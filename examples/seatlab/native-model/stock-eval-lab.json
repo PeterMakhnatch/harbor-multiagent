@@ -1,0 +1,81 @@
+{
+  "loader": "evallab.results.load_trial",
+  "matched_native_rewards": 8,
+  "rows": [
+    {
+      "cell_id": "s2003-ss",
+      "native_trial_id": "f10b5b45-2422-4070-bcd6-7f6ad38471d8",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 0.875
+    },
+    {
+      "cell_id": "s2003-ms",
+      "native_trial_id": "84416b2c-2333-4600-bc47-872837cc6bec",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 0.875
+    },
+    {
+      "cell_id": "s2003-sm",
+      "native_trial_id": "1b5dae9e-1489-46be-9a0d-3eaf5b2132f8",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 1.0
+    },
+    {
+      "cell_id": "s2003-mm",
+      "native_trial_id": "45b1bf65-3647-4a9c-9b87-d51d84c3193c",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 1.0
+    },
+    {
+      "cell_id": "s2017-mm",
+      "native_trial_id": "8a4b9550-6507-4ae5-97a8-3bc753d205c8",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 1.0
+    },
+    {
+      "cell_id": "s2017-sm",
+      "native_trial_id": "ff791481-cd8b-4df9-9a22-f42d4e249a71",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 1.0
+    },
+    {
+      "cell_id": "s2017-ms",
+      "native_trial_id": "1b137ef2-fd8c-4162-bb6a-10e85de44768",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 0.625
+    },
+    {
+      "cell_id": "s2017-ss",
+      "native_trial_id": "259646af-9477-434e-bfd9-59f268b32b31",
+      "roles": [
+        "dispatch",
+        "inventory"
+      ],
+      "team_reward": 0.625
+    }
+  ],
+  "schema": "seatlab.native-pilot-stock-check/v1",
+  "seat_executions": 16,
+  "trials": 8
+}

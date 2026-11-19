@@ -1,0 +1,543 @@
+{
+  "attempts": [
+    {
+      "attempted": true,
+      "case_sha256": "c140510355ec1b96a4bd1ea008a3669e0fb2224270eb9b704302eca6087216d6",
+      "cell_id": "s2003-ss",
+      "measured": {
+        "episodes": 8,
+        "feasible": 7,
+        "optimal": 7
+      },
+      "native_reward": 0.875,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "f0a7c4b9d7a6b9f7b269867be97f9e3a9fe2357840c5660146f762456cc69e26",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "ca3fb3f4f58db0c8073176cd7f94d18893880a61415315cad99590eb3ac3cfb7"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "2eedfddd710d55fb4bb489572bab95bc3942db9608c0dfae7f9cd24b057e18b5",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "ea0d92d4262b253b8c88db57efb64ef13dd1fe854fe2ef9660043a4c100f7fdf"
+        }
+      },
+      "seed": 2003,
+      "state": "verified",
+      "team": "ss",
+      "trial_id": "f10b5b45-2422-4070-bcd6-7f6ad38471d8",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "c140510355ec1b96a4bd1ea008a3669e0fb2224270eb9b704302eca6087216d6",
+      "cell_id": "s2003-ms",
+      "measured": {
+        "episodes": 8,
+        "feasible": 7,
+        "optimal": 7
+      },
+      "native_reward": 0.875,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "f0a7c4b9d7a6b9f7b269867be97f9e3a9fe2357840c5660146f762456cc69e26",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "ca3fb3f4f58db0c8073176cd7f94d18893880a61415315cad99590eb3ac3cfb7"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "2eedfddd710d55fb4bb489572bab95bc3942db9608c0dfae7f9cd24b057e18b5",
+          "model_turns": 1,
+          "model_view_sha256": "ea0d92d4262b253b8c88db57efb64ef13dd1fe854fe2ef9660043a4c100f7fdf",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 1077,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 2685,
+            "duration_ms": 2704,
+            "estimated_cost_usd": 0.008172,
+            "input_tokens": 2,
+            "output_tokens": 386
+          },
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "ea0d92d4262b253b8c88db57efb64ef13dd1fe854fe2ef9660043a4c100f7fdf"
+        }
+      },
+      "seed": 2003,
+      "state": "verified",
+      "team": "ms",
+      "trial_id": "84416b2c-2333-4600-bc47-872837cc6bec",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "c140510355ec1b96a4bd1ea008a3669e0fb2224270eb9b704302eca6087216d6",
+      "cell_id": "s2003-sm",
+      "measured": {
+        "episodes": 8,
+        "feasible": 8,
+        "optimal": 8
+      },
+      "native_reward": 1.0,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "1c22fc3e15029061edf3bd45658b0c6b0c345ca2cfb33750ea5d16c2ac7115e5",
+          "model_turns": 1,
+          "model_view_sha256": "ca3fb3f4f58db0c8073176cd7f94d18893880a61415315cad99590eb3ac3cfb7",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 1383,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 2700,
+            "duration_ms": 2719,
+            "estimated_cost_usd": 0.008695999999999999,
+            "input_tokens": 2,
+            "output_tokens": 316
+          },
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "ca3fb3f4f58db0c8073176cd7f94d18893880a61415315cad99590eb3ac3cfb7"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "2eedfddd710d55fb4bb489572bab95bc3942db9608c0dfae7f9cd24b057e18b5",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "ea0d92d4262b253b8c88db57efb64ef13dd1fe854fe2ef9660043a4c100f7fdf"
+        }
+      },
+      "seed": 2003,
+      "state": "verified",
+      "team": "sm",
+      "trial_id": "1b5dae9e-1489-46be-9a0d-3eaf5b2132f8",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "c140510355ec1b96a4bd1ea008a3669e0fb2224270eb9b704302eca6087216d6",
+      "cell_id": "s2003-mm",
+      "measured": {
+        "episodes": 8,
+        "feasible": 8,
+        "optimal": 8
+      },
+      "native_reward": 1.0,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "1c22fc3e15029061edf3bd45658b0c6b0c345ca2cfb33750ea5d16c2ac7115e5",
+          "model_turns": 1,
+          "model_view_sha256": "ca3fb3f4f58db0c8073176cd7f94d18893880a61415315cad99590eb3ac3cfb7",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 365,
+            "cache_read_input_tokens": 1019,
+            "duration_api_ms": 2681,
+            "duration_ms": 2699,
+            "estimated_cost_usd": 0.0048159,
+            "input_tokens": 2,
+            "output_tokens": 325
+          },
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "ca3fb3f4f58db0c8073176cd7f94d18893880a61415315cad99590eb3ac3cfb7"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "2eedfddd710d55fb4bb489572bab95bc3942db9608c0dfae7f9cd24b057e18b5",
+          "model_turns": 1,
+          "model_view_sha256": "ea0d92d4262b253b8c88db57efb64ef13dd1fe854fe2ef9660043a4c100f7fdf",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 364,
+            "cache_read_input_tokens": 712,
+            "duration_api_ms": 2661,
+            "duration_ms": 2680,
+            "estimated_cost_usd": 0.0053912,
+            "input_tokens": 2,
+            "output_tokens": 386
+          },
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "ea0d92d4262b253b8c88db57efb64ef13dd1fe854fe2ef9660043a4c100f7fdf"
+        }
+      },
+      "seed": 2003,
+      "state": "verified",
+      "team": "mm",
+      "trial_id": "45b1bf65-3647-4a9c-9b87-d51d84c3193c",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "630ef88b6d244be87fc752639608ee3d83d941c86903820aa2aedcfdc29f3289",
+      "cell_id": "s2017-mm",
+      "measured": {
+        "episodes": 8,
+        "feasible": 8,
+        "optimal": 8
+      },
+      "native_reward": 1.0,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "0fe3e588357b0de2f143cbfa0d6d94692ecdc1f09e0a2163c1448a3bff642f5a",
+          "model_turns": 1,
+          "model_view_sha256": "c72b4dfcba6cdf112a2de92b27feb62f53f4d3f209c316bc060dfb6eba7541fe",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 1383,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 2327,
+            "duration_ms": 2345,
+            "estimated_cost_usd": 0.008446,
+            "input_tokens": 2,
+            "output_tokens": 291
+          },
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "c72b4dfcba6cdf112a2de92b27feb62f53f4d3f209c316bc060dfb6eba7541fe"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "c2f61d07bdad0959e1b8881bb9d825a3d5cb8315a10be51d4f046e9971cb0231",
+          "model_turns": 1,
+          "model_view_sha256": "9c631b03f01855bcdede8c4e731ce248d972ff0b692dc91c4d1b543a97cca7f8",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 1077,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 2837,
+            "duration_ms": 2853,
+            "estimated_cost_usd": 0.008172,
+            "input_tokens": 2,
+            "output_tokens": 386
+          },
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "9c631b03f01855bcdede8c4e731ce248d972ff0b692dc91c4d1b543a97cca7f8"
+        }
+      },
+      "seed": 2017,
+      "state": "verified",
+      "team": "mm",
+      "trial_id": "8a4b9550-6507-4ae5-97a8-3bc753d205c8",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "630ef88b6d244be87fc752639608ee3d83d941c86903820aa2aedcfdc29f3289",
+      "cell_id": "s2017-sm",
+      "measured": {
+        "episodes": 8,
+        "feasible": 8,
+        "optimal": 8
+      },
+      "native_reward": 1.0,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "0fe3e588357b0de2f143cbfa0d6d94692ecdc1f09e0a2163c1448a3bff642f5a",
+          "model_turns": 1,
+          "model_view_sha256": "c72b4dfcba6cdf112a2de92b27feb62f53f4d3f209c316bc060dfb6eba7541fe",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 366,
+            "cache_read_input_tokens": 1019,
+            "duration_api_ms": 2360,
+            "duration_ms": 2378,
+            "estimated_cost_usd": 0.0041899,
+            "input_tokens": 2,
+            "output_tokens": 262
+          },
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "c72b4dfcba6cdf112a2de92b27feb62f53f4d3f209c316bc060dfb6eba7541fe"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "c2f61d07bdad0959e1b8881bb9d825a3d5cb8315a10be51d4f046e9971cb0231",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "9c631b03f01855bcdede8c4e731ce248d972ff0b692dc91c4d1b543a97cca7f8"
+        }
+      },
+      "seed": 2017,
+      "state": "verified",
+      "team": "sm",
+      "trial_id": "ff791481-cd8b-4df9-9a22-f42d4e249a71",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "630ef88b6d244be87fc752639608ee3d83d941c86903820aa2aedcfdc29f3289",
+      "cell_id": "s2017-ms",
+      "measured": {
+        "episodes": 8,
+        "feasible": 6,
+        "optimal": 5
+      },
+      "native_reward": 0.625,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "77fac3548f441eafe377c30445f2124fe5c00a24d9e96c5386a3307e4d9ce72d",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "c72b4dfcba6cdf112a2de92b27feb62f53f4d3f209c316bc060dfb6eba7541fe"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "c2f61d07bdad0959e1b8881bb9d825a3d5cb8315a10be51d4f046e9971cb0231",
+          "model_turns": 1,
+          "model_view_sha256": "9c631b03f01855bcdede8c4e731ce248d972ff0b692dc91c4d1b543a97cca7f8",
+          "policy": "first-party",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "status": "verified",
+          "usage": {
+            "cache_creation_input_tokens": 366,
+            "cache_read_input_tokens": 712,
+            "duration_api_ms": 4711,
+            "duration_ms": 4731,
+            "estimated_cost_usd": 0.0053992,
+            "input_tokens": 2,
+            "output_tokens": 386
+          },
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "9c631b03f01855bcdede8c4e731ce248d972ff0b692dc91c4d1b543a97cca7f8"
+        }
+      },
+      "seed": 2017,
+      "state": "verified",
+      "team": "ms",
+      "trial_id": "1b137ef2-fd8c-4162-bb6a-10e85de44768",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    },
+    {
+      "attempted": true,
+      "case_sha256": "630ef88b6d244be87fc752639608ee3d83d941c86903820aa2aedcfdc29f3289",
+      "cell_id": "s2017-ss",
+      "measured": {
+        "episodes": 8,
+        "feasible": 6,
+        "optimal": 5
+      },
+      "native_reward": 0.625,
+      "seats": {
+        "dispatch": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "77fac3548f441eafe377c30445f2124fe5c00a24d9e96c5386a3307e4d9ce72d",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 1317,
+          "view_matches_world": true,
+          "view_sha256": "c72b4dfcba6cdf112a2de92b27feb62f53f4d3f209c316bc060dfb6eba7541fe"
+        },
+        "inventory": {
+          "accepted_matches_world": true,
+          "accepted_submission_sha256": "c2f61d07bdad0959e1b8881bb9d825a3d5cb8315a10be51d4f046e9971cb0231",
+          "model_turns": 0,
+          "model_view_sha256": null,
+          "policy": "script",
+          "served_model": null,
+          "stage": "complete",
+          "status": "verified",
+          "usage": null,
+          "view_bytes": 814,
+          "view_matches_world": true,
+          "view_sha256": "9c631b03f01855bcdede8c4e731ce248d972ff0b692dc91c4d1b543a97cca7f8"
+        }
+      },
+      "seed": 2017,
+      "state": "verified",
+      "team": "ss",
+      "trial_id": "259646af-9477-434e-bfd9-59f268b32b31",
+      "world": {
+        "accepted_reports": 16,
+        "delivered_equal_accepted": 16,
+        "delivered_messages": 16,
+        "truthful_pairs": 8
+      }
+    }
+  ],
+  "distinct_native_trials": 8,
+  "launched": 8,
+  "observed_model_generations": 8,
+  "plan_sha256": "eede743cf4595b3de77c2ccf605164c30b021e328c70b4e399b640d6ea2ad835",
+  "registered_model_seats": 8,
+  "registered_worlds": 8,
+  "schema": "seatlab.native-model-analysis/v1",
+  "subscription_cost_estimate": {
+    "cap_usd_per_generation": 0.3,
+    "is_invoice": false,
+    "known_generations": 8,
+    "sum_known_usd": 0.053282,
+    "unknown_for_observed_generations": 0
+  },
+  "teams": {
+    "mm": {
+      "both_seats_verified": 2,
+      "episodes": 16,
+      "feasible": 16,
+      "native_measured": 2,
+      "optimal": 16,
+      "planned": 2,
+      "roles": {
+        "dispatch": "first-party",
+        "inventory": "first-party"
+      }
+    },
+    "ms": {
+      "both_seats_verified": 2,
+      "episodes": 16,
+      "feasible": 13,
+      "native_measured": 2,
+      "optimal": 12,
+      "planned": 2,
+      "roles": {
+        "dispatch": "script",
+        "inventory": "first-party"
+      }
+    },
+    "sm": {
+      "both_seats_verified": 2,
+      "episodes": 16,
+      "feasible": 16,
+      "native_measured": 2,
+      "optimal": 16,
+      "planned": 2,
+      "roles": {
+        "dispatch": "first-party",
+        "inventory": "script"
+      }
+    },
+    "ss": {
+      "both_seats_verified": 2,
+      "episodes": 16,
+      "feasible": 13,
+      "native_measured": 2,
+      "optimal": 12,
+      "planned": 2,
+      "roles": {
+        "dispatch": "script",
+        "inventory": "script"
+      }
+    }
+  },
+  "unknown_generation_counts": 0,
+  "verified_model_seats": 8,
+  "verified_worlds": 8
+}
