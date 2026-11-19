@@ -1,8 +1,11 @@
 """Viewer API for multi-agent (seat) trials: per-seat trajectories and logs."""
 
 import json
+import os
 import shutil
-from collections.abc import Sequence
+import threading
+import time
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,7 +16,7 @@ from harbor.models.trial.config import Participant, TaskConfig, TrialConfig
 from harbor.models.trial.result import AgentInfo, SeatResult, TrialResult
 from harbor.models.verifier.result import VerifierResult
 from harbor.viewer import server
-from harbor.viewer.server import OUTSIDE_TRIAL_LOG, create_app
+from harbor.viewer.server import REFUSED_LOG, create_app
 from harbor.viewer.trial_utils import model_info_from_model_name
 
 JOB = "seat-job"
@@ -298,7 +301,7 @@ def test_a_log_that_links_out_of_the_trial_is_refused_alone(
         "summary": "trial summary",
         "command-0": "p2 command",
     }
-    assert entries == expected | dict.fromkeys(refused, OUTSIDE_TRIAL_LOG)
+    assert entries == expected | dict.fromkeys(refused, REFUSED_LOG)
 
 
 def test_one_command_log_that_links_out_does_not_hide_the_next(
@@ -315,7 +318,7 @@ def test_one_command_log_that_links_out_does_not_hide_the_next(
 
     assert logs["commands"] == [
         {"index": 0, "content": "ran 0"},
-        {"index": 1, "content": OUTSIDE_TRIAL_LOG},
+        {"index": 1, "content": REFUSED_LOG},
         {"index": 2, "content": "ran 2"},
     ]
 
@@ -330,7 +333,7 @@ def test_a_root_log_that_links_out_is_refused_alone(
 
     logs = _agent_logs(client, None)
 
-    assert (logs["oracle"], logs["setup"]) == (OUTSIDE_TRIAL_LOG, "root setup")
+    assert (logs["oracle"], logs["setup"]) == (REFUSED_LOG, "root setup")
 
 
 def test_a_link_inside_the_trial_is_followed(
@@ -424,9 +427,9 @@ def test_the_read_opens_the_checked_path(
     route: str,
     name: str,
 ) -> None:
-    """The handler reads the final path that _trial_file checked. A link that
-    changes after the check, as in a live agent/ mount, cannot redirect the
-    read. The test swaps the link right after the check."""
+    """The handler opens the final path that _trial_file checked, so the
+    requested link can change after the check without redirecting the read.
+    The test swaps that link right after the check."""
     agent = seat_trial / "seats" / "p1" / "agent"
     (agent / "checked").write_text(json.dumps({"session_id": "checked"}))
     _replace_with_link(agent / name, Path("checked"))
@@ -458,3 +461,169 @@ def test_a_nul_byte_in_seat_or_step_is_refused(
     response = client.get(f"{BASE}/{route}", params=params)
 
     assert response.status_code == 400
+
+
+def _swap_after_check(
+    monkeypatch: pytest.MonkeyPatch, tail: str, swap: Callable[[], None]
+) -> None:
+    """Run ``swap`` once, right after _trial_file checks the first path that
+    ends with ``tail``."""
+    check = server._trial_file
+    swapped: list[Path] = []
+
+    def check_then_swap(trial_dir: Path, path: Path) -> Path | None:
+        checked = check(trial_dir, path)
+        if not swapped and path.match(tail):
+            swapped.append(path)
+            swap()
+        return checked
+
+    monkeypatch.setattr(server, "_trial_file", check_then_swap)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "checked-file-becomes-a-link",
+        "target-of-the-requested-link-becomes-a-link",
+        "seat-agent-dir-becomes-a-link",
+        "command-dir-becomes-a-link",
+        "log-file-becomes-a-link",
+    ],
+)
+def test_a_swap_after_the_check_is_refused(
+    client: TestClient,
+    seat_trial: Path,
+    outside: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    """The handler opens each part of the checked path without following a
+    link. A file or folder on that path that becomes a link to outside the
+    trial after the check, as it can in a live agent/ mount, fails the open."""
+    root_agent = seat_trial / "agent"
+    p1_agent = seat_trial / "seats" / "p1" / "agent"
+    (root_agent / "command-0").mkdir()
+    (root_agent / "command-0" / "stdout.txt").write_text("ran")
+    (root_agent / "oracle.txt").write_text("oracle")
+    (root_agent / "trajectory.json").write_text(json.dumps({"session_id": "root"}))
+    (p1_agent / "checked").write_text(json.dumps({"session_id": "checked"}))
+    _replace_with_link(p1_agent / "trajectory.json", Path("checked"))
+    route, seat, tail, swapped, target, entry = {
+        "checked-file-becomes-a-link": (
+            "trajectory",
+            None,
+            "trajectory.json",
+            root_agent / "trajectory.json",
+            outside / "trajectory.json",
+            None,
+        ),
+        "target-of-the-requested-link-becomes-a-link": (
+            "trajectory",
+            "p1",
+            "trajectory.json",
+            p1_agent / "checked",
+            outside / "trajectory.json",
+            None,
+        ),
+        "seat-agent-dir-becomes-a-link": (
+            "trajectory",
+            "p1",
+            "trajectory.json",
+            p1_agent,
+            outside,
+            None,
+        ),
+        "command-dir-becomes-a-link": (
+            "agent-logs",
+            None,
+            "command-0/stdout.txt",
+            root_agent / "command-0",
+            outside / "command-0",
+            "command-0",
+        ),
+        "log-file-becomes-a-link": (
+            "agent-logs",
+            None,
+            "oracle.txt",
+            root_agent / "oracle.txt",
+            outside / "oracle.txt",
+            "oracle",
+        ),
+    }[case]
+    _swap_after_check(monkeypatch, tail, lambda: _replace_with_link(swapped, target))
+
+    response = client.get(
+        f"{BASE}/{route}", params={"seat": seat} if seat is not None else {}
+    )
+
+    assert SECRET not in response.text
+    if entry is None:
+        assert response.status_code == 403
+    else:
+        logs = response.json()
+        read = {
+            "oracle": logs["oracle"],
+            **{f"command-{c['index']}": c["content"] for c in logs["commands"]},
+        }
+        assert read[entry] == REFUSED_LOG
+
+
+def _open_fifo_writer(fifo: Path) -> None:
+    try:
+        os.close(os.open(fifo, os.O_WRONLY | os.O_NONBLOCK))
+    except OSError:
+        # No reader is blocked on the FIFO.
+        pass
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs FIFOs")
+@pytest.mark.parametrize(
+    ("route", "seat", "relative", "entry"),
+    [
+        ("trajectory", "p1", "seats/p1/agent/trajectory.json", None),
+        ("agent-logs", "p2", "seats/p2/agent/oracle.txt", "oracle"),
+    ],
+)
+def test_a_fifo_does_not_block_the_request(
+    client: TestClient,
+    seat_trial: Path,
+    route: str,
+    seat: str,
+    relative: str,
+    entry: str | None,
+) -> None:
+    """A FIFO is not a regular file: it is refused at once. A read that blocked
+    on it would wait for a writer; the timer opens one after 5 s, so a
+    regression fails here instead of hanging."""
+    fifo = seat_trial / relative
+    fifo.unlink(missing_ok=True)
+    os.mkfifo(fifo)
+    timer = threading.Timer(5, _open_fifo_writer, args=(fifo,))
+    timer.start()
+    started = time.monotonic()
+    try:
+        response = client.get(f"{BASE}/{route}", params={"seat": seat})
+    finally:
+        timer.cancel()
+
+    assert time.monotonic() - started < 5, "the read waited for a FIFO writer"
+    if entry is None:
+        assert response.status_code == 403
+    else:
+        assert response.json()[entry] == REFUSED_LOG
+
+
+def test_without_no_follow_support_the_file_is_read_by_name(
+    client: TestClient, seat_trial: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows has no O_NOFOLLOW or dir_fd for os.open; there the handlers
+    read the checked path by name."""
+    monkeypatch.setattr(server, "_NO_FOLLOW_OPEN", False)
+    (seat_trial / "seats" / "p2" / "agent" / "oracle.txt").write_text("p2 posted\n")
+
+    trajectory = client.get(f"{BASE}/trajectory", params={"seat": "p1"})
+    logs = client.get(f"{BASE}/agent-logs", params={"seat": "p2"})
+
+    assert trajectory.json()["session_id"] == f"{TRIAL}__p1"
+    assert logs.json()["oracle"] == "p2 posted\n"

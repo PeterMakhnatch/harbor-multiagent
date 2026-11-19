@@ -1,13 +1,16 @@
 """FastAPI server for the Harbor Viewer."""
 
 import asyncio
+import errno
 import functools
 import html
+import io
 import json
 import math
 import os
 from ipaddress import ip_address
 import shutil
+import stat
 import sys
 import tempfile
 from collections import Counter
@@ -17,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
+    BinaryIO,
     TypedDict,
     cast,
 )
@@ -255,8 +259,17 @@ MEDIA_EXTENSIONS = {
 RECORDING_FILE_NAME = "recording.mp4"
 RECORDING_MEDIA_TYPE = "video/mp4"
 
-# An agent-logs entry whose file links outside the trial.
-OUTSIDE_TRIAL_LOG = "[Access denied: the file links outside the trial]"
+# An agent-logs entry whose file links outside the trial, or is not a
+# regular file when it is read.
+REFUSED_LOG = "[Access denied: not a regular file in the trial]"
+
+# POSIX can open each part of a path without following a link; Windows
+# cannot, and reads by name.
+_NO_FOLLOW_OPEN = (
+    os.open in os.supports_dir_fd
+    and hasattr(os, "O_NOFOLLOW")
+    and hasattr(os, "O_DIRECTORY")
+)
 
 
 def _trial_file(trial_dir: Path, path: Path) -> Path | None:
@@ -264,9 +277,8 @@ def _trial_file(trial_dir: Path, path: Path) -> Path | None:
     otherwise None.
 
     An agent's logs come from its container and can hold links, below a seat
-    or step root as well as at the trial's own ``agent/``. Read the returned
-    path, as the file route does: a link at ``path`` that changes after this
-    check then cannot redirect the read.
+    or step root as well as at the trial's own ``agent/``. Open the returned
+    path with ``_open_trial_file``.
     """
     try:
         target = path.resolve()
@@ -275,6 +287,50 @@ def _trial_file(trial_dir: Path, path: Path) -> Path | None:
         # ValueError.
         return None
     return target if trial_dir.resolve() in target.parents else None
+
+
+def _open_trial_file(trial_dir: Path, target: Path) -> BinaryIO | None:
+    """Open ``target``, a path that ``_trial_file`` returned, for reading
+    without following a link; None when it is not a regular file now.
+
+    From the trial folder down, each part of the path is opened from its
+    parent's descriptor with O_NOFOLLOW. A file or folder on the path that
+    became a link after the check, as it can in a live ``agent/`` mount,
+    then fails the open instead of redirecting it. O_NONBLOCK keeps a FIFO
+    from blocking the request. A missing file raises FileNotFoundError, as
+    open() does. Without O_NOFOLLOW and dir_fd (Windows), the file is opened
+    by name.
+    """
+    if not _NO_FOLLOW_OPEN:
+        file = target.open("rb")
+    else:
+        root = trial_dir.resolve()
+        parts = target.relative_to(root).parts
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in parts[:-1]:
+                child = os.open(
+                    part,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=directory,
+                )
+                os.close(directory)
+                directory = child
+            fd = os.open(
+                parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+            )
+        except OSError as exc:
+            # ELOOP: the file is a link now; ENOTDIR: a folder on its path is.
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                return None
+            raise
+        finally:
+            os.close(directory)
+        file = os.fdopen(fd, "rb")
+    if not stat.S_ISREG(os.fstat(file.fileno()).st_mode):
+        file.close()
+        return None
+    return file
 
 
 _LOOPBACK_HOSTNAMES = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -2467,15 +2523,20 @@ def _register_job_endpoints(
         trajectory_path = _trial_file(trial_dir, root / "agent" / "trajectory.json")
         if trajectory_path is None:
             raise HTTPException(status_code=403, detail="Access denied")
-        if not trajectory_path.exists():
-            return None
-
         try:
-            return json.loads(trajectory_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=500, detail="Failed to parse trajectory.json"
-            )
+            file = _open_trial_file(trial_dir, trajectory_path)
+        except FileNotFoundError:
+            return None
+        if file is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        with io.TextIOWrapper(file, encoding="utf-8") as text_file:
+            try:
+                return json.loads(text_file.read())
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=500, detail="Failed to parse trajectory.json"
+                )
 
     @app.get("/api/jobs/{job_name}/trials/{trial_name}/interaction")
     def get_interaction(
@@ -2837,16 +2898,20 @@ def _register_job_endpoints(
         }
 
         def read_log(path: Path) -> str | None:
-            """A log file's text, None if it is absent, or a marker when it
-            links outside the trial or cannot be read. A refused file does
-            not hide the other logs."""
+            """A log file's text, None if it is absent, or a marker when it is
+            refused or cannot be read. A refused file does not hide the other
+            logs."""
             target = _trial_file(trial_dir, path)
             if target is None:
-                return OUTSIDE_TRIAL_LOG
-            if not target.exists():
-                return None
+                return REFUSED_LOG
             try:
-                return target.read_text()
+                file = _open_trial_file(trial_dir, target)
+                if file is None:
+                    return REFUSED_LOG
+                with io.TextIOWrapper(file) as text_file:
+                    return text_file.read()
+            except FileNotFoundError:
+                return None
             except Exception:
                 return "[Error reading file]"
 
@@ -2856,9 +2921,12 @@ def _register_job_endpoints(
         # Structured analysis from harbor analyze; it stays None when absent,
         # refused or unreadable.
         analysis_path = _trial_file(trial_dir, trial_dir / "analysis.json")
-        if analysis_path is not None and analysis_path.exists():
+        if analysis_path is not None:
             try:
-                logs["analysis"] = json.loads(analysis_path.read_text())
+                file = _open_trial_file(trial_dir, analysis_path)
+                if file is not None:
+                    with io.TextIOWrapper(file) as text_file:
+                        logs["analysis"] = json.loads(text_file.read())
             except Exception:
                 logs["analysis"] = None
 
