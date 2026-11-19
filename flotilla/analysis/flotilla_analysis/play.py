@@ -404,7 +404,8 @@ def liar_outcome(evidence: Evidence, task: TaskInfo, final: float | None) -> str
     the decoy), corrupted (neither, including no answer) or unknown. None when the task has no decoy."""
     score = evidence.score or {}
     decoy = (task.task_json or {}).get("decoy")
-    if "deceived" not in score and decoy is None:
+    # World v2 writes "deceived": null for every task without a decoy, so test for a boolean.
+    if not isinstance(score.get("deceived"), bool) and decoy is None:
         return None
     if final is None:
         return "unknown"

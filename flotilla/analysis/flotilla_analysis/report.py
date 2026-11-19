@@ -146,6 +146,7 @@ def decomposition_rows(
 
 
 LIAR_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned")
+LIAR_OUTCOMES = ("correct", "deceived", "corrupted", "unknown")
 # (name, minuend condition, subtrahend condition, outcome): each effect is a paired difference of
 # per-instance rates, so it is defined only on instances scored in both conditions.
 LIAR_EFFECTS = (
@@ -171,16 +172,15 @@ def liar_rows(
         if not any(t.condition != "talk" for t in trials):
             continue
         per: dict[str, dict[str, dict[int, list[float]]]] = {
-            c: {"correct": defaultdict(list), "deceived": defaultdict(list), "corrupted": defaultdict(list)}
-            for c in LIAR_CONDITIONS
+            c: {k: defaultdict(list) for k in LIAR_OUTCOMES} for c in LIAR_CONDITIONS
         }
         for trial in trials:
             outcome = plays[trial.path].liar if trial.path in plays else None
             if outcome is None or outcome == "unknown":
-                outcome = "correct" if trial.reward >= 1.0 else None
-            if outcome is None:
-                continue
-            for key in ("correct", "deceived", "corrupted"):
+                # Every scored trial stays in the denominator: a failed trial whose final answer cannot be
+                # compared with the decoy is "unknown", not dropped (dropping it would raise "correct").
+                outcome = "correct" if trial.reward >= 1.0 else "unknown"
+            for key in LIAR_OUTCOMES:
                 per[trial.condition][key][trial.instance].append(1.0 if outcome == key else 0.0)
         means = {
             c: {k: {i: math.fsum(v) / len(v) for i, v in sorted(by.items())} for k, by in d.items()}
@@ -196,7 +196,7 @@ def liar_rows(
                 "trials": sum(len(v) for v in per[c]["correct"].values()),
                 **{
                     k: _estimate(stats.t_interval(list(means[c][k].values()), bounds=(0.0, 1.0)))
-                    for k in ("correct", "deceived", "corrupted")
+                    for k in LIAR_OUTCOMES
                 },
             }
         for name, plus, minus, key in LIAR_EFFECTS:

@@ -354,3 +354,14 @@ class Validity(unittest.TestCase):
             self.play("i", key={"x": 3}, answer={"x": 7}, reward=0.0, score=recorded).liar, "deceived"
         )
         self.assertIsNone(self.play("j", key={"x": 3}, answer={"x": 3}, reward=1.0).liar)
+        # world v2 writes "deceived": null for every task without a decoy
+        null = {"deceived": None, "score": 1.0}
+        self.assertIsNone(self.play("k", key={"x": 3}, answer={"x": 3}, reward=1.0, score=null).liar)
+
+
+class AnswerHours(unittest.TestCase):
+    def test_half_hours_are_not_windows(self):
+        from flotilla_analysis.tasks import _hour
+
+        self.assertEqual([_hour(v) for v in ("14", "14:00", "14:00:00", 14)], [14, 14, 14, 14])
+        self.assertEqual([_hour(v) for v in ("14:30", "2pm", "", True)], [None, None, None, None])

@@ -391,10 +391,21 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
     for design in mine(report.get("liar_design") or []):
         out += _heading("Scripted-peer 2x2: honest or lying peer, warned or not (rates per instance)", 3, md)
         out += _table(
-            ["condition", "instances", "trials", "correct", "deceived (decoy)", "corrupted (neither)"],
+            [
+                "condition",
+                "instances",
+                "trials",
+                "correct",
+                "deceived (decoy)",
+                "corrupted (neither)",
+                "unknown",
+            ],
             [
                 [c, str(v["instances"]), str(v["trials"])]
-                + [f"{_f(v[k]['value'])} {_ci(v[k])}" for k in ("correct", "deceived", "corrupted")]
+                + [
+                    f"{_f(v[k]['value'])} {_ci(v[k])}"
+                    for k in ("correct", "deceived", "corrupted", "unknown")
+                ]
                 for c, v in design["conditions"].items()
             ],
             md,

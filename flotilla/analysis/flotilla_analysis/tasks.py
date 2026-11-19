@@ -172,8 +172,9 @@ def _hour(value: Any) -> int | None:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     if isinstance(value, str):
-        head = value.strip().split(":", 1)[0]
-        return int(head) if head.isdigit() else None
+        # Same rule as the schedule scorer: "14", "14:00" and "14:00:00" are 14:00; "14:30" is not a window.
+        match = re.fullmatch(r"(\d{1,2})(?::00(?::00)?)?", value.strip(), flags=re.ASCII)
+        return int(match.group(1)) if match else None
     return None
 
 

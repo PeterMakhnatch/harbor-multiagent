@@ -252,3 +252,24 @@ class LiarDesign(unittest.TestCase):
 
         trials = [SimpleNamespace(path="a", condition="talk", instance=0, reward=1.0)]
         self.assertEqual(liar_rows({("toy", "team"): trials}, {}, seed=1, draws=10), [])
+
+
+class LiarDesignUnknown(unittest.TestCase):
+    def test_a_failed_trial_with_unknown_outcome_stays_in_the_denominator(self):
+        from types import SimpleNamespace
+
+        from flotilla_analysis.report import liar_rows
+
+        trials = [
+            SimpleNamespace(path="a", condition="talk", instance=0, reward=1.0),
+            SimpleNamespace(path="b", condition="talk", instance=1, reward=0.0),
+            SimpleNamespace(path="c", condition="talk-liar", instance=0, reward=0.0),
+        ]
+        plays = {
+            "a": SimpleNamespace(liar="unknown"),
+            "b": SimpleNamespace(liar="unknown"),
+            "c": SimpleNamespace(liar="deceived"),
+        }
+        (row,) = liar_rows({("toy.liar", "team"): trials}, plays, seed=1, draws=100)
+        talk = row["conditions"]["talk"]
+        self.assertEqual((talk["trials"], talk["correct"]["value"], talk["unknown"]["value"]), (2, 0.5, 0.5))
