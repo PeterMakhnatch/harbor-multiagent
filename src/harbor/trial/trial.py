@@ -586,6 +586,8 @@ class Trial(ABC):
         phase: LogPhase,
         environment: BaseEnvironment,
         step_name: str | None = None,
+        *,
+        seat: str | None = None,
     ) -> contextlib.AbstractContextManager[None]:
         """Stream a phase's stdout/stderr chunks to the registered callbacks.
 
@@ -603,6 +605,7 @@ class Trial(ABC):
                 stream=stream,
                 text=text,
                 step_name=step_name,
+                seat=seat,
             )
             for callback in callbacks:
                 await callback(entry)

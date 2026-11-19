@@ -72,6 +72,7 @@ class LogEntry(BaseModel):
     text: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     step_name: str | None = None
+    seat: str | None = None
 
 
 LogCallback = Callable[[LogEntry], Awaitable[None]]

@@ -258,7 +258,7 @@ class SeatsTrial(SingleStepTrial):
                 f"Seat {seat.name!r}: could not create {logs_dir}: {made.stdout}"
             )
         with environment.scoped_exec_env(seat.agent.extra_env):
-            with self._log_context("agent_setup", environment):
+            with self._log_context("agent_setup", environment, seat=seat.name):
                 await seat.agent.setup(environment=environment)
 
     @override
@@ -330,7 +330,7 @@ class SeatsTrial(SingleStepTrial):
         seat.result.agent_execution = execution
         try:
             with seat.environment.scoped_exec_env(seat.agent.extra_env):
-                with self._log_context("agent", seat.environment):
+                with self._log_context("agent", seat.environment, seat=seat.name):
                     await seat.agent.run(
                         instruction=seat.instruction,
                         environment=seat.environment,
