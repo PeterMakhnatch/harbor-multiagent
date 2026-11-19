@@ -44,6 +44,16 @@ def parser() -> argparse.ArgumentParser:
         "result.json does not exist; may be repeated",
     )
     p.add_argument(
+        "--family-hooks",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="folder of family modules (<DIR>/<family>.py, e.g. flotilla/families) whose analysis hooks "
+        "(carries_own_data, answer_in_text) replace those of the task folder's family.py; task folders "
+        "built before a hook existed lack it. Scores always use the task folder's module. May be repeated",
+    )
+    p.add_argument(
         "--keep-leaks",
         action="store_true",
         help="keep trials flagged example_leak (the answer key is an answer example in an instruction) in "
@@ -66,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         draws=args.draws,
         task_roots=args.tasks,
         keep_leaks=args.keep_leaks,
+        hook_dirs=args.family_hooks,
     )
     text = render(report, args.format)
     if args.output:

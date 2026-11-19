@@ -221,3 +221,104 @@ def parse_text(text: str) -> dict[str, Any] | None:
         if set(calendar) == set(DAYS):
             calendars[person.strip()] = calendar
     return {"calendars": calendars} if calendars else None
+
+
+# --- Analysis hooks: flotilla-analyze reads message texts with these (CONTRACT.md 7). They do not
+# change scoring.
+
+_DAY = r"\b(mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?)(?![a-z])"
+_HOUR = r"(\d{1,2})(?!\d)(?::(\d{2}))?(?:\s*([ap])\.?m\b\.?)?"
+# A weekday and the hour right after it, in the forms seats write: "Mon 09", "Mon09", "Mon:09",
+# "Mon(09", "Mon[9", '"Mon": [9', "Monday 9am", "Thursday at 14:00". Only the first hour after the day
+# is read, so a busy list "Mon 09,10" is one mention (Mon, 9).
+_DAY_HOUR = re.compile(_DAY + r"\.?[\s\"':=(\[{]*(?:at\s+|@\s*)?" + _HOUR, re.IGNORECASE)
+# The compact form of a narrow channel: a capital one- or two-letter day right before a working hour
+# ("M9,15 T12 Th10 R15 F10"; R is Thursday). Case matters, so message ids such as "m1" do not match.
+_SHORT_DAY_HOUR = re.compile(r"(?<![A-Za-z])(Mo|Tu|We|Th|Fr|M|T|W|R|F)(9|1[0-6])(?!\d)")
+_SHORT_DAYS = {"Mo": "Mon", "M": "Mon", "Tu": "Tue", "T": "Tue", "We": "Wed", "W": "Wed", "Th": "Thu",
+               "R": "Thu", "Fr": "Fri", "F": "Fri"}
+# A written-out answer object in either key order: {"day": "Thu", "start": "14:00"}, day=Thu start=14.
+_DAY_START = re.compile(r"\bday\b\W{0,8}" + _DAY + r"\W{0,12}\bstart\b\W{0,8}" + _HOUR, re.IGNORECASE)
+_START_DAY = re.compile(r"\bstart\b\W{0,8}" + _HOUR + r"\W{0,12}\bday\b\W{0,8}" + _DAY, re.IGNORECASE)
+# A format example inside a request: a parenthesis that starts with an example marker
+# ("(e.g., Mon 09,10)") or a quotation right after one ('like "Ben: Mon 9,10"', 'format: "..."').
+_MARKER = r"(?:\be\.\s?g\.|\beg\b|\bfor (?:example|instance)\b|\bsuch as\b|\blike\b|\bformat\b)"
+_EXAMPLE = re.compile(
+    r"\(\s*" + _MARKER + r"[^)]*\)|" + _MARKER + r"\W{0,3}(?:\"[^\"\n]*\"|'[^'\n]*'|“[^”\n]*”|‘[^’\n]*’)",
+    re.IGNORECASE,
+)
+
+
+def _clock(hour: str, minutes: str | None, half: str | None) -> int | None:
+    """The whole hour a mention names (24-hour clock), or None when it is not a whole hour."""
+    value = int(hour)
+    if half:
+        if not 1 <= value <= 12:
+            return None
+        value = value % 12 + (12 if half.lower() == "p" else 0)
+    if minutes not in (None, "00") or value > 23:
+        return None
+    return value
+
+
+def _found(matches: list[tuple[int, str, str, str | None, str | None]]) -> list[tuple[int, Window]]:
+    """(position, (day, hour)) of (position, day, hour, minutes, am/pm) matches that name a whole hour."""
+    found = []
+    for position, day, hour, minutes, half in matches:
+        clock = _clock(hour, minutes, half)
+        if clock is not None:
+            found.append((position, (day[:3].title(), clock)))
+    return found
+
+
+def _day_hour_matches(text: str) -> list[tuple[int, str, str, str | None, str | None]]:
+    found = [(m.start(), m[1], m[2], m[3], m[4]) for m in _DAY_HOUR.finditer(text)]
+    return found + [(m.start(), _SHORT_DAYS[m[1]], m[2], None, None) for m in _SHORT_DAY_HOUR.finditer(text)]
+
+
+def without_examples(text: str) -> str:
+    """The text with its format examples ("(e.g. Mon 09,10)", 'like "Ben: Mon 9"') blanked out."""
+    return _EXAMPLE.sub(" ", text)
+
+
+def day_hours(text: str) -> list[Window]:
+    """(day, whole hour) of every weekday-and-hour mention in the text, in order."""
+    return [window for _, window in sorted(_found(_day_hour_matches(text)))]
+
+
+def mentions(text: str) -> list[Window]:
+    """Every (day, whole hour) that the text names: weekday-and-hour mentions and written-out answer
+    objects, in the order they appear."""
+    found = _found(_day_hour_matches(text))
+    found += _found([(m.start(), m[1], m[2], m[3], m[4]) for m in _DAY_START.finditer(text)])
+    found += _found([(m.start(), m[4], m[1], m[2], m[3]) for m in _START_DAY.finditer(text)])
+    return [window for _, window in sorted(found)]
+
+
+def carries_own_data(text: str, private: dict[str, Any]) -> bool:
+    """Whether a message carries its sender's own calendar information, raw or derived.
+
+    ``private`` is the sender's briefing. True when the text, format examples left out, names at least
+    one attendee whose calendar the sender holds and also names a weekday with an hour
+    ("Ana: Mon 09,10", "Ana:M9,15 T12", "free for Ana, Ben: Tue 13:00"). A bare day-and-hour test also
+    matches format examples inside requests: a request names the receiver's attendees ("Please send
+    Ben's hours: Mon 09,10?") or none, and an example in parentheses or quotes after "e.g.", "like" or
+    "format" is left out, so neither counts. A written-out answer object ('{"day": "Wed", "start":
+    "14:00"}') is not data. Known limits: data written with initials ("A,C,K free: T11") or without any
+    attendee name ("my free slots: Mon 11") does not count; a request that names the sender's own
+    attendees next to an unmarked example ("I have Ana; send yours as Mon 09,10") counts.
+    """
+    calendars = private.get("calendars") if isinstance(private, dict) else None
+    text = without_examples(text)
+    if not isinstance(calendars, dict) or not day_hours(text):
+        return False
+    return any(re.search(rf"\b{re.escape(str(name))}\b", text, re.IGNORECASE) for name in calendars)
+
+
+def answer_in_text(text: str, key: dict[str, Any]) -> bool:
+    """Whether a message names the answer ``key``: a weekday-and-hour mention or a written-out answer
+    object, format examples left out, that ``score`` gives full marks ("Thursday 14:00-16:00",
+    "Thu 2pm", 'SUBMITTED: {"day": "Thu", "start": "14:00"}'). A busy list "Thu 13,14" names only
+    (Thu, 13)."""
+    return any(score({"day": day, "start": f"{hour:02d}:00"}, key)["score"] == 1.0
+               for day, hour in mentions(without_examples(text)))
