@@ -406,6 +406,47 @@ def print_job_results_tables(job_result) -> None:
             console.print(exception_table)
 
         console.print()
+    _print_seat_stats_table(job_result)
+
+
+def _format_usage(value: float | None, usage_complete: bool) -> str:
+    if not usage_complete or value is None:
+        return "unknown"
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
+
+
+def _print_seat_stats_table(job_result) -> None:
+    seat_stats = job_result.stats.seat_stats
+    if not seat_stats:
+        return
+    table = Table(title="Seats", show_header=True)
+    table.add_column("Seat")
+    table.add_column("Under test")
+    table.add_column("Agent")
+    table.add_column("Model")
+    table.add_column("Trials", justify="right")
+    table.add_column("Errors", justify="right")
+    table.add_column("Cost USD", justify="right")
+    table.add_column("Input tokens", justify="right")
+    table.add_column("Cache tokens", justify="right")
+    table.add_column("Output tokens", justify="right")
+    for seat_name, stats in seat_stats.items():
+        table.add_row(
+            seat_name,
+            "yes" if stats.under_test else "no",
+            stats.agent_name or "",
+            stats.model_name or "",
+            str(stats.n_trials),
+            str(stats.n_errors),
+            _format_usage(stats.cost_usd, stats.usage_complete),
+            _format_usage(stats.n_input_tokens, stats.usage_complete),
+            _format_usage(stats.n_cache_tokens, stats.usage_complete),
+            _format_usage(stats.n_output_tokens, stats.usage_complete),
+        )
+    console.print(table)
+    console.print()
 
 
 def _handle_sigterm(_signum, _frame):
