@@ -87,8 +87,10 @@ ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-n
 ALLOW_PUBLIC_SEED = "--allow-public-seed"  # the flag that makes public-seed a WARN
 DOWNGRADES = {  # rule -> (its flag, what the downgraded set is for)
     "runtime-names": (ALLOW_READABLE_NAMES, "for a local debugging run only; never run this set in a wave"),
-    "public-seed": (ALLOW_PUBLIC_SEED, "only to repeat a published build (the 2026-11-19 waves: --seed 1); a new "
-                    "wave builds without --seed"),
+    "public-seed": (
+        ALLOW_PUBLIC_SEED,
+        "only to repeat a published build (the 2026-11-19 waves: --seed 1); a new wave builds without --seed",
+    ),
 }
 SOURCE_WORDS = ("flotilla", "harbor-multiagent")  # the software's name and its repository's name
 MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no seat may get (seat-secrets)

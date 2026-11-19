@@ -128,8 +128,11 @@ exactly one solution, every clue is needed, and one seat's clues fit many soluti
 
 ## Tests
 
+The fork runs no CI, so run `flotilla/check.sh` before you push: it runs both test suites, `ruff check`,
+and a QA pass on a fresh build of every family and condition (about 1 minute; no Docker, no models).
+
 ```bash
-python3 -m pytest flotilla/tests          # Python 3.11+ and pytest; no Docker needed
+flotilla/check.sh
 uvx --quiet --python 3.12 --with pytest --with pyyaml pytest -q -c flotilla/tests/pytest.ini flotilla/tests
 ```
 

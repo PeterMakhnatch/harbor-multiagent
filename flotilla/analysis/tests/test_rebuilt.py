@@ -272,8 +272,9 @@ class RebuiltFolders(unittest.TestCase):
 
 
     def test_no_report_names_a_seed(self):
-        """Each build draws a secret seed, so a rebuild without --seed differs in it; the reports (text, markdown,
-        JSON) say which build parameter differs, never a seed: a published report must not give the answer keys."""
+        """Each build draws a secret seed, so a rebuild without --seed differs in it; the reports (text,
+        markdown, JSON) say which build parameter differs, never a seed: a published report must not give
+        the answer keys."""
         run_seed, rebuilt_seed = 4_404_577_120_938_117, 5_505_577_120_938_118  # of the size that builds draw
         self.build(seed=run_seed)
         self.trials(seen=False)
