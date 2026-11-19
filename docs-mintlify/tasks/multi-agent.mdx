@@ -197,6 +197,8 @@ participants:
 
 Every service in `task.toml` needs exactly one participant. Participants are matched to services by name, in any order. The task, not the config, says which agents are under test. A config with `participants` leaves out `agent`.
 
+Before a trial or job starts its environment, Harbor checks each participant's options and that its model credentials are set, as it does for `agent`, with the same `install_only` and `--skip-credential-checks` exceptions. If any participant fails, Harbor stops with one error that has a line for each failing seat, for example `Participant for seat 'p2': terminus-2: no nonempty model API key selected. Set DEEPSEEK_API_KEY ...`.
+
 ### Jobs
 
 A job config takes the same `participants` list and uses it for every trial in the job, in place of `agents`. Every task in the job is then a multi-agent task with those services. `n_attempts`, `n_concurrent_trials`, datasets and the other job settings work as usual, and the job's lock file records the participants.
