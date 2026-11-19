@@ -1,6 +1,6 @@
 # Two upstream candidates, both reproduced in Docker
 
-No pull request has been sent to Olam Labs. These branches are on a personal fork. They do not depend on the study tasks or the offline workbench.
+No pull request has been sent to Olam Labs. [Draft #6: reserved trial UUID](https://github.com/PeterMakhnatch/harbor-multiagent/pull/6) and [draft #7: nonroot solution transfer](https://github.com/PeterMakhnatch/harbor-multiagent/pull/7) both target Peter's personal fork. Each stands alone and does not depend on the study tasks or SeatLab.
 
 | Candidate | Original behavior | Observed after the change |
 | --- | --- | --- |
