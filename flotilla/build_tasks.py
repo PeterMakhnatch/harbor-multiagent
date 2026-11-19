@@ -56,6 +56,8 @@ CONDITION_TEXT = {
         "not have. You can exchange messages with them through the world."
     ),
 }
+CONDITION_TEXT["talk-liar"] = CONDITION_TEXT["talk"]  # the honest seats are not warned
+SCRIPTED_INSTRUCTION = "Scripted seat: Harbor's oracle agent runs solution/oracle.py here. No model reads this.\n"
 
 
 def load_family(name: str) -> Any:
@@ -173,7 +175,8 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
     return "\n".join(lines)
 
 
-def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str) -> str:
+def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
+              scripted: tuple[str, ...] = ()) -> str:
     lines = [
         'schema_version = "1.4"',
         'artifacts = ["/logs/world/events.jsonl", "/logs/world/messages.jsonl"]',
@@ -195,25 +198,33 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str) -> 
         "[environment]",
         "build_timeout_sec = 600.0",
         "",
-        *(f"[agents.{seat}]\n" for seat in seats),
+        *(f"[agents.{seat}]\n" + ("under_test = false\n" if seat in scripted else "") for seat in seats),
     ]
     return "\n".join(lines)
 
 
 def build(family_name: str, instances: list[int], n_seats: int, difficulty: str, seed: int,
-          conditions: tuple[str, ...], out: Path, variant: str = "") -> list[Path]:
+          conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False) -> list[Path]:
     family = load_family(family_name)
     family_file = ROOT / "families" / f"{family_name}.py"
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
     built = []
     for i in instances:
-        inst = family.generate(seed, i, n_seats, difficulty)
+        inst = family.generate_scripted(seed, i, difficulty) if scripted else family.generate(seed, i, n_seats, difficulty)
         team_seats = sorted(inst["private"])
+        scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
             briefings = (
                 {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
             )
+            for seat in scripted_seats:  # a scripted peer posts its part, honestly or not
+                lying = condition == "talk-liar"
+                briefings[seat] = {
+                    "script": "liar" if lying else "honest",
+                    "text": (inst["liar_text"] if lying else inst["private_text"])[seat],
+                    "part": (inst["liar_private"] if lying else inst["private"])[seat],
+                }
             tokens = {seat: secrets.token_hex(16) for seat in seats}
             admin = secrets.token_hex(16)
             name = f"{label}-{i:03d}-{condition}"
@@ -227,10 +238,14 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             (task_dir / "tests").mkdir()
             meta = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
                     "n_seats": len(seats), "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed}
-            (task_dir / "task.toml").write_text(task_toml(f"flotilla/{name}", meta, seats, family.TITLE))
+            if scripted_seats:
+                meta["scripted_seats"] = list(scripted_seats)
+            (task_dir / "task.toml").write_text(
+                task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats)
+            )
             for seat in seats:
                 (task_dir / "instructions" / f"{seat}.md").write_text(
-                    instruction(family, inst, seat, seats, condition)
+                    SCRIPTED_INSTRUCTION if seat in scripted_seats else instruction(family, inst, seat, seats, condition)
                 )
             (env / "docker-compose.yaml").write_text(compose(condition, seats, tokens, admin, briefings))
             (env / "Dockerfile").write_text(MAIN_DOCKERFILE)
@@ -241,6 +256,9 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             task_json = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
                          "seats": seats,
                          "difficulty": difficulty, "seed": seed, "answer_key": inst["answer_key"]}
+            for extra in ("decoy", "witness", "scripted_seats"):
+                if extra in inst and scripted:
+                    task_json[extra] = inst[extra]
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
@@ -274,9 +292,15 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: "
                         "task names become flotilla/<family>.<variant>-<iii>-<condition>")
+    parser.add_argument("--scripted", action="store_true",
+                        help="use the family's generate_scripted(): a scripted peer seat (not under test); "
+                        "conditions talk (honest peer) and talk-liar (lying peer)")
     args = parser.parse_args()
+    conditions = tuple(c for c in args.conditions.split(",") if c)
+    if args.scripted and args.conditions == ",".join(CONDITIONS):
+        conditions = ("talk", "talk-liar")
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, args.seed,
-                  tuple(c for c in args.conditions.split(",") if c), args.out, args.variant)
+                  conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted)
     print(f"built {len(built)} tasks under {args.out}")
 
 

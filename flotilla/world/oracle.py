@@ -38,10 +38,22 @@ def family_module() -> Any:
     return module
 
 
+def scripted_peer(own: dict[str, Any]) -> None:
+    """A scripted seat posts its part (true or false) in plain words and as data, twice, then stops."""
+    text = f"Hi team, I am {os.environ.get('SEAT', 'a teammate')}. {own['text']}"
+    for _ in range(2):
+        call("POST", "/messages", {"to": "all", "text": text})
+        call("POST", "/messages", {"to": "all", "text": MARK + json.dumps(own["part"], sort_keys=True)})
+        time.sleep(30)
+
+
 def main() -> None:
+    own = json.loads(os.environ["SEAT_BRIEFING"])
+    if "script" in own:
+        scripted_peer(own)
+        return
     family = family_module()
     me = call("GET", "/whoami")
-    own = json.loads(os.environ["SEAT_BRIEFING"])
     if me["condition"] in ("solo", "silent"):
         answer = family.oracle_answer([own])
     else:
@@ -56,6 +68,7 @@ def main() -> None:
             time.sleep(1)
         if set(parts) < others:
             print(f"missing briefings from {sorted(others - set(parts))}", file=sys.stderr)
+        # Naive pooling: teammates' parts are applied after one's own, so a teammate's report wins.
         answer = family.oracle_answer([own, *(parts[seat] for seat in sorted(parts))])
     print(json.dumps(call("POST", "/submit", {"answer": answer})))
 
