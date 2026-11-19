@@ -44,6 +44,17 @@ def parser() -> argparse.ArgumentParser:
         "result.json does not exist; may be repeated",
     )
     p.add_argument(
+        "--manifest",
+        type=Path,
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="a build manifest (manifest.json at the root of a build_tasks.py output): it says what each "
+        "opaque task name (flotilla/t-<12 hex>) stands for when the trial's task folder is gone, and its "
+        "folder is searched for task folders like --tasks; may be repeated (DIR/manifest.json of "
+        "--tasks DIR is read too)",
+    )
+    p.add_argument(
         "--keep-leaks",
         action="store_true",
         help="keep trials flagged example_leak (the answer key is an answer example in an instruction) in "
@@ -59,13 +70,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.resamples < 1 or args.draws < 1:
         print("flotilla-analyze: --resamples and --draws must be positive", file=sys.stderr)
         return 2
+    in_roots = [root / "manifest.json" for root in args.tasks if (root / "manifest.json").is_file()]
     report = build(
         args.paths,
         seed=args.seed,
         resamples=args.resamples,
         draws=args.draws,
-        task_roots=args.tasks,
+        task_roots=[*args.tasks, *(manifest.parent for manifest in args.manifest)],
         keep_leaks=args.keep_leaks,
+        manifests=[*args.manifest, *in_roots],
     )
     text = render(report, args.format)
     if args.output:

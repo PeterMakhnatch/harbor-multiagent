@@ -2,8 +2,10 @@
 
 The walk works like Sextant's: depth first in sorted order, it stops descending at the first
 directory whose ``result.json`` is a trial result (it has ``trial_name`` and ``task_name``), and it
-never follows a symbolic link to a directory. A trial reached twice counts once. Only JSON and JSONL
-files are read; nothing is executed except a task's ``environment/family.py`` (see ``tasks.py``).
+never follows a symbolic link to a directory. A trial reached twice counts once. What a trial's task
+is (label, instance, condition) comes from its task name, or for an opaque name from its task folder or
+a build manifest (``names.py``). Only JSON, JSONL and TOML files are read; nothing is executed except a
+task's ``environment/family.py`` (see ``tasks.py``).
 
 Missing is not zero: every value that a file does not record stays ``None``.
 """
@@ -13,16 +15,13 @@ from __future__ import annotations
 import json
 import math
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-TASK_NAME = re.compile(
-    r"^flotilla/(?P<label>[a-z0-9_]+(?:\.[a-z0-9_]+)?)-(?P<instance>\d{3})-(?P<condition>solo|silent|talk|talk-liar|talk-warned|talk-liar-warned)$"
-)
-CONDITIONS = ("solo", "silent", "talk", "talk-liar", "talk-warned", "talk-liar-warned")
+from flotilla_analysis.names import CONDITIONS, TASK_NAME, Names  # noqa: F401 - report.py and tests import them here
+
 SKIP_DIRS = frozenset({".git", ".hg", ".svn", ".venv", "__pycache__", "node_modules"})
 
 
@@ -127,11 +126,16 @@ class Trajectory:
     start: datetime | None  # timestamp of the first step in the file
 
 
-def load(paths: list[str | Path]) -> tuple[list[Trial], list[Job], list[Problem]]:
+def load(
+    paths: list[str | Path], manifests: list[str | Path] | None = None
+) -> tuple[list[Trial], list[Job], list[Problem]]:
+    """Trials, jobs and problems under the paths. ``manifests`` are build manifests that say what an opaque
+    task name stands for when the trial's task folder is gone (see ``names.py``)."""
     trials: dict[str, Trial] = {}
     identities: dict[tuple[str, str, str], str] = {}
     jobs: dict[str, Job] = {}
-    problems: list[Problem] = []
+    names = Names(manifests)
+    problems: list[Problem] = [Problem(path, reason) for path, reason in names.problems]
     for raw in paths:
         root = Path(raw)
         if not root.exists():
@@ -154,12 +158,21 @@ def load(paths: list[str | Path]) -> tuple[list[Trial], list[Job], list[Problem]
                 )
                 continue
             try:
-                trial = parse_trial(data, directory=directory, relative=relative)
+                trial = parse_trial(data, directory=directory, relative=relative, names=names)
             except (KeyError, TypeError, ValueError) as exc:
                 problems.append(Problem(relative, f"unreadable trial result: {exc}"))
                 continue
             if trial is None:
-                problems.append(Problem(relative, f"not a Flotilla task name: {data.get('task_name')!r}"))
+                name = data.get("task_name")
+                problems.append(
+                    Problem(relative, f"not a Flotilla task name: {name!r}")
+                    if not str(name).startswith("flotilla/")
+                    else Problem(
+                        relative,
+                        f"unknown Flotilla task {name!r}: no task.toml of it at its task path "
+                        "and no manifest names it (pass --manifest)",
+                    )
+                )
                 continue
             trials[key] = trial
             if data.get("id"):
@@ -337,15 +350,20 @@ def _reward(data: dict[str, Any]) -> tuple[float | None, str | None]:
     return float(value), None
 
 
-def parse_trial(data: dict[str, Any], *, directory: Path, relative: str) -> Trial | None:
-    """A ``Trial`` from a trial ``result.json``; None when the task is not a Flotilla task."""
+def parse_trial(
+    data: dict[str, Any], *, directory: Path, relative: str, names: Names | None = None
+) -> Trial | None:
+    """A ``Trial`` from a trial ``result.json``; None when the task is not a Flotilla task, or is an opaque
+    one that neither its task folder nor a manifest describes."""
     trial_name, task_name = data["trial_name"], data["task_name"]
     if not isinstance(trial_name, str) or not isinstance(task_name, str):
         raise ValueError("trial_name and task_name must be strings")
-    match = TASK_NAME.match(task_name)
-    if match is None:
+    task_path = _block(data, "task_id").get("path")
+    task_path = task_path if isinstance(task_path, str) and task_path else None
+    known = (names or Names()).identity(task_name, task_path)
+    if known is None:
         return None
-    label = match["label"]
+    label = known.label
     family, _, variant = label.partition(".")
     seat_results = [s for s in data.get("seat_results") or [] if isinstance(s, dict)]
     if seat_results:
@@ -360,7 +378,6 @@ def parse_trial(data: dict[str, Any], *, directory: Path, relative: str) -> Tria
         team = "mixed(" + ", ".join(f"{s.seat}={s.label}" for s in seats if s.under_test) + ")"
     reward, unscored = _reward(data)
     exception = _block(data, "exception_info").get("exception_type")
-    task_path = _block(data, "task_id").get("path")
     return Trial(
         path=relative,
         directory=directory,
@@ -370,15 +387,15 @@ def parse_trial(data: dict[str, Any], *, directory: Path, relative: str) -> Tria
         label=label,
         family=family,
         variant=variant,
-        instance=int(match["instance"]),
-        condition=match["condition"],
+        instance=known.instance,
+        condition=known.condition,
         finished=data.get("finished_at") is not None,
         reward=reward,
         unscored=unscored,
         exception=str(exception) if exception else None,
         seats=seats,
         team=team,
-        task_path=task_path if isinstance(task_path, str) and task_path else None,
+        task_path=task_path,
         environment_started=parse_time(_block(data, "environment_setup").get("started_at")),
     )
 

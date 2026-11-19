@@ -496,8 +496,9 @@ def build(
     draws: int = stats.DRAWS,
     task_roots: list[Path] | None = None,
     keep_leaks: bool = False,
+    manifests: list[Path] | None = None,
 ) -> dict[str, Any]:
-    trials, jobs, problems = load(list(paths))
+    trials, jobs, problems = load(list(paths), manifests=manifests)
     roots = task_roots or []
     groups: dict[GroupKey, list[Trial]] = defaultdict(list)
     for trial in trials:

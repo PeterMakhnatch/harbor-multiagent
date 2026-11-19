@@ -15,13 +15,21 @@ pip install .   # optional: installs the `flotilla-analyze` command
 `PATH` is a trial folder, a job folder, or any folder that holds job folders. The walk stops at the
 first folder whose `result.json` has `trial_name` (as Sextant does) and never follows directory links.
 `--tasks DIR` names where to find task folders when the path in `result.json` no longer exists.
+`--manifest FILE` names a build manifest (`manifest.json` at the root of a `build_tasks.py` output) for
+opaque task names whose task folder is gone.
 
 ## Inputs
 
-Per trial: `result.json` (task name, `seat_results`, reward, `reward_valid`, timings),
+Per trial: `result.json` (task name, task path, `seat_results`, reward, `reward_valid`, timings),
 `artifacts/logs/world/events.jsonl` and `messages.jsonl`, `verifier/score.json` and
-`verifier/world-state.json`, and `seats/<seat>/agent/trajectory.json` (ATIF). Task names are parsed with
-`^flotilla/(<label>)-(<iii>)-(solo|silent|talk|talk-liar)$`; `<label>` is `<family>` or
+`verifier/world-state.json`, and `seats/<seat>/agent/trajectory.json` (ATIF). Each trial needs its task's
+label, instance and condition (`flotilla_analysis/names.py`). A readable task name says them:
+`^flotilla/(<label>)-(<iii>)-(solo|silent|talk|talk-liar|talk-warned|talk-liar-warned)$`, the name of
+every task built before opaque names. An opaque name (`flotilla/t-<12 hex>`, the default of
+`build_tasks.py`) does not; they come from `task.toml` `[metadata]` in the trial's task folder (the path
+in `result.json`) when that folder still holds the task of that name, else from a build manifest:
+`--manifest FILE`, `DIR/manifest.json` of `--tasks DIR`, or the manifest at the build root of the task
+folder. A trial whose task none of them names is reported as a problem. `<label>` is `<family>` or
 `<family>.<variant>`, and labels are never pooled. `world-state.json` is authoritative for messages and
 submissions (the verifier wrote it after freezing the world; the JSONL artifacts were collected
 before verification); differences are reported per trial.
@@ -30,7 +38,10 @@ The answer-dependent measures (clobbers, invalid answers, the acted-on proxy) al
 folder: `environment/task.json` (answer key), `environment/family.py` and the seats' `SEAT_BRIEFING`
 in `environment/docker-compose.yaml`. A task folder is used only if its `task.json` names the same
 task and the family scorer gives the final answer the score the verifier recorded; otherwise those
-measures are `unknown`. The tool imports `family.py` from the task folder: run it on folders you built.
+measures are `unknown`. A task folder rebuilt since the run has another opaque name: the build manifest
+(at a `--tasks` root, a `--manifest` root, or the build root of the task path) lists it under the same
+label, instance and condition. The tool imports `family.py` from the task folder: run it on folders you
+built.
 
 ## Outputs and rules
 
