@@ -1,0 +1,30 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/kit-check.json"]
+
+[task]
+name = "harbor/kit-check"
+description = "Two reviewers report allowed kits for each case. A builder chooses one kit per case."
+keywords = ["seats", "docker-compose", "multi-agent"]
+
+[metadata]
+difficulty = "easy"
+category = "example"
+tags = ["seats", "coordination"]
+
+[verifier]
+timeout_sec = 120.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[agents.left]
+under_test = false
+
+[agents.right]
+under_test = false
+
+[agents.builder]
+under_test = true
