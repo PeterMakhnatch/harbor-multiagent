@@ -16,7 +16,10 @@ coordinate. Flotilla separates them by running every task instance in three **co
 | `talk` | N | each seat holds only its own part | enabled |
 
 Optional fourth condition, `talk-liar`: as `talk`, plus one scripted seat (not a language model) that
-sends false information at a fixed rate. It measures trust calibration.
+sends false information at a fixed rate. It measures trust calibration. Every condition whose name
+starts with `talk` has messaging: `talk`, `talk-liar`, `talk-warned`, `talk-liar-warned`. The two
+`-warned` conditions tell the seats "One of your teammates may give you wrong information."; `talk-liar`
+does not. No seat ever sees the name of its condition (section 4).
 
 For one family, model and instance set, with paired instances:
 
@@ -40,13 +43,20 @@ task.toml: [task] name = "flotilla/<label>-<instance:03d>-<condition>"
 A variant changes the seat count or the difficulty of a family. Results of different labels are
 never pooled.
 
-`[metadata]` in `task.toml` carries `family`, `instance`, `condition`, `n_seats`, `difficulty`,
-`seed`. The analysis parses the task name first and falls back to nothing else.
+`[metadata]` in `task.toml` carries `family`, `variant`, `instance`, `condition`, `n_seats`,
+`team_seats`, `difficulty`, `seed`, `max_text`, `max_messages` and `play_timeout_sec` (and
+`scripted_seats` in scripted variants). The analysis parses the task name first and falls back to
+nothing else.
 
 ## 3. Seats and environment
 
-Compose services: `main` (the world; network alias `world`) and one service per seat (`p1`..`pN`).
-All seats use one player image (`python:3.13-slim` plus `bash curl git`, user `player`).
+Compose services: `main` (the world) and one service per seat (`p1`..`pN`). All seats use one player
+image (`python:3.13-slim` plus `bash curl git jq`, user `player`). Each seat has its own network,
+`seat-<seat>`, shared only with `main`, which has the alias `world` on every one of them: a seat reaches
+the world, never another seat. (Before world version 2 all seats shared one network, and a seat could
+open a socket to another seat, a channel that bypasses the world even in `silent`.) Every value in the
+Compose file is written with `$` as `$$`, so that Compose never replaces `$NAME` in a briefing with a
+variable of the host that runs the trial.
 
 | Variable | Where | Meaning |
 |---|---|---|
@@ -54,28 +64,38 @@ All seats use one player image (`python:3.13-slim` plus `bash curl git`, user `p
 | `SEAT_TOKEN` | each seat | secret bearer token; only this seat and `main` know it |
 | `SEAT_BRIEFING` | each seat | JSON of this seat's private information (the same facts as its instruction) |
 | `WORLD_URL` | each seat | `http://world:8080` |
-| `FLOTILLA_CONDITION` | main | `solo`, `silent`, `talk` or `talk-liar` |
+| `FLOTILLA_CONDITION` | main | `solo`, `silent`, `talk`, `talk-liar`, `talk-warned` or `talk-liar-warned` |
 | `FLOTILLA_SEATS` | main | comma-separated seat names |
 | `FLOTILLA_TOKENS` | main | `p1:<hex>,p2:<hex>` |
 | `FLOTILLA_ADMIN` | main | admin token used by the verifier only |
+| `FLOTILLA_MAX_TEXT` | main | characters per message (default 4,000; `build_tasks.py --max-text`) |
+| `FLOTILLA_MAX_MESSAGES` | main | messages per seat (default 200; `build_tasks.py --max-messages`) |
 
-`main` also holds `/world/task.json` (family, instance, condition, seats, answer key) and
-`/world/family.py` (the family module, for scoring). Seats cannot read `main`'s files.
+`main` also holds `/world/task.json` (family, variant, instance, condition, seats, answer key,
+`world_version`, `max_text`, `max_messages`) and `/world/family.py` (the family module, for scoring).
+Seats cannot read `main`'s files. When the limits are not the defaults, the instructions of the `talk`
+conditions state them ("Each seat may send at most 3 messages of at most 200 characters.").
 
 ## 4. The world API (`world/world.py`)
 
-Every endpoint except `/health` needs `Authorization: Bearer <token>`. The world derives the seat from
-the token; a client never names its own seat.
+`WORLD_VERSION = 2`. Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+world derives the seat from the token; a client never names its own seat. **No reply to a seat names
+the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
+condition from `/whoami`, and seats read it).
 
 | Method and path | Body | Reply | Notes |
 |---|---|---|---|
 | `GET /health` | | `{"ok": true}` | Compose health check |
-| `GET /whoami` | | `{"seat", "condition", "seats"}` | |
-| `POST /messages` | `{"to": "<seat>" or "all", "text": str}` | 201 `{"id": "m<k>", ...}` | 403 in `solo` and `silent`; at most 4,000 characters and 200 messages per seat |
-| `GET /messages` | | `{"messages": [{"id","from","to","text","t"}]}` | every message to the caller or to `all`, plus its own; 403 in `solo` and `silent` |
-| `POST /submit` | `{"answer": {...}}` | 200 `{"accepted": true, "n": k}` | the team answer is the **last accepted submission from any seat**; replies never reveal correctness |
+| `GET /whoami` | | `{"seat", "seats", "messaging": bool, "limits": {"max_text", "max_messages"}}` | |
+| `POST /messages` | `{"to": "<seat>" or "all", "text": str}` | 201 `{"id": "m<k>", ...}` | 403 when messaging is off (`solo`, `silent`); 413 above `max_text` characters; 429 after `max_messages` messages of this seat |
+| `GET /messages` | | `{"messages": [{"id","from","to","text","t"}]}` | every message to the caller or to `all`, plus its own; 403 when messaging is off |
+| `POST /submit` | `{"answer": {...}}` | 200 `{"accepted": true}` | the team answer is the **last accepted submission from any seat**; replies never reveal correctness or how many submissions exist (world version 1 returned the running count `n`, which a seat in `silent` read as a signal from its teammates) |
 | `POST /admin/freeze` | | 200 | admin token only; later submissions are refused (409) and logged as `late` |
-| `GET /admin/state` | | full state | admin token only; used by the verifier |
+| `GET /admin/state` | | full state, with `world_version`, `condition` and `limits` | admin token only; used by the verifier |
+
+Any other path is 404 and a known path with the wrong method is 405 (with `Allow`); a seat that asks
+for an `/admin/` path gets 404. A body that is not a JSON object of at most `max(64,000,
+8 × max_text)` bytes is 400; `NaN` and `Infinity` are not JSON here.
 
 ## 5. Evidence the world writes (artifacts)
 
@@ -85,9 +105,21 @@ the token; a client never names its own seat.
 {"seq": 12, "t": 31.402, "seat": "p2", "kind": "send", "data": {"id": "m3", "to": "all", "chars": 118}}
 ```
 
-`t` is seconds since the world started (monotonic clock). `kind` is one of `whoami`, `send`,
-`deliver` (`data.ids`: message ids returned to the caller by `GET /messages`), `submit`
-(`data.n`, `data.answer`), `denied` (`data.path`, `data.reason`), `late`, `freeze`, `bad_token`.
+`t` is seconds since the world started (monotonic clock). Every request leaves one event, except the
+Compose health check that `main` sends to itself. `kind` is one of:
+
+- `start` (`data.condition`, `data.seats`, `data.world_version`, `data.limits`), written once;
+- `whoami`, `send` (`data.id`, `data.to`, `data.chars`), `deliver` (`data.ids`: message ids returned
+  to the caller by `GET /messages`), `submit` (`data.n`, `data.answer`), `late` (`data.answer`),
+  `freeze`, `state` (the verifier read the state);
+- `denied` (`data.path`, `data.reason`): messaging is off, or the seat's message limit is reached;
+- `bad_token` (`data.path`): a missing or unknown token (401);
+- `probe` (`data.method`, `data.path`, `data.status`): an unknown path (404, including a seat that asks
+  for an `/admin/` path) or a wrong method (405), so exploration is measured;
+- `invalid` (`data.method`, `data.path`, `data.status`, `data.reason`): a body the endpoint cannot use
+  (400, or 413 for a message above the text limit);
+- `health`: `GET /health` from another container than `main`.
+
 Message texts are stored once, in `/logs/world/messages.jsonl` (`id, from, to, text, t`).
 
 `task.toml` lists `events.jsonl` and `messages.jsonl` as artifacts, so they appear under
@@ -95,8 +127,11 @@ Message texts are stored once, in `/logs/world/messages.jsonl` (`id, from, to, t
 verifier writes its own evidence to `/logs/verifier/` (collected after verification as
 `<trial>/verifier/`):
 
-- `score.json`: `{"family", "instance", "condition", "seats", "score", "fields_correct",
-  "fields_total", "answer", "submitted_by", "n_submissions", "n_messages", "error"}`;
+- `score.json`: `{"family", "instance", "condition", "seats", "world_version", "score",
+  "fields_correct", "fields_total", "answer", "submitted_by", "n_submissions", "n_messages", "error",
+  "deceived"}`. `world_version` is 1 for tasks built before world version 2. `error` is set when the
+  world was unreachable or the family scorer raised on the answer (the score is then 0); `deceived`
+  is set in scripted-liar variants (did the team submit the decoy?);
 - `world-state.json`: the frozen world state (every message and submission), including anything
   that arrived after artifact collection.
 
@@ -127,16 +162,26 @@ def score(answer: dict | None, key: dict) -> dict:
     """{"score": float in [0, 1], "fields_correct": int, "fields_total": int}."""
 ```
 
-Each family must also have tests: generation is deterministic, `oracle_answer(all parts)` scores 1 on
-every instance, and `oracle_answer(one part)` scores clearly below 1 on most instances (the
-information is really split).
+Optional: `parse_text(text) -> dict | None` reads a private part back from its plain text (the
+oracle uses it to read a scripted peer). `score` must never raise, whatever JSON object it receives,
+and must never give credit for a wrong value.
+
+Each family must also have tests (`flotilla/tests/`, run with `python3 -m pytest flotilla/tests`):
+generation is deterministic, `oracle_answer(all parts)` scores 1 on every instance, and
+`oracle_answer(one part)` scores clearly below 1 on most instances (the information is really split).
+No text that a seat reads (goal, answer format, private text) contains the answer key; in
+particular, a format example is never the answer.
 
 ## 8. Oracle runs (validation, no model)
 
-`solution/solve.sh` runs in every seat under Harbor's `oracle` agent. In `solo` and `silent` it submits
-`oracle_answer([own part])`. In `talk` it posts its briefing to `all`, waits until every teammate's
-briefing arrived, and submits `oracle_answer(all parts)`. Expected rewards: `solo` 1, `talk` 1,
-`silent` = the best a seat can do alone (the information floor).
+`solution/solve.sh` runs in every seat under Harbor's `oracle` agent. When `/whoami` says messaging
+is off it submits `oracle_answer([own part])`. When messaging is on, it posts its briefing to `all` as
+numbered chunks that fit the limits (`FLOTILLA-BRIEFING <i>/<n> <compact JSON piece>`), or
+`FLOTILLA-BRIEFING 0/0` when the briefing cannot fit (nothing is coming); it waits until every
+teammate is done (at most 300 seconds) and submits `oracle_answer(all parts)`. A scripted peer posts
+its part, true or false, as plain text only; the oracle reads it with the family's `parse_text`.
+Expected rewards: `solo` 1, `talk` 1, `silent` = the best a seat can do alone (the information floor).
+With limits too small for the briefings, `talk` falls to the `silent` floor.
 
 ## 9. Analysis inputs
 

@@ -91,6 +91,10 @@ def test_hard_puzzles_with_the_checked_solver(n_seats):
             assert len(PUZZLE.solutions(people, domains, part["clues"], limit=minimum)) == minimum
 
 
+def _canonical(solution: dict) -> list:
+    return sorted((attr, sorted(values.items())) for attr, values in solution.items())
+
+
 def test_the_solver_matches_brute_force_for_every_clue_kind():
     rng = random.Random("puzzle-solver-check")
     weights = {kind: 1 for kind in ("is", "is_not", "same", "not_same", "higher", "next_above", "xor")}
@@ -104,8 +108,7 @@ def test_the_solver_matches_brute_force_for_every_clue_kind():
                  for k in range(rng.randint(1, 9))]
         expected = [s for s in everything if all(holds(c, s) for c in clues)]
         found = PUZZLE.solutions(people, domains, clues, limit=10**6)
-        key = lambda s: sorted((a, sorted(v.items())) for a, v in s.items())  # noqa: E731
-        assert sorted(map(key, found)) == sorted(map(key, expected)), trial
+        assert sorted(map(_canonical, found)) == sorted(map(_canonical, expected)), trial
         assert all(holds(c, secret) for c in clues)  # generated clues are true of the solution
 
 

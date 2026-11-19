@@ -155,7 +155,7 @@ def test_docker_compose_reads_the_briefing_back_unchanged(tmp_path):
     result = subprocess.run(
         ["docker", "compose", "--project-directory", str(path.parent), "-f", str(HARBOR_BASE_COMPOSE), "-f",
          str(path), "config", "--format", "json"],
-        capture_output=True, text=True, env={"CONTEXT_DIR": str(path.parent), "PATH": "/usr/bin:/bin:/usr/local/bin:"
+        capture_output=True, text=True, check=False, env={"CONTEXT_DIR": str(path.parent), "PATH": "/usr/bin:/bin:/usr/local/bin:"
                                              "/opt/homebrew/bin", "HOME": str(Path.home()), "USER": "someone"},
     )
     if result.returncode != 0 and "Cannot connect" in result.stderr:
@@ -221,9 +221,9 @@ def test_command_line(tmp_path):
     assert result.stdout.strip() == f"built 9 tasks under {tmp_path}"
     assert sorted(p.name for p in (tmp_path / "ledger").iterdir())[:3] == [
         "ledger-000-silent", "ledger-000-solo", "ledger-000-talk"]
-    bad = subprocess.run([*run[:-2], "--max-messages", "0"], capture_output=True, text=True)
+    bad = subprocess.run([*run[:-2], "--max-messages", "0"], capture_output=True, text=True, check=False)
     assert bad.returncode == 2 and "positive" in bad.stderr
-    unknown = subprocess.run([*run, "--conditions", "talk,shout"], capture_output=True, text=True)
+    unknown = subprocess.run([*run, "--conditions", "talk,shout"], capture_output=True, text=True, check=False)
     assert unknown.returncode == 2 and "unknown conditions" in unknown.stderr
     scripted = subprocess.run(
         [sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "schedule", "--scripted", "--instances", "0",

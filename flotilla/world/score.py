@@ -53,7 +53,7 @@ def main() -> None:
     final = submissions[-1] if submissions else None
     try:
         result = family.score(final["answer"] if final else None, task["answer_key"])
-    except Exception as exc:  # an answer the scorer cannot read earns nothing; the error is kept
+    except Exception as exc:  # noqa: BLE001 - an answer the scorer cannot read earns nothing; the error is kept
         result = {"score": 0.0, "fields_correct": 0, "fields_total": None}
         error = f"scorer failed: {type(exc).__name__}: {exc}"[:500]
     score = float(result["score"])
@@ -64,7 +64,7 @@ def main() -> None:
     if "decoy" in task:  # scripted-liar variants: did the team adopt the lie?
         try:
             deceived = bool(final) and family.score(final["answer"], task["decoy"])["score"] == 1.0
-        except Exception:  # an answer the scorer cannot read did not adopt the lie
+        except Exception:  # noqa: BLE001 - an answer the scorer cannot read did not adopt the lie
             deceived = False
     summary = {
         "deceived": deceived,
