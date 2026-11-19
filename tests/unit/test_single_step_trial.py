@@ -1,3 +1,4 @@
+import io
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.models.trial.paths import EnvironmentPaths
 from harbor.trial.errors import EnvironmentStartTimeoutError, VerifierTimeoutError
 from harbor.trial.single_step import SingleStepTrial
+from harbor.trial.trial import _SCRUB_SAMPLE_BYTES
 
 _NO_MCP_HEADERS = MCPHeaderEnv(refs={}, env={}, secrets=frozenset())
 
@@ -463,52 +465,125 @@ def test_scrub_still_covers_short_env_secrets(tmp_path: Path) -> None:
 _PASSWORD_AGENT = SimpleNamespace(
     extra_env={"DB_PASSWORD": "dummy-password-value"}, mcp_header_env=_NO_MCP_HEADERS
 )
+_PASSWORD_LINE = b"password=dummy-password-value\n"
 
 
 @pytest.mark.parametrize(
-    ("character", "offset"),
-    [("é", 8191), ("€", 8190), ("€", 8191), ("😀", 8189), ("😀", 8190), ("😀", 8191)],
+    ("character", "bytes_in_sample"),
+    [("é", 1), ("€", 1), ("€", 2), ("😀", 1), ("😀", 2), ("😀", 3)],
 )
 def test_scrub_covers_text_whose_sample_ends_inside_a_character(
-    tmp_path: Path, character: str, offset: int
+    tmp_path: Path, character: str, bytes_in_sample: int
 ) -> None:
-    """The text check reads the first 8192 bytes. A multi-byte character that
-    crosses that end leaves the file text, so a secret after it is scrubbed."""
-    if not offset < 8192 < offset + len(character.encode("utf-8")):
-        raise AssertionError("byte 8192 must fall inside the character")
+    """The text check reads the first _SCRUB_SAMPLE_BYTES bytes. A
+    multi-byte character that crosses that end leaves the file text, so a
+    secret after it is scrubbed."""
+    encoded = character.encode("utf-8")
+    if not 0 < bytes_in_sample < len(encoded):
+        raise AssertionError("the sample must end inside the character")
+    head = b"a" * (_SCRUB_SAMPLE_BYTES - bytes_in_sample) + encoded
     log = tmp_path / "agent.log"
-    head = "a" * offset + character
-    log.write_bytes(f"{head}\npassword=dummy-password-value\n".encode())
+    log.write_bytes(head + b"\n" + _PASSWORD_LINE)
 
     _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
 
-    assert log.read_bytes().decode("utf-8").splitlines() == [
-        head,
-        "password=[REDACTED]",
-    ]
+    assert log.read_bytes() == head + b"\npassword=[REDACTED]\n"
 
 
 @pytest.mark.parametrize(
     "data",
     [
-        # A NUL byte marks a binary file.
-        b"\x00binary\npassword=dummy-password-value\n",
-        # Bytes that no UTF-8 text holds, inside the first 8192 bytes: a
-        # byte that cannot start a character, a lead byte cut by ASCII, and
-        # an encoded surrogate.
-        b"head \xff tail\npassword=dummy-password-value\n",
-        b"head \xc3( tail\npassword=dummy-password-value\n",
-        b"head \xed\xa0\x80 tail\npassword=dummy-password-value\n",
+        b"\x00binary\n" + _PASSWORD_LINE,
+        b"head \xff tail\n" + _PASSWORD_LINE,
+        b"head \xc3( tail\n" + _PASSWORD_LINE,
+        b"head \xed\xa0\x80 tail\n" + _PASSWORD_LINE,
+        # The sample check keeps a trailing \xed\xa0 for later input, and the
+        # strict read of the whole file then finds the surrogate.
+        b"a" * (_SCRUB_SAMPLE_BYTES - 2) + b"\xed\xa0\x80\n" + _PASSWORD_LINE,
+        # The file itself ends inside a character.
+        _PASSWORD_LINE + "é".encode("utf-8")[:1],
     ],
-    ids=["nul", "invalid-start-byte", "cut-lead-byte", "surrogate"],
+    ids=[
+        "nul",
+        "invalid-start-byte",
+        "cut-lead-byte",
+        "surrogate",
+        "surrogate-across-the-sample-end",
+        "cut-at-end-of-file",
+    ],
 )
-def test_scrub_leaves_binary_files_untouched(tmp_path: Path, data: bytes) -> None:
+def test_scrub_leaves_binary_and_invalid_utf8_files_unchanged(
+    tmp_path: Path, data: bytes
+) -> None:
+    """A file with a NUL byte in its sample, or one that is not valid UTF-8 as
+    a whole, is left byte for byte as it is, its secrets too. For UTF-8, the
+    strict read of the whole file is the last check; the sample check only
+    exits early."""
     blob = tmp_path / "blob.bin"
     blob.write_bytes(data)
 
     _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
 
     assert blob.read_bytes() == data
+
+
+@pytest.mark.parametrize(
+    ("data", "read_in_full"),
+    [
+        (b"\x00binary\n" + _PASSWORD_LINE, False),
+        (b"head \xff tail\n" + _PASSWORD_LINE, False),
+        (b"head \xc3( tail\n" + _PASSWORD_LINE, False),
+        (b"text\n" + _PASSWORD_LINE, True),
+    ],
+    ids=["nul", "invalid-start-byte", "cut-lead-byte", "text"],
+)
+def test_scrub_reads_in_full_only_files_whose_sample_can_be_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, data: bytes, read_in_full: bool
+) -> None:
+    """The NUL and UTF-8 checks of the sample are an early exit: a file that
+    fails one is never read in full."""
+    blob = tmp_path / "blob.bin"
+    blob.write_bytes(data)
+    read: list[Path] = []
+    for name in ("read_bytes", "read_text"):
+        real = getattr(Path, name)
+
+        def spy(self, *args, _real=real, **kwargs):
+            read.append(self)
+            return _real(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, name, spy)
+
+    _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
+    monkeypatch.undo()
+
+    assert (blob in read) is read_in_full
+
+
+@pytest.mark.parametrize("default_encoding", [None, "cp1252"], ids=["host", "cp1252"])
+def test_scrub_changes_only_the_secret_bytes_under_any_locale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, default_encoding: str | None
+) -> None:
+    """The scrub decodes and encodes UTF-8 bytes. CRLF and CR line endings stay
+    as they are, and so does a character that the locale's encoding lacks.
+    The cp1252 case sets the default text encoding of pathlib to cp1252, as on
+    Windows without UTF-8 mode; byte 0x9d of the UTF-8 cross mark is undefined
+    there."""
+    if default_encoding is not None:
+        monkeypatch.setattr(
+            io,
+            "text_encoding",
+            lambda encoding, stacklevel=2: (
+                default_encoding if encoding is None else encoding
+            ),
+        )
+    head = "first line\r\nfailed \u274c\r\nprogress 10%\rprogress 100%\r\n"
+    log = tmp_path / "agent.log"
+    log.write_bytes(head.encode("utf-8") + b"password=dummy-password-value\r\n")
+
+    _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
+
+    assert log.read_bytes() == head.encode("utf-8") + b"password=[REDACTED]\r\n"
 
 
 @pytest.mark.parametrize("source", ["host_env", "native_config"])
