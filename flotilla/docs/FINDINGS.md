@@ -342,4 +342,8 @@ Fix (a contract change: CONTRACT.md 2, 3 and 4; world version 3):
   (`software-name`), and a seat that gets the seed (`seat-secrets`). It warns about a set with a
   public seed (`public-seed`): below 1,000,000, or named in this checkout's documentation.
 
+> Since 11:00 ET (review of PR #29): `public-seed` is a FAIL; `qa.py --allow-public-seed` makes it a WARN,
+> only to repeat a published build. `qa.py` also fails a fixed `container_name` (`container-name`), and
+> the analysis says only which build parameter of a rebuilt folder differs, never a seed.
+
 Lesson: when the generator is public, the seed is the answer key. Keep it as secret as the key.

@@ -76,12 +76,20 @@ RULES: dict[str, tuple[str, str]] = {
     "runtime-names": ("FAIL", ("the Docker names that Harbor derives from the task folder's name say the condition "
                                "or the label (a set built with --readable-names); --allow-readable-names makes it "
                                "a WARN, for local debugging only")),
-    "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
-    "public-seed": ("WARN", (f"the set was built with a public seed (below {PUBLIC_SEED_BELOW:,}, or named in this "
+    "public-seed": ("FAIL", (f"the set was built with a public seed (below {PUBLIC_SEED_BELOW:,}, or named in this "
                              "checkout's documentation): a seat that finds the public generator can compute every "
-                             "answer key; use it only to repeat a published build")),
+                             "answer key; --allow-public-seed makes it a WARN, only to repeat a published build")),
+    "container-name": ("FAIL", ("a service sets container_name: a seat reads that fixed name by a reverse DNS "
+                                "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
+    "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
+ALLOW_PUBLIC_SEED = "--allow-public-seed"  # the flag that makes public-seed a WARN
+DOWNGRADES = {  # rule -> (its flag, what the downgraded set is for)
+    "runtime-names": (ALLOW_READABLE_NAMES, "for a local debugging run only; never run this set in a wave"),
+    "public-seed": (ALLOW_PUBLIC_SEED, "only to repeat a published build (the 2026-11-19 waves: --seed 1); a new "
+                    "wave builds without --seed"),
+}
 SOURCE_WORDS = ("flotilla", "harbor-multiagent")  # the software's name and its repository's name
 MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no seat may get (seat-secrets)
 DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
@@ -108,7 +116,7 @@ class Finding:
     task: str  # the task folder's name, or a label for a finding about a whole label
     seat: str  # a seat, "p1,p2" for a pair, or "*" for the whole task
     detail: str  # never a token value, an answer key or a secret seed
-    downgraded: bool = False  # a FAIL that the operator allowed as a WARN (--allow-readable-names)
+    downgraded: bool = False  # a FAIL that the operator allowed as a WARN (DOWNGRADES)
 
     @property
     def level(self) -> str:
@@ -713,7 +721,7 @@ def check_seat_secrets(task: Task) -> Iterator[Finding]:
     tokens = [(seat, task.env(seat).get("SEAT_TOKEN", "")) for seat in task.seats if seat in task.services]
     tokens += registered_tokens(main_env.get("FLOTILLA_TOKENS", ""))
     spellings, canonical = secret_forms(task.answer_key)
-    # a secret seed gives every answer key with the public generator; a public one is public-seed's WARN
+    # a secret seed gives every answer key with the public generator; a public one is public-seed's finding
     seed = str(task.seed) if task.seed is not None and task.seed >= PUBLIC_SEED_BELOW else ""
     main_volumes = volume_sources(task, task.services.get("main") or {})
     for seat in task.seats:
@@ -857,8 +865,17 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
 
 
+def check_container_name(task: Task) -> Iterator[Finding]:
+    """Harbor names a trial's containers after the trial, an opaque name. A container_name replaces it with a fixed
+    name, which a seat reads by a reverse DNS lookup of main's address (or of its own), as a silent seat read
+    `schedule-004-silent__cdeu7ht__env-main-1` (FINDINGS.md 2026-11-19 06:20); build_tasks.py never writes one."""
+    for name, service in sorted(task.services.items()):
+        if service.get("container_name") is not None:
+            yield Finding("container-name", task.name, name, f"service {name} sets container_name")
+
+
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
-              check_seat_secrets, check_token_map, check_stale_code, check_solo_sufficient)
+              check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -967,12 +984,12 @@ def documented_seeds(root: Path = ROOT) -> frozenset[int]:
     return frozenset(found)
 
 
-def check_public_seed(tasks: list[Task]) -> Iterator[Finding]:
+def check_public_seed(tasks: list[Task], allow_public_seed: bool = False) -> Iterator[Finding]:
     """The family generators are public (this repository), so a seed is the answer key in another form: a seat that
     finds the generator and the seed can compute the answer, in any condition. Every build before secret seeds used
-    --seed 1, and a small seed can be found by trying them all (FINDINGS.md, 2026-11-19 10:11). One WARN per label
-    and seed: such a set may repeat a published build (RESULTS.md, "Reproduce"), but a new wave needs a secret seed
-    (build without --seed)."""
+    --seed 1, and a small seed can be found by trying them all (FINDINGS.md, 2026-11-19 10:11). One FAIL per label
+    and seed: a new wave needs a secret seed (build without --seed). --allow-public-seed makes it a WARN, to repeat
+    a published build (RESULTS.md, "Reproduce")."""
     documented = documented_seeds()
     by_label: dict[tuple[str, str, int], int] = defaultdict(int)
     for task in tasks:
@@ -982,7 +999,9 @@ def check_public_seed(tasks: list[Task]) -> Iterator[Finding]:
         why = f"below {PUBLIC_SEED_BELOW:,}" if seed < PUBLIC_SEED_BELOW else "named in this checkout's documentation"
         yield Finding("public-seed", label, "*",
                       f"{count} tasks use seed {seed}, which is public ({why}): a seat that finds the public "
-                      "generator can compute their answer keys; build a new wave without --seed")
+                      "generator can compute their answer keys; build a new wave without --seed",
+                      downgraded=allow_public_seed)
+
 
 
 # --- Running and reporting -------------------------------------------------------------------------------------
@@ -1001,9 +1020,11 @@ def find_tasks(patterns: list[str]) -> list[Path]:
     return sorted(dict.fromkeys(p.resolve() for p in found))
 
 
-def check(paths: list[Path], allow_readable_names: bool = False) -> tuple[list[Finding], list[Task]]:
+def check(paths: list[Path], allow_readable_names: bool = False,
+          allow_public_seed: bool = False) -> tuple[list[Finding], list[Task]]:
     """Every finding for the task folders, in report order, and the tasks as read. allow_readable_names makes
-    runtime-names a WARN (a local debugging run of a set built with --readable-names)."""
+    runtime-names a WARN (a local debugging run of a set built with --readable-names); allow_public_seed makes
+    public-seed a WARN (a repeat of a published build)."""
     if yaml is None:
         raise RuntimeError("qa.py needs PyYAML: uvx --quiet --with pyyaml python flotilla/qa.py ...")
     tasks = [load_task(path) for path in paths]
@@ -1013,7 +1034,7 @@ def check(paths: list[Path], allow_readable_names: bool = False) -> tuple[list[F
             findings.update(rule(task))
     findings.update(check_twins(tasks))
     findings.update(check_runtime_names(tasks, allow_readable_names))
-    findings.update(check_public_seed(tasks))
+    findings.update(check_public_seed(tasks, allow_public_seed))
     for task in tasks:
         findings.update(task.errors)  # last: the rules above can add some
     return sorted(findings, key=Finding.order), tasks
@@ -1048,9 +1069,9 @@ def render_text(findings: list[Finding], tasks: list[Task]) -> str:
               f"{'rule':<16} {'level':<5} {'findings':>8} {'tasks':>6}"]
     lines += [f"{rule:<16} {row['level']:<5} {row['findings']:>8} {row['tasks']:>6}"
               for rule, row in facts["rules"].items()]
-    if any(f.downgraded for f in findings):
-        lines += ["", (f"{ALLOW_READABLE_NAMES}: runtime-names is a WARN, for a local debugging run only; "
-                  "never run this set in a wave.")]
+    for rule in sorted({f.rule for f in findings if f.downgraded}):
+        flag, purpose = DOWNGRADES[rule]
+        lines += ["", f"{flag}: {rule} is a WARN, {purpose}."]
     lines += ["", "PASS: no FAIL finding." if facts["passed"] else "FAIL: fix every FAIL finding before a wave."]
     return "\n".join(lines)
 
@@ -1072,6 +1093,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(ALLOW_READABLE_NAMES, action="store_true",
                         help="report runtime-names as a WARN, not a FAIL: for a local debugging run of a set built "
                         "with --readable-names, never for a wave")
+    parser.add_argument(ALLOW_PUBLIC_SEED, action="store_true",
+                        help="report public-seed as a WARN, not a FAIL: only to repeat a published build, such as "
+                        "the 2026-11-19 waves (--seed 1)")
     args = parser.parse_args(argv)
     if yaml is None:
         print("qa.py needs PyYAML: uvx --quiet --with pyyaml python flotilla/qa.py ...", file=sys.stderr)
@@ -1080,7 +1104,8 @@ def main(argv: list[str] | None = None) -> int:
     if not paths:
         print(f"no task folder (with a task.toml) matches {' '.join(args.tasks)}", file=sys.stderr)
         return 2
-    findings, tasks = check(paths, allow_readable_names=args.allow_readable_names)
+    findings, tasks = check(paths, allow_readable_names=args.allow_readable_names,
+                            allow_public_seed=args.allow_public_seed)
     print(render_json(findings, tasks) if args.json else render_text(findings, tasks))
     return 1 if any(f.level == "FAIL" for f in findings) else 0
 

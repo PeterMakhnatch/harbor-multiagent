@@ -39,8 +39,9 @@ build (the canonical waves used `--seed 1`), and `--seed-of PATH` gives a build 
 under PATH, so that two builds pair instance by instance. The same seed gives the same instances, and
 another seed gives other instances. Only the manifest (the `build` record of each entry),
 `task.toml` `[metadata]` and `environment/task.json` record the seed, and no seat reads them. A seed
-below 1,000,000, or one that this checkout's documentation names, is public: `qa.py` warns
-(`public-seed`). Use a public seed only to repeat a published build; build a new wave without `--seed`
+below 1,000,000, or one that this checkout's documentation names, is public: `qa.py` fails the set
+(`public-seed`), and `qa.py --allow-public-seed` makes it a WARN. Use a public seed only to repeat a
+published build (the 2026-11-19 waves: `--seed 1`); build a new wave without `--seed`
 (FINDINGS.md 2026-11-19 10:11).
 
 A task's name and its folder name say nothing about the task (no family, variant, instance or

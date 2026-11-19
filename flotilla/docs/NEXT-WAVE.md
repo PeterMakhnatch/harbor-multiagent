@@ -15,10 +15,11 @@ through OpenRouter, from the observed cost per trial; Modal adds about $0.01 per
 1. **Build.** The defaults are now safe: opaque task names and a secret random seed per build. To pair
    2 builds instance by instance (for example a control arm and a treatment arm), build the second one
    with `--seed-of <label folder of the first>`. Use `--seed 1` only to reproduce the waves of
-   2026-11-19.
+   2026-11-19, and check such a set with `qa.py --allow-public-seed`.
 2. **Check.** `uvx --quiet --with pyyaml python flotilla/qa.py "<out>/*/*"` must report 0 FAIL. It
    fails on readable names, leaked conditions, answer-format examples, shared seat networks, seat
-   secrets and the software's name in seat-visible bytes; it warns on a public seed.
+   secrets, the software's name in seat-visible bytes, fixed container names and a public seed
+   (`public-seed`; `--allow-public-seed` makes that a WARN, only for a reproduction).
 3. **Oracle check.** Run the oracle agent on 2 instances of every arm first (`make_jobs.py --agent oracle`),
    on the same environment as the wave. Expected: solo 1, talk 1, silent below 1; a scripted liar
    deceives the naive oracle. This costs cents and catches broken builds.
