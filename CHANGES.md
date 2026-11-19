@@ -18,6 +18,7 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/models/job/config.py` | `JobConfig.participants`. |
 | `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. |
 | `src/harbor/models/job/lock.py` | Records participants in `lock.json` and its equality, so a changed roster is a changed run. |
+| `src/harbor/trial/trial.py` (scrub text check) | `_scrub_jobs_dir` decided that a file was text by decoding its first 8192 bytes as UTF-8. A multi-byte character across byte 8192 failed that decode, so the whole file was skipped and its secrets stayed. The check now uses an incremental decoder with `final=False`, which accepts a character cut at the end of the sample; a NUL byte or invalid UTF-8 inside the sample still marks a file as binary. Upstream Harbor's `main` has the same check, so this row goes when upstream takes the fix. |
 | `src/harbor/models/trial/result.py` | `SeatResult` and `TrialResult.seat_results`; seat errors count as recorded errors and seat usage counts in the token and cost totals. |
 | `src/harbor/environments/base.py` | `service_upload_file` and `service_upload_dir`, raising the existing unsupported-service error off `main`. |
 | `src/harbor/environments/docker/docker.py` | Docker's `service_upload_file` and `service_upload_dir`. |

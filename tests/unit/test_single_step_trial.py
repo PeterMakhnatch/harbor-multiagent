@@ -460,6 +460,57 @@ def test_scrub_still_covers_short_env_secrets(tmp_path: Path) -> None:
     assert output.read_text() == "password=[REDACTED]"
 
 
+_PASSWORD_AGENT = SimpleNamespace(
+    extra_env={"DB_PASSWORD": "dummy-password-value"}, mcp_header_env=_NO_MCP_HEADERS
+)
+
+
+@pytest.mark.parametrize(
+    ("character", "offset"),
+    [("é", 8191), ("€", 8190), ("€", 8191), ("😀", 8189), ("😀", 8190), ("😀", 8191)],
+)
+def test_scrub_covers_text_whose_sample_ends_inside_a_character(
+    tmp_path: Path, character: str, offset: int
+) -> None:
+    """The text check reads the first 8192 bytes. A multi-byte character that
+    crosses that end leaves the file text, so a secret after it is scrubbed."""
+    if not offset < 8192 < offset + len(character.encode("utf-8")):
+        raise AssertionError("byte 8192 must fall inside the character")
+    log = tmp_path / "agent.log"
+    head = "a" * offset + character
+    log.write_bytes(f"{head}\npassword=dummy-password-value\n".encode())
+
+    _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
+
+    assert log.read_bytes().decode("utf-8").splitlines() == [
+        head,
+        "password=[REDACTED]",
+    ]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # A NUL byte marks a binary file.
+        b"\x00binary\npassword=dummy-password-value\n",
+        # Bytes that no UTF-8 text holds, inside the first 8192 bytes: a
+        # byte that cannot start a character, a lead byte cut by ASCII, and
+        # an encoded surrogate.
+        b"head \xff tail\npassword=dummy-password-value\n",
+        b"head \xc3( tail\npassword=dummy-password-value\n",
+        b"head \xed\xa0\x80 tail\npassword=dummy-password-value\n",
+    ],
+    ids=["nul", "invalid-start-byte", "cut-lead-byte", "surrogate"],
+)
+def test_scrub_leaves_binary_files_untouched(tmp_path: Path, data: bytes) -> None:
+    blob = tmp_path / "blob.bin"
+    blob.write_bytes(data)
+
+    _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
+
+    assert blob.read_bytes() == data
+
+
 @pytest.mark.parametrize("source", ["host_env", "native_config"])
 def test_scrub_mini_swe_agent_resolved_model_key(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str

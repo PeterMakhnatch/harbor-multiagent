@@ -1,5 +1,6 @@
 from typing import Any, override
 import asyncio
+import codecs
 import contextlib
 import hashlib
 import logging
@@ -1346,7 +1347,9 @@ class Trial(ABC):
                 if b"\0" in sample:
                     continue
                 try:
-                    sample.decode("utf-8")
+                    # final=False: a multi-byte character can cross the end
+                    # of the sample, and that does not make the file binary.
+                    codecs.getincrementaldecoder("utf-8")().decode(sample, final=False)
                 except UnicodeDecodeError:
                     continue
                 text = path.read_text()
