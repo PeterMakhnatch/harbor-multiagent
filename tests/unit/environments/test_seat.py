@@ -1,7 +1,10 @@
 """SeatEnvironment points the docker environment at one Compose service."""
 
+import asyncio
+import os
 import shlex
-from pathlib import Path
+import tarfile
+from pathlib import Path, PurePosixPath
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,7 +17,7 @@ from harbor.environments.base import (
 from harbor.environments.docker.docker import DockerEnvironment
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.task.config import EnvironmentConfig
-from harbor.models.trial.paths import TrialPaths
+from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 
 
 @pytest.fixture
@@ -140,6 +143,134 @@ async def test_upload_tar_fallback_targets_the_seat(project, seat, temp_dir):
     tar_steps = [c for c in _commands(project) if c[0] == "exec"]
     assert all(c[:5] == ["exec", "-T", "-u", "root", "maya"] for c in tar_steps)
     assert tar_steps[-1][5:] == ["tar", "-xf", "-", "-C", "/home/maya"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX host file modes")
+async def test_oracle_solution_archive_preserves_modes_and_extracts_as_seat(
+    project, seat, temp_dir
+):
+    source = temp_dir / "solution"
+    source.mkdir(mode=0o700)
+    script = source / "solve.sh"
+    script.write_text("#!/bin/bash\n")
+    script.chmod(0o600)
+    nested = source / ".inputs"
+    nested.mkdir(mode=0o700)
+    (nested / "answer").write_text("task input")
+    (nested / "answer").chmod(0o600)
+    (source / "link").symlink_to(".inputs/answer")
+
+    async def runner(command, **_):
+        if command[-1].endswith("id -u && id -g"):
+            return ExecResult(stdout="1000\n2000\n", return_code=0)
+        if command[0] == "cp":
+            with tarfile.open(command[1]) as archive:
+                entries = {info.name: info for info in archive.getmembers()}
+                assert entries.keys() == {
+                    ".inputs",
+                    ".inputs/answer",
+                    "solve.sh",
+                    "link",
+                }
+                assert entries["link"].issym()
+                assert entries[".inputs"].mode == 0o700
+                assert entries[".inputs/answer"].mode == 0o600
+                assert entries["solve.sh"].mode == 0o600
+                assert entries["link"].linkname == ".inputs/answer"
+        return ExecResult(return_code=0)
+
+    project._run_docker_compose_command = AsyncMock(side_effect=runner)
+
+    await seat.upload_oracle_solution(source)
+
+    identity, prepare, copy, handoff, extract, cleanup = _commands(project)
+    assert identity[:4] == ["exec", "maya", "sh", "-c"]
+    assert "mkdir -m 700 -- /solution && chown -h -- 1000:2000 /solution" in prepare[-1]
+    staging = prepare[-1].split()[-1]
+    assert copy[-1] == f"maya:{staging}/solution.tar"
+    assert all(
+        c[:4] == ["exec", "-u", "root", "maya"] for c in (prepare, handoff, cleanup)
+    )
+    assert f"chmod 400 -- {staging}/solution.tar" in handoff[-1]
+    assert f"chown -h -- 1000:2000 {staging}/solution.tar" in handoff[-1]
+    assert f"chown -h -- 0:2000 {staging} && chmod 710 -- {staging}" in handoff[-1]
+    assert extract[:4] == ["exec", "maya", "sh", "-c"]
+    assert extract[-1].endswith(f"exec tar --no-same-owner -xpf {staging}/solution.tar")
+    assert cleanup[-1] == f"rm -f -- {staging}/solution.tar; rmdir -- {staging}"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires a POSIX shell")
+@pytest.mark.parametrize("redirected", [True, False], ids=["symlink", "nonempty"])
+async def test_oracle_solution_refuses_unsafe_destinations(
+    project, seat, temp_dir, monkeypatch, redirected
+):
+    source = temp_dir / "source"
+    source.mkdir()
+    (source / "solve.sh").write_text("#!/bin/bash\n")
+    target = temp_dir.resolve() / "target"
+    if redirected:
+        target.symlink_to(source, target_is_directory=True)
+    else:
+        target.mkdir()
+        (target / ".keep").write_text("pre-existing")
+    monkeypatch.setattr(
+        EnvironmentPaths,
+        "for_os",
+        lambda _: EnvironmentPaths(solution_dir=PurePosixPath(target)),
+    )
+
+    async def run_guard(command: str, tail: str) -> ExecResult:
+        # Run only the destination check against the fixture, never setup or tar.
+        guard, separator, _ = command.partition(tail)
+        assert separator
+        proc = await asyncio.create_subprocess_exec(
+            "/bin/sh", "-c", guard + "exit 42", stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await proc.communicate()
+        return ExecResult(stderr=stderr.decode(), return_code=await proc.wait())
+
+    async def runner(
+        command: str, *, service: str, user: str | None = None
+    ) -> ExecResult:
+        assert service == "maya"
+        if command.endswith("id -u && id -g"):
+            assert user is None
+            return ExecResult(stdout="1000\n2000\n", return_code=0)
+        if "exec tar" in command:
+            assert user is None
+            return await run_guard(command, "exec tar")
+        if redirected and "destination must be a real directory" in command:
+            assert user == "root"
+            return await run_guard(command, f"if [ ! -d {shlex.quote(str(target))} ]")
+        return ExecResult(return_code=0)
+
+    project.service_exec = AsyncMock(side_effect=runner)
+    project.service_upload_file = AsyncMock()
+    expected = "must be a real directory" if redirected else "must be empty"
+
+    with pytest.raises(RuntimeError, match=expected):
+        await seat.upload_oracle_solution(source)
+
+    if redirected:
+        project.service_upload_file.assert_not_awaited()
+        assert target.is_symlink()
+    else:
+        project.service_upload_file.assert_awaited_once()
+        assert (target / ".keep").read_text() == "pre-existing"
+
+
+async def test_oracle_solution_refuses_root_identity(project, seat, temp_dir):
+    project.service_exec = AsyncMock(
+        return_value=ExecResult(stdout="0\n2000\n", return_code=0)
+    )
+    project.service_upload_file = AsyncMock()
+
+    with pytest.raises(RuntimeError, match="expected a nonroot user"):
+        await seat.upload_oracle_solution(temp_dir)
+
+    project.service_exec.assert_awaited_once()
+    assert project.service_exec.call_args.kwargs["user"] is None
+    project.service_upload_file.assert_not_awaited()
 
 
 async def test_downloads_target_the_seat(project, seat, temp_dir):

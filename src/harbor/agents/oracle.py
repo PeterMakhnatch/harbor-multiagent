@@ -1,20 +1,19 @@
-from typing import override
+import sys
 from pathlib import Path
+from typing import override
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.capabilities import AgentCapabilities
 from harbor.environments.base import BaseEnvironment
+from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
-from harbor.utils.scripts import (
-    build_execution_command,
-    needs_chmod,
-    quote_shell_arg,
-)
+from harbor.models.task.config import TaskOS
 from harbor.models.task.task import Task
 from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 from harbor.utils.env import resolve_env_vars
 from harbor.utils.file_staging import selected_directory
+from harbor.utils.scripts import build_execution_command, needs_chmod, quote_shell_arg
 
 
 class OracleAgent(BaseAgent):
@@ -98,11 +97,23 @@ class OracleAgent(BaseAgent):
 
             self._task.file_filter.require_included(solve_path)
             selection = self._task.file_filter.select(solution_dir)
+            # Keep the normal upload's CRLF handling on Windows hosts.
+            seat = (
+                environment
+                if isinstance(environment, SeatEnvironment)
+                and environment.os == TaskOS.LINUX
+                and environment.default_user != 0
+                and sys.platform != "win32"
+                else None
+            )
             with selected_directory(selection) as source_dir:
-                await environment.upload_dir(
-                    source_dir=source_dir,
-                    target_dir=str(env_paths.solution_dir),
-                )
+                if seat is not None:
+                    await seat.upload_oracle_solution(source_dir)
+                else:
+                    await environment.upload_dir(
+                        source_dir=source_dir,
+                        target_dir=str(env_paths.solution_dir),
+                    )
             task_os = self._task.config.environment.os
             container_solve_path = str(
                 env_paths.solution_dir / solve_path.relative_to(solution_dir).as_posix()
@@ -116,9 +127,10 @@ class OracleAgent(BaseAgent):
             )
 
             if needs_chmod(container_solve_path):
+                mode = "u+x" if seat is not None else "+x"
                 await environment.exec(
-                    command=f"chmod +x {quote_shell_arg(container_solve_path, task_os)}",
-                    user="root",
+                    command=f"chmod {mode} {quote_shell_arg(container_solve_path, task_os)}",
+                    user=None if seat is not None else "root",
                 )
 
             timeout_sec = (
