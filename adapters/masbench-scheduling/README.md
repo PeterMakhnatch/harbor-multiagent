@@ -59,3 +59,5 @@ budget_out="$(mktemp -d)/budget"
 This treatment keeps the cursor messages and private cases unchanged. After 8 complete rounds, `m1` submits a null choice if the replies still disagree and no seat is exhausted. A unanimous or exhausted round takes precedence. Reports separate these 3 termination reasons for verified trials. A missing action is not a null choice.
 
 Use the original interactive branch to collect unbounded receipts. This treatment does not change the offline cursor, `full`, or `first8`.
+
+The [24-pair native result](prefix-results.md) compares a forecast frozen before target execution against acknowledged inputs and actions. It includes the target costs and the meetings lost to the budget.
