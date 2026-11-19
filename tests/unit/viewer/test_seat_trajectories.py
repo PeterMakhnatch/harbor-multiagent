@@ -1,6 +1,7 @@
 """Viewer API for multi-agent (seat) trials: per-seat trajectories and logs."""
 
 import json
+import shutil
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -173,3 +174,91 @@ def test_in_progress_seat_trial_is_labelled_by_its_participants(
         running_summary["model_provider"],
         running_summary["model_name"],
     ) == ("terminus-2", "openrouter", "deepseek/deepseek-v4-flash")
+
+
+SECRET = "host secret"
+
+
+@pytest.fixture
+def outside(tmp_path: Path) -> Path:
+    """A directory outside the trial holding the files an agent dir holds."""
+    link = tmp_path / "symlink-check"
+    try:
+        link.symlink_to("missing")
+    except OSError as error:
+        pytest.skip(f"Symlinks are unavailable: {error}")
+    link.unlink()
+    outside = tmp_path / "outside"
+    for relative in (
+        "trajectory.json",
+        "oracle.txt",
+        "setup/stdout.txt",
+        "command-0/stdout.txt",
+        "analysis.md",
+    ):
+        file = outside / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(json.dumps({"secret": SECRET}))
+    return outside
+
+
+def _replace_with_link(path: Path, target: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink(missing_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.symlink_to(target, target_is_directory=target.is_dir())
+
+
+@pytest.mark.parametrize(
+    ("route", "seat", "link", "target"),
+    [
+        ("trajectory", "p1", "seats/p1/agent/trajectory.json", "trajectory.json"),
+        ("trajectory", "p1", "seats/p1/agent", ""),
+        ("trajectory", None, "agent/trajectory.json", "trajectory.json"),
+        ("agent-logs", "p2", "seats/p2/agent/oracle.txt", "oracle.txt"),
+        ("agent-logs", "p2", "seats/p2/agent/setup/stdout.txt", "setup/stdout.txt"),
+        (
+            "agent-logs",
+            "p2",
+            "seats/p2/agent/command-0/stdout.txt",
+            "command-0/stdout.txt",
+        ),
+        ("agent-logs", "p2", "seats/p2/agent", ""),
+        ("agent-logs", None, "analysis.md", "analysis.md"),
+    ],
+)
+def test_a_link_out_of_the_trial_is_refused(
+    client: TestClient,
+    seat_trial: Path,
+    outside: Path,
+    route: str,
+    seat: str | None,
+    link: str,
+    target: str,
+) -> None:
+    """Each file is checked at its final path, below a valid seat root too."""
+    _replace_with_link(seat_trial / link, outside / target)
+
+    response = client.get(
+        f"{BASE}/{route}", params={"seat": seat} if seat is not None else {}
+    )
+
+    assert response.status_code == 403
+    assert SECRET not in response.text
+
+
+def test_a_link_inside_the_trial_is_followed(
+    client: TestClient, seat_trial: Path, outside: Path
+) -> None:
+    """As in the file route, the boundary is the trial, not the seat."""
+    _replace_with_link(
+        seat_trial / "seats" / "p1" / "agent" / "trajectory.json",
+        Path("..", "..", "p2", "agent", "trajectory.json"),
+    )
+
+    response = client.get(f"{BASE}/trajectory", params={"seat": "p1"})
+
+    assert response.status_code == 200
+    assert response.json()["session_id"] == f"{TRIAL}__p2"

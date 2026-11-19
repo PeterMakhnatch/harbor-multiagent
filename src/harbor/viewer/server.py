@@ -1310,6 +1310,22 @@ def _register_job_endpoints(
             raise HTTPException(status_code=404, detail=f"Seat '{seat}' not found")
         return seat_dir
 
+    def _trial_file(trial_dir: Path, path: Path) -> Path:
+        """Return ``path`` if its final target is inside the trial, else 403.
+
+        An agent's logs come from its container and can hold links, below a
+        seat or step root as well as at the trial's own ``agent/``. The file
+        route checks its final path the same way.
+        """
+        try:
+            target = path.resolve()
+        except (OSError, RuntimeError):
+            # Python 3.12 raises RuntimeError for a link loop.
+            raise HTTPException(status_code=403, detail="Access denied")
+        if trial_dir.resolve() not in target.parents:
+            raise HTTPException(status_code=403, detail="Access denied")
+        return path
+
     def _find_trial_recording(trial_dir: Path) -> tuple[Path, str] | None:
         """Find an OSWorld-style trial recording under agent/recording.mp4."""
         recording_path = trial_dir / "agent" / RECORDING_FILE_NAME
@@ -2433,7 +2449,7 @@ def _register_job_endpoints(
             )
 
         root = _resolve_agent_root(trial_dir, step, seat)
-        trajectory_path = root / "agent" / "trajectory.json"
+        trajectory_path = _trial_file(trial_dir, root / "agent" / "trajectory.json")
         if not trajectory_path.exists():
             return None
 
@@ -2804,7 +2820,7 @@ def _register_job_endpoints(
         }
 
         # Read analysis.md if it exists (always trial-level)
-        analysis_path_md = trial_dir / "analysis.md"
+        analysis_path_md = _trial_file(trial_dir, trial_dir / "analysis.md")
         if analysis_path_md.exists():
             try:
                 logs["summary"] = analysis_path_md.read_text()
@@ -2812,7 +2828,7 @@ def _register_job_endpoints(
                 logs["summary"] = "[Error reading file]"
 
         # Read analysis.json if it exists (structured analysis from harbor analyze)
-        analysis_path = trial_dir / "analysis.json"
+        analysis_path = _trial_file(trial_dir, trial_dir / "analysis.json")
         if analysis_path.exists():
             try:
                 logs["analysis"] = json.loads(analysis_path.read_text())
@@ -2820,7 +2836,7 @@ def _register_job_endpoints(
                 logs["analysis"] = None
 
         # Read oracle.txt if it exists
-        oracle_path = agent_dir / "oracle.txt"
+        oracle_path = _trial_file(trial_dir, agent_dir / "oracle.txt")
         if oracle_path.exists():
             try:
                 logs["oracle"] = oracle_path.read_text()
@@ -2828,7 +2844,7 @@ def _register_job_endpoints(
                 logs["oracle"] = "[Error reading file]"
 
         # Read setup/stdout.txt if it exists
-        setup_stdout_path = agent_dir / "setup" / "stdout.txt"
+        setup_stdout_path = _trial_file(trial_dir, agent_dir / "setup" / "stdout.txt")
         if setup_stdout_path.exists():
             try:
                 logs["setup"] = setup_stdout_path.read_text()
@@ -2841,7 +2857,7 @@ def _register_job_endpoints(
             command_dir = agent_dir / f"command-{i}"
             if not command_dir.exists():
                 break
-            stdout_path = command_dir / "stdout.txt"
+            stdout_path = _trial_file(trial_dir, command_dir / "stdout.txt")
             if stdout_path.exists():
                 try:
                     logs["commands"].append(
