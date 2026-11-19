@@ -1,0 +1,9 @@
+# Positive control: a real change that completion does not score
+
+Register this engineering control after selecting the 2-case panel and before running the changed program. It is a known, designed change, not discovery of an unexpected fault. The independent Linux repeat still uses the original, unchanged policies.
+
+The original blind actor always pursues landmark 0 after the first signal arrives. For this positive control, change that single fixed target to landmark 1. The actor still ignores the symbol's identity. Keep stock Harbor, world specs, seeds, observations, verifier, non-blind partner rules, and study definitions unchanged. Run all 5 teams on each selected world (101 and 102), exactly once on the original host. There are 10 new native trial UUIDs. Do not substitute an existing run or retry a missing cell.
+
+**Expected comparison.** All 10 trials still have Harbor completion reward 1. On seed 101 the native target is 0; the formerly matching blind movement and physical inputs should differ. On seed 102 the target is 1; the formerly different blind movement and physical inputs should now match. On both cases the 4 blind criteria should reverse and the other 5 should not change. This predicts 8 changed case–criterion entries, 10 unchanged, and no unknowns. Each pair of opposite-direction criteria shares measurements: these are not 8 independent effects. The predeclared comparable unit is the case and criterion. A green native completion is not a matching behavior.
+
+Compare the immutable full baseline to these fresh observations using only its selected worlds. Never select a new minimum from the candidate to decide what to test. Source-only coverage does not prove future sensitivity. This one positive control tests whether the system detects this specific, known actor change. The unchanged Linux repeat is a separate negative control. No model or metered infrastructure is needed for the changed run.
