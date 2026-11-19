@@ -203,6 +203,14 @@ def test_accepts_720_rounds_and_final_legal_bound():
         (lambda w: w["rounds"][0]["replies"].pop("m5"), "invalid reply roles"),
         (lambda w: w["rounds"][0]["replies"].update(m2=True), "invalid reply tick"),
         (
+            lambda w: w["rounds"][0].update(query_sha256="0" * 64),
+            "query digest mismatch",
+        ),
+        (
+            lambda w: w["rounds"][1].update(bundle_sha256="0" * 64),
+            "bundle digest mismatch",
+        ),
+        (
             lambda w: w.update(choice_view_sha256=w["rounds"][1]["bundle_sha256"]),
             "choice acknowledgment",
         ),
