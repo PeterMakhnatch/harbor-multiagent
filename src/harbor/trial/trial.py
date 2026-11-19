@@ -523,6 +523,7 @@ class Trial(ABC):
                 config,
                 _task=task,
                 _task_download_result=task_download_result,
+                _trial_id=trial_id,
             )
         elif task.has_steps:
             from harbor.trial.multi_step import MultiStepTrial
