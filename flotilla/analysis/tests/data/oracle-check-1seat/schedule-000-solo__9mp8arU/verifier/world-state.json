@@ -1,0 +1,22 @@
+{
+  "condition": "solo",
+  "frozen": true,
+  "messages": [],
+  "seats": [
+    "p1"
+  ],
+  "sent": {
+    "p1": 0
+  },
+  "submissions": [
+    {
+      "answer": {
+        "day": "Thu",
+        "start": "14:00"
+      },
+      "n": 1,
+      "seat": "p1",
+      "t": 3.822
+    }
+  ]
+}
