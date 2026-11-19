@@ -1,0 +1,311 @@
+{
+  "axes": {
+    "conditions": [
+      "fresh",
+      "reordered"
+    ],
+    "episodes": 12,
+    "seeds": [
+      1001,
+      1003
+    ]
+  },
+  "intentional_drift": [],
+  "policy": "arrival",
+  "schema": "seatlab.replay-comparison/v1",
+  "seeds": [
+    {
+      "cells": [
+        {
+          "condition": "fresh",
+          "native_trial_ids": {
+            "baseline": "dfabf5d9-c179-460f-a379-a19ee64ae6a8",
+            "candidate": "d9d2ffaa-95ea-43a8-a798-4e765136d1b9"
+          },
+          "stages": {
+            "dispatch_choice": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "dispatch_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "6121442969a3faf47302870f51eb991601f63780f570efc5b6f661a97a385450"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "6121442969a3faf47302870f51eb991601f63780f570efc5b6f661a97a385450"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_reports": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "4a54c031042758c0da10743d901c92246e9841eb3606d3a9ccf502de6c91d2c3"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "4a54c031042758c0da10743d901c92246e9841eb3606d3a9ccf502de6c91d2c3"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "latent": {
+              "baseline_fingerprint": "71064a12ebca63f13065733c985ebf127bb04f60dd41a3adb209029c73293f07",
+              "candidate_fingerprint": "71064a12ebca63f13065733c985ebf127bb04f60dd41a3adb209029c73293f07",
+              "episode_ids": [],
+              "status": "match"
+            },
+            "score": {
+              "baseline": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 12,
+                "optimal": 12
+              },
+              "candidate": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 12,
+                "optimal": 12
+              },
+              "episode_ids": [],
+              "scalar_reward_matches": true,
+              "status": "match"
+            }
+          }
+        },
+        {
+          "condition": "reordered",
+          "native_trial_ids": {
+            "baseline": "7808fbc0-6480-4a1f-a039-80d1e7b527c0",
+            "candidate": "0ed3e936-ac00-4c4d-a67f-8b5b8bb5e66b"
+          },
+          "stages": {
+            "dispatch_choice": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "dispatch_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "401c9c7d653967905eeaaafe03c982ae9d51cffc85b5c1484ea2c35f3a6e3afd"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "401c9c7d653967905eeaaafe03c982ae9d51cffc85b5c1484ea2c35f3a6e3afd"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_reports": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "8ee82145b6b2a0cb9601b45b34a9f054d7f4e4e3c1a1051d53fd32e4fef03339"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "8ee82145b6b2a0cb9601b45b34a9f054d7f4e4e3c1a1051d53fd32e4fef03339"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "latent": {
+              "baseline_fingerprint": "71064a12ebca63f13065733c985ebf127bb04f60dd41a3adb209029c73293f07",
+              "candidate_fingerprint": "71064a12ebca63f13065733c985ebf127bb04f60dd41a3adb209029c73293f07",
+              "episode_ids": [],
+              "status": "match"
+            },
+            "score": {
+              "baseline": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 10,
+                "optimal": 9
+              },
+              "candidate": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 10,
+                "optimal": 9
+              },
+              "episode_ids": [],
+              "scalar_reward_matches": true,
+              "status": "match"
+            }
+          }
+        }
+      ],
+      "divergent_stages": [],
+      "seed": 1001
+    },
+    {
+      "cells": [
+        {
+          "condition": "fresh",
+          "native_trial_ids": {
+            "baseline": "027ca050-cdd6-4805-9975-e5eb3dc015cf",
+            "candidate": "c0d493c9-9c13-4cc6-99e2-26b546ca4295"
+          },
+          "stages": {
+            "dispatch_choice": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "dispatch_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "e1924541dfe090184045ec3a978cc8b73d92aef36897bbeb30f41412539787ea"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "e1924541dfe090184045ec3a978cc8b73d92aef36897bbeb30f41412539787ea"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_reports": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "f0021a49c88574b985880a5a73ca9b7671a687e00e819e92fa122c3270834499"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "f0021a49c88574b985880a5a73ca9b7671a687e00e819e92fa122c3270834499"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "latent": {
+              "baseline_fingerprint": "ff8f01c1a657f4ab49f6669537f1a7ca0dcd7a6a29d5061f0e5cd08a483dad7e",
+              "candidate_fingerprint": "ff8f01c1a657f4ab49f6669537f1a7ca0dcd7a6a29d5061f0e5cd08a483dad7e",
+              "episode_ids": [],
+              "status": "match"
+            },
+            "score": {
+              "baseline": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 12,
+                "optimal": 12
+              },
+              "candidate": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 12,
+                "optimal": 12
+              },
+              "episode_ids": [],
+              "scalar_reward_matches": true,
+              "status": "match"
+            }
+          }
+        },
+        {
+          "condition": "reordered",
+          "native_trial_ids": {
+            "baseline": "06225c8d-312f-424b-b00a-cb0672d52b48",
+            "candidate": "7ffef7a1-a31a-4749-a304-6d380efdaba5"
+          },
+          "stages": {
+            "dispatch_choice": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "dispatch_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "7e3351e6e305a5a708353fc93ab207c2b4344619e702314698fd55b4f6a6dd4f"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "7e3351e6e305a5a708353fc93ab207c2b4344619e702314698fd55b4f6a6dd4f"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_reports": {
+              "episode_ids": [],
+              "status": "match"
+            },
+            "inventory_view": {
+              "acknowledged_match": null,
+              "baseline": {
+                "acknowledgment": "missing",
+                "basis": "reconstructed",
+                "canonical_sha256": "582f4dce6cd0adebce98cd47ad37887bb353196bf8b552391ae4812d62f9d783"
+              },
+              "candidate": {
+                "acknowledgment": "verified",
+                "basis": "bound",
+                "canonical_sha256": "582f4dce6cd0adebce98cd47ad37887bb353196bf8b552391ae4812d62f9d783"
+              },
+              "episode_ids": [],
+              "status": "match"
+            },
+            "latent": {
+              "baseline_fingerprint": "ff8f01c1a657f4ab49f6669537f1a7ca0dcd7a6a29d5061f0e5cd08a483dad7e",
+              "candidate_fingerprint": "ff8f01c1a657f4ab49f6669537f1a7ca0dcd7a6a29d5061f0e5cd08a483dad7e",
+              "episode_ids": [],
+              "status": "match"
+            },
+            "score": {
+              "baseline": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 8,
+                "optimal": 7
+              },
+              "candidate": {
+                "changed": 6,
+                "episodes": 12,
+                "feasible": 8,
+                "optimal": 7
+              },
+              "episode_ids": [],
+              "scalar_reward_matches": true,
+              "status": "match"
+            }
+          }
+        }
+      ],
+      "divergent_stages": [],
+      "seed": 1003
+    }
+  ],
+  "status": "match"
+}
