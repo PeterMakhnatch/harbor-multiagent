@@ -1,0 +1,15 @@
+# A controlled native speaker–listener experiment
+
+**Question:** When an inventory report and a dispatch decision are separate real actions, does the speaker or listener determine the final choice? This extension uses 2 under-test participants in each native Harbor trial. It is not the earlier provider replay and does not replace any missing primary result.
+
+## Fixed design
+
+Use the existing dispatch world and trusted independent verifier. Use 2 new seeds, `2001` and `2003`, and 12 shipments per seed. Compare `fresh` and `reordered`. For each world run 4 pairings: script/script (`SS`), script/model (`SM`), model/script (`MS`), model/model (`MM`), where the first letter means inventory. Scripts use the existing arrival-order participant, not the revision-aware oracle. Every model participant uses exactly one restricted parent-hosted first-party Claude CLI generation with only its own accepted native world view. Inventory model output is interpreted as its actual two reports; it may be wrong. Dispatch sees the actual delivered reports and determines the final bay. No correction using the hidden reference is permitted.
+
+Plan 16 distinct native trials and at most 16 model calls. Keep seeds and conditions paired; alternate condition order by seed and reverse the pairing order in the second seed. Use only the existing Claude Max subscription, with a $0.30 CLI provider-estimate bound per call ($4.80 across the experiment). Do not use an API key, a paid fallback, model retry, tools, MCP, project settings or an alternative model. Stop opening new cells on a failed preflight, malformed model result, budget violation, refusal, rate limit, or missing native grade. Report all unattempted cells and incurred known estimates. A cost estimate is not an invoice. There is no charge for the local Docker instances.
+
+## Acceptance
+
+Register the whole grid, actor source hashes, and first-party model identity before launch. For every completed cell verify 2 native seat records, 2 accepted role-view commitments, actual reports, delivered reports, native dispatch choices, the independent native score and both actor identities. Check the served model from the returned CLI metadata, not only the desired config. For scripted seats require zero model turns. For a model seat require exactly one confirmed turn. Unavailable usage is `null`, not zero. Native synthetic evidence can support comparing the reports sent with the reports that should have been sent. Do not interpret an acknowledged input as proof of understanding.
+
+Primary endpoint: paired changes in native choices and optimal counts when substituting only the listener, conditional on equal actual delivered messages. Report upstream message changes separately instead of attributing those to a listener. Secondary: both revision reports vs the speaker's own native input, feasible choices, per-seat reported usage and actual number of complete trials. A scalar reward alone cannot verify these contrasts. With 2 seeds, do not infer population effects or rank models. No original primary, held-out, or calendar trials count toward these denominators.
