@@ -201,9 +201,10 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str) -> 
 
 
 def build(family_name: str, instances: list[int], n_seats: int, difficulty: str, seed: int,
-          conditions: tuple[str, ...], out: Path) -> list[Path]:
+          conditions: tuple[str, ...], out: Path, variant: str = "") -> list[Path]:
     family = load_family(family_name)
     family_file = ROOT / "families" / f"{family_name}.py"
+    label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
     built = []
     for i in instances:
         inst = family.generate(seed, i, n_seats, difficulty)
@@ -215,8 +216,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             )
             tokens = {seat: secrets.token_hex(16) for seat in seats}
             admin = secrets.token_hex(16)
-            name = f"{family_name}-{i:03d}-{condition}"
-            task_dir = out / family_name / name
+            name = f"{label}-{i:03d}-{condition}"
+            task_dir = out / label / name
             if task_dir.exists():
                 shutil.rmtree(task_dir)
             env = task_dir / "environment"
@@ -224,8 +225,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             (task_dir / "instructions").mkdir()
             (task_dir / "solution").mkdir()
             (task_dir / "tests").mkdir()
-            meta = {"family": family_name, "instance": i, "condition": condition, "n_seats": len(seats),
-                    "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed}
+            meta = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
+                    "n_seats": len(seats), "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed}
             (task_dir / "task.toml").write_text(task_toml(f"flotilla/{name}", meta, seats, family.TITLE))
             for seat in seats:
                 (task_dir / "instructions" / f"{seat}.md").write_text(
@@ -237,7 +238,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             shutil.copy(ROOT / "world" / "world.py", env / "world.py")
             shutil.copy(ROOT / "world" / "score.py", env / "score.py")
             shutil.copy(family_file, env / "family.py")
-            task_json = {"family": family_name, "instance": i, "condition": condition, "seats": seats,
+            task_json = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
+                         "seats": seats,
                          "difficulty": difficulty, "seed": seed, "answer_key": inst["answer_key"]}
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
@@ -270,9 +272,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--conditions", default=",".join(CONDITIONS))
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
+    parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: "
+                        "task names become flotilla/<family>.<variant>-<iii>-<condition>")
     args = parser.parse_args()
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, args.seed,
-                  tuple(c for c in args.conditions.split(",") if c), args.out)
+                  tuple(c for c in args.conditions.split(",") if c), args.out, args.variant)
     print(f"built {len(built)} tasks under {args.out}")
 
 

@@ -32,9 +32,13 @@ A family module generates instances from `(seed, instance, n_seats, difficulty)`
 built in every condition. Task directory and Harbor task name:
 
 ```
-flotilla/tasks/<family>/<family>-<instance:03d>-<condition>/
-task.toml: [task] name = "flotilla/<family>-<instance:03d>-<condition>"
+flotilla/tasks/<label>/<label>-<instance:03d>-<condition>/
+task.toml: [task] name = "flotilla/<label>-<instance:03d>-<condition>"
+<label> = <family> or <family>.<variant>   (e.g. schedule, schedule.3seat, ledger.hard)
 ```
+
+A variant changes the seat count or the difficulty of a family. Results of different labels are
+never pooled.
 
 `[metadata]` in `task.toml` carries `family`, `instance`, `condition`, `n_seats`, `difficulty`,
 `seed`. The analysis parses the task name first and falls back to nothing else.
