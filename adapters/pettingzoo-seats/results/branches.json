@@ -1,0 +1,158 @@
+{
+  "controls": {
+    "changed-connect": {
+      "actions_equal": true,
+      "at_step": 2,
+      "branch_views_equal": true,
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "counts": {
+        "compared_steps": 6,
+        "simulated_steps": 6,
+        "source_steps": 19,
+        "target_steps": 7
+      },
+      "first_mismatch": null,
+      "inputs_equal": true,
+      "label": "simulation",
+      "measured_prefix_steps": 1,
+      "policies": {
+        "p0": "low",
+        "p1": "high"
+      },
+      "prefix_mismatch": false,
+      "returns_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "schema": "seatlab.pz-branch-compare/v1",
+      "source_native_trial_id": "53f13b3a-9f52-44b7-9b45-f6dd142183d3",
+      "status": "measured",
+      "target_native_trial_id": "85bead9e-9fa7-4f71-856e-298a721ec8e2",
+      "terminated_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated_equal": {
+        "p0": true,
+        "p1": true
+      }
+    },
+    "repeat-connect": {
+      "actions_equal": true,
+      "at_step": 2,
+      "branch_views_equal": true,
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "counts": {
+        "compared_steps": 18,
+        "simulated_steps": 18,
+        "source_steps": 19,
+        "target_steps": 19
+      },
+      "first_mismatch": null,
+      "inputs_equal": true,
+      "label": "simulation",
+      "measured_prefix_steps": 1,
+      "policies": {
+        "p0": "low",
+        "p1": "low"
+      },
+      "prefix_mismatch": false,
+      "returns_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "schema": "seatlab.pz-branch-compare/v1",
+      "source_native_trial_id": "53f13b3a-9f52-44b7-9b45-f6dd142183d3",
+      "status": "measured",
+      "target_native_trial_id": "0b4a922f-bb21-4a78-8be3-0409226a10f8",
+      "terminated_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated_equal": {
+        "p0": true,
+        "p1": true
+      }
+    },
+    "responsive-rps": {
+      "actions_equal": true,
+      "at_step": 2,
+      "branch_views_equal": true,
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "counts": {
+        "compared_steps": 5,
+        "simulated_steps": 5,
+        "source_steps": 6,
+        "target_steps": 6
+      },
+      "first_mismatch": null,
+      "inputs_equal": true,
+      "label": "simulation",
+      "measured_prefix_steps": 1,
+      "policies": {
+        "p0": "rps-copy",
+        "p1": "rps-beat-last"
+      },
+      "prefix_mismatch": false,
+      "returns_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "schema": "seatlab.pz-branch-compare/v1",
+      "source_native_trial_id": "a9c50d19-d3e0-49c2-9ad6-bbcf38848e8f",
+      "status": "measured",
+      "target_native_trial_id": "4d9fbca3-3a95-4f0c-8708-560f0a113ab2",
+      "terminated_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated_equal": {
+        "p0": true,
+        "p1": true
+      }
+    },
+    "wrong-rps": {
+      "actions_equal": false,
+      "at_step": 2,
+      "branch_views_equal": true,
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "counts": {
+        "compared_steps": 1,
+        "simulated_steps": 5,
+        "source_steps": 6,
+        "target_steps": 6
+      },
+      "first_mismatch": {
+        "kind": "action",
+        "role": "p1",
+        "step": 2
+      },
+      "inputs_equal": true,
+      "label": "simulation",
+      "measured_prefix_steps": 1,
+      "policies": {
+        "p0": "low",
+        "p1": "low"
+      },
+      "prefix_mismatch": false,
+      "returns_equal": {
+        "p0": false,
+        "p1": false
+      },
+      "schema": "seatlab.pz-branch-compare/v1",
+      "source_native_trial_id": "a9c50d19-d3e0-49c2-9ad6-bbcf38848e8f",
+      "status": "measured",
+      "target_native_trial_id": "4d9fbca3-3a95-4f0c-8708-560f0a113ab2",
+      "terminated_equal": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated_equal": {
+        "p0": true,
+        "p1": true
+      }
+    }
+  },
+  "registered": 4,
+  "schema": "seatlab.pz-branch-cohort/v1"
+}

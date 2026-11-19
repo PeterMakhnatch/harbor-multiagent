@@ -1,0 +1,80 @@
+{
+  "cells": [
+    {
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "exact_view_digests": 12,
+      "id": "rps-copy-beat",
+      "linux_native_trial_id": "066a7bef-1841-48b3-889f-f095b5e0456d",
+      "mac_native_trial_id": "4d9fbca3-3a95-4f0c-8708-560f0a113ab2",
+      "matched_actions": 12,
+      "maximum_absolute_numeric_observation_difference": null,
+      "maximum_absolute_return_difference": 0,
+      "returns": {
+        "p0": -3,
+        "p1": 3
+      },
+      "terminated": {
+        "p0": false,
+        "p1": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true
+      },
+      "world_steps": 6
+    },
+    {
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "exact_view_digests": 7,
+      "id": "connect-lh",
+      "linux_native_trial_id": "2cd2797c-41cb-4455-9049-fb9ba0f1f04e",
+      "mac_native_trial_id": "85bead9e-9fa7-4f71-856e-298a721ec8e2",
+      "matched_actions": 7,
+      "maximum_absolute_numeric_observation_difference": null,
+      "maximum_absolute_return_difference": 0,
+      "returns": {
+        "p0": 1,
+        "p1": -1
+      },
+      "terminated": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated": {
+        "p0": false,
+        "p1": false
+      },
+      "world_steps": 7
+    },
+    {
+      "case_sha256": "ad819d835450cf45109a91743091332f0d91e87ca6a7b6bc4237b6b6159ecb55",
+      "exact_view_digests": 12,
+      "id": "spread-llh",
+      "linux_native_trial_id": "81a6431b-a73b-4e21-9747-d18cb2a0b9f9",
+      "mac_native_trial_id": "7a607aaa-9bda-482b-b8d0-5436d62ad31f",
+      "matched_actions": 12,
+      "maximum_absolute_numeric_observation_difference": 0.0,
+      "maximum_absolute_return_difference": 0.0,
+      "returns": {
+        "p0": -5.7520899178967415,
+        "p1": -5.2520899178967415,
+        "p2": -5.7520899178967415
+      },
+      "terminated": {
+        "p0": false,
+        "p1": false,
+        "p2": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true,
+        "p2": true
+      },
+      "world_steps": 4
+    }
+  ],
+  "github_run": 44535915005,
+  "native_machines": 2,
+  "registered": 3,
+  "schema": "seatlab.pz-platform-replication/v1"
+}

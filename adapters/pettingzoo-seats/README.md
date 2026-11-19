@@ -1,10 +1,10 @@
 # PettingZoo seats
 
-This adapter runs installed, trusted, discrete PettingZoo games on stock Olam Harbor. The Harbor commit is `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`. Do not fork Harbor. The four lanes below do not share files.
+This adapter runs installed, trusted, discrete PettingZoo games on unmodified Olam Harbor at `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`. The four contributor lanes below have separate inputs and outputs.
 
-A later [results.md](results.md) will link real observed evidence. This page does not predict scores.
+Start with the [measured results and offline verification](results.md). The [smaller contribution on the personal fork](https://github.com/PeterMakhnatch/harbor-multiagent/pull/22) contains only the reusable task generator, runtime, presets and component tests.
 
-Registered protocols: [protocol.md](protocol.md), [particle-protocol.md](particle-protocol.md), [program-protocol.md](program-protocol.md), [branch-protocol.md](branch-protocol.md).
+Registered protocols: [classic games](protocol.md), [three-role particles](particle-protocol.md), [external programs](program-protocol.md), [source-only branches](branch-protocol.md), [private policy history](window-experiment/protocol.md) and [cooperative communication](communication-experiment/protocol.md).
 
 ## Lane 1. Run one named cell
 

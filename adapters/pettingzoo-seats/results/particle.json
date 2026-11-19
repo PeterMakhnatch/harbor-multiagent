@@ -1,0 +1,93 @@
+{
+  "cells": [
+    {
+      "case_sha256": "ad819d835450cf45109a91743091332f0d91e87ca6a7b6bc4237b6b6159ecb55",
+      "completion": 1,
+      "id": "spread-lll",
+      "native_trial_id": "dab7052e-c1f3-4a93-b4d4-e953c1c72266",
+      "reference": {
+        "decisions": 12,
+        "max_abs_observation_difference": 0.0,
+        "max_abs_return_difference": 0.0,
+        "returns": {
+          "p0": -5.1654547361753504,
+          "p1": -5.1654547361753504,
+          "p2": -5.1654547361753504
+        },
+        "steps": 4,
+        "terminated": {
+          "p0": false,
+          "p1": false,
+          "p2": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true,
+          "p2": true
+        }
+      },
+      "returns": {
+        "p0": -5.1654547361753504,
+        "p1": -5.1654547361753504,
+        "p2": -5.1654547361753504
+      },
+      "schema": "seatlab.pz-outcomes/v1",
+      "terminated": {
+        "p0": false,
+        "p1": false,
+        "p2": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true,
+        "p2": true
+      }
+    },
+    {
+      "case_sha256": "ad819d835450cf45109a91743091332f0d91e87ca6a7b6bc4237b6b6159ecb55",
+      "completion": 1,
+      "id": "spread-llh",
+      "native_trial_id": "7a607aaa-9bda-482b-b8d0-5436d62ad31f",
+      "reference": {
+        "decisions": 12,
+        "max_abs_observation_difference": 0.0,
+        "max_abs_return_difference": 0.0,
+        "returns": {
+          "p0": -5.7520899178967415,
+          "p1": -5.2520899178967415,
+          "p2": -5.7520899178967415
+        },
+        "steps": 4,
+        "terminated": {
+          "p0": false,
+          "p1": false,
+          "p2": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true,
+          "p2": true
+        }
+      },
+      "returns": {
+        "p0": -5.7520899178967415,
+        "p1": -5.2520899178967415,
+        "p2": -5.7520899178967415
+      },
+      "schema": "seatlab.pz-outcomes/v1",
+      "terminated": {
+        "p0": false,
+        "p1": false,
+        "p2": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true,
+        "p2": true
+      }
+    }
+  ],
+  "measured": 2,
+  "registered": 2,
+  "schema": "seatlab.pz-particle-cohort/v1"
+}

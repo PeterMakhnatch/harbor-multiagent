@@ -1,0 +1,246 @@
+{
+  "cells": [
+    {
+      "attempted": true,
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "completion": 1,
+      "decisions": 12,
+      "game": "rps_v2",
+      "id": "rps-ll-a",
+      "native_trial_id": "a9c50d19-d3e0-49c2-9ad6-bbcf38848e8f",
+      "policies": {
+        "p0": "low",
+        "p1": "low"
+      },
+      "reason": null,
+      "reference_sha256": "9345a70ddd800903689497225118de618aaddd1a847cd70221c5a0bc09a39d75",
+      "returns": {
+        "p0": 0,
+        "p1": 0
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": false,
+        "p1": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true
+      },
+      "world_steps": 6
+    },
+    {
+      "attempted": true,
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "completion": 1,
+      "decisions": 12,
+      "game": "rps_v2",
+      "id": "rps-ll-b",
+      "native_trial_id": "a933ef16-6018-4895-af57-4b2db6229847",
+      "policies": {
+        "p0": "low",
+        "p1": "low"
+      },
+      "reason": null,
+      "reference_sha256": "9345a70ddd800903689497225118de618aaddd1a847cd70221c5a0bc09a39d75",
+      "returns": {
+        "p0": 0,
+        "p1": 0
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": false,
+        "p1": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true
+      },
+      "world_steps": 6
+    },
+    {
+      "attempted": true,
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "completion": 1,
+      "decisions": 12,
+      "game": "rps_v2",
+      "id": "rps-lh",
+      "native_trial_id": "9eb74fa9-fa0b-4041-8fb0-329d09c655df",
+      "policies": {
+        "p0": "low",
+        "p1": "high"
+      },
+      "reason": null,
+      "reference_sha256": "566aa01ef36244f46e85efe4b5be16810f16531fced83e0ab5ce3327f3ba30c4",
+      "returns": {
+        "p0": 6,
+        "p1": -6
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": false,
+        "p1": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true
+      },
+      "world_steps": 6
+    },
+    {
+      "attempted": true,
+      "case_sha256": "eebcf69c0eec0feaec67884a894475a6605adbbef40cd63400a53cc0543fb35b",
+      "completion": 1,
+      "decisions": 12,
+      "game": "rps_v2",
+      "id": "rps-copy-beat",
+      "native_trial_id": "4d9fbca3-3a95-4f0c-8708-560f0a113ab2",
+      "policies": {
+        "p0": "rps-copy",
+        "p1": "rps-beat-last"
+      },
+      "reason": null,
+      "reference_sha256": "1a8877c29e812d58123f13cd355b75c766e797519694968db96abb1fa47013fe",
+      "returns": {
+        "p0": -3,
+        "p1": 3
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": false,
+        "p1": false
+      },
+      "truncated": {
+        "p0": true,
+        "p1": true
+      },
+      "world_steps": 6
+    },
+    {
+      "attempted": true,
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "completion": 1,
+      "decisions": 19,
+      "game": "connect_four_v3",
+      "id": "connect-ll-a",
+      "native_trial_id": "53f13b3a-9f52-44b7-9b45-f6dd142183d3",
+      "policies": {
+        "p0": "low",
+        "p1": "low"
+      },
+      "reason": null,
+      "reference_sha256": "8d764d2a03da61102e776f4a4cf8e1535734ff7421c3a2144fa139c1337e5372",
+      "returns": {
+        "p0": 1,
+        "p1": -1
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated": {
+        "p0": false,
+        "p1": false
+      },
+      "world_steps": 19
+    },
+    {
+      "attempted": true,
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "completion": 1,
+      "decisions": 19,
+      "game": "connect_four_v3",
+      "id": "connect-ll-b",
+      "native_trial_id": "0b4a922f-bb21-4a78-8be3-0409226a10f8",
+      "policies": {
+        "p0": "low",
+        "p1": "low"
+      },
+      "reason": null,
+      "reference_sha256": "8d764d2a03da61102e776f4a4cf8e1535734ff7421c3a2144fa139c1337e5372",
+      "returns": {
+        "p0": 1,
+        "p1": -1
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated": {
+        "p0": false,
+        "p1": false
+      },
+      "world_steps": 19
+    },
+    {
+      "attempted": true,
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "completion": 1,
+      "decisions": 7,
+      "game": "connect_four_v3",
+      "id": "connect-lh",
+      "native_trial_id": "85bead9e-9fa7-4f71-856e-298a721ec8e2",
+      "policies": {
+        "p0": "low",
+        "p1": "high"
+      },
+      "reason": null,
+      "reference_sha256": "2461e887c5aae414227902f5b7e31c583dae7be9b0ac06bd840ec4871a129d91",
+      "returns": {
+        "p0": 1,
+        "p1": -1
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated": {
+        "p0": false,
+        "p1": false
+      },
+      "world_steps": 7
+    },
+    {
+      "attempted": true,
+      "case_sha256": "7257140a65aa624ea9b0d3226394d2f647c017db89231e6ea5047609c5594fc9",
+      "completion": 1,
+      "decisions": 7,
+      "game": "connect_four_v3",
+      "id": "connect-hl",
+      "native_trial_id": "4108afc9-96ff-492a-abd7-2f40a190f7c8",
+      "policies": {
+        "p0": "high",
+        "p1": "low"
+      },
+      "reason": null,
+      "reference_sha256": "0f25e195719258dc5c8fc023eaf309ae4a12b832e1ba2f350e626c556598e846",
+      "returns": {
+        "p0": 1,
+        "p1": -1
+      },
+      "status": "matched",
+      "terminated": {
+        "p0": true,
+        "p1": true
+      },
+      "truncated": {
+        "p0": false,
+        "p1": false
+      },
+      "world_steps": 7
+    }
+  ],
+  "counts": {
+    "duplicate_uuid": 0,
+    "invalid": 0,
+    "matched": 8,
+    "measured": 8,
+    "reference_failed": 0,
+    "registered": 8,
+    "unattempted": 0
+  },
+  "schema": "seatlab.pz-census/v1"
+}

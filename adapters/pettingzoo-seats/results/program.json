@@ -1,0 +1,162 @@
+{
+  "cells": [
+    {
+      "attempted": true,
+      "case_equal": true,
+      "completion": 1.0,
+      "exception_type": null,
+      "first_mismatch": null,
+      "id": "program-mixed",
+      "native_trial_id": "37c1c414-1073-4d56-86bf-5e130635d2b1",
+      "reference": "rps-copy-beat",
+      "reference_trial_id": "4d9fbca3-3a95-4f0c-8708-560f0a113ab2",
+      "returns": {
+        "p0": -3,
+        "p1": 3
+      },
+      "returns_equal": true,
+      "roles": {
+        "p0": {
+          "agreements": 6,
+          "comparisons": 6,
+          "executed": true,
+          "observed_calls": 6,
+          "participant": "program-seat",
+          "replay_agreements": 6,
+          "replay_calls": 6
+        },
+        "p1": {
+          "agreements": 6,
+          "comparisons": 6,
+          "executed": true,
+          "observed_calls": null,
+          "participant": "oracle",
+          "replay_agreements": null,
+          "replay_calls": null
+        }
+      },
+      "status": "checked",
+      "terminated_equal": true,
+      "truncated_equal": true
+    },
+    {
+      "attempted": true,
+      "case_equal": true,
+      "completion": 1.0,
+      "exception_type": null,
+      "first_mismatch": null,
+      "id": "program-both",
+      "native_trial_id": "33349d89-969b-4043-864e-f06aaf01986c",
+      "reference": "rps-copy-beat",
+      "reference_trial_id": "4d9fbca3-3a95-4f0c-8708-560f0a113ab2",
+      "returns": {
+        "p0": -3,
+        "p1": 3
+      },
+      "returns_equal": true,
+      "roles": {
+        "p0": {
+          "agreements": 6,
+          "comparisons": 6,
+          "executed": true,
+          "observed_calls": 6,
+          "participant": "program-seat",
+          "replay_agreements": 6,
+          "replay_calls": 6
+        },
+        "p1": {
+          "agreements": 6,
+          "comparisons": 6,
+          "executed": true,
+          "observed_calls": 6,
+          "participant": "program-seat",
+          "replay_agreements": 6,
+          "replay_calls": 6
+        }
+      },
+      "status": "checked",
+      "terminated_equal": true,
+      "truncated_equal": true
+    },
+    {
+      "attempted": true,
+      "case_equal": true,
+      "completion": 1.0,
+      "exception_type": null,
+      "first_mismatch": null,
+      "id": "program-second",
+      "native_trial_id": "71532503-c831-4b76-803e-c0ed4eb2c728",
+      "reference": "connect-lh",
+      "reference_trial_id": "85bead9e-9fa7-4f71-856e-298a721ec8e2",
+      "returns": {
+        "p0": 1,
+        "p1": -1
+      },
+      "returns_equal": true,
+      "roles": {
+        "p0": {
+          "agreements": 4,
+          "comparisons": 4,
+          "executed": true,
+          "observed_calls": null,
+          "participant": "oracle",
+          "replay_agreements": null,
+          "replay_calls": null
+        },
+        "p1": {
+          "agreements": 3,
+          "comparisons": 3,
+          "executed": true,
+          "observed_calls": 3,
+          "participant": "program-seat",
+          "replay_agreements": 3,
+          "replay_calls": 3
+        }
+      },
+      "status": "checked",
+      "terminated_equal": true,
+      "truncated_equal": true
+    },
+    {
+      "attempted": true,
+      "case_equal": null,
+      "completion": null,
+      "exception_type": "ValueError",
+      "first_mismatch": null,
+      "id": "program-invalid",
+      "native_trial_id": "1f43ecd4-b2a7-4b48-bb24-ab9421f4508b",
+      "reference": null,
+      "reference_trial_id": null,
+      "returns": null,
+      "returns_equal": null,
+      "roles": {
+        "p0": {
+          "agreements": null,
+          "comparisons": null,
+          "executed": true,
+          "observed_calls": 1,
+          "participant": "program-seat",
+          "replay_agreements": null,
+          "replay_calls": null
+        },
+        "p1": {
+          "agreements": null,
+          "comparisons": null,
+          "executed": true,
+          "observed_calls": null,
+          "participant": "oracle",
+          "replay_agreements": null,
+          "replay_calls": null
+        }
+      },
+      "status": "failed",
+      "terminated_equal": null,
+      "truncated_equal": null
+    }
+  ],
+  "denominator": 4,
+  "observed_external_calls": 22,
+  "replay_calls": 21,
+  "schema": "seatlab.pz-program-compare/v1",
+  "unique_native_ids": 6
+}

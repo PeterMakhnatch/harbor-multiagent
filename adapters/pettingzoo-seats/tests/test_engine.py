@@ -6,17 +6,12 @@ import hashlib
 import importlib.util
 import json
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
-sys.path.insert(
-    0,
-    "/Users/petermakhnatch/.local/state/harbor-seatlab/handoff-lRVsHLnh/petting-env/lib/python3.12/site-packages",
-)
 _FILE = Path(__file__).resolve().parents[1] / "runtime" / "engine.py"
 _LOADED = importlib.util.spec_from_file_location("pz_seats_engine", _FILE)
 engine = importlib.util.module_from_spec(_LOADED)
