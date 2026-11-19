@@ -62,7 +62,7 @@ def main() -> None:
             "n_concurrent_trials": args.concurrent,
             "quiet": True,
             "environment": {"type": args.env, "force_build": False, "delete": True}
-            | ({"kwargs": {"modal_vm_runtime": True}} if args.env == "modal" else {}),
+            | ({"kwargs": {"modal_vm_runtime": True, "app_name": "flotilla"}} if args.env == "modal" else {}),
             "participants": [{"seat": seat, **overrides.get(seat, participant)} for seat in seats],
             "tasks": [{"path": task} for task in tasks],
         }
