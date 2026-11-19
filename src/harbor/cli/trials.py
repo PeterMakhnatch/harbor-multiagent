@@ -1435,24 +1435,26 @@ def regrade(
     if verifier_kwargs is not None:
         verifier_config.kwargs.update(parse_kwargs(verifier_kwargs))
 
-    # A regrade is a fork of the source trial: carry its agent config and
-    # extra artifact entries verbatim so config/lock keep describing the
-    # trial's real inputs (the agent itself is never re-run).
+    # A regrade is a fork of the source trial: carry its agent config,
+    # participants, and extra artifact entries verbatim so config/lock keep
+    # describing the trial's real inputs (the agent itself is never re-run).
     # result.json was validated above and embeds the original run config.
     # Losing config.json must not silently remove verifier inputs or identity.
     source_agent = source_result.config.agent
+    source_participants = source_result.config.participants
     source_artifacts = source_result.config.artifacts
     try:
         source_config = TrialConfig.model_validate_json(
             source_paths.config_path.read_text()
         )
         source_agent = source_config.agent
+        source_participants = source_config.participants
         source_artifacts = source_config.artifacts
     except Exception:
         console.print(
             "[yellow]Warning:[/yellow] could not parse the source trial's "
-            "config.json; using the agent config and artifacts recorded in "
-            "result.json."
+            "config.json; using the agent config, participants, and artifacts "
+            "recorded in result.json."
         )
 
     config = TrialConfig(
@@ -1460,6 +1462,7 @@ def regrade(
         trial_name=trial_name or "",
         trials_dir=trials_dir,
         agent=source_agent,
+        participants=source_participants,
         environment=environment_config,
         verifier=verifier_config,
         artifacts=source_artifacts,

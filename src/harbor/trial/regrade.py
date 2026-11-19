@@ -47,6 +47,7 @@ from harbor.models.trial.config import AgentConfig, TrialConfig
 from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import (
     ExceptionInfo,
+    SeatResult,
     StepResult,
     TimingInfo,
     TrialResult,
@@ -902,3 +903,113 @@ class MultiStepRegradeTrial(RegradeTrial):
         else:
             self.result.verifier_result = self._select_multi_step_reward()
         self.paths.cleanup_empty_mount_dirs()
+
+
+class SeatsRegradeTrial(RegradeTrial):
+    """Re-run one separate verifier against a recorded multi-seat trial.
+
+    Live seat trials still require shared mode. A regrade has no live agent
+    environment, so it restores the recorded seats and artifacts, then grades
+    them in a separate verifier environment.
+    """
+
+    @override
+    def _init_result(self) -> None:
+        super()._init_result()
+        if self.config.participants:
+            # A seat trial runs its participants; the default `agent` never runs.
+            self.paths.config_path.write_text(
+                self.config.model_dump_json(indent=4, exclude={"agent"})
+            )
+        if self._source_result is None or self._source_result.seat_results is None:
+            return
+        self.result.seat_results = [
+            self._regrade_seat_result(seat_result)
+            for seat_result in self._source_result.seat_results
+        ]
+
+    def _regrade_seat_result(self, source_result: SeatResult) -> SeatResult:
+        """Preserve one seat's recorded run and only its agent-phase error."""
+        seat_result = source_result.model_copy(deep=True)
+        seat_result.exception_info = self._source_agent_exception(source_result)
+        return seat_result
+
+    @override
+    def _validate_regradable(self) -> None:
+        source_result = self._validate_source_record()
+        source_dir = self._source_paths.trial_dir
+        if (
+            source_result.step_results is not None
+            or self._source_paths.steps_dir.exists()
+        ):
+            raise RegradeError(
+                f"Source trial '{source_dir.name}' is multi-step; it cannot be "
+                "regraded with a seat task."
+            )
+        if (
+            source_result.seat_results is None
+            and not self._source_paths.seats_dir.exists()
+        ):
+            raise RegradeError(
+                f"Source trial '{source_dir.name}' has no seat_results or seats/; "
+                "it is not a recorded seat trial."
+            )
+        self._validate_artifact_coverage()
+
+    @override
+    def _seed_from_source(self) -> None:
+        source_seats_dir = self._source_paths.seats_dir
+        target_seats_dir = self.paths.seats_dir
+        self._validate_recorded_outputs([source_seats_dir])
+        validate_output_path(target_seats_dir, self.paths.trial_dir)
+        if source_seats_dir.is_dir():
+            validate_directory_copy(source_seats_dir, target_seats_dir)
+            # Validated recorded seats become portable verifier inputs,
+            # including on providers that do not upload directory links.
+            shutil.copytree(
+                source_seats_dir,
+                target_seats_dir,
+                symlinks=False,
+                dirs_exist_ok=True,
+            )
+        super()._seed_from_source()
+
+    @override
+    async def _run(self) -> None:
+        await self._emit(TrialEvent.VERIFICATION_START)
+        self.result.verifier = TimingInfo(started_at=self._now())
+        try:
+            self.result.verifier_result = await self._run_separate_verifier(
+                key="trial",
+                timeout_sec=self._verifier_timeout_sec,
+                artifacts_dir=self.paths.artifacts_dir,
+                seats_dir=self.paths.seats_dir,
+                user=self.task.config.verifier.user,
+            )
+        finally:
+            self.result.verifier.finished_at = self._now()
+
+        if self._source_result is not None:
+            self.result.exception_info = self._source_agent_exception(
+                self._source_result
+            )
+
+    @override
+    def _source_agent_exception(
+        self,
+        source_result: TrialResult | StepResult | SeatResult,
+    ) -> ExceptionInfo | None:
+        """Preserve agent/preparation errors, excluding stale verifier errors."""
+        if isinstance(source_result, SeatResult):
+            exception = source_result.exception_info
+            if exception is None:
+                return None
+            return exception.model_copy(
+                deep=True,
+                update={
+                    "policy_override": self.config.override_error_policy.get(
+                        exception.exception_type
+                    )
+                },
+            )
+        return super()._source_agent_exception(source_result)

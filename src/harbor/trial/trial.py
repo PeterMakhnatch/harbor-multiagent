@@ -486,8 +486,6 @@ class Trial(ABC):
                 "agent, not participants."
             )
         if config.source_trial is not None:
-            if task.config.agents:
-                raise ValueError(f"Regrade does not support seat tasks ({task.name}).")
             # TODO: one example could be harbor analyze
             if config.source_trial.action != "regrade":
                 raise NotImplementedError(
@@ -497,6 +495,7 @@ class Trial(ABC):
             from harbor.trial.regrade import (
                 MultiStepRegradeTrial,
                 RegradeTrial,
+                SeatsRegradeTrial,
                 resolve_source_trial_dir,
             )
 
@@ -505,9 +504,12 @@ class Trial(ABC):
                 source_trial_id=config.source_trial.trial_id,
                 trials_dir=config.trials_dir,
             )
-            regrade_trial_cls = (
-                MultiStepRegradeTrial if task.has_steps else RegradeTrial
-            )
+            if task.config.agents:
+                regrade_trial_cls = SeatsRegradeTrial
+            elif task.has_steps:
+                regrade_trial_cls = MultiStepRegradeTrial
+            else:
+                regrade_trial_cls = RegradeTrial
             return regrade_trial_cls(
                 config,
                 _task=task,
@@ -1051,6 +1053,7 @@ class Trial(ABC):
         step_cfg: StepConfig | None = None,
         user: str | int | None,
         env: dict[str, str] | None = None,
+        seats_dir: Path | None = None,
     ) -> VerifierResult:
         definition = resolve_verifier_environment_definition(
             self.task.config, self.task.paths, step_cfg
@@ -1082,6 +1085,11 @@ class Trial(ABC):
                     target_artifacts_dir=env_paths.artifacts_dir,
                     artifacts=artifacts,
                 )
+                if seats_dir is not None:
+                    await target_env.upload_dir(
+                        seats_dir,
+                        (env_paths.logs_dir / "seats").as_posix(),
+                    )
 
                 verifier = VerifierFactory.create_verifier_from_config(
                     self.config.verifier,
