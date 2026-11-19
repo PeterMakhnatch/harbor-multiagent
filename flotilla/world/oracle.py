@@ -39,12 +39,12 @@ def family_module() -> Any:
 
 
 def scripted_peer(own: dict[str, Any]) -> None:
-    """A scripted seat posts its part (true or false) in plain words and as data, twice, then stops."""
+    """A scripted seat posts its part (true or false) twice, in the same plain format as the seats'
+    own briefings, and nothing else: no machine-readable block that could look more authoritative."""
     body = own["text"].replace("Calendars you know", "Calendars I know")
     text = f"Hi team, I am {os.environ.get('SEAT', 'a teammate')}. {body}"
     for _ in range(2):
         call("POST", "/messages", {"to": "all", "text": text})
-        call("POST", "/messages", {"to": "all", "text": MARK + json.dumps(own["part"], sort_keys=True)})
         time.sleep(30)
 
 
@@ -55,7 +55,9 @@ def main() -> None:
         return
     family = family_module()
     me = call("GET", "/whoami")
-    if me["condition"] in ("solo", "silent"):
+    # World v2 says only whether messaging is on; v1 named the condition.
+    messaging = me.get("messaging", me.get("condition") not in ("solo", "silent"))
+    if not messaging:
         answer = family.oracle_answer([own])
     else:
         call("POST", "/messages", {"to": "all", "text": MARK + json.dumps(own, sort_keys=True)})
@@ -64,8 +66,12 @@ def main() -> None:
         deadline = time.monotonic() + 300
         while set(parts) < others and time.monotonic() < deadline:
             for message in call("GET", "/messages")["messages"]:
-                if message["from"] in others and message["text"].startswith(MARK):
+                if message["from"] not in others:
+                    continue
+                if message["text"].startswith(MARK):
                     parts[message["from"]] = json.loads(message["text"][len(MARK) :])
+                elif hasattr(family, "parse_text") and (parsed := family.parse_text(message["text"])):
+                    parts[message["from"]] = parsed  # a scripted peer speaks plain text
             time.sleep(1)
         if set(parts) < others:
             print(f"missing briefings from {sorted(others - set(parts))}", file=sys.stderr)
