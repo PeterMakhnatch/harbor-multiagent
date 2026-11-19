@@ -13,7 +13,6 @@ from typing import Any
 
 import pytest
 
-from harbor.environments.docker.docker import _sanitize_docker_compose_project_name
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.trial.config import (
     EnvironmentConfig,
@@ -105,7 +104,16 @@ def world_notes(trial: Trial) -> list[dict[str, Any]]:
 
 
 def compose_project(trial: Trial) -> str:
-    return _sanitize_docker_compose_project_name(trial.agent_environment.session_id)
+    """The trial's Compose project name, without depending on how Harbor derives it."""
+    environment = trial.agent_environment
+    name = getattr(
+        environment, "compose_project_name", None
+    )  # Harbor with neutral project names
+    if isinstance(name, str):
+        return name
+    from harbor.environments.docker.docker import _sanitize_docker_compose_project_name
+
+    return _sanitize_docker_compose_project_name(environment.session_id)
 
 
 def service_mounts(project: str) -> dict[str, list[Mount]]:
