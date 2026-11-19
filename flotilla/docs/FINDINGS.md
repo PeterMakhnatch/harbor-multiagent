@@ -179,3 +179,27 @@ Inferred: the canonical results are not affected in practice, but the leak is re
 name encodes a condition, role or hint, single-agent tasks included. `flotilla/qa.py` reports it as
 `runtime-names` (WARN). A Harbor fix (neutral, hashed Compose project names) is in progress as a
 draft PR in the fork; a Flotilla-side fix would need opaque task names and a contract change.
+
+## 2026-11-19 06:49 ET — Talking teams lose answers by finishing silently
+
+Run: wave c1, `schedule` talk trials of DeepSeek V4 Flash, Qwen 3.6 35B-A3B and GPT-OSS-120B
+(36 trials; the right answer was submitted in all 36; 7 ended wrong). Evidence: each trial's
+`verifier/world-state.json` (submissions and messages with times).
+
+Observed:
+
+- In 6 of the 7 lost trials, the teammate submitted a wrong answer after the right one. In the 7th,
+  the solving seat itself sprayed 7 more candidates within 5 seconds after its right answer
+  (GPT-OSS). In the 29 won trials, no teammate wrote a wrong answer after the right one.
+- In 0 of the 7 lost trials did the solving seat send the answer to its teammate (a message from
+  the solver that holds the answer's day and hour). In won trials it did so in 5 of 29.
+- Typical sequence (DeepSeek, `schedule-001-talk`): p2 sent its calendars 6 times and asked for
+  p1's 6 times. p1 got them, submitted the right answer at 68 s, and never sent its own data. At
+  242 s p2, still without p1's data, submitted a guess and overwrote it.
+
+Inferred: the failure is a missing acknowledgment, not missing information. The seat that can solve
+first solves, submits and stops; its teammate keeps waiting and then guesses. This is the receipt →
+acknowledgment → action gap that the multi-agent literature describes, in its simplest form.
+A protocol that makes the submitter announce "submitted: <answer>" should remove most of these
+losses. The submitter role in wave c5 removes the guesses instead (Qwen 0.750 → 0.917), but only
+for models that follow it.

@@ -68,7 +68,11 @@ Talk condition. "Found" means some seat submitted the right answer at some point
 | GPT-OSS-120B | 12 of 12 | 9 | 3 |
 
 For these 3 models the information-sharing step worked in 36 of 36 trials. The shared answer slot
-("last submission wins") lost 7 of them.
+("last submission wins") lost 7 of them. In 6 of the 7, the teammate submitted a wrong answer after
+the right one (never in the 29 won trials); in the 7th, the solver sprayed 7 more candidates. In 0
+of the 7 lost trials did the solving seat send the answer to its teammate. Inferred: teams lose
+answers by finishing silently: the first seat to solve submits and stops, and its teammate, still
+waiting for data, guesses.
 
 Follow-up wave c5 tests a role protocol: the instructions say only p1 submits (the world still
 accepts any seat). Same 12 instances.
