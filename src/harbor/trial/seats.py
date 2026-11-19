@@ -233,10 +233,14 @@ class SeatsTrial(SingleStepTrial):
                 f"Seat {seat.name!r}: agent setup timed out after "
                 f"{seat.setup_timeout_sec} seconds"
             )
-            seat.result.exception_info = ExceptionInfo.from_exception(timeout)
+            seat.result.exception_info = ExceptionInfo.from_exception(
+                timeout, override_error_policy=self.config.override_error_policy
+            )
             raise timeout from exc
         except Exception as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+            seat.result.exception_info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
             raise
         finally:
             setup.finished_at = self._now()
@@ -318,6 +322,9 @@ class SeatsTrial(SingleStepTrial):
                         ),
                         exception_traceback="",
                         occurred_at=self._now(),
+                        policy_override=self.config.override_error_policy.get(
+                            AgentTimeoutError.__name__
+                        ),
                     )
                 tasks[seat.name].cancel()
 
@@ -337,9 +344,13 @@ class SeatsTrial(SingleStepTrial):
                         context=context,
                     )
         except NonZeroAgentExitCodeError as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+            seat.result.exception_info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
         except Exception as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+            seat.result.exception_info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
             raise
         finally:
             execution.finished_at = self._now()

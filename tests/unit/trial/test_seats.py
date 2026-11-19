@@ -30,6 +30,7 @@ from harbor.models.trial.config import (
     TrialConfig,
     VerifierConfig,
 )
+from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.models.trial.result import TrialResult
 from harbor.models.verifier.result import VerifierResult
 from harbor.trial.seats import SeatsTrial
@@ -415,6 +416,100 @@ async def test_agent_timeout_ends_everyone_still_running_and_still_grades(
     assert result.exception_info.exception_type == "AgentTimeoutError"
     assert result.exception_info.exception_message.startswith("Seat 'maya': ")
     assert _verified(trial) and result.verifier_result is not None
+
+
+async def test_timeout_policy_override_is_kept_and_skips_grading(tmp_path: Path):
+    override = ErrorPolicyOverride(should_grade=False, has_valid_reward=False)
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.2),
+            _participant("maya", hold=True),
+            _participant("raj"),
+            _participant("lee", hold=True),
+            override_error_policy={"AgentTimeoutError": override},
+        )
+    )
+
+    result = await trial.run()
+
+    seats = _seat_results(result)
+    assert seats["raj"].exception_info is None
+    for seat in ("maya", "lee"):
+        info = seats[seat].exception_info
+        assert info is not None and info.policy_override == override
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "AgentTimeoutError"
+    assert result.exception_info.policy_override == override
+    assert not _verified(trial)
+    assert result.verifier_result is None
+
+
+@pytest.mark.parametrize(
+    "fail, error, override, graded",
+    [
+        (
+            "exit",
+            "NonZeroAgentExitCodeError",
+            ErrorPolicyOverride(should_grade=False),
+            False,
+        ),
+        (
+            "auth",
+            "AgentAuthenticationError",
+            ErrorPolicyOverride(should_grade=True),
+            True,
+        ),
+    ],
+)
+async def test_agent_failure_policy_override_is_kept_and_decides_grading(
+    tmp_path: Path, fail: str, error: str, override: ErrorPolicyOverride, graded: bool
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", fail=fail),
+            _participant("raj"),
+            _participant("lee", hold=True),
+            override_error_policy={error: override},
+        )
+    )
+
+    result = await trial.run()
+
+    seats = _seat_results(result)
+    info = seats["maya"].exception_info
+    assert info is not None and info.exception_type == error
+    assert info.policy_override == override
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == error
+    assert result.exception_info.policy_override == override
+    assert _verified(trial) is graded
+    assert (result.verifier_result is not None) is graded
+
+
+async def test_setup_failure_policy_override_is_kept_on_seat_and_trial(
+    tmp_path: Path,
+):
+    override = ErrorPolicyOverride(should_grade=False, should_retry=False)
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            {**_participant("raj", fail="setup"), "override_setup_timeout_sec": 0.05},
+            _participant("lee"),
+            override_error_policy={"AgentSetupTimeoutError": override},
+        )
+    )
+
+    result = await trial.run()
+
+    raj = _seat_results(result)["raj"].exception_info
+    assert raj is not None and raj.exception_type == "AgentSetupTimeoutError"
+    assert raj.policy_override == override
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "AgentSetupTimeoutError"
+    assert result.exception_info.policy_override == override
+    assert not _verified(trial)
 
 
 @pytest.mark.parametrize(
