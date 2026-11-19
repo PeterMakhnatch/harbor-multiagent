@@ -7,6 +7,8 @@
 #   seat reads it.
 # - main runs the message service with messaging off (coop_off.py), so the
 #   seat's coop-* commands report that messaging is off.
+# - The seat is on a network of its own, shared only with main, as each seat
+#   of the team arms is.
 x-seat: &seat
   build:
     context: ./seat
@@ -20,6 +22,7 @@ x-seat: &seat
 services:
   main:
     command: ["python3", "/opt/cooperbench/coop_off.py"]
+    networks: [agent1-net]
     init: true
     environment:
       COOP_AGENTS: agent1
@@ -35,6 +38,7 @@ services:
 
   agent1:
     <<: *seat
+    networks: [agent1-net]
     environment:
       COOP_AGENT_ID: agent1
       COOP_AGENTS: agent1
@@ -42,6 +46,9 @@ services:
     volumes:
       - agent1-repo:/workspace/repo
       - agent1-token:/run/cooperbench:ro
+
+networks:
+  agent1-net: {}
 
 volumes:
   agent1-repo: {}

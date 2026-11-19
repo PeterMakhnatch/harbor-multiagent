@@ -702,13 +702,18 @@ def test_a_rebuild_keeps_each_arms_name(tmp_path: Path):
     assert sorted(paths) == sorted(first.values())
 
 
-def test_the_talk_arm_differs_from_the_seat_task_only_in_task_toml(tmp_path: Path):
+def test_the_talk_arm_differs_from_the_seat_task_in_name_and_networks(
+    tmp_path: Path,
+):
     default = files(generate(tmp_path / "default", make_pair()))
     talk_dir = arms_build(tmp_path / "arms", ("silent", "talk"))["talk"]
     talk = files(talk_dir)
 
     assert set(talk) == set(default)
-    assert [k for k in talk if talk[k] != default[k]] == ["task.toml"]
+    assert sorted(k for k in talk if talk[k] != default[k]) == [
+        "environment/docker-compose.yaml",
+        "task.toml",
+    ]
     changed = set(talk["task.toml"].decode().splitlines()) ^ set(
         default["task.toml"].decode().splitlines()
     )
@@ -718,6 +723,54 @@ def test_the_talk_arm_differs_from_the_seat_task_only_in_task_toml(tmp_path: Pat
         'arm = "talk"',
         'pair = "cb-jinja-t1621-f3-5"',
     }
+    arm_compose = yaml.safe_load(talk["environment/docker-compose.yaml"])
+    seat_compose = yaml.safe_load(default["environment/docker-compose.yaml"])
+    for spec in arm_compose["services"].values():
+        spec.pop("networks")
+    arm_compose.pop("networks")
+    assert arm_compose == seat_compose
+
+
+def test_talk_alone_is_an_arms_build(tmp_path: Path):
+    talk_dir = arms_build(tmp_path, ("talk",))["talk"]
+
+    assert re.fullmatch(r"cb-[0-9a-f]{12}", talk_dir.name)
+    assert compose(talk_dir)["services"]["agent1"]["networks"] == ["agent1-net"]
+
+
+@pytest.mark.parametrize("arm", ARM_WORDS)
+def test_each_seat_has_a_network_of_its_own_in_every_arm(tmp_path: Path, arm: str):
+    task_dir = arms_build(tmp_path, (arm,))[arm]
+    spec = compose(task_dir)
+    seats = list(Task(task_dir).config.agents)
+    networks = {seat: set(spec["services"][seat]["networks"]) for seat in seats}
+
+    for seat in seats:
+        assert len(networks[seat]) == 1, seat
+        assert networks[seat] <= set(spec["services"]["main"]["networks"])
+        for other in seats:
+            if other != seat:
+                assert not networks[seat] & networks[other], (seat, other)
+    assert set(spec["networks"]) == set().union(*networks.values())
+
+
+@pytest.mark.parametrize(
+    ("scale", "timeout"), [(2.0, 3600.0), (1.0, 1800.0), (1.5, 2700.0)]
+)
+def test_solo_gets_a_scaled_agent_timeout(tmp_path: Path, scale: float, timeout: float):
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=ARM_WORDS, solo_time_scale=scale
+    )
+    paths, _ = adapter.generate_many([make_pair()])
+    manifest = json.loads((tmp_path / "tasks/manifest.json").read_text())
+    tasks = {manifest[path.name]["arm"]: Task(path) for path in paths}
+
+    assert tasks["solo"].config.agent.timeout_sec == timeout
+    assert tasks["solo"].config.metadata["solo_time_scale"] == scale
+    for arm in ("silent", "talk"):
+        assert tasks[arm].config.agent.timeout_sec == 1800.0
+        assert "solo_time_scale" not in tasks[arm].config.metadata
+    assert tasks["solo"].config.verifier.timeout_sec == 1800.0
 
 
 def test_silent_differs_from_talk_only_where_messaging_is_off(tmp_path: Path):
@@ -785,6 +838,7 @@ def test_solo_is_one_seat_with_both_features(tmp_path: Path):
         ({"seats": True, "arms": ["loud"]}, "arms must be distinct values"),
         ({"seats": True, "arms": ["talk", "talk"]}, "arms must be distinct values"),
         ({"seats": True, "arms": []}, "arms must be distinct values"),
+        ({"seats": True, "arms": ["solo"], "solo_time_scale": 0}, "must be positive"),
     ],
 )
 def test_bad_arms_are_refused(tmp_path: Path, kwargs: dict[str, Any], match: str):
@@ -796,10 +850,30 @@ def test_cli_parses_arms(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         sys, "argv", ["cooperbench", "--seats", "--arms", "solo", "silent"]
     )
-    assert cli._parse_args().arms == ["solo", "silent"]
+    args = cli._parse_args()
+    assert (args.arms, args.solo_time_scale) == (["solo", "silent"], 2.0)
     monkeypatch.setattr(sys, "argv", ["cooperbench", "--seats"])
-    assert cli._parse_args().arms == ["talk"]
-    monkeypatch.setattr(sys, "argv", ["cooperbench", "--arms", "solo"])
+    assert cli._parse_args().arms is None
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["cooperbench", "--seats", "--arms", "solo", "--solo-time-scale", "1"],
+    )
+    assert cli._parse_args().solo_time_scale == 1.0
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--arms", "solo"],
+        ["--seats", "--arms", "talk", "--solo-time-scale", "2"],
+        ["--seats", "--arms", "solo", "--solo-time-scale", "0"],
+    ],
+)
+def test_cli_refuses_arms_that_do_not_fit(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str]
+):
+    monkeypatch.setattr(sys, "argv", ["cooperbench", *argv])
     with pytest.raises(SystemExit) as exit_info:
         cli._parse_args()
     assert exit_info.value.code == 2

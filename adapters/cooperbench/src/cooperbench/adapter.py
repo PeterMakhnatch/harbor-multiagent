@@ -12,8 +12,9 @@ are ``[agents.<service>]`` seats, so any Harbor harness can fill each one.
 Each seat has its own workspace volume, the seats message each other through
 an authenticated service in main, and the verifier in main merges both
 seats' patches and runs both features' tests, as in the sidecar tasks.
-``arms`` adds the two control arms of a coordination experiment: ``solo`` (one
-seat implements both features) and ``silent`` (two seats, messaging off).
+``arms`` writes the arms of a coordination experiment: ``talk`` (the seat
+task), ``silent`` (messaging off) and ``solo`` (one seat implements both
+features), each seat on a network of its own.
 
 Uses pre-built Docker images from DockerHub (akhatua/cooperbench-*) and
 the runner.sh protocol from the CooperBench evaluation framework.
@@ -352,7 +353,8 @@ class CooperBenchAdapter:
         subset: str | None = None,
         instance_ids: list[str] | None = None,
         seats: bool = False,
-        arms: Iterable[str] = ("talk",),
+        arms: Iterable[str] | None = None,
+        solo_time_scale: float = 2.0,
     ):
         """Initialize the adapter.
 
@@ -370,9 +372,12 @@ class CooperBenchAdapter:
                 (e.g., dottxt-ai__outlines-1371-1).
             seats: Write seat tasks (agent1 and agent2 as [agents.<service>]
                 seats) instead of sidecar tasks; agent_harness does not apply.
-            arms: The arms to write for each pair in seat mode: talk (the
-                default), silent and solo. With any arm but talk alone, task
-                names are opaque and manifest.json maps them to pair and arm.
+            arms: The arms to write for each pair in seat mode, out of solo,
+                silent and talk. Given, every arm's task has opaque names
+                (manifest.json maps them to pair and arm) and each seat on a
+                network of its own; None writes the seat task as it is.
+            solo_time_scale: The solo seat's agent timeout is the team seat's
+                times this, 2 by default: the team's total agent time.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -393,15 +398,19 @@ class CooperBenchAdapter:
             )
         self.agent_harness = agent_harness
         self.seats = seats
-        self.arms = tuple(arms)
+        self._arms_build = arms is not None
+        self.arms = ("talk",) if arms is None else tuple(arms)
         if (
             not self.arms
             or len(set(self.arms)) != len(self.arms)
             or not set(self.arms) <= set(self.ARMS)
         ):
             raise ValueError(f"arms must be distinct values from {self.ARMS}: {arms}")
-        if self.arms != ("talk",) and not seats:
+        if self._arms_build and not seats:
             raise ValueError("arms apply to seat tasks: set seats=True")
+        if not solo_time_scale > 0:
+            raise ValueError(f"solo_time_scale must be positive: {solo_time_scale}")
+        self.solo_time_scale = solo_time_scale
         self._manifest: dict[str, dict] | None = None
 
     def run(self) -> tuple[list[Path], list[tuple[str, str]]]:
@@ -913,12 +922,17 @@ class CooperBenchAdapter:
 
         # -- task.toml -----------------------------------------------------
         toml_text = (template / "task.toml").read_text(encoding="utf-8")
+        agent_timeout_sec = self.agent_timeout_sec
         if arm == "solo":
             toml_text = self._solo_task_toml(toml_text)
+            agent_timeout_sec *= self.solo_time_scale
         if self._opaque_names:
+            extra = 'arm = "{arm}"\npair = "{pair}"\n'
+            if arm == "solo":
+                extra += f"solo_time_scale = {self.solo_time_scale:g}\n"
             toml_text = re.sub(
                 r"^(seat_features = .*\n)",
-                lambda m: m.group(1) + 'arm = "{arm}"\npair = "{pair}"\n',
+                lambda m: m.group(1) + extra,
                 toml_text,
                 count=1,
                 flags=re.MULTILINE,
@@ -926,7 +940,7 @@ class CooperBenchAdapter:
         task_toml = _render(
             toml_text,
             pair_id=task_dir.name,
-            agent_timeout_sec=f"{self.agent_timeout_sec:.1f}",
+            agent_timeout_sec=f"{agent_timeout_sec:.1f}",
             verifier_timeout_sec=f"{self.verifier_timeout_sec:.1f}",
             repo=pair.repo,
             task_id=pair.task_id,
@@ -987,25 +1001,29 @@ class CooperBenchAdapter:
             ("environment/coop_server.py", paths.environment_dir),
             ("environment/seat/coop_msg.py", paths.seat_dir),
         ]
-        if arm == "talk":
-            copies.append(("environment/docker-compose.yaml", paths.environment_dir))
-        else:
+        if arm != "talk":
             copies.append(("arms/coop_off.py", paths.environment_dir))
         if arm == "solo":
             shutil.copy2(
                 arms_dir / "docker-compose.solo.yaml",
                 paths.environment_dir / "docker-compose.yaml",
             )
-        if arm == "silent":
-            (paths.environment_dir / "docker-compose.yaml").write_text(
-                _swap(
-                    (template / "environment" / "docker-compose.yaml").read_text(
-                        encoding="utf-8"
-                    ),
+        elif not self._arms_build:
+            copies.append(("environment/docker-compose.yaml", paths.environment_dir))
+        else:
+            compose_text = self._with_seat_networks(
+                (template / "environment" / "docker-compose.yaml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            if arm == "silent":
+                compose_text = _swap(
+                    compose_text,
                     '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n',
                     '    command: ["python3", "/opt/cooperbench/coop_off.py"]\n',
-                ),
-                encoding="utf-8",
+                )
+            (paths.environment_dir / "docker-compose.yaml").write_text(
+                compose_text, encoding="utf-8"
             )
         for src, dst in copies:
             shutil.copy2(template / src, dst)
@@ -1057,10 +1075,40 @@ class CooperBenchAdapter:
 
     @property
     def _opaque_names(self) -> bool:
-        """Any arm but talk alone: task names that say nothing, because a
-        seat can read its trial's container names (Harbor derives them from
-        the task folder) through reverse DNS."""
-        return self.seats and self.arms != ("talk",)
+        """With arms: task names that say nothing, because a seat can read its
+        trial's container names (Harbor derives them from the task folder)
+        through reverse DNS."""
+        return self.seats and self._arms_build
+
+    @staticmethod
+    def _with_seat_networks(text: str) -> str:
+        """The talk compose file with each seat on a network of its own,
+        shared only with main, so neither seat can reach the other's
+        container; the seats' messages go through main."""
+        text = _swap(
+            text,
+            "#   reach it as http://main:8080.\n",
+            "#   reach it as http://main:8080.\n"
+            "# - Each seat is on a network of its own, shared only with main, so\n"
+            "#   neither seat can reach the other's container.\n",
+        )
+        text = _swap(
+            text,
+            '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n',
+            '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n'
+            "    networks: [agent1-net, agent2-net]\n",
+        )
+        for seat in ("agent1", "agent2"):
+            text = _swap(
+                text,
+                f"  {seat}:\n    <<: *seat\n",
+                f"  {seat}:\n    <<: *seat\n    networks: [{seat}-net]\n",
+            )
+        return _swap(
+            text,
+            "\nvolumes:\n  agent1-repo: {}\n",
+            "\nnetworks:\n  agent1-net: {}\n  agent2-net: {}\n\nvolumes:\n  agent1-repo: {}\n",
+        )
 
     def _task_dir_name(self, pair: CooperBenchPair, arm: str) -> str:
         if not self._opaque_names:
@@ -1126,7 +1174,8 @@ class CooperBenchAdapter:
         text = _swap(
             text,
             "# One agent timeout, shared by both seats.\n",
-            "# The agent timeout of the one seat.\n",
+            "# The one seat's agent timeout: a team seat's times solo_time_scale\n"
+            "# ([metadata]), 2 by default, so solo gets the team's total agent time.\n",
         )
         text = _swap(
             text,

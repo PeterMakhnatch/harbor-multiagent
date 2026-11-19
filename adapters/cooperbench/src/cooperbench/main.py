@@ -107,17 +107,31 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         choices=list(CooperBenchAdapter.ARMS),
         help=(
-            "With --seats: the arms to write for each pair (default: talk). "
-            "solo = one seat with both features; silent = two seats, messaging off; "
-            "talk = two seats that message. Any arm but talk alone gives opaque "
-            "task names and a manifest.json"
+            "With --seats: the arms to write for each pair. solo = one seat with "
+            "both features; silent = two seats, messaging off; talk = two seats "
+            "that message. With --arms, every task gets an opaque name (see "
+            "manifest.json) and each seat a network of its own; without it, the "
+            "seat task is written as it is"
+        ),
+    )
+    parser.add_argument(
+        "--solo-time-scale",
+        type=float,
+        default=None,
+        help=(
+            "The solo seat's agent timeout as a multiple of a team seat's "
+            "(default: 2, the team's total agent time)"
         ),
     )
     args = parser.parse_args()
     if args.arms is not None and not args.seats:
         parser.error("--arms applies to seat tasks: add --seats")
-    if args.arms is None:
-        args.arms = ["talk"]
+    if args.solo_time_scale is not None and "solo" not in (args.arms or []):
+        parser.error("--solo-time-scale applies to the solo arm: add --arms solo")
+    if args.solo_time_scale is None:
+        args.solo_time_scale = 2.0
+    if args.solo_time_scale <= 0:
+        parser.error("--solo-time-scale must be positive")
     if args.seats and args.agent_harness is not None:
         parser.error(
             "--agent-harness applies to sidecar tasks; with --seats, the trial's "
@@ -146,6 +160,7 @@ def main() -> None:
         agent_harness=args.agent_harness,
         seats=args.seats,
         arms=args.arms,
+        solo_time_scale=args.solo_time_scale,
     )
 
     ok, bad = adapter.run()

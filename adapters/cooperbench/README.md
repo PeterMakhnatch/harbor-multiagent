@@ -162,7 +162,9 @@ Available flags:
 - `--seats` — Generate seat tasks instead of sidecar tasks (default output:
   `datasets/cooperbench-seats`); see [Seat mode](#seat-mode)
 - `--arms` — With `--seats`: the arms to write for each pair, out of `solo`,
-  `silent` and `talk` (default `talk`); see [Arms](#arms-solo-silent-talk)
+  `silent` and `talk`; see [Arms](#arms-solo-silent-talk)
+- `--solo-time-scale` — With `--arms solo`: the solo seat's agent timeout as a
+  multiple of a team seat's (default 2, the team's total agent time)
 
 ## Seat mode
 
@@ -360,8 +362,15 @@ workers, and its workers can coordinate.
 uv run cooperbench --seats --arms solo silent talk --subset flash
 ```
 
-- `talk` is the seat task above. Without `--arms`, or with `--arms talk`
-  alone, the output is the same as before, byte for byte.
+- `talk` is the seat task above, with each seat on a network of its own
+  (below). Without `--arms`, the output is the seat task as before, byte for
+  byte; `--arms talk` alone is an arms build, with opaque names and the
+  networks.
+- In every arm, each seat is on a Compose network of its own, shared only
+  with `main`, so no seat can reach another seat's container. The seats'
+  messages go through `main`, so `talk` needs no path between seats, and the
+  arms differ only in the intended manipulation. PR #3's opt-in
+  `seat-shared-network` lint rule reports nothing on the arm tasks.
 - `silent` is `talk` with messaging off. `main` runs `coop_off.py`, which
   answers every request with HTTP 403 "messaging is off in this task" and
   records it as a `denied` event, and the seats' `coop-*` commands print that.
@@ -374,7 +383,14 @@ uv run cooperbench --seats --arms solo silent talk --subset flash
   sections). The verifier runs both features' tests on its patch, and the
   reward is 1 only if both pass, as for a team. Its oracle applies both gold
   patches in turn.
-- With any arm but `talk` alone, each task gets an opaque name, `cb-<12 hex>`,
+- The solo seat's agent timeout is a team seat's times `--solo-time-scale`,
+  2 by default, recorded as `solo_time_scale` in `task.toml` `[metadata]`.
+  With 2, solo gets the team's total agent time (2 seats times the timeout),
+  which is also the team's time per feature. With 1, solo gets the team's
+  wall-clock time instead (the same deadline), and half the time per
+  feature. The task sets no turn or step limits, so the timeout is the only
+  time budget.
+- With `--arms`, each task gets an opaque name, `cb-<12 hex>`,
   random for each build. A seat can read its trial's container names through
   reverse DNS, and Harbor derives them from the task folder; Flotilla found a
   seat doing it. `manifest.json` in the output folder maps each name to its
@@ -388,12 +404,10 @@ the share of the split's cost that talking recovers is
 
 Limits of the arms:
 
-- `solo` has the same agent timeout as each seat of a team, so it has half
-  the agent time per feature.
-- In `talk` and `silent`, both seats are on the project's default network, as
-  in the seat task above, so a silent seat can reach the other seat's
-  container, and every seat has internet access. Flotilla gives each seat its
-  own network with `main`; here that would change the `talk` arm.
+- Every seat has internet access, so an outside service is still a possible
+  channel between silent seats.
+- `talk` with `--arms` is not byte-identical to the seat task without it: it
+  adds the seat networks and an opaque name.
 
 ### Oracle checks
 
