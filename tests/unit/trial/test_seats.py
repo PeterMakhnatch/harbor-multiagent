@@ -567,6 +567,73 @@ async def test_secrets_of_every_seat_are_scrubbed_in_each_pass(
         assert calls.count(log) == 2
 
 
+# A model for mini-swe-agent, and the host variable its provider's key is in.
+HOST_KEY_MODELS = (
+    ("deepseek/deepseek-chat", "DEEPSEEK_API_KEY"),
+    ("openrouter/openai/gpt-6", "OPENROUTER_API_KEY"),
+)
+
+
+async def _host_key_trial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    installed: tuple[str, str],
+    key_names: bool = False,
+) -> tuple[SeatsTrial, dict[str, str]]:
+    """A trial whose ``installed`` seats run mini-swe-agent, an installed agent,
+    each with a model key that is only in the host environment. The third seat
+    runs the scripted agent. Returns the trial and those keys by seat."""
+    keys = {seat: f"{seat}-model-key-to-scrub" for seat in installed}
+    participants = {seat: _participant(seat) for seat in ("maya", "raj", "lee")}
+    for seat, (model_name, variable) in zip(installed, HOST_KEY_MODELS, strict=True):
+        monkeypatch.setenv(variable, keys[seat])
+        participants[seat] = {
+            "seat": seat,
+            "name": "mini-swe-agent",
+            "model_name": model_name,
+        }
+        if key_names:
+            participants[seat]["model_api_key_name"] = variable
+    trial = await _seats_trial(_config(_task_dir(tmp_path), *participants.values()))
+    return trial, keys
+
+
+@pytest.mark.parametrize("key_names", [False, True], ids=["host-env", "key-names"])
+@pytest.mark.parametrize(
+    "installed",
+    [("maya", "raj"), ("raj", "lee")],
+    ids=["first-seat-installed", "first-seat-not-installed"],
+)
+async def test_every_seats_resolved_model_key_is_a_secret_to_scrub(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    installed: tuple[str, str],
+    key_names: bool,
+):
+    trial, keys = await _host_key_trial(tmp_path, monkeypatch, installed, key_names)
+
+    secrets = trial._secrets_to_scrub()
+
+    assert [seat for seat, key in keys.items() if key not in secrets] == []
+
+
+async def test_a_resolved_model_key_in_any_seats_log_is_scrubbed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    trial, keys = await _host_key_trial(tmp_path, monkeypatch, ("raj", "lee"))
+    logs = {
+        seat: trial.paths.trial_dir / "seats" / seat / "agent" / "mini-swe-agent.txt"
+        for seat in keys
+    }
+    for seat, log in logs.items():
+        log.write_text(f"model api key: {keys[seat]}\n")
+
+    trial._scrub_jobs_dir()
+
+    for log in logs.values():
+        assert log.read_text() == "model api key: [REDACTED]\n"
+
+
 async def test_result_json_records_every_seat(tmp_path: Path):
     trial = await _seats_trial(
         _config(
