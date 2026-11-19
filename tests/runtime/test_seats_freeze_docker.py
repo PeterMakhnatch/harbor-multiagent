@@ -1,10 +1,10 @@
 """What a seat leaves running when play ends, on real Docker with the oracle in
 both seats; no model APIs are used.
 
-p1, under test, ends at once and leaves a detached child behind. p2, a
-supporting agent, is still running when play ends and has a background child of
-its own. Each of the three posts to the world DELAY_SEC after p1 has ended, and
-the verifier reads the world GRACE_SEC after that.
+p1, under test, ends as soon as p2 has started, and leaves a detached child
+behind. p2, a supporting agent, is still running when play ends and has a
+background child of its own. Each of the three posts to the world DELAY_SEC
+after p1 has ended, and the verifier reads the world GRACE_SEC after that.
 """
 
 import asyncio
@@ -28,6 +28,7 @@ pytestmark = [pytest.mark.runtime, pytest.mark.integration, pytest.mark.asyncio]
 
 DELAY_SEC = 12
 GRACE_SEC = 6
+BEFORE = {"p2_started", "p1_ended"}
 LATE = ("p1_child", "p2_child", "p2_harness")
 
 WORLD = """\
@@ -85,10 +86,12 @@ posted() {{ python3 -c "import urllib.request as u; u.urlopen('http://main:8080/
 
 echo "$SEAT started"
 if [ "$SEAT" = p1 ]; then
+  until posted p2_started; do sleep 0.2; done
   post p1_ended
   setsid nohup bash -c "$(declare -f post); sleep {DELAY_SEC}; post p1_child" >/dev/null 2>&1 &
   exit 0
 fi
+post p2_started
 until posted p1_ended; do sleep 0.2; done
 (sleep {DELAY_SEC}; post p2_child) &
 sleep {DELAY_SEC}
@@ -131,7 +134,8 @@ timeout_sec = 120
 
 [environment.healthcheck]
 command = "exec 3<>/dev/tcp/localhost/8080"
-interval_sec = 1
+start_period_sec = 30
+start_interval_sec = 0.5
 
 [agents.p1]
 %s
@@ -200,7 +204,7 @@ async def test_nothing_a_seat_left_running_acts_on_the_world_after_play(
     assert p2_log.read_text() == "p2 started\n"
     p2_artifact = trial.paths.artifacts_dir / "logs" / "agent" / "oracle.txt"
     assert p2_artifact.read_text() == "p2 started\n"
-    assert _collected_notes(trial) == {"p1_ended"}
+    assert _collected_notes(trial) == BEFORE
 
 
 async def test_a_seat_with_freeze_off_is_rewarded_for_what_it_does_after_play(
@@ -217,4 +221,4 @@ async def test_a_seat_with_freeze_off_is_rewarded_for_what_it_does_after_play(
     seen = json.loads((trial.paths.verifier_dir / "notes.json").read_text())
     assert all(seen[late] - seen["p1_ended"] >= DELAY_SEC for late in LATE)
     # The artifacts were collected before the verifier ran, and lack them.
-    assert _collected_notes(trial) == {"p1_ended"}
+    assert _collected_notes(trial) == BEFORE
