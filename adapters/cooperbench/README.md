@@ -252,7 +252,7 @@ Limits, so that a seat cannot exhaust `main`, where the verifier runs: a
 message is at most 64 KiB of UTF-8; a seat sends at most 2,000 messages and
 8 MiB in all; `events.jsonl` stops at 100,000 events; a request body is at most
 1 MiB, and a request whose data stalls for 30 seconds is dropped; at most 32
-connections are served at once.
+connections are served at once, and at most 8 from one seat's address.
 
 ### Grading
 
@@ -271,15 +271,22 @@ connections are served at once.
    reward is 0 and `details.json` names the seat; no seat's work is dropped
    without a trace.
 4. The patches are merged (naive merge, then union merge), and runner.sh runs
-   each feature's tests on the merged code, as in the sidecar task. The test
-   patch and the merged patch are copied again before each run, so code from
-   the first run cannot change what the second run tests.
+   each feature's tests on the merged code, as in the sidecar task. Seat code
+   first runs in `main` during the first run, so before it the verifier
+   copies the inputs of both runs (both test patches, the merged patch and
+   runner.sh) and keeps their checksum. Each run uses those copies, and a run
+   whose copies no longer match the checksum fails. Bash also reads the whole
+   verifier before it runs, so rewriting the script file changes nothing.
+   Code from the first run can still change other files in `main`; see
+   [Trust model](#trust-model).
 5. `reward.json` is `{"reward": 1}` only if both features' tests pass. Every
-   exit path writes it, a verifier error included (reward 0, with the failing
-   line in `details.json`). `details.json` holds each feature's result, the
-   merge strategy, the files in each seat's patch, the files dropped from it,
-   whether each patch applied, and each seat's sent and received message
-   counts. `verifier/patches/` holds both seats' patches and the merged patch.
+   exit path writes it: a verifier error gives reward 0 with the failing
+   command in `details.json`, and if even `details.json` cannot be written,
+   `reward.json` is still `{"reward": 0}`. `details.json` holds each
+   feature's result, the merge strategy, the files in each seat's patch, the
+   files dropped from it, whether each patch applied, each seat's sent and
+   received message counts, and `events_capped`. `verifier/patches/` holds
+   both seats' patches and the merged patch.
 
 `pyproject.toml`, `setup.cfg` and `setup.py` stay in the patches: they carry
 package metadata that a feature can need, and CooperBench's own grading
@@ -295,8 +302,9 @@ seats:
 - The verifier runs the merged code in `main` as root: runner.sh installs the
   package and runs pytest. That code can read both workspaces and both tokens,
   and it can change the test outcome, for example with a module that exits 0
-  on import. Dropping test-infrastructure files and copying the patches again
-  before each run close the simplest ways, not all of them.
+  on import, or by changing the toolchain before the second run. Dropping
+  test-infrastructure files, and checking the copies of the test inputs
+  before each run, close the simplest ways, not all of them.
 
 So, as in CooperBench and in the sidecar mode, the score assumes that agents
 do not attack the grader. Do not use it to grade agents that try to.
@@ -374,6 +382,12 @@ task only on pairs whose gold patches merge cleanly.
   running during verification: Harbor cancels the agent's run, not its
   processes. The verifier captures its patch first, but the workspace can
   still change during the capture.
+- The 30-second timeout applies to each read, not to a whole request. A seat
+  that sends one byte at a time can hold its own 8 connections without end,
+  but not the other seat's.
+- After 100,000 events, `events.jsonl` stops (its last event is
+  `events_capped`). `messages_received` in `details.json` then counts fewer
+  messages than were delivered, and `events_capped` is `true`.
 - Gold-patch fixes in seat mode change a seat patch only if it holds all the
   text that the fix replaces. dspy 8635's fix applies to feature 6. The
   react-hook-form 153 fix has two halves that must change together, and no

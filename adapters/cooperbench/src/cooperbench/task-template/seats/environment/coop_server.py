@@ -23,7 +23,7 @@ Limits, so that a seat cannot exhaust main, where the verifier runs: a
 message is at most 64 KiB of UTF-8; a seat sends at most 2,000 messages and
 8 MiB in all; events.jsonl stops at 100,000 events; a request body is at most
 1 MiB and each read must arrive within 30 seconds; at most 32 connections are
-served at once.
+served at once, and at most 8 from one address (each seat has its own).
 
 Standard library only. Configured by environment variables:
 
@@ -54,6 +54,7 @@ MAX_BYTES_PER_SEAT = 8_388_608
 MAX_EVENTS = 100_000
 REQUEST_TIMEOUT_SEC = 30
 MAX_CONNECTIONS = 32
+MAX_CONNECTIONS_PER_CLIENT = 8
 
 
 class Refused(Exception):
@@ -278,8 +279,9 @@ def make_handler(board: Board) -> type[BaseHTTPRequestHandler]:
 
 
 class Server(ThreadingHTTPServer):
-    """A threading HTTP server that serves at most ``max_connections`` at once
-    and closes any connection beyond that."""
+    """A threading HTTP server that serves at most ``max_connections`` at once,
+    and at most ``max_per_client`` from one client address, so one seat
+    cannot take every slot. It closes any connection beyond that."""
 
     daemon_threads = True
 
@@ -288,25 +290,49 @@ class Server(ThreadingHTTPServer):
         address: tuple[str, int],
         handler: type[BaseHTTPRequestHandler],
         max_connections: int = MAX_CONNECTIONS,
+        max_per_client: int = MAX_CONNECTIONS_PER_CLIENT,
     ):
         super().__init__(address, handler)
-        self.slots = threading.BoundedSemaphore(max_connections)
+        self.max_connections = max_connections
+        self.max_per_client = max_per_client
+        self.open_by_client: dict[str, int] = {}
+        self.slots_lock = threading.Lock()
+
+    def _claim(self, client: str) -> bool:
+        with self.slots_lock:
+            mine = self.open_by_client.get(client, 0)
+            if (
+                sum(self.open_by_client.values()) >= self.max_connections
+                or mine >= self.max_per_client
+            ):
+                return False
+            self.open_by_client[client] = mine + 1
+            return True
+
+    def _release(self, client: str) -> None:
+        with self.slots_lock:
+            left = self.open_by_client.get(client, 1) - 1
+            if left > 0:
+                self.open_by_client[client] = left
+            else:
+                self.open_by_client.pop(client, None)
 
     def process_request(self, request: Any, client_address: Any) -> None:
-        if not self.slots.acquire(blocking=False):
+        client = str(client_address[0])
+        if not self._claim(client):
             self.shutdown_request(request)
             return
         try:
             super().process_request(request, client_address)
         except BaseException:
-            self.slots.release()
+            self._release(client)
             raise
 
     def process_request_thread(self, request: Any, client_address: Any) -> None:
         try:
             super().process_request_thread(request, client_address)
         finally:
-            self.slots.release()
+            self._release(str(client_address[0]))
 
 
 def issue_tokens(agents: list[str], tokens_dir: Path) -> dict[str, str]:
@@ -345,10 +371,12 @@ def make_server(
     **limits: int,
 ) -> Server:
     """The service, not yet serving. ``limits`` may set max_messages,
-    max_bytes, max_events and max_connections (the tests make them small)."""
+    max_bytes, max_events, max_connections and max_per_client (the tests make
+    them small)."""
     max_connections = limits.pop("max_connections", MAX_CONNECTIONS)
+    max_per_client = limits.pop("max_per_client", MAX_CONNECTIONS_PER_CLIENT)
     board = Board(agents, issue_tokens(agents, tokens_dir), log_dir, **limits)
-    return Server((host, port), make_handler(board), max_connections)
+    return Server((host, port), make_handler(board), max_connections, max_per_client)
 
 
 def main() -> None:

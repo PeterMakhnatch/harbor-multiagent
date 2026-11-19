@@ -6,9 +6,10 @@
 # /agents/<seat>/repo, and no seat mounts the other's, so each captured patch
 # is its own seat's work. main's own /workspace/repo is the untouched base.
 #
-# Every exit path writes /logs/verifier/reward.json ({"reward": 0 or 1}) and
-# details.json. The COOPERBENCH_* variables only exist so the unit tests can
-# run this script without Docker; a task never sets them.
+# Every exit path writes /logs/verifier/reward.json ({"reward": 0 or 1}), and
+# details.json unless even that cannot be written. The COOPERBENCH_* variables
+# only exist so the unit tests can run this script without Docker; a task
+# never sets them.
 set -eEuo pipefail
 
 # Ensure language toolchains are in PATH (DinD exec may not inherit image ENV)
@@ -24,7 +25,7 @@ RUNNER="${COOPERBENCH_RUNNER:-/usr/local/bin/runner.sh}"
 SEATS="agent1 agent2"
 
 mkdir -p "$OUT/patches" "$PATCHES"
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/cooperbench-verify.XXXXXX")"
 RESULT_WRITTEN=0
 FAILED_AT=""
 
@@ -33,19 +34,21 @@ FAILED_AT=""
 # -------------------------------------------------------------------------
 write_results() {
     REWARD="$1" F1="$2" F2="$3" MERGE_OK="$4" STRATEGY="$5" ERROR="$6" \
-        WORK="$WORK" OUT="$OUT" SEATS="$SEATS" python3 - <<'PY'
+        WORK="$WORK" OUT="$OUT" SEATS="$SEATS" python3 - <<'PY' || return
 import json, os
 from pathlib import Path
 
 def jsonl(path):
-    """Each line that parses, one at a time; a bad line is skipped."""
+    """Each line that is a JSON object, one at a time; other lines are skipped."""
     try:
         with open(path, "rb") as lines:
             for line in lines:
                 try:
-                    yield json.loads(line)
+                    record = json.loads(line)
                 except ValueError:
                     continue
+                if isinstance(record, dict):
+                    yield record
     except OSError:
         return
 
@@ -59,12 +62,16 @@ def names(path):
 work, out, seats = Path(os.environ["WORK"]), Path(os.environ["OUT"]), os.environ["SEATS"].split()
 sent = {seat: 0 for seat in seats}
 received = {seat: 0 for seat in seats}
+events_capped = False
 for message in jsonl(out / "messages.jsonl"):
     if message.get("from") in sent:
         sent[message["from"]] += 1
 for event in jsonl(out / "events.jsonl"):
-    if event.get("kind") == "recv" and event.get("seat") in received:
-        received[event["seat"]] += len(event.get("data", {}).get("ids", []))
+    events_capped = events_capped or event.get("kind") == "events_capped"
+    data = event.get("data")
+    ids = data.get("ids") if isinstance(data, dict) else None
+    if event.get("kind") == "recv" and event.get("seat") in received and isinstance(ids, list):
+        received[event["seat"]] += len(ids)
 apply_ok = {}
 for seat in seats:
     status = work / f"{seat}.apply"
@@ -80,7 +87,8 @@ details = {
     "dropped_files": {seat: names(work / f"{seat}.dropped") for seat in seats},
     "apply_ok": apply_ok,
     "messages_sent": sent,
-    "messages_received": received,
+    "messages_received": received,  # undercounts after the service's events cap
+    "events_capped": events_capped,
 }
 (out / "details.json").write_text(json.dumps(details, indent=2) + "\n")
 (out / "reward.json").write_text(json.dumps({"reward": details["reward"]}) + "\n")
@@ -88,14 +96,21 @@ PY
     RESULT_WRITTEN=1
 }
 
-# Any failure that set -e turns into an exit still leaves reward 0.
+# Any failure that set -e turns into an exit still leaves reward 0. If even
+# write_results fails, reward.json and a short details.json are written here.
 on_exit() {
     local status=$?
+    local error="verifier error (exit $status) at ${FAILED_AT:-unknown}"
     set +e
     if [ "$RESULT_WRITTEN" -ne 1 ]; then
-        write_results 0 false false 0 none \
-            "verifier error (exit $status) at ${FAILED_AT:-unknown}" \
-            || echo '{"reward": 0}' > "$OUT/reward.json"
+        write_results 0 false false 0 none "$error"
+    fi
+    if [ "$RESULT_WRITTEN" -ne 1 ]; then
+        error="${error//\\/\\\\}"
+        error="${error//\"/\\\"}"
+        error=$(printf '%s' "$error; its results could not be written" | tr '\n\r\t' '   ' | tr -d '\000-\037')
+        printf '{"reward": 0}\n' > "$OUT/reward.json"
+        printf '{"reward": 0, "error": "%s"}\n' "$error" > "$OUT/details.json" 2>/dev/null
     fi
     rm -rf "$WORK"
 }
@@ -150,6 +165,10 @@ with open(dropped_path, "wb") as fh:
 PY
 }
 
+# Bash reads this whole block before it runs any of it, so the code that the
+# test runs execute in main cannot change the rest of this script by
+# rewriting the file.
+{
 cd "$REPO"
 BASE_SHA=$(git rev-parse HEAD)
 
@@ -254,14 +273,19 @@ git diff --binary "$BASE_SHA" HEAD > "$WORK/merged.patch"
 cp "$WORK/merged.patch" "$OUT/patches/merged.patch"
 
 # -------------------------------------------------------------------------
-# 4. Test each feature via runner.sh. The test patch and the merged patch
-#    are copied again before each run, so the first run's code cannot change
-#    what the second run tests. A dspy 8563 task also ships testfix.patch,
-#    appended to a test patch that lacks the new format() expectation.
+# 4. Test each feature via runner.sh. Seat code first runs in main in the
+#    first run (runner.sh installs the package and runs pytest), so the
+#    inputs of both runs are prepared before it: both test patches, the
+#    merged patch and runner.sh go to $INPUTS, and their checksum stays in
+#    this shell. Each run copies its patches from $INPUTS to /patches and
+#    runs $INPUTS/runner.sh; a run whose inputs no longer match the checksum
+#    fails. A dspy 8563 task also ships testfix.patch, appended to a test
+#    patch that lacks the new format() expectation.
 # -------------------------------------------------------------------------
-run_feature() {
-    local n="$1"
-    local test_patch="$PATCHES/tests$n.patch"
+INPUTS="$WORK/inputs"
+mkdir -p "$INPUTS"
+for n in 1 2; do
+    test_patch="$INPUTS/tests$n.patch"
     cp "$TESTS_DIR/tests$n.patch" "$test_patch"
     if [ -f "$TESTS_DIR/testfix.patch" ] && ! grep -q 'tool_calls": \[\]' "$test_patch"; then
         if [ -s "$test_patch" ] && [ -n "$(tail -c 1 "$test_patch")" ]; then
@@ -269,12 +293,37 @@ run_feature() {
         fi
         cat "$TESTS_DIR/testfix.patch" >> "$test_patch"
     fi
-    cp "$WORK/merged.patch" "$PATCHES/merged.patch"
+done
+cp "$WORK/merged.patch" "$INPUTS/merged.patch"
+cp "$RUNNER" "$INPUTS/runner.sh"
+
+inputs_sum() {
+    python3 - "$INPUTS" <<'PY'
+import hashlib, sys
+from pathlib import Path
+digest = hashlib.sha256()
+for path in sorted(Path(sys.argv[1]).iterdir()):
+    digest.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
+print(digest.hexdigest())
+PY
+}
+INPUTS_SUM=$(inputs_sum)
+INPUTS_CHANGED=0
+
+run_feature() {
+    local n="$1"
+    if [ "$(inputs_sum)" != "$INPUTS_SUM" ]; then
+        INPUTS_CHANGED=1
+        echo "the test inputs changed during verification" > "$WORK/test${n}_output.txt"
+        return 1
+    fi
+    cp "$INPUTS/tests$n.patch" "$PATCHES/tests$n.patch"
+    cp "$INPUTS/merged.patch" "$PATCHES/merged.patch"
     cd "$REPO"
     git checkout -q --force "$BASE_SHA"
     git reset -q --hard "$BASE_SHA"
     git clean -fdq
-    bash "$RUNNER" "tests$n.patch" merged.patch > "$WORK/test${n}_output.txt" 2>&1
+    bash "$INPUTS/runner.sh" "tests$n.patch" merged.patch > "$WORK/test${n}_output.txt" 2>&1
 }
 
 F1_EXIT=0
@@ -297,5 +346,10 @@ BOTH=$( [ "$F1_EXIT" -eq 0 ] && [ "$F2_EXIT" -eq 0 ] && echo "1" || echo "0" )
     cat "$WORK/test2_output.txt" 2>/dev/null || echo "(no output)"
 } > "$OUT/test-output.txt"
 
-write_results "$BOTH" "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" ""
+if [ "$INPUTS_CHANGED" -eq 1 ]; then
+    write_results 0 "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" "the test inputs changed during verification"
+else
+    write_results "$BOTH" "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" ""
+fi
 exit 0
+}

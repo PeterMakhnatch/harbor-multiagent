@@ -37,9 +37,19 @@ git reset -q --hard HEAD
 git clean -fdxq
 git apply "$COOPERBENCH_PATCHES/$2"
 git apply "$COOPERBENCH_PATCHES/$1"
-if [ -n "${TAMPER:-}" ] && [ "$1" = tests1.patch ]; then
-    echo garbage > "$COOPERBENCH_PATCHES/tests2.patch"
-    echo garbage > "$COOPERBENCH_PATCHES/merged.patch"
+# TAMPER: what the first run's code overwrites before the second run.
+if [ "$1" = tests1.patch ]; then
+    case "${TAMPER:-}" in
+    working)  # the copies the second run would use
+        echo garbage > "$COOPERBENCH_PATCHES/tests2.patch"
+        echo garbage > "$COOPERBENCH_PATCHES/merged.patch" ;;
+    source)  # the task's own test patch: make feature 2's check always pass
+        printf '%s\n' 'diff --git a/tests/check.sh b/tests/check.sh' 'new file mode 100644' \
+            '--- /dev/null' '+++ b/tests/check.sh' '@@ -0,0 +1 @@' '+true' \
+            > "$COOPERBENCH_TESTS/tests2.patch" ;;
+    snapshot)  # the verifier's own copies of the inputs
+        for f in "$TMPDIR"/*/inputs/tests2.patch; do echo '+true' >> "$f"; done ;;
+    esac
 fi
 bash tests/check.sh
 """
@@ -279,9 +289,96 @@ def test_each_feature_run_gets_fresh_patches(world: World):
     merged patch; the verifier copies both again before the second run."""
     implement(world, "agent1", "agent2")
 
-    reward, _ = world.verify(TAMPER="1")
+    reward, _ = world.verify(TAMPER="working")
 
     assert reward == {"reward": 1}
+
+
+def test_rewriting_the_tasks_test_patch_does_not_change_the_second_run(world: World):
+    """The second run uses the copy taken before the first run, not /tests."""
+    implement(world, "agent1")  # agent2 does nothing
+
+    reward, details = world.verify(TAMPER="source")
+
+    assert reward == {"reward": 0}
+    assert details["feature2_passed"] is False
+
+
+def test_changed_inputs_fail_the_run(world: World, tmp_path: Path):
+    implement(world, "agent1")
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+
+    reward, details = world.verify(TAMPER="snapshot", TMPDIR=str(tmp))
+
+    assert reward == {"reward": 0}
+    assert details["error"] == "the test inputs changed during verification"
+
+
+def test_malformed_and_capped_logs_do_not_cost_the_reward(world: World):
+    implement(world, "agent1", "agent2")
+    coop = world.root / "coop"
+    with (coop / "messages.jsonl").open("a") as fh:
+        fh.write('[]\n"text"\n')
+    with (coop / "events.jsonl").open("a") as fh:
+        fh.write(
+            '\n[]\n{"seq": 9, "seat": null, "kind": "events_capped", "data": {}}\n'
+        )
+        fh.write('{"seq": 10, "seat": "agent1", "kind": "recv", "data": []}\n')
+
+    reward, details = world.verify()
+
+    assert reward == {"reward": 1}
+    assert details["messages_sent"] == {"agent1": 1, "agent2": 0}
+    assert details["messages_received"] == {"agent1": 0, "agent2": 1}
+    assert details["events_capped"] is True
+
+
+def test_results_that_cannot_be_written_still_give_reward_zero(world: World):
+    implement(world, "agent1", "agent2")
+    (world.out / "details.json").mkdir(parents=True)  # python cannot write it
+
+    result = subprocess.run(
+        ["bash", str(VERIFIER)],
+        env=world.env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+    assert result.returncode != 0
+    assert json.loads((world.out / "reward.json").read_text()) == {"reward": 0}
+
+
+def test_a_second_run_in_the_same_main_gives_the_same_reward(world: World):
+    implement(world, "agent1", "agent2")
+
+    assert world.verify()[0] == {"reward": 1}
+    assert world.verify()[0] == {"reward": 1}
+
+
+def test_a_patch_that_git_really_rejects_fails_the_merge(world: World):
+    """main has an ignored build product; agent1 un-ignores it and adds its
+    own copy, which cannot be applied over main's file."""
+    repo = Path(world.env["COOPERBENCH_REPO"])
+    (repo / ".gitignore").write_text("build/\n")
+    git(repo, "add", ".gitignore", env=world.env)
+    git(repo, "commit", "-q", "-m", "ignore build", env=world.env)
+    (repo / "build").mkdir()
+    (repo / "build/out.txt").write_text("main's build\n")
+    for seat in SEATS:
+        shutil.rmtree(world.seats[seat])
+        shutil.copytree(repo, world.seats[seat], symlinks=True)
+    implement(world, "agent1", "agent2")
+    world.seat_file("agent1", ".gitignore").write_text("")
+    world.seat_file("agent1", "build/out.txt").write_text("agent1's build\n")
+
+    reward, details = world.verify()
+
+    assert reward == {"reward": 0}
+    assert details["apply_ok"] == {"agent1": False, "agent2": True}
+    assert details["error"].startswith("agent1's patch does not apply: ")
+    assert "build/out.txt" in details["error"]
 
 
 def test_conflicting_edits_fall_back_to_a_union_merge(world: World):

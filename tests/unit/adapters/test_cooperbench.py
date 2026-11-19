@@ -528,7 +528,9 @@ def test_a_restart_keeps_the_seats_tokens(tmp_path: Path):
 
 
 def test_the_message_cap_holds_under_concurrent_sends(tmp_path: Path):
-    with serving(tmp_path, max_messages=5) as info:
+    with serving(
+        tmp_path, max_messages=5, max_connections=64, max_per_client=64
+    ) as info:
         statuses: list[int] = []
 
         def send() -> None:
@@ -594,6 +596,31 @@ def test_a_recipient_that_is_not_a_seat_name_is_refused(
     )
     assert status == 400
     assert reply["error"].startswith("'to' must be one of")
+
+
+def test_one_client_cannot_take_every_connection(tmp_path: Path):
+    module = load_server()
+    setattr(module, "REQUEST_TIMEOUT_SEC", 1)
+    with serving(tmp_path, module, max_per_client=2) as info:
+        stalled = [
+            socket.create_connection(("127.0.0.1", info["port"])) for _ in range(2)
+        ]
+        for conn in stalled:  # each sends part of a request line, then stalls
+            conn.sendall(b"GET /hea")
+        time.sleep(0.3)
+        extra = socket.create_connection(("127.0.0.1", info["port"]))
+        extra.settimeout(5)
+        extra.sendall(b"GET /health HTTP/1.0\r\n\r\n")
+        try:  # 30 slots are free, but not for this client
+            reply = extra.recv(100)
+        except ConnectionResetError:
+            reply = b""
+        assert reply == b""
+        extra.close()
+        time.sleep(1.5)
+        assert call(info, "GET", "/peek", "agent1") == (200, {"unread": 0})
+        for conn in stalled:
+            conn.close()
 
 
 def test_stalled_connections_time_out_and_are_capped(tmp_path: Path):
