@@ -117,6 +117,14 @@ class ViewerApiAdapter:
             raise HTTPException(400, "Invalid step")
         return f"steps/{step}/"
 
+    @staticmethod
+    def seat_prefix(seat: str | None) -> str:
+        if seat is None:
+            return ""
+        if not seat or "/" in seat or "\\" in seat or seat in {".", ".."}:
+            raise HTTPException(400, "Invalid seat")
+        return f"seats/{seat}/"
+
 
 def register_api_adapter(app: FastAPI, source: ViewerSource):
     adapter = ViewerApiAdapter(source)
@@ -404,10 +412,18 @@ def register_api_adapter(app: FastAPI, source: ViewerSource):
         }
 
     @app.get("/api/jobs/{job_id}/trials/{rollout_id}/trajectory")
-    async def trajectory(job_id: UUID, rollout_id: UUID, step: str | None = None):
+    async def trajectory(
+        job_id: UUID,
+        rollout_id: UUID,
+        step: str | None = None,
+        seat: str | None = None,
+    ):
+        if step is not None and seat is not None:
+            raise HTTPException(400, "Cannot specify both 'step' and 'seat'")
+        prefix = adapter.seat_prefix(seat) if seat is not None else adapter.prefix(step)
         return await adapter.object(
             await adapter.rollout(job_id, rollout_id),
-            adapter.prefix(step) + "agent/trajectory.json",
+            prefix + "agent/trajectory.json",
         )
 
     @app.get("/api/jobs/{job_id}/trials/{rollout_id}/verifier-output")

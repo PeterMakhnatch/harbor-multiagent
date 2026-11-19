@@ -1288,6 +1288,25 @@ def _register_job_endpoints(
             raise HTTPException(status_code=404, detail=f"Step '{step}' not found")
         return step_dir
 
+    def _resolve_seat_root(trial_dir: Path, seat: str | None) -> Path:
+        """Return the directory to read seat-scoped files from.
+
+        When ``seat`` is set, resolves to ``trial_dir/seats/{seat}`` after
+        validating the path stays inside the seats directory. When it's
+        ``None``, returns ``trial_dir`` unchanged.
+        """
+        if seat is None:
+            return trial_dir
+        if not seat or "/" in seat or "\\" in seat or seat in {".", ".."}:
+            raise HTTPException(status_code=400, detail="Invalid seat name")
+        seats_dir = (trial_dir / "seats").resolve()
+        seat_dir = (seats_dir / seat).resolve()
+        if seats_dir not in seat_dir.parents:
+            raise HTTPException(status_code=400, detail="Invalid seat name")
+        if not seat_dir.exists():
+            raise HTTPException(status_code=404, detail=f"Seat '{seat}' not found")
+        return seat_dir
+
     def _find_trial_recording(trial_dir: Path) -> tuple[Path, str] | None:
         """Find an OSWorld-style trial recording under agent/recording.mp4."""
         recording_path = trial_dir / "agent" / RECORDING_FILE_NAME
@@ -1321,11 +1340,16 @@ def _register_job_endpoints(
             environment_type: str | None = None
             if config:
                 sources = _job_source_labels(config)
+                configured_agents = config.participants or config.agents
                 agents = sorted(
-                    set(agent.name for agent in config.agents if agent.name is not None)
+                    set(
+                        agent.name
+                        for agent in configured_agents
+                        if agent.name is not None
+                    )
                 )
                 # Extract provider from model_name (format: "provider/model")
-                for agent in config.agents:
+                for agent in configured_agents:
                     if agent.model_name:
                         parts = agent.model_name.split("/", 1)
                         if len(parts) == 2:
@@ -2395,8 +2419,9 @@ def _register_job_endpoints(
         job_name: str,
         trial_name: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
+        seat: str | None = Query(default=None, description="Seat name to scope to"),
     ) -> dict[str, Any] | None:
-        """Get trajectory.json content for a trial (optionally a specific step)."""
+        """Get trajectory.json content for a trial (optionally a step or seat)."""
         trial_dir = _validate_trial_path(job_name, trial_name)
         if not trial_dir.exists():
             raise HTTPException(
@@ -2404,7 +2429,15 @@ def _register_job_endpoints(
                 detail=f"Trial '{trial_name}' not found in job '{job_name}'",
             )
 
-        root = _resolve_step_root(trial_dir, step)
+        if step is not None and seat is not None:
+            raise HTTPException(
+                status_code=400, detail="Cannot specify both 'step' and 'seat'"
+            )
+        root = (
+            _resolve_seat_root(trial_dir, seat)
+            if seat is not None
+            else _resolve_step_root(trial_dir, step)
+        )
         trajectory_path = root / "agent" / "trajectory.json"
         if not trajectory_path.exists():
             return None

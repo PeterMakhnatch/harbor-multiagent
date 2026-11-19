@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from harbor.models.task.id import GitTaskId, LocalTaskId, PackageTaskId
-from harbor.models.trial.config import TrialConfig
+from harbor.models.trial.config import AgentConfig, TrialConfig
 from harbor.models.trial.result import AgentInfo, ModelInfo, TrialResult
 from harbor.viewer.models import TrialSummary
 
@@ -31,23 +31,28 @@ def task_id_from_config(config: TrialConfig) -> LocalTaskId | GitTaskId | Packag
     return config.task.get_task_id()
 
 
+def _primary_agent(config: TrialConfig) -> AgentConfig:
+    return config.participants[0] if config.participants else config.agent
+
+
 def agent_name_from_config(config: TrialConfig) -> str:
-    return config.agent.name or config.agent.import_path or "unknown"
+    agent = _primary_agent(config)
+    return agent.name or agent.import_path or "unknown"
 
 
 def agent_name_from_result(result: TrialResult) -> str:
-    if result.config.agent.import_path:
+    if _primary_agent(result.config).import_path:
         return agent_name_from_config(result.config)
     return result.agent_info.name
 
 
 def reasoning_effort_from_config(config: TrialConfig) -> str | None:
-    value = config.agent.kwargs.get("reasoning_effort")
+    value = _primary_agent(config).kwargs.get("reasoning_effort")
     return value if isinstance(value, str) and value else None
 
 
 def trial_summary_from_config(name: str, config: TrialConfig) -> TrialSummary:
-    model_info = model_info_from_model_name(config.agent.model_name)
+    model_info = model_info_from_model_name(_primary_agent(config).model_name)
     return TrialSummary(
         name=name,
         task_name=task_name_from_config(config),
@@ -76,7 +81,7 @@ def partial_trial_result_from_config(
     config: TrialConfig,
     config_path: Path,
 ) -> TrialResult:
-    model_info = model_info_from_model_name(config.agent.model_name)
+    model_info = model_info_from_model_name(_primary_agent(config).model_name)
     started_at = datetime.fromtimestamp(config_path.stat().st_mtime, tz=timezone.utc)
     return TrialResult(
         id=config.job_id or uuid4(),
