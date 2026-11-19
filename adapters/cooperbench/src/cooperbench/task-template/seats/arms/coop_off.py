@@ -74,7 +74,9 @@ def make_server(
 
 
 def main() -> None:
-    agents = [a.strip() for a in os.environ.get("COOP_AGENTS", "").split(",") if a.strip()]
+    agents = [
+        a.strip() for a in os.environ.get("COOP_AGENTS", "").split(",") if a.strip()
+    ]
     if not agents:
         raise SystemExit("coop_off: set COOP_AGENTS to the seat names")
     server = make_server(

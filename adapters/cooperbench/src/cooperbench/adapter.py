@@ -1227,7 +1227,9 @@ class CooperBenchAdapter:
 
         for idx, pair in enumerate(pairs, start=1):
             for arm in self.arms:
-                label = f"{pair.pair_id} ({arm})" if self._opaque_names else pair.pair_id
+                label = (
+                    f"{pair.pair_id} ({arm})" if self._opaque_names else pair.pair_id
+                )
                 try:
                     out = self.generate_task(pair, overwrite=overwrite, arm=arm)
                     print(f"[{idx}] OK   {label} -> {out}")
