@@ -1,0 +1,662 @@
+{
+  "counts": {
+    "attempted": 13,
+    "census_errors_by_code": {
+      "unknown_native_identity": 13
+    },
+    "census_matched_by_job_and_uuid": 0,
+    "census_matched_by_path": 13,
+    "census_matched_by_uuid": 13,
+    "census_path_identity_conflicts": 0,
+    "census_rewards_known": 0,
+    "census_rewards_matching_native": 0,
+    "census_rows_scanned": 13,
+    "invalid": 1,
+    "measured": 12,
+    "not_attempted": 3,
+    "registered": 16,
+    "unavailable": 4,
+    "unmeasured": 0,
+    "with_native_job_id": 0,
+    "with_native_shared_reward": 12,
+    "with_native_trial_id": 13,
+    "with_reused_native_trial_id": 0
+  },
+  "registered_plan_sha256": "e7880012bac604251fada9d3597ab38ff42626f1c71615468f5efde711b18f27",
+  "reward_attribution": "shared_trial_reward_not_assigned_per_role",
+  "role_usage": {
+    "dispatch": {
+      "known_cache_tokens": 3825,
+      "known_input_tokens": 11360,
+      "known_output_tokens": 1594,
+      "slots_with_known_cache_tokens": 13,
+      "slots_with_known_input_tokens": 13,
+      "slots_with_known_output_tokens": 13,
+      "slots_with_null_cache_tokens": 3,
+      "slots_with_null_input_tokens": 3,
+      "slots_with_null_output_tokens": 3
+    },
+    "inventory": {
+      "known_cache_tokens": 2676,
+      "known_input_tokens": 8807,
+      "known_output_tokens": 4018,
+      "slots_with_known_cache_tokens": 13,
+      "slots_with_known_input_tokens": 13,
+      "slots_with_known_output_tokens": 13,
+      "slots_with_null_cache_tokens": 3,
+      "slots_with_null_input_tokens": 3,
+      "slots_with_null_output_tokens": 3
+    }
+  },
+  "schema": "seatlab.native-team-census/v1",
+  "slots": [
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-SS",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "fresh",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 0,
+      "native_finished_at": "2026-11-19T10:20:20.876405Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:20:06.151464Z",
+      "native_trial_id": "06910707-9f63-4d04-9664-90ba9d7a0274",
+      "native_trial_id_reused": false,
+      "pairing": "SS",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-SM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "fresh",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 1,
+      "native_finished_at": "2026-11-19T10:21:41.657709Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:21:08.605135Z",
+      "native_trial_id": "72abcf4b-2a60-4169-8842-6e3d23e5073e",
+      "native_trial_id_reused": false,
+      "pairing": "SM",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1512,
+          "n_output_tokens": 178
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-MS",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "fresh",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 1,
+      "native_finished_at": "2026-11-19T10:22:58.204241Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:22:33.263445Z",
+      "native_trial_id": "e687fef4-2318-4ef7-b9dd-95fd6f5d24c8",
+      "native_trial_id_reused": false,
+      "pairing": "MS",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1259,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-MM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "fresh",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 2,
+      "native_finished_at": "2026-11-19T10:24:20.257770Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:23:45.125293Z",
+      "native_trial_id": "8b06a917-83b9-4b3d-a8af-cc286379def9",
+      "native_trial_id_reused": false,
+      "pairing": "MM",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 1147,
+          "n_input_tokens": 1514,
+          "n_output_tokens": 178
+        },
+        "inventory": {
+          "n_cache_tokens": 892,
+          "n_input_tokens": 1257,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-SS",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 0,
+      "native_finished_at": "2026-11-19T10:24:57.933451Z",
+      "native_job_id": null,
+      "native_shared_reward": 0.6666666666666666,
+      "native_started_at": "2026-11-19T10:24:38.502233Z",
+      "native_trial_id": "87a3b764-0782-46fe-9bab-4cd5baedb259",
+      "native_trial_id_reused": false,
+      "pairing": "SS",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-SM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 1,
+      "native_finished_at": "2026-11-19T10:26:38.902827Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:26:05.900223Z",
+      "native_trial_id": "3e997102-916e-484b-941f-810cf5de88a9",
+      "native_trial_id_reused": false,
+      "pairing": "SM",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1706,
+          "n_output_tokens": 178
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-MS",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 1,
+      "native_finished_at": "2026-11-19T10:28:15.523448Z",
+      "native_job_id": null,
+      "native_shared_reward": 0.6666666666666666,
+      "native_started_at": "2026-11-19T10:27:34.500599Z",
+      "native_trial_id": "3d754f74-1863-4321-b9d5-f589df48aae0",
+      "native_trial_id_reused": false,
+      "pairing": "MS",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1258,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-MM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 2,
+      "native_finished_at": "2026-11-19T10:29:30.569254Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:28:52.541001Z",
+      "native_trial_id": "5efbe6fc-16f4-40b0-99da-12cc960360d1",
+      "native_trial_id_reused": false,
+      "pairing": "MM",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 1339,
+          "n_input_tokens": 1704,
+          "n_output_tokens": 323
+        },
+        "inventory": {
+          "n_cache_tokens": 892,
+          "n_input_tokens": 1257,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2001
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-MM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 2,
+      "native_finished_at": "2026-11-19T10:30:42.469050Z",
+      "native_job_id": null,
+      "native_shared_reward": 1.0,
+      "native_started_at": "2026-11-19T10:30:13.787733Z",
+      "native_trial_id": "0ce97dbb-213b-41d7-9626-7cd94a55cc06",
+      "native_trial_id_reused": false,
+      "pairing": "MM",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1707,
+          "n_output_tokens": 178
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1259,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-MS",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 1,
+      "native_finished_at": "2026-11-19T10:32:21.156591Z",
+      "native_job_id": null,
+      "native_shared_reward": 0.75,
+      "native_started_at": "2026-11-19T10:31:39.505297Z",
+      "native_trial_id": "759c3d60-3dc0-46c0-9d19-c79184893f5f",
+      "native_trial_id_reused": false,
+      "pairing": "MS",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        },
+        "inventory": {
+          "n_cache_tokens": 892,
+          "n_input_tokens": 1259,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-SM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 1,
+      "native_finished_at": "2026-11-19T10:34:10.209499Z",
+      "native_job_id": null,
+      "native_shared_reward": 0.6666666666666666,
+      "native_started_at": "2026-11-19T10:33:29.759645Z",
+      "native_trial_id": "01e539c9-bdb5-4eaf-b640-ab17e769e8b5",
+      "native_trial_id_reused": false,
+      "pairing": "SM",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 1339,
+          "n_input_tokens": 1705,
+          "n_output_tokens": 178
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-SS",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "reordered",
+      "detail_reason": null,
+      "detail_status": "measured",
+      "model_actors": 0,
+      "native_finished_at": "2026-11-19T10:35:06.329211Z",
+      "native_job_id": null,
+      "native_shared_reward": 0.75,
+      "native_started_at": "2026-11-19T10:34:35.551554Z",
+      "native_trial_id": "a61c91ef-cfa8-4b95-82da-6eed1e8b3546",
+      "native_trial_id_reused": false,
+      "pairing": "SS",
+      "registered_team_status": "measured",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 0,
+          "n_output_tokens": 0
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-fresh-MM",
+      "census": {
+        "error": "unknown_native_identity",
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 1
+      },
+      "condition": "fresh",
+      "detail_reason": "model_invalid_or_refused_decisions",
+      "detail_status": "invalid",
+      "model_actors": 2,
+      "native_finished_at": "2026-11-19T10:36:59.028406Z",
+      "native_job_id": null,
+      "native_shared_reward": null,
+      "native_started_at": "2026-11-19T10:36:12.660131Z",
+      "native_trial_id": "81d2c185-6a76-4487-9420-7d391a0bda6a",
+      "native_trial_id_reused": false,
+      "pairing": "MM",
+      "registered_team_status": "unavailable",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1512,
+          "n_output_tokens": 381
+        },
+        "inventory": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 1258,
+          "n_output_tokens": 574
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": false,
+      "cell_id": "s2003-fresh-MS",
+      "census": {
+        "error": null,
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 0,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 0
+      },
+      "condition": "fresh",
+      "detail_reason": "not_attempted",
+      "detail_status": "not_attempted",
+      "model_actors": 1,
+      "native_finished_at": null,
+      "native_job_id": null,
+      "native_shared_reward": null,
+      "native_started_at": null,
+      "native_trial_id": null,
+      "native_trial_id_reused": false,
+      "pairing": "MS",
+      "registered_team_status": "unavailable",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null
+        },
+        "inventory": {
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": false,
+      "cell_id": "s2003-fresh-SM",
+      "census": {
+        "error": null,
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 0,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 0
+      },
+      "condition": "fresh",
+      "detail_reason": "not_attempted",
+      "detail_status": "not_attempted",
+      "model_actors": 1,
+      "native_finished_at": null,
+      "native_job_id": null,
+      "native_shared_reward": null,
+      "native_started_at": null,
+      "native_trial_id": null,
+      "native_trial_id_reused": false,
+      "pairing": "SM",
+      "registered_team_status": "unavailable",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null
+        },
+        "inventory": {
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null
+        }
+      },
+      "seed": 2003
+    },
+    {
+      "attempted": false,
+      "cell_id": "s2003-fresh-SS",
+      "census": {
+        "error": null,
+        "job_uuid_matches": 0,
+        "path_identity_conflict": false,
+        "path_matches": 0,
+        "reward": null,
+        "reward_matches_native": false,
+        "uuid_matches": 0
+      },
+      "condition": "fresh",
+      "detail_reason": "not_attempted",
+      "detail_status": "not_attempted",
+      "model_actors": 0,
+      "native_finished_at": null,
+      "native_job_id": null,
+      "native_shared_reward": null,
+      "native_started_at": null,
+      "native_trial_id": null,
+      "native_trial_id_reused": false,
+      "pairing": "SS",
+      "registered_team_status": "unavailable",
+      "seats": {
+        "dispatch": {
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null
+        },
+        "inventory": {
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null
+        }
+      },
+      "seed": 2003
+    }
+  ]
+}

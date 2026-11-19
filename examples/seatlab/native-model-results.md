@@ -35,6 +35,22 @@ The table sums the CLI fields by role. CLI and API durations are sums across cal
 
 The 6 measured script seats per role used 0 model turns. The run recorded 14 model turns: 12 in measured cells and 2 in the invalid cell. All 14 have a known CLI estimate, for a total of **$0.1113781 USD**. The protocol uses the existing Claude Max subscription with estimate limits of $0.30 USD per call and $4.80 USD total. The estimates are not an invoice or an incremental subscription charge. Local Docker instances did not incur a usage charge.
 
+## Can stock Eval Lab read these trials?
+
+Yes, through the raw trial reader. The [optional bridge](team_census.py) called stock `evallab.results.load_trial` on each attempted standalone trial. It found **13 native trial UUIDs, 26 seat records, and 12 known team rewards**. It did not duplicate the team reward across seats. The invalid trial has no accepted team score. The 3 unattempted trials have no seat token measurements.
+
+The same bridge opened the stock census read-only on exactly those directories. All 13 census rows matched the raw path and trial UUID. None had a native job UUID, so the census correctly declined to project all 13 rewards. A standalone trial is not a Harbor job. The derived directory remained empty. This result does not describe trials launched under a native job.
+
+| Native seat field | Inventory | Dispatch |
+| --- | ---: | ---: |
+| Seats with known input, cache, and output counts | 13 | 13 |
+| Registered seats with unknown counts | 3 | 3 |
+| `n_input_tokens`, summed over known seats | 8,807 | 11,360 |
+| `n_cache_tokens`, summed over known seats | 2,676 | 3,825 |
+| `n_output_tokens`, summed over known seats | 4,018 | 1,594 |
+
+The native input field includes the CLI input, cache creation, and cache read counts. Do not add the cache column to native input. Totals include the invalid attempt's actual usage. See the [path-free census projection](results/native-model-census.json) for each registered slot. To reproduce on retained private trials, run `python examples/seatlab/team_census.py --study STUDY --evallab-root EVAL_LAB` with Eval Lab installed. No model, network service, or database backfill is needed.
+
 ## What the evidence supports
 
 The report checks actor identity, served model metadata, accepted role-view digests, report fidelity, delivered messages, and committed choices. The independent native verifier scores feasibility and optimality without a model judge. These checks test the recorded model actions against deterministic evidence. They do not prove that a model understood its view or will repeat its choices. With 2 seeds, 1 missing group, and no repeated generation per seat, the results do not establish a general causal effect or rank models.
