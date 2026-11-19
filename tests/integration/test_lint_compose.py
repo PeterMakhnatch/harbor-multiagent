@@ -1092,6 +1092,9 @@ services:
     <<: *player
     pid: "service:main"
     volumes: ["p1-home:/peek:ro"]
+  monitor:
+    image: {IMAGE}
+    ipc: "service:p1"
 volumes:
   p1-home: {{}}
   world: {{}}
@@ -1100,17 +1103,62 @@ volumes:
     assert [(f.rule, f.message.split(";")[0]) for f in findings] == [
         (
             "seat-shared-namespace",
-            "services.p2.pid: Seat shares a PID namespace with service:main",
+            "services.monitor.ipc: Service shares a seat's IPC namespace",
+        ),
+        (
+            "seat-shared-namespace",
+            "services.p2.pid: Seat shares another container's PID namespace",
         ),
         (
             "seat-shared-volume",
-            "services.p1.volumes[0]: Seat can write volume 'p1-home', also mounted by seat p2",
+            "services.p1.volumes[0]: Seat can write a volume also mounted by seat p2",
         ),
         (
             "seat-shared-volume",
-            "services.p1.volumes[2]: Seat can write volume 'world', also written by main",
+            "services.p1.volumes[2]: Seat can write a volume also written by main",
         ),
     ]
+
+
+@pytest.mark.parametrize("output", ["text", "json"])
+def test_seat_findings_never_print_interpolated_values(task, cli, monkeypatch, output):
+    # A host value that reaches Compose through the task's environment.
+    secret = "do-not-print-seat-target"
+    monkeypatch.setenv("HOST_SEAT_TARGET", secret)
+    configure(
+        task,
+        agent={},
+        verifier={},
+        environment={"env": {"SEAT_TARGET": "${HOST_SEAT_TARGET}"}},
+        agents={"p1": {}, "p2": {"under_test": False}},
+    )
+    (task / "instructions").mkdir()
+    for seat in ("p1", "p2"):
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+    (task / "environment/docker-compose.yaml").write_text(f"""
+services:
+  p1:
+    image: {IMAGE}
+    network_mode: "container:${{SEAT_TARGET}}"
+    volumes: ["${{SEAT_TARGET}}:/data"]
+  p2:
+    image: {IMAGE}
+    ipc: "service:${{SEAT_TARGET}}"
+    volumes: ["${{SEAT_TARGET}}:/peek:ro"]
+""")
+    result = CliRunner().invoke(
+        cli, [str(task), *(["--json"] if output == "json" else [])]
+    )
+    assert result.exit_code == 1
+    assert secret not in result.stdout
+    if output == "json":
+        assert [
+            (f["rule"], f["message"].split(":")[0]) for f in json.loads(result.stdout)
+        ] == [
+            ("seat-shared-namespace", "services.p1.network_mode"),
+            ("seat-shared-namespace", "services.p2.ipc"),
+            ("seat-shared-volume", "services.p1.volumes[0]"),
+        ]
 
 
 def test_hello_seats_example_is_clean():

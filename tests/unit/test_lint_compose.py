@@ -16,7 +16,7 @@ from harbor.lint.compose import (
     _load_compose,
     lint_compose,
 )
-from tests.unit.test_lint import cli as cli, task as task
+from tests.unit.test_lint import cli as cli, configure, task as task
 
 pytestmark = pytest.mark.unit
 
@@ -173,7 +173,7 @@ def test_seat_shared_volume(model, path, mounts, expected):
         model["services"].setdefault(service, {})["volumes"] = volumes
     findings = lint_compose(path, seats=["p1", "p2"])
     assert [
-        (f.rule, f.message.split(":")[0], f.message.split(", also ")[1].split(";")[0])
+        (f.rule, f.message.split(":")[0], f.message.split(" also ")[1].split(";")[0])
         for f in findings
     ] == [
         ("seat-shared-volume", f"services.{service}.volumes[0]", sharing)
@@ -195,26 +195,96 @@ def test_seat_shared_bind_volume_access(model, path, flags, expected):
     assert {f.rule for f in lint_compose(path, seats=["p1", "p2"])} == expected
 
 
-@pytest.mark.parametrize("key", ["network_mode", "pid", "ipc"])
+NAMESPACES = [("network_mode", "network"), ("pid", "PID"), ("ipc", "IPC")]
+
+
+@pytest.mark.parametrize("key,kind", NAMESPACES)
 @pytest.mark.parametrize(
-    "mode,shared",
+    "mode,shares",
     [
-        ("host", True),
-        ("service:main", True),
-        ("container:other", True),
-        ("none", False),
-        ("private", False),
-        (None, False),
+        ("host", "the host's"),
+        ("service:main", "another container's"),
+        ("container:other", "another container's"),
+        ("none", None),
+        ("private", None),
+        (None, None),
     ],
 )
-def test_seat_shared_namespace(model, path, key, mode, shared):
-    model["services"]["main"][key] = "host"  # Only seats are checked.
+def test_seat_shared_namespace(model, path, key, kind, mode, shares):
+    model["services"]["main"][key] = "host"  # main alone does not share a seat's.
     model["services"]["p1"] = {key: mode}
     findings = lint_compose(path, seats=["p1"])
-    assert [f.rule for f in findings] == (["seat-shared-namespace"] if shared else [])
-    assert all(
-        f.message.startswith(f"services.p1.{key}: Seat shares a ") for f in findings
+    assert [(f.rule, f.message) for f in findings] == (
+        [
+            (
+                "seat-shared-namespace",
+                f"services.p1.{key}: Seat shares {shares} {kind} namespace; remove it to isolate the seat.",
+            )
+        ]
+        if shares
+        else []
     )
+
+
+@pytest.mark.parametrize("key,kind", NAMESPACES)
+@pytest.mark.parametrize(
+    "service,mode,shared",
+    [
+        ("main", "service:p1", True),
+        ("db", "service:p1", True),
+        ("main", "container:p1-box", True),
+        ("main", "service:db", False),
+        ("main", "container:other", False),
+        ("main", "host", False),
+    ],
+)
+def test_service_shares_seat_namespace(model, path, key, kind, service, mode, shared):
+    model["services"].update(db={}, p1={"container_name": "p1-box"})
+    model["services"][service][key] = mode
+    findings = lint_compose(path, seats=["p1"])
+    assert [(f.rule, f.message) for f in findings] == (
+        [
+            (
+                "seat-shared-namespace",
+                f"services.{service}.{key}: Service shares a seat's {kind} namespace; remove it to isolate the seat.",
+            )
+        ]
+        if shared
+        else []
+    )
+    assert lint_compose(path) == []  # Tasks without seats have no seat findings.
+
+
+@pytest.mark.parametrize("output", ["text", "json"])
+def test_seat_findings_never_print_compose_values(task, cli, model, output):
+    # Compose interpolates these values, so they can hold host secrets.
+    secret = "DO_NOT_PRINT"
+    configure(task, agent={}, verifier={}, agents={"p1": {}, "p2": {}})
+    (task / "instructions").mkdir()
+    for seat in ("p1", "p2"):
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+    (task / "environment/docker-compose.yaml").write_text("services: {}")
+    mount = {"type": "volume", "source": secret, "target": "/data"}
+    model["services"].update(
+        main={"pid": "service:p1"},
+        p1={"network_mode": f"container:{secret}", "volumes": [mount]},
+        p2={"ipc": f"service:{secret}", "volumes": [{**mount, "read_only": True}]},
+    )
+    model["volumes"] = {secret: {"name": secret}}
+    result = CliRunner().invoke(
+        cli, [str(task), *(["--json"] if output == "json" else [])]
+    )
+    assert result.exit_code == 1
+    assert secret not in result.stdout
+    if output == "json":
+        assert [
+            (f["rule"], f["message"].split(":")[0]) for f in json.loads(result.stdout)
+        ] == [
+            ("seat-shared-namespace", "services.main.pid"),
+            ("seat-shared-namespace", "services.p1.network_mode"),
+            ("seat-shared-namespace", "services.p2.ipc"),
+            ("seat-shared-volume", "services.p1.volumes[0]"),
+        ]
 
 
 def test_seat_privilege_and_docker_socket_use_existing_rules(model, path):

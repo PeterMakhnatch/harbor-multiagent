@@ -323,18 +323,32 @@ def lint_compose(
                         PurePosixPath(posixpath.normpath(f"/{subpath}")),
                     )
                 )
-    for seat in seats:
-        service = data.get("services", {}).get(seat, {})
+    # Seat findings name fields and services, never values: Compose
+    # interpolates values such as namespace targets and volume sources.
+    services = data.get("services", {})
+    # Modes that join a seat's namespace, from a service that is not a seat.
+    seat_targets = {f"service:{seat}" for seat in seats} | {
+        f"container:{container}"
+        for seat in seats
+        if (container := services.get(seat, {}).get("container_name"))
+    }
+    for name, service in services.items():
         for key, kind in _SEAT_NAMESPACES.items():
             mode = service.get(key) or ""
-            if mode == "host" or mode.startswith(("service:", "container:")):
-                emit(
-                    LintRule.SEAT_SHARED_NAMESPACE,
-                    f"services.{seat}.{key}",
-                    f"Seat shares a {kind} namespace with "
-                    f"{'the host' if mode == 'host' else mode}; remove it to isolate the seat.",
-                )
-    for volume, mounts in volume_mounts.items():
+            if name in seats and mode == "host":
+                sharing = f"Seat shares the host's {kind} namespace"
+            elif name in seats and mode.startswith(("service:", "container:")):
+                sharing = f"Seat shares another container's {kind} namespace"
+            elif mode in seat_targets:
+                sharing = f"Service shares a seat's {kind} namespace"
+            else:
+                continue
+            emit(
+                LintRule.SEAT_SHARED_NAMESPACE,
+                f"services.{name}.{key}",
+                f"{sharing}; remove it to isolate the seat.",
+            )
+    for mounts in volume_mounts.values():
         for seat, location, writable, subpath in mounts:
             if seat not in seats or not writable:
                 continue
@@ -353,7 +367,7 @@ def lint_compose(
                 emit(
                     LintRule.SEAT_SHARED_VOLUME,
                     location,
-                    f"Seat can write volume {volume!r}, also mounted by seat "
+                    "Seat can write a volume also mounted by seat "
                     f"{', '.join(peers)}; give each seat its own volume.",
                 )
             if writers := sorted(
@@ -363,7 +377,7 @@ def lint_compose(
                 emit(
                     LintRule.SEAT_SHARED_VOLUME,
                     location,
-                    f"Seat can write volume {volume!r}, also written by "
+                    "Seat can write a volume also written by "
                     f"{', '.join(writers)}; mount it read-only in one of them.",
                 )
     return sort_findings(findings)

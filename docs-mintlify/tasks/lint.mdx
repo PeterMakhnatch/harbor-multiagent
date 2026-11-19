@@ -72,7 +72,7 @@ Compose interpolation uses the applicable agent or verifier environment configur
 | `compose-external-bind-mount` | ✓ | Bind sources that resolve outside the task directory. |
 | `compose-symlink-bind-mount` | ✓ | Bind sources that traverse a symlink and resolve outside the task directory. |
 | `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. A read-only mount in another service, such as `main` reading a seat's files, is allowed. |
-| `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, or IPC namespace. |
+| `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, or IPC namespace, and other services that join a seat's namespace with `service:<seat>` or the seat's `container_name`. |
 
 Seats are the services that run the agents of a [multi-agent task](/tasks/multi-agent). The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
 
