@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from flotilla_analysis.load import load, load_evidence, load_trajectories
-from flotilla_analysis.play import ANNOUNCE_BEFORE, analyze
+from flotilla_analysis.play import ANNOUNCE_BEFORE, analyze, found_lost
 from flotilla_analysis.render import render
 from flotilla_analysis.report import build
 from flotilla_analysis.tasks import seat_private, task_info
@@ -29,6 +29,8 @@ REQUEST_RECEIVER_NAMES = "Please send Ben's hours, e.g. Mon 09,10; Tue 13"
 REQUEST_NO_NAMES = 'Please share your busy hours in the format "Mon 09,10; Tue 13".'
 P2_DATA = "Ben: Mon 09,10; Tue -; Wed -; Thu 09; Fri -\nDara: Mon 12; Tue -; Wed -; Thu -; Fri -"
 P1_DATA = "Ana: Mon(09,10), Tue(-). Chen: Wed(11)."
+P3_DATA = "Eli: Mon 13; Tue -; Wed -; Thu -; Fri 15"
+THREE = [fx.seat_result("p1"), fx.seat_result("p2"), fx.seat_result("p3")]
 
 
 def message(mid, sender, text, t, to="all"):
@@ -74,7 +76,9 @@ class FoundLost(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def trial(self, name, *, messages, submissions, deliveries, condition="talk", job="job"):
+    def trial(
+        self, name, *, messages, submissions, deliveries, condition="talk", job="job", seats=None, task=None
+    ):
         final = submissions[-1]["answer"] if submissions else None
         return fx.trial(
             self.root / job,
@@ -82,10 +86,11 @@ class FoundLost(unittest.TestCase):
             label="schedule",
             condition=condition,
             reward=1.0 if final == RIGHT else 0.0,
+            seats=seats,
             events=events(messages, submissions, deliveries),
             messages=messages,
             submissions=submissions,
-            task_path=str(self.tasks[condition]),
+            task_path=str(task or self.tasks[condition]),
         )
 
     def play(self, directory, hook_dirs=None):
@@ -184,6 +189,98 @@ class FoundLost(unittest.TestCase):
         )
         self.assertIsNone(self.play(silent).found_lost)
 
+    def test_data_receipt_limits_seat_and_time(self):
+        """Three seats. The solver's teammate data counts when it was fetched at the moment of the right
+        submission. The overwriter's data counts only from the solver and only up to the overwrite: here
+        p3's calendar reached p2 in time, and p1's calendar reached p2 only after the overwrite."""
+        task = fx.task_dir(
+            self.root / "tasks3",
+            label="schedule",
+            briefings={**BRIEFINGS, "p3": {"calendars": {"Eli": {**FREE, "Mon": [13], "Fri": [15]}}}},
+            answer_key=KEY,
+            family_source=fx.SCHEDULE,
+        )
+        messages = [
+            message("m1", "p1", P1_DATA, 10.0),
+            message("m2", "p2", P2_DATA, 12.0),
+            message("m3", "p3", P3_DATA, 14.0),
+        ]
+        submissions = [submission(1, "p1", RIGHT, 20.0), submission(2, "p2", WRONG, 50.0)]
+        deliveries = [(20.0, "p1", ["m2"]), (30.0, "p2", ["m3"]), (60.0, "p2", ["m1", "m3"])]
+        directory = self.trial(
+            "limits",
+            messages=messages,
+            submissions=submissions,
+            deliveries=deliveries,
+            seats=THREE,
+            task=task,
+        )
+        fl = self.play(directory).found_lost
+        self.assertEqual((fl.solver, fl.overwriter, fl.overwrite_t), ("p1", "p2", 50.0))
+        self.assertEqual((fl.solver_had_teammate_data, fl.solver_data_messages), (True, ["m2"]))
+        self.assertEqual((fl.teammate_had_solver_data, fl.overwriter_data_messages), (False, []))
+
+    def test_own_messages_and_messages_to_oneself_do_not_count(self):
+        """A delivery that returns the solver's own calendar is not teammate data, and a message the solver
+        sends to itself is not an announcement."""
+        messages = [
+            message("m1", "p1", P1_DATA, 5.0),
+            message("m2", "p1", "Thu 14:00 submitted", 11.0, to="p1"),
+        ]
+        directory = self.trial(
+            "self",
+            messages=messages,
+            submissions=[submission(1, "p1", RIGHT, 10.0)],
+            deliveries=[(8.0, "p1", ["m1"])],
+        )
+        fl = self.play(directory).found_lost
+        self.assertEqual((fl.solver_had_teammate_data, fl.solver_data_messages), (False, []))
+        self.assertEqual((fl.solver_announced, fl.announce_messages), (False, []))
+
+    def test_a_known_yes_is_not_hidden_by_an_unknown_message(self):
+        """p3's briefing is empty in the task folder, so its message cannot be judged; p2's calendar still
+        makes the answer yes."""
+        task = fx.task_dir(
+            self.root / "tasks-empty",
+            label="schedule",
+            briefings={**BRIEFINGS, "p3": None},
+            answer_key=KEY,
+            family_source=fx.SCHEDULE,
+        )
+        messages = [message("m1", "p3", P3_DATA, 5.0), message("m2", "p2", P2_DATA, 6.0)]
+        directory = self.trial(
+            "unknown",
+            messages=messages,
+            submissions=[submission(1, "p1", RIGHT, 10.0)],
+            deliveries=[(8.0, "p1", ["m1", "m2"])],
+            seats=THREE,
+            task=task,
+        )
+        fl = self.play(directory).found_lost
+        self.assertEqual((fl.solver_had_teammate_data, fl.solver_data_messages, fl.notes), (True, ["m2"], []))
+        only = self.trial(
+            "only-unknown",
+            messages=messages[:1],
+            submissions=[submission(1, "p1", RIGHT, 10.0)],
+            deliveries=[(8.0, "p1", ["m1"])],
+            seats=THREE,
+            job="job2",
+            task=task,
+        )
+        fl = self.play(only).found_lost
+        self.assertIsNone(fl.solver_had_teammate_data)
+        self.assertIn("no briefing for seat p3", " ".join(fl.notes))
+
+    def test_an_unknown_final_score_leaves_lost_unknown(self):
+        directory = self.trial(
+            "final", messages=[], submissions=[submission(1, "p1", RIGHT, 10.0)], deliveries=[]
+        )
+        (trial,) = load([directory.parent])[0]
+        evidence = load_evidence(trial)
+        info = task_info(trial, evidence, [])
+        fl = found_lost(trial, evidence, info, None)
+        self.assertEqual((fl.found, fl.final_right, fl.lost, fl.solver), (True, None, None, "p1"))
+
     def test_without_hooks_the_data_measures_are_unknown(self):
         """A task folder built before the hooks existed: found and lost are known, data and announcements
         are unknown unless no message qualifies. --family-hooks supplies the hooks."""
@@ -235,24 +332,36 @@ class FoundLost(unittest.TestCase):
             deliveries=[(15.0, "p1", ["m1"])],
         )
         self.trial("c", messages=[], submissions=[submission(1, "p2", WRONG, 9.0)], deliveries=[])
+        # won although p2 overwrote the right answer: p1 wrote it again; p2 had p1's calendar
+        self.trial(
+            "d",
+            messages=[message("m1", "p1", P1_DATA, 5.0), message("m2", "p2", P2_DATA, 6.0)],
+            submissions=[
+                submission(1, "p1", RIGHT, 20.0),
+                submission(2, "p2", WRONG, 30.0),
+                submission(3, "p1", RIGHT, 40.0),
+            ],
+            deliveries=[(8.0, "p1", ["m2"]), (9.0, "p2", ["m1"])],
+        )
         report = build([str(self.root / "job")], resamples=100, draws=100)
         (row,) = report["found_lost"]["conditions"]
         self.assertEqual(
-            (row["trials"], row["found"], row["final_right"], row["won"], row["lost"]), (3, 2, 1, 1, 1)
+            (row["trials"], row["found"], row["final_right"], row["won"], row["lost"]), (4, 3, 2, 2, 1)
         )
-        self.assertEqual(row["teammate_overwrite"], {"lost": 1, "won": 0})
-        self.assertEqual(row["solver_had_teammate_data"], {"yes": 2, "no": 0, "unknown": 0})
+        self.assertEqual(row["teammate_overwrite"], {"lost": 1, "won": 1})
+        self.assertEqual(row["solver_had_teammate_data"], {"yes": 3, "no": 0, "unknown": 0})
         self.assertEqual(row["teammate_had_solver_data"]["lost"], {"yes": 0, "no": 1, "unknown": 0})
+        self.assertEqual(row["teammate_had_solver_data"]["won"], {"yes": 1, "no": 0, "unknown": 0})
         self.assertEqual(row["solver_announced"]["lost"], {"yes": 0, "no": 1, "unknown": 0})
-        self.assertEqual(row["solver_announced"]["won"], {"yes": 1, "no": 0, "unknown": 0})
-        self.assertEqual((row["later_by_solver"], row["later_by_others"]), (0, 1))
-        self.assertEqual(len(report["found_lost"]["trials"]), 3)
-        self.assertEqual(report["family_hooks"], {"task folder": 3})
+        self.assertEqual(row["solver_announced"]["won"], {"yes": 1, "no": 1, "unknown": 0})
+        self.assertEqual((row["later_by_solver"], row["later_by_others"]), (1, 2))
+        self.assertEqual(len(report["found_lost"]["trials"]), 4)
+        self.assertEqual(report["family_hooks"], {"task folder": 4})
         self.assertEqual(report["settings"]["announce_before_s"], ANNOUNCE_BEFORE)
         text = render(report, "text")
         self.assertIn("Found and lost answers (talk conditions)", text)
         self.assertIn("p2 at 60.0", text)
-        self.assertIn("Family hooks: task folder: 3", text)
+        self.assertIn("Family hooks: task folder: 4", text)
         self.assertIn(f"at most {ANNOUNCE_BEFORE:g} s before", text)
 
     def test_a_scripted_peer_posts_its_part(self):

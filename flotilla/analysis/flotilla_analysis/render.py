@@ -36,8 +36,9 @@ NOTES = [
     "solver is the seat of the first right submission; lost = found and the final answer wrong; teammate "
     "overwrite = a later wrong submission by another seat. Solver had teammate data = before its first right "
     "submission the solver fetched a message from another seat that carries that seat's own information "
-    "(family hook carries_own_data; for schedule: one of the sender's own attendees and a day with an hour, "
-    "format examples left out); overwriter had solver data = the same for the overwriting seat and the "
+    "(family hook carries_own_data; for schedule: a day with an hour that is not another attendee's or "
+    "seat's, with one of the sender's attendees named or 3 or more such mentions, format hints left out); "
+    "overwriter had solver data = the same for the overwriting seat and the "
     "solver's messages, before the overwrite. Solver announced = the solver sent a message naming the right "
     "answer (family hook answer_in_text) at most {announce:g} s before its first right submission, or later. "
     "Without a hook these are unknown (--family-hooks).",

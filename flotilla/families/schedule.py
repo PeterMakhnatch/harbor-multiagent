@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import random
 import re
+from collections import Counter
 from typing import Any
 
 FAMILY = "schedule"
@@ -247,6 +248,26 @@ _EXAMPLE = re.compile(
     r"\(\s*" + _MARKER + r"[^)]*\)|" + _MARKER + r"\W{0,3}(?:\"[^\"\n]*\"|'[^'\n]*'|“[^”\n]*”|‘[^’\n]*’)",
     re.IGNORECASE,
 )
+# A format hint that runs to the end of its line, or of the parenthesis it stands in: "Use format: Name:
+# Mon 10,11; Tue 14", 'Example: {"Ben": ["Mon 14"]}', "(hours are whole numbers, e.g., Mon 9,12)".
+_HINT = re.compile(r"\be\.\s?g\.|\beg\b|\bexamples?\b|\bfor instance\b|\bsuch as\b|\bformat\b|\blike\s*:",
+                   re.IGNORECASE)
+# A positional week: five hour lists, Monday to Friday, split by slashes ("15/9,13/10,14/13,16/9,11").
+_WEEK = re.compile(r"(?<![\w/,\-])((?:\d[\d,\-]*)?(?:/(?:\d[\d,\-]*)?){4})(?![\w/])")
+_GROUP = re.compile(r"(?<![A-Za-z])[A-Za-z](?:\s*[,/+&]\s*[A-Za-z]){1,11}(?![A-Za-z])")  # "A,C,K", "g+h+k"
+_LETTER = re.compile(r"(?<![A-Za-z])[A-Z](?![a-z])")
+_INITIALS = {name[0] for name in NAMES}
+# Another speaker: a seat or "you", whose claims a message relays ("p1: Tue 10", "you said Wed 09"); not a
+# seat that names itself ("I am p2", "p2 here").
+_SPEAKER = re.compile(r"(?<![A-Za-z0-9])(?<!I am )(?<!I'm )(?<!is )[pP]\d(?!\d)(?! here)|\byou(?:r)?\b",
+                      re.IGNORECASE)
+# Words that may stand between an attendee or speaker and the hours that belong to it ("Ben is busy: Mon
+# 09", "p1 said Wed 09").
+_FILLER = {"is", "are", "was", "busy", "free", "hours", "hour", "hrs", "and", "or", "s", "at", "on", "none",
+           "all", "day", "days", "says", "said", "say", "sent", "gave", "give", "gives", "has", "had", "have",
+           "reported", "listed", "shared"}
+# What may stand between the attendees of one list ("Chen, Hana, Eli, Ivo: Wed 09", "Ana and Gus").
+_LIST = re.compile(r"\s*(?:[,/+&]|\band\b|\bor\b)(?:\s*(?:and|or)\b)?\s*", re.IGNORECASE)
 
 
 def _clock(hour: str, minutes: str | None, half: str | None) -> int | None:
@@ -281,6 +302,21 @@ def without_examples(text: str) -> str:
     return _EXAMPLE.sub(" ", text)
 
 
+def without_hints(text: str) -> str:
+    """``without_examples``, and also every format hint: from a hint word ("format", "e.g.", "example",
+    "such as", "like:") to the end of its line, or to the end of the parenthesis it stands in."""
+    lines = []
+    for line in without_examples(text).split("\n"):
+        while (hint := _HINT.search(line)) is not None:
+            opened = line.rfind("(", 0, hint.start())
+            inside = opened != -1 and line.find(")", opened, hint.start()) == -1
+            end = line.find(")", hint.end()) if inside else -1
+            end = len(line) if end == -1 else end
+            line = line[: hint.start()] + " " * (end - hint.start()) + line[end:]
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def day_hours(text: str) -> list[Window]:
     """(day, whole hour) of every weekday-and-hour mention in the text, in order."""
     return [window for _, window in sorted(_found(_day_hour_matches(text)))]
@@ -295,24 +331,126 @@ def mentions(text: str) -> list[Window]:
     return [window for _, window in sorted(found)]
 
 
+def _data_mentions(text: str) -> list[tuple[int, int, Window]]:
+    """(start, end, (day, hour)) of every day-and-hour mention that calendar data can hold: weekday-and-hour
+    mentions, compact days ("M9", also glued to an initial: "AM9"), and positional weeks (one mention for
+    each day that has hours)."""
+    found = []
+    for m in _DAY_HOUR.finditer(text):
+        if (clock := _clock(m[2], m[3], m[4])) is not None:
+            found.append((m.start(), m.end(), (m[1][:3].title(), clock)))
+    for m in re.finditer(r"(?<![a-z])(?=(Mo|Tu|We|Th|Fr|M|T|W|R|F)(9|1[0-6])(?!\d))", text):
+        before = text[m.start() - 1] if m.start() else ""
+        glued = before in _INITIALS and (m.start() == 1 or not text[m.start() - 2].isalpha())  # "AM9"
+        if not before.isalpha() or glued:
+            found.append((m.start(), m.start() + len(m[1]) + len(m[2]), (_SHORT_DAYS[m[1]], int(m[2]))))
+    for m in _WEEK.finditer(text):
+        groups = m[1].split("/")
+        numbers = [int(n) for n in re.findall(r"\d+", m[1])]
+        if len(numbers) < 3 or max(numbers) > 23:
+            continue
+        offset = m.start()
+        for day, group in zip(DAYS, groups, strict=True):
+            if (first := re.match(r"\d+", group)) is not None:
+                found.append((offset, offset + len(group), (day, int(first[0]))))
+            offset += len(group) + 1
+    return sorted(set(found))
+
+
+def _references(text: str, own: set[str], mentions: list[tuple[int, int, Window]]) -> list[tuple[int, int, str]]:
+    """(start, end, whose) of every attendee reference: a name of the family's pool, an initial right before
+    calendar data ("B:M11", "B M12", "AM9", "G:15/9,13/..."), or a group of initials ("A,C,K", "D/F/L").
+    ``whose`` is "own" (the sender holds the attendee, or every attendee of a group), "other" (none of
+    them) or "mixed"."""
+    starts = {start for start, _, _ in mentions}
+    found = []
+    for name in sorted(set(NAMES) | own):
+        for m in re.finditer(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
+            found.append((m.start(), m.end(), "own" if name in own else "other"))
+    held = Counter(name[0].upper() for name in own)  # an initial is the sender's when one of its attendees has it
+
+    def whose(letters: list[str]) -> str:
+        mine = {held[c] == 1 for c in letters}
+        if any(held[c] > 1 for c in letters) or len(mine) > 1:
+            return "mixed"
+        return "own" if mine == {True} else "other"
+
+    for m in _LETTER.finditer(text):
+        after = re.match(r"[\s:/=]{0,3}", text[m.end():])
+        if m[0] in _INITIALS and after is not None and m.end() + len(after[0]) in starts:
+            found.append((m.start(), m.end(), whose([m[0]])))
+    for m in _GROUP.finditer(text):
+        letters = [c.upper() for c in m[0] if c.isalpha()]
+        if len(set(letters)) == len(letters) and set(letters) <= _INITIALS:
+            found.append((m.start(), m.end(), whose(letters)))
+    return sorted(found)
+
+
+def _lists(text: str, references: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+    """References with every list of attendees joined into one ("Chen, Hana, Eli, Ivo: Wed 09" belongs to
+    all four: "mixed" when they are not all the sender's or all not), and the other speakers added."""
+    merged: list[tuple[int, int, str]] = []
+    speakers = [(m.start(), m.end(), "other") for m in _SPEAKER.finditer(text)]
+    for start, end, kind in sorted(references + speakers):
+        if merged and start < merged[-1][1]:  # inside the previous reference (an initial inside a group)
+            continue
+        if merged and _LIST.fullmatch(text[merged[-1][1] : start]):
+            first, _, previous = merged.pop()
+            kind, start = (previous if previous == kind else "mixed"), first
+        merged.append((start, end, kind))
+    return merged
+
+
+def _attached(text: str, reference: tuple[int, int, str], mention: tuple[int, int, Window],
+              mentions: list[tuple[int, int, Window]]) -> bool:
+    """Whether a mention belongs to the reference before it: between them stand only other mentions,
+    day words, hours, punctuation and filler words ("Ben is busy: Mon 15; Tue -; Wed 10"), and no
+    sentence ends."""
+    gap = list(text[reference[1] : mention[0]])
+    for start, end, _ in mentions:
+        for i in range(max(start, reference[1]), min(end, mention[0])):
+            gap[i - reference[1]] = " "
+    between = "".join(gap)
+    if re.search(r"[?!]|\.(?:\s|$)", between):
+        return False
+    between = re.sub(_DAY, " ", between, flags=re.IGNORECASE)
+    between = re.sub(r"(?<![A-Za-z])(?:Mo|Tu|We|Th|Fr|M|T|W|R|F)(?![A-Za-z])", " ", between)  # "T-", "Th"
+    words = re.findall(r"[a-z]+", between.lower())
+    return all(word in _FILLER for word in words)
+
+
 def carries_own_data(text: str, private: dict[str, Any]) -> bool:
     """Whether a message carries its sender's own calendar information, raw or derived.
 
-    ``private`` is the sender's briefing. True when the text, format examples left out, names at least
-    one attendee whose calendar the sender holds and also names a weekday with an hour
-    ("Ana: Mon 09,10", "Ana:M9,15 T12", "free for Ana, Ben: Tue 13:00"). A bare day-and-hour test also
-    matches format examples inside requests: a request names the receiver's attendees ("Please send
-    Ben's hours: Mon 09,10?") or none, and an example in parentheses or quotes after "e.g.", "like" or
-    "format" is left out, so neither counts. A written-out answer object ('{"day": "Wed", "start":
-    "14:00"}') is not data. Known limits: data written with initials ("A,C,K free: T11") or without any
-    attendee name ("my free slots: Mon 11") does not count; a request that names the sender's own
-    attendees next to an unmarked example ("I have Ana; send yours as Mon 09,10") counts.
+    ``private`` is the sender's briefing. Format examples and hints are left out first ("(e.g. Mon 09,10)",
+    'like "Ben: Mon 9"', and from "format", "e.g.", "example", "such as" or "like:" to the end of the line
+    or parenthesis). Then a day-and-hour mention that belongs to an attendee the sender does not hold
+    ("Your Ben: Mon 9", "Please send Ben's hours: Mon 9?") does not count. The message carries data when
+    at least one mention is left and either it names one of the sender's attendees (a name, an initial
+    right before data such as "B:M11" or "AM9", or a group of the sender's initials such as "A,C,K"), or
+    at least 3 mentions are left (a calendar or a candidate list without names: "M9-10 T16 W9,11",
+    "pls check Mon11, Mon12, Tue13 for Ben"). A request names the receiver's attendees, or no one with
+    fewer than 3 mentions, so it does not count. A written-out answer object is not data.
+    Known limits: 1 or 2 candidate windows without a name ("Thu11 and Thu13 work for me") do not
+    count; a request that names the sender's own attendees next to an unmarked example ("I have Ana;
+    send yours as Mon 09,10") counts.
     """
     calendars = private.get("calendars") if isinstance(private, dict) else None
-    text = without_examples(text)
-    if not isinstance(calendars, dict) or not day_hours(text):
+    if not isinstance(calendars, dict):
         return False
-    return any(re.search(rf"\b{re.escape(str(name))}\b", text, re.IGNORECASE) for name in calendars)
+    text = without_hints(text)
+    mentions = _data_mentions(text)
+    own = {str(name) for name in calendars}
+    references = _references(text, own, mentions)
+    owners = _lists(text, references)
+    left = []
+    for mention in mentions:
+        before = [r for r in owners if r[1] <= mention[0]]
+        if not (before and before[-1][2] == "other" and _attached(text, before[-1], mention, mentions)):
+            left.append(mention)
+    if not left:
+        return False
+    return any(whose == "own" for _, _, whose in references) or len(left) >= 3
 
 
 def answer_in_text(text: str, key: dict[str, Any]) -> bool:
