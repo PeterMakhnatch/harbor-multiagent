@@ -1,0 +1,278 @@
+{
+  "all_static_decodes_exact_cases": 200,
+  "case_count": 200,
+  "dataset_commit": "c0301a650db95958924bb080192c09fef39389a5",
+  "earliest_agreement_cases": 200,
+  "execution": "local_simulation",
+  "modes": {
+    "bitmap": {
+      "exact_member_decodes": 1000,
+      "max_payload_bytes": 610,
+      "reference_passes": 200,
+      "sole_wins": 77,
+      "tied_wins": 0,
+      "total_payload_bytes": 122000,
+      "total_request_payload_bytes": 0,
+      "total_response_payload_bytes": 122000,
+      "total_round_trips": 200
+    },
+    "cursor": {
+      "exact_member_decodes": null,
+      "max_payload_bytes": 1646,
+      "reference_passes": 200,
+      "sole_wins": 123,
+      "tied_wins": 0,
+      "total_payload_bytes": 103073,
+      "total_request_payload_bytes": 50920,
+      "total_response_payload_bytes": 52153,
+      "total_round_trips": 3892
+    },
+    "full": {
+      "exact_member_decodes": 1000,
+      "max_payload_bytes": 3200,
+      "reference_passes": 200,
+      "sole_wins": 0,
+      "tied_wins": 0,
+      "total_payload_bytes": 598713,
+      "total_request_payload_bytes": 0,
+      "total_response_payload_bytes": 598713,
+      "total_round_trips": 200
+    },
+    "runs": {
+      "exact_member_decodes": 1000,
+      "max_payload_bytes": 2424,
+      "reference_passes": 200,
+      "sole_wins": 0,
+      "tied_wins": 0,
+      "total_payload_bytes": 435471,
+      "total_request_payload_bytes": 0,
+      "total_response_payload_bytes": 435471,
+      "total_round_trips": 200
+    }
+  },
+  "record_type": "summary",
+  "reference_score_agreement_cases": 200,
+  "schema": "seatlab.calendar-encoding/v1",
+  "seat_count": 5,
+  "strata": [
+    {
+      "all_static_decodes_exact_cases": 40,
+      "case_count": 40,
+      "earliest_agreement_cases": 40,
+      "modes": {
+        "bitmap": {
+          "exact_member_decodes": 200,
+          "max_payload_bytes": 610,
+          "reference_passes": 40,
+          "sole_wins": 19,
+          "tied_wins": 0,
+          "total_payload_bytes": 24400,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 24400,
+          "total_round_trips": 40
+        },
+        "cursor": {
+          "exact_member_decodes": null,
+          "max_payload_bytes": 1426,
+          "reference_passes": 40,
+          "sole_wins": 21,
+          "tied_wins": 0,
+          "total_payload_bytes": 23373,
+          "total_request_payload_bytes": 11565,
+          "total_response_payload_bytes": 11808,
+          "total_round_trips": 878
+        },
+        "full": {
+          "exact_member_decodes": 200,
+          "max_payload_bytes": 3129,
+          "reference_passes": 40,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 116983,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 116983,
+          "total_round_trips": 40
+        },
+        "runs": {
+          "exact_member_decodes": 200,
+          "max_payload_bytes": 2417,
+          "reference_passes": 40,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 87282,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 87282,
+          "total_round_trips": 40
+        }
+      },
+      "reference_score_agreement_cases": 40,
+      "stratum": 2,
+      "tie_cases": 0
+    },
+    {
+      "all_static_decodes_exact_cases": 60,
+      "case_count": 60,
+      "earliest_agreement_cases": 60,
+      "modes": {
+        "bitmap": {
+          "exact_member_decodes": 300,
+          "max_payload_bytes": 610,
+          "reference_passes": 60,
+          "sole_wins": 22,
+          "tied_wins": 0,
+          "total_payload_bytes": 36600,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 36600,
+          "total_round_trips": 60
+        },
+        "cursor": {
+          "exact_member_decodes": null,
+          "max_payload_bytes": 1398,
+          "reference_passes": 60,
+          "sole_wins": 38,
+          "tied_wins": 0,
+          "total_payload_bytes": 29258,
+          "total_request_payload_bytes": 14445,
+          "total_response_payload_bytes": 14813,
+          "total_round_trips": 1112
+        },
+        "full": {
+          "exact_member_decodes": 300,
+          "max_payload_bytes": 3193,
+          "reference_passes": 60,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 180906,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 180906,
+          "total_round_trips": 60
+        },
+        "runs": {
+          "exact_member_decodes": 300,
+          "max_payload_bytes": 2424,
+          "reference_passes": 60,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 131247,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 131247,
+          "total_round_trips": 60
+        }
+      },
+      "reference_score_agreement_cases": 60,
+      "stratum": 3,
+      "tie_cases": 0
+    },
+    {
+      "all_static_decodes_exact_cases": 60,
+      "case_count": 60,
+      "earliest_agreement_cases": 60,
+      "modes": {
+        "bitmap": {
+          "exact_member_decodes": 300,
+          "max_payload_bytes": 610,
+          "reference_passes": 60,
+          "sole_wins": 24,
+          "tied_wins": 0,
+          "total_payload_bytes": 36600,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 36600,
+          "total_round_trips": 60
+        },
+        "cursor": {
+          "exact_member_decodes": null,
+          "max_payload_bytes": 1537,
+          "reference_passes": 60,
+          "sole_wins": 36,
+          "tied_wins": 0,
+          "total_payload_bytes": 32624,
+          "total_request_payload_bytes": 16120,
+          "total_response_payload_bytes": 16504,
+          "total_round_trips": 1227
+        },
+        "full": {
+          "exact_member_decodes": 300,
+          "max_payload_bytes": 3200,
+          "reference_passes": 60,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 180269,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 180269,
+          "total_round_trips": 60
+        },
+        "runs": {
+          "exact_member_decodes": 300,
+          "max_payload_bytes": 2374,
+          "reference_passes": 60,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 130179,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 130179,
+          "total_round_trips": 60
+        }
+      },
+      "reference_score_agreement_cases": 60,
+      "stratum": 4,
+      "tie_cases": 0
+    },
+    {
+      "all_static_decodes_exact_cases": 40,
+      "case_count": 40,
+      "earliest_agreement_cases": 40,
+      "modes": {
+        "bitmap": {
+          "exact_member_decodes": 200,
+          "max_payload_bytes": 610,
+          "reference_passes": 40,
+          "sole_wins": 12,
+          "tied_wins": 0,
+          "total_payload_bytes": 24400,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 24400,
+          "total_round_trips": 40
+        },
+        "cursor": {
+          "exact_member_decodes": null,
+          "max_payload_bytes": 1646,
+          "reference_passes": 40,
+          "sole_wins": 28,
+          "tied_wins": 0,
+          "total_payload_bytes": 17818,
+          "total_request_payload_bytes": 8790,
+          "total_response_payload_bytes": 9028,
+          "total_round_trips": 675
+        },
+        "full": {
+          "exact_member_decodes": 200,
+          "max_payload_bytes": 3184,
+          "reference_passes": 40,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 120555,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 120555,
+          "total_round_trips": 40
+        },
+        "runs": {
+          "exact_member_decodes": 200,
+          "max_payload_bytes": 2283,
+          "reference_passes": 40,
+          "sole_wins": 0,
+          "tied_wins": 0,
+          "total_payload_bytes": 86763,
+          "total_request_payload_bytes": 0,
+          "total_response_payload_bytes": 86763,
+          "total_round_trips": 40
+        }
+      },
+      "reference_score_agreement_cases": 40,
+      "stratum": 5,
+      "tie_cases": 0
+    }
+  ],
+  "tie_cases": 0,
+  "winner_metric": "payload_bytes",
+  "winner_rule": "minimum across all four arms; all minima count as tied wins if shared"
+}
