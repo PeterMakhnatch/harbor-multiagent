@@ -1429,7 +1429,7 @@ class _CWSandboxDinD(DinDComposeOps):
 
     @property
     def _project_name(self) -> str:
-        return self._env.session_id.lower().replace(".", "-").replace("_", "-")
+        return self._env.compose_project_name
 
     def _resolve_volumes(self) -> list[ServiceVolumeConfig]:
         # Bind sources refer to the DinD host, not the caller's filesystem.

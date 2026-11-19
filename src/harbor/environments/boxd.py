@@ -68,10 +68,7 @@ from harbor.environments.docker.compose_env import (
     legacy_log_mount_env_vars,
     merge_compose_env,
 )
-from harbor.environments.docker.docker import (
-    _sanitize_docker_compose_project_name,
-    _sanitize_docker_image_name,
-)
+from harbor.environments.docker.docker import _sanitize_docker_image_name
 from harbor.environments.options import EnvironmentOptions
 from harbor.environments.tar_transfer import (
     extract_dir_from_bytes,
@@ -1251,7 +1248,7 @@ class BoxdEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
 
     @property
     def _compose_project_name(self) -> str:
-        return _sanitize_docker_compose_project_name(self.session_id)
+        return self.compose_project_name
 
     @property
     def _session_dir_vm(self) -> str:

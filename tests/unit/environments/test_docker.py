@@ -2981,3 +2981,60 @@ class TestDockerUploadEnvironmentDirAfterStart:
         await env.start(force_build=False)
 
         env.ensure_dirs.assert_awaited_once()
+
+
+class TestComposeProjectName:
+    """Every Compose call names the project by a hash of the session id, so
+    container and network names do not carry the task name."""
+
+    async def test_compose_commands_pass_the_hashed_project_name(self, docker_env):
+        created = {}
+
+        async def fake_exec(*args, **kwargs):
+            proc = AsyncMock()
+            proc.communicate = AsyncMock(return_value=(b"", None))
+            proc.returncode = 0
+            created["args"] = args
+            return proc
+
+        with patch(
+            "harbor.environments.docker.docker.asyncio.create_subprocess_exec",
+            side_effect=fake_exec,
+        ):
+            await docker_env._run_docker_compose_command(["ps"])
+
+        args = list(created["args"])
+        project = args[args.index("--project-name") + 1]
+        assert project == docker_env.compose_project_name == "hb-d65c19a1d1b6"
+        assert "test-task" not in project
+
+    async def test_service_container_lookup_filters_by_the_hashed_project(
+        self, docker_env
+    ):
+        created = {}
+
+        async def fake_exec(*args, **kwargs):
+            proc = AsyncMock()
+            proc.communicate = AsyncMock(
+                return_value=(b"c0ffee\thb-d65c19a1d1b6-p1-1\n", None)
+            )
+            proc.returncode = 0
+            created["args"] = args
+            return proc
+
+        with patch(
+            "harbor.environments.docker.docker_unix.asyncio.create_subprocess_exec",
+            side_effect=fake_exec,
+        ):
+            container = await docker_env._platform._resolve_service_container("p1")
+
+        assert container == "c0ffee"
+        assert "label=com.docker.compose.project=hb-d65c19a1d1b6" in created["args"]
+
+    async def test_attach_uses_the_hashed_project_name(self, docker_env):
+        with patch("harbor.environments.docker.docker.os.execvp") as execvp:
+            await docker_env.attach()
+
+        script = execvp.call_args.args[1][-1]
+        assert script.count(f"--project-name {docker_env.compose_project_name}") == 2
+        assert "--project-name test-task" not in script

@@ -848,7 +848,7 @@ class LangSmithEnvironment(BaseEnvironment):
         return self.environment_dir / "docker-compose.yaml"
 
     def _compose_project_name(self) -> str:
-        return _k8s_name("harbor-compose", self.session_id)
+        return self.compose_project_name
 
     def _compose_infra_env_vars(self) -> dict[str, str]:
         env_vars = ComposeInfraEnvVars(

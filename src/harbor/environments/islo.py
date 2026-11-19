@@ -675,7 +675,7 @@ class IsloEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
 
     @property
     def _compose_project_name(self) -> str:
-        return _sanitize_session_id(self.session_id)
+        return self.compose_project_name
 
     def _compose_infra_env_vars(self) -> dict[str, str]:
         """Harbor infrastructure vars required by the shared compose templates."""
