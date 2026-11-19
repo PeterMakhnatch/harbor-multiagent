@@ -16,6 +16,7 @@ from harbor.lint.compose import (
     _load_compose,
     lint_compose,
 )
+from harbor.lint.models import DEFAULT_RULES
 from tests.unit.test_lint import cli as cli, configure, task as task
 
 pytestmark = pytest.mark.unit
@@ -165,16 +166,24 @@ SEAT_VOLUMES = {
 }
 
 
+def volume_findings(path: Path) -> list[Any]:
+    """Findings for seats p1 and p2, without seat-shared-network."""
+    return [
+        f
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule != "seat-shared-network"
+    ]
+
+
 @pytest.mark.parametrize(
     "mounts,expected", SEAT_VOLUMES.values(), ids=list(SEAT_VOLUMES)
 )
 def test_seat_shared_volume(model, path, mounts, expected):
     for service, volumes in mounts.items():
         model["services"].setdefault(service, {})["volumes"] = volumes
-    findings = lint_compose(path, seats=["p1", "p2"])
     assert [
         (f.rule, f.message.split(":")[0], f.message.split(" also ")[1].split(";")[0])
-        for f in findings
+        for f in volume_findings(path)
     ] == [
         ("seat-shared-volume", f"services.{service}.volumes[0]", sharing)
         for service, sharing in expected
@@ -192,7 +201,7 @@ def test_seat_shared_volume(model, path, mounts, expected):
 def test_seat_shared_bind_volume_access(model, path, flags, expected):
     model["volumes"] = {"a": {"driver_opts": {"o": flags, "device": "./data"}}}
     model["services"].update(p1={"volumes": [volume()]}, p2={"volumes": [volume()]})
-    assert {f.rule for f in lint_compose(path, seats=["p1", "p2"])} == expected
+    assert {f.rule for f in volume_findings(path)} == expected
 
 
 @pytest.mark.parametrize(
@@ -217,13 +226,61 @@ def test_seat_shared_volume_compares_docker_names(model, path, volumes, shared):
         p1={"volumes": [volume()]},
         p2={"volumes": [{**volume(True), "source": "b"}]},
     )
-    assert [
-        f.message.split(";")[0] for f in lint_compose(path, seats=["p1", "p2"])
-    ] == (
+    assert [f.message.split(";")[0] for f in volume_findings(path)] == (
         ["services.p1.volumes[0]: Seat can write a volume also mounted by seat p2"]
         if shared
         else []
     )
+
+
+SEAT_NETWORKS = {
+    "default-network": ({"p1": {}, "p2": {}}, ["p1", "p2"]),
+    "one-network": (
+        {"p1": {"networks": {"play": None}}, "p2": {"networks": ["play"]}},
+        ["p1", "p2"],
+    ),
+    "own-networks": (
+        {
+            "main": {"networks": {"p1-net": None, "p2-net": None}},
+            "p1": {"networks": {"p1-net": None}},
+            "p2": {"networks": {"p2-net": None}},
+        },
+        [],
+    ),
+    "one-docker-network": (
+        {"p1": {"networks": {"a": None}}, "p2": {"networks": {"b": None}}},
+        ["p1", "p2"],
+    ),
+    "bridge": (
+        {"p1": {"network_mode": "bridge"}, "p2": {"network_mode": "bridge"}},
+        ["p1", "p2"],
+    ),
+    "no-network": ({"p1": {"network_mode": "none"}, "p2": {}}, []),
+    "shared-namespaces": (
+        {"p1": {"network_mode": "host"}, "p2": {"network_mode": "service:main"}},
+        [],
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "services,expected", SEAT_NETWORKS.values(), ids=list(SEAT_NETWORKS)
+)
+def test_seat_shared_network(model, path, services, expected):
+    model["services"].update(services)
+    # Both keys name one Docker network only in the one-docker-network case.
+    model["networks"] = {"a": {"name": "x"}, "b": {"name": "x"}, "p1-net": {}}
+    findings = lint_compose(path, seats=["p1", "p2"])
+    assert [f.message for f in findings if f.rule == "seat-shared-network"] == [
+        f"services.{seat}.networks: Seat shares a network with seat "
+        f"{'p2' if seat == 'p1' else 'p1'}; give each seat its own network, "
+        "shared only with main."
+        for seat in expected
+    ]
+
+
+def test_seat_shared_network_is_opt_in():
+    assert LintRule.SEAT_SHARED_NETWORK not in DEFAULT_RULES
 
 
 NAMESPACES = [("network_mode", "network"), ("pid", "PID"), ("ipc", "IPC")]
@@ -603,6 +660,7 @@ def test_cli_non_compose_selection_without_docker(
         ("invalid-task-files", False),
         ("seat-shared-volume", True),
         ("seat-shared-namespace", True),
+        ("seat-shared-network", True),
     ],
 )
 def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule, seats):
@@ -618,7 +676,9 @@ def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule, sea
 
 
 @pytest.mark.parametrize("folder", ["environment", "tests", "steps/one/tests"])
-@pytest.mark.parametrize("rule", ["seat-shared-volume", "seat-shared-namespace"])
+@pytest.mark.parametrize(
+    "rule", ["seat-shared-volume", "seat-shared-namespace", "seat-shared-network"]
+)
 def test_cli_seat_rules_without_seats_skip_docker(task, cli, monkeypatch, folder, rule):
     compose = task / folder / "docker-compose.yaml"
     compose.parent.mkdir(parents=True, exist_ok=True)

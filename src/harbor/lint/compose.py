@@ -157,6 +157,21 @@ def _has_symlink(path: Path) -> bool:
     return False
 
 
+def _network_names(service: dict[str, Any], networks: dict[str, Any]) -> set[str]:
+    """Docker names of the networks a service is attached to."""
+    mode = service.get("network_mode")
+    if mode:
+        # host and joins are namespaces; a mode such as bridge is a network.
+        if mode in ("host", "none") or mode.startswith(("service:", "container:")):
+            return set()
+        return {mode}
+    # Compose attaches a service without networks to the default network.
+    return {
+        (networks.get(key) or {}).get("name") or key
+        for key in service.get("networks") or ["default"]
+    }
+
+
 def lint_compose(
     path: Path,
     *,
@@ -350,6 +365,23 @@ def lint_compose(
                 LintRule.SEAT_SHARED_NAMESPACE,
                 f"services.{name}.{key}",
                 f"{sharing}; remove it to isolate the seat.",
+            )
+    seat_networks = {
+        seat: _network_names(services[seat], data.get("networks", {}))
+        for seat in seats
+        if seat in services
+    }
+    for seat, networks in seat_networks.items():
+        if peers := sorted(
+            other
+            for other, other_networks in seat_networks.items()
+            if other != seat and networks & other_networks
+        ):
+            emit(
+                LintRule.SEAT_SHARED_NETWORK,
+                f"services.{seat}.networks",
+                f"Seat shares a network with seat {', '.join(peers)}; give each "
+                "seat its own network, shared only with main.",
             )
     for mounts in volume_mounts.values():
         for seat, location, writable, subpath in mounts:

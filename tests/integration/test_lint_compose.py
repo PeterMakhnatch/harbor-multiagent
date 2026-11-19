@@ -10,7 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from harbor.lint import lint_compose, lint_task
-from harbor.lint.models import DEFAULT_RULES
+from harbor.lint.models import DEFAULT_RULES, LintRule
 from harbor.models.task.task import Task
 from tests.unit.test_lint import IMAGE, cli as cli, configure, rules, task as task
 
@@ -1185,13 +1185,63 @@ volumes:
   notes-two: {{name: shared-notes}}
 """)
     assert [
-        f.message.split(";")[0] for f in lint_compose(path, seats=["p1", "p2"])
+        f.message.split(";")[0]
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule == "seat-shared-volume"
     ] == [
         "services.p1.volumes[1]: Seat can write a volume also mounted by seat p2",
         "services.p1.volumes[2]: Seat can write a volume also mounted by seat p2",
     ]
 
 
+@pytest.mark.parametrize("separate", [False, True])
+def test_seat_shared_network_reads_real_compose_files(tmp_path: Path, separate):
+    path = tmp_path / "docker-compose.yaml"
+    # Separate networks shared only with main are the fix; otherwise p1 and p2
+    # are both on the default network, and p3 shares a named one with p2.
+    path.write_text(f"""
+services:
+  main:
+    image: {IMAGE}
+    networks: {"[p1-net, p2-net, p3-net]" if separate else "[default, p2-p3]"}
+  p1:
+    image: {IMAGE}
+    {"networks: [p1-net]" if separate else ""}
+  p2:
+    image: {IMAGE}
+    networks: {"[p2-net]" if separate else "[default, p2-p3]"}
+  p3:
+    image: {IMAGE}
+    networks: {"[p3-net]" if separate else "[p2-p3]"}
+  lone:
+    image: {IMAGE}
+    network_mode: none
+networks:
+  p1-net: {{}}
+  p2-net: {{}}
+  p3-net: {{}}
+  p2-p3: {{}}
+""")
+    findings = lint_compose(path, seats=["p1", "p2", "p3", "lone"])
+    assert [
+        f.message.split(";")[0] for f in findings if f.rule == "seat-shared-network"
+    ] == (
+        []
+        if separate
+        else [
+            "services.p1.networks: Seat shares a network with seat p2",
+            "services.p2.networks: Seat shares a network with seat p1, p3",
+            "services.p3.networks: Seat shares a network with seat p2",
+        ]
+    )
+
+
 def test_hello_seats_example_is_clean():
     example = Path(__file__).parents[2] / "examples/tasks/hello-seats"
     assert lint_task(example, selected_rules=DEFAULT_RULES) == []
+    # Its seats share one network on purpose, which the opt-in rule reports.
+    shared = lint_task(example, selected_rules={LintRule.SEAT_SHARED_NETWORK})
+    assert [f.message.split(";")[0] for f in shared] == [
+        "services.p1.networks: Seat shares a network with seat p2",
+        "services.p2.networks: Seat shares a network with seat p1",
+    ]

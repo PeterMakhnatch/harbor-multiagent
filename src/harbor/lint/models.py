@@ -21,6 +21,7 @@ class LintRule(StrEnum):
     COMPOSE_SYMLINK_BIND_MOUNT = "compose-symlink-bind-mount"
     SEAT_SHARED_VOLUME = "seat-shared-volume"
     SEAT_SHARED_NAMESPACE = "seat-shared-namespace"
+    SEAT_SHARED_NETWORK = "seat-shared-network"
     UNPINNED_IMAGE = "unpinned-image"
     UNPINNED_PYTHON_DEPENDENCY = "unpinned-python-dependency"
     VERIFIER_RUNTIME_INSTALL = "verifier-runtime-install"
@@ -62,10 +63,15 @@ COMPOSE_RULES = {
     LintRule.COMPOSE_SYMLINK_BIND_MOUNT,
     LintRule.SEAT_SHARED_VOLUME,
     LintRule.SEAT_SHARED_NAMESPACE,
+    LintRule.SEAT_SHARED_NETWORK,
 }
 
 # Compose rules that only report on seat tasks.
-SEAT_RULES = {LintRule.SEAT_SHARED_VOLUME, LintRule.SEAT_SHARED_NAMESPACE}
+SEAT_RULES = {
+    LintRule.SEAT_SHARED_VOLUME,
+    LintRule.SEAT_SHARED_NAMESPACE,
+    LintRule.SEAT_SHARED_NETWORK,
+}
 
 
 class LintConfig(BaseModel):
