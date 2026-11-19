@@ -30,7 +30,7 @@ TOKENS = {
     for seat, token in (pair.split(":", 1) for pair in os.environ.get("FLOTILLA_TOKENS", "").split(",") if pair)
 }
 ADMIN = os.environ.get("FLOTILLA_ADMIN", "")
-MESSAGING = CONDITION in ("talk", "talk-liar")
+MESSAGING = CONDITION.startswith("talk")  # talk, talk-liar, talk-warned, talk-liar-warned
 DEFAULT_MAX_TEXT = 4000
 DEFAULT_MAX_MESSAGES = 200
 MAX_TEXT = int(os.environ.get("FLOTILLA_MAX_TEXT") or DEFAULT_MAX_TEXT)  # characters per message

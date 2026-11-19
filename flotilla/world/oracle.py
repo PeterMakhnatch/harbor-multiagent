@@ -1,9 +1,10 @@
 """Reference play for one seat, run by Harbor's `oracle` agent (no language model).
 
 `solo` and `silent`: submit the best answer from this seat's own briefing.
-`talk`: post the briefing to everyone, wait for every teammate's briefing, submit the full answer.
+`talk...`: post the briefing to everyone, wait for every teammate's briefing, submit the full answer.
 A briefing travels as numbered chunks (`FLOTILLA-BRIEFING <i>/<n> <text>`) that fit the world's
 message limits; a seat whose briefing cannot fit sends `FLOTILLA-BRIEFING 0/0` (nothing is coming).
+A scripted peer (briefing with a `script` key) posts its part, true or false, and stops.
 The family module sits next to this file (solution/family.py). See CONTRACT.md 8.
 """
 
@@ -40,6 +41,11 @@ def family_module() -> Any:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def limits(me: dict[str, Any]) -> tuple[int, int]:
+    """(characters per message, messages per seat); world version 1 does not report them."""
+    return int(me.get("max_text", 4000)), int(me.get("max_messages", 200))
 
 
 def can_signal(max_text: int, max_messages: int) -> bool:
@@ -86,13 +92,33 @@ def collect(messages: list[dict[str, Any]], others: set[str]) -> tuple[dict[str,
     return parts, done
 
 
+def scripted_peer(own: dict[str, Any]) -> None:
+    """A scripted seat posts its part (true or false) in plain words and as data, twice, then stops."""
+    max_text, max_messages = limits(call("GET", "/whoami"))
+    body = own["text"].replace("Calendars you know", "Calendars I know")
+    words = f"Hi team, I am {os.environ.get('SEAT', 'a teammate')}. {body}"
+    data = briefing_messages(json.dumps(own["part"], sort_keys=True, separators=(",", ":")), max_text, max_messages)
+    texts = ([words] if len(words) <= max_text else []) + data
+    budget = max_messages
+    for _round in range(2):
+        if len(texts) > budget:
+            break
+        for text in texts:
+            call("POST", "/messages", {"to": "all", "text": text})
+        budget -= len(texts)
+        time.sleep(30)
+
+
 def main() -> None:
+    own = json.loads(os.environ["SEAT_BRIEFING"])
+    if "script" in own:
+        scripted_peer(own)
+        return
     family = family_module()
     me = call("GET", "/whoami")
-    own = json.loads(os.environ["SEAT_BRIEFING"])
     parts: dict[str, Any] = {}
     if me["condition"] not in ("solo", "silent"):
-        max_text, max_messages = int(me.get("max_text", 4000)), int(me.get("max_messages", 200))
+        max_text, max_messages = limits(me)
         payload = json.dumps(own, sort_keys=True, separators=(",", ":"))
         for text in briefing_messages(payload, max_text, max_messages):
             call("POST", "/messages", {"to": "all", "text": text})
@@ -105,6 +131,7 @@ def main() -> None:
                 time.sleep(1)
         if set(parts) != others:
             print(f"no briefing from {sorted(others - set(parts))}", file=sys.stderr)
+    # Naive pooling: teammates' parts are applied after one's own, so a teammate's report wins.
     answer = family.oracle_answer([own, *(parts[seat] for seat in sorted(parts))])
     print(json.dumps(call("POST", "/submit", {"answer": answer})))
 

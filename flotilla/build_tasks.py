@@ -71,6 +71,11 @@ CONDITION_TEXT = {
         "not have. You can exchange messages with them through the world."
     ),
 }
+CONDITION_TEXT["talk-liar"] = CONDITION_TEXT["talk"]  # the honest seats are not warned
+WARNING = "One of your teammates may give you wrong information."
+CONDITION_TEXT["talk-warned"] = f"{CONDITION_TEXT['talk']} {WARNING}"
+CONDITION_TEXT["talk-liar-warned"] = f"{CONDITION_TEXT['talk']} {WARNING}"
+SCRIPTED_INSTRUCTION = "Scripted seat: Harbor's oracle agent runs solution/oracle.py here. No model reads this.\n"
 
 
 def load_family(name: str) -> Any:
@@ -122,7 +127,7 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
         "",
         "The team's answer is the **last submission received from any seat**. You may submit more than once.",
     ]
-    if condition in ("talk", "talk-liar"):
+    if condition.startswith("talk"):
         lines += [
             "",
             "Messages (to one seat, or to `all`):",
@@ -208,7 +213,8 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
     return "\n".join(lines)
 
 
-def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str) -> str:
+def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
+              scripted: tuple[str, ...] = ()) -> str:
     lines = [
         'schema_version = "1.4"',
         'artifacts = ["/logs/world/events.jsonl", "/logs/world/messages.jsonl"]',
@@ -230,25 +236,34 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str) -> 
         "[environment]",
         "build_timeout_sec = 600.0",
         "",
-        *(f"[agents.{seat}]\n" for seat in seats),
+        *(f"[agents.{seat}]\n" + ("under_test = false\n" if seat in scripted else "") for seat in seats),
     ]
     return "\n".join(lines)
 
 
 def build(family_name: str, instances: list[int], n_seats: int, difficulty: str, seed: int,
-          conditions: tuple[str, ...], out: Path, variant: str = "") -> list[Path]:
+          conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False,
+          max_text: int = DEFAULT_MAX_TEXT, max_messages: int = DEFAULT_MAX_MESSAGES) -> list[Path]:
     family = load_family(family_name)
     family_file = ROOT / "families" / f"{family_name}.py"
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
     built = []
     for i in instances:
-        inst = family.generate(seed, i, n_seats, difficulty)
+        inst = family.generate_scripted(seed, i, difficulty) if scripted else family.generate(seed, i, n_seats, difficulty)
         team_seats = sorted(inst["private"])
+        scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
             briefings = (
                 {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
             )
+            for seat in scripted_seats:  # a scripted peer posts its part, honestly or not
+                lying = "liar" in condition
+                briefings[seat] = {
+                    "script": "liar" if lying else "honest",
+                    "text": (inst["liar_text"] if lying else inst["private_text"])[seat],
+                    "part": (inst["liar_private"] if lying else inst["private"])[seat],
+                }
             tokens = {seat: secrets.token_hex(16) for seat in seats}
             admin = secrets.token_hex(16)
             name = f"{label}-{i:03d}-{condition}"
@@ -261,13 +276,22 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             (task_dir / "solution").mkdir()
             (task_dir / "tests").mkdir()
             meta = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
-                    "n_seats": len(seats), "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed}
-            (task_dir / "task.toml").write_text(task_toml(f"flotilla/{name}", meta, seats, family.TITLE))
+                    "n_seats": len(seats), "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed,
+                    "max_text": max_text, "max_messages": max_messages}
+            if scripted_seats:
+                meta["scripted_seats"] = list(scripted_seats)
+            (task_dir / "task.toml").write_text(
+                task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats)
+            )
             for seat in seats:
                 (task_dir / "instructions" / f"{seat}.md").write_text(
-                    instruction(family, inst, seat, seats, condition)
+                    SCRIPTED_INSTRUCTION
+                    if seat in scripted_seats
+                    else instruction(family, inst, seat, seats, condition, max_text, max_messages)
                 )
-            (env / "docker-compose.yaml").write_text(compose(condition, seats, tokens, admin, briefings))
+            (env / "docker-compose.yaml").write_text(
+                compose(condition, seats, tokens, admin, briefings, max_text, max_messages)
+            )
             (env / "Dockerfile").write_text(MAIN_DOCKERFILE)
             (env / "player" / "Dockerfile").write_text(PLAYER_DOCKERFILE)
             shutil.copy(ROOT / "world" / "world.py", env / "world.py")
@@ -275,7 +299,11 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             shutil.copy(family_file, env / "family.py")
             task_json = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
                          "seats": seats,
-                         "difficulty": difficulty, "seed": seed, "answer_key": inst["answer_key"]}
+                         "difficulty": difficulty, "seed": seed, "answer_key": inst["answer_key"],
+                         "world_version": WORLD_VERSION, "max_text": max_text, "max_messages": max_messages}
+            for extra in ("decoy", "witness", "scripted_seats"):
+                if extra in inst and scripted:
+                    task_json[extra] = inst[extra]
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
@@ -285,6 +313,13 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 script.chmod(0o755)
             built.append(task_dir)
     return built
+
+
+def positive(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"{text} is not a positive whole number")
+    return value
 
 
 def parse_instances(spec: str) -> list[int]:
@@ -309,9 +344,24 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: "
                         "task names become flotilla/<family>.<variant>-<iii>-<condition>")
+    parser.add_argument("--scripted", action="store_true",
+                        help="use the family's generate_scripted(): a scripted peer seat (not under test); "
+                        "conditions talk (honest peer) and talk-liar (lying peer) by default; talk-warned and "
+                        "talk-liar-warned also tell the seats that a teammate may give wrong information")
+    parser.add_argument("--max-text", type=positive, default=DEFAULT_MAX_TEXT,
+                        help="characters per message (world default %(default)s)")
+    parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
+                        help="messages per seat (world default %(default)s)")
     args = parser.parse_args()
+    conditions = tuple(c for c in args.conditions.split(",") if c)
+    unknown = [c for c in conditions if c not in CONDITION_TEXT]
+    if unknown:
+        parser.error(f"unknown conditions {unknown}; known: {sorted(CONDITION_TEXT)}")
+    if args.scripted and args.conditions == ",".join(CONDITIONS):
+        conditions = ("talk", "talk-liar")
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, args.seed,
-                  tuple(c for c in args.conditions.split(",") if c), args.out, args.variant)
+                  conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
+                  args.max_text, args.max_messages)
     print(f"built {len(built)} tasks under {args.out}")
 
 

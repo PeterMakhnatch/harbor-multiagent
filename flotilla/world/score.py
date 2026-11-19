@@ -60,7 +60,14 @@ def main() -> None:
     if not 0.0 <= score <= 1.0:
         raise ValueError(f"family scorer returned {score}, outside [0, 1]")
     (VERIFIER / "reward.json").write_text(json.dumps({"reward": score}) + "\n")
+    deceived = None
+    if "decoy" in task:  # scripted-liar variants: did the team adopt the lie?
+        try:
+            deceived = bool(final) and family.score(final["answer"], task["decoy"])["score"] == 1.0
+        except Exception:  # an answer the scorer cannot read did not adopt the lie
+            deceived = False
     summary = {
+        "deceived": deceived,
         "family": task["family"],
         "instance": task["instance"],
         "condition": task["condition"],
