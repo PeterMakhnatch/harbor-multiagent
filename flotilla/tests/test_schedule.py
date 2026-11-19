@@ -140,11 +140,14 @@ REAL = [
     (("Gus", "Hana", "Kai"), "G:15/9,13/10,14,15/13,14,16/9,10,11,15,16|H:9,16/14/10/14/11", True),
     (("Eli", "Fay", "Hana"), "pls check Mon11,Mon12,Tue13,Tue14,Tue15,Thu09,Fri13 for Ben,Gus,Lea", True),
     (("Eli", "Fay", "Hana"), "From my data, possible slots: Mon 11, Tue 13/14/15, Thu 09, Fri 10/13. Need Ben/Gus/Lea.", True),
-    # c4: requests, and 1 or 2 windows without a name (known limit: not counted)
+    # c4: requests
     (("Chen", "Dara", "Eli"), "info? I have Chen Dara Eli. Need Ana Fay Hana.", False),
     (("Ben", "Kai", "Lea"), "Please share busy hours for Ana, Dara, Fay (Mon-Fri) as Name:day hour list", False),
     (("Ana", "Ben", "Fay"), "Need busy hours for Ana, Ben, Fay. Format: Name day hours; e.g., Ana Mon 9,10", False),
-    (("Ben", "Gus", "Lea"), "Thu11 and Thu13 both work for me. Which is correct?", False),
+    # c4: 1 or 2 candidate windows without a name, verbatim (Qwen tight-010, tight-002, tight-000)
+    (("Ben", "Gus", "Lea"), "Thu11 and Thu13 both work for me. Which is correct?", True),
+    (("Chen", "Dara", "Eli"), "Candidates: Tue 09:00 or Thu 14:00. What is Hana busy?", True),
+    (("Ana", "Dara", "Fay"), "Thanks p1! Can you also share Lea busy hours? I think Thu 14-16 works for 5.", True),
     (("Chen", "Fay"), "Need Ben's hours. Mon 11, Tue 13, Thu 9 work for me", True),  # a new sentence: not Ben's
     # c3: requests that list every attendee next to a format hint
     (("Dara", "Kai"), "Please reply with your busy hours for each weekday (hours are whole numbers, e.g., Mon 9,12; "
@@ -186,3 +189,28 @@ def test_format_hints_run_to_the_end_of_the_line_or_parenthesis():
     hinted = SCHEDULE.without_hints("Ana: Mon 09 (same format, e.g. Tue 10) Wed 11\nFormat: Thu 12\nFri 13")
     assert SCHEDULE.day_hours(hinted) == [("Mon", 9), ("Wed", 11), ("Fri", 13)]
     assert SCHEDULE.without_hints("no hint, Mon 09") == "no hint, Mon 09"
+
+
+# Misreads found by the review of #30, and cases that pin single branches of the rule.
+CASES = [
+    (("Ana", "Chen"), 'Reply as JSON, e.g. {"Ben": {"Mon": [9], "Tue": [10], "Thu": [11]}}', False),
+    (("Ana", "Chen"), "Please send Ben's busy hours in the format:\n- Name is busy: Mon 9,10; Tue 13", False),
+    (("Ana", "Chen"), "I have Ana. Use this format:\n- Name is busy: Mon 9,10; Tue 13", False),  # the next line
+    (("Ben", "Dara"), 'Please send Ben, Chen, Dara, Fay as arrays of strings like "Mon 9".', False),
+    (("Ana", "Ben"), "p1, Mon 10, Tue 11 and Wed 12 work for Ana and Ben.", True),  # p1 is addressed
+    (("Ana", "Ben"), "I M9,10 T11 W12 free", True),  # the pronoun, not Ivo's initial
+    (("Ana", "Ben"), "p3, p2 claims only Thu 13:00-14:00 works but that is not a 2-hour meeting.", False),
+    (("Chen", "Hana"), "Are Ana and Gus free on Wednesday 09:00-11:00?", False),
+    (("Ben", "Dara"), "a Mon 9 or Tue 10 slot works for me", True),  # a lower-case "a" is not Ana's initial
+    (("Ana", "Chen"), "A,C,E,I: Mon9 Tue10 Wed11", True),  # a group of own and other initials
+    (("Dara", "Fay"), "D/F ok with Mon9, Tue10", True),  # a group of two initials
+    (("Ana", "Chen"), "Send your hours like: Mon 9, Tue 10, Wed 11", False),
+    (("Ana", "Chen"), "You said Mon 9, Tue 10 and Wed 11", False),
+    (("Ben", "Gus"), "Mon09 Tue13", True),  # a bare list of windows
+    (("Ben", "Gus"), "Thu 14:00, submitting now", False),  # one window, no cue: an announcement
+]
+
+
+@pytest.mark.parametrize(("names", "text", "verdict"), CASES)
+def test_rule_branches(names, text, verdict):
+    assert SCHEDULE.carries_own_data(text, cal(*names)) is verdict

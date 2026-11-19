@@ -260,13 +260,17 @@ _LETTER = re.compile(r"(?<![A-Za-z])[A-Z](?![a-z])")
 _INITIALS = {name[0] for name in NAMES}
 # Another speaker: a seat or "you", whose claims a message relays ("p1: Tue 10", "you said Wed 09"); not a
 # seat that names itself ("I am p2", "p2 here").
-_SPEAKER = re.compile(r"(?<![A-Za-z0-9])(?<!I am )(?<!I'm )(?<!is )[pP]\d(?!\d)(?! here)|\byou(?:r)?\b",
-                      re.IGNORECASE)
+_SPEAKER = re.compile(r"(?<![A-Za-z0-9])(?<!I am )(?<!I'm )(?<!is )[pP]\d(?!\d)(?! here)(?!\s*,)|\byou(?:r)?\b",
+                      re.IGNORECASE)  # "p1, Mon 10 works" addresses p1: not a claim
 # Words that may stand between an attendee or speaker and the hours that belong to it ("Ben is busy: Mon
 # 09", "p1 said Wed 09").
 _FILLER = {"is", "are", "was", "busy", "free", "hours", "hour", "hrs", "and", "or", "s", "at", "on", "none",
            "all", "day", "days", "says", "said", "say", "sent", "gave", "give", "gives", "has", "had", "have",
-           "reported", "listed", "shared"}
+           "reported", "listed", "shared", "claims", "claimed", "claim", "thinks", "thought", "only"}
+# A window offered as a candidate: a cue word in its sentence ("Candidates: Tue 09:00", "Thu11 and Thu13 work
+# for me", "free", "available", "possible").
+_CUE = re.compile(r"\b(?:candidates?|options?|works?|working|fits?|free|available|avail|possible|possibly|open)\b",
+                  re.IGNORECASE)
 # What may stand between the attendees of one list ("Chen, Hana, Eli, Ivo: Wed 09", "Ana and Gus").
 _LIST = re.compile(r"\s*(?:[,/+&]|\band\b|\bor\b)(?:\s*(?:and|or)\b)?\s*", re.IGNORECASE)
 
@@ -306,16 +310,21 @@ def without_examples(text: str) -> str:
 def without_hints(text: str) -> str:
     """``without_examples``, and also every format hint: from a hint word ("format", "e.g.", "example",
     "such as", "like:") to the end of its line, or to the end of the parenthesis it stands in."""
-    lines = []
-    for line in without_examples(text).split("\n"):
+    lines, carry = [], False
+    for line in text.split("\n"):
+        if carry:  # the example of a hint that ended its line ("in the format:\n- Name is busy: Mon 9,10")
+            lines.append(" " * len(line))
+            carry = False
+            continue
         while (hint := _HINT.search(line)) is not None:
             opened = line.rfind("(", 0, hint.start())
             inside = opened != -1 and line.find(")", opened, hint.start()) == -1
             end = line.find(")", hint.end()) if inside else -1
             end = len(line) if end == -1 else end
+            carry = not inside and line[hint.end() :].strip() in (":", "")
             line = line[: hint.start()] + " " * (end - hint.start()) + line[end:]
         lines.append(line)
-    return "\n".join(lines)
+    return without_examples("\n".join(lines))
 
 
 def day_hours(text: str) -> list[Window]:
@@ -378,6 +387,8 @@ def _references(text: str, own: set[str], mentions: list[tuple[int, int, Window]
 
     for m in _LETTER.finditer(text):
         after = re.match(r"[\s:/=]{0,3}", text[m.end():])
+        if m[0] == "I" and after is not None and not after[0].strip():
+            continue  # the pronoun ("I M9 free"), unless a separator follows: "I:M14"
         if m[0] in _INITIALS and after is not None and m.end() + len(after[0]) in starts:
             found.append((m.start(), m.end(), whose([m[0]])))
     for m in _GROUP.finditer(text):
@@ -430,11 +441,13 @@ def carries_own_data(text: str, private: dict[str, Any]) -> bool:
     at least one mention is left and either it names one of the sender's attendees (a name, an initial
     right before data such as "B:M11" or "AM9", or a group of the sender's initials such as "A,C,K"), or
     at least 3 mentions are left (a calendar or a candidate list without names: "M9-10 T16 W9,11",
-    "pls check Mon11, Mon12, Tue13 for Ben"). A request names the receiver's attendees, or no one with
-    fewer than 3 mentions, so it does not count. A written-out answer object is not data.
-    Known limits: 1 or 2 candidate windows without a name ("Thu11 and Thu13 work for me") do not
-    count; a request that names the sender's own attendees next to an unmarked example ("I have Ana;
-    send yours as Mon 09,10") counts.
+    "pls check Mon11, Mon12, Tue13 for Ben"), or a left mention is offered as the sender's candidate
+    window: its sentence has a cue word ("Candidates: Tue 09:00 or Thu 14:00", "Thu11 and Thu13 both
+    work for me", "free", "available", "possible") or is a bare list of 2 or more windows ("Mon09 Tue13").
+    A request names the receiver's attendees, or no one and no offered window, so it does not count. A
+    written-out answer object is not data. Known limits: a team conclusion with a cue word counts ("the
+    only common free slot is Tue 13:00"); a request that names the sender's own attendees next to an
+    unmarked example ("I have Ana; send yours as Mon 09,10") counts.
     """
     calendars = private.get("calendars") if isinstance(private, dict) else None
     if not isinstance(calendars, dict):
@@ -451,7 +464,28 @@ def carries_own_data(text: str, private: dict[str, Any]) -> bool:
             left.append(mention)
     if not left:
         return False
-    return any(whose == "own" for _, _, whose in references) or len(left) >= 3
+    if any(whose == "own" for _, _, whose in references) or len(left) >= 3:
+        return True
+    return any(_offered(text, mention, mentions) for mention in left)
+
+
+def _offered(text: str, mention: tuple[int, int, Window], mentions: list[tuple[int, int, Window]]) -> bool:
+    """Whether a mention is offered as the sender's candidate window: its sentence has a cue word
+    ("Candidates: Tue 09:00 or Thu 14:00", "Thu11 and Thu13 both work for me"), or the sentence is a bare
+    list of 2 or more windows ("Mon09, Tue13")."""
+    start = max(text.rfind(c, 0, mention[0]) for c in ".!?\n") + 1
+    ends = [i for i in (text.find(c, mention[1]) for c in ".!?\n") if i != -1]
+    end = min(ends) if ends else len(text)
+    sentence = text[start:end]
+    if _CUE.search(sentence):
+        return True
+    inside = [m for m in mentions if start <= m[0] and m[1] <= end]
+    rest = list(sentence)
+    for m_start, m_end, _ in inside:
+        for i in range(m_start - start, m_end - start):
+            rest[i] = " "
+    words = re.findall(r"[a-z]+", re.sub(_DAY, " ", "".join(rest), flags=re.IGNORECASE).lower())
+    return len(inside) >= 2 and all(word in ("and", "or", "both") for word in words)
 
 
 def answer_in_text(text: str, key: dict[str, Any]) -> bool:

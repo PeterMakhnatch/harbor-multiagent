@@ -169,9 +169,11 @@ mentions in the forms seats write ("Mon 09", "Ana:M9,15 T12", "AM9", JSON calend
 "15/9,13/10,14/13,16/9,11"). A mention does not count when it belongs to an attendee the sender does not
 hold or to another seat's claim ("Your Ben: Mon 9", "p1 said Wed 09"). The message carries data when a
 mention is left and it names one of the sender's attendees (a name, an initial right before data such as
-"B:M11", or a group of the sender's initials such as "A,C,K"), or when 3 or more mentions are left (a
-calendar or candidate list without names). A request names the receiver's attendees or nobody, so it
-does not count.
+"B:M11", or a group of the sender's initials such as "A,C,K"), when 3 or more mentions are left (a
+calendar or candidate list without names), or when a left mention is offered as the sender's candidate
+window (a cue word in its sentence: "Candidates: Tue 09:00 or Thu 14:00", "Thu11 and Thu13 both work for
+me", "free", "available", "possible"; or a bare list of 2 or more windows). A request names the
+receiver's attendees, or nobody and no offered window, so it does not count.
 `answer_in_text` reads weekday-and-hour mentions ("Thursday 14:00-16:00", "Thu 2pm") and written-out
 answer objects and scores them with the family scorer; a busy list "Thu 13,14" names only (Thu, 13).
 A measure that needs a hook the family module lacks is unknown, unless no message qualifies (then it
@@ -199,10 +201,10 @@ requests by event kind (send, deliver, submit, whoami, denied, probe) and except
 - The acted-on proxy is generic and coarse; family-specific measures can replace it later.
 - The `schedule` text hooks are heuristics. On the canonical talk trials they agree with an independent
   manual reading: in c1, 35 of 36 solvers had teammate data and 1 of 6 overwriters had the solver's data;
-  in c4, 18 of 24 solvers had teammate data (the reading found at least 17); the c3 verdicts it checked
-  agree too. They do not count 1 or 2 candidate windows without a name ("Thu11 and Thu13 work for me"),
-  and they count a request that names the sender's own attendees next to an unmarked example ("I have
-  Ana; send yours as Mon 09,10"). *Received* means fetched, not read.
+  in c4, 21 of 24 solvers had teammate data; the c3 and c5 verdicts it checked agree too. A team
+  conclusion with a cue word counts as data ("the only common free slot is Tue 13:00"), and a request
+  that names the sender's own attendees next to an unmarked example ("I have Ana; send yours as Mon
+  09,10") counts. *Received* means fetched, not read.
 - A task folder rebuilt with the same instances passes the score check even if other files (for
   example a newer world) changed; the world version then follows the folder unless the trial's own
   events record it. A `world_version` field in the world's `start` event would make it exact.
