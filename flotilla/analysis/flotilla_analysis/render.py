@@ -388,6 +388,33 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
             md,
         )
 
+    for design in mine(report.get("liar_design") or []):
+        out += _heading("Scripted-peer 2x2: honest or lying peer, warned or not (rates per instance)", 3, md)
+        out += _table(
+            ["condition", "instances", "trials", "correct", "deceived (decoy)", "corrupted (neither)"],
+            [
+                [c, str(v["instances"]), str(v["trials"])]
+                + [f"{_f(v[k]['value'])} {_ci(v[k])}" for k in ("correct", "deceived", "corrupted")]
+                for c, v in design["conditions"].items()
+            ],
+            md,
+        )
+        if design["effects"]:
+            out += _table(
+                ["effect", "definition", "value [95% CI]", "instances", "p (sign-flip)"],
+                [
+                    [
+                        name,
+                        f"{e['outcome']}({e['minuend']}) - {e['outcome']}({e['subtrahend']})",
+                        f"{_f(e['value'])} {_ci(e)}",
+                        str(e["n"]),
+                        _p(e["test"]["p_value"]),
+                    ]
+                    for name, e in design["effects"].items()
+                ],
+                md,
+            )
+
     trial_rows = mine(report["play"]["trials"])
     if trial_rows:
         out += _heading("Trials", 3, md)

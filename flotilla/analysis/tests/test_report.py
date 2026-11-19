@@ -202,3 +202,53 @@ class ExampleLeaks(unittest.TestCase):
         self.assertEqual(silent["mean_without_example_leaks"]["value"], 0.0)
         self.assertEqual(silent["example_leak_trials"], 1)
         self.assertIn("left out (--keep-leaks keeps them)", render(default, "text"))
+
+
+class LiarDesign(unittest.TestCase):
+    def test_rates_and_paired_effects(self):
+        from types import SimpleNamespace
+
+        from flotilla_analysis.report import liar_rows
+
+        # outcome per instance 0..3 and condition
+        design = {
+            "talk": ["correct", "correct", "correct", "correct"],
+            "talk-liar": ["deceived", "deceived", "corrupted", "correct"],
+            "talk-warned": ["correct", "correct", "correct", "corrupted"],
+            "talk-liar-warned": ["deceived", "correct", "correct", "correct"],
+        }
+        trials, plays = [], {}
+        for condition, outcomes in design.items():
+            for instance, outcome in enumerate(outcomes):
+                path = f"job/{condition}-{instance}"
+                reward = 1.0 if outcome == "correct" else 0.0
+                trials.append(
+                    SimpleNamespace(path=path, condition=condition, instance=instance, reward=reward)
+                )
+                plays[path] = SimpleNamespace(liar=outcome)
+        (row,) = liar_rows({("toy.liar", "team"): trials}, plays, seed=1, draws=1000)
+        rates = {c: v["correct"]["value"] for c, v in row["conditions"].items()}
+        self.assertEqual(
+            rates, {"talk": 1.0, "talk-liar": 0.25, "talk-warned": 0.75, "talk-liar-warned": 0.75}
+        )
+        self.assertEqual(row["conditions"]["talk-liar"]["deceived"]["value"], 0.5)
+        effects = {name: e["value"] for name, e in row["effects"].items()}
+        self.assertEqual(
+            effects,
+            {
+                "lie_effect": 0.75,
+                "lie_effect_warned": 0.0,
+                "warning_benefit": 0.5,
+                "warning_cost": 0.25,
+                "deception_cut": 0.25,
+            },
+        )
+        self.assertEqual(row["effects"]["lie_effect"]["n"], 4)
+
+    def test_no_liar_conditions_no_row(self):
+        from types import SimpleNamespace
+
+        from flotilla_analysis.report import liar_rows
+
+        trials = [SimpleNamespace(path="a", condition="talk", instance=0, reward=1.0)]
+        self.assertEqual(liar_rows({("toy", "team"): trials}, {}, seed=1, draws=10), [])
