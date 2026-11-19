@@ -170,11 +170,15 @@ def test_token_and_cost_totals_sum_every_seat():
     assert result.compute_token_cost_totals() == (20, None, 4, 0.75)
 
 
-def test_a_failed_seat_freeze_is_recorded_and_is_not_an_exception():
+def test_a_failed_seat_freeze_is_a_recorded_exception_and_the_reward_is_not_valid():
+    failed = ExceptionInfo(
+        exception_type="SeatFreezeError",
+        exception_message="still running: 2 of 3 processes",
+        exception_traceback="",
+        occurred_at=datetime.now(timezone.utc),
+    )
     freeze = SeatFreeze(
-        finished_at=datetime.now(timezone.utc),
-        stopped=1,
-        error="still running: 2 of 3 processes",
+        finished_at=failed.occurred_at, stopped=1, exception_info=failed
     )
     result = _result(
         verifier_result=VerifierResult(rewards={"reward": 1}),
@@ -184,8 +188,19 @@ def test_a_failed_seat_freeze_is_recorded_and_is_not_an_exception():
     again = TrialResult.model_validate_json(result.model_dump_json(indent=4))
 
     assert [s.freeze for s in again.seat_results or []] == [freeze, None]
-    assert again.recorded_exceptions() == []
-    assert again.reward_valid
+    assert again.recorded_exceptions() == [failed]
+    assert not again.reward_valid
+
+
+def test_a_seat_freeze_that_stopped_everything_keeps_the_reward_valid():
+    freeze = SeatFreeze(finished_at=datetime.now(timezone.utc), stopped=3)
+    result = _result(
+        verifier_result=VerifierResult(rewards={"reward": 1}),
+        seat_results=[_seat("maya", True, 0.5, freeze=freeze)],
+    )
+
+    assert result.recorded_exceptions() == []
+    assert result.reward_valid
 
 
 def test_seat_exceptions_count_as_recorded_exceptions():

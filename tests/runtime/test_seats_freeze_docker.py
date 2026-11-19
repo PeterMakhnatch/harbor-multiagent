@@ -190,12 +190,14 @@ async def test_nothing_a_seat_left_running_acts_on_the_world_after_play(
     assert result.exception_info is None, result.exception_info
     assert result.verifier_result is not None
     assert result.verifier_result.rewards == dict.fromkeys(LATE, 0)
+    assert result.reward_valid
     assert result.agent_execution is not None
     assert result.agent_execution.finished_at is not None
     assert result.seat_results is not None
     for seat in result.seat_results:
         assert seat.freeze is not None, seat.seat
-        assert seat.freeze.error is None, (seat.seat, seat.freeze.error)
+        failed = seat.freeze.exception_info
+        assert failed is None, (seat.seat, failed and failed.exception_message)
         # The service's own `sleep infinity` and at least one leftover.
         assert seat.freeze.stopped is not None and seat.freeze.stopped >= 2
         assert seat.freeze.finished_at >= result.agent_execution.finished_at
@@ -216,6 +218,7 @@ async def test_a_seat_with_freeze_off_is_rewarded_for_what_it_does_after_play(
     assert result.exception_info is None, result.exception_info
     assert result.verifier_result is not None
     assert result.verifier_result.rewards == dict.fromkeys(LATE, 1)
+    assert result.reward_valid
     assert result.seat_results is not None
     assert [seat.freeze for seat in result.seat_results] == [None, None]
     seen = json.loads((trial.paths.verifier_dir / "notes.json").read_text())

@@ -463,8 +463,9 @@ async def test_seats_are_frozen_after_play_and_before_collection_and_grading(
     assert result.agent_execution is not None
     for seat in result.seat_results or []:
         assert seat.freeze is not None
-        assert (seat.freeze.stopped, seat.freeze.error) == (2, None)
+        assert (seat.freeze.stopped, seat.freeze.exception_info) == (2, None)
         assert seat.freeze.finished_at >= result.agent_execution.finished_at
+    assert result.reward_valid
 
 
 async def test_main_as_a_seat_is_never_frozen(tmp_path: Path):
@@ -520,7 +521,7 @@ async def test_a_seat_with_freeze_off_is_left_running(tmp_path: Path):
         ({"side_effect": RuntimeError("exec failed")}, "RuntimeError: exec failed"),
     ],
 )
-async def test_a_failed_freeze_is_recorded_and_warned_and_the_trial_is_still_graded(
+async def test_a_failed_freeze_is_graded_but_its_reward_is_not_valid(
     tmp_path: Path, caplog: pytest.LogCaptureFixture, freeze: dict, error: str
 ):
     trial = await _seats_trial(
@@ -537,13 +538,42 @@ async def test_a_failed_freeze_is_recorded_and_warned_and_the_trial_is_still_gra
         result = await trial.run()
 
     seats = _seat_results(result)
-    assert seats["raj"].freeze.error == error
-    assert seats["maya"].freeze.error is None and seats["lee"].freeze.error is None
+    failed = seats["raj"].freeze.exception_info
+    assert (failed.exception_type, failed.exception_message) == (
+        "SeatFreezeError",
+        error,
+    )
+    assert seats["maya"].freeze.exception_info is None
+    assert seats["lee"].freeze.exception_info is None
     assert f"Failed to freeze seat 'raj': {error}" in caplog.text
     assert result.exception_info is None and seats["raj"].exception_info is None
-    assert _verified(trial) and result.reward_valid
+    assert result.recorded_exceptions() == [failed]
+    assert _verified(trial) and result.verifier_result is not None
+    assert not result.reward_valid
     download = ("compose", "cp", "raj:/logs/agent/.")
     assert index(*download, str(trial.seats[1].paths.agent_dir)) < index("verify")
+
+
+async def test_an_error_policy_override_keeps_the_reward_of_a_failed_freeze(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            override_error_policy={"SeatFreezeError": {"has_valid_reward": True}},
+        )
+    )
+    trial.seats[1].environment.freeze = AsyncMock(return_value=(1, 2))
+
+    result = await trial.run()
+
+    failed = _seat_results(result)["raj"].freeze.exception_info
+    assert failed.exception_type == "SeatFreezeError"
+    assert failed.policy.has_valid_reward
+    assert result.reward_valid
 
 
 async def test_a_failed_play_freezes_the_seats_before_recovering_outputs(

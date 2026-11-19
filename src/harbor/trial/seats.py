@@ -13,6 +13,7 @@ running, collects every seat alike, gives ``main`` the seats' logs at
 import asyncio
 import contextlib
 import logging
+import traceback
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, override
@@ -38,7 +39,11 @@ from harbor.models.trial.result import (
     TimingInfo,
 )
 from harbor.tasks.client import TaskDownloadResult
-from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
+from harbor.trial.errors import (
+    AgentSetupTimeoutError,
+    AgentTimeoutError,
+    SeatFreezeError,
+)
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
@@ -375,25 +380,39 @@ class SeatsTrial(SingleStepTrial):
                     group.create_task(self._freeze_seat(seat))
 
     async def _freeze_seat(self, seat: Seat) -> None:
-        """Record the freeze on the seat. A failed freeze is recorded there and
-        logged, as Trial logs a failed stop of main before sidecar collection;
-        the trial is collected and verified as it was before seats were
-        frozen."""
+        """Record the freeze on the seat. A freeze that fails or leaves a
+        process running is logged, as Trial logs a failed stop of main before
+        sidecar collection, and recorded on the seat's freeze as a
+        SeatFreezeError. The trial is still collected and verified; the error's
+        policy makes its reward invalid, since what the seat did after play may
+        count in it."""
         stopped: int | None = None
-        error: str | None = None
+        error = traceback_text = ""
         try:
             stopped, running = await seat.environment.freeze()
             if running:
                 error = f"still running: {running} of {stopped + running} processes"
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
-        seat.result.freeze = SeatFreeze(
-            finished_at=self._now(), stopped=stopped, error=error
-        )
-        if error is not None:
+            traceback_text = traceback.format_exc()
+        finished_at = self._now()
+        exception_info = None
+        if error:
             seat.logger.warning(f"Failed to freeze seat {seat.name!r}: {error}")
+            exception_info = ExceptionInfo(
+                exception_type=SeatFreezeError.__name__,
+                exception_message=error,
+                exception_traceback=traceback_text,
+                occurred_at=finished_at,
+                policy_override=self.config.override_error_policy.get(
+                    SeatFreezeError.__name__
+                ),
+            )
         else:
             seat.logger.debug(f"Froze seat {seat.name!r}: {stopped} processes stopped")
+        seat.result.freeze = SeatFreeze(
+            finished_at=finished_at, stopped=stopped, exception_info=exception_info
+        )
 
     async def _collect_seats(self) -> None:
         """Mirrors Trial._sync_agent_output for every seat, under test or not."""

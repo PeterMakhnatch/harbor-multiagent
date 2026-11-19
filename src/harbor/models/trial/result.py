@@ -90,12 +90,14 @@ class StepResult(BaseModel):
 
 class SeatFreeze(BaseModel):
     """One seat's freeze at the end of play: when it finished and how many
-    processes it left stopped. ``error`` is set when the freeze failed or left a
-    process running; it is not an exception and does not change reward_valid."""
+    processes it left stopped. ``exception_info`` is a SeatFreezeError when the
+    freeze failed or left a process running. It counts in
+    TrialResult.recorded_exceptions, and by default its policy makes the reward
+    invalid: what the seat did after play may count in it."""
 
     finished_at: datetime
     stopped: int | None = None
-    error: str | None = None
+    exception_info: ExceptionInfo | None = None
 
 
 class SeatResult(BaseModel):
@@ -151,7 +153,8 @@ class TrialResult(BaseModel):
     )
 
     def recorded_exceptions(self) -> list[ExceptionInfo]:
-        """Trial-level exception first, then step or seat exceptions in order.
+        """Trial-level exception first, then step or seat exceptions in order,
+        then the seats' failed freezes.
 
         Multi-step and multi-agent trials record handled failures on each step
         or seat as well.
@@ -162,6 +165,9 @@ class TrialResult(BaseModel):
         for step in [*(self.step_results or []), *(self.seat_results or [])]:
             if step.exception_info is not None:
                 exceptions.append(step.exception_info)
+        for seat in self.seat_results or []:
+            if seat.freeze is not None and seat.freeze.exception_info is not None:
+                exceptions.append(seat.freeze.exception_info)
         return exceptions
 
     @computed_field
