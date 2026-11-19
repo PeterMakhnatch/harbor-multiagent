@@ -86,11 +86,15 @@ the token; a client never names its own seat.
 (`data.n`, `data.answer`), `denied` (`data.path`, `data.reason`), `late`, `freeze`, `bad_token`.
 Message texts are stored once, in `/logs/world/messages.jsonl` (`id, from, to, text, t`).
 
-`/logs/world/score.json`, written by the verifier: `{"family", "instance", "condition", "score",
-"fields_correct", "fields_total", "answer", "submitted_by", "n_submissions", "n_messages"}`.
+`task.toml` lists `events.jsonl` and `messages.jsonl` as artifacts, so they appear under
+`<trial>/artifacts/logs/world/`. Harbor collects artifacts **before** the verifier runs, so the
+verifier writes its own evidence to `/logs/verifier/` (collected after verification as
+`<trial>/verifier/`):
 
-`task.toml` lists both files and `messages.jsonl` as artifacts, so they appear under
-`<trial>/artifacts/logs/world/`.
+- `score.json`: `{"family", "instance", "condition", "seats", "score", "fields_correct",
+  "fields_total", "answer", "submitted_by", "n_submissions", "n_messages", "error"}`;
+- `world-state.json`: the frozen world state (every message and submission), including anything
+  that arrived after artifact collection.
 
 ## 6. Reward
 
