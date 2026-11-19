@@ -870,6 +870,7 @@ def test_solo_is_one_seat_with_both_features(tmp_path: Path):
     verifier = (solo_dir / "tests/test.sh").read_text()
     assert 'SEATS="agent1"\n' in verifier and 'STRATEGY="solo"\n' in verifier
     assert "agent2_branch" not in verifier
+    assert "Merge conflict between agent1 and agent2" not in verifier
 
 
 @pytest.mark.parametrize(
@@ -1025,3 +1026,33 @@ def test_a_failed_arm_task_leaves_no_folder_and_no_entry(tmp_path: Path):
     with pytest.raises(KeyError):
         adapter.generate_task(bad, arm="talk")
     assert list((tmp_path / "tasks").iterdir()) == []
+
+
+def test_a_failed_rebuild_keeps_the_manifest_and_the_folders_in_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    tasks = arms_build(tmp_path)
+    root = tmp_path / "tasks"
+
+    def entries_match_folders() -> dict[str, dict[str, Any]]:
+        manifest = json.loads((root / "manifest.json").read_text())
+        assert set(manifest) == {d.name for d in root.iterdir() if d.is_dir()}
+        return manifest
+
+    adapter = CooperBenchAdapter(output_dir=root, seats=True, arms=ARM_WORDS)
+
+    def fail_after_writing(*args: object) -> None:  # the last step of a task
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(adapter, "_apply_seat_upstream_fixes", fail_after_writing)
+    with pytest.raises(RuntimeError, match="disk full"):
+        adapter.generate_task(make_pair(), overwrite=True, arm="silent")
+
+    manifest = entries_match_folders()
+    assert not tasks["silent"].exists()
+    assert sorted(e["arm"] for e in manifest.values()) == ["solo", "talk"]
+
+    rebuilt = CooperBenchAdapter(
+        output_dir=root, seats=True, arms=["silent"]
+    ).generate_task(make_pair(), arm="silent")
+    assert entries_match_folders()[rebuilt.name]["arm"] == "silent"

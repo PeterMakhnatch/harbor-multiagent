@@ -831,12 +831,17 @@ class CooperBenchAdapter:
             if not overwrite:
                 raise FileExistsError(f"Target already exists: {task_dir}")
             shutil.rmtree(task_dir)
+            if self._opaque_names:
+                self._drop_from_manifest(name)  # the folder is gone: so is its entry
 
         if self.seats and self._opaque_names:
+            # manifest.json lists exactly the arm tasks on disk: an entry is
+            # written only once its task is complete, and dropped with it.
             try:
                 out = self._generate_seat_task(pair, task_dir, arm)
             except BaseException:
-                shutil.rmtree(task_dir, ignore_errors=True)  # no task, no entry
+                shutil.rmtree(task_dir, ignore_errors=True)
+                self._drop_from_manifest(name)
                 raise
             self._record_in_manifest(name, pair, arm)
             return out
@@ -1184,6 +1189,10 @@ class CooperBenchAdapter:
         }
         self._write_manifest()
 
+    def _drop_from_manifest(self, name: str) -> None:
+        if self._load_manifest().pop(name, None) is not None:
+            self._write_manifest()
+
     def _check_output_dir(self) -> None:
         """An arms build and a build without arms never share a folder, so a
         job over one folder never mixes arm tasks with other tasks."""
@@ -1282,6 +1291,15 @@ class CooperBenchAdapter:
             "# merged patch. main's own /workspace/repo is the untouched base.\n",
         )
         text = _swap(text, 'SEATS="agent1 agent2"\n', 'SEATS="agent1"\n')
+        text = _swap(  # one patch cannot conflict with itself
+            text,
+            'if [ "$MERGE_OK" -eq 0 ]; then\n'
+            '    write_results 0 false false 0 none "merge conflict"\n'
+            '    echo "Merge conflict between agent1 and agent2 patches" > "$OUT/test-output.txt"\n'
+            "    exit 0\n"
+            "fi\n",
+            "",
+        )
         return _swap_span(
             text,
             "git checkout -q agent2_branch\nMERGE_OK=0\n",

@@ -391,7 +391,9 @@ uv run cooperbench --seats --arms solo silent talk --subset flash   # into datas
   patches in turn.
 - With `--arms`, each task gets an opaque name, `cb-<12 hex>`, chosen at
   random when the task is first built; a rebuild into the same folder keeps
-  it. A seat can read its trial's container names through reverse DNS, and
+  it. `manifest.json` lists exactly the arm tasks on disk: a task's entry is
+  written once the task is complete, and removed with its folder (a failed
+  rebuild removes both, and the next build picks a new name). A seat can read its trial's container names through reverse DNS, and
   Harbor derives them from the task folder; Flotilla found a seat doing it.
   `manifest.json` in the output folder maps each name to its pair and arm,
   and `task.toml` `[metadata]` has `arm` and `pair`. No seat reads either.
