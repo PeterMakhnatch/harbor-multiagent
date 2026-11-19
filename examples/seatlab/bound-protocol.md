@@ -1,0 +1,7 @@
+# Can a retained view be linked to an actual client action?
+
+This extension adds an optional HTTP acknowledgment to the existing Dispatch Handoff task. A client must compute the SHA-256 digest of the canonical decoded role view it actually received and place it on its action request. The world compares it with the view for that seat and records it only after it accepts the action. Old native runs and clients without that header remain valid, with no acknowledgment.
+
+Before executing the change, register 2 independent arrival-policy Docker panels with `seeds=1001,1003`, `conditions=fresh,reordered` and `episodes=12`: 8 new trials. Compare all actor-stage data and scores within the new panels. Also compare each seed and condition with the previous uninstrumented held-out panel. Expect identical public views and choices, with bound receipts replacing unknown acknowledgment only for the new runs. A missing receipt, unexpected score, or changed action is a result, not a reason to drop a cell. A separate 1-trial stock oracle control uses the `pooled` condition, seed 1001 and 12 shipments: dispatch is active and inventory is deliberately inactive.
+
+The digest covers canonical JSON values, not HTTP response bytes, timing, an execution identity, or a model's understanding. Exactly matching hashes establish only that a client submitted a commitment consistent with the trusted world's role view. This validation does not turn the fixture into an adversarial isolation boundary or remote attestation service.
