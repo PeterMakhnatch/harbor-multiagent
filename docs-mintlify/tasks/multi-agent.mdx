@@ -131,6 +131,8 @@ The container's image, environment variables, volumes and networks come from Com
 
 Harbor creates `/logs/agent` in each agent's container. The harness writes its logs there, and Harbor copies them out after the run.
 
+Container, network and volume names do not carry the task name, so an agent cannot read its task's condition or role from them. Harbor names the Compose project `hb-` and a hash of the trial's session id: a reverse DNS lookup of another container returns a name such as `hb-15a2f00b60a6-main-1.hb-15a2f00b60a6_play`. A bind mount still shows its host path in `/proc/self/mountinfo`, and a path in the task's directory contains the task name. Share files through named volumes, not bind mounts.
+
 ### Sharing an agent's files with the verifier
 
 The verifier runs in `main`. To let it read files from an agent's container, share a named volume:
