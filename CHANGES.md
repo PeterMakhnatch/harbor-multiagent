@@ -19,6 +19,7 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. |
 | `src/harbor/models/job/lock.py` | Records participants in `lock.json` and its equality, so a changed roster is a changed run. |
 | `src/harbor/models/trial/result.py` | `SeatResult` and `TrialResult.seat_results`; seat errors count as recorded errors and seat usage counts in the token and cost totals. |
+| `src/harbor/upload/uploader.py`, `tests/unit/test_uploader.py` | The trial archive's allowlist had no `seats/`, so an uploaded seat trial lost every agent's logs and trajectory; it keeps `seats/<seat>/agent` now. Token and cost usage came from `agent_result`, which a seat trial leaves empty; a seat trial now gets one `trial_model` row per model in `seat_results`, with the usage of that model's seats summed. Tradeoff: the trial row still names one agent, the first agent under test, and the direct `trajectory.json` upload stays empty for a seat trial; both hold one value per trial. |
 | `src/harbor/environments/base.py` | `service_upload_file` and `service_upload_dir`, raising the existing unsupported-service error off `main`. |
 | `src/harbor/environments/docker/docker.py` | Docker's `service_upload_file` and `service_upload_dir`. |
 | `src/harbor/environments/docker/docker_unix.py` | The upload helpers take a service; they were hard-coded to `main`. |

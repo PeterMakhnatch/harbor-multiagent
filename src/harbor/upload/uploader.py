@@ -15,10 +15,11 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from harbor.db.types import PublicJobVisibility
+from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import TrialLock
 from harbor.models.job.result import JobResult
-from harbor.models.trial.result import TrialResult
+from harbor.models.trial.result import ModelInfo, TrialResult
 from harbor.upload.db_client import OwnerOrgError, UploadDB
 from harbor.upload.storage import UploadStorage
 
@@ -106,6 +107,11 @@ _STEP_ARCHIVE_INCLUDES: tuple[str, ...] = (
     "verifier",
     "artifacts",
 )
+
+# Per-seat archive entries under ``seats/{seat}/``. A multi-agent trial keeps
+# each agent's logs and trajectory in ``seats/{seat}/agent``; its root
+# ``agent/`` stays empty.
+_SEAT_ARCHIVE_INCLUDES: tuple[str, ...] = ("agent",)
 
 # Per-job archive: job-level allowlist + every trial subdir, each filtered
 # through `_TRIAL_ARCHIVE_INCLUDES`. Consumed by `harbor job download`.
@@ -532,15 +538,12 @@ class Uploader:
                 agent_cache[agent_key] = await self.db.upsert_agent(
                     tr.agent_info.name, tr.agent_info.version
                 )
-            if tr.agent_info.model_info is not None:
-                model_key = (
-                    tr.agent_info.model_info.name,
-                    tr.agent_info.model_info.provider,
-                )
+            for model_info, _ in _trial_model_usage(tr):
+                model_key = (model_info.name, model_info.provider)
                 if model_key not in model_cache:
                     model_cache[model_key] = await self.db.upsert_model(
-                        tr.agent_info.model_info.name,
-                        tr.agent_info.model_info.provider,
+                        model_info.name,
+                        model_info.provider,
                     )
         return agent_cache, model_cache
 
@@ -596,19 +599,17 @@ class Uploader:
                     )
                 agent_id = agent_cache[agent_key]
 
-            model_id: str | None = None
-            if trial_result.agent_info.model_info is not None:
-                model_key = (
-                    trial_result.agent_info.model_info.name,
-                    trial_result.agent_info.model_info.provider,
-                )
+            # One trial_model row per model the trial ran, with its usage.
+            model_usage: list[tuple[str, AgentContext | None]] = []
+            for model_info, usage in _trial_model_usage(trial_result):
+                model_key = (model_info.name, model_info.provider)
                 async with self._model_cache_lock:
                     if model_key not in model_cache:
                         model_cache[model_key] = await self.db.upsert_model(
-                            trial_result.agent_info.model_info.name,
-                            trial_result.agent_info.model_info.provider,
+                            model_info.name,
+                            model_info.provider,
                         )
-                    model_id = model_cache[model_key]
+                    model_usage.append((model_cache[model_key], usage))
 
             # Reserve the trial before writing Storage. Conflict-safe inserts
             # let an interrupted or concurrent attempt continue without
@@ -659,21 +660,14 @@ class Uploader:
                 ),
             )
 
-            if model_id is not None:
-                agent_result = trial_result.agent_result
+            for model_id, usage in model_usage:
                 await self.db.insert_trial_model(
                     trial_id=trial_result.id,
                     model_id=model_id,
-                    n_input_tokens=(
-                        agent_result.n_input_tokens if agent_result else None
-                    ),
-                    n_cache_tokens=(
-                        agent_result.n_cache_tokens if agent_result else None
-                    ),
-                    n_output_tokens=(
-                        agent_result.n_output_tokens if agent_result else None
-                    ),
-                    cost_usd=agent_result.cost_usd if agent_result else None,
+                    n_input_tokens=usage.n_input_tokens if usage else None,
+                    n_cache_tokens=usage.n_cache_tokens if usage else None,
+                    n_output_tokens=usage.n_output_tokens if usage else None,
+                    cost_usd=usage.cost_usd if usage else None,
                 )
 
             # Now that the row exists (authorizing the storage write), upload
@@ -767,6 +761,52 @@ def _load_job_from_disk(
     return job_result, job_config, trial_results, trial_dirs
 
 
+def _trial_model_usage(
+    trial_result: TrialResult,
+) -> list[tuple[ModelInfo, AgentContext | None]]:
+    """Each model a trial ran, with the token and cost usage recorded for it.
+
+    A single-agent trial has its agent's model and ``agent_result``. A
+    multi-agent trial has no ``agent_result``; each seat in ``seat_results``
+    has its own agent, model and usage, and seats on the same model are
+    summed, as ``TrialResult.compute_token_cost_totals`` sums all seats.
+    """
+    if not trial_result.seat_results:
+        model_info = trial_result.agent_info.model_info
+        return [] if model_info is None else [(model_info, trial_result.agent_result)]
+    seats_by_model: dict[
+        tuple[str, str | None], tuple[ModelInfo, list[AgentContext]]
+    ] = {}
+    for seat in trial_result.seat_results:
+        model_info = seat.agent_info.model_info if seat.agent_info else None
+        if model_info is None:
+            continue
+        key = (model_info.name, model_info.provider)
+        _, contexts = seats_by_model.setdefault(key, (model_info, []))
+        if seat.agent_result is not None:
+            contexts.append(seat.agent_result)
+    return [
+        (model_info, _sum_usage(contexts) if contexts else None)
+        for model_info, contexts in seats_by_model.values()
+    ]
+
+
+def _sum_usage(contexts: list[AgentContext]) -> AgentContext:
+    """Token counts and cost summed over contexts; a field none of them
+    recorded stays None."""
+
+    def total(values: list[Any]) -> Any:
+        known = [value for value in values if value is not None]
+        return sum(known) if known else None
+
+    return AgentContext(
+        n_input_tokens=total([c.n_input_tokens for c in contexts]),
+        n_cache_tokens=total([c.n_cache_tokens for c in contexts]),
+        n_output_tokens=total([c.n_output_tokens for c in contexts]),
+        cost_usd=total([c.cost_usd for c in contexts]),
+    )
+
+
 def _timing_field(timing: object | None, field: str) -> datetime | None:
     if timing is None:
         return None
@@ -849,18 +889,21 @@ def _add_trial_archive_entries(
         if path.exists():
             tar.add(path, arcname=f"{arcname_prefix}{name}")
 
-    steps_dir = trial_dir / "steps"
-    if not steps_dir.exists():
-        return
-
-    for step_dir in sorted(p for p in steps_dir.iterdir() if p.is_dir()):
-        for name in _STEP_ARCHIVE_INCLUDES:
-            path = step_dir / name
-            if path.exists():
-                tar.add(
-                    path,
-                    arcname=f"{arcname_prefix}steps/{step_dir.name}/{name}",
-                )
+    for subtree, includes in (
+        ("steps", _STEP_ARCHIVE_INCLUDES),
+        ("seats", _SEAT_ARCHIVE_INCLUDES),
+    ):
+        subtree_dir = trial_dir / subtree
+        if not subtree_dir.exists():
+            continue
+        for child_dir in sorted(p for p in subtree_dir.iterdir() if p.is_dir()):
+            for name in includes:
+                path = child_dir / name
+                if path.exists():
+                    tar.add(
+                        path,
+                        arcname=f"{arcname_prefix}{subtree}/{child_dir.name}/{name}",
+                    )
 
 
 def _create_job_archive_file(job_dir: Path, archive_path: Path) -> None:

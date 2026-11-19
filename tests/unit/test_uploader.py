@@ -16,6 +16,7 @@ from harbor.models.job.result import JobResult, JobStats
 from harbor.models.trial.config import (
     AgentConfig,
     EnvironmentConfig,
+    Participant,
     TaskConfig,
     TrialConfig,
 )
@@ -23,6 +24,7 @@ from harbor.models.trial.result import (
     AgentInfo,
     ExceptionInfo,
     ModelInfo,
+    SeatResult,
     TimingInfo,
     TrialResult,
 )
@@ -1567,3 +1569,213 @@ def test_archives_keep_both_conversation_roles_and_uploaded_inputs(
             assert member is not None
             assert member.read() == contents.encode("utf-8")
         assert prefix + "unrelated-secret.txt" not in tar.getnames()
+
+
+# A multi-agent trial keeps each agent's logs and trajectory in
+# seats/<seat>/agent and its usage in seat_results; its root agent/ is empty
+# and its agent_result is None.
+SEAT_TRIAL_NAME = "hello-seats__seats"
+SEAT_MODEL = ModelInfo(name="deepseek/deepseek-v4-flash", provider="openrouter")
+SEAT_USAGE = {
+    "p1": AgentContext(
+        n_input_tokens=1000, n_cache_tokens=600, n_output_tokens=100, cost_usd=0.25
+    ),
+    "p2": AgentContext(
+        n_input_tokens=500, n_cache_tokens=300, n_output_tokens=50, cost_usd=0.125
+    ),
+}
+
+
+def _seat_agent_info(model_info: ModelInfo = SEAT_MODEL) -> AgentInfo:
+    return AgentInfo(name="terminus-2", version="2.0.0", model_info=model_info)
+
+
+def _make_seat_trial_result() -> TrialResult:
+    """A finished two-seat trial: p1 under test and p2 supporting, both
+    terminus-2 on one model."""
+    task_config = TaskConfig(path=Path("/tmp/hello-seats"))
+    seats = ("p1", "p2")
+    return TrialResult(
+        task_name="hello-seats",
+        trial_name=SEAT_TRIAL_NAME,
+        trial_uri=f"file:///trials/{SEAT_TRIAL_NAME}",
+        task_id=task_config.get_task_id(),
+        task_checksum="deadbeef",
+        config=TrialConfig(
+            task=task_config,
+            trial_name=SEAT_TRIAL_NAME,
+            job_id=uuid4(),
+            participants=[
+                Participant(
+                    seat=seat,
+                    name="terminus-2",
+                    model_name="openrouter/deepseek/deepseek-v4-flash",
+                )
+                for seat in seats
+            ],
+        ),
+        agent_info=_seat_agent_info(),
+        seat_results=[
+            SeatResult(
+                seat=seat,
+                under_test=seat == "p1",
+                agent_info=_seat_agent_info(),
+                agent_result=SEAT_USAGE[seat].model_copy(),
+            )
+            for seat in seats
+        ],
+        verifier_result=VerifierResult(rewards={"reward": 1}),
+        started_at=datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc),
+        finished_at=datetime(2026, 4, 17, 10, 5, 0, tzinfo=timezone.utc),
+    )
+
+
+def _write_seat_trial_dir(parent: Path, trial_result: TrialResult) -> Path:
+    trial_dir = parent / trial_result.trial_name
+    trial_dir.mkdir(parents=True)
+    (trial_dir / "result.json").write_text(trial_result.model_dump_json())
+    (trial_dir / "config.json").write_text(
+        trial_result.config.model_dump_json(exclude={"agent"})
+    )
+    _write_trial_lock(trial_dir, task_name=trial_result.task_name, digest="a" * 64)
+    (trial_dir / "agent").mkdir()
+    for seat in trial_result.seat_results or []:
+        agent_dir = trial_dir / "seats" / seat.seat / "agent"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "trajectory.json").write_text(
+            json.dumps({"session_id": f"{SEAT_TRIAL_NAME}__{seat.seat}", "steps": []})
+        )
+    (trial_dir / "verifier").mkdir()
+    (trial_dir / "verifier" / "reward.txt").write_text("1")
+    return trial_dir
+
+
+def _write_seat_job_dir(
+    tmp_path: Path, trial_result: TrialResult | None = None
+) -> Path:
+    trial_result = trial_result or _make_seat_trial_result()
+    job_dir = tmp_path / "seat-job"
+    _write_seat_trial_dir(job_dir, trial_result)
+    job_result = JobResult(
+        id=uuid4(),
+        started_at=trial_result.started_at,
+        finished_at=trial_result.finished_at,
+        n_total_trials=1,
+        stats=JobStats.from_trial_results([trial_result]),
+        trial_results=[trial_result],
+    )
+    (job_dir / "result.json").write_text(job_result.model_dump_json())
+    (job_dir / "config.json").write_text(
+        JobConfig(job_name="seat-job").model_dump_json()
+    )
+    return job_dir
+
+
+def _p2_on_another_model(trial_result: TrialResult) -> TrialResult:
+    p2 = (trial_result.seat_results or [])[1]
+    p2.agent_info = _seat_agent_info(
+        ModelInfo(name="claude-test", provider="anthropic")
+    )
+    return trial_result
+
+
+class TestSeatTrialUpload:
+    def test_trial_archive_includes_each_seat(self, tmp_path: Path) -> None:
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        (trial_dir / "seats" / "p1" / "scratch.txt").write_text("not an output")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            names = set(tar.getnames())
+        assert "seats/p1/agent/trajectory.json" in names
+        assert "seats/p2/agent/trajectory.json" in names
+        assert "seats/p1/scratch.txt" not in names
+
+    def test_job_archive_includes_each_seat(self, tmp_path: Path) -> None:
+        job_dir = _write_seat_job_dir(tmp_path)
+
+        names = _job_archive_names(job_dir, tmp_path)
+
+        prefix = f"{job_dir.name}/{SEAT_TRIAL_NAME}"
+        assert f"{prefix}/seats/p1/agent/trajectory.json" in names
+        assert f"{prefix}/seats/p2/agent/trajectory.json" in names
+
+    @pytest.mark.asyncio
+    async def test_records_the_seats_usage_on_their_model(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        job_dir = _write_seat_job_dir(tmp_path)
+
+        result = await mock_uploader.upload_job(job_dir)
+
+        assert result.n_trials_uploaded == 1
+        mock_uploader.db.upsert_model.assert_awaited_once_with(
+            "deepseek/deepseek-v4-flash", "openrouter"
+        )
+        mock_uploader.db.insert_trial_model.assert_awaited_once()
+        row = mock_uploader.db.insert_trial_model.await_args.kwargs
+        assert row["model_id"] == "model-deepseek/deepseek-v4-flash-openrouter"
+        # p1 + p2 from seat_results.
+        assert (
+            row["n_input_tokens"],
+            row["n_cache_tokens"],
+            row["n_output_tokens"],
+            row["cost_usd"],
+        ) == (1500, 900, 150, 0.375)
+
+    @pytest.mark.asyncio
+    async def test_records_each_seat_model_separately(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        job_dir = _write_seat_job_dir(
+            tmp_path, _p2_on_another_model(_make_seat_trial_result())
+        )
+
+        await mock_uploader.upload_job(job_dir)
+
+        assert [
+            call.args for call in mock_uploader.db.upsert_model.await_args_list
+        ] == [
+            ("deepseek/deepseek-v4-flash", "openrouter"),
+            ("claude-test", "anthropic"),
+        ]
+        rows = {
+            call.kwargs["model_id"]: (
+                call.kwargs["n_input_tokens"],
+                call.kwargs["n_cache_tokens"],
+                call.kwargs["n_output_tokens"],
+                call.kwargs["cost_usd"],
+            )
+            for call in mock_uploader.db.insert_trial_model.await_args_list
+        }
+        assert rows == {
+            "model-deepseek/deepseek-v4-flash-openrouter": (1000, 600, 100, 0.25),
+            "model-claude-test-anthropic": (500, 300, 50, 0.125),
+        }
+
+    @pytest.mark.asyncio
+    async def test_streaming_upload_records_each_seat_model(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        """`harbor run --upload` uploads each trial with caches that start empty."""
+        trial_result = _p2_on_another_model(_make_seat_trial_result())
+        trial_dir = _write_seat_trial_dir(tmp_path, trial_result)
+
+        result = await mock_uploader.upload_single_trial(
+            trial_result=trial_result,
+            trial_dir=trial_dir,
+            trial_lock=_read_trial_lock_for_upload(trial_dir),
+            job_id=uuid4(),
+            agent_cache={},
+            model_cache={},
+        )
+
+        assert result.error is None
+        assert mock_uploader.db.insert_trial_model.await_count == 2
+        # The trial row has one agent: agent_info, the first agent under test.
+        mock_uploader.db.upsert_agent.assert_awaited_once_with("terminus-2", "2.0.0")
+        # There is no root agent/trajectory.json; the seats' trajectories are
+        # in the archive only.
+        finalize = mock_uploader.db.finalize_trial_artifacts.await_args.kwargs
+        assert finalize["trajectory_path"] is None

@@ -249,7 +249,7 @@ The job summary reports each key.
 
 ## Logs and results
 
-- `seats/<service>/agent/`: the agent's logs, and its `trajectory.json` if the harness writes one.
+- `seats/<service>/agent/`: the agent's logs, and its `trajectory.json` if the harness writes one. `harbor upload` keeps this folder in the trial and job archives, so `harbor trial download` and `harbor job download` restore it.
 - `result.json`:
   - `config` has `participants`.
   - `agent_info` is the first agent under test.
@@ -267,3 +267,4 @@ The job summary reports each key.
 - A multi-agent task cannot have `[[steps]]`.
 - Multi-agent trials cannot be regraded.
 - Participants cannot set `override_timeout_sec`, `max_timeout_sec`, `n_concurrent`, `concurrency_group`, `skills`, `load_trajectory` or `extra_allowed_hosts`.
+- On the Hub, an uploaded seat trial names one agent, the first agent under test, and has no direct trajectory link. Its tokens and cost are recorded for each model in `seat_results`, summed over the seats on that model.
