@@ -162,10 +162,16 @@ condition (won = found and final answer right):
   Seats often post "the slot is X, submitting now" and submit on their next turn: 3 to 6 s later in the
   canonical runs, while proposals and candidate lists came 13 s or more before.
 
-For `schedule`, `carries_own_data` is true when the text names one of the sender's own attendees and a
-weekday with an hour ("Ana: Mon 09,10", "Ana:M9,15 T12", JSON calendars, or derived free windows
-"for Ana, Chen: Tue 13:00"), after leaving out format examples in parentheses or quotes after "e.g.",
-"like" or "format". A request names the receiver's attendees or nobody, so it does not count.
+For `schedule`, `carries_own_data` first leaves out format examples and hints: a parenthesis or
+quotation after "e.g.", "like" or "format", and the rest of a line (or of its parenthesis) after
+"format", "e.g.", "example", "such as" or "like:" ("Use format: Name: Mon 10,11"). It reads day-and-hour
+mentions in the forms seats write ("Mon 09", "Ana:M9,15 T12", "AM9", JSON calendars, positional weeks
+"15/9,13/10,14/13,16/9,11"). A mention does not count when it belongs to an attendee the sender does not
+hold or to another seat's claim ("Your Ben: Mon 9", "p1 said Wed 09"). The message carries data when a
+mention is left and it names one of the sender's attendees (a name, an initial right before data such as
+"B:M11", or a group of the sender's initials such as "A,C,K"), or when 3 or more mentions are left (a
+calendar or candidate list without names). A request names the receiver's attendees or nobody, so it
+does not count.
 `answer_in_text` reads weekday-and-hour mentions ("Thursday 14:00-16:00", "Thu 2pm") and written-out
 answer objects and scores them with the family scorer; a busy list "Thu 13,14" names only (Thu, 13).
 A measure that needs a hook the family module lacks is unknown, unless no message qualifies (then it
@@ -191,11 +197,12 @@ requests by event kind (send, deliver, submit, whoami, denied, probe) and except
   and a seat that saves `GET /messages` to a file and parses it with a script uses the messages without
   seeing them (observed with GPT-OSS-120B in the 3-seat liar runs).
 - The acted-on proxy is generic and coarse; family-specific measures can replace it later.
-- The `schedule` text hooks are heuristics. On the canonical c1 talk trials they agree with a manual
-  reading (35 of 36 solvers had teammate data; 1 of 6 overwriters had the solver's data). They miss data
-  written with initials or without any attendee name ("A,C,K free: T11", "my free slots: Mon 11"), which
-  the narrow channel (c4) produced often, and they count a request that names the sender's own attendees
-  next to an unmarked example ("I have Ana; send yours as Mon 09,10"). *Received* means fetched, not read.
+- The `schedule` text hooks are heuristics. On the canonical talk trials they agree with an independent
+  manual reading: in c1, 35 of 36 solvers had teammate data and 1 of 6 overwriters had the solver's data;
+  in c4, 18 of 24 solvers had teammate data (the reading found at least 17); the c3 verdicts it checked
+  agree too. They do not count 1 or 2 candidate windows without a name ("Thu11 and Thu13 work for me"),
+  and they count a request that names the sender's own attendees next to an unmarked example ("I have
+  Ana; send yours as Mon 09,10"). *Received* means fetched, not read.
 - A task folder rebuilt with the same instances passes the score check even if other files (for
   example a newer world) changed; the world version then follows the folder unless the trial's own
   events record it. A `world_version` field in the world's `start` event would make it exact.

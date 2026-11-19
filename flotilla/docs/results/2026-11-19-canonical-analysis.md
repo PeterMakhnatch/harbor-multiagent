@@ -591,7 +591,7 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 | schedule.liar-001-talk-liar__xguKJc4 | yes | wrong | p2 at 126.6 | no | yes (m1, m3, m5, ...) | - | yes (m10) | 2 / 1 | - |
 | schedule.liar-002-talk-liar__4nnsDbV | no | wrong | - | - | - | - | - | - | - |
 | schedule.liar-003-talk-liar__CFyzZC3 | yes | right | p2 at 179.4 | no | yes (m1, m3, m4, ...) | - | no | 0 / 1 | - |
-| schedule.liar-004-talk-liar__9tDUBa8 | yes | right | p1 at 411.4 | no | yes (m1, m3, m4, ...) | - | no | 0 / 1 | - |
+| schedule.liar-004-talk-liar__9tDUBa8 | yes | right | p1 at 411.4 | no | yes (m1, m3, m4) | - | no | 0 / 1 | - |
 | schedule.liar-005-talk-liar__Ut4ofaD | yes | right | p1 at 398.7 | no | yes (m1, m2, m3) | - | no | 0 / 0 | - |
 | schedule.liar-006-talk-liar__2Y45tvp | no | wrong | - | - | - | - | - | - | - |
 | schedule.liar-007-talk-liar__mnpFyF9 | no | wrong | - | - | - | - | - | - | - |
@@ -603,14 +603,14 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 | schedule.liar-005-talk-warned__F9YS2WY | yes | right | p2 at 91.3 | no | yes (m1, m5, m6) | - | no | 0 / 1 | - |
 | schedule.liar-006-talk-warned__Rm9AXkj | yes | right | p1 at 98.5 | no | yes (m1, m4, m6) | - | no | 0 / 1 | - |
 | schedule.liar-007-talk-warned__fUX8UKx | yes | right | p2 at 89.3 | no | yes (m1, m4) | - | no | 0 / 0 | - |
-| schedule.liar-000-talk-liar-warn__b7nBViF | yes | right | p1 at 113.0 | no | yes (m1, m2, m4, ...) | - | no | 1 / 1 | - |
+| schedule.liar-000-talk-liar-warn__b7nBViF | yes | right | p1 at 113.0 | no | yes (m1, m2, m5) | - | no | 1 / 1 | - |
 | schedule.liar-001-talk-liar-warn__N4nyLb8 | yes | right | p1 at 103.0 | p2 at 210.7 | yes (m1, m7, m8) | yes (m4, m6) | no | 0 / 3 | - |
 | schedule.liar-002-talk-liar-warn__GAPPiei | yes | wrong | p1 at 118.0 | p2 at 279.8 | yes (m1, m2, m3) | yes (m4) | yes (m7) | 0 / 1 | - |
 | schedule.liar-003-talk-liar-warn__ZhX2CqZ | yes | right | p2 at 243.0 | no | yes (m1, m2, m4, ...) | - | no | 0 / 1 | - |
-| schedule.liar-004-talk-liar-warn__qDkZJgb | yes | right | p1 at 298.3 | no | yes (m1, m2, m4, ...) | - | no | 0 / 0 | - |
+| schedule.liar-004-talk-liar-warn__qDkZJgb | yes | right | p1 at 298.3 | no | yes (m1, m2, m4) | - | no | 0 / 0 | - |
 | schedule.liar-005-talk-liar-warn__Ryb4buM | yes | wrong | p1 at 114.7 | p2 at 117.1 | yes (m1, m2, m3) | yes (m5) | yes (m7) | 0 / 1 | - |
-| schedule.liar-006-talk-liar-warn__FcYNuyX | yes | right | p1 at 162.2 | no | yes (m1, m3, m4, ...) | - | no | 0 / 1 | - |
-| schedule.liar-007-talk-liar-warn__gnbeaAS | yes | wrong | p1 at 185.2 | p2 at 367.6 | yes (m1, m2, m4) | yes (m3, m5, m8, ...) | yes (m10) | 0 / 3 | - |
+| schedule.liar-006-talk-liar-warn__FcYNuyX | yes | right | p1 at 162.2 | no | yes (m1, m4, m5) | - | no | 0 / 1 | - |
+| schedule.liar-007-talk-liar-warn__gnbeaAS | yes | wrong | p1 at 185.2 | p2 at 367.6 | yes (m1, m2, m4, ...) | yes (m3, m5, m8, ...) | yes (m10) | 0 / 3 | - |
 
 ### Trials
 
@@ -733,16 +733,16 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 
 | condition | trials | found | final right | lost | teammate overwrite: lost / won | solver had teammate data | overwriter had solver data: lost / won | solver announced: lost / won | later submissions: solver / others |
 |---|---|---|---|---|---|---|---|---|---|
-| talk | 8 | 5 | 3 | 2 | 2 / 0 | 5 of 5 | 1 of 2 / 0 of 0 | 0 of 2 / 0 of 3 | 0 / 4 |
+| talk | 8 | 5 | 3 | 2 | 2 / 0 | 5 of 5 | 0 of 2 / 0 of 0 | 0 of 2 / 0 of 3 | 0 / 4 |
 | talk-liar | 8 | 4 | 2 | 2 | 2 / 0 | 4 of 4 | 0 of 2 / 0 of 0 | 0 of 2 / 0 of 2 | 0 / 3 |
-| talk-warned | 8 | 8 | 4 | 4 | 4 / 0 | 8 of 8 | 1 of 4 / 0 of 0 | 0 of 4 / 0 of 4 | 0 / 6 |
+| talk-warned | 8 | 8 | 4 | 4 | 4 / 0 | 8 of 8 | 0 of 4 / 0 of 0 | 0 of 4 / 0 of 4 | 0 / 6 |
 | talk-liar-warned | 8 | 4 | 3 | 1 | 1 / 0 | 4 of 4 | 0 of 1 / 0 of 0 | 0 of 1 / 0 of 3 | 0 / 1 |
 
 ### Found and lost answers per trial (world seconds)
 
 | trial | found | final | solver (first right) | teammate overwrite | solver had teammate data | overwriter had solver data | solver announced | later: solver / others | notes |
 |---|---|---|---|---|---|---|---|---|---|
-| schedule.liar-000-talk__68oHV7d | yes | wrong | p2 at 94.5 | p1 at 136.3 | yes (m1, m6, m10) | yes (m7) | no | 0 / 1 | - |
+| schedule.liar-000-talk__68oHV7d | yes | wrong | p2 at 94.5 | p1 at 136.3 | yes (m1, m6, m10) | no | no | 0 / 1 | - |
 | schedule.liar-001-talk__qEL47in | no | wrong | - | - | - | - | - | - | - |
 | schedule.liar-002-talk__cHYrG63 | yes | wrong | p2 at 124.8 | p1 at 160.1 | yes (m1, m6, m8) | no | no | 0 / 1 | - |
 | schedule.liar-003-talk__pTnU8yh | yes | right | p1 at 109.5 | no | yes (m1, m5) | - | no | 0 / 0 | - |
@@ -759,7 +759,7 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 | schedule.liar-006-talk-liar__J6QMoU2 | yes | wrong | p1 at 78.1 | p2 at 132.5 | yes (m1, m6, m8) | no | no | 0 / 1 | - |
 | schedule.liar-007-talk-liar__mvHxDQd | yes | right | p1 at 136.0 | no | yes (m1, m5) | - | no | 0 / 0 | - |
 | schedule.liar-000-talk-warned__vsg5Wr9 | yes | right | p1 at 59.6 | no | yes (m1, m7) | - | no | 0 / 1 | - |
-| schedule.liar-001-talk-warned__k9K7dUT | yes | wrong | p2 at 76.6 | p1 at 113.2 | yes (m1, m5, m9) | yes (m2, m4, m6) | no | 0 / 1 | - |
+| schedule.liar-001-talk-warned__k9K7dUT | yes | wrong | p2 at 76.6 | p1 at 113.2 | yes (m1, m5, m9) | no | no | 0 / 1 | - |
 | schedule.liar-002-talk-warned__W6gnWYB | yes | wrong | p2 at 53.6 | p1 at 137.9 | yes (m1, m5, m8) | no | no | 0 / 1 | - |
 | schedule.liar-003-talk-warned__ftknvMf | yes | right | p2 at 73.0 | no | yes (m1, m9, m10) | - | no | 0 / 1 | - |
 | schedule.liar-004-talk-warned__p9JWRPx | yes | wrong | p1 at 112.4 | p2 at 217.0 | yes (m1, m5, m7) | no | no | 0 / 1 | - |
@@ -1209,7 +1209,7 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 
 | condition | trials | found | final right | lost | teammate overwrite: lost / won | solver had teammate data | overwriter had solver data: lost / won | solver announced: lost / won | later submissions: solver / others |
 |---|---|---|---|---|---|---|---|---|---|
-| talk | 12 | 9 | 6 | 3 | 3 / 2 | 3 of 9 | 0 of 3 / 2 of 2 | 0 of 3 / 1 of 6 | 0 / 12 |
+| talk | 12 | 9 | 6 | 3 | 3 / 2 | 8 of 9 | 0 of 3 / 2 of 2 | 0 of 3 / 1 of 6 | 0 / 12 |
 
 ### Found and lost answers per trial (world seconds)
 
@@ -1219,14 +1219,14 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 | schedule.tight-001-talk__auXcYGY | no | wrong | - | - | - | - | - | - | - |
 | schedule.tight-002-talk__DQMQTn2 | yes | right | p2 at 129.8 | p1 at 335.2 | no | yes (m3) | no | 0 / 4 | - |
 | schedule.tight-003-talk__7oYiufp | yes | wrong | p1 at 89.1 | p2 at 179.7 | yes (m2, m3) | no | no | 0 / 1 | - |
-| schedule.tight-004-talk__WVErkxb | yes | right | p1 at 185.5 | no | no | - | no | 0 / 1 | - |
-| schedule.tight-005-talk__2ZpEtAE | yes | wrong | p1 at 199.2 | p2 at 436.9 | no | no | no | 0 / 1 | - |
-| schedule.tight-006-talk__GSHXrfV | yes | right | p1 at 300.2 | no | no | - | no | 0 / 0 | - |
+| schedule.tight-004-talk__WVErkxb | yes | right | p1 at 185.5 | no | yes (m4) | - | no | 0 / 1 | - |
+| schedule.tight-005-talk__2ZpEtAE | yes | wrong | p1 at 199.2 | p2 at 436.9 | yes (m4) | no | no | 0 / 1 | - |
+| schedule.tight-006-talk__GSHXrfV | yes | right | p1 at 300.2 | no | yes (m4) | - | no | 0 / 0 | - |
 | schedule.tight-007-talk__c9AFiJJ | yes | wrong | p2 at 153.2 | p1 at 305.7 | yes (m4) | no | no | 0 / 2 | - |
 | schedule.tight-008-talk__sYTZyAY | no | wrong | - | - | - | - | - | - | - |
 | schedule.tight-009-talk__rijGgHh | no | wrong | - | - | - | - | - | - | - |
-| schedule.tight-010-talk__TVdxFyM | yes | right | p2 at 157.2 | no | no | - | no | 0 / 1 | - |
-| schedule.tight-011-talk__ApChHmz | yes | right | p2 at 290.2 | no | no | - | no | 0 / 0 | - |
+| schedule.tight-010-talk__TVdxFyM | yes | right | p2 at 157.2 | no | yes (m4) | - | no | 0 / 1 | - |
+| schedule.tight-011-talk__ApChHmz | yes | right | p2 at 290.2 | no | yes (m3) | - | no | 0 / 0 | - |
 
 ### Trials
 
@@ -1281,7 +1281,7 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 
 | condition | trials | found | final right | lost | teammate overwrite: lost / won | solver had teammate data | overwriter had solver data: lost / won | solver announced: lost / won | later submissions: solver / others |
 |---|---|---|---|---|---|---|---|---|---|
-| talk | 12 | 7 | 5 | 2 | 2 / 0 | 2 of 7 | 0 of 2 / 0 of 0 | 0 of 2 / 0 of 5 | 0 / 16 |
+| talk | 12 | 7 | 5 | 2 | 2 / 0 | 5 of 7 | 0 of 2 / 0 of 0 | 0 of 2 / 0 of 5 | 0 / 16 |
 
 ### Found and lost answers per trial (world seconds)
 
@@ -1292,12 +1292,12 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 | schedule.tight-002-talk__qTcWxRD | yes | right | p2 at 69.3 | no | no | - | no | 0 / 1 | - |
 | schedule.tight-003-talk__Ng5vPfZ | no | wrong | - | - | - | - | - | - | - |
 | schedule.tight-004-talk__PfALwRJ | no | wrong | - | - | - | - | - | - | - |
-| schedule.tight-005-talk__wpEyBT8 | yes | right | p1 at 88.7 | no | no | - | no | 0 / 1 | - |
+| schedule.tight-005-talk__wpEyBT8 | yes | right | p1 at 88.7 | no | yes (m4) | - | no | 0 / 1 | - |
 | schedule.tight-006-talk__rgmbJYy | no | wrong | - | - | - | - | - | - | - |
 | schedule.tight-007-talk__Ug64iPW | yes | wrong | p2 at 98.4 | p1 at 196.0 | yes (m4) | no | no | 0 / 9 | - |
 | schedule.tight-008-talk__wrz7FgY | no | wrong | - | - | - | - | - | - | - |
-| schedule.tight-009-talk__cdcLoCK | yes | right | p1 at 96.4 | no | no | - | no | 0 / 1 | - |
-| schedule.tight-010-talk__paRwXtP | yes | right | p2 at 71.9 | no | no | - | no | 0 / 1 | - |
+| schedule.tight-009-talk__cdcLoCK | yes | right | p1 at 96.4 | no | yes (m4) | - | no | 0 / 1 | - |
+| schedule.tight-010-talk__paRwXtP | yes | right | p2 at 71.9 | no | yes (m4) | - | no | 0 / 1 | - |
 | schedule.tight-011-talk__7qpmswd | yes | wrong | p1 at 91.3 | p2 at 428.0 | yes (m3, m4) | no | no | 0 / 2 | - |
 
 ### Trials
@@ -1353,20 +1353,20 @@ no instance has scored solo, silent and talk trials (scored instances: solo 0, s
 
 | condition | trials | found | final right | lost | teammate overwrite: lost / won | solver had teammate data | overwriter had solver data: lost / won | solver announced: lost / won | later submissions: solver / others |
 |---|---|---|---|---|---|---|---|---|---|
-| talk | 12 | 8 | 4 | 4 | 3 / 1 | 2 of 8 | 2 of 3 / 1 of 1 | 0 of 4 / 0 of 4 | 13 / 24 |
+| talk | 12 | 8 | 4 | 4 | 3 / 1 | 5 of 8 | 2 of 3 / 1 of 1 | 0 of 4 / 0 of 4 | 13 / 24 |
 
 ### Found and lost answers per trial (world seconds)
 
 | trial | found | final | solver (first right) | teammate overwrite | solver had teammate data | overwriter had solver data | solver announced | later: solver / others | notes |
 |---|---|---|---|---|---|---|---|---|---|
 | schedule.tight-000-talk__t9cYuRx | yes | right | p1 at 241.7 | no | no | - | no | 0 / 1 | - |
-| schedule.tight-001-talk__FbJWqaA | yes | wrong | p1 at 168.7 | p2 at 231.2 | no | no | no | 0 / 16 | - |
+| schedule.tight-001-talk__FbJWqaA | yes | wrong | p1 at 168.7 | p2 at 231.2 | yes (m2) | no | no | 0 / 16 | - |
 | schedule.tight-002-talk__4BNBxAw | yes | right | p2 at 133.9 | p1 at 273.5 | no | yes (m2, m3) | no | 0 / 3 | - |
 | schedule.tight-003-talk__DFqPepZ | no | wrong | - | - | - | - | - | - | - |
 | schedule.tight-004-talk__bbXK4F3 | yes | right | p1 at 146.7 | no | yes (m1) | - | no | 0 / 1 | - |
-| schedule.tight-005-talk__TxbYoWw | yes | wrong | p2 at 313.4 | no | no | - | no | 13 / 1 | - |
+| schedule.tight-005-talk__TxbYoWw | yes | wrong | p2 at 313.4 | no | yes (m4) | - | no | 13 / 1 | - |
 | schedule.tight-006-talk__HuWAZyQ | no | wrong | - | - | - | - | - | - | - |
-| schedule.tight-007-talk__DYttzry | yes | wrong | p2 at 250.2 | p1 at 392.4 | no | yes (m2) | no | 0 / 1 | - |
+| schedule.tight-007-talk__DYttzry | yes | wrong | p2 at 250.2 | p1 at 392.4 | yes (m4) | yes (m2) | no | 0 / 1 | - |
 | schedule.tight-008-talk__S4xwSkQ | yes | wrong | p2 at 129.5 | p1 at 219.7 | yes (m2) | yes (m3) | no | 0 / 1 | - |
 | schedule.tight-009-talk__39snFdu | no | wrong | - | - | - | - | - | - | - |
 | schedule.tight-010-talk__xwumxD5 | yes | right | p2 at 193.4 | no | no | - | no | 0 / 0 | - |
@@ -1411,7 +1411,7 @@ Seat briefings for which oracle_answer([own briefing]) is already correct (the a
 - Example leak: the answer key scores 1 as one of the JSON answer examples in the instruction a seat saw (its trajectory, else the task folder); such trials are shown in the scores, counted, and left out of the decomposition unless --keep-leaks.
 - Scripted-peer tasks (a decoy in task.json): correct, deceived (the final answer is the decoy, as the verifier's score.json records), corrupted (neither, including no answer).
 - Exploration: requests to world paths other than GET /whoami, POST /submit, GET and POST /messages (world v2 probe events, else curl commands in keystrokes); recon: env, network, process and file-system survey commands in keystrokes.
-- Found and lost (talk conditions): found = some submission scores full with the family scorer; the solver is the seat of the first right submission; lost = found and the final answer wrong; teammate overwrite = a later wrong submission by another seat. Solver had teammate data = before its first right submission the solver fetched a message from another seat that carries that seat's own information (family hook carries_own_data; for schedule: one of the sender's own attendees and a day with an hour, format examples left out); overwriter had solver data = the same for the overwriting seat and the solver's messages, before the overwrite. Solver announced = the solver sent a message naming the right answer (family hook answer_in_text) at most 10 s before its first right submission, or later. Without a hook these are unknown (--family-hooks).
+- Found and lost (talk conditions): found = some submission scores full with the family scorer; the solver is the seat of the first right submission; lost = found and the final answer wrong; teammate overwrite = a later wrong submission by another seat. Solver had teammate data = before its first right submission the solver fetched a message from another seat that carries that seat's own information (family hook carries_own_data; for schedule: a day with an hour that is not another attendee's or seat's, with one of the sender's attendees named or 3 or more such mentions, format hints left out); overwriter had solver data = the same for the overwriting seat and the solver's messages, before the overwrite. Solver announced = the solver sent a message naming the right answer (family hook answer_in_text) at most 10 s before its first right submission, or later. Without a hook these are unknown (--family-hooks).
 
 ## Problems (1)
 
