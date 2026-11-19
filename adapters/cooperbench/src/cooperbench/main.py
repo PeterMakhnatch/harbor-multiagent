@@ -6,6 +6,7 @@ Usage:
     uv run cooperbench --limit 5 --overwrite
     uv run cooperbench --task-ids 1371 8394
     uv run cooperbench --seats --subset flash
+    uv run cooperbench --seats --arms solo silent talk --subset flash
 """
 
 from __future__ import annotations
@@ -100,7 +101,23 @@ def _parse_args() -> argparse.Namespace:
             "that any Harbor harness can fill, instead of sidecars"
         ),
     )
+    parser.add_argument(
+        "--arms",
+        nargs="+",
+        default=None,
+        choices=list(CooperBenchAdapter.ARMS),
+        help=(
+            "With --seats: the arms to write for each pair (default: talk). "
+            "solo = one seat with both features; silent = two seats, messaging off; "
+            "talk = two seats that message. Any arm but talk alone gives opaque "
+            "task names and a manifest.json"
+        ),
+    )
     args = parser.parse_args()
+    if args.arms is not None and not args.seats:
+        parser.error("--arms applies to seat tasks: add --seats")
+    if args.arms is None:
+        args.arms = ["talk"]
     if args.seats and args.agent_harness is not None:
         parser.error(
             "--agent-harness applies to sidecar tasks; with --seats, the trial's "
@@ -128,6 +145,7 @@ def main() -> None:
         verifier_timeout_sec=args.verifier_timeout,
         agent_harness=args.agent_harness,
         seats=args.seats,
+        arms=args.arms,
     )
 
     ok, bad = adapter.run()

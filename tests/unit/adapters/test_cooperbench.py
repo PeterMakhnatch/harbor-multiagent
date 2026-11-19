@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -651,3 +652,208 @@ def test_stalled_connections_time_out_and_are_capped(tmp_path: Path):
         assert call(info, "GET", "/peek", "agent1") == (200, {"unread": 0})
         for conn in stalled:
             conn.close()
+
+
+# -- arms: solo, silent, talk ---------------------------------------------------
+
+ARM_WORDS = ("solo", "silent", "talk")
+
+
+def arms_build(root: Path, arms: tuple[str, ...] = ARM_WORDS) -> dict[str, Path]:
+    adapter = CooperBenchAdapter(output_dir=root / "tasks", seats=True, arms=arms)
+    paths, failures = adapter.generate_many([make_pair()])
+    assert not failures
+    manifest = json.loads((root / "tasks/manifest.json").read_text())
+    return {manifest[path.name]["arm"]: path for path in paths}
+
+
+def files(task_dir: Path) -> dict[str, bytes]:
+    return {
+        p.relative_to(task_dir).as_posix(): p.read_bytes()
+        for p in task_dir.rglob("*")
+        if p.is_file()
+    }
+
+
+def test_arms_get_opaque_names_and_a_manifest(tmp_path: Path):
+    tasks = arms_build(tmp_path)
+
+    manifest = json.loads((tmp_path / "tasks/manifest.json").read_text())
+    assert set(tasks) == set(ARM_WORDS)
+    for arm, task_dir in tasks.items():
+        task = Task(task_dir)
+        assert re.fullmatch(r"cb-[0-9a-f]{12}", task_dir.name)
+        assert task.name == f"cooperbench-seats/{task_dir.name}"
+        assert task.config.metadata["arm"] == arm
+        assert task.config.metadata["pair"] == "cb-jinja-t1621-f3-5"
+        assert manifest[task_dir.name]["arm"] == arm
+        for word in ARM_WORDS + ("jinja", "1621"):
+            assert word not in task_dir.name
+
+
+def test_a_rebuild_keeps_each_arms_name(tmp_path: Path):
+    first = arms_build(tmp_path)
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=ARM_WORDS
+    )
+    paths, failures = adapter.generate_many([make_pair()], overwrite=True)
+
+    assert not failures
+    assert sorted(paths) == sorted(first.values())
+
+
+def test_the_talk_arm_differs_from_the_seat_task_only_in_task_toml(tmp_path: Path):
+    default = files(generate(tmp_path / "default", make_pair()))
+    talk_dir = arms_build(tmp_path / "arms", ("silent", "talk"))["talk"]
+    talk = files(talk_dir)
+
+    assert set(talk) == set(default)
+    assert [k for k in talk if talk[k] != default[k]] == ["task.toml"]
+    changed = set(talk["task.toml"].decode().splitlines()) ^ set(
+        default["task.toml"].decode().splitlines()
+    )
+    assert changed == {
+        'name = "cooperbench-seats/cb-jinja-t1621-f3-5"',
+        f'name = "cooperbench-seats/{talk_dir.name}"',
+        'arm = "talk"',
+        'pair = "cb-jinja-t1621-f3-5"',
+    }
+
+
+def test_silent_differs_from_talk_only_where_messaging_is_off(tmp_path: Path):
+    tasks = arms_build(tmp_path, ("silent", "talk"))
+    talk, silent = files(tasks["talk"]), files(tasks["silent"])
+
+    assert set(silent) - set(talk) == {"environment/coop_off.py"}
+    assert sorted(k for k in talk if talk[k] != silent[k]) == [
+        "environment/Dockerfile",
+        "environment/docker-compose.yaml",
+        "instructions/agent1.md",
+        "instructions/agent2.md",
+        "task.toml",
+    ]
+    # What the seats read beyond their instruction is the same.
+    for name in ("environment/seat/Dockerfile", "environment/seat/coop_msg.py"):
+        assert silent[name] == talk[name]
+    services = yaml.safe_load(silent["environment/docker-compose.yaml"])["services"]
+    assert services["main"]["command"] == ["python3", "/opt/cooperbench/coop_off.py"]
+    assert (
+        services["agent1"]
+        == yaml.safe_load(talk["environment/docker-compose.yaml"])["services"]["agent1"]
+    )
+    for seat, teammate in (("agent1", "agent2"), ("agent2", "agent1")):
+        said = silent[f"instructions/{seat}.md"].decode()
+        talked = talk[f"instructions/{seat}.md"].decode()
+        assert "and you cannot exchange messages." in said
+        assert f"Messaging is off in this task: you and **{teammate}** cannot" in said
+        assert (
+            "## Cooperation protocol" not in said
+            and "## Cooperation protocol" in talked
+        )
+        # The feature and the team setup are the same text up to the one sentence.
+        same_head = talked.split("see each other's files;")[0]
+        assert said.startswith(same_head)
+
+
+def test_solo_is_one_seat_with_both_features(tmp_path: Path):
+    solo_dir = arms_build(tmp_path, ("solo",))["solo"]
+    task = Task(solo_dir)
+
+    assert list(task.config.agents) == ["agent1"]
+    assert task.config.metadata["seat_features"] == {"agent1": ["3", "5"]}
+    instruction = task.seat_instruction("agent1")
+    assert instruction.startswith("## Feature 3\n\nAdd template path validation.")
+    assert "## Feature 5\n\nAdd template path caching." in instruction
+    assert "coop-" not in instruction and "teammate" not in instruction
+    services = compose(solo_dir)["services"]
+    assert set(services) == {"main", "agent1"}
+    assert services["main"]["command"] == ["python3", "/opt/cooperbench/coop_off.py"]
+    assert services["main"]["environment"]["COOP_AGENTS"] == "agent1"
+    assert all("agent2" not in entry for entry in services["main"]["volumes"])
+    assert (solo_dir / "solution/feature1.patch").read_text() == PATCH_A
+    assert (solo_dir / "solution/feature2.patch").read_text() == PATCH_B
+    assert not (solo_dir / "solution/agent1.patch").exists()
+    verifier = (solo_dir / "tests/test.sh").read_text()
+    assert 'SEATS="agent1"\n' in verifier and 'STRATEGY="solo"\n' in verifier
+    assert "agent2_branch" not in verifier
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"arms": ["silent"]}, "set seats=True"),
+        ({"seats": True, "arms": ["loud"]}, "arms must be distinct values"),
+        ({"seats": True, "arms": ["talk", "talk"]}, "arms must be distinct values"),
+        ({"seats": True, "arms": []}, "arms must be distinct values"),
+    ],
+)
+def test_bad_arms_are_refused(tmp_path: Path, kwargs: dict[str, Any], match: str):
+    with pytest.raises(ValueError, match=match):
+        CooperBenchAdapter(output_dir=tmp_path, **kwargs)
+
+
+def test_cli_parses_arms(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        sys, "argv", ["cooperbench", "--seats", "--arms", "solo", "silent"]
+    )
+    assert cli._parse_args().arms == ["solo", "silent"]
+    monkeypatch.setattr(sys, "argv", ["cooperbench", "--seats"])
+    assert cli._parse_args().arms == ["talk"]
+    monkeypatch.setattr(sys, "argv", ["cooperbench", "--arms", "solo"])
+    with pytest.raises(SystemExit) as exit_info:
+        cli._parse_args()
+    assert exit_info.value.code == 2
+
+
+@pytest.fixture
+def off_module(tmp_path: Path) -> Iterator[ModuleType]:
+    """coop_off.py from a generated silent task, next to its coop_server.py."""
+    silent_dir = arms_build(tmp_path / "build", ("silent",))["silent"]
+    env_dir = silent_dir / "environment"
+    spec = importlib.util.spec_from_file_location("coop_off", env_dir / "coop_off.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        yield module
+    finally:
+        sys.modules.pop("coop_server", None)
+        if str(env_dir.resolve()) in sys.path:
+            sys.path.remove(str(env_dir.resolve()))
+
+
+def test_the_silent_service_refuses_every_message(
+    tmp_path: Path, off_module: ModuleType
+):
+    off = (403, {"error": "messaging is off in this task"})
+    with serving(tmp_path / "service", off_module) as info:
+        assert (
+            call(info, "POST", "/send", "agent1", {"to": "agent2", "content": "x"})
+            == off
+        )
+        assert call(info, "POST", "/recv", "agent2", {}) == off
+        assert call(info, "GET", "/peek", "agent1") == off
+        assert call(info, "GET", "/agents", "agent2") == off
+        assert call(info, "GET", "/health", None) == (200, {"ok": True})
+        assert (
+            call(info, "POST", "/send", None, {"to": "agent2", "content": "x"})[0]
+            == 401
+        )
+        sent = coop(info, "agent1", "send", "agent2", "hello")
+        events = [
+            json.loads(line)
+            for line in (info["logs"] / "events.jsonl").read_text().splitlines()
+        ]
+        messages = (info["logs"] / "messages.jsonl").read_text()
+
+    assert sent.returncode == 1
+    assert sent.stderr.strip() == "coop: messaging is off in this task (HTTP 403)"
+    assert messages == ""
+    assert [(e["seat"], e["kind"]) for e in events] == [
+        ("agent1", "denied"),
+        ("agent2", "denied"),
+        ("agent1", "denied"),
+        ("agent2", "denied"),
+        (None, "bad_token"),
+        ("agent1", "denied"),
+    ]

@@ -161,6 +161,8 @@ Available flags:
 - `--overwrite` — Overwrite existing tasks
 - `--seats` — Generate seat tasks instead of sidecar tasks (default output:
   `datasets/cooperbench-seats`); see [Seat mode](#seat-mode)
+- `--arms` — With `--seats`: the arms to write for each pair, out of `solo`,
+  `silent` and `talk` (default `talk`); see [Arms](#arms-solo-silent-talk)
 
 ## Seat mode
 
@@ -340,6 +342,58 @@ To compare teams, put any harnesses in the seats, for example
   service_healthy`), which Podman's Compose does not support.
 - `adapter_metadata.json` and `parity_experiment.json` describe the sidecar
   mode only.
+
+### Arms: solo, silent, talk
+
+`--arms` writes the control arms of a coordination experiment, in the design
+of Flotilla (`flotilla/README.md` on the `flotilla/lab` branch). The arms
+separate two reasons a team can do better or worse than one agent: it has two
+workers, and its workers can coordinate.
+
+| Arm | Seats | Features per seat | Messaging |
+|---|---|---|---|
+| `solo` | 1 (`agent1`) | both | off |
+| `silent` | 2 | one each | off |
+| `talk` | 2 | one each | on |
+
+```bash
+uv run cooperbench --seats --arms solo silent talk --subset flash
+```
+
+- `talk` is the seat task above. Without `--arms`, or with `--arms talk`
+  alone, the output is the same as before, byte for byte.
+- `silent` is `talk` with messaging off. `main` runs `coop_off.py`, which
+  answers every request with HTTP 403 "messaging is off in this task" and
+  records it as a `denied` event, and the seats' `coop-*` commands print that.
+  In the instructions, one sentence and the cooperation protocol change: the
+  seats are told that they cannot exchange messages. Nothing else that a seat
+  reads differs from `talk`: the seat image, the seat's environment and the
+  rest of the instructions are the same.
+- `solo` has one seat, `agent1`, with both features' descriptions, joined
+  as upstream CooperBench's solo runner joins them (`## Feature <id>`
+  sections). The verifier runs both features' tests on its patch, and the
+  reward is 1 only if both pass, as for a team. Its oracle applies both gold
+  patches in turn.
+- With any arm but `talk` alone, each task gets an opaque name, `cb-<12 hex>`,
+  random for each build. A seat can read its trial's container names through
+  reverse DNS, and Harbor derives them from the task folder; Flotilla found a
+  seat doing it. `manifest.json` in the output folder maps each name to its
+  pair and arm, and `task.toml` `[metadata]` has `arm` and `pair`. No seat
+  reads either. A rebuild into the same folder keeps the names.
+
+With paired pairs, the coordination gain is `score(talk) − score(silent)`,
+the share of the split's cost that talking recovers is
+`(talk − silent) / (solo − silent)`, and the cost of the split itself is
+`solo − silent`.
+
+Limits of the arms:
+
+- `solo` has the same agent timeout as each seat of a team, so it has half
+  the agent time per feature.
+- In `talk` and `silent`, both seats are on the project's default network, as
+  in the seat task above, so a silent seat can reach the other seat's
+  container, and every seat has internet access. Flotilla gives each seat its
+  own network with `main`; here that would change the `talk` arm.
 
 ### Oracle checks
 

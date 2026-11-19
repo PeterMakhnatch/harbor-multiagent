@@ -1,0 +1,48 @@
+# CooperBench as one seat (the solo arm): agent1 implements both features in
+# its own copy of the repository.
+#
+# - agent1-repo holds the seat's /workspace/repo. Only the seat writes it;
+#   main mounts it read-only, and the verifier takes the seat's patch from it.
+# - agent1-token holds the seat's message token. main writes it; only the
+#   seat reads it.
+# - main runs the message service with messaging off (coop_off.py), so the
+#   seat's coop-* commands report that messaging is off.
+x-seat: &seat
+  build:
+    context: ./seat
+  command: ["sleep", "infinity"]
+  init: true
+  working_dir: /workspace/repo
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/opt/cooperbench/coop_off.py"]
+    init: true
+    environment:
+      COOP_AGENTS: agent1
+    volumes:
+      - agent1-token:/run/cooperbench/tokens/agent1
+      - agent1-repo:/agents/agent1/repo:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 2s
+
+  agent1:
+    <<: *seat
+    environment:
+      COOP_AGENT_ID: agent1
+      COOP_AGENTS: agent1
+      COOP_URL: http://main:8080
+    volumes:
+      - agent1-repo:/workspace/repo
+      - agent1-token:/run/cooperbench:ro
+
+volumes:
+  agent1-repo: {}
+  agent1-token: {}
