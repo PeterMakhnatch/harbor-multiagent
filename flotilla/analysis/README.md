@@ -1,0 +1,137 @@
+# flotilla-analysis
+
+Reads harbor-multiagent job folders produced by Flotilla tasks and answers three questions for each
+task label and model team: did the team gain from coordination, what did it cost, and did the seats
+use their messages? Standard library only (Python 3.11+); the same inputs and seed give the same bytes.
+
+```bash
+cd flotilla/analysis
+python3 -m flotilla_analysis ../../.flotilla-local/jobs                  # text
+python3 -m flotilla_analysis JOBS --format markdown --output report.md
+python3 -m flotilla_analysis JOBS --format json --seed 1                 # every number, per trial too
+pip install .   # optional: installs the `flotilla-analyze` command
+```
+
+`PATH` is a trial folder, a job folder, or any folder that holds job folders. The walk stops at the
+first folder whose `result.json` has `trial_name` (as Sextant does) and never follows directory links.
+`--tasks DIR` names where to find task folders when the path in `result.json` no longer exists.
+
+## Inputs
+
+Per trial: `result.json` (task name, `seat_results`, reward, `reward_valid`, timings),
+`artifacts/logs/world/events.jsonl` and `messages.jsonl`, `verifier/score.json` and
+`verifier/world-state.json`, and `seats/<seat>/agent/trajectory.json` (ATIF). Task names are parsed with
+`^flotilla/(<label>)-(<iii>)-(solo|silent|talk|talk-liar)$`; `<label>` is `<family>` or
+`<family>.<variant>`, and labels are never pooled. `world-state.json` is authoritative for messages and
+submissions (the verifier wrote it after freezing the world; the JSONL artifacts were collected
+before verification); differences are reported per trial.
+
+The answer-dependent measures (clobbers, invalid answers, the acted-on proxy) also need the task
+folder: `environment/task.json` (answer key), `environment/family.py` and the seats' `SEAT_BRIEFING`
+in `environment/docker-compose.yaml`. A task folder is used only if its `task.json` names the same
+task and the family scorer gives the final answer the score the verifier recorded; otherwise those
+measures are `unknown`. The tool imports `family.py` from the task folder: run it on folders you built.
+
+## Outputs and rules
+
+Missing is not zero: a value a file does not record is `n/a` (JSON `null`) and is left out of means.
+
+**Scores** per label, team and condition: instances, scored trials, unscored trials (not finished, no
+reward, reward outside [0, 1], or `reward_valid` false) with reasons, and the mean of per-instance
+mean rewards with a 95% Student t interval over instances (df = instances − 1), clipped to [0, 1].
+An interval of zero width (every instance equal) is flagged: it understates the uncertainty.
+The same mean is also given without trials flagged `example_leak` (below).
+
+**Validity flag `example_leak`** per trial: true when the answer key is one of the answer examples
+shown to the seats: each JSON code span in the "Answer format" section of the instruction a seat saw
+(the first messages of its trajectory; without a trajectory, `<task>/instructions/<seat>.md`) is scored
+against the key with the family scorer, and a full score is a leak (a seat that copies the example is
+right with no information; world-v1 `schedule` shows `{"day": "Wed", "start": "14:00"}`, the answer of
+instance 005). Flagged trials stay in the scores, are counted there, and are left out of the
+decomposition unless `--keep-leaks` is given; the output says how many were left out.
+
+**Decomposition** per label and team, over instances scored in all of solo, silent and talk:
+ceiling = solo, floor = silent, team = talk, gap = solo − silent, gain = talk − silent (paired t
+intervals), a two-sided paired sign-flip p for the gain (exact enumeration up to 16 nonzero
+differences, else 20,000 draws, p = (1 + extreme) / (1 + draws)), and recovery = mean(gain) / mean(gap)
+with a 10,000-resample percentile bootstrap over instances. Recovery rule: undefined when the mean gap
+is ≤ 0; a resample whose gap is ≤ 0 is undefined; if more than 2.5% of resamples are undefined the
+interval is reported as undefined (the data cannot exclude "no gap", as with Fieller's unbounded set);
+otherwise the 2.5th and 97.5th percentiles of the defined resamples (Hyndman–Fan type 7), with the
+number left out. Draws come from `random.Random("<seed>/<label>/<team>/<purpose>")`.
+
+**Cost** per condition: input tokens (cache included, Harbor's convention), cached and output tokens
+and USD per trial, summed over the seats under test (a scripted seat is not part of the team). A trial
+with any seat's value missing is incomplete and left out of the means. Ratios talk/solo and
+silent/solo are ratios of mean per-instance values over instances complete in both conditions.
+
+**Message funnel** per trial and condition, over (message, recipient) pairs. Recipients are the
+other seats under test for a message to `all`, else the named seat. *Delivered*: the message id is in
+`data.ids` of a `deliver` event of the recipient. *Seen*: delivered, and a distinctive probe of the
+message appears in the observation of a recipient step that did not end before the delivery could
+have happened:
+
+- probes are all 24-character windows of the text with whitespace removed, in three forms: raw,
+  JSON-escaped with ASCII escapes (the world's reply) and without (jq); removing whitespace makes
+  terminal wrapping and pretty-printing irrelevant; a message without a probe is `unknown`;
+- a probe does not count when it also occurs in another message with a different text, in the
+  recipient's instruction or own briefing, in the recipient's keystrokes so far, or in its terminal
+  output from steps that ended before the delivery;
+- timing: the world clock starts no earlier than `environment_setup.started_at` and no earlier than
+  (a seat's agent start − the world time of that seat's first request); a delivery at world time t is
+  no earlier than that bound + t; a step ends at its ATIF timestamp (terminus-2 records a step after
+  capturing its terminal output).
+
+*Acted on* (generic proxy, two or more seats): `yes` when the final answer is correct and the seat that
+submitted it could not answer alone (`oracle_answer([own briefing])` does not score 1); `no` when the
+final answer is wrong or missing; `n.a.` when the submitter's own briefing already gives the answer;
+`unknown` without a usable task folder. In `silent` the same count measures lucky answers: it is the
+baseline for `talk`. For `schedule`, `oracle_answer` takes the first window that fits, so a briefing
+can "give the answer" by luck; the report counts such briefings ("Own-briefing check").
+
+**Scripted-peer tasks** (a `decoy` in `task.json`, e.g. label `schedule.liar` with an honest scripted
+peer in `talk` and a lying one in `talk-liar`): per condition, how many final answers are correct,
+deceived (the final answer is the decoy; the verifier's `deceived` in `score.json` when present) or
+corrupted (neither, including no answer).
+
+**Answer churn** per trial: submissions, distinct answers, answer changes, overwrites (a change by a
+different seat than the previous submitter), invalid submissions (not a well-formed answer: the family
+may define `valid_answer(answer)`; otherwise the answer must be a non-empty object with every key of
+the answer key, and for `schedule` its (day, start) must be one of `windows()`), whether a correct
+answer was ever submitted, clobbers (a correct standing answer replaced by a wrong one), the last
+submitter, and the time of the first message (world seconds).
+
+**Exploration** per trial and seat: requests to the world outside the documented API (anything but
+`GET /whoami`, `POST /submit`, `GET` and `POST /messages`), from world v2 `probe` events when the world
+logs them, else from curl commands in the keystrokes; and reconnaissance commands (environment: `env`,
+`printenv`; network: `arp`, `netstat`, `ss`, `ip`, `/etc/hosts`, ...; processes: `ps`, `top`, ...;
+file system: `find`, `ls`, `du`, `tree`, `locate` on `/` or system folders). The world version is
+taken from the `start` event (`world_version`), else from `probe` events (v2), else from `task.json`
+(no `world_version` = v1).
+
+**Seats** per condition and seat: steps, tool calls, curl calls by target, reconnaissance, world
+requests by event kind (send, deliver, submit, whoami, denied, probe) and exceptions.
+
+## Limits
+
+- Keystroke counts are heuristics: heredoc bodies are skipped, so a script written to a file and run
+  later, or requests made from Python, are not counted. The world's events are the record.
+- *Seen* means shown on the recipient's terminal, and it is a lower bound: a message whose text is
+  shared with another message, or typed by the recipient before it was delivered, cannot be credited,
+  and a seat that saves `GET /messages` to a file and parses it with a script uses the messages without
+  seeing them (observed with GPT-OSS-120B in the 3-seat liar runs).
+- The acted-on proxy is generic and coarse; family-specific measures can replace it later.
+- A task folder rebuilt with the same instances passes the score check even if other files (for
+  example a newer world) changed; the world version then follows the folder unless the trial's own
+  events record it. A `world_version` field in the world's `start` event would make it exact.
+
+## Tests
+
+```bash
+cd flotilla/analysis && python3 -m unittest discover -s tests -t .   # or: pytest tests
+```
+
+Synthetic job folders come from `tests/fixtures.py`. `tests/data/` holds the real oracle-check jobs
+(only the files the tool reads; the local path prefix replaced); the test rebuilds their task folders
+with `flotilla/build_tasks.py`. The test package refuses to run if the interpreter has disabled
+unittest's assertions.

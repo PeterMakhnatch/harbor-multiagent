@@ -1,0 +1,33 @@
+{
+  "condition": "silent",
+  "frozen": true,
+  "messages": [],
+  "seats": [
+    "p1",
+    "p2"
+  ],
+  "sent": {
+    "p1": 0,
+    "p2": 0
+  },
+  "submissions": [
+    {
+      "answer": {
+        "day": "Wed",
+        "start": "11:00"
+      },
+      "n": 1,
+      "seat": "p2",
+      "t": 4.52
+    },
+    {
+      "answer": {
+        "day": "Tue",
+        "start": "09:00"
+      },
+      "n": 2,
+      "seat": "p1",
+      "t": 4.578
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answer": {
+    "day": "Mon",
+    "start": "09:00"
+  },
+  "condition": "silent",
+  "error": null,
+  "family": "schedule",
+  "fields_correct": 0,
+  "fields_total": 1,
+  "instance": 1,
+  "n_messages": 0,
+  "n_submissions": 2,
+  "score": 0.0,
+  "seats": [
+    "p1",
+    "p2"
+  ],
+  "submitted_by": "p1"
+}
