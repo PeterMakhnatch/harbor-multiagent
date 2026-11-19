@@ -48,3 +48,20 @@ SEAT_TASK=/path/to/hello-seats uv run python experiments/seat-attribution/run_ar
 Model job config used for the scored row is `model-job.yaml` beside this
 file; it needs `OPENROUTER_API_KEY` (`keys run -- uv run harbor run -c ...`
 in Eval Lab terms). Expected spend is under $0.01 for 3 attempts.
+
+## Addendum: model on the token-auth task (same day)
+
+Same model setup, 1 attempt on the fixed task at `e0a585d0`: reward 0.0,
+cost $0.0009. p2 posted correctly. p1 never posted: its polling script used
+`jq`, which the player image does not install, the loop aborted, and the
+model stopped after 3 steps. The reply-to workflow needs JSON parsing in
+the seat; the image ships python3 and curl but no jq. Task authors should
+treat seat-image affordances as part of the measured construct.
+
+Token leakage check: no token value (32-hex) appears in the collected
+`seats/*/agent/` artifacts of this run. The model read the token into a
+shell variable (`token=$(cat /run/seat/token)`) and never echoed it. The
+channel still exists — instructions and the oracle inline
+`Authorization: Bearer <token>`, trajectories record commands and outputs,
+and host-side scrubbing cannot know a world-issued secret — but it was not
+exercised by this model on this attempt.
