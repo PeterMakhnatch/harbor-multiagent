@@ -1,5 +1,5 @@
 schema_version = "1.4"
-artifacts = ["/logs/world/kitchen.jsonl"]
+artifacts = ["/logs/world/kitchen.jsonl", "/logs/world/seatlab-acks.jsonl"]
 
 [task]
 name = "harbor/cramped-room-parity"

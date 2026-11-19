@@ -1,0 +1,4 @@
+services:
+  chef1:
+    environment:
+      KITCHEN_POLICY: wait

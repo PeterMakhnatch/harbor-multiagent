@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from hashlib import sha256
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -53,11 +54,12 @@ def wait_for_tick(expected, deadline):
         with urlopen(
             f"{WORLD}/state", timeout=min(2, seconds_left(deadline))
         ) as response:
-            tick = json.load(response)["tick"]
+            view = json.load(response)
+        tick = view["tick"]
         if type(tick) is not int or not 0 <= tick <= expected:
             raise SystemExit(f"Expected tick {expected}, got {tick!r}")
         if tick == expected:
-            return
+            return view
         time.sleep(min(0.05, seconds_left(deadline)))
 
 
@@ -71,11 +73,17 @@ def main():
         raise SystemExit("KITCHEN_POLICY must be tape or wait")
     deadline = time.monotonic() + 45
     for tick, joint_action in enumerate(JOINT_ACTIONS):
-        wait_for_tick(tick, deadline)
+        view = wait_for_tick(tick, deadline)
         action = WAIT if policy == "wait" else joint_action[seat_index]
+        canonical_view = json.dumps(
+            view, sort_keys=True, separators=(",", ":"), allow_nan=False
+        )
+        view_sha256 = sha256(canonical_view.encode("ascii")).hexdigest()
         request = Request(
             f"{WORLD}/action/{seat}",
-            data=json.dumps({"tick": tick, "action": action}).encode(),
+            data=json.dumps(
+                {"tick": tick, "action": action, "view_sha256": view_sha256}
+            ).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
