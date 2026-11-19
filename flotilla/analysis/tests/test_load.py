@@ -22,7 +22,8 @@ class TaskNames(unittest.TestCase):
             match = TASK_NAME.match(f"flotilla/schedule.liar-007-{condition}")
             if match is None:
                 self.fail(f"{condition} must parse")
-            self.assertEqual((match["label"], match["instance"], match["condition"]), ("schedule.liar", "007", condition))
+            got = (match["label"], match["instance"], match["condition"])
+            self.assertEqual(got, ("schedule.liar", "007", condition))
 
 
 class Walk(unittest.TestCase):

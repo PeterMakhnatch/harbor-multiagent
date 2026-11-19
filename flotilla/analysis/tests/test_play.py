@@ -197,7 +197,8 @@ class Funnel(unittest.TestCase):
         self.assertEqual((churn.ever_correct, churn.clobbers), (True, 1))
         self.assertEqual(churn.by_seat, {"p1": 3, "p2": 3})
         self.assertEqual(
-            (play.proxy, play.world_version, play.world_version_source), ("yes", "1", "task.json")
+            (play.proxy, play.world_version, play.world_version_source),
+            ("yes", "1", "start event without a version"),
         )
         self.assertIs(answer_valid(info, {"day": "fri", "start": 15}), True)
         self.assertIs(answer_valid(info, {"day": "Fri", "start": "16:00"}), False)  # would end after 17:00

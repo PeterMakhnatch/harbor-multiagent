@@ -423,8 +423,12 @@ def liar_outcome(evidence: Evidence, task: TaskInfo, final: float | None) -> str
 def world_version(evidence: Evidence, task: TaskInfo) -> tuple[str, str]:
     """The world version the trial ran, from the trial's own evidence first."""
     start = next((e for e in evidence.events or [] if e.get("kind") == "start"), None)
-    version = ((start or {}).get("data") or {}).get("world_version")
-    if version is not None:
+    if start is not None:
+        # World v2 and later name their version in the start event; v1 wrote a start event without it.
+        # A task folder rebuilt later may hold a newer world, so the trial's own events come first.
+        version = (start.get("data") or {}).get("world_version")
+        if version is None:
+            return "1", "start event without a version"
         return str(version), "start event"
     if any(e.get("kind") == "probe" for e in evidence.events or []):
         return "2", "probe events"
