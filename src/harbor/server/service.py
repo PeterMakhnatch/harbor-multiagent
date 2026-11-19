@@ -682,6 +682,7 @@ class Service:
             config.trials_dir = self.work_dir / "rollouts" / str(rollout.id)
             config.job_id = rollout.job_id
             lock = rollout.lock
+            agent = config.participants[0] if config.participants else config.agent
             result = TrialResult(
                 id=rollout.id,
                 trial_name=rollout.name,
@@ -691,10 +692,10 @@ class Service:
                 task_checksum=lock.task.digest.removeprefix("sha256:"),
                 trial_uri=rollout.uri,
                 agent_info=AgentInfo(
-                    name=cast(str, config.agent.name or config.agent.import_path),
+                    name=cast(str, agent.name or agent.import_path),
                     version="",
-                    model_info=ModelInfo(name=config.agent.model_name)
-                    if config.agent.model_name
+                    model_info=ModelInfo(name=agent.model_name)
+                    if agent.model_name
                     else None,
                 ),
                 started_at=rollout.started_at,
