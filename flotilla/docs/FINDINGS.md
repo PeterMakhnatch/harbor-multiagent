@@ -124,7 +124,7 @@ Inferred:
   oracle runs: 29 of 29 trials as designed), and logs every unknown world request as a `probe`
   event. Seats still have internet access, so an outside service is still a possible channel.
 
-## 2026-11-19 05:50 ET — On a narrow channel, agents ask instead of tell
+## 2026-11-19 05:47 ET — On a narrow channel, agents ask instead of tell
 
 Run: wave c4, `schedule.tight` (easy, 2 seats, world v2), talk only, Modal, terminus-2 with a
 40-turn cap. Each seat may send at most 2 messages of at most 100 characters. A seat's raw briefing
