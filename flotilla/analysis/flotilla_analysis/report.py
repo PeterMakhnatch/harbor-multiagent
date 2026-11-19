@@ -402,7 +402,7 @@ def briefing_check(trials: list[Trial], infos: dict[str, TaskInfo]) -> list[dict
     seen: dict[str, dict[tuple[int, str], bool]] = defaultdict(dict)
     for trial in trials:
         info = infos.get(trial.path)
-        if info is None or not info.usable or trial.condition not in ("silent", "talk", "talk-liar"):
+        if info is None or not info.usable or trial.condition not in CONDITIONS[1:]:
             continue
         for seat in sorted(info.briefings):
             key = (trial.instance, seat)

@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any
 
 TASK_NAME = re.compile(
-    r"^flotilla/(?P<label>[a-z0-9_]+(?:\.[a-z0-9_]+)?)-(?P<instance>\d{3})-(?P<condition>solo|silent|talk|talk-liar)$"
+    r"^flotilla/(?P<label>[a-z0-9_]+(?:\.[a-z0-9_]+)?)-(?P<instance>\d{3})-(?P<condition>solo|silent|talk|talk-liar|talk-warned|talk-liar-warned)$"
 )
-CONDITIONS = ("solo", "silent", "talk", "talk-liar")
+CONDITIONS = ("solo", "silent", "talk", "talk-liar", "talk-warned", "talk-liar-warned")
 SKIP_DIRS = frozenset({".git", ".hg", ".svn", ".venv", "__pycache__", "node_modules"})
 
 

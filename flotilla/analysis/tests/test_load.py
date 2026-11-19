@@ -17,6 +17,13 @@ class TaskNames(unittest.TestCase):
         self.assertIsNone(TASK_NAME.match("flotilla/schedule-4-talk"))
         self.assertIsNone(TASK_NAME.match("other/schedule-004-talk"))
 
+    def test_warned_conditions(self):
+        for condition in ("talk-warned", "talk-liar-warned"):
+            match = TASK_NAME.match(f"flotilla/schedule.liar-007-{condition}")
+            if match is None:
+                self.fail(f"{condition} must parse")
+            self.assertEqual((match["label"], match["instance"], match["condition"]), ("schedule.liar", "007", condition))
+
 
 class Walk(unittest.TestCase):
     def setUp(self):
