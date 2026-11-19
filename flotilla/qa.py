@@ -1,0 +1,962 @@
+"""Deterministic QA of built Flotilla seat tasks. Every task set must pass it before a wave.
+
+    uvx --quiet --with pyyaml python flotilla/qa.py 'flotilla/tasks/*/*'          # table and summary
+    uvx --quiet --with pyyaml python flotilla/qa.py 'flotilla/tasks/*/*' --json   # the same as JSON
+
+Real runs found validity faults that each corrupted a condition (docs/FINDINGS.md): an answer example
+that equalled one instance's answer key, a world reply that named the condition, a reply counter that
+was a side channel, one Compose network for all seats, and a scripted peer whose format looked more
+authoritative than plain text. World version 2 fixed them in code. This checker reads a built task set
+and reports every fault of these kinds that it finds (see RULES). It reads files and calls the task's
+own family module (solution/family.py); it starts no container and opens no connection. No output
+names a token or an answer key. Exit status: 1 when any finding is a FAIL, 2 when no task folder
+matches, otherwise 0. See README.md ("Check a task set before a wave") and CONTRACT.md 2.
+"""
+
+from __future__ import annotations
+
+import argparse
+import functools
+import glob
+import hashlib
+import json
+import os
+import re
+import shlex
+import sys
+import tomllib
+import types
+from collections import defaultdict
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, NamedTuple
+
+try:
+    import yaml
+except ImportError:  # main() says how to run with PyYAML
+    yaml = None
+YAML_LOADER = getattr(yaml, "CSafeLoader", None) or getattr(yaml, "SafeLoader", None)  # libyaml is 50 times faster
+
+ROOT = Path(__file__).resolve().parent
+
+
+def load_module(path: Path, name: str) -> types.ModuleType:
+    """Run a Python file as a new module, without writing bytecode next to it (task folders stay as built)."""
+    module = types.ModuleType(name)
+    module.__file__ = str(path)
+    sys.modules[name] = module  # dataclasses and typing look a module up by its name
+    exec(compile(path.read_text(), str(path), "exec"), module.__dict__)  # noqa: S102 - our own or the task's code
+    return module
+
+
+BUILD = load_module(ROOT / "build_tasks.py", "flotilla_qa_build_tasks")
+WARNING: str = BUILD.WARNING  # the deliberate sentence of the two -warned conditions
+WORLD_VERSION: int = BUILD.WORLD_VERSION
+
+# rule -> (level, what a finding means), in the order of the report
+RULES: dict[str, tuple[str, str]] = {
+    "example-leak": ("FAIL", "a JSON example in a seat's instruction scores 1 against the answer key or the decoy"),
+    "condition-leak": ("FAIL", "a byte that a seat under test reads names its condition or reveals it"),
+    "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart (talk and talk-liar, "
+                               "talk-warned and talk-liar-warned)")),
+    "seat-network": ("FAIL", "a seat is not alone with main on a network of its own"),
+    "seat-secrets": ("FAIL", ("a seat gets the answer key, task.json, a world, family or score file, the admin "
+                              "token or another seat's token")),
+    "token-map": ("FAIL", "seat tokens are not distinct, or main does not map each one to its seat"),
+    "stale-code": ("FAIL", "the task ships a world, scorer, oracle or family file that differs from this checkout"),
+    "qa-error": ("FAIL", "a task file is missing or unreadable, so the task cannot be checked"),
+    "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
+    "runtime-names": ("WARN", "the Docker names that Harbor derives from the task name say 'liar'"),
+}
+TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"))  # each pair must look the same to a seat
+REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned")
+LIAR = re.compile(r"(?<![a-z])liars?(?![a-z])", re.IGNORECASE)
+WARNED = re.compile(r"(?<![a-z])warned(?![a-z])", re.IGNORECASE)
+WORLD_FILES = ("task.json", "world.py", "score.py", "family.py", "docker-compose.yaml")  # main's, never a seat's
+SHIPPED = {"environment/world.py": "world/world.py", "environment/score.py": "world/score.py",
+           "solution/oracle.py": "world/oracle.py", "environment/family.py": "families/{family}.py",
+           "solution/family.py": "families/{family}.py"}  # built file -> its source in this checkout
+MIN_TOKEN_CHARS = 16  # a shorter token could be guessed by another seat
+MAX_READ_BYTES = 2_000_000
+TASK_NAME = re.compile(r"^(?P<label>.+)-(?P<instance>\d+)-(?P<condition>[a-z]+(?:-[a-z]+)*)$")
+
+
+@dataclass(frozen=True)
+class Finding:
+    rule: str
+    task: str  # the task folder's name, or a label for a finding about a whole label
+    seat: str  # a seat, "p1,p2" for a pair, or "*" for the whole task
+    detail: str  # never a token value or an answer key
+
+    @property
+    def level(self) -> str:
+        return RULES[self.rule][0]
+
+    def order(self) -> tuple[bool, int, str, str, str]:
+        return (self.level != "FAIL", list(RULES).index(self.rule), self.task, self.seat, self.detail)
+
+
+class Build(NamedTuple):
+    """A service's image: its Dockerfile and the task files that the Dockerfile copies into it."""
+
+    dockerfile_name: str  # relative to the task folder
+    dockerfile: str
+    copied: list[Path]
+
+
+@dataclass
+class Task:
+    path: Path
+    name: str = ""  # the folder name, e.g. schedule.liar-000-talk-liar
+    task_name: str = ""  # [task] name in task.toml, e.g. flotilla/schedule.liar-000-talk-liar
+    label: str = ""
+    instance: int | None = None
+    condition: str = ""
+    family_name: str = ""
+    seats: list[str] = field(default_factory=list)  # the [agents.<seat>] tables
+    under_test: list[str] = field(default_factory=list)  # the seats a model plays
+    compose: dict[str, Any] = field(default_factory=dict)
+    services: dict[str, dict[str, Any]] = field(default_factory=dict)
+    task_json: dict[str, Any] = field(default_factory=dict)
+    family: Any = None
+    errors: list[Finding] = field(default_factory=list)
+    cache: dict[tuple[str, str], Any] = field(default_factory=dict)
+
+    @property
+    def env_dir(self) -> Path:
+        return self.path / "environment"
+
+    @property
+    def answer_key(self) -> dict[str, Any] | None:
+        key = self.task_json.get("answer_key")
+        return key if isinstance(key, dict) else None
+
+    def error(self, detail: str, seat: str = "*") -> None:
+        self.errors.append(Finding("qa-error", self.name, seat, detail))
+
+    def env(self, service: str) -> dict[str, str]:
+        """The environment of a service as its container gets it."""
+        if ("env", service) not in self.cache:
+            self.cache[("env", service)] = service_env(self, self.services.get(service) or {})
+        return self.cache[("env", service)]
+
+    def build(self, service: str) -> Build | None:
+        if ("build", service) not in self.cache:
+            self.cache[("build", service)] = service_build(self, service)
+        return self.cache[("build", service)]
+
+    def view(self, seat: str) -> dict[str, str]:
+        if ("view", seat) not in self.cache:
+            self.cache[("view", seat)] = seat_view(self, seat)
+        return self.cache[("view", seat)]
+
+
+# --- Reading a task folder ---------------------------------------------------------------------------------
+
+
+def read_text(path: Path) -> str | None:
+    try:
+        with path.open("rb") as handle:
+            return handle.read(MAX_READ_BYTES).decode("utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+_FAMILIES: dict[str, types.ModuleType] = {}
+
+
+def family_module(path: Path) -> types.ModuleType:
+    """The task's own family module, loaded once per distinct file content."""
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest not in _FAMILIES:
+        _FAMILIES[digest] = load_module(path, f"flotilla_qa_family_{digest[:16]}")
+    return _FAMILIES[digest]
+
+
+def load_task(path: Path) -> Task:
+    """Read one task folder. A missing or unreadable file becomes a qa-error finding, never an exception."""
+    task = Task(path=path, name=path.name)
+    try:
+        config = tomllib.loads((path / "task.toml").read_text())
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        task.error(f"task.toml cannot be read ({type(exc).__name__})")
+        config = {}
+    meta = config.get("metadata") if isinstance(config.get("metadata"), dict) else {}
+    task.task_name = str((config.get("task") or {}).get("name") or f"flotilla/{path.name}")
+    parsed = TASK_NAME.match(task.task_name.rsplit("/", 1)[-1])
+    try:
+        task.task_json = json.loads((task.env_dir / "task.json").read_text())
+    except (OSError, ValueError) as exc:
+        task.error(f"environment/task.json cannot be read ({type(exc).__name__})")
+    if not isinstance(task.task_json, dict):
+        task.error("environment/task.json is not a JSON object")
+        task.task_json = {}
+    elif task.answer_key is None:
+        task.error("environment/task.json has no answer_key object")
+    task.family_name = str(meta.get("family") or task.task_json.get("family") or "")
+    variant = str(meta.get("variant") or "")
+    task.label = (f"{task.family_name}.{variant}" if variant else task.family_name) or (
+        parsed["label"] if parsed else "")
+    instance = meta.get("instance", int(parsed["instance"]) if parsed else None)
+    task.instance = instance if isinstance(instance, int) else None
+    task.condition = str(meta.get("condition") or (parsed["condition"] if parsed else ""))
+    agents = config.get("agents") if isinstance(config.get("agents"), dict) else {}
+    task.seats = sorted(agents)
+    task.under_test = [seat for seat in task.seats if (agents[seat] or {}).get("under_test", True) is not False]
+    if config and not agents:
+        task.error("task.toml has no [agents.<seat>] tables, so it is not a seat task")
+    try:
+        compose = yaml.load((task.env_dir / "docker-compose.yaml").read_text(), Loader=YAML_LOADER)
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        task.error(f"environment/docker-compose.yaml cannot be read ({type(exc).__name__})")
+        compose = {}
+    task.compose = compose if isinstance(compose, dict) else {}
+    services = task.compose.get("services") if isinstance(task.compose.get("services"), dict) else {}
+    task.services = {str(name): (spec if isinstance(spec, dict) else {}) for name, spec in services.items()}
+    if task.compose and "main" not in task.services:
+        task.error("docker-compose.yaml has no main service")
+    for seat in task.seats:
+        if task.compose and seat not in task.services:
+            task.error(f"docker-compose.yaml has no service for seat {seat}", seat)
+        if not (path / "instructions" / f"{seat}.md").is_file():
+            task.error(f"instructions/{seat}.md is missing", seat)
+    family_path = path / "solution" / "family.py"
+    try:
+        module = family_module(family_path)
+    except Exception as exc:  # noqa: BLE001 - any failure of the task's own module is a finding
+        task.error(f"solution/family.py cannot be loaded ({type(exc).__name__})")
+    else:
+        if callable(getattr(module, "score", None)) and callable(getattr(module, "oracle_answer", None)):
+            task.family = module
+        else:
+            task.error("solution/family.py lacks score() or oracle_answer()")
+    if not task.family_name:
+        task.error("neither task.toml nor task.json names the family")
+    return task
+
+
+def unescape(value: Any) -> str:
+    """A Compose value as the container receives it: `$$` is a literal `$` (CONTRACT.md 3)."""
+    if value is None:
+        return ""
+    text = ("true" if value else "false") if isinstance(value, bool) else str(value)
+    return text.replace("$$", "$")
+
+
+def resolve(base: Path, value: str) -> Path:
+    return (base / os.path.expanduser(value)).resolve()
+
+
+def env_files(task: Task, service: dict[str, Any]) -> list[tuple[str, Path]]:
+    raw = service.get("env_file")
+    items = raw if isinstance(raw, list) else [raw] if raw else []
+    paths = [item.get("path") if isinstance(item, dict) else item for item in items]
+    return [("env_file", resolve(task.env_dir, str(p))) for p in paths if p]
+
+
+def service_env(task: Task, service: dict[str, Any]) -> dict[str, str]:
+    """A service's env_file entries, then its environment entries."""
+    env: dict[str, str] = {}
+    for _kind, path in env_files(task, service):
+        for line in (read_text(path) or "").splitlines():
+            name, sep, value = line.strip().partition("=")
+            if sep and name and not name.startswith("#"):
+                env[name.strip()] = value.strip()
+    raw = service.get("environment")
+    if isinstance(raw, list):
+        for item in raw:
+            name, sep, value = str(item).partition("=")
+            env[name] = unescape(value) if sep else ""  # a bare name passes the host's value through
+    elif isinstance(raw, dict):
+        env.update((str(name), unescape(value)) for name, value in raw.items())
+    return env
+
+
+def service_networks(service: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Compose network key -> this service's settings on it; {"default": {}} when the service names none."""
+    if "network_mode" in service:
+        return {}
+    raw = service.get("networks")
+    if raw is None:
+        return {"default": {}}
+    if isinstance(raw, list):
+        return {str(name): {} for name in raw}
+    if isinstance(raw, dict):
+        return {str(name): (spec if isinstance(spec, dict) else {}) for name, spec in raw.items()}
+    return {}
+
+
+def network_specs(task: Task) -> dict[str, dict[str, Any]]:
+    """The top-level `networks:` of the Compose file."""
+    defined = task.compose.get("networks")
+    return {str(k): (v if isinstance(v, dict) else {}) for k, v in defined.items()} if isinstance(defined, dict) else {}
+
+
+def network_name(task: Task, key: str) -> str:
+    """The network that a Compose key stands for: its `name:` when the file sets one, else the key."""
+    return str(network_specs(task).get(key, {}).get("name") or key)
+
+
+def main_networks(task: Task) -> dict[str, dict[str, Any]]:
+    """Network -> main's settings on it (its aliases)."""
+    return {network_name(task, k): spec for k, spec in service_networks(task.services.get("main") or {}).items()}
+
+
+def volume_sources(task: Task, service: dict[str, Any]) -> list[tuple[str, str]]:
+    """("bind", resolved host path) or ("volume", name) for each volume of a service."""
+    sources = []
+    for item in service.get("volumes") or []:
+        kind = ""
+        if isinstance(item, str):
+            source, sep, _target = item.partition(":")
+            if not sep:
+                continue  # an anonymous volume is new for each container
+        elif isinstance(item, dict):
+            source, kind = str(item.get("source") or ""), str(item.get("type") or "")
+            if kind == "tmpfs" or not source:
+                continue
+        else:
+            continue
+        if kind == "bind" or source.startswith((".", "/", "~")):
+            sources.append(("bind", str(resolve(task.env_dir, source))))
+        else:
+            sources.append(("volume", source))
+    return sources
+
+
+def overlap(a: tuple[str, str], b: tuple[str, str]) -> bool:
+    """Whether two volumes reach the same data: one named volume, or one bind path inside the other."""
+    if a[0] != b[0]:
+        return False
+    if a[0] == "volume":
+        return a[1] == b[1]
+    first, second = Path(a[1]), Path(b[1])
+    return first == second or first in second.parents or second in first.parents
+
+
+def mounted_files(task: Task, service: dict[str, Any]) -> list[tuple[str, Path]]:
+    """Host files a service reads at start: its env files and the files of its Compose secrets and configs."""
+    found = env_files(task, service)
+    for section in ("secrets", "configs"):
+        defined = task.compose.get(section) if isinstance(task.compose.get(section), dict) else {}
+        for item in service.get(section) or []:
+            name = item.get("source") if isinstance(item, dict) else item
+            spec = defined.get(name) if isinstance(defined.get(name), dict) else {}
+            if spec.get("file"):
+                found.append((f"{section[:-1]} {name}", resolve(task.env_dir, str(spec["file"]))))
+    return found
+
+
+def relative(task: Task, path: Path) -> str:
+    try:
+        return str(path.relative_to(task.path.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def dockerfile_instructions(text: str) -> list[tuple[str, str]]:
+    """(INSTRUCTION, arguments) of a Dockerfile; continuation lines are joined and comments dropped."""
+    instructions, current = [], ""
+    for line in [*text.splitlines(), ""]:
+        stripped = line.strip()
+        if not current and (not stripped or stripped.startswith("#")):
+            continue
+        if stripped.endswith("\\"):
+            current += stripped[:-1] + " "
+            continue
+        word, _, rest = (current + stripped).strip().partition(" ")
+        instructions.append((word.upper(), rest.strip()))
+        current = ""
+    return instructions
+
+
+def copy_sources(base: Path, sources: list[str]) -> list[Path]:
+    """The files that COPY or ADD sources name in a build context (Docker refuses paths outside it)."""
+    files: list[Path] = []
+    for source in sources:
+        if "://" in source or source.startswith("<<"):
+            continue  # a download, or a heredoc (its text is in the Dockerfile)
+        source = source.lstrip("/")
+        if source in ("", "."):
+            matches = [base]
+        else:
+            matches = sorted(base.glob(source)) if any(c in source for c in "*?[") else [base / source]
+        for match in (m.resolve() for m in matches):
+            if match != base and base not in match.parents:
+                continue
+            if match.is_dir():
+                files += sorted(p for p in match.rglob("*") if p.is_file())
+            elif match.is_file():
+                files.append(match)
+    return files
+
+
+def service_build(task: Task, service_name: str) -> Build | None:
+    """A service's Dockerfile and the task files it copies; None without a local build (or without its Dockerfile,
+    a qa-error)."""
+    build = (task.services.get(service_name) or {}).get("build")
+    if isinstance(build, str):
+        build = {"context": build}
+    if not isinstance(build, dict):
+        return None
+    context_value = str(build.get("context") or ".")
+    if "://" in context_value or context_value.startswith("git@"):
+        return None  # a remote context holds nothing of the task folder
+    context = resolve(task.env_dir, context_value)
+    contexts_raw = build.get("additional_contexts") or {}
+    if isinstance(contexts_raw, list):
+        contexts_raw = dict(str(item).split("=", 1) for item in contexts_raw if "=" in str(item))
+    contexts = {str(k): resolve(task.env_dir, str(v)) for k, v in contexts_raw.items() if "://" not in str(v)}
+    if build.get("dockerfile_inline") is not None:
+        name, text = "build.dockerfile_inline", str(build["dockerfile_inline"])
+    else:
+        dockerfile = resolve(context, str(build.get("dockerfile") or "Dockerfile"))
+        name, text = relative(task, dockerfile), read_text(dockerfile)
+        if text is None:
+            task.error(f"its Dockerfile {name} cannot be read", service_name)
+            return None
+    copied: list[Path] = []
+    for word, args in dockerfile_instructions(text):
+        if word not in ("COPY", "ADD"):
+            continue
+        stage, rest = None, args
+        while rest.startswith("--"):
+            flag, _, rest = rest.partition(" ")
+            rest = rest.strip()
+            if flag.startswith("--from="):
+                stage = flag.removeprefix("--from=")
+        try:
+            words = json.loads(rest) if rest.startswith("[") else shlex.split(rest)
+        except ValueError:
+            words = rest.split()
+        base = context if stage is None else contexts.get(stage)
+        if base is not None and isinstance(words, list):  # not from another image or build stage
+            copied += copy_sources(base, [str(w) for w in words[:-1]])
+    return Build(name, text, list(dict.fromkeys(copied)))
+
+
+def seat_view(task: Task, seat: str) -> dict[str, str]:
+    """Every byte the seat's agent can read before play, by field: its instruction, its container's environment
+    and Compose settings, its image's Dockerfile and the task files that it copies, and main's settings on the
+    seat's networks (for example the alias `world`)."""
+    view = {"instruction": read_text(task.path / "instructions" / f"{seat}.md") or ""}
+    service = task.services.get(seat) or {}
+    view.update((f"env.{name}", value) for name, value in task.env(seat).items())
+    view.update((f"service.{key}", json.dumps(service[key], sort_keys=True, default=str))
+                for key in sorted(service) if key not in ("environment", "env_file"))
+    image = task.build(seat)
+    if image is not None:
+        view[f"image:{image.dockerfile_name}"] = image.dockerfile
+        view.update((f"image:{relative(task, path)}", read_text(path) or "") for path in image.copied)
+    with_main = main_networks(task)
+    for key in service_networks(service):
+        if network_name(task, key) in with_main:
+            view[f"main on {key}"] = json.dumps(with_main[network_name(task, key)], sort_keys=True, default=str)
+    return view
+
+
+def json_objects(text: str) -> list[tuple[int, dict[str, Any]]]:
+    """(line, object) for every JSON object written anywhere in a text, nested objects included."""
+    decoder = json.JSONDecoder()
+    found: list[tuple[int, dict[str, Any]]] = []
+    seen: set[str] = set()
+    start = text.find("{")
+    while start != -1:
+        try:
+            stack = [decoder.raw_decode(text, start)[0]]
+        except (ValueError, RecursionError):
+            stack = []
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                canonical = json.dumps(item, sort_keys=True)
+                if canonical not in seen:
+                    seen.add(canonical)
+                    found.append((text.count("\n", 0, start) + 1, item))
+                stack.extend(item.values())
+            elif isinstance(item, list):
+                stack.extend(item)
+        start = text.find("{", start + 1)
+    return found
+
+
+def decoded(text: str) -> str:
+    """A JSON object or array written again with its escapes resolved (`\\u006c` reads as `l`); other text as is."""
+    if text.lstrip()[:1] not in ("{", "["):
+        return text
+    try:
+        return json.dumps(json.loads(text), ensure_ascii=False, sort_keys=True)
+    except (ValueError, RecursionError):
+        return text
+
+
+def score_of(task: Task, answer: Any, key: Any, what: str) -> float:
+    """The family's score of an answer; 0 (and a qa-error finding) when the scorer raises."""
+    try:
+        return float(task.family.score(answer, key)["score"])
+    except Exception as exc:  # noqa: BLE001 - a family scorer must never raise (CONTRACT.md 7)
+        task.error(f"solution/family.py score() raised {type(exc).__name__} on {what}")
+        return 0.0
+
+
+# --- Rules on one task ---------------------------------------------------------------------------------------
+
+
+def check_example_leak(task: Task) -> Iterator[Finding]:
+    """A JSON object in an instruction that scores 1 against the answer key (or the decoy) gives the answer away: a
+    seat that copies it is right without any information (FINDINGS.md, 2026-11-19 04:35)."""
+    if task.family is None or task.answer_key is None:
+        return
+    targets = [("the answer key", task.answer_key)]
+    if isinstance(task.task_json.get("decoy"), dict):
+        targets.append(("the decoy", task.task_json["decoy"]))
+    for seat in task.under_test:
+        for line, example in json_objects(task.view(seat)["instruction"]):
+            for what, target in targets:
+                if score_of(task, example, target, f"the example on line {line} of instructions/{seat}.md") >= 1.0:
+                    yield Finding("example-leak", task.name, seat,
+                                  f"the JSON example on line {line} of its instruction scores 1 against {what}")
+
+
+def reveal_hits(text: str, condition: str) -> list[tuple[int, str]]:
+    """(offset, word) for each word that names or reveals a condition, leaving out a word inside a longer one
+    ("liar" inside "talk-liar")."""
+    names = sorted({*REVEALING_NAMES, *([condition] if condition else [])})
+    patterns = [re.compile(rf"(?<![A-Za-z0-9_-]){re.escape(n)}(?![A-Za-z0-9_-])", re.IGNORECASE) for n in names]
+    spans = sorted((m.start(), -m.end(), m.group(0)) for p in [*patterns, LIAR, WARNED] for m in p.finditer(text))
+    hits, reach = [], -1
+    for start, negative_end, word in spans:
+        if -negative_end > reach:
+            hits.append((start, word))
+            reach = -negative_end
+    return hits
+
+
+def check_condition_leak(task: Task) -> Iterator[Finding]:
+    """No byte that a seat under test reads may name its condition or reveal it: world v1's /whoami said
+    "talk-liar", and seats read it as a warning (FINDINGS.md, 2026-11-19 04:50). The builder's deliberate sentences
+    are allowed: messaging on or off, and the warning, which only the two -warned conditions may show."""
+    warned = task.condition.endswith("-warned")
+    for seat in task.under_test:
+        for name, text in task.view(seat).items():
+            if name.startswith("env."):
+                text = f"{name.removeprefix('env.')}\n{decoded(text)}"  # the variable's name is visible too
+            if WARNING in text and not warned:
+                yield Finding("condition-leak", task.name, seat,
+                              f"{name} has the warning sentence, but {task.condition} is not a warned condition")
+            hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition)
+            if hits:
+                where = f" (line {text.count(chr(10), 0, hits[0][0]) + 1})" if name == "instruction" else ""
+                words = ", ".join(sorted({repr(word) for _start, word in hits}))
+                yield Finding("condition-leak", task.name, seat, f"{name}{where} contains {words}")
+        if warned and WARNING not in task.view(seat)["instruction"]:
+            yield Finding("condition-leak", task.name, seat,
+                          f"instruction lacks the warning sentence of the {task.condition} condition")
+
+
+def check_seat_network(task: Task) -> Iterator[Finding]:
+    """Each seat is alone with main on a network of its own, where main has the alias `world`. In world v1 all seats
+    shared one network, and a silent seat could reach its teammate (FINDINGS.md, 2026-11-19 05:10)."""
+    members: dict[str, set[str]] = defaultdict(set)
+    for name, service in task.services.items():
+        for key in service_networks(service):
+            members[network_name(task, key)].add(name)
+    with_main = main_networks(task)
+    specs = network_specs(task)
+    for seat in task.seats:
+        service = task.services.get(seat)
+        if service is None:
+            continue
+        found: list[str] = []
+        for item in service.get("volumes_from") or []:
+            source = str(item).split(":", 1)[0]
+            if source in task.seats and source != seat:
+                found.append(f"it takes the volumes of {source} (volumes_from)")
+        for namespace in ("ipc", "pid"):
+            value = str(service.get(namespace) or "")
+            if value == "host" or value.startswith(("service:", "container:")):
+                found.append(f"{namespace}: {value} shares a namespace with other containers")
+        for other in task.seats:
+            if other != seat and other in task.services and any(
+                    overlap(a, b) for a in volume_sources(task, service)
+                    for b in volume_sources(task, task.services[other])):
+                found.append(f"it shares a volume with {other}")
+        networks = service_networks(service)
+        if "network_mode" in service:
+            mode = str(service["network_mode"])
+            found.append("network_mode: none, so it cannot reach the world" if mode == "none"
+                         else f"network_mode: {mode} gives it no network of its own")
+        elif "default" in networks:
+            how = "names no network" if service.get("networks") is None else "names the default network"
+            found.append(f"it {how}, so it is on the default network")
+        for key in networks:
+            others = sorted(members[network_name(task, key)] - {seat, "main"})
+            if others:
+                found.append(f"it shares network {key} with {', '.join(others)}")
+            if specs.get(key, {}).get("external"):
+                found.append(f"network {key} is external, so containers outside the task can join it")
+            elif specs.get(key, {}).get("name"):
+                found.append(f"network {key} has a fixed name, so concurrent trials share it")
+        shared = [network_name(task, key) for key in networks if network_name(task, key) in with_main]
+        if "network_mode" not in service and not shared:
+            found.append("it shares no network with main, so it cannot reach the world")
+        elif shared and not any("world" in (with_main[name].get("aliases") or []) for name in shared):
+            found.append("main has no alias world on its network, so WORLD_URL does not resolve")
+        yield from (Finding("seat-network", task.name, seat, detail) for detail in found)
+
+
+def protected_files(task: Task, seat: str) -> dict[Path, str]:
+    """Files of the task folder that a seat must never get: main's files, the family module and the other seats'
+    instructions (their private information)."""
+    paths = {task.env_dir / name: f"environment/{name}" for name in WORLD_FILES}
+    paths[task.path / "solution" / "family.py"] = "solution/family.py"
+    paths.update((task.path / "instructions" / f"{other}.md", f"instructions/{other}.md")
+                 for other in task.seats if other != seat)
+    return {path.resolve(): label for path, label in paths.items() if path.exists()}
+
+
+def secret_forms(key: dict[str, Any] | None) -> tuple[set[str], set[str]]:
+    """JSON spellings of the answer key and of its object members, and their canonical forms."""
+    if key is None:
+        return set(), set()
+    parts = [key, *(value for value in key.values() if isinstance(value, dict))]
+    spellings = {json.dumps(part, sort_keys=sort, separators=separators)
+                 for part in parts for sort in (False, True) for separators in (None, (",", ":"))}
+    return spellings, {json.dumps(part, sort_keys=True) for part in parts}
+
+
+def registered_tokens(value: str) -> list[tuple[str, str]]:
+    """(seat, token) pairs of main's FLOTILLA_TOKENS ("p1:<hex>,p2:<hex>")."""
+    return [(seat, token) for seat, _sep, token in (pair.partition(":") for pair in value.split(",") if pair)]
+
+
+def check_seat_secrets(task: Task) -> Iterator[Finding]:
+    """A seat gets nothing that only main and the verifier hold. (The instruction's examples are example-leak's.)"""
+    main_env = task.env("main")
+    admin = main_env.get("FLOTILLA_ADMIN", "")
+    tokens = [(seat, task.env(seat).get("SEAT_TOKEN", "")) for seat in task.seats if seat in task.services]
+    tokens += registered_tokens(main_env.get("FLOTILLA_TOKENS", ""))
+    spellings, canonical = secret_forms(task.answer_key)
+    main_volumes = volume_sources(task, task.services.get("main") or {})
+    for seat in task.seats:
+        service = task.services.get(seat)
+        if service is None:
+            continue
+        found = [f"it gets {name}" for name in ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS") if name in task.env(seat)]
+        own = task.env(seat).get("SEAT_TOKEN", "")  # a token that two seats hold is token-map's finding
+        others = {(other, token) for other, token in tokens if other != seat and len(token) >= 8 and token != own}
+        for name, text in task.view(seat).items():
+            if name in ("env.FLOTILLA_ADMIN", "env.FLOTILLA_TOKENS"):
+                continue  # reported above
+            if len(admin) >= 8 and admin != own and admin in text:
+                found.append(f"{name} holds the admin token (FLOTILLA_ADMIN)")
+            found += [f"{name} holds the token of {other}" for other in sorted({o for o, t in others if t in text})]
+            if name != "instruction" and (any(s in text for s in spellings) or any(
+                    json.dumps(obj, sort_keys=True) in canonical for _line, obj in json_objects(text))):
+                found.append(f"{name} holds the answer key")
+        protected = protected_files(task, seat)
+        for kind, source in volume_sources(task, service):
+            exposed = sorted(label for path, label in protected.items()
+                             if kind == "bind" and (str(path) == source or Path(source) in path.parents))
+            if exposed:
+                found.append(f"it mounts {source}, which holds {', '.join(exposed)}")
+            elif any(overlap((kind, source), theirs) for theirs in main_volumes):
+                found.append(f"it shares volume {source} with main")
+        if any(str(item).split(":", 1)[0] == "main" for item in service.get("volumes_from") or []):
+            found.append("it takes main's volumes (volumes_from)")
+        found += [f"its {what} reads {protected[path]}" for what, path in mounted_files(task, service)
+                  if path in protected]
+        image = task.build(seat)
+        if image is not None and image.copied:
+            contents = {path.read_bytes(): label for path, label in protected.items() if path.is_file()}
+            for path in image.copied:
+                data = path.read_bytes() if path.stat().st_size <= MAX_READ_BYTES else b""
+                label = protected.get(path) or contents.get(data) or (path.name if path.name in WORLD_FILES else "")
+                if label:
+                    found.append(f"{image.dockerfile_name} copies {label} into the seat image")
+        yield from (Finding("seat-secrets", task.name, seat, detail) for detail in found)
+
+
+def check_token_map(task: Task) -> Iterator[Finding]:
+    """Every seat holds its own distinct token, and main's FLOTILLA_TOKENS maps that token to that seat, as world.py
+    reads it (a later entry wins)."""
+    if "main" not in task.services:
+        return
+    main_env = task.env("main")
+    admin = main_env.get("FLOTILLA_ADMIN", "")
+    if not admin:
+        yield Finding("token-map", task.name, "main", "it has no FLOTILLA_ADMIN, so the verifier cannot read the world")
+    pairs = registered_tokens(main_env.get("FLOTILLA_TOKENS", ""))
+    if any(not seat or not token for seat, token in pairs):
+        yield Finding("token-map", task.name, "main", "its FLOTILLA_TOKENS has an entry that is not seat:token")
+    world = {token: seat for seat, token in pairs if token}
+    holders: dict[str, list[str]] = defaultdict(list)
+    for seat in task.seats:
+        if seat not in task.services:
+            continue
+        env = task.env(seat)
+        if env.get("SEAT") != seat:
+            yield Finding("token-map", task.name, seat, f"its SEAT is {env.get('SEAT', '')!r}, not {seat!r}")
+        token = env.get("SEAT_TOKEN", "")
+        if not token:
+            yield Finding("token-map", task.name, seat, "it has no SEAT_TOKEN")
+            continue
+        holders[token].append(seat)
+        if len(token) < MIN_TOKEN_CHARS:
+            yield Finding("token-map", task.name, seat,
+                          f"its token has {len(token)} characters; a token needs at least {MIN_TOKEN_CHARS}")
+        if token == admin:
+            yield Finding("token-map", task.name, seat, "its token is the admin token (FLOTILLA_ADMIN)")
+        if token not in world:
+            yield Finding("token-map", task.name, seat, "main's FLOTILLA_TOKENS has no entry for its token")
+        elif world[token] != seat:
+            yield Finding("token-map", task.name, seat, f"main's FLOTILLA_TOKENS maps its token to {world[token]}")
+    for seats in holders.values():
+        if len(seats) > 1:
+            yield Finding("token-map", task.name, ",".join(seats), f"{' and '.join(seats)} hold the same token")
+    for seat, token in pairs:
+        if token and token not in holders:
+            yield Finding("token-map", task.name, "main",
+                          f"its FLOTILLA_TOKENS has a token for {seat} that no seat holds")
+    for variable, listed in (("FLOTILLA_TOKENS", {seat for seat, _token in pairs}),
+                             ("FLOTILLA_SEATS", set(main_env.get("FLOTILLA_SEATS", "").split(",")) - {""})):
+        if sorted(listed) != task.seats:
+            yield Finding("token-map", task.name, "main",
+                          f"its {variable} names {', '.join(sorted(listed)) or 'no seat'}; the seats are "
+                          f"{', '.join(task.seats)}")
+
+
+@functools.cache
+def checkout_bytes(relative_path: str) -> bytes | None:
+    path = ROOT / relative_path
+    return path.read_bytes() if path.is_file() else None
+
+
+def check_stale_code(task: Task) -> Iterator[Finding]:
+    """The task ships this checkout's world (version 2: no reply names the condition or counts submissions), verifier,
+    oracle (the scripted peer speaks plain text only) and family module. A set built from an older checkout fails."""
+    if not task.family_name:
+        return
+    missing, differ = [], []
+    for built, source in SHIPPED.items():
+        expected = checkout_bytes(source.format(family=task.family_name))
+        if expected is None:
+            yield Finding("stale-code", task.name, "*", f"this checkout has no family {task.family_name!r}")
+        elif not (task.path / built).is_file():
+            missing.append(built)
+        elif (task.path / built).read_bytes() != expected:
+            differ.append(built)
+    if differ:
+        yield Finding("stale-code", task.name, "*",
+                      f"{', '.join(differ)} differ from this checkout's files: build the set again")
+    if missing:
+        yield Finding("stale-code", task.name, "*", f"{', '.join(missing)} missing")
+    version = task.task_json.get("world_version", 1)  # task.json has no world_version before world version 2
+    if task.task_json and version != WORLD_VERSION:
+        yield Finding("stale-code", task.name, "*",
+                      f"task.json gives world version {version}; this checkout's world is version {WORLD_VERSION}")
+
+
+def check_solo_sufficient(task: Task) -> Iterator[Finding]:
+    """A seat whose own briefing already gives the answer needs no teammate in this instance. Only a WARN: in
+    `schedule` a seat alone may guess right by luck (CONTRACT.md 7)."""
+    if task.condition == "solo" or task.family is None or task.answer_key is None:
+        return
+    for seat in task.under_test:
+        raw = task.env(seat).get("SEAT_BRIEFING")
+        if raw is None:
+            continue
+        try:
+            answer = task.family.oracle_answer([json.loads(raw)])
+        except Exception as exc:  # noqa: BLE001 - reported as a finding
+            task.error(f"oracle_answer() fails on its SEAT_BRIEFING ({type(exc).__name__})", seat)
+            continue
+        if score_of(task, answer, task.answer_key, f"the oracle answer from {seat}'s briefing") >= 1.0:
+            yield Finding("solo-sufficient", task.name, seat,
+                          "its own briefing alone gives a correct answer (oracle_answer scores 1)")
+
+
+TASK_RULES = (check_example_leak, check_condition_leak, check_seat_network, check_seat_secrets, check_token_map,
+              check_stale_code, check_solo_sufficient)
+
+
+# --- Rules across tasks ----------------------------------------------------------------------------------------
+
+
+def json_difference(a: Any, b: Any, path: str = "") -> str | None:
+    """The first JSON path where two values differ, or None."""
+    if type(a) is not type(b):
+        return path or "the top level"
+    if isinstance(a, dict):
+        for key in sorted(set(a) | set(b), key=str):
+            where = f"{path}.{key}" if path else str(key)
+            if key not in a or key not in b:
+                return where
+            found = json_difference(a[key], b[key], where)
+            if found is not None:
+                return found
+        return None
+    if isinstance(a, list):
+        for i, (x, y) in enumerate(zip(a, b)):
+            found = json_difference(x, y, f"{path}[{i}]")
+            if found is not None:
+                return found
+        return None if len(a) == len(b) else f"{path}[{min(len(a), len(b))}]"
+    return None if a == b else (path or "the top level")
+
+
+def describe_difference(name: str, mine: str | None, theirs: str | None, twin: str) -> str:
+    """Where a field of a seat's view differs from the same field in the twin task."""
+    if mine is None:
+        return f"{name} is only in {twin}"
+    if theirs is None:
+        return f"{name} is not in {twin}"
+    if name == "instruction":
+        lines, other_lines = mine.splitlines(), theirs.splitlines()
+        line = next((i for i, (x, y) in enumerate(zip(lines, other_lines), 1) if x != y),
+                    min(len(lines), len(other_lines)) + 1)
+        return f"instruction differs from {twin} at line {line}"
+    try:
+        where = json_difference(json.loads(mine), json.loads(theirs))
+    except ValueError:
+        return f"{name} differs from {twin}"
+    return f"{name} differs from {twin} at {where}" if where else f"{name} differs from {twin} (same JSON, other text)"
+
+
+def check_twins(tasks: list[Task]) -> Iterator[Finding]:
+    """talk and talk-liar (and talk-warned and talk-liar-warned) differ only in the scripted peer's script: each seat
+    under test reads the same bytes in both, apart from its token."""
+    groups: dict[tuple[str, str, int], dict[str, Task]] = defaultdict(dict)
+    for task in tasks:
+        if task.instance is not None and task.condition:
+            groups[(str(task.path.parent), task.label, task.instance)].setdefault(task.condition, task)
+    for _key, by_condition in sorted(groups.items()):
+        for first, second in TWINS:
+            if first not in by_condition or second not in by_condition:
+                continue
+            a, b = by_condition[first], by_condition[second]
+            if a.under_test != b.under_test:
+                yield Finding("twin-mismatch", b.name, "*", f"its seats under test are {', '.join(b.under_test)}; "
+                              f"in {a.name}, {', '.join(a.under_test)}")
+            for seat in sorted(set(a.under_test) & set(b.under_test)):
+                theirs, mine = a.view(seat), b.view(seat)
+                for name in sorted(set(theirs) | set(mine)):
+                    if name != "env.SEAT_TOKEN" and theirs.get(name) != mine.get(name):
+                        yield Finding("twin-mismatch", b.name, seat,
+                                      describe_difference(name, mine.get(name), theirs.get(name), a.name))
+
+
+def compose_project(name: str) -> str:
+    """Harbor's Compose project name for a name (environments/docker/docker.py)."""
+    name = name.lower()
+    return re.sub(r"[^a-z0-9_-]", "-", name if re.match(r"^[a-z0-9]", name) else "0" + name)
+
+
+def check_runtime_names(tasks: list[Task]) -> Iterator[Finding]:
+    """Harbor names a trial after the first 32 characters of the task name (models/trial/config.py) and the trial's
+    Compose project `<trial>__env`, and Docker's DNS gives seats the container and network names: a silent seat read
+    `schedule-004-silent__cdeu7ht__env-main-1` by a reverse lookup (job w2-schedule-qwen3-6-35b-2seat, FINDINGS.md
+    2026-11-19 05:10). A name that says "liar" tells honest and unwarned seats about the liar. The task folder cannot
+    fix this (Harbor can), so it is a WARN, once per label."""
+    by_label: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for task in tasks:
+        prefix = task.task_name.rsplit("/", 1)[-1][:32].rstrip("_-")
+        if LIAR.search(prefix):
+            by_label[(str(task.path.parent), task.label)].append(prefix)
+    for (_parent, label), prefixes in sorted(by_label.items()):
+        yield Finding("runtime-names", label, "*",
+                      f"{len(prefixes)} tasks: Harbor names Docker containers and networks after the task "
+                      f"(for example {compose_project(prefixes[0])}__<id>__env-main-1); a seat that looks up an "
+                      "address reads 'liar'")
+
+
+# --- Running and reporting -------------------------------------------------------------------------------------
+
+
+def find_tasks(patterns: list[str]) -> list[Path]:
+    """Task folders (with task.toml) that the globs name, or that are below the folders they name."""
+    found: list[Path] = []
+    for pattern in patterns:
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            path = Path(match)
+            if (path / "task.toml").is_file():
+                found.append(path)
+            elif path.is_dir():
+                found += sorted(p.parent for p in path.rglob("task.toml"))
+    return sorted(dict.fromkeys(p.resolve() for p in found))
+
+
+def check(paths: list[Path]) -> tuple[list[Finding], list[Task]]:
+    """Every finding for the task folders, in report order, and the tasks as read."""
+    if yaml is None:
+        raise RuntimeError("qa.py needs PyYAML: uvx --quiet --with pyyaml python flotilla/qa.py ...")
+    tasks = [load_task(path) for path in paths]
+    findings: set[Finding] = set()
+    for task in tasks:
+        for rule in TASK_RULES:
+            findings.update(rule(task))
+    findings.update(check_twins(tasks))
+    findings.update(check_runtime_names(tasks))
+    for task in tasks:
+        findings.update(task.errors)  # last: the rules above can add some
+    return sorted(findings, key=Finding.order), tasks
+
+
+def summary(findings: list[Finding], tasks: list[Task]) -> dict[str, Any]:
+    labels: dict[str, int] = defaultdict(int)
+    for task in tasks:
+        labels[task.label or "?"] += 1
+    rules = {rule: {"level": level, "findings": sum(1 for f in findings if f.rule == rule),
+                    "tasks": len({f.task for f in findings if f.rule == rule}), "means": means}
+             for rule, (level, means) in RULES.items()}
+    fails = sum(1 for f in findings if f.level == "FAIL")
+    return {"tasks": len(tasks), "labels": dict(sorted(labels.items())), "fail": fails,
+            "warn": len(findings) - fails, "passed": fails == 0, "rules": rules}
+
+
+def render_text(findings: list[Finding], tasks: list[Task]) -> str:
+    facts = summary(findings, tasks)
+    lines = []
+    if findings:
+        rows = [("LEVEL", "RULE", "TASK", "SEAT", "DETAIL"), *((f.level, f.rule, f.task, f.seat, f.detail)
+                                                               for f in findings)]
+        widths = [max(len(row[i]) for row in rows) for i in range(4)]
+        lines += ["  ".join(cell.ljust(width) for cell, width in zip(row, widths)) + "  " + row[4] for row in rows]
+    else:
+        lines.append("No findings.")
+    labels = ", ".join(f"{label} {n}" for label, n in facts["labels"].items())
+    lines += ["", f"Checked {facts['tasks']} tasks ({labels}): {facts['fail']} FAIL, {facts['warn']} WARN.", "",
+              f"{'rule':<16} {'level':<5} {'findings':>8} {'tasks':>6}"]
+    lines += [f"{rule:<16} {row['level']:<5} {row['findings']:>8} {row['tasks']:>6}"
+              for rule, row in facts["rules"].items()]
+    lines += ["", "PASS: no FAIL finding." if facts["passed"] else "FAIL: fix every FAIL finding before a wave."]
+    return "\n".join(lines)
+
+
+def render_json(findings: list[Finding], tasks: list[Task]) -> str:
+    paths = {task.name: str(task.path) for task in tasks} | {task.label: str(task.path.parent) for task in tasks}
+    rows = [{"level": f.level, "rule": f.rule, "task": f.task, "seat": f.seat, "detail": f.detail,
+             "path": paths.get(f.task)} for f in findings]
+    return json.dumps({**summary(findings, tasks), "findings": rows}, indent=2)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("tasks", nargs="+", help="task folders, or globs in quotes, e.g. 'flotilla/tasks/*/*'")
+    parser.add_argument("--json", action="store_true", help="print the findings and the summary as JSON")
+    args = parser.parse_args(argv)
+    if yaml is None:
+        print("qa.py needs PyYAML: uvx --quiet --with pyyaml python flotilla/qa.py ...", file=sys.stderr)
+        return 2
+    paths = find_tasks(args.tasks)
+    if not paths:
+        print(f"no task folder (with a task.toml) matches {' '.join(args.tasks)}", file=sys.stderr)
+        return 2
+    findings, tasks = check(paths)
+    print(render_json(findings, tasks) if args.json else render_text(findings, tasks))
+    return 1 if any(f.level == "FAIL" for f in findings) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
