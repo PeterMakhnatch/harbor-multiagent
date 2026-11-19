@@ -1,0 +1,910 @@
+{
+  "cells": [
+    {
+      "first_symbol": 0,
+      "id": "s101-plain-plain",
+      "native_trial_id": "fc24703a-9d2a-424c-88a8-7cbe5a8b3a6e",
+      "reason": null,
+      "seed": 101,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s101-rotate-rotate",
+      "native_trial_id": "ea3dc9b2-84e7-4f92-8aa7-14aa6af9c428",
+      "reason": null,
+      "seed": 101,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s101-plain-rotate",
+      "native_trial_id": "13e6b186-2628-4587-9a68-59bb7ba33f51",
+      "reason": null,
+      "seed": 101,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s101-rotate-plain",
+      "native_trial_id": "92a9726f-7936-452d-896a-5aabd7b4e3ed",
+      "reason": null,
+      "seed": 101,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s101-plain-blind",
+      "native_trial_id": "f639117d-4859-4999-8cfd-21ea4b1cb9ed",
+      "reason": null,
+      "seed": 101,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s102-plain-plain",
+      "native_trial_id": "e93e6424-0cc6-4dac-956a-487309a74deb",
+      "reason": null,
+      "seed": 102,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s102-rotate-rotate",
+      "native_trial_id": "d5b425ae-c43a-423d-a28f-c1b1f9e5ef12",
+      "reason": null,
+      "seed": 102,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s102-plain-rotate",
+      "native_trial_id": "25587431-5247-4a3e-ad30-ddda24f40024",
+      "reason": null,
+      "seed": 102,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s102-rotate-plain",
+      "native_trial_id": "ee252c12-1990-4434-9b82-79f840569d00",
+      "reason": null,
+      "seed": 102,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s102-plain-blind",
+      "native_trial_id": "9a11628c-734d-4613-a123-e729c52564c7",
+      "reason": null,
+      "seed": 102,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s103-plain-plain",
+      "native_trial_id": "a77ae233-1d90-4480-af7e-92b6bb182b22",
+      "reason": null,
+      "seed": 103,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s103-rotate-rotate",
+      "native_trial_id": "8b2d7dea-0f4a-4984-8c25-e4a70d740389",
+      "reason": null,
+      "seed": 103,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s103-plain-rotate",
+      "native_trial_id": "7afc4afb-a12a-4b90-bb22-159c22585855",
+      "reason": null,
+      "seed": 103,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s103-rotate-plain",
+      "native_trial_id": "8d233627-de3d-4d49-8f27-94a52c116341",
+      "reason": null,
+      "seed": 103,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s103-plain-blind",
+      "native_trial_id": "27c3a8f4-d017-4601-992b-eeebc606a8ee",
+      "reason": null,
+      "seed": 103,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s104-plain-plain",
+      "native_trial_id": "9270a647-d708-4292-ae07-816fa3b1ccf5",
+      "reason": null,
+      "seed": 104,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s104-rotate-rotate",
+      "native_trial_id": "b39397bb-9e03-4384-9949-24bdec7b61db",
+      "reason": null,
+      "seed": 104,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s104-plain-rotate",
+      "native_trial_id": "78cad551-c798-4f12-84a9-70150dbdd820",
+      "reason": null,
+      "seed": 104,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s104-rotate-plain",
+      "native_trial_id": "9a524f92-1741-4876-885b-17ca6b43cd4b",
+      "reason": null,
+      "seed": 104,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s104-plain-blind",
+      "native_trial_id": "5e78c55e-ee2d-4c59-a774-e9cbb2e38be5",
+      "reason": null,
+      "seed": 104,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s105-plain-plain",
+      "native_trial_id": "f138cc5c-785f-4eb1-9daa-9ea5cbda8bd0",
+      "reason": null,
+      "seed": 105,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s105-rotate-rotate",
+      "native_trial_id": "be153079-d6bf-4361-ae90-f29ed17e3ffb",
+      "reason": null,
+      "seed": 105,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s105-plain-rotate",
+      "native_trial_id": "996cd3b7-d250-454e-8849-ea0505b8da5c",
+      "reason": null,
+      "seed": 105,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s105-rotate-plain",
+      "native_trial_id": "f2d9f1a8-ea1b-4c18-9283-4010d912b06a",
+      "reason": null,
+      "seed": 105,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s105-plain-blind",
+      "native_trial_id": "10e512fd-d873-481b-bc12-5b9f95e1d534",
+      "reason": null,
+      "seed": 105,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s106-plain-plain",
+      "native_trial_id": "7936749b-c454-4e78-b6cb-e85fcf71f657",
+      "reason": null,
+      "seed": 106,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s106-rotate-rotate",
+      "native_trial_id": "d506d420-ea4c-4482-8639-3085d295d29c",
+      "reason": null,
+      "seed": 106,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s106-plain-rotate",
+      "native_trial_id": "dfdac3ad-fa11-4a5a-b4a9-218cf92e0c9f",
+      "reason": null,
+      "seed": 106,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s106-rotate-plain",
+      "native_trial_id": "e2c2ddca-4ad1-489c-8c6b-6bbff2dcaeaf",
+      "reason": null,
+      "seed": 106,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s106-plain-blind",
+      "native_trial_id": "a312ed3b-f1f2-41f6-b2ed-71fe34b18974",
+      "reason": null,
+      "seed": 106,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s107-plain-plain",
+      "native_trial_id": "88630357-a37e-4cf6-b340-a244cba26547",
+      "reason": null,
+      "seed": 107,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s107-rotate-rotate",
+      "native_trial_id": "1eb43dff-ddb1-49c0-a471-5cc4a49a8112",
+      "reason": null,
+      "seed": 107,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s107-plain-rotate",
+      "native_trial_id": "0090d909-e938-4e4f-ac27-be3676be5605",
+      "reason": null,
+      "seed": 107,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s107-rotate-plain",
+      "native_trial_id": "fbee4fb9-115a-4aba-9909-1eb65b63130e",
+      "reason": null,
+      "seed": 107,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s107-plain-blind",
+      "native_trial_id": "4372797d-6efc-4e30-8501-587866ccd001",
+      "reason": null,
+      "seed": 107,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s108-plain-plain",
+      "native_trial_id": "418c1b97-94c5-4de0-b8e4-83d6d686d408",
+      "reason": null,
+      "seed": 108,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s108-rotate-rotate",
+      "native_trial_id": "eb1101de-e408-40e6-8b29-47bcd3ff4066",
+      "reason": null,
+      "seed": 108,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s108-plain-rotate",
+      "native_trial_id": "2b81fcba-dfa2-4eeb-8847-88800e6131b8",
+      "reason": null,
+      "seed": 108,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s108-rotate-plain",
+      "native_trial_id": "6824b38a-d672-4fb9-9e41-428394f38558",
+      "reason": null,
+      "seed": 108,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s108-plain-blind",
+      "native_trial_id": "a25ae47d-2c3e-49ec-8b44-e3864ada00fc",
+      "reason": null,
+      "seed": 108,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s109-plain-plain",
+      "native_trial_id": "af59a6bb-9129-4501-9135-75b140e0453e",
+      "reason": null,
+      "seed": 109,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s109-rotate-rotate",
+      "native_trial_id": "0631ea7f-4854-4e3a-9ef5-6ef92a905e27",
+      "reason": null,
+      "seed": 109,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s109-plain-rotate",
+      "native_trial_id": "538ff8c3-0b8a-47ed-9c5e-8b86af113d96",
+      "reason": null,
+      "seed": 109,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s109-rotate-plain",
+      "native_trial_id": "6537f104-f27f-46bc-aad1-3d24368fdbac",
+      "reason": null,
+      "seed": 109,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s109-plain-blind",
+      "native_trial_id": "967fb9ed-ddda-4488-a0de-331b8386d939",
+      "reason": null,
+      "seed": 109,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s110-plain-plain",
+      "native_trial_id": "c3bc2b66-0a10-4fb9-9fc8-aa5c0461aecb",
+      "reason": null,
+      "seed": 110,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s110-rotate-rotate",
+      "native_trial_id": "e2cced4e-e718-4270-bd04-ba00445039f2",
+      "reason": null,
+      "seed": 110,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s110-plain-rotate",
+      "native_trial_id": "d17259fc-46a0-44df-8c9e-a86370d9102a",
+      "reason": null,
+      "seed": 110,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s110-rotate-plain",
+      "native_trial_id": "3388b138-1b55-4b4b-a8a8-ba87095499e8",
+      "reason": null,
+      "seed": 110,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s110-plain-blind",
+      "native_trial_id": "fbd08551-618c-4bbe-8d1d-5fa232406df6",
+      "reason": null,
+      "seed": 110,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s111-plain-plain",
+      "native_trial_id": "58fdf0bb-935e-45be-aa79-cb5a8ec0d7b9",
+      "reason": null,
+      "seed": 111,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s111-rotate-rotate",
+      "native_trial_id": "166a6ed0-0fa8-4f62-93a0-48cdd72f0c97",
+      "reason": null,
+      "seed": 111,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s111-plain-rotate",
+      "native_trial_id": "8f6e7399-7d10-435f-a3d8-7b972da108ce",
+      "reason": null,
+      "seed": 111,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 2,
+      "id": "s111-rotate-plain",
+      "native_trial_id": "c9dad5bc-3cd8-4930-b1ee-d124dbb28d9e",
+      "reason": null,
+      "seed": 111,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s111-plain-blind",
+      "native_trial_id": "b87752cf-7931-45d8-ab87-8bb903ade997",
+      "reason": null,
+      "seed": 111,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s112-plain-plain",
+      "native_trial_id": "bb16b984-79e0-440b-8af2-b980eb58dba6",
+      "reason": null,
+      "seed": 112,
+      "status": "complete",
+      "team": "plain-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s112-rotate-rotate",
+      "native_trial_id": "8d26a555-f076-44cb-af70-0c9675573f90",
+      "reason": null,
+      "seed": 112,
+      "status": "complete",
+      "team": "rotate-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s112-plain-rotate",
+      "native_trial_id": "bbd45e1c-a98b-4916-b15f-4ca58679f2e0",
+      "reason": null,
+      "seed": 112,
+      "status": "complete",
+      "team": "plain-rotate",
+      "usable": true
+    },
+    {
+      "first_symbol": 1,
+      "id": "s112-rotate-plain",
+      "native_trial_id": "0f827974-0f26-4371-a272-a6de714bb409",
+      "reason": null,
+      "seed": 112,
+      "status": "complete",
+      "team": "rotate-plain",
+      "usable": true
+    },
+    {
+      "first_symbol": 0,
+      "id": "s112-plain-blind",
+      "native_trial_id": "0f95ae78-5fd8-40ab-8289-42df030b20e0",
+      "reason": null,
+      "seed": 112,
+      "status": "complete",
+      "team": "plain-blind",
+      "usable": true
+    }
+  ],
+  "crossed": {
+    "plain-rotate": {
+      "better": 0,
+      "denominator": 12,
+      "missing": 0,
+      "tie": 0,
+      "worse": 12
+    },
+    "rotate-plain": {
+      "better": 0,
+      "denominator": 12,
+      "missing": 0,
+      "tie": 0,
+      "worse": 12
+    },
+    "total": {
+      "better": 0,
+      "denominator": 24,
+      "missing": 0,
+      "tie": 0,
+      "worse": 24
+    }
+  },
+  "direct_engine": {
+    "agreed_cells": 60,
+    "compared_cells": 60,
+    "compared_decisions": 2400,
+    "compared_observation_components": 16800,
+    "compared_payoffs": 120,
+    "compared_world_steps": 1200,
+    "contrasts": {
+      "independent_measured": 48,
+      "native_measured": 48,
+      "registered": 48
+    },
+    "disagreed_cells": 0,
+    "independent": {
+      "failed": 0,
+      "ok": 60
+    },
+    "max_abs_observation_difference": 0.0,
+    "max_abs_payoff_difference": 0.0,
+    "native": {
+      "complete": 60,
+      "invalid": 0,
+      "unattempted": 0,
+      "unregistered": 0
+    },
+    "registered_cells": 60
+  },
+  "forecast_commit": "11905583a7a6a759f3469f6825f78c9f0c588bac",
+  "forecast_sha256": "87caff7d0ff2321a6a227a1b8a5ef9c287ad6895d1bce5b0561ba18164e6c76a",
+  "primary_blind": {
+    "groups": {
+      "target_other": {
+        "equal": 0,
+        "measured": 7,
+        "missing": 0,
+        "seeds": 7
+      },
+      "target_unknown": {
+        "equal": 0,
+        "measured": 0,
+        "missing": 0,
+        "seeds": 0
+      },
+      "target_zero": {
+        "equal": 5,
+        "measured": 5,
+        "missing": 0,
+        "seeds": 5
+      }
+    },
+    "seeds": [
+      {
+        "blind_equal": true,
+        "seed": 101,
+        "target": 0
+      },
+      {
+        "blind_equal": false,
+        "seed": 102,
+        "target": 1
+      },
+      {
+        "blind_equal": false,
+        "seed": 103,
+        "target": 1
+      },
+      {
+        "blind_equal": false,
+        "seed": 104,
+        "target": 2
+      },
+      {
+        "blind_equal": true,
+        "seed": 105,
+        "target": 0
+      },
+      {
+        "blind_equal": false,
+        "seed": 106,
+        "target": 1
+      },
+      {
+        "blind_equal": true,
+        "seed": 107,
+        "target": 0
+      },
+      {
+        "blind_equal": true,
+        "seed": 108,
+        "target": 0
+      },
+      {
+        "blind_equal": false,
+        "seed": 109,
+        "target": 1
+      },
+      {
+        "blind_equal": false,
+        "seed": 110,
+        "target": 1
+      },
+      {
+        "blind_equal": false,
+        "seed": 111,
+        "target": 1
+      },
+      {
+        "blind_equal": true,
+        "seed": 112,
+        "target": 0
+      }
+    ]
+  },
+  "registered": {
+    "cells": 60,
+    "comparisons": 48,
+    "seeds": [
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112
+    ],
+    "teams": [
+      "plain-plain",
+      "rotate-rotate",
+      "plain-rotate",
+      "rotate-plain",
+      "plain-blind"
+    ],
+    "tolerance": 1e-06
+  },
+  "schema": "seatlab.pz-communication-forecast-check/v1",
+  "shared_rotation": {
+    "actions_preserved": {
+      "denominator": 12,
+      "false": 0,
+      "missing": 0,
+      "true": 12
+    },
+    "physical_preserved": {
+      "denominator": 12,
+      "false": 0,
+      "missing": 0,
+      "true": 12
+    },
+    "symbol_changed": {
+      "denominator": 12,
+      "false": 0,
+      "missing": 0,
+      "true": 12
+    }
+  },
+  "summary": {
+    "contrasts": {
+      "plain-blind": {
+        "differing_actions": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_action": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_physical_step": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        }
+      },
+      "plain-rotate": {
+        "differing_actions": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_action": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_physical_step": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        }
+      },
+      "rotate-plain": {
+        "differing_actions": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_action": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_physical_step": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        }
+      },
+      "rotate-rotate": {
+        "differing_actions": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_action": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        },
+        "first_physical_step": {
+          "denominator": 12,
+          "false": 0,
+          "missing": 0,
+          "true": 12
+        }
+      }
+    },
+    "goal": {
+      "denominator": 12,
+      "false": 0,
+      "missing": 0,
+      "true": 12
+    },
+    "returns": {
+      "plain-blind": {
+        "denominator": 12,
+        "false": 0,
+        "missing": 0,
+        "true": 12
+      },
+      "plain-plain": {
+        "denominator": 12,
+        "false": 0,
+        "missing": 0,
+        "true": 12
+      },
+      "plain-rotate": {
+        "denominator": 12,
+        "false": 0,
+        "missing": 0,
+        "true": 12
+      },
+      "rotate-plain": {
+        "denominator": 12,
+        "false": 0,
+        "missing": 0,
+        "true": 12
+      },
+      "rotate-rotate": {
+        "denominator": 12,
+        "false": 0,
+        "missing": 0,
+        "true": 12
+      }
+    }
+  },
+  "verdict": "agreed"
+}
