@@ -1,0 +1,362 @@
+{
+  "comparison": {
+    "basis": "completed slots, distinct native trial UUIDs and result pins",
+    "distinct_trials": 8,
+    "full_identical": true,
+    "projections_identical": {
+      "accepted_report": true,
+      "decision": true,
+      "dispatch_view": true,
+      "inventory_view": true,
+      "latent": true,
+      "reward": true,
+      "score": true
+    },
+    "slots": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "view_attestation": "world_derived_not_oracle_acknowledged"
+  },
+  "counts": {
+    "control": {
+      "completed": 8,
+      "planned": 8
+    },
+    "hosted": {
+      "not_planned": 8,
+      "planned": 0
+    },
+    "planned_slots": 8
+  },
+  "integrity_failures": 0,
+  "plan": {
+    "condition": "reordered",
+    "control_only": true,
+    "episodes": 4,
+    "interval_seconds": 3600,
+    "plan_sha256": "6cbf0c01fefee9d5bc22c11fcfd828069a01fc52b0fd12d5b087278a7df03eb0",
+    "seed": 1009,
+    "slots": 8,
+    "start": "2026-11-19T09:15:00Z",
+    "task": "harbor/dispatch-handoff",
+    "window_seconds": 900
+  },
+  "schema": "seatlab.timed-evidence/v1",
+  "sentinels": {
+    "pause_hosted": true,
+    "stop": false
+  },
+  "slots": [
+    {
+      "control": {
+        "decided_at": "2026-11-19T09:15:00.076599Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "134a2c00ead1c3fc4fd73dbf194bbc3abcdeac274addbe3dea4ec139d9646be4",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T09:15:00.076599Z",
+          "outcome_at": "2026-11-19T09:15:08.952376Z",
+          "planned_cutoff": "2026-11-19T09:30:00Z",
+          "planned_start": "2026-11-19T09:15:00Z",
+          "receipt_sha256": "908718b6f4452a23c41792611f9ab6810b940b3e4a15f5fa39802dc7ad4ef5c0",
+          "recorded_order_ok": true,
+          "slot": 1,
+          "started_at": "2026-11-19T09:15:00.147548Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "517f655f-dbfb-4a14-8d19-b83e7c9c12d5"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T09:30:00Z",
+      "planned_start": "2026-11-19T09:15:00Z",
+      "slot": 1
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T10:15:00.147449Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "6b8f71f078a84982a2f66e31aa98b30e077c48f649a76087910855e12e0f045a",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T10:15:00.147449Z",
+          "outcome_at": "2026-11-19T10:15:13.413196Z",
+          "planned_cutoff": "2026-11-19T10:30:00Z",
+          "planned_start": "2026-11-19T10:15:00Z",
+          "receipt_sha256": "aca4550c9860ccc6a2911ff66a9c0cbc863a2fc562f1437b49b141bcf625ca4a",
+          "recorded_order_ok": true,
+          "slot": 2,
+          "started_at": "2026-11-19T10:15:00.277670Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "c2c53a13-cfd1-430b-86a6-5c8247cab51b"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T10:30:00Z",
+      "planned_start": "2026-11-19T10:15:00Z",
+      "slot": 2
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T11:15:00.191637Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "b04fb3495da734eac9088a878395dcab74a698b0f6816aebe4aee71dc4dfb2de",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T11:15:00.191637Z",
+          "outcome_at": "2026-11-19T11:15:19.161580Z",
+          "planned_cutoff": "2026-11-19T11:30:00Z",
+          "planned_start": "2026-11-19T11:15:00Z",
+          "receipt_sha256": "550b2c5bf0a37c5475baf3357a7e812bcadd47db1d107fa90b0e4d2598de53a6",
+          "recorded_order_ok": true,
+          "slot": 3,
+          "started_at": "2026-11-19T11:15:00.471920Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "2d3dd577-ca1e-4c27-b8ff-e755a765ebb8"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T11:30:00Z",
+      "planned_start": "2026-11-19T11:15:00Z",
+      "slot": 3
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T12:15:00.151779Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "36d3c7d13c6394999105860c0948a5a24747e64be71055f688d40fd6d6d65138",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T12:15:00.151779Z",
+          "outcome_at": "2026-11-19T12:15:10.624493Z",
+          "planned_cutoff": "2026-11-19T12:30:00Z",
+          "planned_start": "2026-11-19T12:15:00Z",
+          "receipt_sha256": "271bf20fbe530c23671b88393fce5fb17e4621bba19c28f4d0064341bba630c4",
+          "recorded_order_ok": true,
+          "slot": 4,
+          "started_at": "2026-11-19T12:15:00.232370Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "b57c6247-316b-4c97-872c-53dd8cd889d0"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T12:30:00Z",
+      "planned_start": "2026-11-19T12:15:00Z",
+      "slot": 4
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T13:15:00.153356Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "0af11870ca5f06f64b37b13b3ac0dab0f284ea573f6617ca66bf14bbdc44831f",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T13:15:00.153356Z",
+          "outcome_at": "2026-11-19T13:15:22.738159Z",
+          "planned_cutoff": "2026-11-19T13:30:00Z",
+          "planned_start": "2026-11-19T13:15:00Z",
+          "receipt_sha256": "5952d38a78d2158077fdf3e19ab33ef7b48dc2c4ac1349c1f60071a3abe8d6a9",
+          "recorded_order_ok": true,
+          "slot": 5,
+          "started_at": "2026-11-19T13:15:00.575971Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "1ee1dae4-21a7-4d86-9f17-45919aafd4fb"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T13:30:00Z",
+      "planned_start": "2026-11-19T13:15:00Z",
+      "slot": 5
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T14:15:00.150470Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "9ddca18d88677d6a849f5ac2d262034ff7bc86953adcd95aa3c946de512c51c6",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T14:15:00.150470Z",
+          "outcome_at": "2026-11-19T14:15:15.838561Z",
+          "planned_cutoff": "2026-11-19T14:30:00Z",
+          "planned_start": "2026-11-19T14:15:00Z",
+          "receipt_sha256": "720fa1be73aa2b257c54043b57ec2fa1ad4a433be47e364b31c2ace5257e5ab9",
+          "recorded_order_ok": true,
+          "slot": 6,
+          "started_at": "2026-11-19T14:15:00.215636Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "a285b76c-e9dc-499c-a6bf-d826e9b8f336"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T14:30:00Z",
+      "planned_start": "2026-11-19T14:15:00Z",
+      "slot": 6
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T15:15:00.143976Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "2771d4cc1f62ec620edff3156a647775ab6b2cbe7f1fb6b146a58046d545a5f5",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T15:15:00.143976Z",
+          "outcome_at": "2026-11-19T15:15:08.940270Z",
+          "planned_cutoff": "2026-11-19T15:30:00Z",
+          "planned_start": "2026-11-19T15:15:00Z",
+          "receipt_sha256": "d268e6c16ef95d57e96ff731d76df520b4fd495e4ca7cb7426ba66e777f15e1c",
+          "recorded_order_ok": true,
+          "slot": 7,
+          "started_at": "2026-11-19T15:15:00.198293Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "c336a946-070a-4d87-8636-3db075038af1"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T15:30:00Z",
+      "planned_start": "2026-11-19T15:15:00Z",
+      "slot": 7
+    },
+    {
+      "control": {
+        "decided_at": "2026-11-19T16:15:00.057438Z",
+        "outcome_unsafe": false,
+        "projection": {
+          "accepted_report_sha256": "0cb6d7c402f3a4926e5837532ec223be3dddc6ecbf2231f4de45acae858781c1",
+          "decision_sha256": "595474e5c177896935e4ceb2799f1c1f684b83d49de0a1e05e0f158fb380b9c9",
+          "dispatch_view_sha256": "008d0ce62b9e3cf5b97636ba9a13bad7091887f8a54087f864711d3cb34732fe",
+          "inventory_view_sha256": "62934de0a634292a0d4b33573939ddcc3acc99b69d723cbf7b8324c23ff5a978",
+          "latent_sha256": "a0c68c93c8f4ec3759f3f799c42db17b0c9821594650b5caf21a0a44f10fc778",
+          "manifest_sha256": "bfbc0cde5946de53e3466bd3bdec15255eca54711cd97f65699349c5ec7dfac0",
+          "native_result_sha256": "77ce7e8a865d9f72e67752e9dd327daec13bca57c4bdc23d42d655f6ce721a75",
+          "reward_sha256": "564343601c97e28aaab2331af01c0a3ce52d964fde80ca699a16dfce3c7371af",
+          "score_sha256": "67dff280fecfdf81751a9baa87e5bd5868fb1f249cd5eb848866059ee4745b5a",
+          "view_attestation": "world_derived_not_oracle_acknowledged"
+        },
+        "receipt": {
+          "attempt_in_window": true,
+          "attempted_at": "2026-11-19T16:15:00.057438Z",
+          "outcome_at": "2026-11-19T16:15:11.372252Z",
+          "planned_cutoff": "2026-11-19T16:30:00Z",
+          "planned_start": "2026-11-19T16:15:00Z",
+          "receipt_sha256": "bab2249bb6acdbae4256ab94846b743e1693fc5906180178828b95b59faf25f3",
+          "recorded_order_ok": true,
+          "slot": 8,
+          "started_at": "2026-11-19T16:15:00.160509Z"
+        },
+        "reread_status": "measured",
+        "state": "completed",
+        "trial_id": "86259bd8-883a-40b7-9cc5-df13ee2e773c"
+      },
+      "hosted": {
+        "plan_state": "not_planned"
+      },
+      "planned_cutoff": "2026-11-19T16:30:00Z",
+      "planned_start": "2026-11-19T16:15:00Z",
+      "slot": 8
+    }
+  ]
+}
