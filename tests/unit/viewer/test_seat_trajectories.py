@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 from harbor.models.trial.config import Participant, TaskConfig, TrialConfig
 from harbor.models.trial.result import AgentInfo, SeatResult, TrialResult
 from harbor.models.verifier.result import VerifierResult
-from harbor.viewer.server import create_app
+from harbor.viewer import server
+from harbor.viewer.server import OUTSIDE_TRIAL_LOG, create_app
 from harbor.viewer.trial_utils import model_info_from_model_name
 
 JOB = "seat-job"
@@ -213,41 +214,123 @@ def _replace_with_link(path: Path, target: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("route", "seat", "link", "target"),
+    ("seat", "link", "target"),
     [
-        ("trajectory", "p1", "seats/p1/agent/trajectory.json", "trajectory.json"),
-        ("trajectory", "p1", "seats/p1/agent", ""),
-        ("trajectory", None, "agent/trajectory.json", "trajectory.json"),
-        ("agent-logs", "p2", "seats/p2/agent/oracle.txt", "oracle.txt"),
-        ("agent-logs", "p2", "seats/p2/agent/setup/stdout.txt", "setup/stdout.txt"),
-        (
-            "agent-logs",
-            "p2",
-            "seats/p2/agent/command-0/stdout.txt",
-            "command-0/stdout.txt",
-        ),
-        ("agent-logs", "p2", "seats/p2/agent", ""),
-        ("agent-logs", None, "analysis.md", "analysis.md"),
+        ("p1", "seats/p1/agent/trajectory.json", "trajectory.json"),
+        ("p1", "seats/p1/agent", ""),
+        (None, "agent/trajectory.json", "trajectory.json"),
     ],
 )
-def test_a_link_out_of_the_trial_is_refused(
+def test_a_trajectory_that_links_out_of_the_trial_is_refused(
     client: TestClient,
     seat_trial: Path,
     outside: Path,
-    route: str,
     seat: str | None,
     link: str,
     target: str,
 ) -> None:
-    """Each file is checked at its final path, below a valid seat root too."""
+    """The file is checked at its final path, below a valid seat root too."""
     _replace_with_link(seat_trial / link, outside / target)
 
     response = client.get(
-        f"{BASE}/{route}", params={"seat": seat} if seat is not None else {}
+        f"{BASE}/trajectory", params={"seat": seat} if seat is not None else {}
     )
 
     assert response.status_code == 403
     assert SECRET not in response.text
+
+
+def _agent_logs(client: TestClient, seat: str | None) -> dict:
+    response = client.get(
+        f"{BASE}/agent-logs", params={"seat": seat} if seat is not None else {}
+    )
+    assert response.status_code == 200
+    assert SECRET not in response.text
+    return response.json()
+
+
+@pytest.mark.parametrize(
+    ("link", "target", "refused"),
+    [
+        ("seats/p2/agent/oracle.txt", "oracle.txt", {"oracle"}),
+        ("seats/p2/agent/setup/stdout.txt", "setup/stdout.txt", {"setup"}),
+        (
+            "seats/p2/agent/command-0/stdout.txt",
+            "command-0/stdout.txt",
+            {"command-0"},
+        ),
+        ("seats/p2/agent", "", {"oracle", "setup", "command-0"}),
+        ("analysis.md", "analysis.md", {"summary"}),
+    ],
+)
+def test_a_log_that_links_out_of_the_trial_is_refused_alone(
+    client: TestClient,
+    seat_trial: Path,
+    outside: Path,
+    link: str,
+    target: str,
+    refused: set[str],
+) -> None:
+    """Each log is checked at its final path. A log that links out gets a
+    marker, and the other logs still come back."""
+    agent = seat_trial / "seats" / "p2" / "agent"
+    for relative, text in {
+        "oracle.txt": "p2 oracle",
+        "setup/stdout.txt": "p2 setup",
+        "command-0/stdout.txt": "p2 command",
+    }.items():
+        (agent / relative).parent.mkdir(parents=True, exist_ok=True)
+        (agent / relative).write_text(text)
+    (seat_trial / "analysis.md").write_text("trial summary")
+    _replace_with_link(seat_trial / link, outside / target)
+
+    logs = _agent_logs(client, "p2")
+
+    entries = {
+        "oracle": logs["oracle"],
+        "setup": logs["setup"],
+        "summary": logs["summary"],
+        **{f"command-{c['index']}": c["content"] for c in logs["commands"]},
+    }
+    expected = {
+        "oracle": "p2 oracle",
+        "setup": "p2 setup",
+        "summary": "trial summary",
+        "command-0": "p2 command",
+    }
+    assert entries == expected | dict.fromkeys(refused, OUTSIDE_TRIAL_LOG)
+
+
+def test_one_command_log_that_links_out_does_not_hide_the_next(
+    client: TestClient, seat_trial: Path, outside: Path
+) -> None:
+    agent = seat_trial / "seats" / "p2" / "agent"
+    (agent / "command-0").mkdir()
+    (agent / "command-0" / "stdout.txt").write_text("ran 0")
+    _replace_with_link(agent / "command-1", outside / "command-0")
+    (agent / "command-2").mkdir()
+    (agent / "command-2" / "stdout.txt").write_text("ran 2")
+
+    logs = _agent_logs(client, "p2")
+
+    assert logs["commands"] == [
+        {"index": 0, "content": "ran 0"},
+        {"index": 1, "content": OUTSIDE_TRIAL_LOG},
+        {"index": 2, "content": "ran 2"},
+    ]
+
+
+def test_a_root_log_that_links_out_is_refused_alone(
+    client: TestClient, seat_trial: Path, outside: Path
+) -> None:
+    """The root agent/ of an ordinary trial gets the same check."""
+    (seat_trial / "agent" / "setup").mkdir()
+    (seat_trial / "agent" / "setup" / "stdout.txt").write_text("root setup")
+    _replace_with_link(seat_trial / "agent" / "oracle.txt", outside / "oracle.txt")
+
+    logs = _agent_logs(client, None)
+
+    assert (logs["oracle"], logs["setup"]) == (OUTSIDE_TRIAL_LOG, "root setup")
 
 
 def test_a_link_inside_the_trial_is_followed(
@@ -328,3 +411,39 @@ def test_a_custom_agent_under_test_keeps_its_import_path_label(
         TRIAL: ("my_agents:Custom", "custom"),
         "hello-seats__running": ("my_agents:Custom", None),
     }
+
+
+@pytest.mark.parametrize(
+    ("route", "name"), [("trajectory", "trajectory.json"), ("agent-logs", "oracle.txt")]
+)
+def test_the_read_opens_the_checked_path(
+    client: TestClient,
+    seat_trial: Path,
+    outside: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+    name: str,
+) -> None:
+    """The handler reads the final path that _trial_file checked. A link that
+    changes after the check, as in a live agent/ mount, cannot redirect the
+    read. The test swaps the link right after the check."""
+    agent = seat_trial / "seats" / "p1" / "agent"
+    (agent / "checked").write_text(json.dumps({"session_id": "checked"}))
+    _replace_with_link(agent / name, Path("checked"))
+    check = server._trial_file
+
+    def check_then_swap(trial_dir: Path, path: Path) -> Path | None:
+        checked = check(trial_dir, path)
+        if path.name == name:
+            _replace_with_link(path, outside / name)
+        return checked
+
+    monkeypatch.setattr(server, "_trial_file", check_then_swap)
+
+    response = client.get(f"{BASE}/{route}", params={"seat": "p1"})
+
+    assert response.status_code == 200
+    assert SECRET not in response.text
+    body = response.json()
+    read = body if route == "trajectory" else json.loads(body["oracle"])
+    assert read == {"session_id": "checked"}
