@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from uuid import UUID
 
@@ -108,9 +108,9 @@ _STEP_ARCHIVE_INCLUDES: tuple[str, ...] = (
     "artifacts",
 )
 
-# Per-seat archive entries under ``seats/{seat}/``. A multi-agent trial keeps
-# each agent's logs and trajectory in ``seats/{seat}/agent``; its root
-# ``agent/`` stays empty.
+# Per-seat archive entries under ``seats/{seat}/``, for each seat in the
+# trial's ``seat_results``. A multi-agent trial keeps each agent's logs and
+# trajectory in ``seats/{seat}/agent``; its root ``agent/`` stays empty.
 _SEAT_ARCHIVE_INCLUDES: tuple[str, ...] = ("agent",)
 
 # Per-job archive: job-level allowlist + every trial subdir, each filtered
@@ -889,21 +889,89 @@ def _add_trial_archive_entries(
         if path.exists():
             tar.add(path, arcname=f"{arcname_prefix}{name}")
 
-    for subtree, includes in (
-        ("steps", _STEP_ARCHIVE_INCLUDES),
-        ("seats", _SEAT_ARCHIVE_INCLUDES),
-    ):
-        subtree_dir = trial_dir / subtree
-        if not subtree_dir.exists():
+    _add_seat_archive_entries(tar, trial_dir, arcname_prefix=arcname_prefix)
+
+    steps_dir = trial_dir / "steps"
+    if not steps_dir.exists():
+        return
+
+    for step_dir in sorted(p for p in steps_dir.iterdir() if p.is_dir()):
+        for name in _STEP_ARCHIVE_INCLUDES:
+            path = step_dir / name
+            if path.exists():
+                tar.add(
+                    path,
+                    arcname=f"{arcname_prefix}steps/{step_dir.name}/{name}",
+                )
+
+
+def _add_seat_archive_entries(
+    tar: tarfile.TarFile, trial_dir: Path, *, arcname_prefix: str
+) -> None:
+    """Add ``seats/{seat}/agent`` for each seat in the trial's ``seat_results``.
+
+    Seat files come from the agents' containers, so other directories under
+    ``seats/`` are left out, and so is a seat whose path is a link or leaves
+    ``trial_dir/seats``. ``_keep_seat_member`` filters the files themselves.
+    """
+    seats_dir = trial_dir.resolve() / "seats"
+    for seat in _declared_seats(trial_dir):
+        if not _is_plain_name(seat):
             continue
-        for child_dir in sorted(p for p in subtree_dir.iterdir() if p.is_dir()):
-            for name in includes:
-                path = child_dir / name
-                if path.exists():
-                    tar.add(
-                        path,
-                        arcname=f"{arcname_prefix}{subtree}/{child_dir.name}/{name}",
-                    )
+        for name in _SEAT_ARCHIVE_INCLUDES:
+            path = trial_dir / "seats" / seat / name
+            if not path.exists() or path.resolve() != seats_dir / seat / name:
+                continue
+            tar.add(
+                path,
+                arcname=f"{arcname_prefix}seats/{seat}/{name}",
+                filter=_keep_seat_member,
+            )
+
+
+def _declared_seats(trial_dir: Path) -> list[str]:
+    """The seat names in the trial's ``result.json``; none if it has none."""
+    result_path = trial_dir / "result.json"
+    if not result_path.is_file():
+        return []
+    try:
+        result = TrialResult.model_validate_json(result_path.read_text())
+    except (OSError, ValueError) as exc:
+        logger.debug("Archiving no seats of %s: %s", trial_dir, exc)
+        return []
+    return [seat.seat for seat in result.seat_results or []]
+
+
+def _is_plain_name(name: str) -> bool:
+    """Whether ``name`` is a single path component, as a seat's service is."""
+    return (
+        name not in ("", ".", "..")
+        and PurePosixPath(name).name == name
+        and PureWindowsPath(name).name == name
+    )
+
+
+def _keep_seat_member(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """Keep directories, regular files, hard links to earlier members, and
+    symlinks that are relative and have no ``..``; leave out other links and
+    special files.
+
+    ``harbor trial download`` and ``harbor job download`` extract with
+    ``filter="data"``, which refuses special files and links that leave the
+    destination, and one refused member fails the whole download. A link
+    without an anchor or ``..`` resolves below its own directory wherever the
+    archive is extracted, even through other such links.
+    """
+    if member.isdir() or member.isfile() or member.islnk():
+        return member
+    if not member.issym() or not member.linkname:
+        return None
+    # PureWindowsPath splits on both separators and treats "/" and drives as
+    # anchors, so the check holds on any platform that downloads the archive.
+    target = PureWindowsPath(member.linkname)
+    if target.anchor or ".." in target.parts:
+        return None
+    return member
 
 
 def _create_job_archive_file(job_dir: Path, archive_path: Path) -> None:

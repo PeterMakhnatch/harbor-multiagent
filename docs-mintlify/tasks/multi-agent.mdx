@@ -249,7 +249,7 @@ The job summary reports each key.
 
 ## Logs and results
 
-- `seats/<service>/agent/`: the agent's logs, and its `trajectory.json` if the harness writes one. `harbor upload` keeps this folder in the trial and job archives, so `harbor trial download` and `harbor job download` restore it.
+- `seats/<service>/agent/`: the agent's logs, and its `trajectory.json` if the harness writes one. `harbor upload` keeps this folder in the trial and job archives for each seat in `seat_results`, so `harbor trial download` and `harbor job download` restore it. The archive leaves out special files and symlinks that are absolute or contain `..`.
 - `result.json`:
   - `config` has `participants`.
   - `agent_info` is the first agent under test.

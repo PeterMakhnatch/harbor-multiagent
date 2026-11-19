@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import tarfile
 import asyncio
 from datetime import datetime, timezone
@@ -9,6 +11,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from harbor.download.downloader import Downloader
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import VerifierLock, TaskLock, TrialLock
@@ -1590,11 +1593,10 @@ def _seat_agent_info(model_info: ModelInfo = SEAT_MODEL) -> AgentInfo:
     return AgentInfo(name="terminus-2", version="2.0.0", model_info=model_info)
 
 
-def _make_seat_trial_result() -> TrialResult:
-    """A finished two-seat trial: p1 under test and p2 supporting, both
+def _make_seat_trial_result(seats: tuple[str, ...] = ("p1", "p2")) -> TrialResult:
+    """A finished seat trial: p1 under test and the others supporting, all
     terminus-2 on one model."""
     task_config = TaskConfig(path=Path("/tmp/hello-seats"))
-    seats = ("p1", "p2")
     return TrialResult(
         task_name="hello-seats",
         trial_name=SEAT_TRIAL_NAME,
@@ -1620,7 +1622,9 @@ def _make_seat_trial_result() -> TrialResult:
                 seat=seat,
                 under_test=seat == "p1",
                 agent_info=_seat_agent_info(),
-                agent_result=SEAT_USAGE[seat].model_copy(),
+                agent_result=(
+                    SEAT_USAGE[seat].model_copy() if seat in SEAT_USAGE else None
+                ),
             )
             for seat in seats
         ],
@@ -1677,6 +1681,96 @@ def _p2_on_another_model(trial_result: TrialResult) -> TrialResult:
         ModelInfo(name="claude-test", provider="anthropic")
     )
     return trial_result
+
+
+@pytest.fixture
+def symlinks_available(tmp_path: Path) -> None:
+    link = tmp_path / "symlink-check"
+    try:
+        link.symlink_to("missing")
+    except OSError as error:
+        pytest.skip(f"Symlinks are unavailable: {error}")
+    link.unlink()
+
+
+def _write_seat_job_with_hazards(tmp_path: Path) -> Path:
+    """The seat job plus what an upload must leave out: a directory under
+    seats/ that result.json does not declare, a declared seat (p3) whose
+    directory is a link out of the trial, and in p1 two links that leave the
+    trial and a pipe. p1 also has a relative link to its own trajectory."""
+    outside = tmp_path / "outside"
+    (outside / "agent").mkdir(parents=True)
+    (outside / "agent" / "host.txt").write_text("host file")
+    job_dir = _write_seat_job_dir(tmp_path, _make_seat_trial_result(("p1", "p2", "p3")))
+    seats = job_dir / SEAT_TRIAL_NAME / "seats"
+    shutil.rmtree(seats / "p3")
+    (seats / "p3").symlink_to(outside, target_is_directory=True)
+    (seats / "ghost" / "agent").mkdir(parents=True)
+    (seats / "ghost" / "agent" / "notes.txt").write_text("not a seat")
+    p1 = seats / "p1" / "agent"
+    (p1 / "latest.json").symlink_to("trajectory.json")
+    (p1 / "absolute.txt").symlink_to(outside / "agent" / "host.txt")
+    (p1 / "parent.txt").symlink_to(
+        Path("..", "..", "..", "..", "..", "outside", "agent", "host.txt")
+    )
+    if hasattr(os, "mkfifo"):
+        os.mkfifo(p1 / "pipe")
+    return job_dir
+
+
+# What a download restores under seats/ from that job: the declared seats
+# inside the trial, without the links that leave it or the pipe.
+SAFE_SEAT_TREE = {
+    "seats/p1": "dir",
+    "seats/p1/agent": "dir",
+    "seats/p1/agent/latest.json": "-> trajectory.json",
+    "seats/p1/agent/trajectory.json": json.dumps(
+        {"session_id": f"{SEAT_TRIAL_NAME}__p1", "steps": []}
+    ),
+    "seats/p2": "dir",
+    "seats/p2/agent": "dir",
+    "seats/p2/agent/trajectory.json": json.dumps(
+        {"session_id": f"{SEAT_TRIAL_NAME}__p2", "steps": []}
+    ),
+}
+
+
+def _seat_tree(trial_dir: Path) -> dict[str, str]:
+    """Each entry under seats/: "-> target" for a link, a file's text, or
+    "dir"."""
+    tree = {}
+    for path in sorted((trial_dir / "seats").rglob("*")):
+        key = path.relative_to(trial_dir).as_posix()
+        if path.is_symlink():
+            tree[key] = f"-> {os.readlink(path)}"
+        elif path.is_dir():
+            tree[key] = "dir"
+        else:
+            tree[key] = path.read_text()
+    return tree
+
+
+def _capture_storage(uploader: Uploader) -> dict[str, bytes]:
+    """The bytes of each resumable upload, by remote path."""
+    stored: dict[str, bytes] = {}
+
+    async def upload(file_path: Path, remote_path: str, **_: object) -> None:
+        stored[remote_path] = Path(file_path).read_bytes()
+
+    uploader.storage.upload_resumable_file.side_effect = upload
+    return stored
+
+
+def _downloader_serving(stored: dict[str, bytes]) -> Downloader:
+    with (
+        patch("harbor.download.downloader.UploadDB") as db_cls,
+        patch("harbor.download.downloader.UploadStorage") as storage_cls,
+    ):
+        db_cls.return_value = AsyncMock()
+        storage = AsyncMock()
+        storage.download_bytes.side_effect = lambda remote_path: stored[remote_path]
+        storage_cls.return_value = storage
+        return Downloader()
 
 
 class TestSeatTrialUpload:
@@ -1779,3 +1873,87 @@ class TestSeatTrialUpload:
         # in the archive only.
         finalize = mock_uploader.db.finalize_trial_artifacts.await_args.kwargs
         assert finalize["trajectory_path"] is None
+
+    def test_ordinary_trial_archive_leaves_out_a_seats_dir(
+        self, tmp_path: Path
+    ) -> None:
+        """A trial without seat_results has no seats, whatever is on disk."""
+        trial_dir = _write_trial_dir(tmp_path, _make_trial_result())
+        stray = trial_dir / "seats" / "p1" / "agent"
+        stray.mkdir(parents=True)
+        (stray / "notes.txt").write_text("not a seat")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            assert not [name for name in tar.getnames() if name.startswith("seats")]
+
+    @pytest.mark.parametrize(
+        "seat",
+        ["../agent", "..", ".", "p9/agent", "p9\\agent", ""],
+    )
+    def test_trial_archive_skips_a_seat_name_that_is_a_path(
+        self, tmp_path: Path, seat: str
+    ) -> None:
+        """A seat name is one path component, as a Compose service name is.
+        Any other name in result.json is skipped, even where its path leads
+        to an agent directory."""
+        trial_result = _make_seat_trial_result()
+        trial_dir = _write_seat_trial_dir(tmp_path, trial_result)
+        (trial_result.seat_results or [])[1].seat = seat
+        (trial_dir / "result.json").write_text(trial_result.model_dump_json())
+        reached = trial_dir / "seats" / seat / "agent"
+        reached.mkdir(parents=True, exist_ok=True)
+        (reached / "reached.txt").write_text("reached through a path")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            seat_members = [n for n in tar.getnames() if n.startswith("seats/")]
+        assert seat_members == [
+            "seats/p1/agent",
+            "seats/p1/agent/trajectory.json",
+        ]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("download", ["trial", "job"])
+    async def test_upload_then_download_restores_only_safe_seat_files(
+        self,
+        tmp_path: Path,
+        mock_uploader: Uploader,
+        symlinks_available: None,
+        download: str,
+    ) -> None:
+        job_dir = _write_seat_job_with_hazards(tmp_path)
+        trial_result = TrialResult.model_validate_json(
+            (job_dir / SEAT_TRIAL_NAME / "result.json").read_text()
+        )
+        stored = _capture_storage(mock_uploader)
+
+        upload = await mock_uploader.upload_job(job_dir)
+
+        assert (upload.n_trials_uploaded, upload.n_trials_failed) == (1, 0)
+        downloader = _downloader_serving(stored)
+        target = tmp_path / "downloads"
+        if download == "trial":
+            downloader.db.get_trial.return_value = {
+                "id": str(trial_result.id),
+                "trial_name": SEAT_TRIAL_NAME,
+                "archive_path": f"trials/{trial_result.id}/trial.tar.gz",
+            }
+            result = await downloader.download_trial(trial_result.id, target)
+            restored = result.output_dir
+        else:
+            (job_archive,) = [path for path in stored if path.startswith("jobs/")]
+            downloader.db.get_job.return_value = {
+                "id": upload.job_id,
+                "job_name": "seat-job",
+                "archive_path": job_archive,
+            }
+            result = await downloader.download_job(UUID(upload.job_id), target)
+            restored = result.output_dir / SEAT_TRIAL_NAME
+        assert _seat_tree(restored) == SAFE_SEAT_TREE
+        assert (restored / "result.json").exists()
+        assert (restored / "seats" / "p1" / "agent" / "latest.json").read_text() == (
+            SAFE_SEAT_TREE["seats/p1/agent/trajectory.json"]
+        )
