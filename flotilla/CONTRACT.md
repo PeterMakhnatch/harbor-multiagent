@@ -32,8 +32,19 @@ For one family, model and instance set, with paired instances:
 ## 2. Task instances and names
 
 A family module generates instances from `(seed, instance, n_seats, difficulty)`. Every instance is
-built in every condition. A task's name and its folder name say nothing about the task (no family,
-variant, instance or condition):
+built in every condition. The family modules are public (this repository), so the seed is a secret: a
+seat that knew it could compute every answer key. `build_tasks.py` draws a random seed for each build,
+from 1,000,000 to 2^53 − 1 (below 2^53, every JSON reader holds it exactly). `--seed N` repeats a
+build (the canonical waves used `--seed 1`), and `--seed-of PATH` gives a build the seed of the tasks
+under PATH, so that two builds pair instance by instance. The same seed gives the same instances, and
+another seed gives other instances. Only the manifest, `task.toml` `[metadata]`,
+`environment/task.json` and the verifier's `score.json` record the seed; no seat reads them. A seed
+below 1,000,000, or one that this checkout's documentation names, is public: `qa.py` warns
+(`public-seed`). Use a public seed only to repeat a published build; build a new wave without `--seed`
+(FINDINGS.md 2026-11-19 10:11).
+
+A task's name and its folder name say nothing about the task (no family, variant, instance or
+condition):
 
 ```
 flotilla/tasks/<label>/t-<12 hex>/              the task folder
@@ -53,25 +64,28 @@ and no seat sees that path.
 
 `manifest.json` lies at the build root, outside every task folder, so no seat reads it. It maps each
 task name to `path` (relative to the build root), `label`, `family`, `variant`, `instance`,
-`condition`, `seats` and `built` (UTC). It holds no token and no answer key:
+`condition`, `seats`, `seed` and `built` (UTC). It holds no token and no answer key, but with the
+public generator its seeds give every answer key:
 
 ```json
 {"format": "flotilla-manifest", "version": 1, "tasks": {"flotilla/t-3f9c2a7b10de": {"path": "schedule/t-3f9c2a7b10de",
   "label": "schedule", "family": "schedule", "variant": "", "instance": 4, "condition": "silent",
-  "seats": ["p1", "p2"], "built": "2026-11-19T18:00:00Z"}}}
+  "seats": ["p1", "p2"], "seed": 3817240925570214, "built": "2026-11-19T18:00:00Z"}}}
 ```
 
 A build replaces each task folder of the same label, instance and condition that an earlier build
 wrote (readable or opaque), so a label never holds two folders of one task. The manifest keeps every
 name built at its root, also the names of replaced folders, so that jobs of an earlier build can still
 be read. Do not publish a manifest while its tasks can still run: a seat that reads its own name could
-look the name up.
+look the name up, and the seeds give the answer keys.
 
 `build_tasks.py --readable-names` writes the layout used before opaque names, for debugging only:
 `flotilla/tasks/<label>/<label>-<instance:03d>-<condition>/`, task name
-`flotilla/<label>-<instance:03d>-<condition>`. `qa.py` warns about such a set (`runtime-names`); never
-run one in a wave. `qa.py` fails a task built with opaque names whose task name or folder name is not
-of the opaque form or names a condition, its family or its variant (`opaque-names`).
+`flotilla/<label>-<instance:03d>-<condition>`. `qa.py` fails such a set (`runtime-names`);
+`qa.py --allow-readable-names` makes it a WARN for a local debugging run. `make_jobs.py` refuses a task
+whose folder name or task name is not opaque, unless it gets `--allow-readable-names`. Never run such a
+set in a wave. `qa.py` fails a task built with opaque names whose task name or folder name is not of
+the opaque form or names a condition, its family or its variant (`opaque-names`).
 
 A variant changes the seat count or the difficulty of a family. Results of different labels are
 never pooled.
@@ -82,13 +96,18 @@ Before a wave, every built task set must pass `flotilla/qa.py` with no FAIL find
 `[metadata]` in `task.toml` carries `family`, `variant`, `instance`, `condition`, `n_seats`,
 `team_seats`, `difficulty`, `seed`, `max_text`, `max_messages`, `play_timeout_sec` and `names`
 (`opaque` or `readable`), and `scripted_seats` in scripted variants. `environment/task.json` also
-carries `family`, `variant`, `instance` and `condition` (section 3). No seat reads either file, nor
-the manifest (`qa.py seat-secrets`).
+carries `family`, `variant`, `instance`, `condition` and `seed` (section 3). No seat reads either
+file, nor the manifest (`qa.py seat-secrets`, which also fails a seat-visible byte that holds a secret
+seed).
 
 The analysis learns what a trial's task is from a readable task name, else from `task.toml`
 `[metadata]` in the trial's task folder (`task_id.path` in `result.json`) when that folder still holds
 the task of that name, else from a build manifest: one given with `flotilla-analyze --manifest`, the
-one in a `--tasks` folder, or the one at the build root of the task folder.
+one in a `--tasks` folder, or the one at the build root of the task folder. It uses a task folder for
+a trial only if the folder holds the trial's seed (`seed` in the trial's `score.json`, section 5):
+a rebuild without `--seed` holds other instances under the same label, instance and condition.
+Trials verified before world version 3 record no seed; for them, rebuild a folder with its build's
+seed (`--seed 1` for every build before secret seeds).
 
 ## 3. Seats and environment
 
@@ -113,17 +132,22 @@ variable of the host that runs the trial.
 | `FLOTILLA_MAX_TEXT` | main | characters per message (default 4,000; `build_tasks.py --max-text`) |
 | `FLOTILLA_MAX_MESSAGES` | main | messages per seat (default 200; `build_tasks.py --max-messages`) |
 
-`main` also holds `/world/task.json` (family, variant, instance, condition, seats, answer key,
+`main` also holds `/world/task.json` (family, variant, instance, condition, seats, seed, answer key,
 `world_version`, `max_text`, `max_messages`) and `/world/family.py` (the family module, for scoring).
 Seats cannot read `main`'s files. When the limits are not the defaults, the instructions of the `talk`
 conditions state them ("Each seat may send at most 3 messages of at most 200 characters.").
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 2`. Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 3`. Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
-condition from `/whoami`, and seats read it).
+condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
+the `Server` header is `world`, also on the error pages of the server library (world versions 1 and 2
+sent `flotilla-world/<version> Python/<version>`, and seats searched the file system and pip for that
+name). A reply has no header but `Server`, `Date`, `Content-Type`, `Content-Length`, `Allow` (with a
+405) and `Connection` (with an error page). The world version is only in the `start` event and in
+`GET /admin/state`.
 
 | Method and path | Body | Reply | Notes |
 |---|---|---|---|
@@ -169,9 +193,11 @@ Message texts are stored once, in `/logs/world/messages.jsonl` (`id, from, to, t
 verifier writes its own evidence to `/logs/verifier/` (collected after verification as
 `<trial>/verifier/`):
 
-- `score.json`: `{"family", "instance", "condition", "seats", "world_version", "score",
+- `score.json`: `{"family", "instance", "condition", "seats", "seed", "world_version", "score",
   "fields_correct", "fields_total", "answer", "submitted_by", "n_submissions", "n_messages", "error",
-  "deceived"}`. `world_version` is 1 for tasks built before world version 2. `error` is set when the
+  "deceived"}`. `seed` is the build's seed (from world version 3; the analysis matches a task folder to
+  the trial by it), so keep job folders as private as task folders. `world_version` is 1 for tasks
+  built before world version 2. `error` is set when the
   world was unreachable or the family scorer raised on the answer (the score is then 0); `deceived`
   is set in scripted-liar variants (did the team submit the decoy?);
 - `world-state.json`: the frozen world state (every message and submission), including anything

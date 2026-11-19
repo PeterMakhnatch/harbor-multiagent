@@ -6,6 +6,10 @@ A job's participant roster must match every task's seats, so `solo` tasks (seat 
     python3 flotilla/make_jobs.py --tasks 'flotilla/tasks/schedule/*' --agent oracle --name oracle-check
     python3 flotilla/make_jobs.py --tasks 'flotilla/tasks/schedule/*' --agent terminus-2 \\
         --model openrouter/deepseek/deepseek-v4-flash --attempts 1 --concurrent 3 --name ds-wave1
+
+It refuses tasks with readable names (`build_tasks.py --readable-names`, or a build before opaque names):
+Harbor names a trial's Docker containers and networks after the task folder, and a seat can read them, so
+they say the condition. `--allow-readable-names` lets them through, for a local debugging job only.
 """
 
 from __future__ import annotations
@@ -13,16 +17,26 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import re
+import sys
 import tomllib
 from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+OPAQUE_NAME = re.compile(r"^t-[0-9a-f]{12}$")  # the folder name that build_tasks.py writes (CONTRACT.md 2)
 
 
 def seats_of(task_dir: Path) -> tuple[str, ...]:
     config = tomllib.loads((task_dir / "task.toml").read_text())
     return tuple(sorted(config.get("agents", {})))
+
+
+def opaque(task_dir: Path) -> bool:
+    """Whether the folder name and the task name are opaque (`t-<12 hex>`, `flotilla/t-<12 hex>`): Harbor names the
+    trial and its Docker containers and networks after the folder, and its results after the task name."""
+    name = (tomllib.loads((task_dir / "task.toml").read_text()).get("task") or {}).get("name")
+    return bool(OPAQUE_NAME.match(task_dir.name)) and name == f"flotilla/{task_dir.name}"
 
 
 def main() -> None:
@@ -40,13 +54,26 @@ def main() -> None:
                         help="docker: local; modal: Modal VM runtime (Compose networks need it)")
     parser.add_argument("--jobs-dir", default=str(ROOT.parent / ".flotilla-local" / "jobs"))
     parser.add_argument("--out", type=Path, default=ROOT / "configs" / "generated")
+    parser.add_argument("--allow-readable-names", action="store_true",
+                        help="accept tasks with readable names (their Docker names say the condition): for a local "
+                        "debugging job only, never for a wave")
     args = parser.parse_args()
 
     groups: dict[tuple[str, ...], list[str]] = defaultdict(list)
+    readable: list[str] = []
     for path in sorted(glob.glob(args.tasks)):
         task_dir = Path(path)
         if (task_dir / "task.toml").is_file():
             groups[seats_of(task_dir)].append(str(task_dir.resolve()))
+            if not opaque(task_dir):
+                readable.append(task_dir.name)
+    if readable and not args.allow_readable_names:
+        total = sum(len(tasks) for tasks in groups.values())
+        print(f"refused: readable names in {len(readable)} of {total} tasks (for example {readable[0]}); Harbor names "
+              "a trial's Docker containers and networks after the task folder, and a seat can read them. Build the "
+              "set again without --readable-names, or pass --allow-readable-names for a local debugging job.",
+              file=sys.stderr)
+        sys.exit(2)
     args.out.mkdir(parents=True, exist_ok=True)
     for seats, tasks in sorted(groups.items()):
         participant = {"name": args.agent} | ({"model_name": args.model} if args.model else {})

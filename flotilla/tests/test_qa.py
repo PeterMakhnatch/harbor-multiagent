@@ -21,12 +21,15 @@ TALK_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned")
 Findings = set[tuple[str, str, str, str]]
 
 
+SEED = 6_151_806_725_431_072  # of the size that build_tasks.py draws (a secret seed), fixed for these tests
+
+
 def build_set(out: Path, readable_names: bool) -> Path:
     """Instance 0 of schedule (2 seats), schedule.liar (scripted peer, all four talk conditions) and ledger."""
-    BUILD.build("schedule", [0], 2, "easy", 1, BUILD.CONDITIONS, out, readable_names=readable_names)
-    BUILD.build("schedule", [0], 2, "easy", 1, TALK_CONDITIONS, out, variant="liar", scripted=True,
+    BUILD.build("schedule", [0], 2, "easy", SEED, BUILD.CONDITIONS, out, readable_names=readable_names)
+    BUILD.build("schedule", [0], 2, "easy", SEED, TALK_CONDITIONS, out, variant="liar", scripted=True,
                 readable_names=readable_names)
-    BUILD.build("ledger", [0], 2, "easy", 1, BUILD.CONDITIONS, out, readable_names=readable_names)
+    BUILD.build("ledger", [0], 2, "easy", SEED, BUILD.CONDITIONS, out, readable_names=readable_names)
     return out
 
 
@@ -81,17 +84,23 @@ def answer_key(task: Path) -> dict[str, Any]:
     return json.loads((task / "environment" / "task.json").read_text())["answer_key"]
 
 
-def test_a_fresh_build_has_no_fail(built, baseline):
+def test_a_readable_build_fails_runtime_names_unless_allowed(built, baseline):
     found, tasks = QA.check(QA.find_tasks([str(built / "*" / "*")]))
     assert len(tasks) == 10
-    assert [f for f in found if f.level == "FAIL"] == []
+    assert {f.rule for f in found if f.level == "FAIL"} == {"runtime-names"}  # the only fault of a fresh build
     assert {f.rule for f in found} <= {"solo-sufficient", "runtime-names"}
-    # Harbor's Docker names carry a readable folder name, so each label gets a WARN; schedule.liar's say 'liar'
+    # Harbor's Docker names carry a readable folder name, so each label fails; schedule.liar's say 'liar'
     names = {f.task: f.detail for f in found if f.rule == "runtime-names"}
     assert sorted(names) == ["ledger", "schedule", "schedule.liar"]
     assert "reads 'liar', 'schedule', 'talk', 'warned'" in names["schedule.liar"]
     assert "reads 'schedule', 'silent', 'solo', 'talk'" in names["schedule"]
     assert {(f.rule, f.task, f.seat, f.detail) for f in found} == baseline
+    allowed, _tasks = QA.check(QA.find_tasks([str(built / "*" / "*")]), allow_readable_names=True)
+    assert [f for f in allowed if f.level == "FAIL"] == []  # --allow-readable-names: a local debugging run
+    assert {(f.rule, f.task, f.seat, f.detail) for f in allowed} == baseline
+    assert {f.level for f in allowed if f.rule == "runtime-names"} == {"WARN"}
+    assert QA.summary(allowed, tasks)["rules"]["runtime-names"]["level"] == "WARN"
+    assert QA.summary(found, tasks)["rules"]["runtime-names"]["level"] == "FAIL"
 
 
 def test_an_opaque_build_passes_runtime_names(opaque):
@@ -237,6 +246,21 @@ def plant_missing_instruction(task: Path) -> None:
     (task / "instructions" / "p2.md").unlink()
 
 
+def plant_software_name_in_env(task: Path) -> None:
+    """A seat's variable names the software: world v2's Server header did, and seats searched for the name."""
+    edit_compose(task, lambda c: env(c, "p1").update(FLOTILLA_RUN="1"))
+
+
+def plant_software_name_in_instruction(task: Path) -> None:
+    path = task / "instructions" / "p1.md"
+    path.write_text(path.read_text() + "\nThe world runs harbor-multiagent.\n")
+
+
+def plant_seed(task: Path) -> None:
+    """A seat's variable holds the build's secret seed: with the public generator it gives every answer key."""
+    edit_compose(task, lambda c: env(c, "p2").update(RUN_ID=f"run-{SEED}"))
+
+
 PLANTED = [
     ("example-leak", "schedule/schedule-000-silent", plant_answer_example),
     ("example-leak", "ledger/ledger-000-silent", plant_answer_in_submit_example),
@@ -248,6 +272,9 @@ PLANTED = [
     ("token-map", "schedule/schedule-000-talk", plant_duplicate_token),
     ("stale-code", "ledger/ledger-000-talk", plant_stale_world),
     ("qa-error", "ledger/ledger-000-silent", plant_missing_instruction),
+    ("software-name", "schedule/schedule-000-talk", plant_software_name_in_env),
+    ("software-name", "ledger/ledger-000-silent", plant_software_name_in_instruction),
+    ("seat-secrets", "ledger/ledger-000-talk", plant_seed),
 ]
 
 
@@ -331,11 +358,18 @@ def test_a_briefing_that_holds_everything_is_solo_sufficient(copy, baseline):
 
 def test_command_line(built, copy, tmp_path):
     qa = [sys.executable, str(FLOTILLA / "qa.py")]
-    clean = subprocess.run([*qa, str(built / "*" / "*"), "--json"], capture_output=True, text=True, check=False)
+    readable = subprocess.run([*qa, str(built / "*" / "*"), "--json"], capture_output=True, text=True, check=False)
+    assert readable.returncode == 1, readable.stderr  # readable names: runtime-names fails
+    assert {row["rule"] for row in json.loads(readable.stdout)["findings"] if row["level"] == "FAIL"} == {
+        "runtime-names"}
+    clean = subprocess.run([*qa, str(built / "*" / "*"), "--json", "--allow-readable-names"],
+                           capture_output=True, text=True, check=False)
     assert clean.returncode == 0, clean.stderr
     report = json.loads(clean.stdout)
     assert (report["tasks"], report["fail"], report["passed"]) == (10, 0, True)
     assert set(report["rules"]) == set(QA.RULES)
+    text = subprocess.run([*qa, str(built), "--allow-readable-names"], capture_output=True, text=True, check=False)
+    assert text.returncode == 0 and "runtime-names is a WARN, for a local debugging run only" in text.stdout
     task = copy / "schedule" / "schedule-000-talk"
     for plant in (plant_admin_token, plant_duplicate_token, plant_answer_example):
         plant(task)
@@ -346,6 +380,39 @@ def test_command_line(built, copy, tmp_path):
         bad = subprocess.run([*qa, str(copy), *flags], capture_output=True, text=True, check=False)
         assert bad.returncode == 1, bad.stderr
         assert {"seat-secrets", "token-map", "example-leak"} <= set(re.findall(r"[a-z]+-[a-z]+", bad.stdout))
-        assert not any(secret in bad.stdout for secret in secrets | keys)  # no output names a token or a key
+        assert not any(secret in bad.stdout for secret in secrets | keys | {str(SEED)})  # nor a seed
     nothing = subprocess.run([*qa, str(tmp_path / "no-such-folder")], capture_output=True, text=True, check=False)
     assert nothing.returncode == 2 and "no task folder" in nothing.stderr
+
+
+def test_planted_names_and_seeds_read_as_expected(copy, baseline):
+    plant_software_name_in_env(copy / "schedule" / "schedule-000-talk")
+    plant_software_name_in_instruction(copy / "ledger" / "ledger-000-silent")
+    plant_seed(copy / "ledger" / "ledger-000-talk")
+    assert findings(copy) - baseline == {
+        ("software-name", "schedule-000-talk", "p1", "env.FLOTILLA_RUN contains 'flotilla'"),
+        ("software-name", "ledger-000-silent", "p1", "instruction contains 'harbor-multiagent'"),
+        ("seat-secrets", "ledger-000-talk", "p2", "env.RUN_ID holds the build's seed"),
+    }
+
+
+def test_a_public_seed_is_a_warn_once_per_label(tmp_path, monkeypatch):
+    """The generators are public: a seed below 1,000,000 or one that the documentation names gives the answers."""
+    documented = 7_340_982_618_211
+    for variant, seed in (("", 1), ("hard", 999_999), ("big", 1_000_000), ("doc", documented), ("own", SEED)):
+        BUILD.build("ledger", [0, 1], 2, "easy", seed, ("talk",), tmp_path, variant=variant)
+    monkeypatch.setattr(QA, "documented_seeds", lambda: frozenset({1, documented}))
+    found, _tasks = QA.check(QA.find_tasks([str(tmp_path)]))
+    tail = "a seat that finds the public generator can compute their answer keys; build a new wave without --seed"
+    assert {(f.level, f.task, f.seat, f.detail) for f in found if f.rule == "public-seed"} == {
+        ("WARN", "ledger", "*", f"2 tasks use seed 1, which is public (below 1,000,000): {tail}"),
+        ("WARN", "ledger.hard", "*", f"2 tasks use seed 999999, which is public (below 1,000,000): {tail}"),
+        ("WARN", "ledger.doc", "*",
+         f"2 tasks use seed {documented}, which is public (named in this checkout's documentation): {tail}"),
+    }
+    assert not [f for f in found if f.level == "FAIL"]
+
+
+def test_the_documentation_names_the_canonical_seed():
+    """RESULTS.md and README.md rebuild the canonical waves with --seed 1, so seed 1 is documented, and public."""
+    assert 1 in QA.documented_seeds() and SEED not in QA.documented_seeds()

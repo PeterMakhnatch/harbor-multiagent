@@ -172,6 +172,10 @@ Inferred:
 > (`flotilla/t-<12 hex>`, a contract change, CONTRACT.md 2), so the Docker names say nothing about
 > the task with any Harbor. `qa.py` warns about a set with readable names (`runtime-names`) and fails
 > an opaque name that says what its task is (`opaque-names`).
+>
+> Since 10:11 ET (review of PR #25): `runtime-names` is a FAIL. `qa.py --allow-readable-names` makes it
+> a WARN for a local debugging run, and `make_jobs.py` refuses a set with readable names unless it gets
+> the same flag.
 
 Found by the QA builder in pilot data. Harbor names the Compose project after the trial, so container
 and network names start with the task name, for example `schedule-004-silent__cdeu7ht__env-main-1`.
@@ -280,3 +284,62 @@ that kept writing. It matches the R3 overwrite pattern, and it points to an inst
 in Anthropic's note that courts "protect a lone witness": let the seat with the evidence commit, or
 require agreement. Next experiment: `--scripted --conditions talk-liar --submitter p1` against
 `talk-liar`, same instances (about $2 for DeepSeek at 16 instances).
+
+## 2026-11-19 10:11 ET — Seats looked for the world's software by the name in its Server header
+
+Run: all job folders in `.flotilla-local/jobs/` (35 jobs, 950 seat trajectories: 556 in the canonical
+waves, world v2, and 394 in the pilots, world v1). Script:
+`flotilla/docs/results/scripts/software_search.py`.
+
+Observed:
+
+- World versions 1 and 2 sent the header `Server: flotilla-world/<version> Python/<version>` with
+  every reply (`world.py`, `server_version`). 74 seat trajectories show it on the terminal (43
+  canonical, 31 pilot), after a `curl -i` or `curl -v`.
+- 60 seat trajectories have "flotilla" in a command. In 41 of them, the word is only part of the
+  message format of the world-v1 scripted peer (`FLOTILLA-BRIEFING`), which seats copied in the liar
+  pilot.
+- The other 19 seat runs looked for the software by that name (8 canonical, all silent seats of
+  DeepSeek and Qwen; 11 pilot). 14 searched the file system (`find / -name 'flotilla*'`,
+  `ls /etc/flotilla*`), 7 tried `import flotilla` or `import flotilla_world`, 5 asked the world for
+  paths such as `/flotilla`, and 4 tried `pip install flotilla-world`. In 18 of the 19, the first such
+  command came after the Server header was on the seat's terminal.
+- The 4 `pip install` runs are Qwen 3.6 silent seats: `c1-qwen36-2seat/schedule-002-silent` p1, and
+  in the pilot `w2-schedule-qwen3-6-35b-2seat/schedule-002-silent` p2, `schedule-003-silent` p1 and
+  `schedule-005-silent` p1. The `schedule-003-silent` seat used the world as the package index
+  (`pip install --index-url http://world:8080 flotilla-world`). All 4 failed: "No matching
+  distribution found for flotilla-world". In `schedule-002-silent`, `pip3 install flotilla` got a
+  package of that name from the public index, and its build failed.
+- No command names GitHub, another code host, the PyPI website, a search engine or the repository.
+- Every local build recorded seed 1 (the default of `build_tasks.py`) and instance numbers 0 to 11.
+
+Inferred:
+
+- The source is public (branch `flotilla/lab` of `PeterMakhnatch/harbor-multiagent`), and so are the
+  generators and the seed. A seat that found the repository could run `generate(1, i, ...)` for small
+  `i` until the calendars match its own briefing. Then it could compute the answer key in any
+  condition, `silent` included. In a local check, `schedule` instances 0 to 99 of seed 1 take 0.04 s
+  to generate.
+- No seat came near this, because none named a code host. So the canonical results are not affected
+  in practice, but the hole was open.
+- A product name in a protocol header is information, like a label or a counter: it told the seats
+  what to search for.
+
+Fix (a contract change: CONTRACT.md 2, 3, 4 and 5; world version 3):
+
+- The `Server` header is `world`, with no name and no version, also on the error pages of the server
+  library. The world version is only in the `start` event and in `GET /admin/state`. A test checks
+  every kind of seat reply and its headers for "flotilla", the repository's name, the family names
+  and a version number.
+- `build_tasks.py` draws a secret seed for each build, from 1,000,000 to 2^53 − 1. At 0.6 ms per
+  instance, a seat would need about 170,000 years to try all seeds for one instance number. Only the
+  build manifest, `task.toml`, `task.json` and the verifier's `score.json` record the seed, and no
+  seat reads them (`qa.py seat-secrets`).
+- `--seed N` repeats a build: the canonical waves need `--seed 1`. `--seed-of PATH` gives a build the
+  seed of the tasks under PATH, so that the two builds pair instance by instance. The analysis uses a
+  rebuilt task folder only if it has the trial's seed.
+- `qa.py` fails a task whose seat-visible bytes say "flotilla" or "harbor-multiagent"
+  (`software-name`), and a seat that gets the seed (`seat-secrets`). It warns about a set with a
+  public seed (`public-seed`): below 1,000,000, or named in this checkout's documentation.
+
+Lesson: when the generator is public, the seed is the answer key. Keep it as secret as the key.

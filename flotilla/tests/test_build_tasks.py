@@ -106,7 +106,8 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
             assert json.loads(env["SEAT_BRIEFING"]) == json.loads(json.dumps(expected))
         task_json = json.loads((task / "environment" / "task.json").read_text())
         assert task_json["answer_key"] == inst["answer_key"] and task_json["seats"] == seats
-        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (2, 4000, 200)
+        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (3, 4000, 200)
+        assert task_json["seed"] == meta["seed"] == 1
         for script in (task / "tests" / "test.sh", task / "solution" / "solve.sh"):
             assert script.stat().st_mode & 0o111
 
@@ -232,8 +233,9 @@ def test_command_line(tmp_path):
     run = [sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "ledger", "--instances", "0-1,3",
            "--seats", "3", "--out", str(tmp_path), "--max-messages", "5"]
     result = subprocess.run(run, capture_output=True, text=True, check=True)
-    assert result.stdout.splitlines() == [f"built 9 tasks under {tmp_path}",
-                                          f"manifest: {tmp_path / 'manifest.json'} (opaque names)"]
+    assert result.stdout.splitlines() == [
+        f"built 9 tasks under {tmp_path}", f"manifest: {tmp_path / 'manifest.json'} (opaque names)",
+        "seed: secret, drawn for this build (only the manifest, task.toml and task.json record it)"]
     assert sorted(key[1:] for key in by_task(tmp_path))[:3] == [(0, "silent"), (0, "solo"), (0, "talk")]
     assert all(re.fullmatch(r"t-[0-9a-f]{12}", p.name) for p in (tmp_path / "ledger").iterdir())
     readable = subprocess.run([*run[:-4], "--out", str(tmp_path / "readable"), "--readable-names"],
@@ -299,3 +301,97 @@ def test_announce_protocol(tmp_path):
     assert json.loads((tasks[("schedule", 0, "talk")] / "environment" / "task.json").read_text())["announce"] is True
     assert "SUBMITTED:" not in (tasks[("schedule", 0, "silent")] / "instructions" / "p1.md").read_text()
     assert "SUBMITTED:" not in (tasks[("schedule", 0, "solo")] / "instructions" / "p1.md").read_text()
+
+
+# --- Secret seeds (CONTRACT.md 2): the generators are public, so a seat that knew the seed could compute the answer
+
+
+def run_builder(*arguments: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(FLOTILLA / "build_tasks.py"), *arguments],
+                          capture_output=True, text=True, check=check)
+
+
+def instances_of(root: Path) -> dict[tuple[str, int, str], tuple[dict, dict]]:
+    """(label, instance, condition) -> (answer key, briefing of each seat), read from the build under root."""
+    found = {}
+    for key, task in by_task(root).items():
+        services = compose_services((task / "environment" / "docker-compose.yaml").read_text())
+        briefings = {seat: json.loads(spec["env"]["SEAT_BRIEFING"]) for seat, spec in services.items() if seat != "main"}
+        found[key] = (json.loads((task / "environment" / "task.json").read_text())["answer_key"], briefings)
+    return found
+
+
+def recorded_seeds(root: Path) -> set[int]:
+    """Every seed that the build under root records: manifest entries, task.toml [metadata] and task.json."""
+    seeds = {entry["seed"] for entry in json.loads((root / "manifest.json").read_text())["tasks"].values()}
+    for task in by_task(root).values():
+        seeds.add(tomllib.loads((task / "task.toml").read_text())["metadata"]["seed"])
+        seeds.add(json.loads((task / "environment" / "task.json").read_text())["seed"])
+    return seeds
+
+
+def test_each_build_draws_a_secret_seed_that_seats_never_see(tmp_path):
+    outputs = [run_builder("--family", "schedule", "--instances", "0-1", "--out", str(tmp_path / build))
+               for build in ("a", "b")]
+    (first,), (second,) = recorded_seeds(tmp_path / "a"), recorded_seeds(tmp_path / "b")  # one seed per build
+    assert first != second
+    for seed in (first, second):
+        assert BUILD.PUBLIC_SEED_BELOW <= seed < BUILD.SEED_LIMIT == 2**53  # exact in every JSON reader
+        assert type(seed) is int
+    for output, seed in zip(outputs, (first, second)):
+        assert str(seed) not in output.stdout + output.stderr  # the output does not name it
+        assert "seed: secret, drawn for this build" in output.stdout
+    for root, seed in ((tmp_path / "a", first), (tmp_path / "b", second)):
+        for task in by_task(root).values():
+            services = compose_services((task / "environment" / "docker-compose.yaml").read_text())
+            for seat in (s for s in services if s != "main"):
+                assert not any(str(seed) in text for text in seat_visible_texts(task, seat, services))
+    a, b = instances_of(tmp_path / "a"), instances_of(tmp_path / "b")
+    assert sorted(a) == sorted(b) and all(a[key] != b[key] for key in a)  # another seed, other instances
+
+
+def test_the_same_seed_gives_the_same_instances(tmp_path):
+    seed = "4404577120938117"  # a fixed seed of the secret size, for this test only
+    for build in ("a", "b"):
+        run_builder("--family", "ledger", "--instances", "0-1", "--seed", seed, "--out", str(tmp_path / build))
+    run_builder("--family", "ledger", "--instances", "0-1", "--seed", str(int(seed) + 1), "--out", str(tmp_path / "c"))
+    a, b, c = (instances_of(tmp_path / build) for build in ("a", "b", "c"))
+    assert a == b and recorded_seeds(tmp_path / "a") == recorded_seeds(tmp_path / "b") == {int(seed)}
+    assert sorted(a) == sorted(c) and all(a[key] != c[key] for key in a)
+    for key, task in by_task(tmp_path / "a").items():  # the instructions are the same bytes too
+        assert (task / "instructions" / "p1.md").read_text() == (
+            by_task(tmp_path / "b")[key] / "instructions" / "p1.md").read_text()
+
+
+def test_seed_of_pairs_a_build_with_an_earlier_one(tmp_path):
+    out = str(tmp_path / "tasks")
+    run_builder("--family", "schedule", "--instances", "0-2", "--out", out)
+    paired = run_builder("--family", "schedule", "--instances", "0-2", "--variant", "tight", "--max-text", "100",
+                         "--max-messages", "2", "--conditions", "talk", "--seed-of", f"{out}/schedule", "--out", out)
+    (seed,) = recorded_seeds(tmp_path / "tasks")  # both labels
+    assert str(seed) not in paired.stdout + paired.stderr
+    assert paired.stdout.splitlines()[2].startswith(f"seed: the seed of the tasks under {out}/schedule")
+    found = instances_of(tmp_path / "tasks")
+    assert all(found[("schedule.tight", i, "talk")] == found[("schedule", i, "talk")] for i in range(3))
+    # a folder of two builds, or of none, has no one seed: the builder stops, and names no seed
+    run_builder("--family", "schedule", "--instances", "0", "--variant", "other", "--out", out)
+    for path, says in ((out, "tasks of 2 different seeds"), (str(tmp_path / "empty"), "no task with a seed")):
+        (tmp_path / "empty").mkdir(exist_ok=True)
+        refused = run_builder("--family", "schedule", "--instances", "0", "--seed-of", path, "--out",
+                              str(tmp_path / "x"), check=False)
+        assert refused.returncode == 1 and says in refused.stderr, refused.stderr
+        assert not any(str(s) in refused.stderr for s in recorded_seeds(tmp_path / "tasks"))
+    both = run_builder("--family", "schedule", "--seed", "5", "--seed-of", out, "--out", str(tmp_path / "x"),
+                       check=False)
+    assert both.returncode == 2 and "not allowed with argument" in both.stderr
+
+
+def test_a_small_seed_is_said_to_be_public(tmp_path):
+    public = run_builder("--family", "puzzle", "--instances", "0", "--conditions", "solo", "--seed", "1",
+                         "--out", str(tmp_path / "a"))
+    assert public.stdout.splitlines()[2] == (
+        "seed: 1, given with --seed; it is public (below 1,000,000), so qa.py warns (public-seed)")
+    given = run_builder("--family", "puzzle", "--instances", "0", "--conditions", "solo", "--seed", "1000000",
+                        "--out", str(tmp_path / "b"))
+    assert given.stdout.splitlines()[2] == (
+        "seed: given with --seed (only the manifest, task.toml and task.json record it)")

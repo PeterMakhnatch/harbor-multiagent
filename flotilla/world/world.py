@@ -22,7 +22,11 @@ from typing import Any
 # "talk-liar" as a warning); the submit reply no longer carries the submission count `n` (a seat in
 # `silent` read it as a signal from its teammates); every request is logged; the message limits come
 # from the environment.
-WORLD_VERSION = 2
+# Version 3: no reply names the software or its version (versions 1 and 2 sent the header
+# `Server: flotilla-world/<version>`, and seats searched the file system and pip for that name; the
+# source and its generator are public). The version is only in the start event and /admin/state.
+WORLD_VERSION = 3
+SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
 SEATS = [s for s in os.environ.get("FLOTILLA_SEATS", "p1,p2").split(",") if s]
@@ -85,7 +89,9 @@ def _no_constants(name: str) -> Any:
 
 
 class World(BaseHTTPRequestHandler):
-    server_version = f"flotilla-world/{WORLD_VERSION}"
+    def version_string(self) -> str:
+        """The Server header of every reply, error pages of the server library included."""
+        return SERVER
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - keep stderr quiet
         return

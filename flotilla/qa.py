@@ -6,12 +6,13 @@
 Real runs found validity faults that each corrupted a condition (docs/FINDINGS.md): an answer example
 that equalled one instance's answer key, a world reply that named the condition, a reply counter that
 was a side channel, one Compose network for all seats, a scripted peer whose format looked more
-authoritative than plain text, and Docker names that carried the task name. World version 2 and opaque
-task names fixed them in code. This checker reads a built task set
+authoritative than plain text, Docker names that carried the task name, and a Server header that named
+the software, whose public generator and public seed give every answer key. World versions 2 and 3,
+opaque task names and secret seeds fixed them in code. This checker reads a built task set
 and reports every fault of these kinds that it finds (see RULES). It reads files and calls the task's
 own family module (solution/family.py); it starts no container and opens no connection. No output
-names a token or an answer key. Exit status: 1 when any finding is a FAIL, 2 when no task folder
-matches, otherwise 0. See README.md ("Check a task set before a wave") and CONTRACT.md 2.
+names a token, an answer key or a secret seed. Exit status: 1 when any finding is a FAIL, 2 when no task
+folder matches, otherwise 0. See README.md ("Check a task set before a wave") and CONTRACT.md 2.
 """
 
 from __future__ import annotations
@@ -54,25 +55,37 @@ def load_module(path: Path, name: str) -> types.ModuleType:
 BUILD = load_module(ROOT / "build_tasks.py", "flotilla_qa_build_tasks")
 WARNING: str = BUILD.WARNING  # the deliberate sentence of the two -warned conditions
 WORLD_VERSION: int = BUILD.WORLD_VERSION
+PUBLIC_SEED_BELOW: int = BUILD.PUBLIC_SEED_BELOW
 
 # rule -> (level, what a finding means), in the order of the report
 RULES: dict[str, tuple[str, str]] = {
     "example-leak": ("FAIL", "a JSON example in a seat's instruction scores 1 against the answer key or the decoy"),
     "condition-leak": ("FAIL", "a byte that a seat under test reads names its condition or reveals it"),
+    "software-name": ("FAIL", ("a byte that a seat under test reads names the software (flotilla) or its "
+                               "repository, where the public generator computes the answer key from the seed")),
     "opaque-names": ("FAIL", ("a task built with opaque names has a task or folder name that is not t-<12 hex>, "
                               "or that names a condition, its family or its variant")),
     "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart (talk and talk-liar, "
                                "talk-warned and talk-liar-warned)")),
     "seat-network": ("FAIL", "a seat is not alone with main on a network of its own"),
-    "seat-secrets": ("FAIL", ("a seat gets the answer key, task.json, task.toml, the build manifest, a world, "
-                              "family or score file, the admin token or another seat's token")),
+    "seat-secrets": ("FAIL", ("a seat gets the answer key, the build's seed, task.json, task.toml, the build "
+                              "manifest, a world, family or score file, the admin token or another seat's token")),
     "token-map": ("FAIL", "seat tokens are not distinct, or main does not map each one to its seat"),
     "stale-code": ("FAIL", "the task ships a world, scorer, oracle or family file that differs from this checkout"),
     "qa-error": ("FAIL", "a task file is missing or unreadable, so the task cannot be checked"),
+    "runtime-names": ("FAIL", ("the Docker names that Harbor derives from the task folder's name say the condition "
+                               "or the label (a set built with --readable-names); --allow-readable-names makes it "
+                               "a WARN, for local debugging only")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
-    "runtime-names": ("WARN", ("the Docker names that Harbor derives from the task folder's name say the condition "
-                               "or the label (a set built with --readable-names)")),
+    "public-seed": ("WARN", (f"the set was built with a public seed (below {PUBLIC_SEED_BELOW:,}, or named in this "
+                             "checkout's documentation): a seat that finds the public generator can compute every "
+                             "answer key; use it only to repeat a published build")),
 }
+ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
+SOURCE_WORDS = ("flotilla", "harbor-multiagent")  # the software's name and its repository's name
+MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no seat may get (seat-secrets)
+DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
+DOCUMENTED_SEED = re.compile(r"(?<![A-Za-z0-9_])seed\W{0,3}(\d+)", re.IGNORECASE)  # --seed 1, seed 1, "seed": 1
 TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"))  # each pair must look the same to a seat
 REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned")
 LIAR = re.compile(r"(?<![a-z])liars?(?![a-z])", re.IGNORECASE)
@@ -94,11 +107,12 @@ class Finding:
     rule: str
     task: str  # the task folder's name, or a label for a finding about a whole label
     seat: str  # a seat, "p1,p2" for a pair, or "*" for the whole task
-    detail: str  # never a token value or an answer key
+    detail: str  # never a token value, an answer key or a secret seed
+    downgraded: bool = False  # a FAIL that the operator allowed as a WARN (--allow-readable-names)
 
     @property
     def level(self) -> str:
-        return RULES[self.rule][0]
+        return "WARN" if self.downgraded else RULES[self.rule][0]
 
     def order(self) -> tuple[bool, int, str, str, str]:
         return (self.level != "FAIL", list(RULES).index(self.rule), self.task, self.seat, self.detail)
@@ -122,6 +136,7 @@ class Task:
     condition: str = ""
     family_name: str = ""
     names: str = ""  # [metadata] names: "opaque", "readable", or "" for a set built before opaque names
+    seed: int | None = None  # [metadata] seed (else task.json's): the generator's seed, secret unless public
     seats: list[str] = field(default_factory=list)  # the [agents.<seat>] tables
     under_test: list[str] = field(default_factory=list)  # the seats a model plays
     compose: dict[str, Any] = field(default_factory=dict)
@@ -217,6 +232,8 @@ def load_task(path: Path) -> Task:
     task.instance = instance if isinstance(instance, int) else None
     task.condition = str(meta.get("condition") or (parsed["condition"] if parsed else ""))
     task.names = str(meta.get("names") or "")
+    seed = meta.get("seed", task.task_json.get("seed"))
+    task.seed = seed if isinstance(seed, int) and not isinstance(seed, bool) else None
     agents = config.get("agents") if isinstance(config.get("agents"), dict) else {}
     task.seats = sorted(agents)
     task.under_test = [seat for seat in task.seats if (agents[seat] or {}).get("under_test", True) is not False]
@@ -571,6 +588,21 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
                           f"instruction lacks the warning sentence of the {task.condition} condition")
 
 
+def check_software_name(task: Task) -> Iterator[Finding]:
+    """No byte that a seat under test reads names the software or its repository. World v2's Server header said
+    `flotilla-world/2`, and seats searched the file system and pip for that name; the source is public, and with the
+    seed its generator gives the answer key (FINDINGS.md, 2026-11-19 10:11)."""
+    for seat in task.under_test:
+        for name, text in task.view(seat).items():
+            if name.removeprefix("env.") in MAIN_SECRETS:
+                continue  # seat-secrets reports a seat that gets one of these
+            if name.startswith("env."):
+                text = f"{name.removeprefix('env.')}\n{decoded(text)}"  # the variable's name is visible too
+            words = sorted({word for word in SOURCE_WORDS if word in text.lower()})
+            if words:
+                yield Finding("software-name", task.name, seat, f"{name} contains {', '.join(map(repr, words))}")
+
+
 def name_words(task: Task, name: str) -> list[str]:
     """The words in a name that say what the task is: a word of a condition name, or of the task's label (family and
     variant). A word of hex digits only is left out, because an opaque name holds such strings by chance."""
@@ -681,20 +713,24 @@ def check_seat_secrets(task: Task) -> Iterator[Finding]:
     tokens = [(seat, task.env(seat).get("SEAT_TOKEN", "")) for seat in task.seats if seat in task.services]
     tokens += registered_tokens(main_env.get("FLOTILLA_TOKENS", ""))
     spellings, canonical = secret_forms(task.answer_key)
+    # a secret seed gives every answer key with the public generator; a public one is public-seed's WARN
+    seed = str(task.seed) if task.seed is not None and task.seed >= PUBLIC_SEED_BELOW else ""
     main_volumes = volume_sources(task, task.services.get("main") or {})
     for seat in task.seats:
         service = task.services.get(seat)
         if service is None:
             continue
-        found = [f"it gets {name}" for name in ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS") if name in task.env(seat)]
+        found = [f"it gets {name}" for name in MAIN_SECRETS if name in task.env(seat)]
         own = task.env(seat).get("SEAT_TOKEN", "")  # a token that two seats hold is token-map's finding
         others = {(other, token) for other, token in tokens if other != seat and len(token) >= 8 and token != own}
         for name, text in task.view(seat).items():
-            if name in ("env.FLOTILLA_ADMIN", "env.FLOTILLA_TOKENS"):
+            if name.removeprefix("env.") in MAIN_SECRETS:
                 continue  # reported above
             if len(admin) >= 8 and admin != own and admin in text:
                 found.append(f"{name} holds the admin token (FLOTILLA_ADMIN)")
             found += [f"{name} holds the token of {other}" for other in sorted({o for o, t in others if t in text})]
+            if seed and seed in text:
+                found.append(f"{name} holds the build's seed")
             if name != "instruction" and (any(s in text for s in spellings) or any(
                     json.dumps(obj, sort_keys=True) in canonical for _line, obj in json_objects(text))):
                 found.append(f"{name} holds the answer key")
@@ -777,8 +813,9 @@ def checkout_bytes(relative_path: str) -> bytes | None:
 
 
 def check_stale_code(task: Task) -> Iterator[Finding]:
-    """The task ships this checkout's world (version 2: no reply names the condition or counts submissions), verifier,
-    oracle (the scripted peer speaks plain text only) and family module. A set built from an older checkout fails."""
+    """The task ships this checkout's world (version 3: no reply names the condition, the software or a version, or
+    counts submissions), verifier, oracle (the scripted peer speaks plain text only) and family module. A set built
+    from an older checkout fails."""
     if not task.family_name:
         return
     missing, differ = [], []
@@ -820,8 +857,8 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
 
 
-TASK_RULES = (check_example_leak, check_condition_leak, check_opaque_names, check_seat_network, check_seat_secrets,
-              check_token_map, check_stale_code, check_solo_sufficient)
+TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
+              check_seat_secrets, check_token_map, check_stale_code, check_solo_sufficient)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -896,14 +933,15 @@ def compose_project(name: str) -> str:
     return re.sub(r"[^a-z0-9_-]", "-", name if re.match(r"^[a-z0-9]", name) else "0" + name)
 
 
-def check_runtime_names(tasks: list[Task]) -> Iterator[Finding]:
+def check_runtime_names(tasks: list[Task], allow_readable_names: bool = False) -> Iterator[Finding]:
     """Harbor names a local task's trial after the first 32 characters of the task folder's name (models/task/id.py,
     models/trial/config.py) and the trial's Compose project `<trial>__env`, and Docker's DNS gives seats the
     container and network names: a silent seat read `schedule-004-silent__cdeu7ht__env-main-1` by a reverse lookup
     (job w2-schedule-qwen3-6-35b-2seat, FINDINGS.md 2026-11-19 06:20). A readable folder name says the condition,
     and in schedule.liar 'liar' too, to honest and unwarned seats. Opaque names (the default) say nothing, and an
-    opaque task whose name says something is opaque-names' FAIL. So this WARN, once per label, is about sets built
-    with --readable-names (or before opaque names): never run one in a wave."""
+    opaque task whose name says something is opaque-names' FAIL. So this FAIL, once per label, is about sets built
+    with --readable-names (or before opaque names): never run one in a wave. --allow-readable-names makes it a WARN
+    for a local debugging run; make_jobs.py refuses such a set without the same flag."""
     by_label: dict[tuple[str, str], list[tuple[str, list[str]]]] = defaultdict(list)
     for task in tasks:
         prefix = task.path.name[:32].rstrip("_-")
@@ -915,7 +953,36 @@ def check_runtime_names(tasks: list[Task]) -> Iterator[Finding]:
         yield Finding("runtime-names", label, "*",
                       f"{len(found)} tasks: Harbor names Docker containers and networks after the task folder "
                       f"(for example {compose_project(found[0][0])}__<id>__env-main-1); a seat that looks up an "
-                      f"address reads {', '.join(map(repr, words))}: build without --readable-names")
+                      f"address reads {', '.join(map(repr, words))}: build without --readable-names",
+                      downgraded=allow_readable_names)
+
+
+@functools.cache
+def documented_seeds(root: Path = ROOT) -> frozenset[int]:
+    """Seeds that this checkout's documentation names (`--seed 1` in a reproduce command, "seed 1"): public."""
+    found: set[int] = set()
+    for pattern in DOCUMENTATION:
+        for path in sorted(root.glob(pattern)):
+            found.update(int(digits) for digits in DOCUMENTED_SEED.findall(read_text(path) or ""))
+    return frozenset(found)
+
+
+def check_public_seed(tasks: list[Task]) -> Iterator[Finding]:
+    """The family generators are public (this repository), so a seed is the answer key in another form: a seat that
+    finds the generator and the seed can compute the answer, in any condition. Every build before secret seeds used
+    --seed 1, and a small seed can be found by trying them all (FINDINGS.md, 2026-11-19 10:11). One WARN per
+    label and seed: such a set may repeat a published build (RESULTS.md,
+    "Reproduce"), but a new wave needs a secret seed (build without --seed)."""
+    documented = documented_seeds()
+    by_label: dict[tuple[str, str, int], int] = defaultdict(int)
+    for task in tasks:
+        if task.seed is not None and (task.seed < PUBLIC_SEED_BELOW or task.seed in documented):
+            by_label[(str(task.path.parent), task.label, task.seed)] += 1
+    for (_parent, label, seed), count in sorted(by_label.items()):
+        why = f"below {PUBLIC_SEED_BELOW:,}" if seed < PUBLIC_SEED_BELOW else "named in this checkout's documentation"
+        yield Finding("public-seed", label, "*",
+                      f"{count} tasks use seed {seed}, which is public ({why}): a seat that finds the public "
+                      "generator can compute their answer keys; build a new wave without --seed")
 
 
 # --- Running and reporting -------------------------------------------------------------------------------------
@@ -934,8 +1001,9 @@ def find_tasks(patterns: list[str]) -> list[Path]:
     return sorted(dict.fromkeys(p.resolve() for p in found))
 
 
-def check(paths: list[Path]) -> tuple[list[Finding], list[Task]]:
-    """Every finding for the task folders, in report order, and the tasks as read."""
+def check(paths: list[Path], allow_readable_names: bool = False) -> tuple[list[Finding], list[Task]]:
+    """Every finding for the task folders, in report order, and the tasks as read. allow_readable_names makes
+    runtime-names a WARN (a local debugging run of a set built with --readable-names)."""
     if yaml is None:
         raise RuntimeError("qa.py needs PyYAML: uvx --quiet --with pyyaml python flotilla/qa.py ...")
     tasks = [load_task(path) for path in paths]
@@ -944,7 +1012,8 @@ def check(paths: list[Path]) -> tuple[list[Finding], list[Task]]:
         for rule in TASK_RULES:
             findings.update(rule(task))
     findings.update(check_twins(tasks))
-    findings.update(check_runtime_names(tasks))
+    findings.update(check_runtime_names(tasks, allow_readable_names))
+    findings.update(check_public_seed(tasks))
     for task in tasks:
         findings.update(task.errors)  # last: the rules above can add some
     return sorted(findings, key=Finding.order), tasks
@@ -954,7 +1023,8 @@ def summary(findings: list[Finding], tasks: list[Task]) -> dict[str, Any]:
     labels: dict[str, int] = defaultdict(int)
     for task in tasks:
         labels[task.label or "?"] += 1
-    rules = {rule: {"level": level, "findings": sum(1 for f in findings if f.rule == rule),
+    rules = {rule: {"level": next((f.level for f in findings if f.rule == rule), level),  # a downgrade shows
+                    "findings": sum(1 for f in findings if f.rule == rule),
                     "tasks": len({f.task for f in findings if f.rule == rule}), "means": means}
              for rule, (level, means) in RULES.items()}
     fails = sum(1 for f in findings if f.level == "FAIL")
@@ -978,6 +1048,9 @@ def render_text(findings: list[Finding], tasks: list[Task]) -> str:
               f"{'rule':<16} {'level':<5} {'findings':>8} {'tasks':>6}"]
     lines += [f"{rule:<16} {row['level']:<5} {row['findings']:>8} {row['tasks']:>6}"
               for rule, row in facts["rules"].items()]
+    if any(f.downgraded for f in findings):
+        lines += ["", f"{ALLOW_READABLE_NAMES}: runtime-names is a WARN, for a local debugging run only; "
+                  "never run this set in a wave."]
     lines += ["", "PASS: no FAIL finding." if facts["passed"] else "FAIL: fix every FAIL finding before a wave."]
     return "\n".join(lines)
 
@@ -996,6 +1069,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("tasks", nargs="+", help="task folders, or globs in quotes, e.g. 'flotilla/tasks/*/*'")
     parser.add_argument("--json", action="store_true", help="print the findings and the summary as JSON")
+    parser.add_argument(ALLOW_READABLE_NAMES, action="store_true",
+                        help="report runtime-names as a WARN, not a FAIL: for a local debugging run of a set built "
+                        "with --readable-names, never for a wave")
     args = parser.parse_args(argv)
     if yaml is None:
         print("qa.py needs PyYAML: uvx --quiet --with pyyaml python flotilla/qa.py ...", file=sys.stderr)
@@ -1004,7 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
     if not paths:
         print(f"no task folder (with a task.toml) matches {' '.join(args.tasks)}", file=sys.stderr)
         return 2
-    findings, tasks = check(paths)
+    findings, tasks = check(paths, allow_readable_names=args.allow_readable_names)
     print(render_json(findings, tasks) if args.json else render_text(findings, tasks))
     return 1 if any(f.level == "FAIL" for f in findings) else 0
 

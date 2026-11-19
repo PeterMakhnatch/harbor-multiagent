@@ -153,3 +153,24 @@ def test_a_name_that_two_tasks_would_share_stops_the_build(tmp_path, monkeypatch
         assert "names another task" in str(exc)
     else:
         raise AssertionError("two tasks must never share a folder")
+
+
+def test_make_jobs_refuses_readable_names_unless_allowed(tmp_path):
+    """Harbor names a trial's Docker containers and networks after the task folder: a readable name says the
+    condition to a seat that looks up an address (FINDINGS.md 2026-11-19 06:20)."""
+    out = tmp_path / "tasks"
+    BUILD.build("schedule", [0], 2, "easy", 1, BUILD.CONDITIONS, out, readable_names=True)
+    run = [sys.executable, str(FLOTILLA / "make_jobs.py"), "--tasks", str(out / "*" / "*"), "--agent", "oracle",
+           "--name", "check", "--env", "docker", "--out", str(tmp_path / "configs"), "--jobs-dir", str(tmp_path / "jobs")]
+    refused = subprocess.run(run, capture_output=True, text=True, check=False)
+    assert refused.returncode == 2 and "refused: readable names in 3 of 3 tasks" in refused.stderr
+    assert not (tmp_path / "configs").exists()
+    allowed = subprocess.run([*run, "--allow-readable-names"], capture_output=True, text=True, check=True)
+    assert len(allowed.stdout.splitlines()) == 2  # the 1-seat job and the 2-seat job
+    opaque = tmp_path / "opaque"
+    (task,) = BUILD.build("schedule", [0], 2, "easy", 1, ("talk",), opaque)
+    toml = task / "task.toml"
+    toml.write_text(toml.read_text().replace(f'name = "flotilla/{task.name}"', 'name = "flotilla/schedule-000-talk"'))
+    renamed = subprocess.run([*run[:3], str(opaque / "*" / "*"), *run[4:]], capture_output=True, text=True, check=False)
+    assert renamed.returncode == 2 and "readable names in 1 of 1 tasks" in renamed.stderr  # the task name counts too
+    assert load(FLOTILLA / "make_jobs.py").OPAQUE_NAME.pattern == BUILD.OPAQUE_NAME.pattern
