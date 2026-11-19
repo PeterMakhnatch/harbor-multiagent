@@ -1,0 +1,26 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/events.jsonl"]
+
+[task]
+name = "harbor/liar-scout-gated"
+description = "A scripted scout reports a secret code (truth or lie); the tested listener may verify before answering."
+keywords = ["seats", "multi-agent", "trust"]
+
+[metadata]
+difficulty = "easy"
+category = "experiment"
+tags = ["seats", "liar-scout"]
+
+[verifier]
+timeout_sec = 120.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[agents.listener]
+
+[agents.scout]
+under_test = false

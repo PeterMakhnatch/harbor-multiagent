@@ -32,7 +32,7 @@ ROOT = Path("/tmp/liar-scout-trials")
 async def run_one(name: str) -> dict:
     config = TrialConfig(
         task=TaskConfig(path=TASK),
-        trial_name=f"liar-{os.environ.get('SEAT_TAG', '')}{name}",
+        trial_name=f"liar-{TASK.name}-{os.environ.get('SEAT_TAG', '')}{name}",
         trials_dir=ROOT,
         participants=[
             Participant(
