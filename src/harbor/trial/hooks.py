@@ -21,6 +21,8 @@ class TrialEvent(Enum):
     ENVIRONMENT_START = "environment-start"
     AGENT_START = "agent-start"
     AGENT_END = "agent-end"
+    SEAT_START = "seat-start"
+    SEAT_END = "seat-end"
     VERIFICATION_START = "verification-start"
     END = "end"
     CANCEL = "cancel"
@@ -34,6 +36,7 @@ class TrialHookEvent(BaseModel):
     The `result` field is initialized before START and fully populated by END.
     `trial_name` and `trial_id` are derived from `config` and `result`, so
     callers do not pass them when constructing hook events.
+    `seat` identifies the participant for seat lifecycle events only.
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -44,6 +47,7 @@ class TrialHookEvent(BaseModel):
     result: TrialResult
     lock: TrialLock
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    seat: str | None = None
 
     @computed_field
     @property
@@ -64,6 +68,7 @@ class LogEntry(BaseModel):
 
     Pydantic (like its neighbor ``TrialHookEvent``) to follow the project's
     model convention; ``timestamp`` is a ``datetime`` to match it as well.
+    `seat` identifies a participant's setup or execution output, if applicable.
     """
 
     trial_id: UUID
@@ -72,6 +77,7 @@ class LogEntry(BaseModel):
     text: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     step_name: str | None = None
+    seat: str | None = None
 
 
 LogCallback = Callable[[LogEntry], Awaitable[None]]

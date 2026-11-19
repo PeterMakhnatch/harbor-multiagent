@@ -258,7 +258,7 @@ class SeatsTrial(SingleStepTrial):
                 f"Seat {seat.name!r}: could not create {logs_dir}: {made.stdout}"
             )
         with environment.scoped_exec_env(seat.agent.extra_env):
-            with self._log_context("agent_setup", environment):
+            with self._log_context("agent_setup", environment, seat=seat.name):
                 await seat.agent.setup(environment=environment)
 
     @override
@@ -329,8 +329,9 @@ class SeatsTrial(SingleStepTrial):
         seat.result.agent_result = context
         seat.result.agent_execution = execution
         try:
+            await self._emit(TrialEvent.SEAT_START, seat=seat.name)
             with seat.environment.scoped_exec_env(seat.agent.extra_env):
-                with self._log_context("agent", seat.environment):
+                with self._log_context("agent", seat.environment, seat=seat.name):
                     await seat.agent.run(
                         instruction=seat.instruction,
                         environment=seat.environment,
@@ -343,6 +344,7 @@ class SeatsTrial(SingleStepTrial):
             raise
         finally:
             execution.finished_at = self._now()
+            await self._emit(TrialEvent.SEAT_END, seat=seat.name)
 
     async def _collect_seats(self) -> None:
         """Mirrors Trial._sync_agent_output for every seat, under test or not."""

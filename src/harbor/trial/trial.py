@@ -586,6 +586,8 @@ class Trial(ABC):
         phase: LogPhase,
         environment: BaseEnvironment,
         step_name: str | None = None,
+        *,
+        seat: str | None = None,
     ) -> contextlib.AbstractContextManager[None]:
         """Stream a phase's stdout/stderr chunks to the registered callbacks.
 
@@ -603,19 +605,21 @@ class Trial(ABC):
                 stream=stream,
                 text=text,
                 step_name=step_name,
+                seat=seat,
             )
             for callback in callbacks:
                 await callback(entry)
 
         return environment.scoped_output_callback(emit)
 
-    async def _emit(self, event: TrialEvent) -> None:
+    async def _emit(self, event: TrialEvent, *, seat: str | None = None) -> None:
         hook_event = TrialHookEvent(
             event=event,
             task_name=self.task.name,
             config=self.config,
             result=self.result,
             lock=self._trial_lock,
+            seat=seat,
         )
         for hook in self._hooks[event]:
             await hook(hook_event)

@@ -19,7 +19,8 @@ from harbor.agents.installed.base import (
     NonZeroAgentExitCodeError,
 )
 from harbor.agents.installed.codex import Codex
-from harbor.environments.base import BaseEnvironment, ExecResult
+from harbor.environments.base import BaseEnvironment, ExecResult, OutputCallback
+from harbor.environments.docker.docker import DockerEnvironment
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.result import JobStats
@@ -32,6 +33,7 @@ from harbor.models.trial.config import (
 )
 from harbor.models.trial.result import TrialResult
 from harbor.models.verifier.result import VerifierResult
+from harbor.trial.hooks import LogEntry, TrialEvent, TrialHookEvent
 from harbor.trial.seats import SeatsTrial
 from harbor.trial.single_step import SingleStepTrial
 from harbor.trial.trial import Trial
@@ -74,6 +76,7 @@ class ScriptedAgent(BaseAgent):
     async def setup(self, environment: BaseEnvironment) -> None:
         assert isinstance(environment, SeatEnvironment)
         note("setup", environment.service)
+        await environment.exec(f"echo {environment.service} setup")
         if self.fail == "setup":
             await asyncio.Event().wait()
 
@@ -145,13 +148,27 @@ def _service_and_user(command: list[str]) -> tuple[str, str]:
     return service, user
 
 
-async def compose(command: list[str], **_: Any) -> ExecResult:
+async def compose(
+    command: list[str], *, on_output: OutputCallback | None = None, **_: Any
+) -> ExecResult:
     note("compose", *command)
+    if on_output is not None:
+        await on_output(command[-1], "stdout")
+        await asyncio.sleep(0)
+        await on_output(command[-1], "stderr")
     if command[0] != "exec" or "sh" not in command:
         return ExecResult(stdout="", return_code=0)
     if command[-1] == "exec bash -c 'id -u'":
         return ExecResult(stdout="1000\n", return_code=0)
     return ExecResult(stdout="", return_code=0)
+
+
+def _fake_compose(trial: Trial) -> None:
+    project = trial.agent_environment
+    assert isinstance(project, DockerEnvironment)
+    project._run_docker_compose_command = AsyncMock(side_effect=compose)
+    project.start = AsyncMock()
+    project.stop = AsyncMock(side_effect=lambda delete: note("stop"))
 
 
 async def _seats_trial(config: TrialConfig) -> SeatsTrial:
@@ -160,13 +177,14 @@ async def _seats_trial(config: TrialConfig) -> SeatsTrial:
     RELEASE.clear()
     trial = await Trial.create(config)
     assert isinstance(trial, SeatsTrial)
-    project = trial.agent_environment
-    project._run_docker_compose_command = AsyncMock(side_effect=compose)
-    project.start = AsyncMock()
-    project.stop = AsyncMock(side_effect=lambda delete: note("stop"))
-    trial._run_shared_verifier = AsyncMock(
-        side_effect=lambda **_: note("verify") or VerifierResult(rewards={"maya": 1})
-    )
+    _fake_compose(trial)
+
+    async def verify(*_: Any) -> VerifierResult:
+        note("verify")
+        await trial.agent_environment.exec("echo verifying")
+        return VerifierResult(rewards={"maya": 1})
+
+    trial._verify_with_timeout = AsyncMock(side_effect=verify)
     return trial
 
 
@@ -176,6 +194,31 @@ def _verified(trial: SeatsTrial) -> bool:
 
 def _seat_results(result) -> dict[str, Any]:
     return {seat.seat: seat for seat in result.seat_results or []}
+
+
+def _record_seat_hooks(trial: SeatsTrial) -> None:
+    async def capture(event: TrialHookEvent) -> None:
+        assert event.seat is not None
+        note("hook", event.event.value, event.seat)
+
+    trial.add_hook(TrialEvent.SEAT_START, capture)
+    trial.add_hook(TrialEvent.SEAT_END, capture)
+
+
+def _assert_seat_hooks(trial: SeatsTrial) -> None:
+    hooks = [event[1:] for event in EVENTS if event[0] == "hook"]
+    assert sorted(hooks) == sorted(
+        (event, seat.name)
+        for seat in trial.seats
+        for event in ("seat-start", "seat-end")
+    )
+    for seat in trial.seats:
+        start = index("hook", "seat-start", seat.name)
+        end = index("hook", "seat-end", seat.name)
+        assert start < index("run", seat.name, seat.instruction) < end
+        for event in ("ended", "stopped"):
+            if (event, seat.name) in EVENTS:
+                assert index(event, seat.name) < end
 
 
 async def test_trial_create_routes_seat_tasks(tmp_path: Path):
@@ -194,7 +237,7 @@ async def test_trial_create_routes_seat_tasks(tmp_path: Path):
     assert trial.seats[0].paths.agent_dir == trial.paths.trial_dir / "seats/maya/agent"
 
 
-async def test_trial_create_keeps_ordinary_tasks_single_step(tmp_path: Path):
+async def test_ordinary_trial_keeps_unattributed_hooks_and_logs(tmp_path: Path):
     task_dir = tmp_path / "plain"
     (task_dir / "environment").mkdir(parents=True)
     (task_dir / "environment" / "Dockerfile").write_text("FROM ubuntu\n")
@@ -203,10 +246,50 @@ async def test_trial_create_keeps_ordinary_tasks_single_step(tmp_path: Path):
     (task_dir / "tests").mkdir()
     (task_dir / "tests" / "test.sh").write_text("#!/bin/bash\n")
     plain = TrialConfig(
-        task=TaskConfig(path=task_dir), verifier=VerifierConfig(disable=True)
+        task=TaskConfig(path=task_dir),
+        trials_dir=tmp_path / "trials",
+        agent=AgentConfig(name="nop"),
+        verifier=VerifierConfig(disable=True),
     )
 
-    assert type(await Trial.create(plain)) is SingleStepTrial
+    trial = await Trial.create(plain)
+    assert type(trial) is SingleStepTrial
+    _fake_compose(trial)
+    entries: list[LogEntry] = []
+    events: list[TrialHookEvent] = []
+
+    async def log(entry: LogEntry) -> None:
+        entries.append(entry)
+
+    async def hook(event: TrialHookEvent) -> None:
+        events.append(event)
+
+    async def exec_in_agent(environment: BaseEnvironment, **_: Any) -> None:
+        await environment.exec("echo ordinary trial")
+
+    trial.agent.setup = AsyncMock(side_effect=exec_in_agent)
+    trial.agent.run = AsyncMock(side_effect=exec_in_agent)
+    trial.add_log_callback(log)
+    for event in TrialEvent:
+        trial.add_hook(event, hook)
+
+    result = await trial.run()
+
+    assert result.exception_info is None
+    assert [(entry.phase, entry.seat) for entry in entries] == [
+        ("agent_setup", None),
+        ("agent_setup", None),
+        ("agent", None),
+        ("agent", None),
+    ]
+    assert [(event.event, event.seat) for event in events] == [
+        (TrialEvent.START, None),
+        (TrialEvent.ENVIRONMENT_START, None),
+        (TrialEvent.AGENT_START, None),
+        (TrialEvent.AGENT_END, None),
+        (TrialEvent.END, None),
+    ]
+
     with pytest.raises(ValueError, match="takes agent, not participants"):
         await Trial.create(
             plain.model_copy(update={"participants": [_participant("maya")]})
@@ -402,9 +485,11 @@ async def test_agent_timeout_ends_everyone_still_running_and_still_grades(
             _participant("lee", hold=True),
         )
     )
+    _record_seat_hooks(trial)
 
     result = await trial.run()
 
+    _assert_seat_hooks(trial)
     seats = _seat_results(result)
     assert ("stopped", "maya") in EVENTS and ("stopped", "lee") in EVENTS
     assert seats["raj"].exception_info is None
@@ -435,9 +520,11 @@ async def test_an_agent_failure_reaches_the_trial_and_job_stats_and_grades_by_po
             _participant("lee", hold=True),
         )
     )
+    _record_seat_hooks(trial)
 
     result = await trial.run()
 
+    _assert_seat_hooks(trial)
     seats = _seat_results(result)
     assert seats["maya"].exception_info.exception_type == error
     assert result.exception_info is not None
@@ -617,6 +704,41 @@ async def test_each_seat_logs_under_its_own_name(tmp_path: Path):
         assert seat.environment.logger.name.startswith(
             f"{trial.logger.name}.seats.{seat.name}."
         )
+
+
+async def test_log_streaming_attributes_concurrent_seat_output(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    entries: list[LogEntry] = []
+
+    async def capture(entry: LogEntry) -> None:
+        entries.append(entry)
+
+    trial.add_log_callback(capture)
+
+    result = await trial.run()
+
+    assert result.exception_info is None
+    assert result.verifier_result is not None
+    assert all(entry.trial_id == trial.id for entry in entries)
+    for phase in ("agent_setup", "agent"):
+        phase_entries = [entry for entry in entries if entry.phase == phase]
+        streams = [entry.stream for entry in phase_entries]
+        assert streams == ["stdout"] * 3 + ["stderr"] * 3
+        for stream in ("stdout", "stderr"):
+            assert {
+                entry.seat for entry in phase_entries if entry.stream == stream
+            } == {"maya", "raj", "lee"}
+        assert all(entry.seat and entry.seat in entry.text for entry in phase_entries)
+    assert [
+        (entry.seat, entry.stream) for entry in entries if entry.phase == "verification"
+    ] == [(None, "stdout"), (None, "stderr")]
 
 
 def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
