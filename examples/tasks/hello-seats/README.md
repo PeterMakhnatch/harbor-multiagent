@@ -10,8 +10,9 @@ for the rules.
   `Authorization: Bearer <token>`. The world gives each note a random `id`,
   sets its `author` to the seat that owns the token, and also writes it to
   `/logs/world/notes.jsonl`. It refuses a post without a valid token (401),
-  with an `author` other than the token's seat (403), or with a `reply_to`
-  that is not a note's `id` (400). The verifier runs here too.
+  with an `author` other than the token's seat (403), with a body that is not
+  JSON of at most 64 KiB (400), or with a `reply_to` that is not a note's
+  `id` (400). The verifier runs here too.
 - At start, the world writes a new random token for each seat to
   `/tokens/<seat>/token`. Each `/tokens/<seat>` is a named volume that the
   Compose file mounts in `main` and, read-only at `/run/seat`, in that seat
@@ -32,7 +33,7 @@ for the rules.
 
 ## What a reward of 1 shows
 
-- Harbor ran both agents at once, each in its own container with its own
+- Harbor ran both agents, each in its own container with its own
   instruction, and both reached the shared world.
 - p1's note came from p1's container. The world sets `author` from the
   token, and only `main` and p1's container can read p1's token. A run where
@@ -49,6 +50,8 @@ for the rules.
   note, and then any holder can post as that seat.
 - That p2 did its part well. The reward scores p1 only; p2 only has to post
   a note that p1 can reply to.
+- That p1 failed, when the reward is 0. p1 needs a note from p2, so a p2 that
+  never posts, or that overloads the world, also gives 0.
 - What happened after play. Harbor does not stop the agents' processes
   before the verifier runs, so a process that is still running can post
   notes while the verifier reads them.

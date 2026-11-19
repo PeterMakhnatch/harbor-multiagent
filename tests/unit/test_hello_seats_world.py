@@ -92,6 +92,21 @@ def test_a_post_without_a_seat_token_is_refused(world, token):
     assert module.NOTES == []
 
 
+@pytest.mark.parametrize("length", ["-1", str(10**12), "many"])
+def test_a_body_length_out_of_bounds_is_refused_unread(world, length):
+    module, port = world
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        connection.putrequest("POST", "/note")
+        connection.putheader("Authorization", f"Bearer {module.TOKENS['p1']}")
+        connection.putheader("Content-Length", length)
+        connection.endheaders()
+        assert connection.getresponse().status == 400
+    finally:
+        connection.close()
+    assert module.NOTES == []
+
+
 def test_a_seat_cannot_post_as_another_seat(world):
     module, port = world
     body = {"author": "p1", "text": "hello from p1"}

@@ -15,6 +15,7 @@ from pathlib import Path
 
 NOTES_PATH = Path("/logs/world/notes.jsonl")
 TOKENS_DIR = Path("/tokens")
+MAX_BODY_BYTES = 64 * 1024
 NOTES: list[dict[str, str | None]] = []
 TOKENS: dict[str, str] = {}  # seat -> token
 LOCK = threading.Lock()
@@ -52,7 +53,8 @@ class World(BaseHTTPRequestHandler):
             self._reply(200, {"ok": True})
         elif self.path == "/notes":
             with LOCK:
-                self._reply(200, list(NOTES))
+                notes = list(NOTES)
+            self._reply(200, notes)
         else:
             self._reply(404, {"error": "not found"})
 
@@ -61,10 +63,13 @@ class World(BaseHTTPRequestHandler):
             self._reply(404, {"error": "not found"})
             return
         try:
-            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            length = int(self.headers["Content-Length"])
+            if not 0 <= length <= MAX_BODY_BYTES:
+                raise ValueError(length)
+            body = json.loads(self.rfile.read(length))
             text = str(body["text"])
-        except (KeyError, TypeError, ValueError):
-            self._reply(400, {"error": 'send JSON {"text": ..., "reply_to": ...}'})
+        except (KeyError, TypeError, ValueError, RecursionError):
+            self._reply(400, {"error": 'send <= 64 KiB of JSON {"text": ...}'})
             return
         author = seat_of(self.headers.get("Authorization", ""))
         if author is None:

@@ -28,7 +28,7 @@ SEATS = ("p1", "p2")
 # p1's note as p1, once with its own token and once with no token. p1 prints a
 # line, as any agent leaves a log, so only the world's record can fail it.
 IMPERSONATION = r"""#!/bin/bash
-if [ "$SEAT" = p1 ]; then echo "p1 takes no action"; sleep 10; exit 0; fi
+if [ "$SEAT" = p1 ]; then echo "p1 takes no action"; exit 0; fi
 for auth in "Authorization: Bearer $(cat /run/seat/token)" "Authorization: Bearer"; do
   curl -sS -o /dev/null -w '%{http_code}\n' http://world:8080/note -H "$auth" \
     -H 'Content-Type: application/json' -d '{"author": "p1", "text": "hello from p1"}'
@@ -87,6 +87,12 @@ async def test_p2_posting_as_p1_earns_reward_zero(tmp_path: Path):
     task = tmp_path / "hello-seats"
     shutil.copytree(TASK, task)
     (task / "solution" / "solve.sh").write_text(IMPERSONATION)
+    # Put p2 under test too, so play lasts until p2's posts are done.
+    task_toml = task / "task.toml"
+    assert "under_test = false" in task_toml.read_text()
+    task_toml.write_text(
+        task_toml.read_text().replace("under_test = false", "under_test = true")
+    )
 
     trial, result = await run_oracle_trial(task, tmp_path)
 
