@@ -1161,6 +1161,37 @@ services:
         ]
 
 
+def test_seat_shared_volume_compares_docker_volume_names(tmp_path: Path):
+    path = tmp_path / "docker-compose.yaml"
+    # main's read-only mount is the docs' pattern for sharing files with tests.
+    path.write_text(f"""
+x-player: &player
+  image: {IMAGE}
+services:
+  main:
+    volumes: ["p1-home:/agents/p1/home:ro"]
+  p1:
+    <<: *player
+    volumes: ["p1-home:/home/player", "cache-one:/cache", "notes-one:/notes"]
+  p2:
+    <<: *player
+    volumes: ["cache-two:/cache:ro", "notes-two:/notes:ro", "p2-home:/home/player"]
+volumes:
+  p1-home: {{}}
+  p2-home: {{}}
+  cache-one: {{external: true, name: shared-cache}}
+  cache-two: {{external: true, name: shared-cache}}
+  notes-one: {{name: shared-notes}}
+  notes-two: {{name: shared-notes}}
+""")
+    assert [
+        f.message.split(";")[0] for f in lint_compose(path, seats=["p1", "p2"])
+    ] == [
+        "services.p1.volumes[1]: Seat can write a volume also mounted by seat p2",
+        "services.p1.volumes[2]: Seat can write a volume also mounted by seat p2",
+    ]
+
+
 def test_hello_seats_example_is_clean():
     example = Path(__file__).parents[2] / "examples/tasks/hello-seats"
     assert lint_task(example, selected_rules=DEFAULT_RULES) == []

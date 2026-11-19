@@ -195,6 +195,37 @@ def test_seat_shared_bind_volume_access(model, path, flags, expected):
     assert {f.rule for f in lint_compose(path, seats=["p1", "p2"])} == expected
 
 
+@pytest.mark.parametrize(
+    "volumes,shared",
+    [
+        (
+            {
+                "a": {"name": "x", "external": True},
+                "b": {"name": "x", "external": True},
+            },
+            True,
+        ),
+        ({"a": {"name": "x"}, "b": {"name": "x"}}, True),
+        ({"a": {"name": "harbor-lint_a"}, "b": {"name": "harbor-lint_b"}}, False),
+        ({}, False),
+    ],
+    ids=["one-external-volume", "one-name", "own-volumes", "undeclared-keys"],
+)
+def test_seat_shared_volume_compares_docker_names(model, path, volumes, shared):
+    model["volumes"] = volumes
+    model["services"].update(
+        p1={"volumes": [volume()]},
+        p2={"volumes": [{**volume(True), "source": "b"}]},
+    )
+    assert [
+        f.message.split(";")[0] for f in lint_compose(path, seats=["p1", "p2"])
+    ] == (
+        ["services.p1.volumes[0]: Seat can write a volume also mounted by seat p2"]
+        if shared
+        else []
+    )
+
+
 NAMESPACES = [("network_mode", "network"), ("pid", "PID"), ("ipc", "IPC")]
 
 

@@ -266,7 +266,7 @@ def lint_compose(
         for service in data.get("services", {}).values()
         if service.get("build") and service.get("image")
     }
-    # Each named volume's mounts: service, field, write access and subpath.
+    # Mounts of each Docker volume: service, field, write access and subpath.
     volume_mounts: dict[str, list[tuple[str, str, bool, PurePosixPath]]] = {}
     for name, service in data.get("services", {}).items():
         field = f"services.{name}"
@@ -315,7 +315,10 @@ def lint_compose(
                 bind(device, location, read_only=read_only)
             if mount["type"] == "volume" and source:
                 subpath = (mount.get("volume") or {}).get("subpath") or ""
-                volume_mounts.setdefault(source, []).append(
+                # Compose resolves each key's Docker name: its name: field, an
+                # external key itself, or the key with the project prefix.
+                volume = data.get("volumes", {}).get(source, {}).get("name")
+                volume_mounts.setdefault(volume or source, []).append(
                     (
                         name,
                         location,

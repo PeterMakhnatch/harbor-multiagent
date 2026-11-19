@@ -71,10 +71,12 @@ Compose interpolation uses the applicable agent or verifier environment configur
 | `compose-writable-bind-mount` | ✓ | Host bind mounts with write access. |
 | `compose-external-bind-mount` | ✓ | Bind sources that resolve outside the task directory. |
 | `compose-symlink-bind-mount` | ✓ | Bind sources that traverse a symlink and resolve outside the task directory. |
-| `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. A read-only mount in another service, such as `main` reading a seat's files, is allowed. |
+| `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. Volumes are compared by the Docker volume name that Compose resolves, so two keys that name one external volume are one volume. A read-only mount in another service, such as `main` reading a seat's files, is allowed. |
 | `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, or IPC namespace, and other services that join a seat's namespace with `service:<seat>` or the seat's `container_name`. |
 
 Seats are the services that run the agents of a [multi-agent task](/tasks/multi-agent). The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
+
+`seat-shared-volume` does not follow `volumes_from` and does not compare bind mounts; `compose-writable-bind-mount` reports each writable bind mount. It compares volume subpaths as text, so it does not resolve symlinks inside a volume.
 
 Linting is optional. Use `--ignore` for rules that do not fit your task.
 
