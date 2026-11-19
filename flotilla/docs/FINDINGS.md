@@ -72,6 +72,8 @@ against the answer key in task QA.
 
 ## 2026-11-19 04:50 ET — The liar pilot is confounded twice; the seats read every label
 
+> Corrected: the counts below were partial; final pilot counts are in "Corrections after the independent review". This entry was written at about 04:33 ET.
+
 Run: liar pilot `wL`, `schedule.liar` (3 seats: p1 and p2 under test, p3 scripted), world v1,
 4 models, stopped early. Conditions: `talk` (p3 honest) and `talk-liar` (p3 lies about one attendee,
 the witness, whose true calendar p1 also holds).
@@ -126,6 +128,8 @@ Inferred:
 
 ## 2026-11-19 05:47 ET — On a narrow channel, agents ask instead of tell
 
+> Corrected: the request-only and too-long counts below are wrong; see "Corrections after the independent review".
+
 Run: wave c4, `schedule.tight` (easy, 2 seats, world v2), talk only, Modal, terminus-2 with a
 40-turn cap. Each seat may send at most 2 messages of at most 100 characters. A seat's raw briefing
 is 228–290 characters (median 252), so it does not fit. The seat's own free 2-hour windows fit
@@ -162,6 +166,8 @@ Inferred:
 
 ## 2026-11-19 06:20 ET — Harbor's container names carry the task name, and the condition with it
 
+> Corrected: with all canonical trials finished, the count is 0 of 556.
+
 Found by the QA builder in pilot data. Harbor names the Compose project after the trial, so container
 and network names start with the task name, for example `schedule-004-silent__cdeu7ht__env-main-1`.
 Docker's DNS answers reverse lookups with these names, on local Docker and inside Modal VMs.
@@ -184,6 +190,8 @@ Flotilla-side fix would need opaque task names and a contract change.
 
 ## 2026-11-19 06:49 ET — Talking teams lose answers by finishing silently
 
+> Corrected: the inference is not supported at this sample size; see "Corrections after the independent review".
+
 Run: wave c1, `schedule` talk trials of DeepSeek V4 Flash, Qwen 3.6 35B-A3B and GPT-OSS-120B
 (36 trials; the right answer was submitted in all 36; 7 ended wrong). Evidence: each trial's
 `verifier/world-state.json` (submissions and messages with times).
@@ -205,3 +213,37 @@ acknowledgment → action gap that the multi-agent literature describes, in its 
 A protocol that makes the submitter announce "submitted: <answer>" should remove most of these
 losses. The submitter role in wave c5 removes the guesses instead (Qwen 0.750 → 0.917), but only
 for models that follow it.
+
+## 2026-11-19 08:24 ET — Corrections after the independent review
+
+An independent reviewer re-derived the results from the raw job folders with its own code
+(`/private/tmp/.../review18/REVIEW.md`, local). It confirmed the R1, R2, R3 found/lost, c5, R5 and R6
+numbers and the statistics code. It found these errors in this log and in RESULTS.md:
+
+- **Liar pilot (04:50 entry).** The counts were taken while the wave still ran. Final world-v1
+  talk-liar counts: DeepSeek 5 correct and 5 deceived of 10; GPT-OSS 3 correct and 1 deceived of 12;
+  Qwen 4 correct and 2 deceived of 10; GLM 0 correct of 6. An earlier RESULTS claim that the leaked
+  label made DeepSeek resist the lie (2 of 2) is withdrawn: v1 5 of 10 deceived against v2 5 of 8.
+- **Narrow channel (05:47 entry).** "Rejected as too long" counted 400 errors on `/submit` too. The
+  413 rejections on `/messages` are DeepSeek 21, Qwen 29, GPT-OSS 4. The request-only counts came from
+  a regex that does not see compact data such as `Mon15`. A manual reading gives 27, 19 and 30 of 45,
+  42 and 42 messages; a regex count of messages with no calendar data gives 33, 21 and 26. So about
+  half to two-thirds of messages carried no data, not 1 in 3. Qwen's c1 talk score is 0.750 (12 trials).
+- **Silent finish.** In 0 of 7 lost and 5 of 29 won trials the solver sent the answer to its teammate;
+  Fisher two-sided p = 0.56, so this is a hypothesis. The observed mechanism is the teammate's later
+  wrong write (6 of 7); in 5 of those 6 the teammate had none of the solver's calendar data (manual
+  reading). In GPT-OSS `schedule-007` the right answer was a guess without teammate data, so data
+  reached the solver in 35 of 36 trials, not 36.
+- **Statistics wording.** Only DeepSeek's R1 gain is resolved by the exact test (p 0.001; Qwen and
+  GPT-OSS 0.070, GLM 0.125). The R5 lie effects have exact p 0.125. The c4 and c5 differences are not
+  resolved (exact p 0.062 to 1.000).
+- **Smaller items.** Cost ratios are the paired per-instance ratios from the analysis (talk ÷ solo
+  5.64, 6.16, 12.97, 5.32; silent ÷ solo 25.43, 17.90, 3.48, 3.91), not ratios of rounded means.
+  Qwen's 35 distinct silent payloads include 229 non-answers out of 672 (it queried through
+  `/submit`). The v1 example leak did not raise DeepSeek's v1 floor (that trial has no score).
+  `qa.py` was written during the waves; inline checks ran before c1, c3 and c5.
+- **Code.** 3 latent analysis bugs, none of which changed a reported number, are fixed in
+  `flotilla-analyze` (liar outcome on non-liar tasks, dropped unknown outcomes, half-hour windows).
+
+Lesson: the same discipline that found the validity faults applies to the write-up. Every number now
+comes from `flotilla-analyze` or from `docs/results/scripts/breakdowns.py`, both in the repo.
