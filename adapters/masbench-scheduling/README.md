@@ -29,6 +29,8 @@ The following is an **offline protocol simulation on all 200 actual scenarios**.
 
 Cursor recovers the same earliest start as full disclosure in every case. Its worst case takes 59 rounds. The useful design question is not simply whether to shorten the context. It is which extra round trips buy back correctness, and whether their latency fits the task. Bytes count canonical message bodies, not network frames or model tokens. Fewer disclosed starts do not establish stronger privacy. See the [registered cursor design](cursor-protocol.md).
 
+The cursor also runs as a real five-seat negotiation. See [the 4 development and 20 follow-up trials](interactive-results.md) for the actual choices, verified per-round counters, and a command to reproduce the comparison.
+
 ## Run an actual five-seat world
 
 Start local Docker with the Compose plugin. Use a new output path. No model, provider account, or cloud service is needed.
