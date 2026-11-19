@@ -1,0 +1,60 @@
+name: Verify a recorded Harbor job with the published SeatLab action
+on:
+  push:
+    branches: [example/seatlab-study-action]
+    paths:
+      - '.github/workflows/verify-seatlab-study.yml'
+      - 'examples/seatlab-verify/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          sparse-checkout: examples/seatlab-verify
+      - name: Verify the stored job
+        id: job
+        uses: PeterMakhnatch/harbor-seatlab@e23c962ceca8aaa5c07c1824a1f5cf79b99d51fa
+        with:
+          manifest: examples/seatlab-verify/recorded-job/study.json
+          expected-sha256: f289c8c89a12bcb8c25753a8b3f5a5ac389825baceba874921e6e2587556110d
+      - name: Read the verified result, not a game grade
+        shell: bash
+        env:
+          REPORT: ${{ steps.job.outputs.report }}
+          PAGE: ${{ steps.job.outputs.html }}
+          CHECKS: ${{ steps.job.outputs.checks }}
+        run: |
+          set -euo pipefail
+          test "$CHECKS" = 1 && test -s "$PAGE"
+          jq -e '.status == "verified" and .files == 3 and .checks[0].kind == "alignment" and .checks[0].counts.pairs == 2' "$REPORT"
+      - name: Refuse a different trusted pin (expected negative control)
+        id: wrong
+        continue-on-error: true
+        uses: PeterMakhnatch/harbor-seatlab@e23c962ceca8aaa5c07c1824a1f5cf79b99d51fa
+        with:
+          manifest: examples/seatlab-verify/recorded-job/study.json
+          expected-sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - name: Require refusal without output
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.wrong.outcome }}
+          REPORT: ${{ steps.wrong.outputs.report }}
+          PAGE: ${{ steps.wrong.outputs.html }}
+          CHECKS: ${{ steps.wrong.outputs.checks }}
+        run: |
+          set -euo pipefail
+          test "$OUTCOME" = failure && test -z "$REPORT$PAGE$CHECKS"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-harbor-job
+          path: |
+            ${{ steps.job.outputs.report }}
+            ${{ steps.job.outputs.html }}
+          if-no-files-found: error
+          retention-days: 7
