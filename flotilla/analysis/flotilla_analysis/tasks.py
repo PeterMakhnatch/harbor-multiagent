@@ -288,7 +288,8 @@ def rebuilt_differences(
         for key in BUILD_PARAMETERS:
             expected, actual = run.parameters.get(key), here.parameters.get(key)
             if expected is not None and actual is not None and expected != actual:
-                found.append((key, f"{key} {_show(actual)} (the run: {_show(expected)})"))
+                # only the name: a build's seed is secret (CONTRACT.md 2), and reports are published
+                found.append((key, f"{key} differs"))
         if run.instructions:
             for seat in sorted((set(run.instructions) | set(here.instructions)) - checked):
                 if run.instructions.get(seat) != here.instructions.get(seat):

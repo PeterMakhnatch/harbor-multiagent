@@ -253,7 +253,7 @@ Decision for the next wave:
 ```bash
 python3 flotilla/build_tasks.py --family schedule --instances 0-11 --seats 2 --difficulty easy \
     --play-timeout 600 --seed 1 --out .flotilla-local/tasks/c1
-uvx --quiet --with pyyaml python flotilla/qa.py ".flotilla-local/tasks/c1/*/*"
+uvx --quiet --with pyyaml python flotilla/qa.py ".flotilla-local/tasks/c1/*/*" --allow-public-seed  # seed 1 is public
 python3 flotilla/make_jobs.py --tasks ".flotilla-local/tasks/c1/*/*" --agent terminus-2 \
     --model openrouter/deepseek/deepseek-v4-flash --max-turns 40 --concurrent 4 --env modal \
     --name c1-ds --out .flotilla-local/configs/canon

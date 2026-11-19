@@ -261,6 +261,19 @@ def plant_seed(task: Path) -> None:
     edit_compose(task, lambda c: env(c, "p2").update(RUN_ID=f"run-{SEED}"))
 
 
+def plant_escaped_software_name(task: Path) -> None:
+    """The name, written with a JSON escape in a seat's briefing: the seat's JSON reader turns it into "flotilla"."""
+    def change(compose: dict[str, Any]) -> None:
+        briefing = json.dumps(json.loads(env(compose, "p1")["SEAT_BRIEFING"]), sort_keys=True)
+        env(compose, "p1")["SEAT_BRIEFING"] = briefing[:-1] + ', "zz": "\\u0066lotilla"}'
+    edit_compose(task, change)
+
+
+def plant_container_name(task: Path) -> None:
+    """A fixed name for main's container: a seat reads it by a reverse DNS lookup of the world's address."""
+    edit_compose(task, lambda c: c["services"]["main"].update(container_name="world-main"))
+
+
 PLANTED = [
     ("example-leak", "schedule/schedule-000-silent", plant_answer_example),
     ("example-leak", "ledger/ledger-000-silent", plant_answer_in_submit_example),
@@ -275,6 +288,8 @@ PLANTED = [
     ("software-name", "schedule/schedule-000-talk", plant_software_name_in_env),
     ("software-name", "ledger/ledger-000-silent", plant_software_name_in_instruction),
     ("seat-secrets", "ledger/ledger-000-talk", plant_seed),
+    ("software-name", "schedule/schedule-000-silent", plant_escaped_software_name),
+    ("container-name", "ledger/ledger-000-talk", plant_container_name),
 ]
 
 
@@ -389,28 +404,44 @@ def test_planted_names_and_seeds_read_as_expected(copy, baseline):
     plant_software_name_in_env(copy / "schedule" / "schedule-000-talk")
     plant_software_name_in_instruction(copy / "ledger" / "ledger-000-silent")
     plant_seed(copy / "ledger" / "ledger-000-talk")
+    plant_escaped_software_name(copy / "schedule" / "schedule-000-silent")
+    plant_container_name(copy / "ledger" / "ledger-000-solo")
+    raw = yaml.safe_load((copy / "schedule" / "schedule-000-silent" / "environment" / "docker-compose.yaml")
+                         .read_text())["services"]["p1"]["environment"]["SEAT_BRIEFING"]
+    assert "flotilla" not in raw and "\\u0066lotilla" in raw  # only the decoded JSON says it
     assert findings(copy) - baseline == {
         ("software-name", "schedule-000-talk", "p1", "env.FLOTILLA_RUN contains 'flotilla'"),
         ("software-name", "ledger-000-silent", "p1", "instruction contains 'harbor-multiagent'"),
         ("seat-secrets", "ledger-000-talk", "p2", "env.RUN_ID holds the build's seed"),
+        ("software-name", "schedule-000-silent", "p1", "env.SEAT_BRIEFING contains 'flotilla'"),
+        ("container-name", "ledger-000-solo", "main", "service main sets container_name"),
     }
 
 
-def test_a_public_seed_is_a_warn_once_per_label(tmp_path, monkeypatch):
-    """The generators are public: a seed below 1,000,000 or one that the documentation names gives the answers."""
+def test_a_public_seed_fails_once_per_label_unless_allowed(tmp_path, monkeypatch):
+    """The generators are public: a seed below 1,000,000 or one that the documentation names gives the answers.
+    --allow-public-seed makes it a WARN, to repeat a published build (the 2026-11-19 waves used --seed 1)."""
     documented = 7_340_982_618_211
     for variant, seed in (("", 1), ("hard", 999_999), ("big", 1_000_000), ("doc", documented), ("own", SEED)):
         BUILD.build("ledger", [0, 1], 2, "easy", seed, ("talk",), tmp_path, variant=variant)
     monkeypatch.setattr(QA, "documented_seeds", lambda: frozenset({1, documented}))
     found, _tasks = QA.check(QA.find_tasks([str(tmp_path)]))
     tail = "a seat that finds the public generator can compute their answer keys; build a new wave without --seed"
-    assert {(f.level, f.task, f.seat, f.detail) for f in found if f.rule == "public-seed"} == {
-        ("WARN", "ledger", "*", f"2 tasks use seed 1, which is public (below 1,000,000): {tail}"),
-        ("WARN", "ledger.hard", "*", f"2 tasks use seed 999999, which is public (below 1,000,000): {tail}"),
-        ("WARN", "ledger.doc", "*",
+    expected = {
+        ("ledger", "*", f"2 tasks use seed 1, which is public (below 1,000,000): {tail}"),
+        ("ledger.hard", "*", f"2 tasks use seed 999999, which is public (below 1,000,000): {tail}"),
+        ("ledger.doc", "*",
          f"2 tasks use seed {documented}, which is public (named in this checkout's documentation): {tail}"),
     }
-    assert not [f for f in found if f.level == "FAIL"]
+    assert {(f.level, f.task, f.seat, f.detail) for f in found if f.rule == "public-seed"} == {
+        ("FAIL", *row) for row in expected}
+    assert {f.rule for f in found if f.level == "FAIL"} == {"public-seed"}
+    allowed, tasks = QA.check(QA.find_tasks([str(tmp_path)]), allow_public_seed=True)
+    assert {(f.level, f.task, f.seat, f.detail) for f in allowed if f.rule == "public-seed"} == {
+        ("WARN", *row) for row in expected}
+    assert not [f for f in allowed if f.level == "FAIL"]
+    assert "--allow-public-seed: public-seed is a WARN, only to repeat a published build" in QA.render_text(
+        allowed, tasks)
 
 
 def test_the_documentation_names_the_canonical_seed():

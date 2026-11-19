@@ -50,7 +50,8 @@ files. See [CONTRACT.md](CONTRACT.md) section 2.
 
 Each build draws a secret seed. The family generators are public, so a seat that knew the seed could
 compute the answer key; only the manifest, `task.toml` and `task.json` record it. `--seed N` repeats
-a build: the canonical waves used `--seed 1`, which is public, so `qa.py` warns (`public-seed`).
+a build: the canonical waves used `--seed 1`, which is public, so `qa.py` fails such a set
+(`public-seed`) unless `--allow-public-seed`, which is only for repeating a published build.
 `--seed-of PATH` gives a build the seed of the tasks under PATH, so that the two builds have the same
 instances, for example a narrow channel against the `talk` tasks above:
 
@@ -84,6 +85,8 @@ It reads the task folders and calls each task's own `solution/family.py`. It sta
 uses no network or model. The exit status is 1 when a finding is a FAIL. Fix every FAIL before a wave.
 No output names a token, an answer key or a secret seed. `--allow-readable-names` makes
 `runtime-names` a WARN, for a local debugging run of a set built with `--readable-names`.
+`--allow-public-seed` makes `public-seed` a WARN, only to repeat a published build such as the
+2026-11-19 waves (`--seed 1`).
 
 | Rule | Level | Finding |
 |---|---|---|
@@ -98,8 +101,9 @@ No output names a token, an answer key or a secret seed. `--allow-readable-names
 | `stale-code` | FAIL | the task ships a `world.py`, `score.py`, `oracle.py` or family file that differs from this checkout: build the set again |
 | `qa-error` | FAIL | a task file is missing or cannot be read |
 | `runtime-names` | FAIL | the set has readable names (`--readable-names`, or a build before opaque names): the Docker names that Harbor derives from a task folder say its condition or label; a WARN with `--allow-readable-names` |
+| `public-seed` | FAIL | the set was built with a public seed: below 1,000,000 (such as the canonical `--seed 1`) or named in this checkout's documentation; a WARN with `--allow-public-seed`, only to repeat a published build |
+| `container-name` | FAIL | a service sets `container_name`: a seat reads that fixed name by a reverse DNS lookup (Harbor's own names are opaque), and concurrent trials would share it |
 | `solo-sufficient` | WARN | in a team condition, one seat's own briefing gives a correct answer (`oracle_answer`) |
-| `public-seed` | WARN | the set was built with a public seed: below 1,000,000 (such as the canonical `--seed 1`) or named in this checkout's documentation; use it only to repeat a published build |
 
 Harbor names a trial after the first 32 characters of the task folder's name, and names the trial's
 containers and networks after the trial. A seat can read these names with a reverse DNS lookup: a

@@ -42,7 +42,7 @@ MANIFEST = "manifest.json"  # at the build root (--out), outside every task fold
 OPAQUE_NAME = re.compile(r"^t-[0-9a-f]{12}$")
 # The generators are public, so a seat that knows a build's seed can compute its answer keys. A seed below
 # PUBLIC_SEED_BELOW is public in effect (every build before secret seeds used --seed 1, and a small seed can be
-# found by trying them all): qa.py warns (public-seed). A drawn seed is below SEED_LIMIT = 2**53, so that every
+# found by trying them all): qa.py fails it (public-seed) unless --allow-public-seed. A drawn seed is below SEED_LIMIT = 2**53, so that every
 # JSON reader (JavaScript, jq) holds it exactly.
 PUBLIC_SEED_BELOW = 1_000_000
 SEED_LIMIT = 2**53
@@ -491,7 +491,8 @@ def main() -> None:
     seeds = parser.add_mutually_exclusive_group()
     seeds.add_argument("--seed", type=int,
                        help="reproduce the instances of a build made with this seed (the canonical waves used "
-                       "--seed 1, which is public: qa.py warns); default: a secret random seed for each build")
+                       "--seed 1, which is public: qa.py fails it unless --allow-public-seed); default: a secret "
+                       "random seed for each build")
     seeds.add_argument("--seed-of", type=Path, metavar="PATH",
                        help="use the seed of the tasks under PATH (a label folder of an earlier build), so that "
                        "this build has the same instances; the seed stays out of the command and the output")
@@ -528,15 +529,15 @@ def main() -> None:
         conditions = ("talk", "talk-liar")
     if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else args.seats) + 1)]:
         parser.error(f"--submitter {args.submitter} is not a seat of this build")
-    kept = "only the manifest, task.toml and task.json record it"
     if args.seed is not None:
-        seed = args.seed
-        said = (f"{seed}, given with --seed; it is public (below {PUBLIC_SEED_BELOW:,}), so qa.py warns (public-seed)"
-                if seed < PUBLIC_SEED_BELOW else f"given with --seed ({kept})")
+        seed, source = args.seed, "given with --seed"
     elif args.seed_of is not None:
-        seed, said = seed_of(args.seed_of), f"the seed of the tasks under {args.seed_of} ({kept})"
+        seed, source = seed_of(args.seed_of), f"the seed of the tasks under {args.seed_of}"
     else:
-        seed, said = secret_seed(), f"secret, drawn for this build ({kept})"
+        seed, source = secret_seed(), "secret, drawn for this build"
+    said = (f"{seed}, {source}; it is public (below {PUBLIC_SEED_BELOW:,}), so qa.py fails the set (public-seed) "
+            "unless --allow-public-seed, which is only for repeating a published build"
+            if seed < PUBLIC_SEED_BELOW else f"{source} (only the manifest, task.toml and task.json record it)")
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, seed,
                   conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
                   args.play_timeout, max_text=args.max_text, max_messages=args.max_messages,
