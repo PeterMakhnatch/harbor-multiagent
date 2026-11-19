@@ -1,0 +1,61 @@
+x-player: &player
+  build: ./player
+  user: root
+  working_dir: /actor
+  command: ["sleep", "infinity"]
+  init: true
+  networks: [play]
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/world/world.py"]
+    volumes:
+      - type: volume
+        source: seat_p0_token
+        target: /run/hanabi-tokens/p0
+      - type: volume
+        source: seat_p1_token
+        target: /run/hanabi-tokens/p1
+    networks:
+      play:
+        aliases: [world]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+      start_period: 2s
+  p0:
+    <<: *player
+    volumes:
+      - type: volume
+        source: seat_p0_token
+        target: /run/seat-token
+        read_only: true
+    environment:
+      SEAT: p0
+      CONVENTION: L
+      WORLD_URL: http://world:8080
+      SEAT_TOKEN_FILE: /run/seat-token/token
+  p1:
+    <<: *player
+    volumes:
+      - type: volume
+        source: seat_p1_token
+        target: /run/seat-token
+        read_only: true
+    environment:
+      SEAT: p1
+      CONVENTION: L
+      WORLD_URL: http://world:8080
+      SEAT_TOKEN_FILE: /run/seat-token/token
+
+networks:
+  play: {}
+
+volumes:
+  seat_p0_token: {}
+  seat_p1_token: {}
