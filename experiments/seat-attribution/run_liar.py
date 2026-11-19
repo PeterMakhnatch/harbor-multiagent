@@ -88,13 +88,13 @@ async def main() -> None:
     for i in range(count):
         try:
             print(
-                json.dumps(await run_one(f"{condition}{i}", condition == "lie", listener)),
+                json.dumps(await run_one(f"{condition}{i+2}", condition == "lie", listener)),
                 flush=True,
             )
         except Exception as exc:
             print(
                 json.dumps(
-                    {"episode": f"{condition}{i}", "error": f"{type(exc).__name__}: {exc}"[:300]}
+                    {"episode": f"{condition}{i+2}", "error": f"{type(exc).__name__}: {exc}"[:300]}
                 ),
                 flush=True,
             )
