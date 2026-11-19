@@ -1,0 +1,417 @@
+{
+  "attempted": 4,
+  "cells": [
+    {
+      "arm": "raw",
+      "attempted": true,
+      "cases": 12,
+      "input_bytes": 1951,
+      "input_sha256": "401c9c7d653967905eeaaafe03c982ae9d51cffc85b5c1484ea2c35f3a6e3afd",
+      "measurement": {
+        "decisions": [
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 1
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 2
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 3
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 4
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 5
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 6
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 7
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 8
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 9
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 10
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 11
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 12
+          }
+        ],
+        "feasible": 12,
+        "optimal": 12
+      },
+      "observed_reports": 24,
+      "position": 1,
+      "seed": 1001,
+      "served_model": "claude-sonnet-5-5",
+      "stage": "complete",
+      "telemetry": {
+        "cache_creation_input_tokens": 1705,
+        "cache_read_input_tokens": 0,
+        "duration_api_ms": 4253,
+        "duration_ms": 4293,
+        "estimated_cost_usd": 0.011084,
+        "input_tokens": 2,
+        "output_tokens": 426
+      }
+    },
+    {
+      "arm": "highest_revision",
+      "attempted": true,
+      "cases": 12,
+      "input_bytes": 1507,
+      "input_sha256": "8075c11f767cf4f6bd527e74fca560cab564fb702dc8fa676ad89b2b7726c8d4",
+      "measurement": {
+        "decisions": [
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 1
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 2
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 3
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 4
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 5
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 6
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 7
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 8
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 9
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 10
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 11
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 12
+          }
+        ],
+        "feasible": 12,
+        "optimal": 12
+      },
+      "observed_reports": 12,
+      "position": 2,
+      "seed": 1001,
+      "served_model": "claude-sonnet-5-5",
+      "stage": "complete",
+      "telemetry": {
+        "cache_creation_input_tokens": 1512,
+        "cache_read_input_tokens": 0,
+        "duration_api_ms": 2619,
+        "duration_ms": 2640,
+        "estimated_cost_usd": 0.007832,
+        "input_tokens": 2,
+        "output_tokens": 178
+      }
+    },
+    {
+      "arm": "highest_revision",
+      "attempted": true,
+      "cases": 12,
+      "input_bytes": 1507,
+      "input_sha256": "da6bb0e9f6d2ea39f1a25d475f766f6fc4a251c60ce2347c82e3655677a35e44",
+      "measurement": {
+        "decisions": [
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 1
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 2
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 3
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 4
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 5
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 6
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 7
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 8
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 9
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 10
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 11
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 12
+          }
+        ],
+        "feasible": 12,
+        "optimal": 12
+      },
+      "observed_reports": 12,
+      "position": 3,
+      "seed": 1003,
+      "served_model": "claude-sonnet-5-5",
+      "stage": "complete",
+      "telemetry": {
+        "cache_creation_input_tokens": 1513,
+        "cache_read_input_tokens": 0,
+        "duration_api_ms": 2059,
+        "duration_ms": 2081,
+        "estimated_cost_usd": 0.007836,
+        "input_tokens": 2,
+        "output_tokens": 178
+      }
+    },
+    {
+      "arm": "raw",
+      "attempted": true,
+      "cases": 12,
+      "input_bytes": 1951,
+      "input_sha256": "7e3351e6e305a5a708353fc93ab207c2b4344619e702314698fd55b4f6a6dd4f",
+      "measurement": {
+        "decisions": [
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 1
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 2
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 3
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 4
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 5
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 6
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 7
+          },
+          {
+            "bay": "C",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 8
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 9
+          },
+          {
+            "bay": "A",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 10
+          },
+          {
+            "bay": "B",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 11
+          },
+          {
+            "bay": "D",
+            "feasible": true,
+            "optimal": true,
+            "ordinal": 12
+          }
+        ],
+        "feasible": 12,
+        "optimal": 12
+      },
+      "observed_reports": 24,
+      "position": 4,
+      "seed": 1003,
+      "served_model": "claude-sonnet-5-5",
+      "stage": "complete",
+      "telemetry": {
+        "cache_creation_input_tokens": 1704,
+        "cache_read_input_tokens": 0,
+        "duration_api_ms": 3537,
+        "duration_ms": 3555,
+        "estimated_cost_usd": 0.010669999999999999,
+        "input_tokens": 2,
+        "output_tokens": 385
+      }
+    }
+  ],
+  "complete": 4,
+  "configured_model": "claude-sonnet-5-5",
+  "pairs": [
+    {
+      "changed_ordinals": [],
+      "seed": 1001
+    },
+    {
+      "changed_ordinals": [],
+      "seed": 1003
+    }
+  ],
+  "plan_sha256": "67b534c50c2a678e455801c31ed0622ac8e6b94d514387f6d0ca10c8ffb7ef1c",
+  "planned": 4,
+  "route_preflight": "verified",
+  "schema": "seatlab.claude-replay/v1"
+}
