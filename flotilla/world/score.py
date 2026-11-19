@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 VERIFIER = Path("/logs/verifier")
+WORLD_DIR = Path("/world")  # task.json and family.py
 WORLD = "http://localhost:8080"
 
 
@@ -29,7 +30,7 @@ def call(method: str, path: str) -> dict[str, Any]:
         return json.load(response)
 
 
-def load_family(path: str = "/world/family.py") -> Any:
+def load_family(path: Path) -> Any:
     spec = importlib.util.spec_from_file_location("family", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
@@ -40,8 +41,8 @@ def load_family(path: str = "/world/family.py") -> Any:
 
 def main() -> None:
     VERIFIER.mkdir(parents=True, exist_ok=True)
-    task = json.loads(Path("/world/task.json").read_text())
-    family = load_family()
+    task = json.loads((WORLD_DIR / "task.json").read_text())
+    family = load_family(WORLD_DIR / "family.py")
     try:
         call("POST", "/admin/freeze")
         state = call("GET", "/admin/state")
@@ -50,7 +51,11 @@ def main() -> None:
         state, error = {"submissions": [], "messages": []}, f"world unreachable: {type(exc).__name__}"
     submissions = state.get("submissions") or []
     final = submissions[-1] if submissions else None
-    result = family.score(final["answer"] if final else None, task["answer_key"])
+    try:
+        result = family.score(final["answer"] if final else None, task["answer_key"])
+    except Exception as exc:  # an answer the scorer cannot read earns nothing; the error is kept
+        result = {"score": 0.0, "fields_correct": 0, "fields_total": None}
+        error = f"scorer failed: {type(exc).__name__}: {exc}"[:500]
     score = float(result["score"])
     if not 0.0 <= score <= 1.0:
         raise ValueError(f"family scorer returned {score}, outside [0, 1]")
@@ -60,6 +65,7 @@ def main() -> None:
         "instance": task["instance"],
         "condition": task["condition"],
         "seats": task["seats"],
+        "world_version": task.get("world_version", 1),
         "score": score,
         "fields_correct": result.get("fields_correct"),
         "fields_total": result.get("fields_total"),

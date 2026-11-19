@@ -2,6 +2,8 @@
 
 `solo` and `silent`: submit the best answer from this seat's own briefing.
 `talk`: post the briefing to everyone, wait for every teammate's briefing, submit the full answer.
+A briefing travels as numbered chunks (`FLOTILLA-BRIEFING <i>/<n> <text>`) that fit the world's
+message limits; a seat whose briefing cannot fit sends `FLOTILLA-BRIEFING 0/0` (nothing is coming).
 The family module sits next to this file (solution/family.py). See CONTRACT.md 8.
 """
 
@@ -17,8 +19,10 @@ from pathlib import Path
 from typing import Any
 
 WORLD = os.environ.get("WORLD_URL", "http://world:8080")
-HEADERS = {"Authorization": f"Bearer {os.environ['SEAT_TOKEN']}", "Content-Type": "application/json"}
+HEADERS = {"Authorization": f"Bearer {os.environ.get('SEAT_TOKEN', '')}", "Content-Type": "application/json"}
 MARK = "FLOTILLA-BRIEFING "
+NOTHING = MARK + "0/0"
+WAIT_SEC = 300
 
 
 def call(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -38,25 +42,70 @@ def family_module() -> Any:
     return module
 
 
+def can_signal(max_text: int, max_messages: int) -> bool:
+    """Whether a seat can send at least the `nothing is coming` message under these limits."""
+    return max_messages >= 1 and len(NOTHING) <= max_text
+
+
+def briefing_messages(payload: str, max_text: int, max_messages: int) -> list[str]:
+    """The message texts that carry the payload within the limits."""
+    room = max_text - len(MARK) - 2 * len(str(max_messages)) - 2  # room for "<i>/<n> "
+    pieces = [payload[k : k + room] for k in range(0, len(payload), room)] if room > 0 else []
+    if pieces and len(pieces) <= max_messages:
+        return [f"{MARK}{i}/{len(pieces)} {piece}" for i, piece in enumerate(pieces, 1)]
+    return [NOTHING] if can_signal(max_text, max_messages) else []
+
+
+def collect(messages: list[dict[str, Any]], others: set[str]) -> tuple[dict[str, Any], set[str]]:
+    """Complete briefings by sender, and the senders that are done (complete, or nothing is coming)."""
+    pieces: dict[str, dict[int, str]] = {}
+    totals: dict[str, int] = {}
+    for message in messages:
+        sender, text = message.get("from"), message.get("text") or ""
+        if sender not in others or not text.startswith(MARK):
+            continue
+        header, _, piece = text[len(MARK) :].partition(" ")
+        try:
+            i, n = (int(x) for x in header.split("/"))
+        except ValueError:
+            continue
+        totals[sender] = n
+        pieces.setdefault(sender, {})[i] = piece
+    parts: dict[str, Any] = {}
+    done: set[str] = set()
+    for sender, n in totals.items():
+        got = pieces[sender]
+        if n == 0:
+            done.add(sender)
+        elif all(i in got for i in range(1, n + 1)):
+            done.add(sender)
+            try:
+                parts[sender] = json.loads("".join(got[i] for i in range(1, n + 1)))
+            except ValueError:
+                print(f"unreadable briefing from {sender}", file=sys.stderr)
+    return parts, done
+
+
 def main() -> None:
     family = family_module()
     me = call("GET", "/whoami")
     own = json.loads(os.environ["SEAT_BRIEFING"])
-    if me["condition"] in ("solo", "silent"):
-        answer = family.oracle_answer([own])
-    else:
-        call("POST", "/messages", {"to": "all", "text": MARK + json.dumps(own, sort_keys=True)})
+    parts: dict[str, Any] = {}
+    if me["condition"] not in ("solo", "silent"):
+        max_text, max_messages = int(me.get("max_text", 4000)), int(me.get("max_messages", 200))
+        payload = json.dumps(own, sort_keys=True, separators=(",", ":"))
+        for text in briefing_messages(payload, max_text, max_messages):
+            call("POST", "/messages", {"to": "all", "text": text})
         others = {seat for seat in me["seats"] if seat != me["seat"]}
-        parts: dict[str, Any] = {}
-        deadline = time.monotonic() + 300
-        while set(parts) < others and time.monotonic() < deadline:
-            for message in call("GET", "/messages")["messages"]:
-                if message["from"] in others and message["text"].startswith(MARK):
-                    parts[message["from"]] = json.loads(message["text"][len(MARK) :])
-            time.sleep(1)
-        if set(parts) < others:
-            print(f"missing briefings from {sorted(others - set(parts))}", file=sys.stderr)
-        answer = family.oracle_answer([own, *(parts[seat] for seat in sorted(parts))])
+        done: set[str] = set()
+        deadline = time.monotonic() + WAIT_SEC
+        while can_signal(max_text, max_messages) and not others <= done and time.monotonic() < deadline:
+            parts, done = collect(call("GET", "/messages")["messages"], others)
+            if not others <= done:
+                time.sleep(1)
+        if set(parts) != others:
+            print(f"no briefing from {sorted(others - set(parts))}", file=sys.stderr)
+    answer = family.oracle_answer([own, *(parts[seat] for seat in sorted(parts))])
     print(json.dumps(call("POST", "/submit", {"answer": answer})))
 
 

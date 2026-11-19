@@ -1,6 +1,7 @@
 """Render Flotilla seat tasks: every instance of a family, in every condition.
 
     python3 flotilla/build_tasks.py --family schedule --instances 0-11 --seats 2 --difficulty easy
+    python3 flotilla/build_tasks.py --family schedule --variant tight --max-messages 3 --max-text 200
 
 Writes flotilla/tasks/<family>/<family>-<iii>-<condition>/ (git-ignored: answer keys and seat tokens
 must not be published, because seats have public network access). The same seed always gives the
@@ -12,6 +13,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import secrets
 import shutil
 from pathlib import Path
@@ -20,6 +22,19 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 CONDITIONS = ("solo", "silent", "talk")
 PLAY_TIMEOUT_SEC = 900.0
+
+
+def world_constant(name: str) -> int:
+    """An integer constant of world/world.py, read from its source (the file the task ships)."""
+    match = re.search(rf"^{name} = (\d+)$", (ROOT / "world" / "world.py").read_text(), flags=re.MULTILINE)
+    if match is None:
+        raise SystemExit(f"world/world.py does not define {name}")
+    return int(match.group(1))
+
+
+WORLD_VERSION = world_constant("WORLD_VERSION")
+DEFAULT_MAX_TEXT = world_constant("DEFAULT_MAX_TEXT")
+DEFAULT_MAX_MESSAGES = world_constant("DEFAULT_MAX_MESSAGES")
 
 PLAYER_DOCKERFILE = """FROM python:3.13-slim
 
@@ -68,7 +83,12 @@ def load_family(name: str) -> Any:
     return module
 
 
-def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], condition: str) -> str:
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], condition: str,
+                max_text: int = DEFAULT_MAX_TEXT, max_messages: int = DEFAULT_MAX_MESSAGES) -> str:
     team = (
         "You work alone."
         if condition == "solo"
@@ -113,6 +133,12 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
             f"curl -s $WORLD_URL/messages {auth}",
             "```",
         ]
+        if (max_text, max_messages) != (DEFAULT_MAX_TEXT, DEFAULT_MAX_MESSAGES):
+            lines += [
+                "",
+                f"Each seat may send at most {_plural(max_messages, 'message')} of at most "
+                f"{_plural(max_text, 'character')}.",
+            ]
     lines += [
         "",
         "## Answer format",
@@ -125,9 +151,17 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
     return "\n".join(lines)
 
 
+def quote(value: str) -> str:
+    """A Compose value that arrives unchanged: a JSON string is a valid YAML double-quoted scalar, and
+    `$$` stops Compose from replacing `$NAME` with a variable from the host that runs the trial."""
+    return json.dumps(value.replace("$", "$$"))
+
+
 def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str,
-            briefings: dict[str, Any]) -> str:
-    q = json.dumps  # a JSON string is a valid YAML double-quoted scalar
+            briefings: dict[str, Any], max_text: int = DEFAULT_MAX_TEXT,
+            max_messages: int = DEFAULT_MAX_MESSAGES) -> str:
+    """Each seat gets its own network, shared only with `main`: seats reach the world, not each other."""
+    q = quote
     lines = [
         "x-player: &player",
         "  build: ./player",
@@ -135,7 +169,6 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
         "  working_dir: /home/player",
         '  command: ["sleep", "infinity"]',
         "  init: true",
-        "  networks: [play]",
         "  depends_on:",
         "    main:",
         "      condition: service_healthy",
@@ -148,9 +181,10 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
         f"      FLOTILLA_SEATS: {q(','.join(seats))}",
         f"      FLOTILLA_TOKENS: {q(','.join(f'{s}:{tokens[s]}' for s in seats))}",
         f"      FLOTILLA_ADMIN: {q(admin)}",
+        f"      FLOTILLA_MAX_TEXT: {q(str(max_text))}",
+        f"      FLOTILLA_MAX_MESSAGES: {q(str(max_messages))}",
         "    networks:",
-        "      play:",
-        "        aliases: [world]",
+        *(f"      seat-{seat}:\n        aliases: [world]" for seat in seats),
         "    healthcheck:",
         '      test: ["CMD", "python3", "-c", "import urllib.request; '
         "urllib.request.urlopen('http://localhost:8080/health', timeout=2)\"]",
@@ -163,13 +197,14 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
         lines += [
             f"  {seat}:",
             "    <<: *player",
+            f"    networks: [seat-{seat}]",
             "    environment:",
             f"      SEAT: {q(seat)}",
             f"      SEAT_TOKEN: {q(tokens[seat])}",
             f"      SEAT_BRIEFING: {q(json.dumps(briefings[seat], sort_keys=True))}",
             '      WORLD_URL: "http://world:8080"',
         ]
-    lines += ["", "networks:", "  play: {}", ""]
+    lines += ["", "networks:", *(f"  seat-{seat}: {{}}" for seat in seats), ""]
     return "\n".join(lines)
 
 
