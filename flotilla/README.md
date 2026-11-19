@@ -17,7 +17,8 @@ submission, and freezes the answer before grading. See [CONTRACT.md](CONTRACT.md
 ## Results so far
 
 [docs/RESULTS.md](docs/RESULTS.md) has the canonical waves of 2026-11-19 (4 open models, world v2):
-talking recovers 0.67 to 0.92 of the solo score; silent seats probe the world thousands of times and
+talking closes 67% to 92% of the gap between the silent team and one agent (3 of 4 models; GPT-OSS's
+team beats its own solo score); silent seats probe the world thousands of times and
 spray answers; talking teams found the answer in 36 of 36 trials but lost 7 to a later wrong write;
 on a narrow channel, agents ask instead of tell; a lying peer deceives DeepSeek in 5 of 8 trials.
 [docs/FINDINGS.md](docs/FINDINGS.md) is the dated log of observations and the validity faults found
