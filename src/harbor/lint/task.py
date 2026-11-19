@@ -249,24 +249,40 @@ def _lint_layout(
             paths.environment_dir,
             "Missing environment directory; add environment/ or set environment.docker_image.",
         )
-    overlapping: set[str] = set()
-    for index, step in enumerate(config.steps or [None]):
+    for seat in config.agents:
+        filename = f"instructions/{seat}.md"
         try:
-            instruction = (
-                paths.step_instruction_path(step.name)
-                if step
-                else paths.instruction_path
-            )
+            instruction = paths.seat_instruction_path(seat)
         except (ValueError, RuntimeError):
             invalid(
-                paths.task_dir,
-                "Step inputs must stay within the task without symlink cycles.",
+                paths.task_dir / filename,
+                f"Use a regular seat instruction at {filename} within the task, without symlink cycles.",
             )
             continue
         if instruction not in files:
-            invalid(instruction, "Missing instruction file; add instruction.md.")
+            invalid(instruction, f"Missing seat instruction; add {filename}.")
         elif not strip_canary(instruction.read_text()).strip():
-            invalid(instruction, "Instruction is empty; describe the agent's task.")
+            invalid(instruction, f"Seat instruction is empty; add text to {filename}.")
+
+    overlapping: set[str] = set()
+    for index, step in enumerate(config.steps or [None]):
+        if not config.agents:
+            try:
+                instruction = (
+                    paths.step_instruction_path(step.name)
+                    if step
+                    else paths.instruction_path
+                )
+            except (ValueError, RuntimeError):
+                invalid(
+                    paths.task_dir,
+                    "Step inputs must stay within the task without symlink cycles.",
+                )
+                continue
+            if instruction not in files:
+                invalid(instruction, "Missing instruction file; add instruction.md.")
+            elif not strip_canary(instruction.read_text()).strip():
+                invalid(instruction, "Instruction is empty; describe the agent's task.")
         try:
             definition = resolve_verifier_environment_definition(
                 config,

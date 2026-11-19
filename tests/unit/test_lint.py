@@ -1260,6 +1260,56 @@ def test_missing_required_inputs(task: Path, missing: str):
     assert findings[0].path == str(path)
 
 
+@pytest.fixture
+def seat_task(task: Path) -> Path:
+    configure(
+        task,
+        agent={},
+        agents={"p1": {"under_test": True}, "p2": {"under_test": False}},
+    )
+    (task / "instructions").mkdir()
+    (task / "instructions/p1.md").write_text("Complete the task.\n")
+    return task
+
+
+def test_seat_instructions_do_not_require_root_instruction(seat_task: Path):
+    (seat_task / "instruction.md").unlink()
+    (seat_task / "instructions/p2.md").write_text("Support the other agent.\n")
+
+    assert lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES}) == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [None, " \n\t", "# canary: secret\n\n"],
+    ids=["missing", "whitespace", "canary-only"],
+)
+def test_support_seat_requires_nonempty_instruction(
+    seat_task: Path, content: str | None
+):
+    if content is not None:
+        (seat_task / "instructions/p2.md").write_text(content)
+
+    findings = lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES})
+    assert [
+        (Path(f.path).relative_to(seat_task).as_posix(), f.rule) for f in findings
+    ] == [("instructions/p2.md", LintRule.INVALID_TASK_FILES)]
+
+
+def test_rejected_seat_instruction_preserves_verifier_checks(seat_task: Path):
+    instruction = seat_task / "instructions/p2.md"
+    instruction.symlink_to(instruction.name)
+    (seat_task / "tests/test.sh").unlink()
+
+    findings = lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES})
+    assert {
+        (Path(f.path).relative_to(seat_task).as_posix(), f.rule) for f in findings
+    } == {
+        ("instructions/p2.md", LintRule.INVALID_TASK_FILES),
+        ("tests/test.sh", LintRule.INVALID_TASK_FILES),
+    }
+
+
 @pytest.mark.parametrize("content", ["", " \n\t", "# canary: secret\n\n"])
 def test_empty_step_instruction(task: Path, content: str):
     configure(task, steps=[{"name": "one"}])
