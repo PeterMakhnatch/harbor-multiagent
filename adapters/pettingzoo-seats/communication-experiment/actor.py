@@ -90,7 +90,7 @@ def _listener(observation: list[float], codebook: str) -> int:
     if all(item == 0 for item in signal):
         return 0
     if codebook == "blind":
-        index = 0
+        index = 1
     else:
         index = (_unique_argmax(signal) - OFFSET[codebook]) % 3
     base = 2 + 2 * index
