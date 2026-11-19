@@ -23,7 +23,7 @@ The service an agent runs in is its **seat**. The word appears in `participants[
 
 ## Example
 
-[`examples/tasks/hello-seats`](https://github.com/olamlabs/harbor-multiagent/tree/main/examples/tasks/hello-seats) is the smallest multi-agent task. Its world is an HTTP notes server in `main`. Agent `p1` posts a note, checks that it is there, and stops. Agent `p2` posts a note, then polls until p1's note appears.
+[`examples/tasks/hello-seats`](https://github.com/olamlabs/harbor-multiagent/tree/main/examples/tasks/hello-seats) is the smallest multi-agent task. Its world is an HTTP notes server in `main`. Agent `p2` posts a note, then polls until p1's note appears. Agent `p1` polls until p2's note appears, posts a note in reply to it, and stops. Each agent sends its own token with each note, so the world knows which agent posted it.
 
 ```bash
 hello-seats/
@@ -37,6 +37,8 @@ hello-seats/
 │   ├── world.py
 │   └── player/
 │       └── Dockerfile          # the image both agents run in
+├── solution/
+│   └── solve.sh                # the oracle's script, for either agent
 └── tests/
     └── test.sh
 ```
@@ -78,7 +80,9 @@ The order of the tables is the agents' order. `agent_info` in `result.json` is t
 A multi-agent task has no `instruction.md`. Every agent needs `instructions/<service>.md`. Extra instructions from the trial or job config are appended to each one.
 
 ```markdown title="instructions/p1.md"
-You are p1. Post exactly one note to http://world:8080/note with author p1 and the text 'hello from p1', then GET /notes and confirm it is there, then stop.
+You are p1. Your token is in the file /run/seat/token. Send it on every POST to the world, as the header `Authorization: Bearer <token>`.
+
+Poll GET http://world:8080/notes every 2 seconds until a note from p2 appears. Then post exactly one note: POST http://world:8080/note with the JSON body `{"text": "hello from p1", "reply_to": "<the id of p2's note>"}`. Then stop.
 ```
 
 ## The Compose file
@@ -100,6 +104,8 @@ x-player: &player
 services:
   main:
     command: ["python3", "/world/world.py"]
+    # The world writes each seat's token into that seat's volume at start.
+    volumes: ["p1-token:/tokens/p1", "p2-token:/tokens/p2"]
     networks:
       play:
         aliases: [world]
@@ -109,14 +115,24 @@ services:
       timeout: 5s
       retries: 15
       start_period: 2s
-  p1: *player
-  p2: *player
+  p1:
+    <<: *player
+    environment: {SEAT: p1}
+    volumes: ["p1-token:/run/seat:ro"] # p1's token only
+  p2:
+    <<: *player
+    environment: {SEAT: p2}
+    volumes: ["p2-token:/run/seat:ro"] # p2's token only
 
 networks:
   play: {}
+
+volumes:
+  p1-token: {}
+  p2-token: {}
 ```
 
-Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`.
+Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`. Each agent reads its own token at `/run/seat/token`, from a volume that it shares with `main` and with no other agent; see [Credit each action to the right agent](#credit-each-action-to-the-right-agent).
 
 ### An agent's container
 
@@ -230,14 +246,19 @@ The trial's `exception_info` is the first agent error in `[agents.<service>]` or
 
 The verifier runs once, in `main`, after the run ends and while every container is still up. It can query the environment's services, read volumes shared with `main`, and read each agent's logs and trajectory under `/logs/seats/<service>/agent/`.
 
-The example's `tests/test.sh` writes one reward. It checks that p1's note reached the world and that both agents left a trajectory:
+The example's `tests/test.sh` writes one reward from the world's own record, `/logs/world/notes.jsonl` in `main`:
 
 ```python title="tests/test.sh (excerpt)"
-reward = int(p1_posted() and has_trajectory("p1") and has_trajectory("p2"))
-Path("/logs/verifier/reward.txt").write_text(f"{reward}\n")
+p1_notes = [note for note in notes if note.get("author") == "p1"]
+p2_note_ids = {note.get("id") for note in notes if note.get("author") == "p2"}
+reward = int(
+    len(p1_notes) == 1
+    and p1_notes[0].get("text") == "hello from p1"
+    and p1_notes[0].get("reply_to") in p2_note_ids
+)
 ```
 
-`p1_posted()` reads `/logs/world/notes.jsonl` in `main`. `has_trajectory(seat)` checks that `/logs/seats/<seat>/agent/trajectory.json` is non-empty JSON.
+Reward 1 means that p1 posted exactly one note, with exactly the text that its instruction asks for, in reply to p2's note. The verifier does not read `/logs/seats/`: an agent can write anything to its own logs, so they are not evidence of what it did in the world.
 
 The verifier writes whatever rewards it likes, whether or not an agent is under test. To score agents separately, write one key per agent to `/logs/verifier/reward.json`:
 
@@ -246,6 +267,18 @@ The verifier writes whatever rewards it likes, whether or not an agent is under 
 ```
 
 The job summary reports each key.
+
+### Credit each action to the right agent
+
+Agents share the network, so any agent can send any request to the world. A field such as `"author": "p1"` proves nothing, because p2 can send it too. To credit an action to one agent, the world must tell the agents apart. hello-seats does this in three steps:
+
+1. At start, the world writes a new random token for each agent to `/tokens/<service>/token`.
+2. The Compose file mounts each `/tokens/<service>` volume in `main` and, read-only at `/run/seat`, in that agent's service only. An agent can read its own token and no other.
+3. Every `POST /note` sends the token as `Authorization: Bearer <token>`. The world refuses a post without a valid token, or with another agent's name as `author`. It sets each note's `author` to the agent that owns the token.
+
+In a run where p2 posts a note as p1 and p1 does nothing, the world refuses p2's posts and the reward is 0. `tests/runtime/test_hello_seats_docker.py` runs that case with the oracle.
+
+The token identifies a container, not a process in it, and an agent can give its token away. The token stays secret only while no agent can read another agent's files, environment or traffic: no shared volume, Docker socket or privileged container, and no root for the agents, since the example's world speaks plain HTTP. Harbor does not stop the agents' processes before the verifier runs, so a process that is still running can change the world while the verifier reads it.
 
 ## Logs and results
 
