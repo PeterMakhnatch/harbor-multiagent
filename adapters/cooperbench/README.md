@@ -162,9 +162,11 @@ Available flags:
 - `--seats` — Generate seat tasks instead of sidecar tasks (default output:
   `datasets/cooperbench-seats`); see [Seat mode](#seat-mode)
 - `--arms` — With `--seats`: the arms to write for each pair, out of `solo`,
-  `silent` and `talk`; see [Arms](#arms-solo-silent-talk)
-- `--solo-time-scale` — With `--arms solo`: the solo seat's agent timeout as a
-  multiple of a team seat's (default 2, the team's total agent time)
+  `silent` and `talk` (default output: `datasets/cooperbench-arms`); see
+  [Arms](#arms-solo-silent-talk)
+- `--solo-budget-scale` — With `--arms solo`: the solo seat's per-seat caps that
+  the task sets (its agent timeout) as a multiple of a team seat's (default 2,
+  the team's total budget; 1 is upstream CooperBench's solo budget)
 
 ## Seat mode
 
@@ -359,7 +361,7 @@ workers, and its workers can coordinate.
 | `talk` | 2 | one each | on |
 
 ```bash
-uv run cooperbench --seats --arms solo silent talk --subset flash
+uv run cooperbench --seats --arms solo silent talk --subset flash   # into datasets/cooperbench-arms
 ```
 
 - `talk` is the seat task above, with each seat on a network of its own
@@ -369,45 +371,123 @@ uv run cooperbench --seats --arms solo silent talk --subset flash
 - In every arm, each seat is on a Compose network of its own, shared only
   with `main`, so no seat can reach another seat's container. The seats'
   messages go through `main`, so `talk` needs no path between seats, and the
-  arms differ only in the intended manipulation. PR #3's opt-in
-  `seat-shared-network` lint rule reports nothing on the arm tasks.
-- `silent` is `talk` with messaging off. `main` runs `coop_off.py`, which
-  answers every request with HTTP 403 "messaging is off in this task" and
-  records it as a `denied` event, and the seats' `coop-*` commands print that.
-  In the instructions, one sentence and the cooperation protocol change: the
-  seats are told that they cannot exchange messages. Nothing else that a seat
-  reads differs from `talk`: the seat image, the seat's environment and the
-  rest of the instructions are the same.
+  arms differ only in the intended manipulation. The seats have no `NET_RAW`
+  (`cap_drop`), so they cannot forge frames, and `main` does not forward
+  packets between the seat networks (`net.ipv4.ip_forward: 0`). PR #3's
+  opt-in `seat-shared-network` lint rule reports nothing on the arm tasks.
+- `silent` is `talk` with messaging off. `main` runs `coop_off.py`: every
+  request except `GET /health` gets HTTP 403 "messaging is off in this task"
+  (a bad token gets 401) and is recorded as a `denied` event, and the seats'
+  `coop-*` commands print the refusal. Only the messaging sentences of the
+  instructions change: "you can only exchange messages" becomes "you cannot
+  exchange messages", and the protocol's commands and messaging workflow
+  become one paragraph that says messaging is off. The protocol's "features
+  may overlap" paragraph stays. Nothing else that a seat reads differs from
+  `talk`.
 - `solo` has one seat, `agent1`, with both features' descriptions, joined
   as upstream CooperBench's solo runner joins them (`## Feature <id>`
   sections). The verifier runs both features' tests on its patch, and the
   reward is 1 only if both pass, as for a team. Its oracle applies both gold
   patches in turn.
-- The solo seat's agent timeout is a team seat's times `--solo-time-scale`,
-  2 by default, recorded as `solo_time_scale` in `task.toml` `[metadata]`.
-  With 2, solo gets the team's total agent time (2 seats times the timeout),
-  which is also the team's time per feature. With 1, solo gets the team's
-  wall-clock time instead (the same deadline), and half the time per
-  feature. The task sets no turn or step limits, so the timeout is the only
-  time budget.
-- With `--arms`, each task gets an opaque name, `cb-<12 hex>`,
-  random for each build. A seat can read its trial's container names through
-  reverse DNS, and Harbor derives them from the task folder; Flotilla found a
-  seat doing it. `manifest.json` in the output folder maps each name to its
-  pair and arm, and `task.toml` `[metadata]` has `arm` and `pair`. No seat
-  reads either. A rebuild into the same folder keeps the names.
+- With `--arms`, each task gets an opaque name, `cb-<12 hex>`, chosen at
+  random when the task is first built; a rebuild into the same folder keeps
+  it. A seat can read its trial's container names through reverse DNS, and
+  Harbor derives them from the task folder; Flotilla found a seat doing it.
+  `manifest.json` in the output folder maps each name to its pair and arm,
+  and `task.toml` `[metadata]` has `arm` and `pair`. No seat reads either.
+- An arms build has its own default folder, `datasets/cooperbench-arms`.
+  The adapter refuses an arms build into a folder that holds other tasks,
+  and a build without `--arms` into a folder that holds an arms build, so a
+  job over one folder never mixes them.
 
-With paired pairs, the coordination gain is `score(talk) − score(silent)`,
+#### The solo budget
+
+The solo seat's budget is a team seat's times `--solo-budget-scale`, 2 by
+default, recorded as `solo_budget_scale` in `task.toml` `[metadata]`.
+
+- The one per-seat cap that a task sets is the agent timeout (`[agent]
+  timeout_sec`); the adapter scales it. With 2, solo gets the team's total
+  budget (2 seats times a seat's), which is also the team's budget per
+  feature.
+- Turn, step, iteration and cost caps are participant settings in the job
+  (for example claude-code `max_turns`, mini-swe-agent `cost_limit`,
+  openhands `max_iterations`, or Flotilla's `make_jobs.py --max-turns`). A
+  task cannot set them, so the solo job must get each one times the scale.
+- `--solo-budget-scale 1` is upstream CooperBench's solo budget: upstream
+  gives the solo agent the same limits as each cooperating agent (100 steps
+  and $3 in its mini-swe-agent configs). Solo scores at scale 2 do not
+  compare with upstream's solo results.
+
+#### Reading the arms
+
+On the same pairs, the coordination gain is `score(talk) − score(silent)`,
 the share of the split's cost that talking recovers is
 `(talk − silent) / (solo − silent)`, and the cost of the split itself is
-`solo − silent`.
+`solo − silent`. `talk − silent` measures the channel together with the
+protocol's messaging workflow text, which only `talk` has.
+
+Choose a wave's pairs with one rule for all arms. Do not choose them by each
+arm's oracle result: the solo oracle applies the two gold patches in turn,
+the team oracles merge two branches, and the pairs where each earns 1 can
+differ.
+
+#### How to run the arms
+
+1. Build the solo roster and the team roster into folders of their own, so
+   that each job can get its own caps:
+
+   ```bash
+   uv run cooperbench --seats --arms solo --subset flash --output-dir datasets/cooperbench-arms/solo
+   uv run cooperbench --seats --arms silent talk --subset flash --output-dir datasets/cooperbench-arms/team
+   ```
+
+   One folder for all three arms also works (Flotilla's `make_jobs.py`
+   groups tasks by seat roster), as long as no job-level cap needs scaling.
+2. Run 2 jobs: solo tasks have 1 seat and team tasks 2, and a job's
+   participants must fill every task's seats. The names are opaque, so
+   select tasks by folder or by `manifest.json`, not by name. Give both jobs
+   the same settings: timeout multiplier, attempts, retries, concurrency and
+   environment.
+
+   ```yaml title="arms-team.yaml"
+   environment: {type: docker, delete: true}
+   n_concurrent_trials: 2
+   participants:
+     - {seat: agent1, name: claude-code, model_name: anthropic/claude-opus-5-5, kwargs: {max_turns: 100}}
+     - {seat: agent2, name: claude-code, model_name: anthropic/claude-opus-5-5, kwargs: {max_turns: 100}}
+   datasets:
+     - path: datasets/cooperbench-arms/team
+   ```
+
+   ```yaml title="arms-solo.yaml"
+   environment: {type: docker, delete: true}
+   n_concurrent_trials: 2
+   participants:
+     - {seat: agent1, name: claude-code, model_name: anthropic/claude-opus-5-5, kwargs: {max_turns: 200}}   # 2 x 100
+   datasets:
+     - path: datasets/cooperbench-arms/solo
+   ```
+
+3. Each team trial needs 2 Docker networks, and each solo trial 1. Docker's
+   default address pools hold about 30 networks per daemon, so keep
+   concurrency low on one local daemon, or widen `default-address-pools` in
+   the daemon's configuration.
+4. On Modal, set `environment.kwargs: {modal_vm_runtime: true}`. The default
+   sandbox puts every service on host networking, which Compose refuses
+   together with `networks:`.
+5. Cloud environments that size one sandbox from `main`'s `[environment]`
+   (2 CPUs, 4,096 MB) give the solo seat the CPU that 2 team seats share;
+   with scale 2 that is twice the team's CPU time.
 
 Limits of the arms:
 
 - Every seat has internet access, so an outside service is still a possible
-  channel between silent seats.
+  channel between silent seats. So are, with deliberate work by both seats,
+  the Docker host (on Docker Desktop, `host.docker.internal`), host-wide
+  counters such as free disk space and `/proc/loadavg`, and the timing of
+  `main`'s replies.
 - `talk` with `--arms` is not byte-identical to the seat task without it: it
-  adds the seat networks and an opaque name.
+  adds the seat networks, the hardening and an opaque name.
 
 ### Oracle checks
 

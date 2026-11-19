@@ -13,7 +13,8 @@
 ## Setup
 
 You are **agent1**. You implement both features above, alone, in this
-codebase. You work in the repository at `/workspace/repo`.
+codebase. You work in the repository at `/workspace/repo`. There is no
+messaging in this task.
 
 Your work is the state of `/workspace/repo` when you stop: every difference from
 the starting commit, committed or not, new files included. You do not need to

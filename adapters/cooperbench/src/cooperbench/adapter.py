@@ -324,6 +324,18 @@ def _swap(text: str, old: str, new: str) -> str:
     return text.replace(old, new)
 
 
+def _swap_span(text: str, start: str, end: str, new: str) -> str:
+    """Replace the text from ``start`` through ``end``; each must occur
+    exactly once, ``start`` before ``end``."""
+    for mark in (start, end):
+        if text.count(mark) != 1:
+            raise ValueError(f"template text not found exactly once: {mark[:60]!r}")
+    first, last = text.index(start), text.index(end) + len(end)
+    if last <= first:
+        raise ValueError(f"template text out of order: {start[:40]!r}")
+    return text[:first] + new + text[last:]
+
+
 class CooperBenchAdapter:
     """CooperBench → Harbor adapter.
 
@@ -354,7 +366,7 @@ class CooperBenchAdapter:
         instance_ids: list[str] | None = None,
         seats: bool = False,
         arms: Iterable[str] | None = None,
-        solo_time_scale: float = 2.0,
+        solo_budget_scale: float = 2.0,
     ):
         """Initialize the adapter.
 
@@ -376,8 +388,10 @@ class CooperBenchAdapter:
                 silent and talk. Given, every arm's task has opaque names
                 (manifest.json maps them to pair and arm) and each seat on a
                 network of its own; None writes the seat task as it is.
-            solo_time_scale: The solo seat's agent timeout is the team seat's
-                times this, 2 by default: the team's total agent time.
+            solo_budget_scale: The solo seat's per-seat caps that the task
+                controls (its agent timeout) are a team seat's times this; 2,
+                the default, gives solo the team's total budget, and 1 is
+                upstream CooperBench's solo budget.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -408,10 +422,11 @@ class CooperBenchAdapter:
             raise ValueError(f"arms must be distinct values from {self.ARMS}: {arms}")
         if self._arms_build and not seats:
             raise ValueError("arms apply to seat tasks: set seats=True")
-        if not solo_time_scale > 0:
-            raise ValueError(f"solo_time_scale must be positive: {solo_time_scale}")
-        self.solo_time_scale = solo_time_scale
+        if not solo_budget_scale > 0:
+            raise ValueError(f"solo_budget_scale must be positive: {solo_budget_scale}")
+        self.solo_budget_scale = solo_budget_scale
         self._manifest: dict[str, dict] | None = None
+        self._output_checked = False
 
     def run(self) -> tuple[list[Path], list[tuple[str, str]]]:
         """Load the dataset, apply filters, and generate tasks.
@@ -434,10 +449,17 @@ class CooperBenchAdapter:
             print("No feature pairs found. Check filters.")
             return [], []
 
-        print(
-            f"Generating {len(pairs)} CooperBench tasks "
-            f"(from {len(features)} features) into {self.output_dir}"
-        )
+        if self._arms_build:
+            print(
+                f"Generating {len(pairs) * len(self.arms)} CooperBench tasks "
+                f"(pairs: {len(pairs)}, arms: {len(self.arms)}, from "
+                f"{len(features)} features) into {self.output_dir}"
+            )
+        else:
+            print(
+                f"Generating {len(pairs)} CooperBench tasks "
+                f"(from {len(features)} features) into {self.output_dir}"
+            )
         return self.generate_many(pairs, overwrite=self.overwrite)
 
     @staticmethod
@@ -797,17 +819,29 @@ class CooperBenchAdapter:
         overwrite: bool = False,
         arm: str = "talk",
     ) -> Path:
-        task_dir = self.output_dir / self._task_dir_name(pair, arm)
+        if arm not in self.arms:
+            raise ValueError(
+                f"this adapter writes the arms {self.arms}, not {arm!r}; "
+                "pass arms= to the constructor"
+            )
+        self._check_output_dir()
+        name = self._task_dir_name(pair, arm)
+        task_dir = self.output_dir / name
         if task_dir.exists():
             if not overwrite:
                 raise FileExistsError(f"Target already exists: {task_dir}")
             shutil.rmtree(task_dir)
 
-        if self.seats:
-            out = self._generate_seat_task(pair, task_dir, arm)
-            if self._opaque_names:
-                self._write_manifest()
+        if self.seats and self._opaque_names:
+            try:
+                out = self._generate_seat_task(pair, task_dir, arm)
+            except BaseException:
+                shutil.rmtree(task_dir, ignore_errors=True)  # no task, no entry
+                raise
+            self._record_in_manifest(name, pair, arm)
             return out
+        if self.seats:
+            return self._generate_seat_task(pair, task_dir, arm)
 
         paths = HarborTaskPaths(task_dir)
         gh_dir = GITHUB_DIR_FOR_REPO[pair.repo]
@@ -925,18 +959,21 @@ class CooperBenchAdapter:
         agent_timeout_sec = self.agent_timeout_sec
         if arm == "solo":
             toml_text = self._solo_task_toml(toml_text)
-            agent_timeout_sec *= self.solo_time_scale
+            agent_timeout_sec *= self.solo_budget_scale
         if self._opaque_names:
             extra = 'arm = "{arm}"\npair = "{pair}"\n'
             if arm == "solo":
-                extra += f"solo_time_scale = {self.solo_time_scale:g}\n"
-            toml_text = re.sub(
-                r"^(seat_features = .*\n)",
-                lambda m: m.group(1) + extra,
-                toml_text,
-                count=1,
-                flags=re.MULTILINE,
-            )
+                extra += f"solo_budget_scale = {self.solo_budget_scale:g}\n"
+            lines = [
+                ln
+                for ln in toml_text.splitlines(True)
+                if ln.startswith("seat_features = ")
+            ]
+            if len(lines) != 1:
+                raise ValueError(
+                    "template task.toml needs exactly one seat_features line"
+                )
+            toml_text = _swap(toml_text, lines[0], lines[0] + extra)
         task_toml = _render(
             toml_text,
             pair_id=task_dir.name,
@@ -1011,7 +1048,7 @@ class CooperBenchAdapter:
         elif not self._arms_build:
             copies.append(("environment/docker-compose.yaml", paths.environment_dir))
         else:
-            compose_text = self._with_seat_networks(
+            compose_text = self._arm_compose(
                 (template / "environment" / "docker-compose.yaml").read_text(
                     encoding="utf-8"
                 )
@@ -1081,22 +1118,32 @@ class CooperBenchAdapter:
         return self.seats and self._arms_build
 
     @staticmethod
-    def _with_seat_networks(text: str) -> str:
-        """The talk compose file with each seat on a network of its own,
-        shared only with main, so neither seat can reach the other's
-        container; the seats' messages go through main."""
+    def _arm_compose(text: str) -> str:
+        """The talk compose file for an arm: each seat on a network of its
+        own, shared only with main, so neither seat can reach the other's
+        container (the seats' messages go through main); the seats without
+        NET_RAW, so they cannot forge frames; main not forwarding packets
+        between the seat networks."""
         text = _swap(
             text,
             "#   reach it as http://main:8080.\n",
             "#   reach it as http://main:8080.\n"
             "# - Each seat is on a network of its own, shared only with main, so\n"
-            "#   neither seat can reach the other's container.\n",
+            "#   neither seat can reach the other's container. The seats have no\n"
+            "#   NET_RAW, and main does not forward packets between the networks.\n",
+        )
+        text = _swap(
+            text,
+            "  init: true\n  working_dir: /workspace/repo\n",
+            "  init: true\n  working_dir: /workspace/repo\n  cap_drop: [NET_RAW]\n",
         )
         text = _swap(
             text,
             '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n',
             '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n'
-            "    networks: [agent1-net, agent2-net]\n",
+            "    networks: [agent1-net, agent2-net]\n"
+            "    sysctls:\n"
+            "      net.ipv4.ip_forward: 0\n",
         )
         for seat in ("agent1", "agent2"):
             text = _swap(
@@ -1120,8 +1167,12 @@ class CooperBenchAdapter:
         while True:
             name = f"cb-{secrets.token_hex(6)}"
             if name not in manifest and not (self.output_dir / name).exists():
-                break
-        manifest[name] = {
+                return name
+
+    def _record_in_manifest(self, name: str, pair: CooperBenchPair, arm: str) -> None:
+        """Add a written task to manifest.json (only then, so a failed task
+        leaves no entry)."""
+        self._load_manifest()[name] = {
             "pair": pair.pair_id,
             "arm": arm,
             "repo": pair.repo,
@@ -1131,7 +1182,31 @@ class CooperBenchAdapter:
                 pair.feature_b.cooperbench_feature_id,
             ],
         }
-        return name
+        self._write_manifest()
+
+    def _check_output_dir(self) -> None:
+        """An arms build and a build without arms never share a folder, so a
+        job over one folder never mixes arm tasks with other tasks."""
+        if self._output_checked:
+            return
+        if self._opaque_names:
+            listed = set(self._load_manifest())
+            others = sorted(
+                d.name
+                for d in self.output_dir.iterdir()
+                if (d / "task.toml").is_file() and d.name not in listed
+            )
+            if others:
+                raise ValueError(
+                    f"{self.output_dir} holds tasks that are not arm tasks "
+                    f"({', '.join(others[:3])}...); write the arms to another folder"
+                )
+        elif (self.output_dir / self.MANIFEST).exists():
+            raise ValueError(
+                f"{self.output_dir} holds an arms build ({self.MANIFEST}); "
+                "write these tasks to another folder"
+            )
+        self._output_checked = True
 
     def _load_manifest(self) -> dict[str, dict]:
         if self._manifest is None:
@@ -1146,21 +1221,22 @@ class CooperBenchAdapter:
 
     @staticmethod
     def _silent_instruction(text: str) -> str:
-        """The talk instruction with its deliberate differences: the seats
-        cannot exchange messages, and the cooperation protocol becomes one
-        paragraph that says messaging is off."""
+        """The talk instruction with only its messaging sentences changed: the
+        seats cannot exchange messages, and the protocol's commands and
+        messaging workflow become one paragraph that says messaging is off.
+        The protocol's heading and its "features may overlap" paragraph stay."""
         text = _swap(
             text,
             "see each other's files; you can only exchange messages.",
             "see each other's files, and you cannot exchange messages.",
         )
-        head, _, _ = text.partition("## Cooperation protocol\n")
-        return head + (
-            "## Messages\n"
-            "\n"
+        return _swap_span(
+            text,
+            "Available shell commands for cross-agent messaging",
+            "Messages are not magic — your peers only know what you tell them.\n",
             "Messaging is off in this task: you and **{teammate}** cannot exchange\n"
             "messages. The `coop-send`, `coop-broadcast`, `coop-recv`, `coop-peek` and\n"
-            "`coop-agents` commands only report that.\n"
+            "`coop-agents` commands only report that.\n",
         )
 
     @staticmethod
@@ -1174,8 +1250,8 @@ class CooperBenchAdapter:
         text = _swap(
             text,
             "# One agent timeout, shared by both seats.\n",
-            "# The one seat's agent timeout: a team seat's times solo_time_scale\n"
-            "# ([metadata]), 2 by default, so solo gets the team's total agent time.\n",
+            "# The one seat's agent timeout: a team seat's times solo_budget_scale\n"
+            "# ([metadata]), 2 by default, so solo gets the team's total budget.\n",
         )
         text = _swap(
             text,
@@ -1193,25 +1269,27 @@ class CooperBenchAdapter:
     def _solo_verifier(text: str) -> str:
         """The seat verifier for one seat: agent1's patch is the merged patch,
         and both features' tests run on it."""
-        text = _swap(
+        text = _swap_span(
             text,
             "# CooperBench seat verifier. Runs in main after both seats have ended.\n",
-            "# CooperBench seat verifier, solo arm: one seat (agent1) implemented both\n"
-            "# features, and its patch is the merged patch. Runs in main after the\n"
-            "# seat has ended.\n",
+            "# is its own seat's work. main's own /workspace/repo is the untouched base.\n",
+            "# CooperBench seat verifier, solo arm. Runs in main after the seat has\n"
+            "# ended.\n"
+            "#\n"
+            "# agent1, the one seat, was a Harbor agent in its own container with its\n"
+            "# own /workspace/repo volume, which main mounts read-only at\n"
+            "# /agents/agent1/repo. It implemented both features, and its patch is the\n"
+            "# merged patch. main's own /workspace/repo is the untouched base.\n",
         )
         text = _swap(text, 'SEATS="agent1 agent2"\n', 'SEATS="agent1"\n')
-        start = text.index("git checkout -q agent2_branch\nMERGE_OK=0\n")
-        end = text.index('        STRATEGY="union"\n    fi\nfi\n') + len(
-            '        STRATEGY="union"\n    fi\nfi\n'
-        )
-        return (
-            text[:start]
-            + "# One seat: its patch is the merged patch.\n"
-            + "git checkout -q agent1_branch\n"
-            + "MERGE_OK=1\n"
-            + 'STRATEGY="solo"\n'
-            + text[end:]
+        return _swap_span(
+            text,
+            "git checkout -q agent2_branch\nMERGE_OK=0\n",
+            '        STRATEGY="union"\n    fi\nfi\n',
+            "# One seat: its patch is the merged patch.\n"
+            "git checkout -q agent1_branch\n"
+            "MERGE_OK=1\n"
+            'STRATEGY="solo"\n',
         )
 
     # -- batch generation ---------------------------------------------------
@@ -1224,6 +1302,7 @@ class CooperBenchAdapter:
     ) -> tuple[list[Path], list[tuple[str, str]]]:
         success: list[Path] = []
         failures: list[tuple[str, str]] = []
+        self._check_output_dir()  # a mixed folder stops the build, not one task
 
         for idx, pair in enumerate(pairs, start=1):
             for arm in self.arms:

@@ -725,9 +725,15 @@ def test_the_talk_arm_differs_from_the_seat_task_in_name_and_networks(
     }
     arm_compose = yaml.safe_load(talk["environment/docker-compose.yaml"])
     seat_compose = yaml.safe_load(default["environment/docker-compose.yaml"])
-    for spec in arm_compose["services"].values():
+    for service, spec in arm_compose["services"].items():
         spec.pop("networks")
+        if service == "main":
+            assert spec.pop("sysctls") == {"net.ipv4.ip_forward": 0}
+        else:
+            assert spec.pop("cap_drop") == ["NET_RAW"]
     arm_compose.pop("networks")
+    arm_compose.pop("x-seat").pop("cap_drop")
+    seat_compose.pop("x-seat")
     assert arm_compose == seat_compose
 
 
@@ -757,19 +763,22 @@ def test_each_seat_has_a_network_of_its_own_in_every_arm(tmp_path: Path, arm: st
 @pytest.mark.parametrize(
     ("scale", "timeout"), [(2.0, 3600.0), (1.0, 1800.0), (1.5, 2700.0)]
 )
-def test_solo_gets_a_scaled_agent_timeout(tmp_path: Path, scale: float, timeout: float):
+def test_solo_gets_a_scaled_budget(tmp_path: Path, scale: float, timeout: float):
     adapter = CooperBenchAdapter(
-        output_dir=tmp_path / "tasks", seats=True, arms=ARM_WORDS, solo_time_scale=scale
+        output_dir=tmp_path / "tasks",
+        seats=True,
+        arms=ARM_WORDS,
+        solo_budget_scale=scale,
     )
     paths, _ = adapter.generate_many([make_pair()])
     manifest = json.loads((tmp_path / "tasks/manifest.json").read_text())
     tasks = {manifest[path.name]["arm"]: Task(path) for path in paths}
 
     assert tasks["solo"].config.agent.timeout_sec == timeout
-    assert tasks["solo"].config.metadata["solo_time_scale"] == scale
+    assert tasks["solo"].config.metadata["solo_budget_scale"] == scale
     for arm in ("silent", "talk"):
         assert tasks[arm].config.agent.timeout_sec == 1800.0
-        assert "solo_time_scale" not in tasks[arm].config.metadata
+        assert "solo_budget_scale" not in tasks[arm].config.metadata
     assert tasks["solo"].config.verifier.timeout_sec == 1800.0
 
 
@@ -799,13 +808,45 @@ def test_silent_differs_from_talk_only_where_messaging_is_off(tmp_path: Path):
         talked = talk[f"instructions/{seat}.md"].decode()
         assert "and you cannot exchange messages." in said
         assert f"Messaging is off in this task: you and **{teammate}** cannot" in said
-        assert (
-            "## Cooperation protocol" not in said
-            and "## Cooperation protocol" in talked
-        )
-        # The feature and the team setup are the same text up to the one sentence.
+        assert "coop-send <recipient>" in talked and "coop-send <recipient>" not in said
+        assert "Recommended workflow" not in said
+        # Only the messaging sentences differ: the feature, the team setup,
+        # the protocol's heading and its "features may overlap" paragraph stay.
         same_head = talked.split("see each other's files;")[0]
         assert said.startswith(same_head)
+        overlap = talked[talked.index("## Cooperation protocol") :].split(
+            "Available shell commands"
+        )[0]
+        assert "your features may overlap (touch the same files)" in overlap
+        assert overlap in said
+
+
+def test_arms_harden_every_seat_network(tmp_path: Path):
+    for arm, task_dir in arms_build(tmp_path).items():
+        spec = compose(task_dir)
+        assert spec["x-seat"]["cap_drop"] == ["NET_RAW"], arm
+        assert spec["services"]["main"]["sysctls"] == {"net.ipv4.ip_forward": 0}, arm
+
+
+def test_solo_files_match_the_team_files(tmp_path: Path):
+    """solo's compose file and Setup text are written by hand: hold them to
+    talk's, apart from the deliberate differences."""
+    tasks = arms_build(tmp_path, ("solo", "talk"))
+    solo, talk = compose(tasks["solo"]), compose(tasks["talk"])
+    solo_seat = dict(solo["services"]["agent1"])
+    talk_seat = dict(talk["services"]["agent1"])
+    assert solo_seat.pop("environment") == {
+        **talk_seat.pop("environment"),
+        "COOP_AGENTS": "agent1",
+    }
+    assert solo_seat == talk_seat
+    assert solo["x-seat"] == talk["x-seat"]
+    for key in ("init", "healthcheck", "sysctls"):
+        assert solo["services"]["main"][key] == talk["services"]["main"][key], key
+    solo_text = Task(tasks["solo"]).seat_instruction("agent1")
+    team_text = Task(tasks["talk"]).seat_instruction("agent1")
+    work = team_text[team_text.index("Your work is the state") :].split("\n\n")[0]
+    assert work in solo_text
 
 
 def test_solo_is_one_seat_with_both_features(tmp_path: Path):
@@ -838,7 +879,7 @@ def test_solo_is_one_seat_with_both_features(tmp_path: Path):
         ({"seats": True, "arms": ["loud"]}, "arms must be distinct values"),
         ({"seats": True, "arms": ["talk", "talk"]}, "arms must be distinct values"),
         ({"seats": True, "arms": []}, "arms must be distinct values"),
-        ({"seats": True, "arms": ["solo"], "solo_time_scale": 0}, "must be positive"),
+        ({"seats": True, "arms": ["solo"], "solo_budget_scale": 0}, "must be positive"),
     ],
 )
 def test_bad_arms_are_refused(tmp_path: Path, kwargs: dict[str, Any], match: str):
@@ -851,23 +892,26 @@ def test_cli_parses_arms(monkeypatch: pytest.MonkeyPatch):
         sys, "argv", ["cooperbench", "--seats", "--arms", "solo", "silent"]
     )
     args = cli._parse_args()
-    assert (args.arms, args.solo_time_scale) == (["solo", "silent"], 2.0)
+    assert (args.arms, args.solo_budget_scale) == (["solo", "silent"], 2.0)
+    assert args.output_dir == cli.DEFAULT_ARMS_OUTPUT_DIR
     monkeypatch.setattr(sys, "argv", ["cooperbench", "--seats"])
-    assert cli._parse_args().arms is None
+    args = cli._parse_args()
+    assert (args.arms, args.output_dir) == (None, cli.DEFAULT_SEATS_OUTPUT_DIR)
     monkeypatch.setattr(
         sys,
         "argv",
-        ["cooperbench", "--seats", "--arms", "solo", "--solo-time-scale", "1"],
+        ["cooperbench", "--seats", "--arms", "solo", "--solo-budget-scale", "1"],
     )
-    assert cli._parse_args().solo_time_scale == 1.0
+    assert cli._parse_args().solo_budget_scale == 1.0
 
 
 @pytest.mark.parametrize(
     "argv",
     [
         ["--arms", "solo"],
-        ["--seats", "--arms", "talk", "--solo-time-scale", "2"],
-        ["--seats", "--arms", "solo", "--solo-time-scale", "0"],
+        ["--seats", "--arms", "talk", "--solo-budget-scale", "2"],
+        ["--seats", "--arms", "solo", "--solo-budget-scale", "0"],
+        ["--seats", "--arms", "talk", "talk"],
     ],
 )
 def test_cli_refuses_arms_that_do_not_fit(
@@ -931,3 +975,53 @@ def test_the_silent_service_refuses_every_message(
         (None, "bad_token"),
         ("agent1", "denied"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("arms", "arm"), [(None, "silent"), (("silent",), "talk"), (ARM_WORDS, "loud")]
+)
+def test_generate_task_refuses_an_arm_it_was_not_built_for(
+    tmp_path: Path, arms: tuple[str, ...] | None, arm: str
+):
+    adapter = CooperBenchAdapter(output_dir=tmp_path / "tasks", seats=True, arms=arms)
+
+    with pytest.raises(ValueError, match="this adapter writes the arms"):
+        adapter.generate_task(make_pair(), arm=arm)
+    assert not any((tmp_path / "tasks").iterdir())
+
+
+def test_an_arms_build_refuses_a_folder_of_other_tasks(tmp_path: Path):
+    generate(tmp_path, make_pair())  # a seat task in tmp_path/tasks
+
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=ARM_WORDS
+    )
+    with pytest.raises(ValueError, match="not arm tasks"):
+        adapter.generate_many([make_pair()])
+    assert not (tmp_path / "tasks/manifest.json").exists()
+
+
+@pytest.mark.parametrize("seats", [True, False])
+def test_a_build_without_arms_refuses_an_arms_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seats: bool
+):
+    monkeypatch.setitem(
+        _combined_patch_cache, ("pallets/jinja", "1621"), PATCH_A + PATCH_B
+    )
+    arms_build(tmp_path, ("talk",))
+
+    with pytest.raises(ValueError, match="holds an arms build"):
+        CooperBenchAdapter(output_dir=tmp_path / "tasks", seats=seats).generate_task(
+            make_pair()
+        )
+
+
+def test_a_failed_arm_task_leaves_no_folder_and_no_entry(tmp_path: Path):
+    bad = make_pair(repo="nobody/nothing")  # no image mapping: generation fails
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=["talk"]
+    )
+
+    with pytest.raises(KeyError):
+        adapter.generate_task(bad, arm="talk")
+    assert list((tmp_path / "tasks").iterdir()) == []
