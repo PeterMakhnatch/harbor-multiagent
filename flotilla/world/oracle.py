@@ -40,7 +40,8 @@ def family_module() -> Any:
 
 def scripted_peer(own: dict[str, Any]) -> None:
     """A scripted seat posts its part (true or false) in plain words and as data, twice, then stops."""
-    text = f"Hi team, I am {os.environ.get('SEAT', 'a teammate')}. {own['text']}"
+    body = own["text"].replace("Calendars you know", "Calendars I know")
+    text = f"Hi team, I am {os.environ.get('SEAT', 'a teammate')}. {body}"
     for _ in range(2):
         call("POST", "/messages", {"to": "all", "text": text})
         call("POST", "/messages", {"to": "all", "text": MARK + json.dumps(own["part"], sort_keys=True)})
