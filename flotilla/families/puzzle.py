@@ -15,6 +15,7 @@ import json
 import math
 import random
 import re
+from collections.abc import Callable
 from typing import Any
 
 FAMILY = "puzzle"
@@ -181,17 +182,27 @@ def _attrs_of(clue: Clue) -> set[str]:
     return {FLOOR} | {ref["attr"] for ref in (clue["x"], clue["y"]) if "attr" in ref}
 
 
-def _holds(clue: Clue, assign: Solution, owner: dict[str, dict[Any, str]]) -> bool:
+def _checker(clue: Clue) -> Callable[[Solution, dict[str, dict[Any, str]]], bool]:
+    """A function (assignment, owners) -> whether a clue that is not about one cell holds."""
     kind = clue["kind"]
     if kind in ("same", "not_same"):
-        (a, u), (b, v) = clue["a"], clue["b"]
-        return (owner[a][u] == owner[b][v]) == (kind == "same")
+        (a, u), (b, v), want = clue["a"], clue["b"], kind == "same"
+        return lambda assign, owner: (owner[a][u] == owner[b][v]) == want
     if kind == "xor":
         (a, u), (b, v), person = clue["a"], clue["b"], clue["person"]
-        return (assign[a][person] == u) != (assign[b][person] == v)
-    x, y = (assign[FLOOR][ref["person"] if "person" in ref else owner[ref["attr"]][ref["value"]]]
-            for ref in (clue["x"], clue["y"]))
-    return x > y if kind == "higher" else x == y + 1
+        return lambda assign, owner: (assign[a][person] == u) != (assign[b][person] == v)
+
+    def who(ref: dict[str, Any]) -> Callable[[dict[str, dict[Any, str]]], str]:
+        if "person" in ref:
+            person = ref["person"]
+            return lambda owner: person
+        attr, value = ref["attr"], ref["value"]
+        return lambda owner: owner[attr][value]
+
+    x, y = who(clue["x"]), who(clue["y"])
+    if kind == "higher":
+        return lambda assign, owner: assign[FLOOR][x(owner)] > assign[FLOOR][y(owner)]
+    return lambda assign, owner: assign[FLOOR][x(owner)] == assign[FLOOR][y(owner)] + 1
 
 
 def solutions(people: list[str], domains: dict[str, list[Any]], clues: list[Clue], limit: int) -> list[Solution]:
@@ -205,12 +216,12 @@ def solutions(people: list[str], domains: dict[str, list[Any]], clues: list[Clue
     attrs = [FLOOR, *sorted(a for a in domains if a != FLOOR)]
     level = {attr: i for i, attr in enumerate(attrs)}
     unary: dict[str, list[Clue]] = {attr: [] for attr in attrs}
-    checks: list[list[Clue]] = [[] for _ in attrs]
+    checks: list[list[Callable[[Solution, dict[str, dict[Any, str]]], bool]]] = [[] for _ in attrs]
     for clue in clues:
         if clue["kind"] in ("is", "is_not"):
             unary[clue["attr"]].append(clue)
         else:
-            checks[max(level[attr] for attr in _attrs_of(clue))].append(clue)
+            checks[max(level[attr] for attr in _attrs_of(clue))].append(_checker(clue))
     options = []
     for attr in attrs:
         fitting = []
@@ -230,7 +241,7 @@ def solutions(people: list[str], domains: dict[str, list[Any]], clues: list[Clue
         attr = attrs[depth]
         for values, owners in options[depth]:
             assign[attr], owner[attr] = values, owners
-            if all(_holds(clue, assign, owner) for clue in checks[depth]) and walk(depth + 1):
+            if all(check(assign, owner) for check in checks[depth]) and walk(depth + 1):
                 return True
         assign.pop(attr, None)
         owner.pop(attr, None)
