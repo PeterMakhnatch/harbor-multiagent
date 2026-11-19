@@ -43,3 +43,17 @@ the account's zero-data-retention setting. All 36 trials scored 0 with $0 cost a
 `NotFoundError` in every seat. These trials were deleted and the wave rerun with Qwen 3.6
 35B-A3B, which passes the filter. Lesson for the analysis: a trial whose seats never reached the
 model is unscored, not a failure of the model.
+
+## 2026-11-19 04:25 ET — GPT-OSS-120B fails the easy solo task by not acting
+
+Run: wave 2, `schedule` (easy), terminus-2 with GPT-OSS-120B, Modal, world v1. Solo: 9 of 12.
+
+Observed: all 3 solo failures have 0 submissions and a correct answer in the agent's own analysis
+(`schedule-001-solo`, `-002-`, `-009-`). Two sent a curl command whose JSON body was broken by a
+newline, noticed it ("The previous POST request was malformed ... We need to resend"), and ended
+before resending. One asked for permission in an unattended run: "Would you like me to go ahead and
+submit it now?"
+
+Inferred: for this model the solo ceiling is limited by acting, not by reasoning. A team score must
+be read against that ceiling, and the analysis reports "no submission" separately from "wrong
+answer".
