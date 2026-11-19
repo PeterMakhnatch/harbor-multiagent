@@ -21,7 +21,7 @@ import functools
 import json
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +74,7 @@ class Manifest:
     names: dict[str, Identity]  # task name -> identity
     folders: dict[Identity, list[Path]]  # identity -> its task folders, newest build first
     problem: str | None = None  # why the file cannot be used; None when it can
+    entries: dict[str, dict[str, Any]] = field(default_factory=dict)  # task name -> its entry as written
 
 
 def read_manifest(path: Path) -> Manifest:
@@ -96,6 +97,7 @@ def _read_manifest(path: str, _mtime_ns: int, _size: int) -> Manifest:
     if not isinstance(tasks, dict):
         return Manifest({}, {}, "not a Flotilla build manifest (no tasks object)")
     names: dict[str, Identity] = {}
+    entries: dict[str, dict[str, Any]] = {}
     built: dict[Identity, list[tuple[str, Path]]] = {}
     for name, entry in tasks.items():
         known = (
@@ -106,6 +108,7 @@ def _read_manifest(path: str, _mtime_ns: int, _size: int) -> Manifest:
         if known is None:
             continue
         names[str(name)] = known
+        entries[str(name)] = entry
         if isinstance(entry.get("path"), str):
             built.setdefault(known, []).append(
                 (str(entry.get("built") or ""), Path(path).parent / entry["path"])
@@ -114,7 +117,7 @@ def _read_manifest(path: str, _mtime_ns: int, _size: int) -> Manifest:
         key: [folder for _at, folder in sorted(rows, key=lambda row: row[0], reverse=True)]
         for key, rows in built.items()
     }
-    return Manifest(names, folders)
+    return Manifest(names, folders, entries=entries)
 
 
 def rebuilt_folders(root: Path, task: Identity) -> list[Path]:
