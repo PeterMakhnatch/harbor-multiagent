@@ -1284,8 +1284,9 @@ class Trial(ABC):
 
         secrets: set[str] = set()
         # An agent may resolve its model key from the host environment or a
-        # native config, neither of which appears in its extra_env.
-        for agent in (self.agent, self.user_agent):
+        # native config, neither of which appears in its extra_env. A seat
+        # trial passes each seat's agent as primary_agent.
+        for agent in (primary_agent, self.user_agent):
             if not isinstance(agent, BaseInstalledAgent):
                 continue
             try:

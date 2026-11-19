@@ -567,6 +567,53 @@ async def test_secrets_of_every_seat_are_scrubbed_in_each_pass(
         assert calls.count(log) == 2
 
 
+def _native_key_participant(seat: str, api_key: str | None) -> dict[str, Any]:
+    """mini-swe-agent, with its model key in its native config when given."""
+    native = {"config": {"model": {"model_kwargs": {"api_key": api_key}}}}
+    return {
+        "seat": seat,
+        "name": "mini-swe-agent",
+        "model_name": "openai/gpt-4o",
+        "kwargs": native if api_key is not None else {},
+    }
+
+
+@pytest.mark.parametrize("raj_source", ["native_config", "host_env"])
+async def test_each_seat_resolved_model_key_is_scrubbed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raj_source: str
+):
+    """Each seat resolves its own model key outside its env. Raj's is not
+    the key of the first agent under test (maya), so it must come from raj's
+    own agent."""
+    keys = {"maya": "maya-native-model-key", "raj": f"raj-{raj_source}-model-key"}
+    for name in ("OPENAI_API_KEY", "MSWEA_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    if raj_source == "host_env":
+        monkeypatch.setenv("MSWEA_API_KEY", keys["raj"])
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _native_key_participant("maya", keys["maya"]),
+            _native_key_participant(
+                "raj", keys["raj"] if raj_source == "native_config" else None
+            ),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    seats = {seat.name: seat for seat in trial.seats}
+    assert {name: seats[name].agent.model_connection.api_key for name in keys} == keys
+    logs = {}
+    for name, key in keys.items():
+        logs[name] = seats[name].paths.agent_dir / "mini-swe-agent.txt"
+        logs[name].write_text(f"model api key: {key}\n")
+
+    trial._scrub_jobs_dir()
+
+    for log in logs.values():
+        assert log.read_text() == "model api key: [REDACTED]\n"
+
+
 async def test_result_json_records_every_seat(tmp_path: Path):
     trial = await _seats_trial(
         _config(
