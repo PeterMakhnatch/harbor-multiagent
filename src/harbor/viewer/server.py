@@ -77,6 +77,7 @@ from harbor.viewer.task_scanner import TaskDefinitionScanner
 from harbor.viewer.trial_utils import (
     agent_name_from_config,
     reasoning_effort_from_config,
+    reasoning_effort_from_result,
     agent_name_from_result,
     model_info_from_model_name,
     partial_trial_result_from_config,
@@ -2018,9 +2019,10 @@ def _register_job_endpoints(
         efforts = []
         for name in scanner.list_trials(job_name):
             result = scanner.get_trial_result(job_name, name)
-            config = (
-                result.config if result else scanner.get_trial_config(job_name, name)
-            )
+            if result is not None:
+                efforts.append(reasoning_effort_from_result(result))
+                continue
+            config = scanner.get_trial_config(job_name, name)
             if config:
                 efforts.append(reasoning_effort_from_config(config))
         options = filter_options(_get_all_task_summaries(job_name), efforts)
@@ -2222,7 +2224,7 @@ def _register_job_endpoints(
                     source=result.source,
                     agent_name=result_agent_name,
                     reported_agent_name=result.agent_info.name,
-                    reasoning_effort=reasoning_effort_from_config(result.config),
+                    reasoning_effort=reasoning_effort_from_result(result),
                     model_provider=model_info.provider if model_info else None,
                     model_name=model_info.name if model_info else None,
                     reward=reward,

@@ -28,7 +28,8 @@ P2 = Participant(seat="p2", name="claude-code", model_name="anthropic/claude-tes
 
 def _agent_info(participant: Participant) -> AgentInfo:
     return AgentInfo(
-        name=participant.name or "",
+        # An agent given by import path reports its own name.
+        name=participant.name or "custom",
         version="1.0",
         model_info=model_info_from_model_name(participant.model_name),
     )
@@ -262,3 +263,68 @@ def test_a_link_inside_the_trial_is_followed(
 
     assert response.status_code == 200
     assert response.json()["session_id"] == f"{TRIAL}__p2"
+
+
+# p1, under test, and p2, supporting, with their own reasoning effort.
+P1_HIGH = Participant(
+    seat="p1",
+    name="terminus-2",
+    model_name="openrouter/deepseek/deepseek-v4-flash",
+    kwargs={"reasoning_effort": "high"},
+)
+P2_LOW = Participant(
+    seat="p2",
+    name="claude-code",
+    model_name="anthropic/claude-test",
+    kwargs={"reasoning_effort": "low"},
+)
+
+
+def test_finished_trial_is_labelled_by_its_first_seat_under_test(
+    tmp_path: Path,
+) -> None:
+    """agent_info names p1, the first seat under test, wherever the config
+    lists its participant. The reasoning effort that labels and filters the
+    trial is p1's too, not that of p2, the supporting seat listed first."""
+    write_seat_trial(tmp_path / JOB, (P2_LOW, P1_HIGH))
+    client = TestClient(create_app(tmp_path))
+
+    (summary,) = client.get(f"/api/jobs/{JOB}/trials").json()["items"]
+    filters = client.get(f"/api/jobs/{JOB}/tasks/filters").json()
+    high = client.get(f"/api/jobs/{JOB}/trials", params={"reasoning_effort": "high"})
+    low = client.get(f"/api/jobs/{JOB}/trials", params={"reasoning_effort": "low"})
+
+    assert (
+        summary["agent_name"],
+        summary["model_provider"],
+        summary["model_name"],
+        summary["reasoning_effort"],
+    ) == ("terminus-2", "openrouter", "deepseek/deepseek-v4-flash", "high")
+    assert [option["value"] for option in filters["reasoning_efforts"]] == ["high"]
+    assert [item["name"] for item in high.json()["items"]] == [TRIAL]
+    assert low.json()["items"] == []
+
+
+def test_a_custom_agent_under_test_keeps_its_import_path_label(
+    tmp_path: Path,
+) -> None:
+    """As for a single agent, an agent given by import path is labelled by
+    that path, while its trial runs and once it has a result."""
+    custom = Participant(
+        seat="p1", import_path="my_agents:Custom", model_name="openai/gpt-test"
+    )
+    write_seat_trial(tmp_path / JOB, (P2_LOW, custom))
+    write_seat_trial(
+        tmp_path / JOB, (custom, P2_LOW), name="hello-seats__running", finished=False
+    )
+    client = TestClient(create_app(tmp_path))
+
+    labels = {
+        item["name"]: (item["agent_name"], item["reported_agent_name"])
+        for item in client.get(f"/api/jobs/{JOB}/trials").json()["items"]
+    }
+
+    assert labels == {
+        TRIAL: ("my_agents:Custom", "custom"),
+        "hello-seats__running": ("my_agents:Custom", None),
+    }
