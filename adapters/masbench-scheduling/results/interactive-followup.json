@@ -1,0 +1,474 @@
+{
+  "by_stratum": {
+    "2": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 5,
+      "physically_feasible": 5,
+      "planned": 5,
+      "rounds": 93,
+      "scalar_disclosures": 465,
+      "unattempted": 0,
+      "verified": 5
+    },
+    "3": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 5,
+      "physically_feasible": 5,
+      "planned": 5,
+      "rounds": 93,
+      "scalar_disclosures": 465,
+      "unattempted": 0,
+      "verified": 5
+    },
+    "4": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 5,
+      "physically_feasible": 5,
+      "planned": 5,
+      "rounds": 123,
+      "scalar_disclosures": 615,
+      "unattempted": 0,
+      "verified": 5
+    },
+    "5": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 5,
+      "physically_feasible": 5,
+      "planned": 5,
+      "rounds": 89,
+      "scalar_disclosures": 445,
+      "unattempted": 0,
+      "verified": 5
+    }
+  },
+  "cells": [
+    {
+      "case_id": "2/2",
+      "native_id": "ff84e202-5a69-4c70-b0f9-84abc8bdecaf",
+      "observed": {
+        "choice": 485,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 123,
+          "payload_bytes": 886,
+          "request_payload_bytes": 440,
+          "response_payload_bytes": 446,
+          "round_trips": 31,
+          "scalar_disclosures": 155,
+          "seat_exchanges": 155
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "2/3",
+      "native_id": "9b6945ca-801d-44f2-aeea-cf11e09c874a",
+      "observed": {
+        "choice": 193,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 60,
+          "payload_bytes": 387,
+          "request_payload_bytes": 190,
+          "response_payload_bytes": 197,
+          "round_trips": 15,
+          "scalar_disclosures": 75,
+          "seat_exchanges": 75
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "2/4",
+      "native_id": "da5ead37-88ab-4b2d-8373-ef721ca4df6e",
+      "observed": {
+        "choice": 62,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 25,
+          "payload_bytes": 115,
+          "request_payload_bytes": 55,
+          "response_payload_bytes": 60,
+          "round_trips": 6,
+          "scalar_disclosures": 30,
+          "seat_exchanges": 30
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "2/5",
+      "native_id": "afb9e625-c60d-48db-b058-6e70d3b056c5",
+      "observed": {
+        "choice": 69,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 37,
+          "payload_bytes": 175,
+          "request_payload_bytes": 85,
+          "response_payload_bytes": 90,
+          "round_trips": 9,
+          "scalar_disclosures": 45,
+          "seat_exchanges": 45
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "2/6",
+      "native_id": "383dc9a7-8b36-42fb-8400-e3e3a892a408",
+      "observed": {
+        "choice": 377,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 122,
+          "payload_bytes": 877,
+          "request_payload_bytes": 435,
+          "response_payload_bytes": 442,
+          "round_trips": 32,
+          "scalar_disclosures": 160,
+          "seat_exchanges": 160
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "3/2",
+      "native_id": "e601ec73-d69d-46ea-a296-2e74574f8b5a",
+      "observed": {
+        "choice": 271,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 113,
+          "payload_bytes": 766,
+          "request_payload_bytes": 380,
+          "response_payload_bytes": 386,
+          "round_trips": 29,
+          "scalar_disclosures": 145,
+          "seat_exchanges": 145
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "3/3",
+      "native_id": "227df34e-ddcb-41c2-87e5-6cdca4f0384a",
+      "observed": {
+        "choice": 249,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 89,
+          "payload_bytes": 626,
+          "request_payload_bytes": 310,
+          "response_payload_bytes": 316,
+          "round_trips": 23,
+          "scalar_disclosures": 115,
+          "seat_exchanges": 115
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "3/4",
+      "native_id": "239084d4-cfcf-4dcd-aef8-aa73c9106c51",
+      "observed": {
+        "choice": 65,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 20,
+          "payload_bytes": 95,
+          "request_payload_bytes": 45,
+          "response_payload_bytes": 50,
+          "round_trips": 5,
+          "scalar_disclosures": 25,
+          "seat_exchanges": 25
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "3/5",
+      "native_id": "f33b0baf-d36f-4826-b5af-66bddc6f4971",
+      "observed": {
+        "choice": 239,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 83,
+          "payload_bytes": 546,
+          "request_payload_bytes": 270,
+          "response_payload_bytes": 276,
+          "round_trips": 21,
+          "scalar_disclosures": 105,
+          "seat_exchanges": 105
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "3/6",
+      "native_id": "b7999caa-d03a-4303-b17e-e25b78dc6994",
+      "observed": {
+        "choice": 212,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 57,
+          "payload_bytes": 408,
+          "request_payload_bytes": 200,
+          "response_payload_bytes": 208,
+          "round_trips": 15,
+          "scalar_disclosures": 75,
+          "seat_exchanges": 75
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "4/2",
+      "native_id": "c140e774-d807-4e41-8aa3-7965faf43fb3",
+      "observed": {
+        "choice": 628,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 195,
+          "payload_bytes": 1406,
+          "request_payload_bytes": 700,
+          "response_payload_bytes": 706,
+          "round_trips": 49,
+          "scalar_disclosures": 245,
+          "seat_exchanges": 245
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "4/3",
+      "native_id": "a3c5f0c0-a826-4f48-a7fb-d542917f7de4",
+      "observed": {
+        "choice": 201,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 52,
+          "payload_bytes": 326,
+          "request_payload_bytes": 160,
+          "response_payload_bytes": 166,
+          "round_trips": 13,
+          "scalar_disclosures": 65,
+          "seat_exchanges": 65
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "4/4",
+      "native_id": "184580aa-65d7-44ec-8c76-55cf4866782f",
+      "observed": {
+        "choice": 214,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 66,
+          "payload_bytes": 436,
+          "request_payload_bytes": 215,
+          "response_payload_bytes": 221,
+          "round_trips": 17,
+          "scalar_disclosures": 85,
+          "seat_exchanges": 85
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "4/5",
+      "native_id": "0526006b-3095-4aad-87ff-670cb3825dae",
+      "observed": {
+        "choice": 378,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 126,
+          "payload_bytes": 878,
+          "request_payload_bytes": 435,
+          "response_payload_bytes": 443,
+          "round_trips": 32,
+          "scalar_disclosures": 160,
+          "seat_exchanges": 160
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "4/6",
+      "native_id": "d6ea859c-3926-4bfd-841f-78f9ce636554",
+      "observed": {
+        "choice": 199,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 49,
+          "payload_bytes": 306,
+          "request_payload_bytes": 150,
+          "response_payload_bytes": 156,
+          "round_trips": 12,
+          "scalar_disclosures": 60,
+          "seat_exchanges": 60
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "5/2",
+      "native_id": "268b4490-f820-4f26-b388-c7bf48d283bb",
+      "observed": {
+        "choice": 49,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 9,
+          "payload_bytes": 35,
+          "request_payload_bytes": 15,
+          "response_payload_bytes": 20,
+          "round_trips": 2,
+          "scalar_disclosures": 10,
+          "seat_exchanges": 10
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "5/3",
+      "native_id": "c29ba50d-a19e-4d6b-91c3-9520e68fb546",
+      "observed": {
+        "choice": 264,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 99,
+          "payload_bytes": 696,
+          "request_payload_bytes": 345,
+          "response_payload_bytes": 351,
+          "round_trips": 26,
+          "scalar_disclosures": 130,
+          "seat_exchanges": 130
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "5/4",
+      "native_id": "c6a55e0c-16fe-4c47-a3f7-84f5c49f31f9",
+      "observed": {
+        "choice": 208,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 57,
+          "payload_bytes": 356,
+          "request_payload_bytes": 175,
+          "response_payload_bytes": 181,
+          "round_trips": 14,
+          "scalar_disclosures": 70,
+          "seat_exchanges": 70
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "5/5",
+      "native_id": "c8334382-d04e-4f84-94e2-480bfadf3071",
+      "observed": {
+        "choice": 124,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 40,
+          "payload_bytes": 236,
+          "request_payload_bytes": 115,
+          "response_payload_bytes": 121,
+          "round_trips": 10,
+          "scalar_disclosures": 50,
+          "seat_exchanges": 50
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "5/6",
+      "native_id": "1b345c5e-a853-4734-8482-e89b314d809e",
+      "observed": {
+        "choice": 412,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 147,
+          "payload_bytes": 1056,
+          "request_payload_bytes": 525,
+          "response_payload_bytes": 531,
+          "round_trips": 37,
+          "scalar_disclosures": 185,
+          "seat_exchanges": 185
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    }
+  ],
+  "mode": "cursor",
+  "schema": "seatlab.calendar-interactive-result/v1",
+  "study_id": "23955b8841cc4814ba07ed7871bba0c5",
+  "summary": {
+    "failed": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "measured_nulls": 0,
+    "official_exact_matches": 20,
+    "physically_feasible": 20,
+    "planned": 20,
+    "rounds": 398,
+    "scalar_disclosures": 1990,
+    "unattempted": 0,
+    "verified": 20
+  }
+}

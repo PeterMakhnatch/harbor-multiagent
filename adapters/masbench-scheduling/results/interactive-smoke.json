@@ -1,0 +1,154 @@
+{
+  "by_stratum": {
+    "2": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 1,
+      "physically_feasible": 1,
+      "planned": 1,
+      "rounds": 23,
+      "scalar_disclosures": 115,
+      "unattempted": 0,
+      "verified": 1
+    },
+    "3": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 1,
+      "physically_feasible": 1,
+      "planned": 1,
+      "rounds": 17,
+      "scalar_disclosures": 85,
+      "unattempted": 0,
+      "verified": 1
+    },
+    "4": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 1,
+      "physically_feasible": 1,
+      "planned": 1,
+      "rounds": 31,
+      "scalar_disclosures": 155,
+      "unattempted": 0,
+      "verified": 1
+    },
+    "5": {
+      "failed": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "measured_nulls": 0,
+      "official_exact_matches": 1,
+      "physically_feasible": 1,
+      "planned": 1,
+      "rounds": 4,
+      "scalar_disclosures": 20,
+      "unattempted": 0,
+      "verified": 1
+    }
+  },
+  "cells": [
+    {
+      "case_id": "2/1",
+      "native_id": "676fca62-8b75-4ffa-b4a9-2e40acf6b390",
+      "observed": {
+        "choice": 245,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 88,
+          "payload_bytes": 626,
+          "request_payload_bytes": 310,
+          "response_payload_bytes": 316,
+          "round_trips": 23,
+          "scalar_disclosures": 115,
+          "seat_exchanges": 115
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "3/1",
+      "native_id": "e9fce64d-038b-4af8-b2f1-3effb40f42e1",
+      "observed": {
+        "choice": 202,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 68,
+          "payload_bytes": 447,
+          "request_payload_bytes": 220,
+          "response_payload_bytes": 227,
+          "round_trips": 17,
+          "scalar_disclosures": 85,
+          "seat_exchanges": 85
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "4/1",
+      "native_id": "961ac6fe-2446-46c8-82e3-4bbd94b5a01f",
+      "observed": {
+        "choice": 410,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 119,
+          "payload_bytes": 866,
+          "request_payload_bytes": 430,
+          "response_payload_bytes": 436,
+          "round_trips": 31,
+          "scalar_disclosures": 155,
+          "seat_exchanges": 155
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    },
+    {
+      "case_id": "5/1",
+      "native_id": "cf3aeb81-d0b1-4444-9fb7-662e42957a9c",
+      "observed": {
+        "choice": 59,
+        "official_exact_match": true,
+        "physically_feasible": true,
+        "resources": {
+          "distinct_disclosed_starts": 17,
+          "payload_bytes": 75,
+          "request_payload_bytes": 35,
+          "response_payload_bytes": 40,
+          "round_trips": 4,
+          "scalar_disclosures": 20,
+          "seat_exchanges": 20
+        },
+        "reward": 1
+      },
+      "status": "verified"
+    }
+  ],
+  "mode": "cursor",
+  "schema": "seatlab.calendar-interactive-result/v1",
+  "study_id": "5ac92408a1d8400ba53e4cb06f4886b5",
+  "summary": {
+    "failed": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "measured_nulls": 0,
+    "official_exact_matches": 4,
+    "physically_feasible": 4,
+    "planned": 4,
+    "rounds": 75,
+    "scalar_disclosures": 375,
+    "unattempted": 0,
+    "verified": 4
+  }
+}
