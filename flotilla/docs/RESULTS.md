@@ -10,9 +10,11 @@ Where the numbers come from:
   [results/2026-11-19-canonical-analysis.md](results/2026-11-19-canonical-analysis.md).
 - R3, R4, wave c5 and the pilot counts: [results/scripts/breakdowns.py](results/scripts/breakdowns.py).
 - R3 found, lost, overwrite, data-receipt and announcement counts: the `found_lost` section of
-  `flotilla-analyze` (run it with `--family-hooks flotilla/families`). Its family hook counts a message
-  as data only if it names one of the sender's own attendees with a day and an hour, after it removes
-  format examples; it agrees with an independent manual reading of the messages.
+  `flotilla-analyze` (run it with `--family-hooks flotilla/families`). Its family hook first removes
+  format examples and hints, and skips requests and claims about another seat's data; it then counts a
+  message as the sender's data when what is left names the sender's own attendees (also by initial)
+  with days and hours, or lists the sender's candidate or free windows. For the c1 talk trials it agrees
+  with an independent manual reading of every message.
 - Counts marked "manual reading" come from that independent review, because a bare regex also
   matches format examples such as "Mon 09,10" inside a request.
 - The counts of seats that looked for the world's software (validity record):
@@ -262,11 +264,13 @@ cd flotilla/analysis && python3 -m flotilla_analysis ../../.flotilla-local/jobs/
 python3 flotilla/docs/results/scripts/breakdowns.py .flotilla-local/jobs
 ```
 
-Waves c3, c4 and c5 add `--scripted --conditions talk,talk-liar,talk-warned,talk-liar-warned`
-(with `--seat-agent p3=oracle` in `make_jobs.py`), `--variant tight --max-text 100 --max-messages 2
---conditions talk`, and `--variant submitter --submitter p1 --conditions talk`.
+To repeat waves c3, c4 and c5 (with `--seed 1`), add `--scripted --conditions
+talk,talk-liar,talk-warned,talk-liar-warned` (with `--seat-agent p3=oracle` in `make_jobs.py`),
+`--variant tight --max-text 100 --max-messages 2 --conditions talk`, and `--variant submitter
+--submitter p1 --conditions talk`. A new arm is not a repeat: build it without `--seed`, or with
+`--seed-of <label folder>` to pair it with another new build (see [NEXT-WAVE.md](NEXT-WAVE.md)).
 
 Every canonical build used seed 1, the default then. `build_tasks.py` now draws a secret seed for
-each build, so pass `--seed 1` to rebuild these instances. `qa.py` then warns (`public-seed`): the
+each build, so pass `--seed 1` to rebuild these instances. `qa.py` then flags the set (`public-seed`): the
 generator and seed 1 are public, so use such a set only to repeat these waves. A new wave builds
 without `--seed`.
