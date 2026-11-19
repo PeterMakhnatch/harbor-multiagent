@@ -197,6 +197,8 @@ participants:
 
 Every service in `task.toml` needs exactly one participant. Participants are matched to services by name, in any order. The task, not the config, says which agents are under test. A config with `participants` leaves out `agent`.
 
+`harbor trial start`, `harbor run`, `harbor job resume`, `Job.create` and the job submission of `harbor serve` check each participant's options and that its model credentials are set, as they check `agent`, with the same `install_only` and `--skip-credential-checks` exceptions. In a config with participants, they do not check `agent` or `user_agent`, because a seat task runs neither. If any participant fails, Harbor stops with one error that has a line for each failing seat, for example `Participant for seat 'p2': terminus-2: no nonempty model API key selected. Set DEEPSEEK_API_KEY ...`. `Trial.create` in Python does not make these checks, as it does not make them for `agent`.
+
 ### Jobs
 
 A job config takes the same `participants` list and uses it for every trial in the job, in place of `agents`. Every task in the job is then a multi-agent task with those services. `n_attempts`, `n_concurrent_trials`, datasets and the other job settings work as usual, and the job's lock file records the participants.
@@ -204,6 +206,8 @@ A job config takes the same `participants` list and uses it for every trial in t
 ```bash
 harbor run -c examples/configs/features/seats-job.yaml
 ```
+
+Before a job starts its first trial, it checks the roster against every task, as a trial checks it when Harbor creates the trial: each service has one participant, each participant names a service of the task, the config leaves out `agents` and `user_agent`, the verifier runs in `main`, and the network mode is `public`. A job with participants also stops there at a task without `[agents.<service>]` tables, and a job without participants at a task with them. `harbor serve` makes the same checks when it accepts a job, and a participant's `env` reaches its agent in the run, as `agents[].env` does.
 
 ## How a run works
 
@@ -259,7 +263,8 @@ The job summary reports each key.
 
 ## Limitations
 
-- Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.
+- Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container. Harbor does not check this before the environment starts.
+- Checks that need both the task and an agent, such as Windows containers and MCP servers, run in each trial before its environment starts, as for `agent`. A trial that fails one records the error, and the other trials of the job go on.
 - On `modal`, use the VM runtime (`environment.kwargs: {modal_vm_runtime: true}`). Modal's default sandbox puts every Compose service on host networking, which fails any task that declares `networks:`.
 - The verifier runs in `main`; separate verifiers are not supported.
 - Network mode must be `public`.

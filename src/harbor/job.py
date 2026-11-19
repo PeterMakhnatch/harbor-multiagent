@@ -120,6 +120,11 @@ class Job:
                 if not trial.is_regrade and trial.agent not in inference_agents:
                     inference_agents.append(trial.agent)
             self._preflight_agents(config, inference_agents)
+        # A roster that does not fit a task fails here, before any trial
+        # starts, not in that task's Trial.create in the middle of the job.
+        from harbor.trial.seats import check_job_seats
+
+        check_job_seats(self._trial_configs, self._task_download_results)
         if self.config.is_regrade:
             self._ensure_regrade_metrics()
 
@@ -146,6 +151,16 @@ class Job:
 
     @staticmethod
     def _preflight_agents(config: JobConfig, agents: list[AgentConfig]) -> None:
+        if config.participants:
+            # A seat task runs the participants, never agents or user_agent;
+            # check_job_seats refuses a seat job that sets those.
+            if agents:
+                AgentFactory.run_participants_preflight(
+                    config.participants,
+                    skip_credential_checks=config.skip_credential_checks
+                    or config.install_only,
+                )
+            return
         for agent in agents:
             if config.user_agent is not None:
                 AgentFactory.run_preflight(

@@ -19,7 +19,7 @@ from harbor.utils.logger import logger
 
 if TYPE_CHECKING:
     from harbor.agents.base import BaseAgent
-    from harbor.models.trial.config import AgentConfig
+    from harbor.models.trial.config import AgentConfig, Participant
 
 
 def _import_agent_class(import_path: str) -> "type[BaseAgent]":
@@ -220,6 +220,43 @@ class AgentFactory:
                     "or --api-key-name and --base-url to override the connection.",
                     config.model_name,
                 )
+
+    @classmethod
+    def run_participants_preflight(
+        cls,
+        participants: "list[Participant]",
+        *,
+        skip_credential_checks: bool = False,
+    ) -> None:
+        """Run ``run_preflight`` for every participant of a seat task.
+
+        A seat task runs its participants, not ``agent``, so they need the
+        checks ``agent`` gets. Every participant is checked before raising,
+        whatever its check raises; an interrupt or a cancellation is raised
+        at once.
+
+        Raises:
+            ValueError: One message with a line for each seat that failed,
+                chained to the first seat's error.
+        """
+        problems = []
+        errors: list[Exception] = []
+        for participant in participants:
+            try:
+                cls.run_preflight(
+                    participant, skip_credential_checks=skip_credential_checks
+                )
+            except Exception as exc:
+                detail = str(exc)
+                # A config error reads as its message; any other error also
+                # gets its type, as an import or harness failure needs it.
+                if not isinstance(exc, (TypeError, ValueError)):
+                    name = type(exc).__name__
+                    detail = f"{name}: {detail}" if detail else name
+                problems.append(f"Participant for seat {participant.seat!r}: {detail}")
+                errors.append(exc)
+        if problems:
+            raise ValueError("\n".join(problems)) from errors[0]
 
     @classmethod
     def create_agent_from_name(

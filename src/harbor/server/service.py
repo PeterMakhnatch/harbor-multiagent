@@ -10,7 +10,12 @@ from uuid import UUID, uuid4
 
 from harbor.models.job.config import RetryConfig
 from harbor.models.job.lock import TrialLock
-from harbor.models.trial.config import TrialConfig
+from harbor.models.trial.config import (
+    AgentConfig,
+    EnvironmentConfig,
+    TrialConfig,
+    VerifierConfig,
+)
 from harbor.models.trial.result import AgentInfo, ExceptionInfo, ModelInfo, TrialResult
 from harbor.server import DEFAULT_MAX_CONCURRENT
 from harbor.server.database import (
@@ -95,6 +100,22 @@ def _write_text(path: Path, value: str) -> None:
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(value)
     temporary.replace(path)
+
+
+def _runtime_env_components(
+    model: TrialConfig | TrialLock,
+) -> dict[str, AgentConfig | EnvironmentConfig | VerifierConfig]:
+    """The parts of a trial config or lock whose env is private, under the
+    names runtime_env keeps it by: agent, user_agent, environment and
+    verifier, and each participant as participants.<seat>."""
+    components: dict[str, AgentConfig | EnvironmentConfig | VerifierConfig] = {
+        name: component
+        for name in ("agent", "user_agent", "environment", "verifier")
+        if (component := getattr(model, name)) is not None
+    }
+    for participant in model.participants:
+        components[f"participants.{participant.seat}"] = participant
+    return components
 
 
 class Service:
@@ -401,8 +422,8 @@ class Service:
             if parent is not None
             else {
                 name: component.env
-                for name in ("agent", "user_agent", "environment", "verifier")
-                if (component := getattr(config, name)) is not None and component.env
+                for name, component in _runtime_env_components(config).items()
+                if component.env
             },
             lock=lock,
             uri=storage_uri,
@@ -758,9 +779,10 @@ class Service:
             config.job_id = rollout.job_id
             lock = rollout.lock.model_copy(deep=True)
             # Restore private inputs only in execution copies; persisted configs stay redacted.
-            for name, env in rollout.runtime_env.items():
-                for model in (config, lock):
-                    getattr(model, name).env.update(env)
+            for model in (config, lock):
+                components = _runtime_env_components(model)
+                for name, env in rollout.runtime_env.items():
+                    components[name].env.update(env)
             # Validate submitted inputs before applying relay routing or credentials.
             await validate_trials(
                 [config],

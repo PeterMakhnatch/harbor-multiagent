@@ -123,6 +123,15 @@ def _run_preflight(config: JobConfig) -> None:
         # Derived jobs check their runnable agents after the trial plan is known.
         if config.source_jobs:
             return
+        if config.participants:
+            # A seat task runs the participants, never agents or user_agent;
+            # Job.create refuses a seat job that sets those.
+            AgentFactory.run_participants_preflight(
+                config.participants,
+                skip_credential_checks=config.skip_credential_checks
+                or config.install_only,
+            )
+            return
         for agent in config.agents:
             if config.user_agent is not None:
                 AgentFactory.run_preflight(
