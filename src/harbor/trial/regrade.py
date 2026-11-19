@@ -98,6 +98,11 @@ def local_task_name(task_dir: Path) -> str:
 def check_task_regradable(task_dir: Path) -> str | None:
     """Return why this task cannot serve as a regrade verifier, or None."""
     config = TaskConfig.model_validate_toml((task_dir / "task.toml").read_text())
+    if config.agents:
+        return (
+            f"Task at {task_dir} defines multi-agent seats; "
+            "regrade does not support seat tasks."
+        )
     if config.steps:
         shared_steps = [
             step.name

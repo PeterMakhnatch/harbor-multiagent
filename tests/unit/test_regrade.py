@@ -519,6 +519,18 @@ class TestHelpers:
         assert error is not None
         assert "shared-mode verifier step(s): build" in error
 
+    @pytest.mark.parametrize("mode", ["shared", "separate"])
+    def test_check_task_regradable_rejects_seat_tasks(self, tmp_path: Path, mode: str):
+        task_dir = tmp_path / "seats"
+        task_dir.mkdir()
+        (task_dir / "task.toml").write_text(
+            f'[verifier]\nenvironment_mode = "{mode}"\n[agents.maya]\n[agents.raj]\n'
+        )
+        error = check_task_regradable(task_dir)
+        assert error is not None
+        assert "seat tasks" in error
+        assert 'environment_mode = "separate"' not in error
+
 
 class TestRegradeFieldValidation:
     def test_install_only_conflicts_with_regrade(self, tmp_path: Path):

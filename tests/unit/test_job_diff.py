@@ -15,7 +15,12 @@ from harbor.job_plan import JobPlan
 from harbor.metrics.mean import Mean
 from harbor.models.job.config import JobConfig, SourceJobConfig
 from harbor.models.job.lock import TrialLock
-from harbor.models.trial.config import TaskConfig, TrialConfig, VerifierConfig
+from harbor.models.trial.config import (
+    Participant,
+    TaskConfig,
+    TrialConfig,
+    VerifierConfig,
+)
 from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import AgentInfo, ExceptionInfo, StepResult, TrialResult
 from harbor.models.verifier.result import VerifierResult
@@ -45,6 +50,41 @@ def _make_plan(
         tasks=[task_config],
         n_attempts=n_attempts,
         verifier=VerifierConfig(disable=disable_verification),
+    )
+    return JobPlan.from_resolved(
+        config,
+        task_configs=[task_config],
+        metrics={"adhoc": [Mean()]},
+        task_download_results={
+            task_config.get_task_id(): TaskDownloadResult(
+                path=task_dir,
+                download_time_sec=0,
+                cached=True,
+            )
+        },
+    )
+
+
+def _make_seat_plan(tmp_path: Path, *, verifier_mode: str) -> JobPlan:
+    task_dir = tmp_path / "task"
+    (task_dir / "environment").mkdir(parents=True)
+    (task_dir / "environment" / "docker-compose.yaml").write_text(
+        "services:\n  main: {}\n  maya: {}\n"
+    )
+    (task_dir / "instructions").mkdir()
+    (task_dir / "instructions" / "maya.md").write_text("You are maya.")
+    (task_dir / "tests").mkdir()
+    (task_dir / "tests" / "test.sh").write_text("#!/bin/bash\n")
+    (task_dir / "task.toml").write_text(
+        '[task]\nname = "example/task"\nversion = "1.2.3"\n\n'
+        f'[verifier]\nenvironment_mode = "{verifier_mode}"\n\n'
+        "[agents.maya]\n"
+    )
+
+    task_config = TaskConfig(path=task_dir)
+    config = JobConfig(
+        tasks=[task_config],
+        participants=[Participant(seat="maya", name="oracle")],
     )
     return JobPlan.from_resolved(
         config,
@@ -378,6 +418,22 @@ def test_unregradable_minor_change_is_downgraded_to_rerun(tmp_path: Path) -> Non
 
     assert result.trials[0].action == DiffAction.RERUN
     assert result.trials[0].regrade_downgraded
+    assert result.n_regrade_downgraded == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("verifier_mode", ["shared", "separate"])
+def test_seat_task_minor_change_is_downgraded_to_rerun(
+    tmp_path: Path, verifier_mode: str
+) -> None:
+    plan = _make_seat_plan(tmp_path, verifier_mode=verifier_mode)
+    source = _source(tmp_path, plan.trial_locks[0], version="1.1.0")
+
+    result = compare_job_trials(plan, [source])
+
+    assert result.trials[0].action == DiffAction.RERUN
+    assert result.trials[0].regrade_downgraded
+    assert "seat tasks" in result.trials[0].reason
     assert result.n_regrade_downgraded == 1
 
 
