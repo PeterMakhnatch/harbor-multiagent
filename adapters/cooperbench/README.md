@@ -434,11 +434,13 @@ differ.
 #### How to run the arms
 
 1. Build the solo roster and the team roster into folders of their own, so
-   that each job can get its own caps:
+   that each job can get its own caps. Run these from `adapters/cooperbench`
+   (the CLI's project); the `../../` paths put the tasks in the repository's
+   git-ignored `datasets/` folder, where step 2 finds them:
 
    ```bash
-   uv run cooperbench --seats --arms solo --subset flash --output-dir datasets/cooperbench-arms/solo
-   uv run cooperbench --seats --arms silent talk --subset flash --output-dir datasets/cooperbench-arms/team
+   uv run cooperbench --seats --arms solo --subset flash --output-dir ../../datasets/cooperbench-arms/solo
+   uv run cooperbench --seats --arms silent talk --subset flash --output-dir ../../datasets/cooperbench-arms/team
    ```
 
    One folder for all three arms also works (Flotilla's `make_jobs.py`
