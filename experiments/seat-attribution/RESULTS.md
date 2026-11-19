@@ -87,3 +87,13 @@ need a task where waiting costs model turns; this task does not create
 that pressure. Scripts: `delay_agents.py`, `run_delay.py` beside this file
 (task copy with jq was local; set `SEAT_TASK` to a hello-seats copy whose
 player image installs jq).
+
+## Addendum: start skew (same day, existing trial dirs)
+
+Across 16 local seat trials (scripted and model), the gap between the
+first and last seat's `agent_execution.started_at` was at most 0.057 s
+(median 0.019 s). Play starts only after every seat's setup finishes, so
+setup is an accidental barrier: per-seat setup took 0.3–24.5 s and its
+variance is absorbed before play. On local Docker there is no measurable
+start-fairness problem at play start; cloud providers with slower exec
+paths are unmeasured.
