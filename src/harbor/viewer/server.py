@@ -1304,7 +1304,11 @@ def _register_job_endpoints(
         if step is None:
             return trial_dir
         trial_resolved = trial_dir.resolve()
-        step_dir = (trial_dir / "steps" / step).resolve()
+        try:
+            step_dir = (trial_dir / "steps" / step).resolve()
+        except ValueError:
+            # A NUL byte, which no path can hold.
+            raise HTTPException(status_code=400, detail="Invalid step name")
         if trial_resolved not in step_dir.parents:
             raise HTTPException(status_code=400, detail="Invalid step name")
         if not step_dir.exists():
@@ -1325,7 +1329,11 @@ def _register_job_endpoints(
             return _resolve_step_root(trial_dir, step)
         if step is not None:
             raise HTTPException(status_code=400, detail="Pass step or seat, not both")
-        seat_dir = (trial_dir / "seats" / seat).resolve()
+        try:
+            seat_dir = (trial_dir / "seats" / seat).resolve()
+        except ValueError:
+            # A NUL byte, which no path can hold.
+            raise HTTPException(status_code=400, detail="Invalid seat name")
         if seat_dir.parent != trial_dir.resolve() / "seats":
             raise HTTPException(status_code=400, detail="Invalid seat name")
         if not seat_dir.is_dir():

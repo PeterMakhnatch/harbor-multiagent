@@ -447,3 +447,14 @@ def test_the_read_opens_the_checked_path(
     body = response.json()
     read = body if route == "trajectory" else json.loads(body["oracle"])
     assert read == {"session_id": "checked"}
+
+
+@pytest.mark.parametrize("route", ["trajectory", "agent-logs"])
+@pytest.mark.parametrize("params", [{"seat": "p1\x00x"}, {"step": "one\x00x"}])
+def test_a_nul_byte_in_seat_or_step_is_refused(
+    client: TestClient, route: str, params: dict[str, str]
+) -> None:
+    """A path cannot hold a NUL byte; Path.resolve raises ValueError on one."""
+    response = client.get(f"{BASE}/{route}", params=params)
+
+    assert response.status_code == 400
