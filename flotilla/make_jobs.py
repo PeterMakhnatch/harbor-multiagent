@@ -33,6 +33,8 @@ def main() -> None:
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--concurrent", type=int, default=2)
     parser.add_argument("--name", required=True, help="job name prefix")
+    parser.add_argument("--env", choices=("docker", "modal"), default="docker",
+                        help="docker: local; modal: Modal VM runtime (Compose networks need it)")
     parser.add_argument("--jobs-dir", default=str(ROOT.parent / ".flotilla-local" / "jobs"))
     parser.add_argument("--out", type=Path, default=ROOT / "configs" / "generated")
     args = parser.parse_args()
@@ -52,7 +54,8 @@ def main() -> None:
             "timeout_multiplier": 1.0,
             "n_concurrent_trials": args.concurrent,
             "quiet": True,
-            "environment": {"type": "docker", "force_build": False, "delete": True},
+            "environment": {"type": args.env, "force_build": False, "delete": True}
+            | ({"kwargs": {"modal_vm_runtime": True}} if args.env == "modal" else {}),
             "participants": [{"seat": seat, **participant} for seat in seats],
             "tasks": [{"path": task} for task in tasks],
         }
