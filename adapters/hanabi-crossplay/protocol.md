@@ -1,0 +1,22 @@
+# Matched-deck partner changes in full Hanabi
+
+This is a deterministic harness test on the [OpenSpiel](https://github.com/google-deepmind/open_spiel/tree/v2.0.2/open_spiel/games/hanabi) implementation of full 2-player Hanabi. The rules come from the [Hanabi Learning Environment](https://github.com/google-deepmind/hanabi-learning-environment). The experiment borrows the self-play versus cross-play question from [Other-Play](https://arxiv.org/abs/2003.02979). It does not train a policy, reproduce the paper, or measure human partnership. We checked the initial chance and observation APIs before registration. We have not measured the registered cohort.
+
+## Freeze before measurement
+
+- Use stock Olam `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, OpenSpiel `2.0.2`, 2 seats, 5 colors, 5 ranks, 5-card hands, 8 initial information tokens, 3 lives, `card_knowledge`, and a fixed starting player. Keep native draws explicit. Do not expose the deck or the other actor's convention to an actor.
+- Make 50 physical cards: chance action ID `5 * color_index + rank_index`; rank copy counts `[3,2,2,2,1]`. For each physical copy, hash the ASCII string `seatlab-hanabi-deck-v1:{deck_id}:{action_id}:{copy_index}`. Sort by the raw SHA-256 bytes; use the resulting ID stream at successive chance nodes. All indices start at 0. A deal consumes one card; a hint does not. Match the entire draw order, not just the initial hands.
+- Each actor sees only its OpenSpiel observation string, ordered legal move IDs and labels, and the public positions touched by the immediately preceding hint (otherwise `null`). The actor acknowledges its view digest with its action. If the actor is missing or the acknowledgment differs, the world cannot choose for it.
+- Register two fixed conventions. **L** interprets a hint as a request to play the leftmost touched position; **R** uses the rightmost. On receipt of a hint, play that convention's touched card. Otherwise select the lowest-ID legal hint whose indicated partner card is currently playable. With no such hint, discard the lowest legal position, or play the lowest legal position if no discard is legal. These are simple memoryless protocols, not optimized agents.
+- Run **LL, LR, RL, RR** for deck IDs **0–63** offline: 256 registered games. For IDs **0–7**, run all four pairings independently in stock Harbor: **32 registered native trials**, 64 seat processes. Run deck-major in ascending ID and the listed pair order. If a cell fails, preserve it; do not silently repeat it. Any separate runtime or exploratory controls get separate names. There is no cutoff for a low-quality policy and no replacement for absent results.
+- Freeze the source commit, then produce and hash all offline predictions **before** the first measured native trial. The offline predictor runs the actual engine from the start with the registered actor policies. This is an explicit world simulation, not a forecast made from a static recorded suffix. The native world runs both actors in separate Olam seat containers. Policy and engine source are shared; cross-runtime agreement is not independent proof of game rules.
+
+## Endpoints
+
+Primary: for each eligible native trial, compare its deck digest, ordered digest of `(turn, seat, actor view digest, action)`, terminal raw score (0–25), and native shared verifier reward against the frozen offline prediction. Also require both native participant receipts, unique native trial UUID, and a real verifier result. The verifier must replay the publicly recorded actions from the same physical deck in a new engine instance. Incomplete or invalid trials are not zero-score games. Count every registered cell.
+
+Secondary: compare self-play `(LL+RR)/2` and cross-play `(LR+RL)/2` raw scores **within each deck**. Report the paired difference, count positive/tied/negative decks, and report four pairing means and terminal zeros. No significance test or population claim: the 64 registered decks are fixed. Cases 0–7 overlap the offline series; do not add them as fresh experimental decks. Report the first changed actor view or action after a partner swap without claiming all later recorded states would have existed under the change.
+
+## Scope
+
+This is useful for testing harnesses and partner-specific conventions. Receipts attest agreement of recorded bytes, not comprehension or adversarial isolation. Real actors can use a compatible seat endpoint instead of these reference policies. No paid service, hosted model, or private player data is required.
