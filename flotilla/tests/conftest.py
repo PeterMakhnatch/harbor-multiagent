@@ -7,6 +7,7 @@ import http.client
 import importlib.util
 import itertools
 import json
+import sys
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ def load(path: Path, name: str | None = None) -> ModuleType:
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # as an import does: dataclasses look a module up by its name
     spec.loader.exec_module(module)
     return module
 

@@ -43,6 +43,9 @@ task.toml: [task] name = "flotilla/<label>-<instance:03d>-<condition>"
 A variant changes the seat count or the difficulty of a family. Results of different labels are
 never pooled.
 
+Before a wave, every built task set must pass `flotilla/qa.py` with no FAIL finding (README.md,
+"Check a task set before a wave"). A set that fails is fixed and built again, never run.
+
 `[metadata]` in `task.toml` carries `family`, `variant`, `instance`, `condition`, `n_seats`,
 `team_seats`, `difficulty`, `seed`, `max_text`, `max_messages` and `play_timeout_sec` (and
 `scripted_seats` in scripted variants). The analysis parses the task name first and falls back to
