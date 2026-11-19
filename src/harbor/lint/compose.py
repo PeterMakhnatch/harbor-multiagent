@@ -1,9 +1,11 @@
 import errno
 import json
 import os
+import posixpath
 import re
 import stat
 import subprocess
+from collections.abc import Collection
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from uuid import uuid4
@@ -16,6 +18,7 @@ from harbor.lint.models import LintFinding, LintRule, sort_findings
 from harbor.utils.env import resolve_env_vars
 
 _RUNTIME_HOST_DIRECTORY = f"__harbor_lint_runtime_{uuid4().hex}__"
+_SEAT_NAMESPACES = {"network_mode": "network", "pid": "PID", "ipc": "IPC"}
 
 
 def lint_image(
@@ -159,8 +162,12 @@ def lint_compose(
     *,
     task_root: Path | None = None,
     task_env: dict[str, str] | None = None,
+    seats: Collection[str] = (),
 ) -> list[LintFinding]:
-    """Check Compose's normalized model without starting containers."""
+    """Check Compose's normalized model without starting containers.
+
+    ``seats`` names the services that run a seat task's agents.
+    """
     path = path.absolute()
     if not path.is_file():
         raise OSError("Compose input must be a regular file.")
@@ -259,6 +266,8 @@ def lint_compose(
         for service in data.get("services", {}).values()
         if service.get("build") and service.get("image")
     }
+    # Each named volume's mounts: service, field, write access and subpath.
+    volume_mounts: dict[str, list[tuple[str, str, bool, PurePosixPath]]] = {}
     for name, service in data.get("services", {}).items():
         field = f"services.{name}"
         image = service.get("image")
@@ -302,5 +311,59 @@ def lint_compose(
                     )
             elif mount["type"] == "volume" and source in local_binds:
                 device, driver_read_only = local_binds[source]
-                bind(device, location, read_only=read_only or driver_read_only)
+                read_only = read_only or driver_read_only
+                bind(device, location, read_only=read_only)
+            if mount["type"] == "volume" and source:
+                subpath = (mount.get("volume") or {}).get("subpath") or ""
+                volume_mounts.setdefault(source, []).append(
+                    (
+                        name,
+                        location,
+                        not read_only,
+                        PurePosixPath(posixpath.normpath(f"/{subpath}")),
+                    )
+                )
+    for seat in seats:
+        service = data.get("services", {}).get(seat, {})
+        for key, kind in _SEAT_NAMESPACES.items():
+            mode = service.get(key) or ""
+            if mode == "host" or mode.startswith(("service:", "container:")):
+                emit(
+                    LintRule.SEAT_SHARED_NAMESPACE,
+                    f"services.{seat}.{key}",
+                    f"Seat shares a {kind} namespace with "
+                    f"{'the host' if mode == 'host' else mode}; remove it to isolate the seat.",
+                )
+    for volume, mounts in volume_mounts.items():
+        for seat, location, writable, subpath in mounts:
+            if seat not in seats or not writable:
+                continue
+            shared = [
+                (other, other_writable)
+                for other, _, other_writable, other_subpath in mounts
+                if other != seat
+                and (
+                    subpath.is_relative_to(other_subpath)
+                    or other_subpath.is_relative_to(subpath)
+                )
+            ]
+            # No other seat may mount what a seat can write. Other services may
+            # read it, as main reads a seat's files, but must not also write it.
+            if peers := sorted({other for other, _ in shared if other in seats}):
+                emit(
+                    LintRule.SEAT_SHARED_VOLUME,
+                    location,
+                    f"Seat can write volume {volume!r}, also mounted by seat "
+                    f"{', '.join(peers)}; give each seat its own volume.",
+                )
+            if writers := sorted(
+                {other for other, other_writable in shared if other_writable}
+                - set(seats)
+            ):
+                emit(
+                    LintRule.SEAT_SHARED_VOLUME,
+                    location,
+                    f"Seat can write volume {volume!r}, also written by "
+                    f"{', '.join(writers)}; mount it read-only in one of them.",
+                )
     return sort_findings(findings)

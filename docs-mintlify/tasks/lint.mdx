@@ -47,7 +47,8 @@ Precedence: **CLI flags > task.toml > dataset.toml > defaults**.
 | `invalid-task-files` | ✓ | Missing or excluded required files, empty instructions, unsafe input paths, or invalid active `.harborignore` files. |
 | `unused-harborignore` | ✓ | `.harborignore` files outside `tests/` or `solution/`, including their step equivalents. |
 | `root-agent` | — | An omitted or root agent user, including step overrides. |
-| `shared-verifier` | ✓ | A verifier sharing the agent sandbox. |
+| `shared-verifier` | ✓ | A verifier sharing the agent sandbox. Multi-agent tasks always verify in `main` and use `main-seat` instead. |
+| `main-seat` | ✓ | A multi-agent task with an agent in `main`, the service where the verifier runs. |
 | `overlapping-artifacts` | ✓ | Artifact output collisions that can skip requested content, including across services and within steps. |
 | `artifact-log-overlap` | ✓ | Artifacts overlapping a separate verifier's protected agent or verifier log paths. |
 | `unpinned-image` | — | External images without a SHA-256 digest in task configuration, Dockerfile `FROM` instructions, or Compose. |
@@ -70,6 +71,10 @@ Compose interpolation uses the applicable agent or verifier environment configur
 | `compose-writable-bind-mount` | ✓ | Host bind mounts with write access. |
 | `compose-external-bind-mount` | ✓ | Bind sources that resolve outside the task directory. |
 | `compose-symlink-bind-mount` | ✓ | Bind sources that traverse a symlink and resolve outside the task directory. |
+| `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. A read-only mount in another service, such as `main` reading a seat's files, is allowed. |
+| `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, or IPC namespace. |
+
+Seats are the services that run the agents of a [multi-agent task](/tasks/multi-agent). The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
 
 Linting is optional. Use `--ignore` for rules that do not fit your task.
 

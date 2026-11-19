@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from harbor.lint import lint_compose, lint_task
+from harbor.lint.models import DEFAULT_RULES
 from harbor.models.task.task import Task
 from tests.unit.test_lint import IMAGE, cli as cli, configure, rules, task as task
 
@@ -1064,3 +1065,54 @@ def test_compose_named_bind_reports_only_writable_consumers(tmp_path: Path):
     findings = lint_compose(path)
     assert [f.rule for f in findings] == ["compose-writable-bind-mount"]
     assert findings[0].message.startswith("services.writer.volumes[0]:")
+
+
+def test_seat_rules_read_real_compose_files(task):
+    configure(
+        task, agent={}, verifier={}, agents={"p1": {}, "p2": {"under_test": False}}
+    )
+    (task / "instructions").mkdir()
+    for seat in ("p1", "p2"):
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+    (task / "environment/docker-compose.yaml").write_text(f"""
+x-player: &player
+  image: {IMAGE}
+  user: player
+services:
+  main:
+    network_mode: host
+    volumes: ["p1-home:/agents/p1/home:ro", "world:/world"]
+  p1:
+    <<: *player
+    volumes:
+      - p1-home:/home/player
+      - world:/world:ro
+      - {{type: volume, source: world, target: /scratch, volume: {{subpath: p1}}}}
+  p2:
+    <<: *player
+    pid: "service:main"
+    volumes: ["p1-home:/peek:ro"]
+volumes:
+  p1-home: {{}}
+  world: {{}}
+""")
+    findings = lint_task(task, selected_rules=DEFAULT_RULES)
+    assert [(f.rule, f.message.split(";")[0]) for f in findings] == [
+        (
+            "seat-shared-namespace",
+            "services.p2.pid: Seat shares a PID namespace with service:main",
+        ),
+        (
+            "seat-shared-volume",
+            "services.p1.volumes[0]: Seat can write volume 'p1-home', also mounted by seat p2",
+        ),
+        (
+            "seat-shared-volume",
+            "services.p1.volumes[2]: Seat can write volume 'world', also written by main",
+        ),
+    ]
+
+
+def test_hello_seats_example_is_clean():
+    example = Path(__file__).parents[2] / "examples/tasks/hello-seats"
+    assert lint_task(example, selected_rules=DEFAULT_RULES) == []

@@ -193,7 +193,9 @@ def test_invalid_harborignore_preserves_other_checks(task: Path, monkeypatch):
         for finding in findings
         if finding.rule == LintRule.INVALID_TASK_FILES
     } == {str(ignore), str(task / "instruction.md")}
-    check_compose.assert_called_once_with(compose, task_root=task, task_env={})
+    check_compose.assert_called_once_with(
+        compose, task_root=task, task_env={}, seats=[]
+    )
 
 
 @pytest.mark.parametrize("step", [False, True])
@@ -272,7 +274,10 @@ def test_invalid_ignore_preserves_verifier_compose_environment(
         (LintRule.INVALID_TASK_FILES, str(ignore))
     }
     check_compose.assert_called_once_with(
-        compose, task_root=task, task_env={"FLAG": "step" if step else "task"}
+        compose,
+        task_root=task,
+        task_env={"FLAG": "step" if step else "task"},
+        seats=[],
     )
 
 
@@ -390,7 +395,9 @@ def test_ignored_compose_build_definition_is_still_linted(
     monkeypatch.setattr("harbor.lint.task.lint_compose", check_compose)
 
     assert lint_task(task) == [finding]
-    check_compose.assert_called_once_with(compose, task_root=task, task_env={})
+    check_compose.assert_called_once_with(
+        compose, task_root=task, task_env={}, seats=[]
+    )
 
 
 @pytest.mark.parametrize("step", [False, True])
@@ -1308,6 +1315,44 @@ def test_rejected_seat_instruction_preserves_verifier_checks(seat_task: Path):
         ("instructions/p2.md", LintRule.INVALID_TASK_FILES),
         ("tests/test.sh", LintRule.INVALID_TASK_FILES),
     }
+
+
+@pytest.mark.parametrize("main", [False, True])
+def test_seat_tasks_report_main_seat_instead_of_shared_verifier(
+    seat_task: Path, main: bool
+):
+    agents = {"p1": {}, "p2": {"under_test": False}}
+    if main:
+        agents["main"] = {"under_test": False}
+    configure(seat_task, agent={}, verifier={}, agents=agents)
+
+    findings = lint_task(
+        seat_task, selected_rules={LintRule.SHARED_VERIFIER, LintRule.MAIN_SEAT}
+    )
+    assert [(f.rule, f.path, f.message.split(":")[0]) for f in findings] == (
+        [(LintRule.MAIN_SEAT, str(seat_task / "task.toml"), "agents.main")]
+        if main
+        else []
+    )
+
+
+def test_seats_are_checked_in_the_environment_compose_file(
+    seat_task: Path, monkeypatch
+):
+    configure(
+        seat_task, agent={}, verifier={}, agents={"p1": {}, "p2": {"under_test": False}}
+    )
+    compose = seat_task / "environment/docker-compose.yaml"
+    verifier_compose = seat_task / "tests/docker-compose.yaml"
+    for path in (compose, verifier_compose):
+        path.write_text("services: {}\n")
+    check_compose = Mock(return_value=[])
+    monkeypatch.setattr("harbor.lint.task.lint_compose", check_compose)
+
+    lint_task(seat_task)
+    assert {
+        call.args[0]: call.kwargs["seats"] for call in check_compose.call_args_list
+    } == {compose: ["p1", "p2"], verifier_compose: []}
 
 
 @pytest.mark.parametrize("content", ["", " \n\t", "# canary: secret\n\n"])

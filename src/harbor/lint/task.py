@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from packaging.requirements import InvalidRequirement, Requirement
 from pydantic import AliasChoices, AliasPath, BaseModel, ValidationError
 
+from harbor.constants import MAIN_SERVICE_NAME
 from harbor.lint.compose import lint_compose, lint_image
 from harbor.lint.models import COMPOSE_RULES, LintFinding, LintRule, sort_findings
 from harbor.models.task.artifacts import (
@@ -367,7 +368,14 @@ def _lint_config(config: TaskConfig, path: Path) -> list[LintFinding]:
                     f"steps[{index}].artifacts: {collision.describe()}",
                 )
 
-    if task_has_any_shared_verifier(config):
+    if config.agents:
+        # Seat tasks always verify in main, so only a seat there shares it.
+        if MAIN_SERVICE_NAME in config.agents:
+            emit(
+                LintRule.MAIN_SEAT,
+                "agents.main: Seat runs an agent in main, where the verifier runs; give the agent its own service.",
+            )
+    elif task_has_any_shared_verifier(config):
         emit(
             LintRule.SHARED_VERIFIER,
             'Verifier shares the agent sandbox; set verifier.environment_mode = "separate", including shared step overrides.',
@@ -777,9 +785,17 @@ def lint_task(
         contexts = _compose_contexts(config, paths) if config is not None else {}
         for path in sorted(files):
             if path.name == "docker-compose.yaml" and _is_task_build_file(path, root):
+                # Seats are services of the agent environment's Compose file.
+                seats = (
+                    list(config.agents)
+                    if config is not None and path.parent == paths.environment_dir
+                    else []
+                )
                 # One Compose file may be reused by verifiers with different envs.
                 for env in contexts.get(path, [{}]):
-                    for finding in lint_compose(path, task_root=root, task_env=env):
+                    for finding in lint_compose(
+                        path, task_root=root, task_env=env, seats=seats
+                    ):
                         if finding not in findings:
                             findings.append(finding)
     return sort_findings(

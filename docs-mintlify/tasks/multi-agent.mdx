@@ -149,6 +149,8 @@ volumes:
 
 `tests/test.sh` can then read p1's home directory at `/agents/p1/home`.
 
+[`harbor lint`](/tasks/lint) reports a volume that an agent can write when another agent also mounts it, or when another service also writes it. The read-only mount in `main` above is not reported.
+
 ## Participants
 
 A trial config fills each agent's service with a participant. A participant is an ordinary Harbor agent config, with the same fields as [`agents[]`](https://harborframework.com/docs/jobs/configs#agents) in a job config, plus `seat`.

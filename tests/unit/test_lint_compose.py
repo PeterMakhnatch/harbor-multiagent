@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -109,6 +110,129 @@ def test_other_volumes_are_not_binds(model, path, kind):
             {"type": "volume", "source": "inputs", "target": "/data"}
         ]
     assert lint_compose(path) == []
+
+
+def volume(read_only: bool = False, subpath: str | None = None) -> dict[str, Any]:
+    mount: dict[str, Any] = {"type": "volume", "source": "a", "target": "/data"}
+    if read_only:
+        mount["read_only"] = True
+    if subpath is not None:
+        mount["volume"] = {"subpath": subpath}
+    return mount
+
+
+SEAT_VOLUMES = {
+    "own-volume": ({"p1": [volume()]}, []),
+    "seats-read": (
+        {"main": [volume()], "p1": [volume(True)], "p2": [volume(True)]},
+        [],
+    ),
+    "main-reads-seat": ({"main": [volume(True)], "p1": [volume()]}, []),
+    "seat-reads-main": ({"main": [volume()], "p1": [volume(True)]}, []),
+    "one-seat-twice": ({"p1": [volume(), volume(True)]}, []),
+    "separate-subpaths": (
+        {
+            "main": [volume(True)],
+            "p1": [volume(subpath="p1")],
+            "p2": [volume(subpath="./p2/")],
+        },
+        [],
+    ),
+    "seats-write": (
+        {"p1": [volume()], "p2": [volume()]},
+        [("p1", "mounted by seat p2"), ("p2", "mounted by seat p1")],
+    ),
+    "seat-reads-seat": (
+        {"p1": [volume()], "p2": [volume(True)]},
+        [("p1", "mounted by seat p2")],
+    ),
+    "main-writes": (
+        {"main": [volume()], "p1": [volume()]},
+        [("p1", "written by main")],
+    ),
+    "service-writes": (
+        {"db": [volume()], "p1": [volume()], "p2": [volume(True)]},
+        [("p1", "mounted by seat p2"), ("p1", "written by db")],
+    ),
+    "volume-and-subpath": (
+        {"p1": [volume()], "p2": [volume(subpath="p2")]},
+        [("p1", "mounted by seat p2"), ("p2", "mounted by seat p1")],
+    ),
+    "subpath-traversal": (
+        {"p1": [volume(subpath="p1")], "p2": [volume(True, "p2/../p1")]},
+        [("p1", "mounted by seat p2")],
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "mounts,expected", SEAT_VOLUMES.values(), ids=list(SEAT_VOLUMES)
+)
+def test_seat_shared_volume(model, path, mounts, expected):
+    for service, volumes in mounts.items():
+        model["services"].setdefault(service, {})["volumes"] = volumes
+    findings = lint_compose(path, seats=["p1", "p2"])
+    assert [
+        (f.rule, f.message.split(":")[0], f.message.split(", also ")[1].split(";")[0])
+        for f in findings
+    ] == [
+        ("seat-shared-volume", f"services.{service}.volumes[0]", sharing)
+        for service, sharing in expected
+    ]
+    assert lint_compose(path) == []  # Tasks without seats have no seat findings.
+
+
+@pytest.mark.parametrize(
+    "flags,expected",
+    [
+        ("bind,ro", set()),
+        ("bind", {"compose-writable-bind-mount", "seat-shared-volume"}),
+    ],
+)
+def test_seat_shared_bind_volume_access(model, path, flags, expected):
+    model["volumes"] = {"a": {"driver_opts": {"o": flags, "device": "./data"}}}
+    model["services"].update(p1={"volumes": [volume()]}, p2={"volumes": [volume()]})
+    assert {f.rule for f in lint_compose(path, seats=["p1", "p2"])} == expected
+
+
+@pytest.mark.parametrize("key", ["network_mode", "pid", "ipc"])
+@pytest.mark.parametrize(
+    "mode,shared",
+    [
+        ("host", True),
+        ("service:main", True),
+        ("container:other", True),
+        ("none", False),
+        ("private", False),
+        (None, False),
+    ],
+)
+def test_seat_shared_namespace(model, path, key, mode, shared):
+    model["services"]["main"][key] = "host"  # Only seats are checked.
+    model["services"]["p1"] = {key: mode}
+    findings = lint_compose(path, seats=["p1"])
+    assert [f.rule for f in findings] == (["seat-shared-namespace"] if shared else [])
+    assert all(
+        f.message.startswith(f"services.p1.{key}: Seat shares a ") for f in findings
+    )
+
+
+def test_seat_privilege_and_docker_socket_use_existing_rules(model, path):
+    model["services"]["p1"] = {
+        "privileged": True,
+        "volumes": [
+            {
+                "type": "bind",
+                "source": "/var/run/docker.sock",
+                "target": "/var/run/docker.sock",
+                "read_only": True,
+            }
+        ],
+    }
+    reported = {f.rule for f in lint_compose(path, seats=["p1"])}
+    assert "compose-privileged" in reported
+    # POSIX host sources are inspected only on POSIX hosts.
+    assert ("compose-external-bind-mount" in reported) == (os.name != "nt")
 
 
 @pytest.mark.parametrize(
@@ -368,6 +492,8 @@ def test_cli_non_compose_selection_without_docker(
     "rule",
     [
         "compose-privileged",
+        "seat-shared-volume",
+        "seat-shared-namespace",
         "unpinned-image",
         "invalid-task-config",
         "invalid-task-files",
