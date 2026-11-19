@@ -5,14 +5,15 @@ has a service per agent, each named by an ``[agents.<service>]`` table in
 task.toml. We call that service the agent's seat. The trial starts the project
 as any Compose task, installs every participant's agent into its seat at once,
 starts them together under the task's agent timeout, and ends play when every
-agent under test has ended. It then collects every seat alike, gives ``main``
-the seats' logs at /logs/seats, and runs the shared verifier once with every
-container still up.
+agent under test has ended. It then stops every process the seats left
+running, collects every seat alike, gives ``main`` the seats' logs at
+/logs/seats, and runs the shared verifier once with every container still up.
 """
 
 import asyncio
 import contextlib
 import logging
+import traceback
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, override
@@ -31,9 +32,18 @@ from harbor.models.task.verifier_mode import (
 )
 from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
-from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
+from harbor.models.trial.result import (
+    ExceptionInfo,
+    SeatFreeze,
+    SeatResult,
+    TimingInfo,
+)
 from harbor.tasks.client import TaskDownloadResult
-from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
+from harbor.trial.errors import (
+    AgentSetupTimeoutError,
+    AgentTimeoutError,
+    SeatFreezeError,
+)
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
@@ -46,6 +56,7 @@ class Seat:
 
     name: str
     under_test: bool
+    freeze: bool
     participant: Participant
     agent: BaseAgent
     logger: logging.Logger
@@ -159,6 +170,7 @@ class SeatsTrial(SingleStepTrial):
             seat = Seat(
                 name=name,
                 under_test=seat_config.under_test,
+                freeze=seat_config.freeze,
                 participant=participant,
                 agent=agent,
                 logger=logger,
@@ -263,9 +275,9 @@ class SeatsTrial(SingleStepTrial):
 
     @override
     async def _run(self) -> None:
-        """Mirrors SingleStepTrial._run for one agent per seat: play, collect
-        every seat and the task's artifacts, upload trial/seats/ to main's
-        /logs/seats/, then call Trial._run_verifier and
+        """Mirrors SingleStepTrial._run for one agent per seat: play, freeze
+        the seats, collect every seat and the task's artifacts, upload
+        trial/seats/ to main's /logs/seats/, then call Trial._run_verifier and
         _stop_agent_environment."""
         await self._emit(TrialEvent.AGENT_START)
         execution = TimingInfo(started_at=self._now())
@@ -275,6 +287,7 @@ class SeatsTrial(SingleStepTrial):
         finally:
             execution.finished_at = self._now()
             await self._emit(TrialEvent.AGENT_END)
+        await self._freeze_seats()
         await self._collect_seats()
         self._record_seat_errors()
         await self._collect_artifacts()
@@ -288,6 +301,7 @@ class SeatsTrial(SingleStepTrial):
 
     @override
     async def _recover_outputs(self) -> None:
+        await self._freeze_seats()
         await self._collect_seats()
         await self._collect_artifacts(stop_main_before_sidecars=False)
         await self._stop_agent_environment()
@@ -296,7 +310,8 @@ class SeatsTrial(SingleStepTrial):
         """Start every seat at once. Play ends when every agent under test has
         ended or the agent timeout ([agent] timeout_sec) runs out; the runs
         still going are then cancelled, as Trial cancels a single agent at its
-        timeout. Nothing in the containers is killed, and they stay up. A seat
+        timeout. Cancelling a run ends Harbor's side of it only: what it
+        started in its container runs on until _freeze_seats stops it. A seat
         error other than its agent exiting non-zero aborts play and fails the
         trial, as it fails a single-agent trial."""
         timeout_sec = self._agent_timeout_sec
@@ -343,6 +358,65 @@ class SeatsTrial(SingleStepTrial):
             raise
         finally:
             execution.finished_at = self._now()
+
+    async def _freeze_seats(self) -> None:
+        """Once play has started, stop every process in every seat at once
+        (SeatEnvironment.freeze), so that nothing a seat left running acts on
+        the world while logs and artifacts are collected and the verifier runs.
+        It comes after the cancelled runs have ended, so that no agent, such as
+        one whose harness runs in Harbor's process and sends each command as an
+        exec, starts a process in its seat after the freeze; a seat process can
+        still act in the time between the end of play and the freeze. Separate
+        verifier mode stops main before sidecar evidence is collected for the
+        same reason; seats are stopped in place because they are still
+        collected from. A seat is frozen once, here or in _recover_outputs.
+        main holds the world and the verifier and is never frozen, and neither
+        is a seat with ``freeze = false``."""
+        if self.result.agent_execution is None:
+            return
+        async with _seat_tasks() as group:
+            for seat in self.seats:
+                if (
+                    seat.freeze
+                    and seat.result.freeze is None
+                    and not self.agent_environment.is_main_service(seat.name)
+                ):
+                    group.create_task(self._freeze_seat(seat))
+
+    async def _freeze_seat(self, seat: Seat) -> None:
+        """Record the freeze on the seat. A freeze that fails or leaves a
+        process running is logged, as Trial logs a failed stop of main before
+        sidecar collection, and recorded on the seat's freeze as a
+        SeatFreezeError. The trial is still collected and verified; the error's
+        policy makes its reward invalid, since what the seat did after play may
+        count in it."""
+        stopped: int | None = None
+        error = traceback_text = ""
+        try:
+            stopped, running = await seat.environment.freeze()
+            if running:
+                error = f"still running: {running} of {stopped + running} processes"
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            traceback_text = traceback.format_exc()
+        finished_at = self._now()
+        exception_info = None
+        if error:
+            seat.logger.warning(f"Failed to freeze seat {seat.name!r}: {error}")
+            exception_info = ExceptionInfo(
+                exception_type=SeatFreezeError.__name__,
+                exception_message=error,
+                exception_traceback=traceback_text,
+                occurred_at=finished_at,
+                policy_override=self.config.override_error_policy.get(
+                    SeatFreezeError.__name__
+                ),
+            )
+        else:
+            seat.logger.debug(f"Froze seat {seat.name!r}: {stopped} processes stopped")
+        seat.result.freeze = SeatFreeze(
+            finished_at=finished_at, stopped=stopped, exception_info=exception_info
+        )
 
     async def _collect_seats(self) -> None:
         """Mirrors Trial._sync_agent_output for every seat, under test or not."""

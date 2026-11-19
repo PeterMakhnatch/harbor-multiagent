@@ -7,6 +7,7 @@ project's per-service operations; starting and stopping belong to the project.
 """
 
 import logging
+import re
 import shlex
 from pathlib import Path
 from typing import override
@@ -14,6 +15,37 @@ from typing import override
 from harbor.environments.base import BaseEnvironment, ExecResult
 from harbor.models.task.config import EnvironmentConfig
 from harbor.models.trial.paths import TrialPaths
+
+# Sends SIGSTOP to every process the caller may signal but PID 1 and itself
+# (kill -1) and reads each process's state from /proc, again every 0.1 s until
+# none is left running or a second has passed, and prints how many are stopped
+# and how many are not. The signal goes out again each time because a process
+# that was inside its own kill(-1, SIGCONT) when it was stopped continues the
+# processes the freeze had already stopped, and only then stops itself.
+# kill's exit status says nothing: it is 0 when no process could be signalled.
+# The state is the field after the last ")" of /proc/<pid>/stat, so a process
+# cannot name itself stopped.
+_FREEZE = """\
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  kill -s STOP -- -1 2>/dev/null
+  stopped=0 running=0
+  for dir in /proc/[0-9]*; do
+    case ${dir#/proc/} in 1 | $$) continue ;; esac
+    stat=
+    { IFS= read -r -d '' stat < "$dir/stat"; } 2>/dev/null
+    state=${stat##*) }
+    case ${state%% *} in
+      T | t) stopped=$((stopped + 1)) ;;
+      '' | Z | X) ;;
+      *) running=$((running + 1)) ;;
+    esac
+  done
+  [ "$running" -eq 0 ] && break
+  sleep 0.1
+done
+echo "stopped=$stopped running=$running"
+"""
+_FREEZE_TIMEOUT_SEC = 30
 
 
 class SeatEnvironment(BaseEnvironment):
@@ -82,6 +114,27 @@ class SeatEnvironment(BaseEnvironment):
                 timeout_sec=timeout_sec,
                 user=user,
             )
+
+    async def freeze(self) -> tuple[int, int]:
+        """Stop every process in the seat with SIGSTOP, as root, and return how
+        many are now stopped and how many are still running. The container
+        stays up and nothing is killed, so exec, upload and download still
+        work: they start new processes, which are not stopped. PID 1 cannot be
+        stopped from inside its container and is not counted: with Compose
+        ``init: true`` it is the init process, without it the service's own
+        command. The counts hold only while the seat's agent cannot change what
+        root runs here, as when it runs as a non-root ``user:`` and the image's
+        shell belongs to root: an agent that is root can replace bash. Two or
+        more processes that keep sending each other SIGCONT can stay running;
+        they are counted as running."""
+        result = await self.exec(_FREEZE, user="root", timeout_sec=_FREEZE_TIMEOUT_SEC)
+        counts = re.search(r"stopped=(\d+) running=(\d+)", result.stdout or "")
+        if result.return_code != 0 or counts is None:
+            raise RuntimeError(
+                f"Seat {self.service!r}: could not stop its processes "
+                f"(exit {result.return_code}): {result.stdout}"
+            )
+        return int(counts[1]), int(counts[2])
 
     @override
     async def upload_file(self, source_path: Path | str, target_path: str):

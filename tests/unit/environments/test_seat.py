@@ -162,6 +162,38 @@ async def test_inherited_helpers_run_in_the_seat(project, seat):
     assert "mkdir -p /logs/agent && chmod 777 /logs/agent" in ensure[-1]
 
 
+async def test_freeze_stops_the_seat_as_root_and_returns_its_counts(project, seat):
+    project._run_docker_compose_command = AsyncMock(
+        return_value=ExecResult(stdout="stopped=4 running=1\n", return_code=0)
+    )
+
+    assert await seat.freeze() == (4, 1)
+
+    command = _commands(project)[-1]
+    assert command[:6] == ["exec", "-u", "root", "maya", "sh", "-c"]
+    assert shlex.split(command[-1])[:3] == ["exec", "bash", "-c"]
+    script = shlex.split(command[-1])[3]
+    # SIGSTOP goes out again before each check, not once before the first.
+    stop = script.index("kill -s STOP -- -1")
+    assert script.index("for _ in") < stop < script.index("/proc/")
+    assert project._run_docker_compose_command.call_args.kwargs["timeout_sec"] == 30
+
+
+@pytest.mark.parametrize(
+    "stdout, return_code",
+    [("", 0), ("bash: not found\n", 127), ("stopped=4 running=0\n", 137)],
+)
+async def test_freeze_raises_when_the_seat_does_not_answer(
+    project, seat, stdout, return_code
+):
+    project._run_docker_compose_command = AsyncMock(
+        return_value=ExecResult(stdout=stdout, return_code=return_code)
+    )
+
+    with pytest.raises(RuntimeError, match="'maya': could not stop its processes"):
+        await seat.freeze()
+
+
 async def test_seat_output_streams_through_its_own_callbacks(project, seat):
     seen: list[str] = []
 

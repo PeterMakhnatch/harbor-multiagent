@@ -145,12 +145,30 @@ def _service_and_user(command: list[str]) -> tuple[str, str]:
     return service, user
 
 
+FREEZE = "kill -s STOP -- -1"
+
+
+def _freezes() -> list[tuple[str, str, int]]:
+    """Every freeze in EVENTS: its service, its user and where it happened."""
+    return [
+        (*_service_and_user(list(event[1:])), at)
+        for at, event in enumerate(EVENTS)
+        if event[0] == "compose" and FREEZE in event[-1]
+    ]
+
+
+def _first_copy() -> int:
+    return next(at for at, event in enumerate(EVENTS) if event[:2] == ("compose", "cp"))
+
+
 async def compose(command: list[str], **_: Any) -> ExecResult:
     note("compose", *command)
-    if command[0] != "exec" or "sh" not in command:
+    if command[0] != "exec":
         return ExecResult(stdout="", return_code=0)
     if command[-1] == "exec bash -c 'id -u'":
         return ExecResult(stdout="1000\n", return_code=0)
+    if FREEZE in command[-1]:
+        return ExecResult(stdout="stopped=2 running=0\n", return_code=0)
     return ExecResult(stdout="", return_code=0)
 
 
@@ -415,6 +433,205 @@ async def test_agent_timeout_ends_everyone_still_running_and_still_grades(
     assert result.exception_info.exception_type == "AgentTimeoutError"
     assert result.exception_info.exception_message.startswith("Seat 'maya': ")
     assert _verified(trial) and result.verifier_result is not None
+
+
+@pytest.mark.parametrize("timeout_sec, cancelled", [(30, "lee"), (0.2, "maya")])
+async def test_seats_are_frozen_after_play_and_before_collection_and_grading(
+    tmp_path: Path, timeout_sec: float, cancelled: str
+):
+    """Play ends with a supporting agent still running, or at the agent timeout
+    with an agent under test still running."""
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=timeout_sec),
+            _participant("maya", hold=cancelled == "maya"),
+            _participant("raj"),
+            _participant("lee", hold=cancelled == "lee"),
+        )
+    )
+
+    result = await trial.run()
+
+    freezes = _freezes()
+    assert sorted(freeze[:2] for freeze in freezes) == [
+        ("lee", "root"),
+        ("maya", "root"),
+        ("raj", "root"),
+    ]
+    for _, _, frozen in freezes:
+        assert index("stopped", cancelled) < frozen < _first_copy() < index("verify")
+    assert result.agent_execution is not None
+    for seat in result.seat_results or []:
+        assert seat.freeze is not None
+        assert (seat.freeze.stopped, seat.freeze.exception_info) == (2, None)
+        assert seat.freeze.finished_at >= result.agent_execution.finished_at
+    assert result.reward_valid
+
+
+async def test_main_as_a_seat_is_never_frozen(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task_toml = task_dir / "task.toml"
+    task_toml.write_text(task_toml.read_text() + "[agents.main]\n")
+    (task_dir / "instructions" / "main.md").write_text("You are main.")
+    trial = await _seats_trial(
+        _config(
+            task_dir,
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            _participant("main"),
+        )
+    )
+
+    result = await trial.run()
+
+    assert ("run", "main", "You are main.") in EVENTS
+    assert not any(FREEZE in event[-1] and "main" in event for event in EVENTS)
+    assert sorted(freeze[0] for freeze in _freezes()) == ["lee", "maya", "raj"]
+    assert _seat_results(result)["main"].freeze is None
+    assert _verified(trial)
+
+
+async def test_a_seat_with_freeze_off_is_left_running(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task_toml = task_dir / "task.toml"
+    task_toml.write_text(task_toml.read_text() + "freeze = false\n")
+    trial = await _seats_trial(
+        _config(
+            task_dir,
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", hold=True),
+        )
+    )
+
+    result = await trial.run()
+
+    assert sorted(freeze[0] for freeze in _freezes()) == ["maya", "raj"]
+    seats = _seat_results(result)
+    assert seats["lee"].freeze is None
+    assert seats["maya"].freeze is not None and seats["raj"].freeze is not None
+    assert _verified(trial)
+
+
+@pytest.mark.parametrize(
+    "freeze, error",
+    [
+        ({"return_value": (1, 2)}, "still running: 2 of 3 processes"),
+        ({"side_effect": RuntimeError("exec failed")}, "RuntimeError: exec failed"),
+    ],
+)
+async def test_a_failed_freeze_is_graded_but_its_reward_is_not_valid(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, freeze: dict, error: str
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    trial.seats[1].environment.freeze = AsyncMock(**freeze)
+
+    with caplog.at_level("WARNING"):
+        result = await trial.run()
+
+    seats = _seat_results(result)
+    failed = seats["raj"].freeze.exception_info
+    assert (failed.exception_type, failed.exception_message) == (
+        "SeatFreezeError",
+        error,
+    )
+    assert seats["maya"].freeze.exception_info is None
+    assert seats["lee"].freeze.exception_info is None
+    assert f"Failed to freeze seat 'raj': {error}" in caplog.text
+    assert result.exception_info is None and seats["raj"].exception_info is None
+    assert result.recorded_exceptions() == [failed]
+    assert _verified(trial) and result.verifier_result is not None
+    assert not result.reward_valid
+    download = ("compose", "cp", "raj:/logs/agent/.")
+    assert index(*download, str(trial.seats[1].paths.agent_dir)) < index("verify")
+
+
+async def test_an_error_policy_override_keeps_the_reward_of_a_failed_freeze(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            override_error_policy={"SeatFreezeError": {"has_valid_reward": True}},
+        )
+    )
+    trial.seats[1].environment.freeze = AsyncMock(return_value=(1, 2))
+
+    result = await trial.run()
+
+    failed = _seat_results(result)["raj"].freeze.exception_info
+    assert failed.exception_type == "SeatFreezeError"
+    assert failed.policy.has_valid_reward
+    assert result.reward_valid
+
+
+async def test_a_failed_play_freezes_the_seats_before_recovering_outputs(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", hold=True),
+            _participant("raj", hold=True),
+            _participant("lee", fail="crash"),
+        )
+    )
+
+    result = await trial.run()
+
+    assert result.exception_info is not None and not _verified(trial)
+    freezes = _freezes()
+    assert sorted(freeze[0] for freeze in freezes) == ["lee", "maya", "raj"]
+    assert all(frozen < _first_copy() for _, _, frozen in freezes)
+    assert all(seat.freeze is not None for seat in result.seat_results or [])
+
+
+async def test_a_trial_that_fails_after_play_does_not_freeze_a_seat_again(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    trial._run_shared_verifier = AsyncMock(side_effect=RuntimeError("no verifier"))
+
+    result = await trial.run()
+
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "RuntimeError"
+    assert sorted(freeze[0] for freeze in _freezes()) == ["lee", "maya", "raj"]
+
+
+async def test_seats_are_not_frozen_when_play_never_started(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            {**_participant("raj", fail="setup"), "override_setup_timeout_sec": 0.05},
+            _participant("lee"),
+        )
+    )
+
+    result = await trial.run()
+
+    assert result.agent_execution is None
+    assert _freezes() == []
+    assert all(seat.freeze is None for seat in result.seat_results or [])
 
 
 @pytest.mark.parametrize(

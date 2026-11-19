@@ -856,6 +856,15 @@ class SeatConfig(BaseModel):
             "under test has ended; the others never hold it open."
         ),
     )
+    freeze: bool = Field(
+        default=True,
+        description=(
+            "Whether every process in this seat is stopped when play ends, "
+            "before logs and artifacts are collected and the verifier runs. "
+            "Set it to false when the verifier needs this seat's processes "
+            "running. The main service is never stopped."
+        ),
+    )
     mcp_servers: list[MCPServerConfig] = Field(
         default_factory=list,
         description="Added to [environment] mcp_servers for this seat's agent.",
