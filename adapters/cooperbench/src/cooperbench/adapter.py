@@ -7,6 +7,12 @@ concurrently by two agents communicating via Redis.
 Both agents run as symmetric sidecars (agent1, agent2). The main container
 runs a lightweight coordinator that waits for both to finish.
 
+With ``seats=True`` the adapter writes seat tasks instead: agent1 and agent2
+are ``[agents.<service>]`` seats, so any Harbor harness can fill each one.
+Each seat has its own workspace volume, the seats message each other through
+an authenticated service in main, and the verifier in main merges both
+seats' patches and runs both features' tests, as in the sidecar tasks.
+
 Uses pre-built Docker images from DockerHub (akhatua/cooperbench-*) and
 the runner.sh protocol from the CooperBench evaluation framework.
 
@@ -266,6 +272,28 @@ class HarborTaskPaths:
             d.mkdir(parents=True, exist_ok=True)
 
 
+class SeatTaskPaths:
+    """Layout of a seat task: instructions/<seat>.md, no instruction.md, and
+    one seat image in environment/seat/ for both seats."""
+
+    def __init__(self, task_dir: Path):
+        self.task_dir = Path(task_dir)
+        self.instructions_dir = self.task_dir / "instructions"
+        self.environment_dir = self.task_dir / "environment"
+        self.seat_dir = self.environment_dir / "seat"
+        self.tests_dir = self.task_dir / "tests"
+        self.solution_dir = self.task_dir / "solution"
+        self.task_toml_path = self.task_dir / "task.toml"
+
+        for d in (
+            self.instructions_dir,
+            self.seat_dir,
+            self.tests_dir,
+            self.solution_dir,
+        ):
+            d.mkdir(parents=True, exist_ok=True)
+
+
 # ---------------------------------------------------------------------------
 # Adapter
 # ---------------------------------------------------------------------------
@@ -285,6 +313,8 @@ class CooperBenchAdapter:
     """
 
     AGENT_HARNESSES = ("mini-swe-agent", "openhands-sdk")
+    # Seat names in seat mode: agent1 implements feature A, agent2 feature B.
+    SEATS = ("agent1", "agent2")
 
     def __init__(
         self,
@@ -299,6 +329,7 @@ class CooperBenchAdapter:
         agent_harness: str = "mini-swe-agent",
         subset: str | None = None,
         instance_ids: list[str] | None = None,
+        seats: bool = False,
     ):
         """Initialize the adapter.
 
@@ -314,6 +345,8 @@ class CooperBenchAdapter:
             subset: Subset name (lite, flash) or path to subset JSON.
             instance_ids: CooperBench instance_ids to filter to
                 (e.g., dottxt-ai__outlines-1371-1).
+            seats: Write seat tasks (agent1 and agent2 as [agents.<service>]
+                seats) instead of sidecar tasks; agent_harness does not apply.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -333,6 +366,7 @@ class CooperBenchAdapter:
                 f"Choose from: {', '.join(self.AGENT_HARNESSES)}"
             )
         self.agent_harness = agent_harness
+        self.seats = seats
 
     def run(self) -> tuple[list[Path], list[tuple[str, str]]]:
         """Load the dataset, apply filters, and generate tasks.
@@ -481,34 +515,50 @@ class CooperBenchAdapter:
     # at runtime so the pre-existing test_tool_calls_format_basic passes.
     _DSPY_T8563_TESTFIX = Path(__file__).parent / "fixes" / "dspy-t8563-testfix.patch"
 
+    _GOLD_PATCH_FIX_TASKS = (
+        ("stanfordnlp/dspy", "8635"),
+        ("react-hook-form/react-hook-form", "153"),
+    )
+
     def _apply_upstream_fixes(
         self,
         pair: CooperBenchPair,
-        paths: HarborTaskPaths,
+        paths: HarborTaskPaths | SeatTaskPaths,
+        gold_patches: Iterable[Path] | None = None,
     ) -> None:
-        """Apply fixes for known upstream CooperBench bugs."""
+        """Apply fixes for known upstream CooperBench bugs.
+
+        ``gold_patches`` are the gold patches to fix: solution/combined.patch
+        in a sidecar task (the default), each seat's feature patch in a seat
+        task. A fix whose text a patch does not contain leaves it untouched.
+        """
+        if gold_patches is None:
+            gold_patches = [paths.solution_dir / "combined.patch"]
+        for patch_path in gold_patches:
+            self._fix_gold_patch(pair, patch_path)
+        self._fix_test_patches(pair, paths)
+
+    def _fix_gold_patch(self, pair: CooperBenchPair, patch_path: Path) -> None:
         task_key = (pair.repo, pair.task_id)
+        if task_key not in self._GOLD_PATCH_FIX_TASKS:
+            return
+        original = patch_path.read_text(encoding="utf-8")
+        content = original
 
         # -- stanfordnlp/dspy task 8635 ------------------------------------
         # combined.patch sets min_instr_chars=30 which rejects short mock
         # responses in pre-existing tests.  Change default to 0.
         if task_key == ("stanfordnlp/dspy", "8635"):
-            patch_path = paths.solution_dir / "combined.patch"
-            content = patch_path.read_text(encoding="utf-8")
             content = content.replace(
                 "+        min_instr_chars=30,",
                 "+        min_instr_chars=0,",
             )
-            patch_path.write_text(content, encoding="utf-8")
 
         # -- react-hook-form task 153 --------------------------------------
         # combined.patch uses handleSubmit(onValid, onInvalid, options) where
         # options is an object, but the test patch passes onFinally as a bare
         # function in the 3rd positional arg.  Add runtime type detection.
         if task_key == ("react-hook-form/react-hook-form", "153"):
-            patch_path = paths.solution_dir / "combined.patch"
-            content = patch_path.read_text(encoding="utf-8")
-
             # Fix implementation: detect function vs options object
             content = content.replace(
                 "+    (onValid, onInvalid, options) => async (e?, context?) => {\n"
@@ -531,16 +581,34 @@ class CooperBenchAdapter:
                 "((formState: FormState<TFieldValues>) => void | Promise<void>) | {",
             )
 
-            patch_path.write_text(content, encoding="utf-8")
-
+        if content == original:
+            return
+        patch_path.write_text(content, encoding="utf-8")
+        if task_key == ("react-hook-form/react-hook-form", "153"):
             # Fix hunk headers (line counts changed)
             self._fix_patch_hunk_headers(patch_path)
+
+    def _fix_test_patches(
+        self,
+        pair: CooperBenchPair,
+        paths: HarborTaskPaths | SeatTaskPaths,
+    ) -> None:
+        task_key = (pair.repo, pair.task_id)
 
         # -- stanfordnlp/dspy task 8563 ------------------------------------
         # combined.patch changes format() return type; only feature 1's test
         # patch updates expectations.  Append a testfix patch to all test
         # patches so pre-existing tests pass with the new return type.
-        if task_key == ("stanfordnlp/dspy", "8563"):
+        # A seat task's gold patches are only its two features, and the new
+        # return type is feature 1's, so there the fix applies only to pairs
+        # with feature 1.
+        features = {
+            pair.feature_a.cooperbench_feature_id,
+            pair.feature_b.cooperbench_feature_id,
+        }
+        if task_key == ("stanfordnlp/dspy", "8563") and (
+            not self.seats or "1" in features
+        ):
             if self._DSPY_T8563_TESTFIX.exists():
                 testfix = self._DSPY_T8563_TESTFIX.read_text(encoding="utf-8")
                 (paths.tests_dir / "testfix.patch").write_text(
@@ -660,6 +728,9 @@ class CooperBenchAdapter:
                 raise FileExistsError(f"Target already exists: {task_dir}")
             shutil.rmtree(task_dir)
 
+        if self.seats:
+            return self._generate_seat_task(pair, task_dir)
+
         paths = HarborTaskPaths(task_dir)
         gh_dir = GITHUB_DIR_FOR_REPO[pair.repo]
         image_name = get_image_name(gh_dir, pair.task_id)
@@ -749,6 +820,90 @@ class CooperBenchAdapter:
 
         # -- upstream bug fixes ------------------------------------------------
         self._apply_upstream_fixes(pair, paths)
+
+        return task_dir
+
+    def _generate_seat_task(self, pair: CooperBenchPair, task_dir: Path) -> Path:
+        """Write a seat task: agent1 (feature A) and agent2 (feature B) are
+        [agents.<service>] seats, both under test, each with its own
+        instruction, container and workspace volume. main holds the base
+        commit, serves the seats' messages, and runs the verifier."""
+        paths = SeatTaskPaths(task_dir)
+        template = self.template_dir / "seats"
+        image_name = get_image_name(GITHUB_DIR_FOR_REPO[pair.repo], pair.task_id)
+        features = dict(zip(self.SEATS, (pair.feature_a, pair.feature_b)))
+
+        # -- task.toml -----------------------------------------------------
+        task_toml = _render(
+            (template / "task.toml").read_text(encoding="utf-8"),
+            pair_id=pair.pair_id,
+            agent_timeout_sec=f"{self.agent_timeout_sec:.1f}",
+            verifier_timeout_sec=f"{self.verifier_timeout_sec:.1f}",
+            repo=pair.repo,
+            task_id=pair.task_id,
+            feature_a=pair.feature_a.cooperbench_feature_id,
+            feature_b=pair.feature_b.cooperbench_feature_id,
+        )
+        paths.task_toml_path.write_text(task_toml, encoding="utf-8")
+
+        # -- instructions/<seat>.md: the seat's feature, then the team setup
+        # and the cooperation protocol (feature text last, so it is not
+        # scanned for placeholders) --------------------------------------
+        instruction = (template / "instruction.md").read_text(encoding="utf-8")
+        for seat, feature in features.items():
+            (teammate,) = (other for other in self.SEATS if other != seat)
+            (paths.instructions_dir / f"{seat}.md").write_text(
+                _render(
+                    instruction,
+                    agent_id=seat,
+                    teammate=teammate,
+                    feature_description=feature.problem_statement,
+                ),
+                encoding="utf-8",
+            )
+
+        # -- environment/: main, the seat image, and the compose file -------
+        for dockerfile_dir, out_dir in (
+            (template / "environment", paths.environment_dir),
+            (template / "environment" / "seat", paths.seat_dir),
+        ):
+            (out_dir / "Dockerfile").write_text(
+                _render(
+                    (dockerfile_dir / "Dockerfile").read_text(encoding="utf-8"),
+                    image_name=image_name,
+                ),
+                encoding="utf-8",
+            )
+        for src, dst in (
+            ("docker-compose.yaml", paths.environment_dir),
+            ("coop_server.py", paths.environment_dir),
+            ("seat/coop_msg.py", paths.seat_dir),
+        ):
+            shutil.copy2(template / "environment" / src, dst)
+
+        # -- tests/ --------------------------------------------------------
+        (paths.tests_dir / "tests1.patch").write_text(
+            pair.feature_a.test_patch, encoding="utf-8"
+        )
+        (paths.tests_dir / "tests2.patch").write_text(
+            pair.feature_b.test_patch, encoding="utf-8"
+        )
+        test_sh_path = paths.tests_dir / "test.sh"
+        shutil.copy2(template / "tests" / "test.sh", test_sh_path)
+        test_sh_path.chmod(0o755)
+
+        # -- solution/: each seat's own feature's gold patch ----------------
+        seat_patches = []
+        for seat, feature in features.items():
+            patch_path = paths.solution_dir / f"{seat}.patch"
+            patch_path.write_text(feature.patch, encoding="utf-8")
+            seat_patches.append(patch_path)
+        solve_sh_path = paths.solution_dir / "solve.sh"
+        shutil.copy2(template / "solution" / "solve.sh", solve_sh_path)
+        solve_sh_path.chmod(0o755)
+
+        # -- upstream bug fixes ------------------------------------------------
+        self._apply_upstream_fixes(pair, paths, gold_patches=seat_patches)
 
         return task_dir
 

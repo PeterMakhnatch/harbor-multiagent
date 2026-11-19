@@ -39,6 +39,8 @@ with tasks ranging from adding validators to implementing caching mechanisms.
   upstream ([#40](https://github.com/cooperbench/CooperBench/pull/40),
   [#41](https://github.com/cooperbench/CooperBench/pull/41),
   [#42](https://github.com/cooperbench/CooperBench/pull/42))
+- **Seat mode** (`--seats`): agent1 and agent2 are seats of a multi-agent
+  task, so any Harbor harness can fill each role. See [Seat mode](#seat-mode).
 
 ## Generated Task Structure
 
@@ -157,6 +159,167 @@ Available flags:
 - `--task-ids` — CooperBench task IDs to filter to
 - `--instance-ids` — CooperBench `instance_id`s to filter to
 - `--overwrite` — Overwrite existing tasks
+- `--seats` — Generate seat tasks instead of sidecar tasks (default output:
+  `datasets/cooperbench-seats`); see [Seat mode](#seat-mode)
+
+## Seat mode
+
+This fork of Harbor runs several Harbor agents in one task, each in its own
+Compose service, its **seat** (see
+[docs-mintlify/tasks/multi-agent.mdx](../../docs-mintlify/tasks/multi-agent.mdx)).
+With `--seats`, each CooperBench agent is a seat: `agent1` implements feature
+A and `agent2` feature B, and a trial's participants put any Harbor harness and
+model in each seat. Both seats are under test. Without `--seats`, the adapter
+writes the sidecar tasks above, unchanged.
+
+```bash
+cd adapters/cooperbench
+uv run cooperbench --seats --subset flash
+```
+
+```
+cooperbench-seats/
+├── cb-jinja-t1621-f3-5/
+│   ├── task.toml               # [agents.agent1], [agents.agent2]; no instruction.md
+│   ├── instructions/
+│   │   ├── agent1.md           # feature A, team setup, cooperation protocol
+│   │   └── agent2.md           # feature B, team setup, cooperation protocol
+│   ├── environment/
+│   │   ├── Dockerfile          # main: base commit, message service, verifier
+│   │   ├── coop_server.py      # the message service between the seats
+│   │   ├── docker-compose.yaml # main, agent1, agent2, their volumes
+│   │   └── seat/
+│   │       ├── Dockerfile      # the image both seats run (task image + coop-* commands)
+│   │       └── coop_msg.py     # coop-send, coop-recv, coop-broadcast, coop-peek, coop-agents
+│   ├── solution/
+│   │   ├── solve.sh            # oracle: applies its own seat's gold patch
+│   │   ├── agent1.patch        # feature A's gold patch
+│   │   └── agent2.patch        # feature B's gold patch
+│   └── tests/
+│       ├── test.sh             # capture both seats' patches, merge, test both features
+│       ├── tests1.patch
+│       └── tests2.patch
+```
+
+### From sidecars to seats
+
+| Part | Sidecar task | Seat task |
+|---|---|---|
+| Who works | 2 sidecar services run a fixed harness (`openhands-sdk` or `mini-swe-agent`); the Harbor agent in `main` is a coordinator (`nop`) | `agent1` and `agent2` are seats; each runs the Harbor agent its participant names |
+| Instructions | `environment/agent{1,2}/instruction.md`, baked into each sidecar image; collaboration text comes from the harness | `instructions/agent{1,2}.md`: the feature, the team setup, and CooperBench's cooperation protocol for CLI agents |
+| Workspace | each sidecar's image copy of `/workspace/repo` | each seat's `/workspace/repo` is a named volume, `agent{1,2}-repo`, written by that seat only |
+| Messages | Redis service; `from` is written by the sender | a service in `main` with one token per seat; the sender is the token's seat |
+| Patch | each sidecar writes `git diff` to a shared output volume when its agent exits | the verifier computes each seat's diff from its workspace volume, which `main` mounts read-only |
+| Grading | merge (naive, then union), then runner.sh with each feature's tests | unchanged |
+| Reward | `reward.json` with the reward and string details | `reward.json` is `{"reward": 0 or 1}`; the details are in `details.json` |
+| Oracle | `main` applies `combined.patch`; the verifier skips the merge | each seat applies its own feature's gold patch; the verifier merges as for agents |
+| Per-agent results | none in `result.json` | `seat_results`: each seat's harness, model, tokens, cost, timing and error |
+
+### Messages between the seats
+
+Each seat has the commands of CooperBench's own messaging tool for CLI agents
+(`cooperbench.agents._coop.coop_msg` upstream, which its Claude Code and Codex
+adapters use), with the same arguments and output:
+
+```bash
+coop-send <recipient> "message text here"   # send to a specific peer
+coop-broadcast "message text here"          # send to every other peer
+coop-recv                                    # drain your inbox (prints JSON list)
+coop-peek                                    # number of unread messages
+coop-agents                                  # list every agent id
+```
+
+They talk to `coop_server.py` in `main` (`http://main:8080`), not to Redis.
+Upstream's semantics stay: one FIFO inbox per agent, a receive drains the
+caller's inbox, a broadcast is one message to each other agent, and an agent
+reads messages only when it runs `coop-recv`. Two things change:
+
+- The sender cannot be forged. At start, `main` writes a new token for each
+  seat into a volume that only `main` and that seat mount. The service takes
+  the sender from the token, so a seat cannot send as the other seat or read
+  its inbox. In upstream's Redis, the sender writes the `from` field.
+- Every message is recorded. `main` writes each message to
+  `/logs/cooperbench/messages.jsonl` and each request to `events.jsonl`; both
+  are task artifacts, and the verifier copies them to `verifier/`.
+
+A message is at most 65,536 characters, and a seat sends at most 2,000
+messages.
+
+### Grading
+
+`tests/test.sh` runs in `main` after both seats have ended:
+
+1. Each seat's patch is the difference between its `/workspace/repo` and the
+   base commit, committed or not, untracked files included (`.gitignore`
+   applies). Git runs on a copy of `main`'s own `.git`, so nothing a seat did
+   to its `.git` changes the result.
+2. Test files are dropped from both patches, the patches are merged (naive
+   merge, then union merge), and runner.sh runs each feature's tests on the
+   merged code, as in the sidecar task.
+3. `reward.json` is `{"reward": 1}` only if both features' tests pass.
+   `details.json` holds each feature's result, the merge strategy, the files
+   in each seat's patch, and each seat's sent and received message counts.
+   `verifier/patches/` holds both seats' patches and the merged patch.
+
+### Run it
+
+```yaml title="seats-oracle.yaml"
+task:
+  path: datasets/cooperbench-seats/cb-jinja-t1621-f3-5
+environment:
+  type: docker
+  delete: true
+participants:
+  - seat: agent1
+    name: oracle
+  - seat: agent2
+    name: oracle
+```
+
+```bash
+uv run harbor trial start -c seats-oracle.yaml
+```
+
+To compare teams, put any harnesses in the seats, for example
+`name: claude-code` with `model_name: anthropic/claude-opus-5-5` in `agent1` and
+`name: codex` with `model_name: openai/gpt-5.5` in `agent2`. A job config takes
+the same `participants` list.
+
+### Oracle checks
+
+The oracle runs `solution/solve.sh` in each seat. It sends its file list to the
+other seat, applies its own feature's gold patch, and waits at most
+`COOP_ORACLE_WAIT_SEC` seconds (default 30) for the other seat's message.
+
+Local Docker, 2026-11-19 (images 939-947 MB each, about 250 MB compressed):
+
+| Task | agent1 | agent2 | Reward | Feature tests |
+|---|---|---|---|---|
+| `cb-click-t2956-f1-8` | oracle | oracle | 1 | 220 and 219 passed |
+| `cb-click-t2956-f1-8` | oracle | nop | 0 | feature 2: 10 of 219 failed |
+| `cb-jinja-t1621-f3-5` | oracle | oracle | 1 | 49 and 46 passed |
+| `cb-jinja-t1621-f3-5` | nop | oracle | 0 | feature 1: 7 of 49 failed |
+
+The gold pair earns 1 only when the two features' own gold patches merge into
+working code. CooperBench's features overlap by design, and many gold pairs do
+not. For the 25 flash pairs from click, jinja and dirty-equals, a local merge
+of the two gold patches gave: 10 naive merges, 15 union merges, and 9 of those
+15 union merges with a Python syntax error. Use the oracle to check a seat
+task only on pairs whose gold patches merge cleanly.
+
+### Limits
+
+- Agents read messages only when they run `coop-recv`, as with upstream's CLI
+  agents. Upstream's mini-swe-agent and OpenHands harnesses inject messages
+  into the conversation instead.
+- The service is not Redis, so OpenHands' Redis collaboration tools do not
+  work in a seat.
+- `main` must reach PyPI during verification: runner.sh installs the package
+  and pytest.
+- Only the 4 trials above have run. No model has run in a seat yet. The
+  upstream fixes for dspy 8635 and react-hook-form 153 apply to the seat's
+  feature patch that contains the bug, and the dspy 8563 test fix applies only
+  to pairs with feature 1. These are not validated in Docker.
 
 ## Comparison with Original Benchmark (Parity)
 
@@ -180,6 +343,8 @@ coordinator while openhands-sdk sidecars do the actual work. Standard
 single-agent CLI agents (claude-code, codex, etc.) cannot be used for
 parity experiments because the benchmark's two-agent architecture is
 handled by the sidecar containers, not the Harbor agent slot.
+[Seat mode](#seat-mode) puts any Harbor harness in each role; no parity run
+exists for it yet.
 
 ### Reproduction
 

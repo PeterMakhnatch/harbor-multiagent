@@ -1,0 +1,62 @@
+# CooperBench as seats: agent1 and agent2 each run a Harbor agent in a
+# container of their own, with their own copy of the repository.
+#
+# - <seat>-repo holds the seat's /workspace/repo. Only that seat writes it;
+#   main mounts it read-only, and the verifier takes the seat's patch from it.
+# - <seat>-token holds the seat's message token. main writes it; only that
+#   seat reads it.
+# - main serves the messages between the seats (coop_server.py). The seats
+#   reach it as http://main:8080.
+x-seat: &seat
+  build:
+    context: ./seat
+  command: ["sleep", "infinity"]
+  init: true
+  working_dir: /workspace/repo
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/opt/cooperbench/coop_server.py"]
+    init: true
+    environment:
+      COOP_AGENTS: agent1,agent2
+    volumes:
+      - agent1-token:/run/cooperbench/tokens/agent1
+      - agent2-token:/run/cooperbench/tokens/agent2
+      - agent1-repo:/agents/agent1/repo:ro
+      - agent2-repo:/agents/agent2/repo:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 2s
+
+  agent1:
+    <<: *seat
+    environment:
+      COOP_AGENT_ID: agent1
+      COOP_AGENTS: agent1,agent2
+      COOP_URL: http://main:8080
+    volumes:
+      - agent1-repo:/workspace/repo
+      - agent1-token:/run/cooperbench:ro
+
+  agent2:
+    <<: *seat
+    environment:
+      COOP_AGENT_ID: agent2
+      COOP_AGENTS: agent1,agent2
+      COOP_URL: http://main:8080
+    volumes:
+      - agent2-repo:/workspace/repo
+      - agent2-token:/run/cooperbench:ro
+
+volumes:
+  agent1-repo: {}
+  agent2-repo: {}
+  agent1-token: {}
+  agent2-token: {}
