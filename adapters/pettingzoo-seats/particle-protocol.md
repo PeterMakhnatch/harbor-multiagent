@@ -6,4 +6,6 @@ Use `mpe2.simple_spread_v3:parallel_env`, 3 discrete-action agents, 4 cycles and
 
 Check each actual role observation, legal action, accepted action and payoff against the official engine. Check that the bridge counts 4 simultaneous groups and 12 decisions per complete trial. Each last step is a time limit, not a terminal win. On the first changing group, the 2 unchanged seats should have identical inputs and actions. Use numeric tolerances only for the documented cross-platform floating-point comparison. Report false mismatches instead of relaxing a check after viewing the native result.
 
+Before native collection, fix the floating-point comparison: absolute tolerance `1e-7`, relative tolerance `1e-6`, for each observation component and each accumulated return. Require exact legal actions, accepted actions, groups and end flags. Report the largest absolute observation and return differences. The 2 integer games use exact comparisons.
+
 Prior feasibility check: the host engine with all actions zero produced 4 groups of 3 agents and marked all 3 truncated. Each agent's observation contained 18 finite scalars. No native trial was run in that check. The game payoff is not a protocol completion score.
