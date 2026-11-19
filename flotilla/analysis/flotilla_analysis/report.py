@@ -602,8 +602,11 @@ def build(
         if not evidence.sources:
             problems.append(Problem(trial.path, "no world evidence (events, messages, score or world state)"))
             continue
-        infos[trial.path] = task_info(trial, evidence, roots, hook_dirs)
-        plays[trial.path] = analyze(trial, evidence, load_trajectories(trial), infos[trial.path])
+        trajectories = load_trajectories(trial)
+        infos[trial.path] = task_info(trial, evidence, roots, hook_dirs, trajectories)
+        if infos[trial.path].detail:
+            problems.append(Problem(trial.path, f"{infos[trial.path].problem}: {infos[trial.path].detail}"))
+        plays[trial.path] = analyze(trial, evidence, trajectories, infos[trial.path])
     leaks = {path: play.example_leak for path, play in plays.items()}
     return {
         "tool": {"name": "flotilla-analyze", "version": __version__},

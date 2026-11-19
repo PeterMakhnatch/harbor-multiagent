@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -79,6 +80,12 @@ def test_the_manifest_maps_every_task_and_lies_outside_every_task_folder(tmp_pat
             meta["family"], meta["variant"], meta["instance"], meta["condition"])
         assert entry["seats"] == sorted(tomllib.loads((task / "task.toml").read_text())["agents"]) == task_json["seats"]
         assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", entry["built"])
+        # what the analysis compares when a trial's task folder was rebuilt or moved (flotilla_analysis/tasks.py)
+        unset = {"scripted_seats": [], "submitter": "", "announce": False}  # [metadata] leaves these out
+        assert entry["build"] == {key: meta.get(key, unset.get(key)) for key in (
+            "seed", "difficulty", "n_seats", "team_seats", "max_text", "max_messages", *unset)}
+        assert entry["instructions_sha256"] == {seat: hashlib.sha256((task / "instructions" / f"{seat}.md")
+                                                                     .read_bytes()).hexdigest() for seat in entry["seats"]}
     assert [p.name for p in tmp_path.rglob("manifest.json")] == ["manifest.json"]  # one, at the build root
     assert sorted(p.name for p in tmp_path.iterdir()) == ["ledger", "ledger.3seat", "manifest.json", "puzzle",
                                                          "schedule", "schedule.liar"]

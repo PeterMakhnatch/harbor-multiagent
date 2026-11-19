@@ -449,9 +449,16 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             shutil.copy(family_file, task_dir / "solution" / "family.py")
             for script in (task_dir / "tests" / "test.sh", task_dir / "solution" / "solve.sh"):
                 script.chmod(0o755)
-            entries[f"flotilla/{name}"] = {"path": f"{label}/{name}", "label": label, "family": family_name,
-                                           "variant": variant, "instance": i, "condition": condition,
-                                           "seats": seats, "built": built_at}
+            entries[f"flotilla/{name}"] = {
+                "path": f"{label}/{name}", "label": label, "family": family_name, "variant": variant, "instance": i,
+                "condition": condition, "seats": seats, "built": built_at,
+                # what the analysis compares when it reads a trial's task from a rebuilt or moved folder
+                "build": {"seed": seed, "difficulty": difficulty, "n_seats": len(seats), "team_seats": len(team_seats),
+                          "max_text": max_text, "max_messages": max_messages, "scripted_seats": list(scripted_seats),
+                          "submitter": submitter, "announce": announce},
+                "instructions_sha256": {seat: hashlib.sha256((task_dir / "instructions" / f"{seat}.md").read_bytes())
+                                        .hexdigest() for seat in seats},
+            }
             built.append(task_dir)
     update_manifest(out, entries)
     return built

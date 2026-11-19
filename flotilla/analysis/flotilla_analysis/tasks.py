@@ -3,8 +3,10 @@
 Only the answer-dependent measures need them (clobbers, the acted-on proxy, found and lost answers;
 the last also uses the family's optional text hooks, ``HOOKS``). Task directories are
 git-ignored and are rebuilt with fresh seat tokens, so a directory is used for a trial only when it
-matches that trial: ``environment/task.json`` names the same family, variant, instance and condition,
-and the family scorer gives the final answer the score the verifier recorded.
+matches that trial: ``environment/task.json`` names the same family, variant, instance and condition;
+a folder that is not provably the one the trial ran (rebuilt or moved) has the build parameters of the
+run, the seats and limits the world recorded, and the instruction each model seat saw
+(``rebuilt_differences``); and the family scorer gives the final answer the score the verifier recorded.
 
 This module executes ``environment/family.py`` from the task directory: run the tool only on task
 directories you built.
@@ -16,12 +18,13 @@ import hashlib
 import importlib.util
 import json
 import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from flotilla_analysis.load import Evidence, Trial, read_json
-from flotilla_analysis.names import Identity, rebuilt_folders
+from flotilla_analysis.load import Evidence, Trajectory, Trial, read_json
+from flotilla_analysis.names import MANIFEST, Identity, from_name, read_manifest, rebuilt_folders
 
 TOLERANCE = 1e-9
 _SEAT = re.compile(r'^\s+SEAT:\s*(".*")\s*$')
@@ -39,6 +42,7 @@ class TaskInfo:
     task_json: dict[str, Any] | None = None  # set when task.json names this trial's task
     hooks: Any | None = None  # the module whose analysis hooks are used (HOOKS); scores use ``family``
     hooks_source: str = ""  # "task folder", "--family-hooks <file>" or "" (none)
+    detail: str = ""  # for a folder rebuilt with different parameters: what differs from the run
 
     @property
     def usable(self) -> bool:
@@ -99,6 +103,199 @@ def find_task_dir(trial: Trial, roots: list[Path]) -> Path | None:
     return None
 
 
+# Build parameters that decide what a task folder holds: two folders of one label, instance and condition
+# built with other values hold other briefings, answer keys or rules. build_tasks.py records them in
+# task.toml [metadata] and, with a sha256 of each seat's instructions/<seat>.md, in the build manifest.
+BUILD_PARAMETERS = (
+    "seed",
+    "difficulty",
+    "n_seats",
+    "team_seats",
+    "max_text",
+    "max_messages",
+    "scripted_seats",
+    "submitter",
+    "announce",
+)
+_UNSET = {"scripted_seats": [], "submitter": "", "announce": False}  # [metadata] leaves these out when unset
+
+
+@dataclass(frozen=True)
+class Build:
+    """What a build put in one task folder: its build parameters (None for one that the source does not
+    record) and the sha256 of each seat's instruction file."""
+
+    parameters: dict[str, Any]
+    instructions: dict[str, str]
+
+
+def build_parameters(record: dict[str, Any] | None) -> dict[str, Any]:
+    """The build parameters of task.toml [metadata] or of a manifest entry's ``build`` object."""
+    if not record:
+        return dict.fromkeys(BUILD_PARAMETERS)
+    found: dict[str, Any] = {}
+    for key in BUILD_PARAMETERS:
+        value = record.get(key, _UNSET.get(key))
+        if key == "scripted_seats" and isinstance(value, list):
+            value = sorted(str(seat) for seat in value)
+        elif key == "announce" and value is not None:
+            value = bool(value)
+        found[key] = value
+    return found
+
+
+def _task_toml(folder: Path) -> dict[str, Any]:
+    try:
+        config = tomllib.loads((folder / "task.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return {}
+    return config if isinstance(config, dict) else {}
+
+
+def _holds(folder: Path, task_name: str) -> bool:
+    task = _task_toml(folder).get("task")
+    return isinstance(task, dict) and task.get("name") == task_name
+
+
+def folder_build(folder: Path) -> Build:
+    meta = _task_toml(folder).get("metadata")
+    digests = {
+        path.stem: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted((folder / "instructions").glob("*.md"))
+        if path.is_file()
+    }
+    return Build(build_parameters(meta if isinstance(meta, dict) else None), digests)
+
+
+def _same_folder(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return False
+
+
+def ran_here(trial: Trial, folder: Path) -> bool:
+    """Whether the folder is provably the one the trial ran: the folder at the trial's task path that holds
+    its task under an opaque name, which no build reuses. A readable name may have been rebuilt in place."""
+    if not trial.task_path or from_name(trial.task_name) is not None:
+        return False
+    return _same_folder(folder, Path(trial.task_path)) and _holds(folder, trial.task_name)
+
+
+def run_build(trial: Trial, roots: list[Path]) -> Build | None:
+    """The build that made the task the trial ran: its own folder, when that folder still holds the trial's
+    task; else, for an opaque name, the entry of that name in a build manifest (at the build root of the task
+    path, or at a root). A readable name's entry may describe a later build of the same name, so it is not
+    used. None when unknown (also for an entry written before manifests recorded build parameters)."""
+    own = Path(trial.task_path) if trial.task_path else None
+    if own is not None and _holds(own, trial.task_name):
+        return folder_build(own)
+    if from_name(trial.task_name) is not None:
+        return None
+    build_roots = [own.parent, own.parent.parent] if own is not None else []
+    for root in [*build_roots, *roots]:
+        entry = read_manifest(root / MANIFEST).entries.get(trial.task_name)
+        if isinstance(entry, dict) and isinstance(entry.get("build"), dict):
+            digests = entry.get("instructions_sha256")
+            return Build(
+                build_parameters(entry["build"]),
+                {str(k): str(v) for k, v in digests.items()} if isinstance(digests, dict) else {},
+            )
+    return None
+
+
+def _show(value: Any) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, list):
+        return ",".join(map(str, value)) or "none"
+    return str(value) if value != "" else "none"
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _recorded_limits(evidence: Evidence | None) -> dict[str, Any]:
+    """The message limits in the world's ``start`` event (world version 2), or {}."""
+    for event in (evidence.events or []) if evidence is not None else []:
+        if event.get("kind") == "start":
+            data = event.get("data")
+            limits = data.get("limits") if isinstance(data, dict) else None
+            return dict(limits) if isinstance(limits, dict) else {}
+    return {}
+
+
+def _instruction_head(text: str) -> str:
+    """An instruction up to its "Answer format" section: the seat's information, the team, the rules, the
+    limits and the protocols. The example-leak check reads the answer-format section from the trajectory, so a
+    later fix of a family's answer example must not make the folder of an old run unusable."""
+    match = _ANSWER_HEADING.search(text)
+    return _flat(text[: match.start()] if match else text)
+
+
+def rebuilt_differences(
+    trial: Trial,
+    folder: Path,
+    task: dict[str, Any],
+    evidence: Evidence | None,
+    trajectories: dict[str, Trajectory],
+    roots: list[Path],
+) -> list[tuple[str, str]]:
+    """(kind, what differs) for a task folder that is not provably the one the trial ran; [] when it may be
+    used.
+
+    A rebuilt or moved folder of the same label, instance and condition is used only when it has:
+
+    - the seats and message limits that the world recorded for the run (``world-state.json`` or
+      ``score.json`` seats, the ``start`` event's limits);
+    - for each seat under test whose first messages show the instruction (its trajectory), the folder's
+      instruction text up to the answer-format section;
+    - the build parameters of the run, and for seats not checked by their trajectory the same
+      instruction file (sha256), when the run's build is known (``run_build``).
+    """
+    if ran_here(trial, folder):
+        return []
+    found: list[tuple[str, str]] = []
+    recorded = evidence.seats if evidence is not None and evidence.seats else [s.seat for s in trial.seats]
+    seats = task.get("seats")
+    if isinstance(seats, list) and sorted(map(str, seats)) != sorted(recorded):
+        found.append(
+            ("seats", f"seats {_show(sorted(map(str, seats)))} (the run: {_show(sorted(recorded))})")
+        )
+    limits = _recorded_limits(evidence)
+    for key in ("max_text", "max_messages"):
+        if limits.get(key) is not None and task.get(key) is not None and limits[key] != task[key]:
+            found.append((key, f"{key} {task[key]} (the world recorded {limits[key]})"))
+    checked: set[str] = set()
+    for seat in trial.under_test:
+        trajectory = trajectories.get(seat.seat)
+        path = folder / "instructions" / f"{seat.seat}.md"
+        if trajectory is None or not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        anchor = _flat(next((line for line in text.splitlines() if line.strip()), ""))
+        head, seen = _instruction_head(text), _flat(trajectory.preamble)
+        if not anchor or not head or anchor not in seen:
+            continue  # its first messages show no instruction of this task: nothing to compare
+        checked.add(seat.seat)
+        if head not in seen:
+            found.append(("instruction seen", f"instructions/{seat.seat}.md is not the instruction it saw"))
+    own = Path(trial.task_path) if trial.task_path else None
+    run = None if own is not None and _same_folder(own, folder) else run_build(trial, roots)
+    if run is not None:
+        here = folder_build(folder)
+        for key in BUILD_PARAMETERS:
+            expected, actual = run.parameters.get(key), here.parameters.get(key)
+            if expected is not None and actual is not None and expected != actual:
+                found.append((key, f"{key} {_show(actual)} (the run: {_show(expected)})"))
+        if run.instructions:
+            for seat in sorted((set(run.instructions) | set(here.instructions)) - checked):
+                if run.instructions.get(seat) != here.instructions.get(seat):
+                    found.append(("instructions", f"instructions/{seat}.md is not the run's"))
+    return found
+
+
 def final_answer(evidence: Evidence | None) -> tuple[bool, Any]:
     """(known, answer): the last submission's answer; (True, None) when nothing was submitted."""
     if evidence is None:
@@ -140,7 +337,11 @@ def hook_module(family_name: str, family: Any, hook_dirs: list[Path]) -> tuple[A
 
 
 def task_info(
-    trial: Trial, evidence: Evidence | None, roots: list[Path], hook_dirs: list[Path] | None = None
+    trial: Trial,
+    evidence: Evidence | None,
+    roots: list[Path],
+    hook_dirs: list[Path] | None = None,
+    trajectories: dict[str, Trajectory] | None = None,
 ) -> TaskInfo:
     directory = find_task_dir(trial, roots)
     if directory is None:
@@ -152,6 +353,14 @@ def task_info(
     found = {key: task.get(key) for key in expected}
     if found != expected or (task.get("variant") or "") != trial.variant:
         return TaskInfo(directory, problem="environment/task.json describes another task")
+    differences = rebuilt_differences(trial, directory, task, evidence, trajectories or {}, roots)
+    if differences:
+        kinds = ", ".join(sorted({kind for kind, _what in differences}))
+        return TaskInfo(
+            directory,
+            problem=f"task folder rebuilt with different parameters ({kinds})",
+            detail="; ".join(what for _kind, what in differences),
+        )
     try:
         family = load_family(directory / "environment" / "family.py")
     except Exception as exc:  # noqa: BLE001 - any failure of a family module makes the directory unusable
