@@ -273,3 +273,31 @@ class LiarDesignUnknown(unittest.TestCase):
         (row,) = liar_rows({("toy.liar", "team"): trials}, plays, seed=1, draws=100)
         talk = row["conditions"]["talk"]
         self.assertEqual((talk["trials"], talk["correct"]["value"], talk["unknown"]["value"]), (2, 0.5, 0.5))
+
+
+class LiarFinalWriter(unittest.TestCase):
+    def test_final_writer_by_outcome_in_lying_conditions(self):
+        from types import SimpleNamespace
+
+        from flotilla_analysis.report import liar_rows
+
+        def play(liar, last):
+            return SimpleNamespace(liar=liar, churn=SimpleNamespace(last_submitter=last))
+
+        trials = [
+            SimpleNamespace(path="a", condition="talk", instance=0, reward=1.0),
+            SimpleNamespace(path="b", condition="talk-liar", instance=0, reward=0.0),
+            SimpleNamespace(path="c", condition="talk-liar-warned", instance=0, reward=1.0),
+            SimpleNamespace(path="d", condition="talk-liar", instance=1, reward=0.0),
+        ]
+        plays = {
+            "a": play("correct", "p2"),
+            "b": play("deceived", "p2"),
+            "c": play("correct", "p1"),
+            "d": play(None, None),
+        }
+        (row,) = liar_rows({("toy.liar", "team"): trials}, plays, seed=1, draws=100)
+        # the honest-peer "talk" trial is not counted; a trial without submissions counts as "none"
+        self.assertEqual(
+            row["final_writer"], {"none": {"unknown": 1}, "p1": {"correct": 1}, "p2": {"deceived": 1}}
+        )

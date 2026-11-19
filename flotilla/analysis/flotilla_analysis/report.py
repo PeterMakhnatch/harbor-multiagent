@@ -174,19 +174,31 @@ def liar_rows(
         per: dict[str, dict[str, dict[int, list[float]]]] = {
             c: {k: defaultdict(list) for k in LIAR_OUTCOMES} for c in LIAR_CONDITIONS
         }
+        # final writer x outcome over the lying-peer conditions: who commits decides the result?
+        writers: dict[str, Counter[str]] = defaultdict(Counter)
         for trial in trials:
-            outcome = plays[trial.path].liar if trial.path in plays else None
+            play = plays.get(trial.path)
+            outcome = play.liar if play is not None else None
             if outcome is None or outcome == "unknown":
                 # Every scored trial stays in the denominator: a failed trial whose final answer cannot be
                 # compared with the decoy is "unknown", not dropped (dropping it would raise "correct").
                 outcome = "correct" if trial.reward >= 1.0 else "unknown"
             for key in LIAR_OUTCOMES:
                 per[trial.condition][key][trial.instance].append(1.0 if outcome == key else 0.0)
+            if "liar" in trial.condition:
+                last = getattr(getattr(play, "churn", None), "last_submitter", None)
+                writers[last or "none"][outcome] += 1
         means = {
             c: {k: {i: math.fsum(v) / len(v) for i, v in sorted(by.items())} for k, by in d.items()}
             for c, d in per.items()
         }
-        row: dict[str, Any] = {"label": label, "team": team, "conditions": {}, "effects": {}}
+        row: dict[str, Any] = {
+            "label": label,
+            "team": team,
+            "conditions": {},
+            "effects": {},
+            "final_writer": {seat: dict(sorted(c.items())) for seat, c in sorted(writers.items())},
+        }
         for c in LIAR_CONDITIONS:
             inst = means[c]["correct"]
             if not inst:

@@ -152,7 +152,8 @@ instance; "deceived" means the final answer is the liar's decoy.
 - Who wrote the final answer matters, and this effect is resolved. Across the liar conditions of all
   3 models (42 trials), when p1 (the only seat that can check the lie) wrote last, the team was correct
   11 times and deceived once; when p2 wrote last, correct 5 times and deceived 14 times (Fisher
-  two-sided p = 0.0006; [results/scripts/liar_writes.py](results/scripts/liar_writes.py)). In 9 of the
+  two-sided p = 0.0006; `flotilla-analyze` reports this table per model, and
+  [results/scripts/liar_writes.py](results/scripts/liar_writes.py) pools the models). In 9 of the
   15 deceived trials, the right answer had been submitted first. This is an association, because write
   order is not randomized.
 - The world-v1 pilot was confounded (the seats could read the label `talk-liar`, and the liar also

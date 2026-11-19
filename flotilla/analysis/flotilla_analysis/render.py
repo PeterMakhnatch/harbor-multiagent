@@ -422,6 +422,21 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
             ],
             md,
         )
+        if design.get("final_writer"):
+            out += _table(
+                [
+                    "final answer written by (lying-peer conditions)",
+                    "correct",
+                    "deceived",
+                    "corrupted",
+                    "unknown",
+                ],
+                [
+                    [seat] + [str(counts.get(k, 0)) for k in ("correct", "deceived", "corrupted", "unknown")]
+                    for seat, counts in design["final_writer"].items()
+                ],
+                md,
+            )
         if design["effects"]:
             out += _table(
                 ["effect", "definition", "value [95% CI]", "instances", "p (sign-flip)"],
