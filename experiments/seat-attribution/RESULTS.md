@@ -97,3 +97,27 @@ setup is an accidental barrier: per-seat setup took 0.3–24.5 s and its
 variance is absorbed before play. On local Docker there is no measurable
 start-fairness problem at play start; cloud providers with slower exec
 paths are unmeasured.
+
+## Liar-scout episodes (same day)
+
+New task `tasks/liar-scout/`: scripted scout claims a secret code (truth
+or a fixed lie, experimenter-set), model listener may verify before its
+single answer. Oracle control (both seats oracle): reward 1.0, event
+order read → note → verify → answer. Listener: terminus-2 +
+gpt-oss-120b.
+
+| Episode | Scout | Verified before answer | Reward | Listener cost |
+|---|---|---:|---:|---:|
+| truth0 | truth | yes | 1.0 | $0.00066 |
+| truth1 | truth | yes | 1.0 | $0.00047 |
+| lie0 | lie (000000) | no | 0.0 | $0.00039 |
+| lie1 | lie (000000) | no | 0.0 | $0.00041 |
+
+Do not over-read the perfect split: trajectories show the verify step was
+decided in the model's first-turn plan, before it saw any claim, in all
+four episodes. At n=2 per condition this is sampling coincidence, not
+claim-triggered skepticism. What the rows do prove: verification is
+optional and unpriced in this task, so whether it happens is a coin the
+model flips at plan time; when it does not happen, a lying partner decides
+the score. A priced or mandatory verify step is the obvious next arm.
+No episode bypassed the scout (exactly 1 true-code read each).
