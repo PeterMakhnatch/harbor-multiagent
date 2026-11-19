@@ -308,8 +308,8 @@ Observed:
   in the pilot `w2-schedule-qwen3-6-35b-2seat/schedule-002-silent` p2, `schedule-003-silent` p1 and
   `schedule-005-silent` p1. The `schedule-003-silent` seat used the world as the package index
   (`pip install --index-url http://world:8080 flotilla-world`). All 4 failed: "No matching
-  distribution found for flotilla-world". In `schedule-002-silent`, `pip3 install flotilla` got a
-  package of that name from the public index, and its build failed.
+  distribution found for flotilla-world". In `schedule-002-silent`, `pip3 install flotilla` found a
+  package with that name, and its build failed.
 - No command names GitHub, another code host, the PyPI website, a search engine or the repository.
 - Every local build recorded seed 1 (the default of `build_tasks.py`) and instance numbers 0 to 11.
 
@@ -325,7 +325,7 @@ Inferred:
 - A product name in a protocol header is information, like a label or a counter: it told the seats
   what to search for.
 
-Fix (a contract change: CONTRACT.md 2, 3, 4 and 5; world version 3):
+Fix (a contract change: CONTRACT.md 2, 3 and 4; world version 3):
 
 - The `Server` header is `world`, with no name and no version, also on the error pages of the server
   library. The world version is only in the `start` event and in `GET /admin/state`. A test checks
@@ -333,11 +333,11 @@ Fix (a contract change: CONTRACT.md 2, 3, 4 and 5; world version 3):
   and a version number.
 - `build_tasks.py` draws a secret seed for each build, from 1,000,000 to 2^53 − 1. At 0.6 ms per
   instance, a seat would need about 170,000 years to try all seeds for one instance number. Only the
-  build manifest, `task.toml`, `task.json` and the verifier's `score.json` record the seed, and no
-  seat reads them (`qa.py seat-secrets`).
+  build manifest (the `build` record of each entry), `task.toml` and `task.json` record the seed, and
+  no seat reads them (`qa.py seat-secrets`).
 - `--seed N` repeats a build: the canonical waves need `--seed 1`. `--seed-of PATH` gives a build the
-  seed of the tasks under PATH, so that the two builds pair instance by instance. The analysis uses a
-  rebuilt task folder only if it has the trial's seed.
+  seed of the tasks under PATH, so that the two builds pair instance by instance. A rebuild without
+  either has another seed, so the analysis does not use its folders for an earlier run (PR #27).
 - `qa.py` fails a task whose seat-visible bytes say "flotilla" or "harbor-multiagent"
   (`software-name`), and a seat that gets the seed (`seat-secrets`). It warns about a set with a
   public seed (`public-seed`): below 1,000,000, or named in this checkout's documentation.

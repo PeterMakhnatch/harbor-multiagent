@@ -37,8 +37,8 @@ seat that knew it could compute every answer key. `build_tasks.py` draws a rando
 from 1,000,000 to 2^53 − 1 (below 2^53, every JSON reader holds it exactly). `--seed N` repeats a
 build (the canonical waves used `--seed 1`), and `--seed-of PATH` gives a build the seed of the tasks
 under PATH, so that two builds pair instance by instance. The same seed gives the same instances, and
-another seed gives other instances. Only the manifest, `task.toml` `[metadata]`,
-`environment/task.json` and the verifier's `score.json` record the seed; no seat reads them. A seed
+another seed gives other instances. Only the manifest (the `build` record of each entry),
+`task.toml` `[metadata]` and `environment/task.json` record the seed, and no seat reads them. A seed
 below 1,000,000, or one that this checkout's documentation names, is public: `qa.py` warns
 (`public-seed`). Use a public seed only to repeat a published build; build a new wave without `--seed`
 (FINDINGS.md 2026-11-19 10:11).
@@ -64,13 +64,20 @@ and no seat sees that path.
 
 `manifest.json` lies at the build root, outside every task folder, so no seat reads it. It maps each
 task name to `path` (relative to the build root), `label`, `family`, `variant`, `instance`,
-`condition`, `seats`, `seed` and `built` (UTC). It holds no token and no answer key, but with the
-public generator its seeds give every answer key:
+`condition`, `seats`, `built` (UTC), `build` and `instructions_sha256`. `build` holds the build
+parameters of the task: `seed`, `difficulty`, `n_seats`, `team_seats`, `max_text`, `max_messages`,
+`scripted_seats`, `submitter` and `announce`. `instructions_sha256` maps each seat to the SHA-256 of
+its `instructions/<seat>.md`. The analysis compares both with a task folder that was rebuilt or moved
+since a run (below). The manifest holds no token and no answer key, but with the public generator its
+seeds give every answer key:
 
 ```json
 {"format": "flotilla-manifest", "version": 1, "tasks": {"flotilla/t-3f9c2a7b10de": {"path": "schedule/t-3f9c2a7b10de",
   "label": "schedule", "family": "schedule", "variant": "", "instance": 4, "condition": "silent",
-  "seats": ["p1", "p2"], "seed": 3817240925570214, "built": "2026-11-19T18:00:00Z"}}}
+  "seats": ["p1", "p2"], "built": "2026-11-19T18:00:00Z",
+  "build": {"seed": 3817240925570214, "difficulty": "easy", "n_seats": 2, "team_seats": 2, "max_text": 4000,
+            "max_messages": 200, "scripted_seats": [], "submitter": "", "announce": false},
+  "instructions_sha256": {"p1": "<64 hex>", "p2": "<64 hex>"}}}}
 ```
 
 A build replaces each task folder of the same label, instance and condition that an earlier build
@@ -103,11 +110,13 @@ seed).
 The analysis learns what a trial's task is from a readable task name, else from `task.toml`
 `[metadata]` in the trial's task folder (`task_id.path` in `result.json`) when that folder still holds
 the task of that name, else from a build manifest: one given with `flotilla-analyze --manifest`, the
-one in a `--tasks` folder, or the one at the build root of the task folder. It uses a task folder for
-a trial only if the folder holds the trial's seed (`seed` in the trial's `score.json`, section 5):
-a rebuild without `--seed` holds other instances under the same label, instance and condition.
-Trials verified before world version 3 record no seed; for them, rebuild a folder with its build's
-seed (`--seed 1` for every build before secret seeds).
+one in a `--tasks` folder, or the one at the build root of the task folder. A task folder that is not
+provably the one the trial ran (a readable name's folder, or an opaque name's folder that was rebuilt
+or moved) is used only when it matches the run: the seats and message limits that the world recorded,
+the instruction that each seat's trajectory shows, and, when the run's build is known (its own
+folder's `task.toml`, or the manifest entry of its opaque name), every build parameter and instruction
+hash. A rebuild without `--seed` or `--seed-of` has another seed, so its folders do not match an
+earlier run (`flotilla/analysis/README.md`).
 
 ## 3. Seats and environment
 
@@ -193,11 +202,9 @@ Message texts are stored once, in `/logs/world/messages.jsonl` (`id, from, to, t
 verifier writes its own evidence to `/logs/verifier/` (collected after verification as
 `<trial>/verifier/`):
 
-- `score.json`: `{"family", "instance", "condition", "seats", "seed", "world_version", "score",
+- `score.json`: `{"family", "instance", "condition", "seats", "world_version", "score",
   "fields_correct", "fields_total", "answer", "submitted_by", "n_submissions", "n_messages", "error",
-  "deceived"}`. `seed` is the build's seed (from world version 3; the analysis matches a task folder to
-  the trial by it), so keep job folders as private as task folders. `world_version` is 1 for tasks
-  built before world version 2. `error` is set when the
+  "deceived"}`. `world_version` is 1 for tasks built before world version 2. `error` is set when the
   world was unreachable or the family scorer raised on the answer (the score is then 0); `deceived`
   is set in scripted-liar variants (did the team submit the decoy?);
 - `world-state.json`: the frozen world state (every message and submission), including anything

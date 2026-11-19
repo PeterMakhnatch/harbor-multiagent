@@ -168,7 +168,8 @@ def test_make_jobs_refuses_readable_names_unless_allowed(tmp_path):
     out = tmp_path / "tasks"
     BUILD.build("schedule", [0], 2, "easy", 1, BUILD.CONDITIONS, out, readable_names=True)
     run = [sys.executable, str(FLOTILLA / "make_jobs.py"), "--tasks", str(out / "*" / "*"), "--agent", "oracle",
-           "--name", "check", "--env", "docker", "--out", str(tmp_path / "configs"), "--jobs-dir", str(tmp_path / "jobs")]
+           "--name", "check", "--env", "docker", "--out", str(tmp_path / "configs"),
+           "--jobs-dir", str(tmp_path / "jobs")]
     refused = subprocess.run(run, capture_output=True, text=True, check=False)
     assert refused.returncode == 2 and "refused: readable names in 3 of 3 tasks" in refused.stderr
     assert not (tmp_path / "configs").exists()

@@ -316,14 +316,18 @@ def instances_of(root: Path) -> dict[tuple[str, int, str], tuple[dict, dict]]:
     found = {}
     for key, task in by_task(root).items():
         services = compose_services((task / "environment" / "docker-compose.yaml").read_text())
-        briefings = {seat: json.loads(spec["env"]["SEAT_BRIEFING"]) for seat, spec in services.items() if seat != "main"}
+        briefings = {seat: json.loads(spec["env"]["SEAT_BRIEFING"])
+                     for seat, spec in services.items() if seat != "main"}
         found[key] = (json.loads((task / "environment" / "task.json").read_text())["answer_key"], briefings)
     return found
 
 
 def recorded_seeds(root: Path) -> set[int]:
-    """Every seed that the build under root records: manifest entries, task.toml [metadata] and task.json."""
-    seeds = {entry["seed"] for entry in json.loads((root / "manifest.json").read_text())["tasks"].values()}
+    """Every seed that the build under root records: the manifest entries' build record, task.toml [metadata] and
+    task.json."""
+    entries = json.loads((root / "manifest.json").read_text())["tasks"].values()
+    assert all("seed" not in entry for entry in entries)  # the build record holds it, and nothing else in the entry
+    seeds = {entry["build"]["seed"] for entry in entries}
     for task in by_task(root).values():
         seeds.add(tomllib.loads((task / "task.toml").read_text())["metadata"]["seed"])
         seeds.add(json.loads((task / "environment" / "task.json").read_text())["seed"])

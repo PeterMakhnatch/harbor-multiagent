@@ -20,7 +20,7 @@ from pathlib import Path
 
 NAME = re.compile(r"flotilla", re.IGNORECASE)
 MESSAGE_FORMAT = re.compile(r"FLOTILLA[-‐‑‒– ]?(BRIEFING|format)", re.IGNORECASE)
-SERVER = re.compile(r"Server:\s*flotilla-world", re.IGNORECASE)
+SERVER = re.compile(r"Server['\"]?:\s*['\"]?flotilla-world", re.IGNORECASE)  # curl -i or -v, or a printed dict
 KINDS = {  # a lookup command can be of several kinds
     "searched the file system": re.compile(r"\b(find|locate|ls)\b[^\n|;]*flotilla|grep\b[^\n]*flotilla[^\n]*\s/",
                                            re.IGNORECASE),
@@ -29,8 +29,9 @@ KINDS = {  # a lookup command can be of several kinds
         r"(WORLD_URL|world:8080|\d+\.\d+\.\d+\.\d+:8080)/flotilla|['\"]/flotilla[^'\"]*['\"]", re.IGNORECASE),
     "tried pip install": re.compile(r"\b(pip3?|python3? -m pip)\s+(install|download)\b[^\n]*flotilla", re.IGNORECASE),
 }
-OUTSIDE = re.compile(r"github|gitlab|githubusercontent|pypi\.org|duckduckgo|google\.com/search|bing\.com|"
-                     r"harbor-multiagent", re.IGNORECASE)
+# a code host, the package index's website, a search engine, or the repository and its owner
+OUTSIDE = re.compile(r"github|gitlab|bitbucket|codeberg|sr\.ht|huggingface|pypi\.org|duckduckgo|google\.|bing\.com|"
+                     r"search\?q=|harbor-multiagent|PeterMakhnatch", re.IGNORECASE)
 
 
 def commands_and_output(path: Path) -> list[tuple[list[str], list[str]]]:
@@ -71,7 +72,7 @@ def main() -> None:
         count[(group, "  of these, after the Server header was shown")] += looked and after_header
         for kind in KINDS:
             count[(group, f"  of these, {kind}")] += kind in kinds
-        count[(group, "named GitHub, PyPI, a search engine or the repository")] += outside
+        count[(group, "named a code host, PyPI, a search engine or the repository")] += outside
         if "tried pip install" in kinds:
             installs.append(f"{job}/{trial} {seat}")
     rows = list(dict.fromkeys(row for _group, row in count))

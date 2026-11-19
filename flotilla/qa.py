@@ -970,9 +970,9 @@ def documented_seeds(root: Path = ROOT) -> frozenset[int]:
 def check_public_seed(tasks: list[Task]) -> Iterator[Finding]:
     """The family generators are public (this repository), so a seed is the answer key in another form: a seat that
     finds the generator and the seed can compute the answer, in any condition. Every build before secret seeds used
-    --seed 1, and a small seed can be found by trying them all (FINDINGS.md, 2026-11-19 10:11). One WARN per
-    label and seed: such a set may repeat a published build (RESULTS.md,
-    "Reproduce"), but a new wave needs a secret seed (build without --seed)."""
+    --seed 1, and a small seed can be found by trying them all (FINDINGS.md, 2026-11-19 10:11). One WARN per label
+    and seed: such a set may repeat a published build (RESULTS.md, "Reproduce"), but a new wave needs a secret seed
+    (build without --seed)."""
     documented = documented_seeds()
     by_label: dict[tuple[str, str, int], int] = defaultdict(int)
     for task in tasks:

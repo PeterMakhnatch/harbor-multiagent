@@ -4,15 +4,15 @@
     python3 flotilla/build_tasks.py --family schedule --variant tight --max-messages 3 --max-text 200
 
 Writes flotilla/tasks/<label>/t-<12 hex>/, one folder per task, and flotilla/tasks/manifest.json, which
-maps each task name to its label, instance, condition, seats and seed (all git-ignored: answer keys, seat
-tokens and seeds must not be published, because seats have public network access). Task names are opaque
-(`flotilla/t-<12 hex>`), because Harbor names a trial's Docker containers and networks after the task
-folder and seats can read those names; `--readable-names` writes `<label>-<iii>-<condition>` instead, for
-debugging only. The family generators are public, so the seed is a secret: each build draws a random one,
-and only the manifest, task.toml and task.json record it. The same seed always gives the same instances:
-`--seed N` reproduces a build, and `--seed-of PATH` gives a build the seed of the tasks under PATH, so
-that the two builds pair instance by instance. Names and tokens are random per build.
-See CONTRACT.md 2, 3 and 8.
+maps each task name to its label, instance, condition, seats and build parameters, the seed among them
+(all git-ignored: answer keys, seat tokens and seeds must not be published, because seats have public
+network access). Task names are opaque (`flotilla/t-<12 hex>`), because Harbor names a trial's Docker
+containers and networks after the task folder and seats can read those names; `--readable-names` writes
+`<label>-<iii>-<condition>` instead, for debugging only. The family generators are public, so the seed is
+a secret: each build draws a random one, and only the manifest, task.toml and task.json record it. The
+same seed always gives the same instances: `--seed N` reproduces a build, and `--seed-of PATH` gives a
+build the seed of the tasks under PATH, so that the two builds pair instance by instance. Names and tokens
+are random per build. See CONTRACT.md 2, 3 and 8.
 """
 
 from __future__ import annotations

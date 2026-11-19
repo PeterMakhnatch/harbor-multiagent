@@ -87,7 +87,7 @@ def answer_key(task: Path) -> dict[str, Any]:
 def test_a_readable_build_fails_runtime_names_unless_allowed(built, baseline):
     found, tasks = QA.check(QA.find_tasks([str(built / "*" / "*")]))
     assert len(tasks) == 10
-    assert {f.rule for f in found if f.level == "FAIL"} == {"runtime-names"}  # the only fault of a fresh build
+    assert {f.rule for f in found if f.level == "FAIL"} == {"runtime-names"}  # its only fault
     assert {f.rule for f in found} <= {"solo-sufficient", "runtime-names"}
     # Harbor's Docker names carry a readable folder name, so each label fails; schedule.liar's say 'liar'
     names = {f.task: f.detail for f in found if f.rule == "runtime-names"}

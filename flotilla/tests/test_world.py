@@ -308,7 +308,8 @@ def _seat_replies(world) -> list[bytes]:
     auth = f"Authorization: Bearer {world.tokens['p1']}\r\n"
 
     def request(method: str, path: str, body: bytes = b"", headers: str = "") -> bytes:
-        return f"{method} {path} HTTP/1.1\r\nHost: world\r\n{headers}Content-Length: {len(body)}\r\n\r\n".encode() + body
+        head = f"{method} {path} HTTP/1.1\r\nHost: world\r\n{headers}Content-Length: {len(body)}\r\n\r\n"
+        return head.encode() + body
 
     requests = [
         request("GET", "/health"),
