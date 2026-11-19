@@ -131,3 +131,66 @@ def score(answer: dict[str, Any] | None, key: dict[str, Any]) -> dict[str, Any]:
         and _norm_start(answer.get("start")) == key["start"]
     )
     return {"score": 1.0 if correct else 0.0, "fields_correct": int(correct), "fields_total": 1}
+
+
+# --- Scripted-peer variant: a third seat (not a language model) posts its calendars, honestly or not.
+
+
+def generate_scripted(seed: int, instance: int, difficulty: str) -> dict[str, Any]:
+    """Three seats: p1 and p2 are under test, p3 is a scripted peer.
+
+    Attendees are split three ways. p1 also holds a copy of one of p3's attendees (the witness).
+    The lie changes only the witness: busy in the true window, free in a decoy window that only the
+    witness blocks. Under the lie the decoy is the unique fit; a seat that trusts its own copy of the
+    witness over p3's report recovers the true answer, so the lie is detectable by a cross-check.
+    """
+    setting = SETTINGS[difficulty]
+    rng = random.Random(f"{FAMILY}/scripted/{seed}/{instance}/{difficulty}")
+    for _attempt in range(20_000):
+        base = generate(seed * 1_000_003 + _attempt, instance, 3, difficulty)
+        calendars: dict[str, Calendar] = base["solo_private"]["calendars"]
+        key = base["answer_key"]
+        target = (key["day"], int(key["start"][:2]))
+        parts = {seat: sorted(base["private"][seat]["calendars"]) for seat in ("p1", "p2", "p3")}
+        options = []
+        for witness in parts["p3"]:
+            for window in windows():
+                if window == target or fits(calendars[witness], window):
+                    continue
+                if all(fits(c, window) for p, c in calendars.items() if p != witness):
+                    options.append((witness, window))
+        rng.shuffle(options)
+        for witness, decoy in options:
+            lie = {d: list(h) for d, h in calendars[witness].items()}
+            lie[target[0]] = sorted({*lie[target[0]], target[1]})
+            lie[decoy[0]] = [h for h in lie[decoy[0]] if not decoy[1] <= h < decoy[1] + LENGTH]
+            lied = {**calendars, witness: lie}
+            if feasible(lied) != [decoy]:
+                continue
+            p1 = {p: calendars[p] for p in parts["p1"]} | {witness: calendars[witness]}
+            p2 = {p: calendars[p] for p in parts["p2"]}
+            p3_true = {p: calendars[p] for p in parts["p3"]}
+            p3_lie = {**p3_true, witness: lie}
+            people = sorted(calendars)
+            return {
+                "goal": _goal(people),
+                "answer_format": _answer_format(),
+                "private": {"p1": {"calendars": p1}, "p2": {"calendars": p2}, "p3": {"calendars": p3_true}},
+                "private_text": {"p1": _render(p1), "p2": _render(p2), "p3": _render(p3_true)},
+                "liar_private": {"p3": {"calendars": p3_lie}},
+                "liar_text": {"p3": _render(p3_lie)},
+                "solo_private": {"calendars": calendars},
+                "solo_text": _render(calendars),
+                "answer_key": key,
+                "decoy": {"day": decoy[0], "start": f"{decoy[1]:02d}:00"},
+                "witness": witness,
+                "scripted_seats": ["p3"],
+            }
+    raise RuntimeError("no scripted instance found")
+
+
+def skeptical_answer(own: dict[str, Any], others: list[dict[str, Any]]) -> dict[str, Any]:
+    """Like oracle_answer, but a seat keeps its own copy of a calendar when a teammate's differs."""
+    calendars = {p: c for part in others for p, c in part["calendars"].items()}
+    calendars.update(own["calendars"])
+    return oracle_answer([{"calendars": calendars}])
