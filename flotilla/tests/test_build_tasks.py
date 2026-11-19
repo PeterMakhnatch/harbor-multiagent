@@ -49,6 +49,18 @@ def build(tmp_path: Path, family_name: str, n_seats: int = 2, difficulty: str = 
     return BUILD.build(family_name, [0, 1], n_seats, difficulty, 1, ("solo", "silent", "talk"), tmp_path, **options)
 
 
+def by_task(root: Path) -> dict[tuple[str, int, str], Path]:
+    """(label, instance, condition) -> task folder, read from each task.toml (opaque names say none of it)."""
+    found = {}
+    for toml in sorted(root.glob("*/*/task.toml")):
+        meta = tomllib.loads(toml.read_text())["metadata"]
+        label = f"{meta['family']}.{meta['variant']}" if meta["variant"] else meta["family"]
+        key = (label, meta["instance"], meta["condition"])
+        assert key not in found, f"two folders of {key}"
+        found[key] = toml.parent
+    return found
+
+
 def seat_visible_texts(task: Path, seat: str, services: dict) -> list[str]:
     """Everything a seat's agent can read: its instruction, its container's files and environment."""
     texts = [(task / "instructions" / f"{seat}.md").read_text()]
@@ -68,11 +80,11 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
         meta = config["metadata"]
         condition = meta["condition"]
         seats = ["p1"] if condition == "solo" else [f"p{i + 1}" for i in range(n_seats)]
-        assert config["task"]["name"] == f"flotilla/{family_name}-{meta['instance']:03d}-{condition}"
-        assert task.name == config["task"]["name"].split("/", 1)[1]
+        assert re.fullmatch(r"flotilla/t-[0-9a-f]{12}", config["task"]["name"])  # opaque by default
+        assert task.name == config["task"]["name"].split("/", 1)[1] and task.parent.name == family_name
         assert meta | {} == {"family": family_name, "variant": "", "instance": meta["instance"], "condition": condition,
                              "n_seats": len(seats), "team_seats": n_seats, "difficulty": "easy", "seed": 1,
-                             "max_text": 4000, "max_messages": 200, "play_timeout_sec": 900.0}
+                             "max_text": 4000, "max_messages": 200, "play_timeout_sec": 900.0, "names": "opaque"}
         assert sorted(config["agents"]) == seats
         assert sorted(p.stem for p in (task / "instructions").iterdir()) == seats
         services = compose_services((task / "environment" / "docker-compose.yaml").read_text())
@@ -200,8 +212,10 @@ def test_every_talk_condition_gets_the_messaging_instructions(condition):
 def test_variants_get_their_own_label(tmp_path):
     task = build(tmp_path, "ledger", variant="hard")[0]
     config = tomllib.loads((task / "task.toml").read_text())
-    assert config["task"]["name"] == "flotilla/ledger.hard-000-solo"
     assert task.parent.name == "ledger.hard" and config["metadata"]["variant"] == "hard"
+    assert "hard" not in config["task"]["name"] and "ledger" not in config["task"]["name"]
+    readable = build(tmp_path / "readable", "ledger", variant="hard", readable_names=True)[0]
+    assert tomllib.loads((readable / "task.toml").read_text())["task"]["name"] == "flotilla/ledger.hard-000-solo"
 
 
 def test_instructions_are_deterministic_and_tokens_are_not(tmp_path):
@@ -218,8 +232,14 @@ def test_command_line(tmp_path):
     run = [sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "ledger", "--instances", "0-1,3",
            "--seats", "3", "--out", str(tmp_path), "--max-messages", "5"]
     result = subprocess.run(run, capture_output=True, text=True, check=True)
-    assert result.stdout.strip() == f"built 9 tasks under {tmp_path}"
-    assert sorted(p.name for p in (tmp_path / "ledger").iterdir())[:3] == [
+    assert result.stdout.splitlines() == [f"built 9 tasks under {tmp_path}",
+                                          f"manifest: {tmp_path / 'manifest.json'} (opaque names)"]
+    assert sorted(key[1:] for key in by_task(tmp_path))[:3] == [(0, "silent"), (0, "solo"), (0, "talk")]
+    assert all(re.fullmatch(r"t-[0-9a-f]{12}", p.name) for p in (tmp_path / "ledger").iterdir())
+    readable = subprocess.run([*run[:-4], "--out", str(tmp_path / "readable"), "--readable-names"],
+                              capture_output=True, text=True, check=True)
+    assert readable.stdout.splitlines()[1].endswith("(readable names)")
+    assert sorted(p.name for p in (tmp_path / "readable" / "ledger").iterdir())[:3] == [
         "ledger-000-silent", "ledger-000-solo", "ledger-000-talk"]
     bad = subprocess.run([*run[:-2], "--max-messages", "0"], capture_output=True, text=True, check=False)
     assert bad.returncode == 2 and "positive" in bad.stderr
@@ -229,11 +249,10 @@ def test_command_line(tmp_path):
         [sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "schedule", "--scripted", "--instances", "0",
          "--conditions", "talk,talk-liar,talk-warned,talk-liar-warned", "--out", str(tmp_path)],
         capture_output=True, text=True, check=True)
-    assert scripted.stdout.strip() == f"built 4 tasks under {tmp_path}"
-    lying = {p.name: json.loads(compose_services((p / "environment" / "docker-compose.yaml").read_text())["p3"]["env"][
-        "SEAT_BRIEFING"])["script"] for p in (tmp_path / "schedule.liar").iterdir()}
-    assert lying == {"schedule.liar-000-talk": "honest", "schedule.liar-000-talk-warned": "honest",
-                     "schedule.liar-000-talk-liar": "liar", "schedule.liar-000-talk-liar-warned": "liar"}
+    assert scripted.stdout.splitlines()[0] == f"built 4 tasks under {tmp_path}"
+    lying = {key[2]: json.loads(compose_services((p / "environment" / "docker-compose.yaml").read_text())["p3"]["env"][
+        "SEAT_BRIEFING"])["script"] for key, p in by_task(tmp_path).items() if key[0] == "schedule.liar"}
+    assert lying == {"talk": "honest", "talk-warned": "honest", "talk-liar": "liar", "talk-liar-warned": "liar"}
 
 
 def test_submitter_role_protocol(tmp_path):
@@ -249,14 +268,14 @@ def test_submitter_role_protocol(tmp_path):
          "--out", str(tmp_path)],
         check=True, capture_output=True,
     )
-    root = tmp_path / "schedule"
-    talk = root / "schedule-000-talk"
+    tasks = by_task(tmp_path)
+    talk = tasks[("schedule", 0, "talk")]
     p1 = (talk / "instructions" / "p1.md").read_text()
     p2 = (talk / "instructions" / "p2.md").read_text()
     assert "only you submit the team answer" in p1
     assert "only seat p1 submits the team answer: do not submit" in p2
     assert json.loads((talk / "environment" / "task.json").read_text())["submitter"] == "p1"
-    silent = (root / "schedule-000-silent" / "instructions" / "p1.md").read_text()
+    silent = (tasks[("schedule", 0, "silent")] / "instructions" / "p1.md").read_text()
     assert "Your team agreed" not in silent
 
 
@@ -273,10 +292,10 @@ def test_announce_protocol(tmp_path):
          "--out", str(tmp_path)],
         check=True, capture_output=True,
     )
-    root = tmp_path / "schedule"
+    tasks = by_task(tmp_path)
     for seat in ("p1", "p2"):
-        text = (root / "schedule-000-talk" / "instructions" / f"{seat}.md").read_text()
+        text = (tasks[("schedule", 0, "talk")] / "instructions" / f"{seat}.md").read_text()
         assert text.count("starts with `SUBMITTED:`") == 1
-    assert json.loads((root / "schedule-000-talk" / "environment" / "task.json").read_text())["announce"] is True
-    assert "SUBMITTED:" not in (root / "schedule-000-silent" / "instructions" / "p1.md").read_text()
-    assert "SUBMITTED:" not in (root / "schedule-000-solo" / "instructions" / "p1.md").read_text()
+    assert json.loads((tasks[("schedule", 0, "talk")] / "environment" / "task.json").read_text())["announce"] is True
+    assert "SUBMITTED:" not in (tasks[("schedule", 0, "silent")] / "instructions" / "p1.md").read_text()
+    assert "SUBMITTED:" not in (tasks[("schedule", 0, "solo")] / "instructions" / "p1.md").read_text()
