@@ -176,7 +176,7 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
 
 
 def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
-              scripted: tuple[str, ...] = ()) -> str:
+              scripted: tuple[str, ...] = (), play_timeout: float = PLAY_TIMEOUT_SEC) -> str:
     lines = [
         'schema_version = "1.4"',
         'artifacts = ["/logs/world/events.jsonl", "/logs/world/messages.jsonl"]',
@@ -193,7 +193,7 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
         "timeout_sec = 120.0",
         "",
         "[agent]",
-        f"timeout_sec = {PLAY_TIMEOUT_SEC}",
+        f"timeout_sec = {play_timeout}",
         "",
         "[environment]",
         "build_timeout_sec = 600.0",
@@ -204,7 +204,8 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
 
 
 def build(family_name: str, instances: list[int], n_seats: int, difficulty: str, seed: int,
-          conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False) -> list[Path]:
+          conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False,
+          play_timeout: float = PLAY_TIMEOUT_SEC) -> list[Path]:
     family = load_family(family_name)
     family_file = ROOT / "families" / f"{family_name}.py"
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
@@ -238,10 +239,11 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             (task_dir / "tests").mkdir()
             meta = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
                     "n_seats": len(seats), "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed}
+            meta["play_timeout_sec"] = play_timeout
             if scripted_seats:
                 meta["scripted_seats"] = list(scripted_seats)
             (task_dir / "task.toml").write_text(
-                task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats)
+                task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats, play_timeout)
             )
             for seat in seats:
                 (task_dir / "instructions" / f"{seat}.md").write_text(
@@ -292,6 +294,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: "
                         "task names become flotilla/<family>.<variant>-<iii>-<condition>")
+    parser.add_argument("--play-timeout", type=float, default=PLAY_TIMEOUT_SEC,
+                        help="seconds of play before Harbor ends the trial (default: %(default)s)")
     parser.add_argument("--scripted", action="store_true",
                         help="use the family's generate_scripted(): a scripted peer seat (not under test); "
                         "conditions talk (honest peer) and talk-liar (lying peer)")
@@ -300,7 +304,8 @@ def main() -> None:
     if args.scripted and args.conditions == ",".join(CONDITIONS):
         conditions = ("talk", "talk-liar")
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, args.seed,
-                  conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted)
+                  conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
+                  args.play_timeout)
     print(f"built {len(built)} tasks under {args.out}")
 
 
