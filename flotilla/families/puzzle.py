@@ -291,19 +291,19 @@ def _goal(people: list[str], domains: dict[str, list[Any]], n_clues: int) -> str
     n = len(people)
     others = [attr for attr in domains if attr != FLOOR]
     lines = [
-        f"{_count(n)} people ({', '.join(people)}) live in one building, one person per floor. Work out each "
-        f"person's floor, {others[0]} and {others[1]}.",
+        (f"{_count(n)} people ({', '.join(people)}) live in one building, one person per floor. Work out each "
+        f"person's floor, {others[0]} and {others[1]}."),
         "",
-        f"- Floors: {', '.join(str(f) for f in domains[FLOOR])}. Floor 1 is the lowest and floor {n} is the "
-        "highest. Each person lives on a different floor.",
+        (f"- Floors: {', '.join(str(f) for f in domains[FLOOR])}. Floor 1 is the lowest and floor {n} is the "
+        "highest. Each person lives on a different floor."),
     ]
     for attr in others:
         label, rule = RULES[attr]
         lines.append(f"- {label}: {', '.join(domains[attr])}. {rule}")
     lines += [
         "",
-        f"The puzzle has {n_clues} clues, numbered 1 to {n_clues}. Every clue is true. Together, the "
-        f"{n_clues} clues fit exactly one solution.",
+        (f"The puzzle has {n_clues} clues, numbered 1 to {n_clues}. Every clue is true. Together, the "
+        f"{n_clues} clues fit exactly one solution."),
     ]
     return "\n".join(lines)
 

@@ -202,23 +202,23 @@ def numbers_in(text: str) -> set[int]:
 def _goal(accounts: list[str], n_rows: int) -> str:
     names = ", ".join(accounts[:-1]) + f" and {accounts[-1]}"
     return "\n".join([
-        f"Close the books for one period. There are {len(accounts)} accounts: {names}. Find each account's "
+        (f"Close the books for one period. There are {len(accounts)} accounts: {names}. Find each account's "
         "closing balance: its opening balance plus the effect of every row in the period's log. "
-        f"The log has {n_rows} rows, T01 to T{n_rows:02d}; each row id appears exactly once.",
+        f"The log has {n_rows} rows, T01 to T{n_rows:02d}; each row id appears exactly once."),
         "",
         "What each type of row does:",
         "",
         "- `deposit` adds its amount to its account.",
         "- `withdrawal` and `fee` subtract their amount from their account.",
-        "- A transfer between two accounts is two rows with the same transfer id (X1, X2, ...): "
+        ("- A transfer between two accounts is two rows with the same transfer id (X1, X2, ...): "
         "`transfer-out` subtracts the amount from the paying account, and `transfer-in` adds it to the "
-        "receiving account.",
-        "- `reversal` cancels the earlier row that it names: it undoes that row's effect on that row's "
+        "receiving account."),
+        ("- `reversal` cancels the earlier row that it names: it undoes that row's effect on that row's "
         "account. A reversed deposit is subtracted again; a reversed withdrawal or fee is added back. "
-        "A reversal never cancels a transfer row or another reversal.",
+        "A reversal never cancels a transfer row or another reversal."),
         "",
-        "Every row changes exactly one account: the account in its `account` column (for a reversal, "
-        "the account of the row that it cancels). Amounts are whole units. A balance can be negative.",
+        ("Every row changes exactly one account: the account in its `account` column (for a reversal, "
+        "the account of the row that it cancels). Amounts are whole units. A balance can be negative."),
     ])
 
 

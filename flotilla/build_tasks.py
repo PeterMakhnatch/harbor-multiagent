@@ -141,13 +141,13 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
         "",
         "## The world service",
         "",
-        "All team actions go through the world service at `$WORLD_URL` (http://world:8080). "
-        "Authenticate every request with your seat token, which is in the environment variable `$SEAT_TOKEN`.",
+        ("All team actions go through the world service at `$WORLD_URL` (http://world:8080). "
+        "Authenticate every request with your seat token, which is in the environment variable `$SEAT_TOKEN`."),
         "",
         "```bash",
         f"curl -s $WORLD_URL/whoami {auth}",
-        f"curl -s -X POST $WORLD_URL/submit {auth} -H 'Content-Type: application/json' "
-        "-d '{\"answer\": {...}}'",
+        (f"curl -s -X POST $WORLD_URL/submit {auth} -H 'Content-Type: application/json' "
+        "-d '{\"answer\": {...}}'"),
         "```",
         "",
         "The team's answer is the **last submission received from any seat**. You may submit more than once.",
@@ -173,16 +173,16 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
             "Messages (to one seat, or to `all`):",
             "",
             "```bash",
-            f"curl -s -X POST $WORLD_URL/messages {auth} -H 'Content-Type: application/json' "
-            "-d '{\"to\": \"all\", \"text\": \"...\"}'",
+            (f"curl -s -X POST $WORLD_URL/messages {auth} -H 'Content-Type: application/json' "
+            "-d '{\"to\": \"all\", \"text\": \"...\"}'"),
             f"curl -s $WORLD_URL/messages {auth}",
             "```",
         ]
         if (max_text, max_messages) != (DEFAULT_MAX_TEXT, DEFAULT_MAX_MESSAGES):
             lines += [
                 "",
-                f"Each seat may send at most {_plural(max_messages, 'message')} of at most "
-                f"{_plural(max_text, 'character')}.",
+                (f"Each seat may send at most {_plural(max_messages, 'message')} of at most "
+                f"{_plural(max_text, 'character')}."),
             ]
     lines += [
         "",
@@ -231,8 +231,8 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
         "    networks:",
         *(f"      seat-{seat}:\n        aliases: [world]" for seat in seats),
         "    healthcheck:",
-        '      test: ["CMD", "python3", "-c", "import urllib.request; '
-        "urllib.request.urlopen('http://localhost:8080/health', timeout=2)\"]",
+        ('      test: ["CMD", "python3", "-c", "import urllib.request; '
+        "urllib.request.urlopen('http://localhost:8080/health', timeout=2)\"]"),
         "      interval: 2s",
         "      timeout: 5s",
         "      retries: 15",

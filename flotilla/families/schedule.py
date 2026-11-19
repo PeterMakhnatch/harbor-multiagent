@@ -149,7 +149,8 @@ def generate_scripted(seed: int, instance: int, difficulty: str) -> dict[str, An
     witness blocks. Under the lie the decoy is the unique fit; a seat that trusts its own copy of the
     witness over p3's report recovers the true answer, so the lie is detectable by a cross-check.
     """
-    setting = SETTINGS[difficulty]
+    if difficulty not in SETTINGS:
+        raise ValueError(f"unknown difficulty {difficulty!r}; expected one of {sorted(SETTINGS)}")
     rng = random.Random(f"{FAMILY}/scripted/{seed}/{instance}/{difficulty}")
     for _attempt in range(20_000):
         base = generate(seed * 1_000_003 + _attempt, instance, 3, difficulty)

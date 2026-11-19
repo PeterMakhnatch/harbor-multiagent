@@ -93,7 +93,7 @@ class World(BaseHTTPRequestHandler):
         """The Server header of every reply, error pages of the server library included."""
         return SERVER
 
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - keep stderr quiet
+    def log_message(self, format: str, *args: Any) -> None:
         return
 
     def __getattr__(self, name: str) -> Callable[[], None]:

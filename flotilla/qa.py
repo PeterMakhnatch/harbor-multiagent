@@ -1049,8 +1049,8 @@ def render_text(findings: list[Finding], tasks: list[Task]) -> str:
     lines += [f"{rule:<16} {row['level']:<5} {row['findings']:>8} {row['tasks']:>6}"
               for rule, row in facts["rules"].items()]
     if any(f.downgraded for f in findings):
-        lines += ["", f"{ALLOW_READABLE_NAMES}: runtime-names is a WARN, for a local debugging run only; "
-                  "never run this set in a wave."]
+        lines += ["", (f"{ALLOW_READABLE_NAMES}: runtime-names is a WARN, for a local debugging run only; "
+                  "never run this set in a wave.")]
     lines += ["", "PASS: no FAIL finding." if facts["passed"] else "FAIL: fix every FAIL finding before a wave."]
     return "\n".join(lines)
 
