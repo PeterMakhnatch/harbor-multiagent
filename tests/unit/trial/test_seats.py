@@ -30,6 +30,7 @@ from harbor.models.trial.config import (
     TrialConfig,
     VerifierConfig,
 )
+from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.models.trial.result import TrialResult
 from harbor.models.verifier.result import VerifierResult
 from harbor.trial.seats import SeatsTrial
@@ -76,6 +77,8 @@ class ScriptedAgent(BaseAgent):
         note("setup", environment.service)
         if self.fail == "setup":
             await asyncio.Event().wait()
+        if self.fail == "setup-crash":
+            raise RuntimeError("setup crashed")
 
     async def run(
         self, instruction: str, environment: BaseEnvironment, context: AgentContext
@@ -414,6 +417,7 @@ async def test_agent_timeout_ends_everyone_still_running_and_still_grades(
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "AgentTimeoutError"
     assert result.exception_info.exception_message.startswith("Seat 'maya': ")
+    assert result.reward_valid
     assert _verified(trial) and result.verifier_result is not None
 
 
@@ -446,6 +450,7 @@ async def test_an_agent_failure_reaches_the_trial_and_job_stats_and_grades_by_po
     assert "Seat 'maya'" in trial.paths.exception_message_path.read_text()
     assert ("ended", "raj") in EVENTS and ("stopped", "lee") in EVENTS
     assert _verified(trial) is graded
+    assert result.reward_valid is graded
     stats = JobStats()
     stats.increment(result)
     assert stats.n_errored_trials == 1
@@ -514,6 +519,46 @@ async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):
     assert raj is not None and raj.exception_type == "AgentSetupTimeoutError"
     assert not any(e[0] == "run" for e in EVENTS)
     assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
+
+
+@pytest.mark.parametrize(
+    ("fail", "error_type", "should_retry", "verified"),
+    [
+        ("exit", "NonZeroAgentExitCodeError", True, True),
+        ("timeout", "AgentTimeoutError", True, True),
+        ("setup", "AgentSetupTimeoutError", False, False),
+        ("setup-crash", "RuntimeError", False, False),
+        ("crash", "RuntimeError", False, False),
+    ],
+)
+async def test_seat_error_policy_override_reaches_the_trial(
+    tmp_path: Path, fail: str, error_type: str, should_retry: bool, verified: bool
+) -> None:
+    policy = ErrorPolicyOverride(
+        should_retry=should_retry, has_valid_reward=not verified
+    )
+    participant = _participant("maya", hold=fail == "timeout", fail=fail)
+    if fail == "setup":
+        participant["override_setup_timeout_sec"] = 0.05
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.2 if fail == "timeout" else 30),
+            participant,
+            _participant("raj"),
+            _participant("lee"),
+            override_error_policy={error_type: policy},
+        )
+    )
+
+    result = await trial.run()
+
+    for info in (_seat_results(result)["maya"].exception_info, result.exception_info):
+        assert info is not None
+        assert info.exception_type == error_type
+        assert info.policy_override == policy
+        assert info.policy.should_retry is should_retry
+    assert (result.verifier_result is not None) is verified
+    assert result.reward_valid is False
 
 
 async def test_install_only_sets_up_every_seat_and_plays_none(tmp_path: Path):
