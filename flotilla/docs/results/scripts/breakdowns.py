@@ -25,8 +25,14 @@ def trials(jobs: Path, job: str, condition: str | None = None):
             score = json.loads((trial / "verifier" / "score.json").read_text())
         except (OSError, ValueError):
             continue
+        # a readable task name says the instance and condition; an opaque one (flotilla/t-<12 hex>) does not,
+        # and the verifier's score.json says them for both
         match = re.search(r"-(\d{3})-([a-z-]+)$", result.get("task_name", ""))
-        if match is None or (condition and match.group(2) != condition):
+        if match:
+            instance, found = int(match.group(1)), match.group(2)
+        else:
+            instance, found = score.get("instance"), score.get("condition")
+        if not isinstance(instance, int) or (condition and found != condition):
             continue
         state = json.loads((trial / "verifier" / "world-state.json").read_text())
         key = score.get("answer") if score.get("score") == 1.0 else None
@@ -37,7 +43,7 @@ def trials(jobs: Path, job: str, condition: str | None = None):
         events = [json.loads(line) for line in (world / "events.jsonl").read_text().splitlines()] \
             if (world / "events.jsonl").exists() else []
         yield {
-            "name": trial.name, "instance": int(match.group(1)), "score": score["score"], "key": key,
+            "name": trial.name, "instance": instance, "score": score["score"], "key": key,
             "deceived": score.get("deceived"), "submissions": state.get("submissions") or [],
             "messages": state.get("messages") or [], "events": events,
         }
