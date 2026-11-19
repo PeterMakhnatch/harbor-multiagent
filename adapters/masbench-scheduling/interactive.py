@@ -16,6 +16,8 @@ from cases import DATASET_COMMIT, load_case
 
 ADAPTER = Path(__file__).resolve().parent
 MODE = "cursor"
+POLICY = "cursor-budget-8"
+ROUND_LIMIT = 8
 PLAN_SCHEMA = "seatlab.calendar-interactive-plan/v1"
 ATTEMPT_SCHEMA = "seatlab.calendar-interactive-attempt/v1"
 RESULT_SCHEMA = "seatlab.calendar-interactive-result/v1"
@@ -197,6 +199,8 @@ def _plan(study_id, source, case_ids, hashes):
         "schema": PLAN_SCHEMA,
         "study_id": study_id,
         "mode": MODE,
+        "policy": POLICY,
+        "round_limit": ROUND_LIMIT,
         "source_sha256": study._sha(study._canonical(source)),
         "task_sha256": hashes,
         "cells": [
@@ -337,6 +341,8 @@ def run(dataset: Path, out: Path, harbor: Path, case_spec: str):
         "out_path": str(out),
         "dataset_path": str(dataset),
         "dataset_commit": DATASET_COMMIT,
+        "policy": POLICY,
+        "round_limit": ROUND_LIMIT,
         "harbor_executable_path": str(harbor),
         "harbor_executable_sha256": executable_hash,
         "reviewed_sha256": _digests(reviewed),
@@ -478,6 +484,7 @@ def _collect_cell(out, registered_out, cell, case, task_hashes, verify):
             key: score[key]
             for key in (
                 "choice",
+                "termination",
                 "official_exact_match",
                 "physically_feasible",
                 "reward",
@@ -491,6 +498,7 @@ def _collect_cell(out, registered_out, cell, case, task_hashes, verify):
 
 def _summary(rows):
     totals = {"planned": len(rows), **dict.fromkeys(STATUSES, 0)}
+    terminations = dict.fromkeys(("exhausted", "unanimous", "budget"), 0)
     totals.update(
         measured_nulls=0,
         official_exact_matches=0,
@@ -503,11 +511,12 @@ def _summary(rows):
         if row["status"] == "verified":
             observed = row["observed"]
             totals["measured_nulls"] += observed["choice"] is None
+            terminations[observed["termination"]] += 1
             totals["official_exact_matches"] += observed["official_exact_match"] is True
             totals["physically_feasible"] += observed["physically_feasible"] is True
             totals["rounds"] += observed["resources"]["round_trips"]
             totals["scalar_disclosures"] += observed["resources"]["scalar_disclosures"]
-    return totals
+    return {**totals, "terminations": terminations}
 
 
 def collect(out: Path):
@@ -538,6 +547,10 @@ def collect(out: Path):
         )
         and re.fullmatch(r"[a-f0-9]{64}", source["harbor_executable_sha256"])
         and source["dataset_commit"] == DATASET_COMMIT
+        and source.get("policy") == POLICY
+        and type(source.get("round_limit")) is int
+        and source["round_limit"] == ROUND_LIMIT
+        and type(plan.get("round_limit")) is int
         and 0 < len(case_ids) == len(set(case_ids)) <= study.CORPUS_SIZE
         and set(case_ids) == cases.keys() == hashes.keys()
         and _valid_digests(reviewed, REVIEWED_FILES)
@@ -589,6 +602,8 @@ def collect(out: Path):
         "schema": RESULT_SCHEMA,
         "study_id": plan["study_id"],
         "mode": MODE,
+        "policy": POLICY,
+        "round_limit": ROUND_LIMIT,
         "summary": _summary(rows),
         "by_stratum": {stratum: _summary(group) for stratum, group in groups.items()},
         "cells": rows,

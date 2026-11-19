@@ -14,6 +14,8 @@ from typing import Any, TypeGuard
 
 ROLES = ("m1", "m2", "m3", "m4", "m5")
 MAX_ROUNDS = 720
+# Coordinator policy only; the mailbox and calendar horizon still allow 720.
+ROUND_LIMIT = 8
 DEADLINE_SECONDS = 120
 POLL_SECONDS = 0.025
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -253,7 +255,7 @@ def run_actor(role: str, exchange: Path, *, timeout: float = DEADLINE_SECONDS) -
             )
             if replies[role] != tick:
                 raise ValueError("round bundle changed the coordinator's own reply")
-            if next_bound is None:
+            if next_bound is None or number == ROUND_LIMIT:
                 _submit(out / "choice.json", finish_choice(bundle, choice))
                 _, message = _wait_for(deadline, done)
                 _check_done(message)

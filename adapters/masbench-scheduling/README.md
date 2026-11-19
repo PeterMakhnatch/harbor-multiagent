@@ -44,3 +44,18 @@ out="$(mktemp -d)"
 `m1` through `m5` are separate Harbor participants. Each seat has one private exchange volume. Only the world container has the original reference answers. All five seats submit observations and reports. Only `m1` receives all reports and submits the decision. The verifier independently computes the shared accuracy and physical feasibility. An explicit null means that the team did not schedule a meeting. Missing evidence is not a zero.
 
 Use `--shard i/n` with the same ordered cases and treatments to divide native runs between independent workers. Use different output directories. The `collect` command reads existing trials without starting new ones. Private output contains calendars and host paths. Publish only approved fields. [Protocol](PROTOCOL.md) · [upstream license](UPSTREAM-LICENSE.txt).
+
+## Run the bounded native cursor treatment
+
+On the `experiments/seatlab-cursor-budget` branch, use `interactive.py` with a new private output path:
+
+```sh
+budget_out="$(mktemp -d)/budget"
+.venv/bin/python "$d/interactive.py" run --dataset /tmp/masbench-data \
+  --cases 2/1,3/1,4/1,5/1 --harbor "$PWD/.venv/bin/harbor" --out "$budget_out"
+.venv/bin/python "$d/interactive.py" collect --out "$budget_out"
+```
+
+This treatment keeps the cursor messages and private cases unchanged. After 8 complete rounds, `m1` submits a null choice if the replies still disagree and no seat is exhausted. A unanimous or exhausted round takes precedence. Reports separate these 3 termination reasons for verified trials. A missing action is not a null choice.
+
+Use the original interactive branch to collect unbounded receipts. This treatment does not change the offline cursor, `full`, or `first8`.

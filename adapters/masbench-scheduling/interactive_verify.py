@@ -8,7 +8,7 @@ from typing import Any, TypeGuard
 
 ROLES = ("m1", "m2", "m3", "m4", "m5")
 ROLE_SET = frozenset(ROLES)
-MAX_ROUNDS = 720
+ROUND_LIMIT = 8
 CASE_PATH = Path("/opt/calendar/case.json")
 WORLD_PATH = Path("/logs/artifacts/world.calendar.json")
 REWARD_PATH = Path("/logs/verifier/reward.txt")
@@ -138,7 +138,9 @@ def verify(case: dict[str, Any], world: dict[str, Any]) -> dict[str, Any]:
     if world["initial_view_sha256"] != views:
         raise ValueError("initial acknowledgments do not match the five private views")
     rounds = world["rounds"]
-    if not isinstance(rounds, list) or not 1 <= len(rounds) <= min(horizon, MAX_ROUNDS):
+    if not isinstance(rounds, list) or not 1 <= len(rounds) <= min(
+        horizon, ROUND_LIMIT
+    ):
         raise ValueError("invalid number of native rounds")
     start = world["choice"]
     if not _optional_tick(start, horizon):
@@ -188,30 +190,33 @@ def verify(case: dict[str, Any], world: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"round bundle digest mismatch in round {number}")
         requests += len(ROLES) * len(_canonical(bound))
 
-        exhausted = len(replies_at_bound) < len(ROLES)
-        unanimous = not exhausted and all(
-            tick == replies_at_bound[0] for tick in replies_at_bound
-        )
-        if exhausted or unanimous:
-            if number != len(rounds):
-                raise ValueError("native rounds continue after a terminal reply set")
-            if world["choice_view_sha256"] != bundle:
-                raise ValueError("choice acknowledgment does not match terminal bundle")
-            terminal_choice = None if exhausted else replies_at_bound[0]
-            if start != terminal_choice:
-                raise ValueError("native choice does not match terminal replies")
-            break
-        bound = max(replies_at_bound)
+        if len(replies_at_bound) < len(ROLES):
+            termination, terminal_choice = "exhausted", None
+        elif all(tick == replies_at_bound[0] for tick in replies_at_bound):
+            termination, terminal_choice = "unanimous", replies_at_bound[0]
+        elif number == ROUND_LIMIT:
+            termination, terminal_choice = "budget", None
+        else:
+            bound = max(replies_at_bound)
+            continue
+
+        if number != len(rounds):
+            raise ValueError("native rounds continue after a terminal reply set")
+        if world["choice_view_sha256"] != bundle:
+            raise ValueError("choice acknowledgment does not match terminal bundle")
+        if start != terminal_choice:
+            raise ValueError("native choice does not match terminal replies or budget")
+        break
     else:
         raise ValueError("native choice precedes a terminal reply set")
 
-    # Check the actual recorded choice against the complete intersection, not
-    # merely the last reported values or the original reference answer key.
-    common = set(starts[ROLES[0]])
-    common.intersection_update(*(starts[role] for role in ROLES[1:]))
-    earliest = min(common, default=None)
-    if start != earliest:
-        raise ValueError("native choice is not the earliest common start")
+    # A budget cutoff can leave common starts undiscovered. In all other
+    # cases, check the choice against the full physical intersection.
+    if termination != "budget":
+        common = set(starts[ROLES[0]])
+        common.intersection_update(*(starts[role] for role in ROLES[1:]))
+        if start != min(common, default=None):
+            raise ValueError("native choice is not the earliest common start")
 
     official_match = start is not None and start in gold
     feasible = None
@@ -229,6 +234,7 @@ def verify(case: dict[str, Any], world: dict[str, Any]) -> dict[str, Any]:
         "case_id": case_id,
         "mode": "cursor",
         "choice": start,
+        "termination": termination,
         "official_exact_match": official_match,
         "physically_feasible": feasible,
         "reward": int(official_match),

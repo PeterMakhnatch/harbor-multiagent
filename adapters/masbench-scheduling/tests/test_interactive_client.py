@@ -4,11 +4,15 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import pytest
 
+from test_interactive_world import relay
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import interactive_client  # noqa: E402
 from interactive_client import (  # noqa: E402
     coordinate_round,
     feasible_starts,
@@ -168,6 +172,117 @@ def test_all_five_actors_exchange_only_cursor_files(tmp_path, exhausted):
     )
     for role in ROLES[1:]:
         port, _ = ports[role]
+        assert {path.name for path in (port / "out").iterdir()} == reply_names
+        assert not list(port.glob("round-*.json"))
+
+
+def test_five_actors_commit_null_after_eight_complete_rounds(tmp_path, monkeypatch):
+    horizon = 16
+    free = {
+        **dict.fromkeys(ROLES, range(horizon)),
+        "m1": [0, 2, 4, 6, 8, 10],
+        "m2": [1, 3, 5, 7, 9, 10],
+    }
+    case = {
+        "case_id": "2/1",
+        "horizon": horizon,
+        "duration": 1,
+        "slots_per_day": horizon,
+        "members": {
+            role: sorted(set(range(horizon)).difference(free[role])) for role in ROLES
+        },
+    }
+    ports = tmp_path / "ports"
+    ports.mkdir()
+    artifact = tmp_path / "world.calendar.json"
+    world = relay.InteractiveWorld(case, "cursor", ports, artifact)
+    leader = ports / "m1"
+    choice = leader / "out" / "choice.json"
+    choice_ready = Event()
+    release_choice = Event()
+    # Observe the broker before publication without replacing the actor's action.
+    submit = interactive_client._submit
+
+    def hold_choice(path, document):
+        if path == choice:
+            choice_ready.set()
+            if not release_choice.wait(5):
+                raise TimeoutError("test did not release the coordinator action")
+        submit(path, document)
+
+    monkeypatch.setattr(interactive_client, "_submit", hold_choice)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        actors = [
+            executor.submit(run_actor, role, ports / role, timeout=5) for role in ROLES
+        ]
+        try:
+            deadline = time.monotonic() + 5
+            while not choice_ready.is_set() and time.monotonic() < deadline:
+                assert world.advance() is False
+                choice_ready.wait(0.005)
+            assert choice_ready.is_set(), "coordinator did not attempt a choice"
+            assert (leader / "round-008.json").is_file()
+            assert not choice.exists()
+            assert world.advance() is False
+            with pytest.raises(TimeoutError, match="waiting for a coordinator action"):
+                world.run(timeout=0)
+            assert not artifact.exists()
+            assert not any((ports / role / "done.json").exists() for role in ROLES)
+            assert not any(actor.done() for actor in actors)
+        finally:
+            release_choice.set()
+        world.run(timeout=5)
+        for actor in actors:
+            assert actor.result() is None
+
+    views = {
+        role: json.loads((ports / role / "input.json").read_bytes()) for role in ROLES
+    }
+    prior_view = views["m1"]
+    reply_names, query_names = set(), set()
+    for number in range(1, 9):
+        bound = number - 1
+        query = {"round": number, "bound": bound}
+        query_name = f"query-{number:03d}.json"
+        reply_name = f"reply-{number:03d}.json"
+        query_names.add(query_name)
+        reply_names.add(reply_name)
+        assert (leader / "out" / query_name).read_bytes() == _wire(
+            {**query, "view_sha256": _hash(prior_view)}
+        )
+        replies = {
+            **dict.fromkeys(ROLES, bound),
+            "m1": bound + bound % 2,
+            "m2": bound + number % 2,
+        }
+        for role in ROLES:
+            port = ports / role
+            assert (port / query_name).read_bytes() == _wire(query)
+            assert (port / "out" / reply_name).read_bytes() == _wire(
+                {
+                    "role": role,
+                    "round": number,
+                    "next": replies[role],
+                    "initial_sha256": _hash(views[role]),
+                    "query_sha256": _hash(query),
+                }
+            )
+        prior_view = {**query, "replies": replies}
+        assert (leader / f"round-{number:03d}.json").read_bytes() == _wire(prior_view)
+    assert choice.read_bytes() == _wire(
+        {"round": 8, "start": None, "view_sha256": _hash(prior_view)}
+    )
+    record = json.loads(artifact.read_bytes())
+    assert record["choice"] is None and record["acknowledged"] is True
+    assert len(record["rounds"]) == 8
+    assert record["choice_view_sha256"] == _hash(prior_view)
+    assert {path.name for path in (leader / "out").iterdir()} == (
+        {"choice.json"} | reply_names | query_names
+    )
+    for role in ROLES:
+        assert not (ports / role / "query-009.json").exists()
+    for role in ROLES[1:]:
+        port = ports / role
         assert {path.name for path in (port / "out").iterdir()} == reply_names
         assert not list(port.glob("round-*.json"))
 

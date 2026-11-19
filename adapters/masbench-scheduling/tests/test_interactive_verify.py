@@ -92,6 +92,7 @@ def test_scores_five_way_disagreement_and_counts_repeated_disclosures(disagreeme
         "case_id": "2/1",
         "mode": "cursor",
         "choice": 10,
+        "termination": "unanimous",
         "official_exact_match": True,
         "physically_feasible": True,
         "reward": 1,
@@ -120,6 +121,7 @@ def test_first_round_exhaustion_is_a_completed_null_choice():
     world = _world(case, [_row(1, 0, (None, 2, 2, 2, 2))], None)
     score = verifier.verify(case, world)
     assert score["choice"] is None
+    assert score["termination"] == "exhausted"
     assert score["physically_feasible"] is None
     assert score["official_exact_match"] is False
     assert score["reward"] == 0
@@ -153,34 +155,103 @@ def test_end_of_day_is_not_a_free_cross_day_start():
         verifier.verify(case, forged)
 
 
-def test_accepts_720_rounds_and_final_legal_bound():
-    horizon = 720
-    free = dict.fromkeys(ROLES, range(horizon))
-    free["m1"] = range(0, horizon, 2)
-    free["m2"] = range(1, horizon, 2)
-    case = _case(free, horizon=horizon)
+@pytest.fixture
+def budget():
+    case = _case(
+        {
+            **dict.fromkeys(ROLES, range(16)),
+            "m1": [0, 2, 4, 6, 8, 10],
+            "m2": [1, 3, 5, 7, 9, 10],
+        },
+        gold=[10],
+    )
     rounds = [
         _row(
-            tick + 1,
-            tick,
-            (tick + tick % 2, tick + (tick + 1) % 2, tick, tick, tick),
+            bound + 1,
+            bound,
+            (bound + bound % 2, bound + (bound + 1) % 2, bound, bound, bound),
         )
-        for tick in range(horizon - 1)
+        for bound in range(8)
     ]
-    rounds.append(_row(720, 719, (None, 719, 719, 719, 719)))
-    world = _world(case, rounds, None)
-    score = verifier.verify(case, world)
-    assert score["choice"] is None
-    assert score["resources"]["round_trips"] == 720
-    assert score["resources"]["seat_exchanges"] == 3600
-    assert score["resources"]["scalar_disclosures"] == 3599
-    assert score["resources"]["distinct_disclosed_starts"] == 2880
+    return case, _world(case, rounds, None)
 
-    # Even a larger whole-day case cannot allow more than 720 native rounds.
-    larger_case = _case(dict.fromkeys(ROLES, ()), horizon=horizon + 1)
-    too_many = _world(larger_case, [*rounds, _row(721, 720, (None,) * 5)], None)
+
+def test_budget_null_leaves_an_undiscovered_common_start(budget):
+    case, world = budget
+    assert verifier.verify(case, world) == {
+        "case_id": "2/1",
+        "mode": "cursor",
+        "choice": None,
+        "termination": "budget",
+        "official_exact_match": False,
+        "physically_feasible": None,
+        "reward": 0,
+        "resources": {
+            "round_trips": 8,
+            "seat_exchanges": 40,
+            "scalar_disclosures": 40,
+            "distinct_disclosed_starts": 33,
+            "request_payload_bytes": 40,
+            "response_payload_bytes": 40,
+            "payload_bytes": 80,
+        },
+    }
+
+
+def test_rejects_a_choice_before_the_budget_and_an_honest_continuation(budget):
+    case, world = budget
+    rounds = world["rounds"]
+    premature = _world(case, rounds[:7], None)
+    with pytest.raises(ValueError, match="precedes a terminal reply set"):
+        verifier.verify(case, premature)
+
+    too_many = _world(
+        case,
+        [
+            *rounds,
+            _row(9, 8, (8, 9, 8, 8, 8)),
+            _row(10, 9, (10, 9, 9, 9, 9)),
+            _row(11, 10, (10,) * 5),
+        ],
+        10,
+    )
     with pytest.raises(ValueError, match="number of native rounds"):
-        verifier.verify(larger_case, too_many)
+        verifier.verify(case, too_many)
+
+
+def test_rejects_an_absent_or_nonnull_budget_choice(budget):
+    case, world = budget
+    with pytest.raises(ValueError, match="choice does not match"):
+        verifier.verify(case, {**world, "choice": 10})
+    del world["choice"]
+    with pytest.raises(ValueError, match="completion record"):
+        verifier.verify(case, world)
+
+
+@pytest.mark.parametrize(
+    ("termination", "start"), [("unanimous", 7), ("exhausted", None)]
+)
+def test_intrinsic_termination_takes_precedence_at_round_eight(
+    budget, termination, start
+):
+    _, budget_world = budget
+    first = [0, 2, 4, 6]
+    if start is not None:
+        first.append(start)
+    case = _case(
+        {**dict.fromkeys(ROLES, range(16)), "m1": first, "m2": [1, 3, 5, 7]},
+        gold=[7],
+    )
+    rounds = [*budget_world["rounds"][:7], _row(8, 7, (start, 7, 7, 7, 7))]
+    world = _world(case, rounds, start)
+    score = verifier.verify(case, world)
+    assert score["choice"] == start
+    assert score["termination"] == termination
+    assert score["reward"] == int(start is not None)
+    assert score["resources"]["round_trips"] == 8
+    if termination == "unanimous":
+        with pytest.raises(ValueError, match="choice does not match"):
+            verifier.verify(case, {**world, "choice": None})
 
 
 @pytest.mark.parametrize(
@@ -280,7 +351,7 @@ def test_rejects_malformed_private_case(disagreement, mutate):
 
 
 def test_native_command_writes_reward_only_after_verified_action(
-    disagreement, tmp_path, monkeypatch
+    disagreement, budget, tmp_path, monkeypatch
 ):
     case, world = disagreement
     private_case = tmp_path / "case.json"
@@ -316,3 +387,14 @@ def test_native_command_writes_reward_only_after_verified_action(
     artifact.write_text(json.dumps(no_start))
     verifier.main()
     assert reward.read_text() == "0\n"
+
+    budget_case, budget_world = budget
+    private_case.write_text(json.dumps({"mode": "cursor", "case": budget_case}))
+    artifact.write_text(json.dumps(budget_world))
+    verifier.main()
+    assert reward.read_text() == "0\n"
+
+    artifact.unlink()
+    with pytest.raises(SystemExit, match="invalid interactive calendar evidence"):
+        verifier.main()
+    assert not reward.exists()

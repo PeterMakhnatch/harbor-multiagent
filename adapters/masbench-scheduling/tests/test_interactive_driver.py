@@ -43,6 +43,22 @@ def _case(driver, case_id, *, null=False):
     }
 
 
+def _budget_case(driver):
+    horizon = 16
+    return {
+        **_case(driver, "2/3"),
+        "horizon": horizon,
+        "slots_per_day": horizon,
+        "duration": 1,
+        "members": {
+            **dict.fromkeys(driver.study.SEATS, []),
+            "m1": sorted(set(range(horizon)) - {0, 2, 4, 6, 8, 10}),
+            "m2": sorted(set(range(horizon)) - {1, 3, 5, 7, 9, 10}),
+        },
+        "gold": [10],
+    }
+
+
 def _register(driver, reviewed, out, cases):
     out.mkdir(mode=0o700)
     (out / "cells").mkdir(mode=0o700)
@@ -50,6 +66,8 @@ def _register(driver, reviewed, out, cases):
         "out_path": str(out),
         "dataset_path": "/not/needed/to/collect",
         "dataset_commit": driver.DATASET_COMMIT,
+        "policy": "cursor-budget-8",
+        "round_limit": 8,
         "harbor_executable_path": "/not/needed/to/collect/harbor",
         "harbor_executable_sha256": "b" * 64,
         "reviewed_sha256": driver._digests(reviewed),
@@ -65,7 +83,7 @@ def _register(driver, reviewed, out, cases):
     return plan
 
 
-def _world(driver, case):
+def _world(driver, case, *, budget=False):
     """Encode a fixed transcript, without the actor, broker, or offline cursor."""
     canonical = driver.study._canonical
 
@@ -78,18 +96,31 @@ def _world(driver, case):
             {
                 "role": role,
                 "mode": "cursor",
-                "horizon": 720,
-                "slots_per_day": 144,
-                "duration": 2,
+                "horizon": case["horizon"],
+                "slots_per_day": case["slots_per_day"],
+                "duration": case["duration"],
                 "busy": busy,
             }
         )
         for role, busy in case["members"].items()
     }
-    replies = {"m1": 2, "m2": None if null else 1, "m3": 0, "m4": 0, "m5": 0}
-    payloads = [(0, replies)]
-    if not null:
-        payloads.append((2, dict.fromkeys(driver.study.SEATS, 2)))
+    if budget:
+        payloads = [
+            (
+                bound,
+                {
+                    **dict.fromkeys(driver.study.SEATS, bound),
+                    "m1": bound + bound % 2,
+                    "m2": bound + (bound + 1) % 2,
+                },
+            )
+            for bound in range(8)
+        ]
+    else:
+        replies = {"m1": 2, "m2": None if null else 1, "m3": 0, "m4": 0, "m5": 0}
+        payloads = [(0, replies)]
+        if not null:
+            payloads.append((2, dict.fromkeys(driver.study.SEATS, 2)))
     rounds = []
     for index, (bound, replies) in enumerate(payloads, 1):
         query = {"round": index, "bound": bound}
@@ -103,14 +134,23 @@ def _world(driver, case):
         "mode": "cursor",
         "initial_view_sha256": views,
         "rounds": rounds,
-        "choice": None if null else 2,
+        "choice": None if null or budget else 2,
         "choice_view_sha256": rounds[-1]["bundle_sha256"],
         "acknowledged": True,
     }
 
 
 def _record_attempt(
-    driver, reviewed, out, plan, case, *, identifier=None, returncode=0, modify=None
+    driver,
+    reviewed,
+    out,
+    plan,
+    case,
+    *,
+    identifier=None,
+    returncode=0,
+    modify=None,
+    world=None,
 ):
     case_id = case["case_id"]
     cell = next(row for row in plan["cells"] if row["case_id"] == case_id)
@@ -127,7 +167,8 @@ def _record_attempt(
     )
     files = {}
     if returncode == 0:
-        world = _world(driver, case)
+        if world is None:
+            world = _world(driver, case)
         reward = int(world["choice"] in case["gold"])
         result = _base_result(
             driver.study, root, native, cell, identifier or str(uuid4()), reward
@@ -191,12 +232,16 @@ def test_collect_distinguishes_verified_null_failed_incomplete_and_unattempted(
         "schema",
         "study_id",
         "mode",
+        "policy",
+        "round_limit",
         "summary",
         "by_stratum",
         "cells",
     }
     assert report["schema"] == "seatlab.calendar-interactive-result/v1"
     assert report["mode"] == "cursor"
+    assert report["policy"] == "cursor-budget-8"
+    assert report["round_limit"] == 8
     assert list(report["by_stratum"]) == ["2", "3", "5"]
     assert report["summary"] == {
         "planned": 5,
@@ -206,6 +251,7 @@ def test_collect_distinguishes_verified_null_failed_incomplete_and_unattempted(
         "failed": 1,
         "invalid": 0,
         "measured_nulls": 1,
+        "terminations": {"exhausted": 1, "unanimous": 1, "budget": 0},
         "official_exact_matches": 1,
         "physically_feasible": 1,
         "rounds": 3,
@@ -220,8 +266,10 @@ def test_collect_distinguishes_verified_null_failed_incomplete_and_unattempted(
         "5/1",
     ]
     assert first["observed"]["choice"] == 2
+    assert first["observed"]["termination"] == "unanimous"
     assert first["observed"]["resources"]["seat_exchanges"] == 10
     assert null["observed"]["choice"] is None
+    assert null["observed"]["termination"] == "exhausted"
     assert null["observed"]["physically_feasible"] is None
     assert null["observed"]["reward"] == 0
     assert first["native_id"] != null["native_id"]
@@ -233,6 +281,37 @@ def test_collect_distinguishes_verified_null_failed_incomplete_and_unattempted(
     assert incomplete == {"case_id": "3/2", "status": "incomplete"}
     assert unattempted == {"case_id": "5/1", "status": "unattempted"}
     assert "/not/needed" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("remove_choice", [False, True])
+def test_collect_scores_only_an_explicit_budget_null(
+    driver, reviewed, tmp_path, remove_choice
+):
+    out = tmp_path / "private"
+    case = _budget_case(driver)
+    plan = _register(driver, reviewed, out, {case["case_id"]: case})
+    world = _world(driver, case, budget=True)
+
+    def modify(world, _result):
+        if remove_choice:
+            del world["choice"]
+
+    _record_attempt(driver, reviewed, out, plan, case, modify=modify, world=world)
+    report = driver.collect(out)
+    row = report["cells"][0]
+    if remove_choice:
+        assert row["status"] == "invalid"
+        assert row["reason"] == "invalid interactive world evidence"
+        assert "observed" not in row
+    else:
+        assert row["status"] == "verified"
+        assert row["observed"]["choice"] is None
+        assert row["observed"]["termination"] == "budget"
+        assert row["observed"]["reward"] == 0
+        assert row["observed"]["resources"]["round_trips"] == 8
+    counts = {"exhausted": 0, "unanimous": 0, "budget": int(not remove_choice)}
+    assert report["summary"]["terminations"] == counts
+    assert report["by_stratum"]["2"]["terminations"] == counts
 
 
 def test_collect_keeps_reference_mismatch_separate_from_feasibility(
@@ -349,6 +428,52 @@ def test_rejects_source_snapshot_changes(driver, reviewed, tmp_path):
         driver.collect(out)
 
 
+def test_collect_requires_the_registered_verifier_bytes(
+    driver, reviewed, tmp_path, monkeypatch
+):
+    out = tmp_path / "private"
+    case_id = "2/1"
+    _register(driver, reviewed, out, {case_id: _case(driver, case_id)})
+    changed_source = tmp_path / "modified-source"
+    changed_source.mkdir()
+    (changed_source / "interactive_verify.py").write_bytes(
+        reviewed["interactive_verify.py"] + b"\n"
+    )
+    monkeypatch.setattr(driver, "ADAPTER", changed_source)
+    with pytest.raises(ValueError, match="local independent verifier differs"):
+        driver.collect(out)
+
+
+@pytest.mark.parametrize(
+    ("file", "key", "value"),
+    [
+        ("source", "policy", "unbounded"),
+        ("source", "round_limit", 9),
+        ("source", "round_limit", 8.0),
+        ("plan", "policy", "unbounded"),
+        ("plan", "round_limit", 9),
+        ("plan", "round_limit", 8.0),
+    ],
+)
+def test_registration_refuses_resealed_policy_changes(
+    driver, reviewed, tmp_path, file, key, value
+):
+    out = tmp_path / "private"
+    case_id = "2/1"
+    plan = _register(driver, reviewed, out, {case_id: _case(driver, case_id)})
+    source_path = out / "source.json"
+    source = json.loads(source_path.read_bytes())
+    if file == "source":
+        source[key] = value
+        source_path.write_bytes(driver.study._canonical(source))
+        plan = driver._plan(plan["study_id"], source, [case_id], plan["task_sha256"])
+    else:
+        plan[key] = value
+    (out / "plan.json").write_bytes(driver.study._canonical(plan))
+    with pytest.raises(ValueError, match="source snapshot"):
+        driver.collect(out)
+
+
 def test_run_uses_explicit_order_and_stops_before_next_trial(
     driver, tmp_path, monkeypatch
 ):
@@ -365,7 +490,16 @@ def test_run_uses_explicit_order_and_stops_before_next_trial(
 
     def start(args, *, cwd, env, **_kwargs):
         created.append(args)
-        assert (out / "plan.json").is_file()
+        plan = json.loads((out / "plan.json").read_bytes())
+        source = json.loads((out / "source.json").read_bytes())
+        for registration in (source, plan):
+            assert registration["policy"] == "cursor-budget-8"
+            assert type(registration["round_limit"]) is int
+            assert registration["round_limit"] == 8
+        assert plan["mode"] == "cursor"
+        assert plan["source_sha256"] == driver.study._sha(
+            driver.study._canonical(source)
+        )
         assert args[:4] == [str(harbor.resolve()), "trial", "start", "--config"]
         config = json.loads(Path(args[4]).read_bytes())
         assert config["participants"] == [
@@ -385,6 +519,18 @@ def test_run_uses_explicit_order_and_stops_before_next_trial(
         assert (task / "environment/calendar_world.py").read_bytes() == (
             ADAPTER / "interactive_world.py"
         ).read_bytes()
+        for staged, original in (
+            ("solution/client.py", "interactive_client.py"),
+            ("tests/verify.py", "interactive_verify.py"),
+            ("solution/solve.sh", "template/solution/solve.sh"),
+        ):
+            payload = (task / staged).read_bytes()
+            assert payload == (ADAPTER / original).read_bytes()
+            assert (
+                driver.study._sha(payload)
+                == source["reviewed_sha256"][original]
+                == plan["task_sha256"]["3/2"][staged]
+            )
         assert (
             b"COPY calendar_world.py calendar_base.py case.json ./"
             in (task / "environment/Dockerfile").read_bytes()
@@ -393,8 +539,9 @@ def test_run_uses_explicit_order_and_stops_before_next_trial(
         for seat in driver.study.SEATS:
             instructions = (task / f"instructions/{seat}.md").read_text()
             assert f"You are `{seat}`" in instructions
-        wrapper = json.loads((task / "environment/case.json").read_bytes())
-        assert wrapper["mode"] == "cursor"
+        assert (task / "environment/case.json").read_bytes() == (
+            driver.study._canonical({"mode": "cursor", "case": load(tmp_path, "3/2")})
+        )
         assert not any(
             path.name == "case.json" for path in (task / "solution").iterdir()
         )
