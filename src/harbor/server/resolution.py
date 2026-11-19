@@ -14,6 +14,7 @@ from harbor.models.model_api_format import ModelApiFormat
 from harbor.models.task.task import Task
 from harbor.models.trial.config import AgentConfig, TaskConfig, TrialConfig
 from harbor.server.models import APIError
+from harbor.trial.seats import check_seats
 
 
 def relay_agent_config(config: AgentConfig, base_url: str, token: str) -> AgentConfig:
@@ -111,7 +112,7 @@ async def validate_trials(
             checked_participants = config.participants
         EnvironmentFactory.validate_resource_policies(config.environment)
         download = downloads[config.task.get_task_id()]
-        Task(
+        task = Task(
             download.path,
             extra_instruction_paths=config.extra_instruction_paths,
             extra_instructions=config.extra_instructions,
@@ -124,6 +125,7 @@ async def validate_trials(
                 f"Inputs changed for task {lock.task.name!r}.",
                 409,
             )
+        check_seats(config, task)
         # Bulk validation must leave room for reads and controls on other jobs.
         await asyncio.sleep(0)
 

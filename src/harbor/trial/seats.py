@@ -13,8 +13,9 @@ container still up.
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, override
 
 from harbor.agents.base import BaseAgent
@@ -24,6 +25,8 @@ from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
 from harbor.models.task.config import NetworkMode, merge_mcp_servers
+from harbor.models.task.config import TaskConfig as TaskDefinitionConfig
+from harbor.models.task.paths import TaskPaths
 from harbor.models.task.task import Task
 from harbor.models.task.verifier_mode import (
     VerifierEnvironmentMode,
@@ -32,7 +35,7 @@ from harbor.models.task.verifier_mode import (
 from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
-from harbor.tasks.client import TaskDownloadResult
+from harbor.tasks.client import TaskDownloadResult, TaskIdType
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
@@ -87,6 +90,64 @@ def check_launch(config: TrialConfig, task: Task) -> None:
         problems.append("seat tasks support only public network_mode")
     if problems:
         raise ValueError(f"Task {task.name} cannot run: {'; '.join(problems)}.")
+
+
+def check_seats(config: TrialConfig, task: Task) -> None:
+    """Raise ValueError if this trial config cannot fill the task's seats, as
+    Trial.create does before it builds the trial: participants for a task
+    without seats, or check_launch's problems for a seat task."""
+    if task.config.agents:
+        check_launch(config, task)
+    elif config.participants:
+        raise ValueError(
+            f"Task {task.name} has no [agents.<service>] seats, so it takes "
+            "agent, not participants."
+        )
+
+
+def check_job_seats(
+    configs: Iterable[TrialConfig],
+    task_download_results: Mapping[TaskIdType, TaskDownloadResult],
+) -> None:
+    """Make check_seats for every trial of a job before any trial starts, so a
+    roster that does not fit a task stops the job at once, where Trial.create
+    would stop it midway and cancel the trials then running.
+
+    Each task is read once. In a job without participants, a task whose
+    task.toml has no seats, or does not load, is left to Trial.create, as
+    before. Regrades are left to Trial.create, which refuses seat tasks.
+    """
+    tasks: dict[TaskIdType, Task | None] = {}
+    for config in configs:
+        if config.is_regrade:
+            continue
+        task_id = config.task.get_task_id()
+        if task_id not in tasks:
+            download = task_download_results.get(task_id)
+            # Trial.create downloads and checks a task the job has not.
+            tasks[task_id] = _task_to_check(config, download.path) if download else None
+        if (task := tasks[task_id]) is not None:
+            check_seats(config, task)
+
+
+def _task_to_check(config: TrialConfig, task_dir: Path) -> Task | None:
+    """The task, loaded as Trial.create loads it, or None when a trial
+    without participants has nothing to check."""
+    if not config.participants:
+        try:
+            seats = TaskDefinitionConfig.model_validate_toml(
+                TaskPaths(task_dir).config_path.read_text()
+            ).agents
+        except (OSError, ValueError):
+            return None
+        if not seats:
+            return None
+    return Task(
+        task_dir=task_dir,
+        extra_instruction_paths=config.extra_instruction_paths,
+        extra_instructions=config.extra_instructions,
+        disable_verification=config.verifier.disable,
+    )
 
 
 @contextlib.asynccontextmanager

@@ -1,4 +1,5 @@
-"""A seat task runs its participants, so preflight checks each of them.
+"""A seat task runs its participants, so preflight checks each of them, and a
+job checks that its roster fits every task before any trial starts.
 
 The roster is the one that showed the gap: an oracle in ``p1`` and a
 terminus-2 in ``p2`` whose model has no API key in the environment.
@@ -82,16 +83,18 @@ def _plain_task(root: Path) -> Path:
 
 
 def _seat_job(tmp_path: Path, **kwargs) -> JobConfig:
-    return JobConfig(
-        job_name="seats",
-        jobs_dir=tmp_path / "jobs",
-        tasks=[
-            TaskConfig(path=_seat_task(tmp_path, "one")),
-            TaskConfig(path=_seat_task(tmp_path, "two")),
-        ],
-        participants=ROSTER,
-        n_attempts=2,
-        **kwargs,
+    return JobConfig.model_validate(
+        {
+            "job_name": "seats",
+            "jobs_dir": tmp_path / "jobs",
+            "tasks": [
+                TaskConfig(path=_seat_task(tmp_path, "one")),
+                TaskConfig(path=_seat_task(tmp_path, "two")),
+            ],
+            "participants": ROSTER,
+            "n_attempts": 2,
+            **kwargs,
+        }
     )
 
 
@@ -333,6 +336,92 @@ async def test_server_checks_the_roster_once_for_all_its_trials(
         ("p1", "oracle", True),
         ("p2", "terminus-2", True),
     ]
+
+
+@pytest.mark.parametrize(
+    "change, problem",
+    [
+        ({"participants": []}, r"seats without a participant: \['p1', 'p2'\]"),
+        ({"participants": ROSTER[1:]}, r"seats without a participant: \['p1'\]"),
+        (
+            {"participants": [*ROSTER, {"seat": "p3", "name": "nop"}]},
+            r"participants for seats the task does not have: \['p3'\]",
+        ),
+        ({"agents": [{"name": "nop"}]}, "agent is set; a seat task takes participants"),
+        (
+            {"user_agent": {"name": "nop", "bridge": {"kind": "acp"}}},
+            "user_agent is not supported for seat tasks",
+        ),
+    ],
+    ids=["no-participants", "missing-seat", "unknown-seat", "agent", "user_agent"],
+)
+async def test_roster_that_does_not_fit_the_tasks_fails_before_any_trial(
+    tmp_path: Path, api_key, change, problem
+):
+    config = _seat_job(tmp_path, **change)
+    message = f"Task one cannot run: {problem}"
+
+    with pytest.raises(ValueError, match=message):
+        await Job.create(config)
+    assert not (tmp_path / "jobs").exists()
+
+    with pytest.raises(ValueError, match=message):
+        await resolve_config(config)
+
+
+async def test_participants_for_a_task_without_seats_fail_before_any_trial(
+    tmp_path: Path, api_key
+):
+    config = _seat_job(tmp_path, tasks=[TaskConfig(path=_plain_task(tmp_path))])
+    message = (
+        r"Task plain has no \[agents.<service>\] seats, so it takes agent, "
+        "not participants"
+    )
+
+    with pytest.raises(ValueError, match=message):
+        await Job.create(config)
+    assert not (tmp_path / "jobs").exists()
+
+    with pytest.raises(ValueError, match=message):
+        await resolve_config(config)
+
+
+async def test_single_agent_job_with_a_seat_task_fails_before_any_trial(
+    tmp_path: Path,
+):
+    config = JobConfig(
+        job_name="mixed",
+        jobs_dir=tmp_path / "jobs",
+        tasks=[
+            TaskConfig(path=_plain_task(tmp_path)),
+            TaskConfig(path=_seat_task(tmp_path)),
+        ],
+        agents=[AgentConfig(name="nop")],
+    )
+
+    with pytest.raises(
+        ValueError, match=r"Task hello cannot run: seats without a participant"
+    ):
+        await Job.create(config)
+    assert not (tmp_path / "jobs").exists()
+
+
+async def test_single_agent_job_leaves_a_task_that_does_not_load_to_its_trial(
+    tmp_path: Path,
+):
+    task_dir = _plain_task(tmp_path)
+    (task_dir / "task.toml").write_text("[agent\n")
+    config = JobConfig(
+        job_name="plain",
+        jobs_dir=tmp_path / "jobs",
+        tasks=[TaskConfig(path=task_dir)],
+        agents=[AgentConfig(name="nop")],
+    )
+
+    job = await Job.create(config)
+    job._close_logger_handlers()
+
+    assert len(job) == 1
 
 
 def test_configs_without_participants_check_only_their_agent(
