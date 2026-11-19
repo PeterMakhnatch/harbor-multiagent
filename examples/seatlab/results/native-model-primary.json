@@ -1,0 +1,2768 @@
+{
+  "cells": [
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-SS",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "692ce2c25165c9c6c04db42a631b01341e9d1c85037d45c7077bfbe702ec2908",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "80dfca3ab6e87e39c3d8468eff57652bae8f25df7e67aceb707b1b888b169695",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 0,
+      "native_returncode": 0,
+      "pairing": "SS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "8d41628e4b7668a6cd8480b91b7a95a2980dc38d10f2776809ed8773dabca777",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ed1f8d73682bf01af384c4f44a973382a81428025b99bbe20e160cd11896a4a0",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "06910707-9f63-4d04-9664-90ba9d7a0274"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-SM",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "692ce2c25165c9c6c04db42a631b01341e9d1c85037d45c7077bfbe702ec2908",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "80dfca3ab6e87e39c3d8468eff57652bae8f25df7e67aceb707b1b888b169695",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 1,
+      "native_returncode": 0,
+      "pairing": "SM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "8d41628e4b7668a6cd8480b91b7a95a2980dc38d10f2776809ed8773dabca777",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1510,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 3147,
+            "duration_ms": 3660,
+            "estimated_cost_usd": 0.007824000000000001,
+            "input_tokens": 2,
+            "output_tokens": 178
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ed1f8d73682bf01af384c4f44a973382a81428025b99bbe20e160cd11896a4a0",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "72abcf4b-2a60-4169-8842-6e3d23e5073e"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-MS",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "692ce2c25165c9c6c04db42a631b01341e9d1c85037d45c7077bfbe702ec2908",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "80dfca3ab6e87e39c3d8468eff57652bae8f25df7e67aceb707b1b888b169695",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 1,
+      "native_returncode": 0,
+      "pairing": "MS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "8d41628e4b7668a6cd8480b91b7a95a2980dc38d10f2776809ed8773dabca777",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ed1f8d73682bf01af384c4f44a973382a81428025b99bbe20e160cd11896a4a0",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1257,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 4070,
+            "duration_ms": 4177,
+            "estimated_cost_usd": 0.010772,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "e687fef4-2318-4ef7-b9dd-95fd6f5d24c8"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-fresh-MM",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "692ce2c25165c9c6c04db42a631b01341e9d1c85037d45c7077bfbe702ec2908",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "5165967e23538dd0186166f116f82520f29bf2f280bd994442251df12719ef8a",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "8f8545833ca092749cb0bcff847e12c9a9c20087b322828e528ddcda4a8b757e",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "a3e0ec9f01e5041eae61b5e35220edd4a232666a429b25af3c1e46c5955ec387",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "80dfca3ab6e87e39c3d8468eff57652bae8f25df7e67aceb707b1b888b169695",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "c68809eff3ce75f989c188961c67674d5602e77bc8cc44e8f34a02a956c8d217",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 2,
+      "native_returncode": 0,
+      "pairing": "MM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "8d41628e4b7668a6cd8480b91b7a95a2980dc38d10f2776809ed8773dabca777",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 365,
+            "cache_read_input_tokens": 1147,
+            "duration_api_ms": 2290,
+            "duration_ms": 3038,
+            "estimated_cost_usd": 0.0033587,
+            "input_tokens": 2,
+            "output_tokens": 178
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ed1f8d73682bf01af384c4f44a973382a81428025b99bbe20e160cd11896a4a0",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 363,
+            "cache_read_input_tokens": 892,
+            "duration_api_ms": 5809,
+            "duration_ms": 6206,
+            "estimated_cost_usd": 0.0072851999999999995,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "8b06a917-83b9-4b3d-a8af-cc286379def9"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-SS",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "184dabae03a44ea35bb97af3d8ccfc0fb54edf930456579a26c4d4ac6264535c",
+        "episodes": 12,
+        "feasible": 10,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 8,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": true,
+            "id": 1,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "f5ec725f23f7de910d0e719425b44813259763923b5a491d8e11c3d5bae2717d",
+            "feasible": false,
+            "id": 3,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "3a923f7a9345c0966239d0a458957f52c9d90a829654849b84768a7acb40f264",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": false,
+            "id": 7,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "eff191fdc9958b95173acb4d172fbf45713c3db2b48553b7bbf5f2dbef940344",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 11,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 0,
+      "native_returncode": 0,
+      "pairing": "SS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "70bdeaf77e302ac77d0856ba8df39ee0e740e24a01ae623c51a8311cd252a7d6",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "25f3a2fd3907204eebf84e2f6f6a3e4f5de2ade31fd0be85846c7f6216ca8a29",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "87a3b764-0782-46fe-9bab-4cd5baedb259"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-SM",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "184dabae03a44ea35bb97af3d8ccfc0fb54edf930456579a26c4d4ac6264535c",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "f5ec725f23f7de910d0e719425b44813259763923b5a491d8e11c3d5bae2717d",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "3a923f7a9345c0966239d0a458957f52c9d90a829654849b84768a7acb40f264",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "eff191fdc9958b95173acb4d172fbf45713c3db2b48553b7bbf5f2dbef940344",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 1,
+      "native_returncode": 0,
+      "pairing": "SM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "70bdeaf77e302ac77d0856ba8df39ee0e740e24a01ae623c51a8311cd252a7d6",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1704,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 3025,
+            "duration_ms": 3479,
+            "estimated_cost_usd": 0.0086,
+            "input_tokens": 2,
+            "output_tokens": 178
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "25f3a2fd3907204eebf84e2f6f6a3e4f5de2ade31fd0be85846c7f6216ca8a29",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "3e997102-916e-484b-941f-810cf5de88a9"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-MS",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "184dabae03a44ea35bb97af3d8ccfc0fb54edf930456579a26c4d4ac6264535c",
+        "episodes": 12,
+        "feasible": 10,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 8,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": true,
+            "id": 1,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "f5ec725f23f7de910d0e719425b44813259763923b5a491d8e11c3d5bae2717d",
+            "feasible": false,
+            "id": 3,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "3a923f7a9345c0966239d0a458957f52c9d90a829654849b84768a7acb40f264",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": false,
+            "id": 7,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "eff191fdc9958b95173acb4d172fbf45713c3db2b48553b7bbf5f2dbef940344",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 11,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 1,
+      "native_returncode": 0,
+      "pairing": "MS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "70bdeaf77e302ac77d0856ba8df39ee0e740e24a01ae623c51a8311cd252a7d6",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "25f3a2fd3907204eebf84e2f6f6a3e4f5de2ade31fd0be85846c7f6216ca8a29",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1256,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 5085,
+            "duration_ms": 5712,
+            "estimated_cost_usd": 0.010768,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "3d754f74-1863-4321-b9d5-f589df48aae0"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2001-reordered-MM",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "dc3cb063a63593109a04b3f81de104e86f9897dcbb1966a3dbc743ca2a219e73",
+      "metrics": {
+        "delivered_messages_sha256": "184dabae03a44ea35bb97af3d8ccfc0fb54edf930456579a26c4d4ac6264535c",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "B",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "f5ec725f23f7de910d0e719425b44813259763923b5a491d8e11c3d5bae2717d",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "3a923f7a9345c0966239d0a458957f52c9d90a829654849b84768a7acb40f264",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "d67b071549520a2b49c46e1c1f5e3260c7707c5f54dec107bb773d3bc6d6b077",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "6674d14fb35b307c63f9aa2e572396c4ccca9efce3490058b142c32d045e4518",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "eff191fdc9958b95173acb4d172fbf45713c3db2b48553b7bbf5f2dbef940344",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 2,
+      "native_returncode": 0,
+      "pairing": "MM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "70bdeaf77e302ac77d0856ba8df39ee0e740e24a01ae623c51a8311cd252a7d6",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 363,
+            "cache_read_input_tokens": 1339,
+            "duration_api_ms": 3077,
+            "duration_ms": 3842,
+            "estimated_cost_usd": 0.0048199,
+            "input_tokens": 2,
+            "output_tokens": 323
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "25f3a2fd3907204eebf84e2f6f6a3e4f5de2ade31fd0be85846c7f6216ca8a29",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 363,
+            "cache_read_input_tokens": 892,
+            "duration_api_ms": 4465,
+            "duration_ms": 4883,
+            "estimated_cost_usd": 0.0072851999999999995,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2001,
+      "status": "measured",
+      "trial_id": "5efbe6fc-16f4-40b0-99da-12cc960360d1"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-MM",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "16c629968a7dc750d1e836d97aba2abbc53123c5fbbc1b61f076a1476bccf649",
+      "metrics": {
+        "delivered_messages_sha256": "59ae3d5037424b93b3f28f9e3ca341da11c84b1ea1f45795228777576b587832",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 12,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "7b302f32eb4b152342b3a31b25875d4da8783a07420e16f72217bf2edb72546f",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "bac866a5e0b0b38506dc9ee743ed726d70c316613c4f71ed5ff93c30e0f24aa0",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "59ddfc8f8d37ace00dc7904b999ced47a4ecb32b7f1efd58bb55d592f5e078f1",
+            "feasible": true,
+            "id": 9,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": true,
+            "id": 11,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 2,
+      "native_returncode": 0,
+      "pairing": "MM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "dc8c943bceb81710b24f23475a89f3b0d3cd0a67a01a803e322842b753810088",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1705,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 2273,
+            "duration_ms": 2346,
+            "estimated_cost_usd": 0.008604,
+            "input_tokens": 2,
+            "output_tokens": 178
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ce632d34d8f019404c1345914a2a9b3e630cd1fd55b6172519184ff1792cf06c",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1257,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 3529,
+            "duration_ms": 4205,
+            "estimated_cost_usd": 0.010772,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "measured",
+      "trial_id": "0ce97dbb-213b-41d7-9626-7cd94a55cc06"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-MS",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "16c629968a7dc750d1e836d97aba2abbc53123c5fbbc1b61f076a1476bccf649",
+      "metrics": {
+        "delivered_messages_sha256": "59ae3d5037424b93b3f28f9e3ca341da11c84b1ea1f45795228777576b587832",
+        "episodes": 12,
+        "feasible": 9,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 9,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "7b302f32eb4b152342b3a31b25875d4da8783a07420e16f72217bf2edb72546f",
+            "feasible": false,
+            "id": 1,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "bac866a5e0b0b38506dc9ee743ed726d70c316613c4f71ed5ff93c30e0f24aa0",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "59ddfc8f8d37ace00dc7904b999ced47a4ecb32b7f1efd58bb55d592f5e078f1",
+            "feasible": false,
+            "id": 9,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": false,
+            "id": 11,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 1,
+      "native_returncode": 0,
+      "pairing": "MS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "dc8c943bceb81710b24f23475a89f3b0d3cd0a67a01a803e322842b753810088",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ce632d34d8f019404c1345914a2a9b3e630cd1fd55b6172519184ff1792cf06c",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 365,
+            "cache_read_input_tokens": 892,
+            "duration_api_ms": 4637,
+            "duration_ms": 5437,
+            "estimated_cost_usd": 0.0072932,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "measured",
+      "trial_id": "759c3d60-3dc0-46c0-9d19-c79184893f5f"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-SM",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "16c629968a7dc750d1e836d97aba2abbc53123c5fbbc1b61f076a1476bccf649",
+      "metrics": {
+        "delivered_messages_sha256": "59ae3d5037424b93b3f28f9e3ca341da11c84b1ea1f45795228777576b587832",
+        "episodes": 12,
+        "feasible": 12,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 8,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "7b302f32eb4b152342b3a31b25875d4da8783a07420e16f72217bf2edb72546f",
+            "feasible": true,
+            "id": 1,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 3,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": true,
+            "id": 5,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "bac866a5e0b0b38506dc9ee743ed726d70c316613c4f71ed5ff93c30e0f24aa0",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "59ddfc8f8d37ace00dc7904b999ced47a4ecb32b7f1efd58bb55d592f5e078f1",
+            "feasible": true,
+            "id": 9,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "A",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": true,
+            "id": 11,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 1,
+      "native_returncode": 0,
+      "pairing": "SM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "dc8c943bceb81710b24f23475a89f3b0d3cd0a67a01a803e322842b753810088",
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 364,
+            "cache_read_input_tokens": 1339,
+            "duration_api_ms": 3165,
+            "duration_ms": 3698,
+            "estimated_cost_usd": 0.0033739,
+            "input_tokens": 2,
+            "output_tokens": 178
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ce632d34d8f019404c1345914a2a9b3e630cd1fd55b6172519184ff1792cf06c",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "measured",
+      "trial_id": "01e539c9-bdb5-4eaf-b640-ab17e769e8b5"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-reordered-SS",
+      "condition": "reordered",
+      "error": null,
+      "fingerprint": "16c629968a7dc750d1e836d97aba2abbc53123c5fbbc1b61f076a1476bccf649",
+      "metrics": {
+        "delivered_messages_sha256": "59ae3d5037424b93b3f28f9e3ca341da11c84b1ea1f45795228777576b587832",
+        "episodes": 12,
+        "feasible": 9,
+        "inventory_copy_fidelity": {
+          "both_correct": 12,
+          "revision_1_correct": 12,
+          "revision_2_correct": 12,
+          "revision_reports": 24
+        },
+        "optimal": 9,
+        "rows": [
+          {
+            "availability_changed": false,
+            "choice": "C",
+            "delivered_messages_sha256": "373a594c1310533ac578b96777975eedf5ec066acc97ebba42dbafe90d728968",
+            "feasible": true,
+            "id": 0,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "7b302f32eb4b152342b3a31b25875d4da8783a07420e16f72217bf2edb72546f",
+            "feasible": false,
+            "id": 1,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 2,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "995b24ea40a349fda9522bcd9616aeab9732236c7cea064162ec7331aac2ea4e",
+            "feasible": true,
+            "id": 3,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "1d35392f647117f23b3005f6170dc3dde146affabc0922cb3aeed382ece9dbdc",
+            "feasible": true,
+            "id": 4,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "D",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": true,
+            "id": 5,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 6,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "bac866a5e0b0b38506dc9ee743ed726d70c316613c4f71ed5ff93c30e0f24aa0",
+            "feasible": true,
+            "id": 7,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "A",
+            "delivered_messages_sha256": "801272d6cd89d71aa64a0052fe27f9cc1b7bc00e5351dc5b7484ebc7f1c13766",
+            "feasible": true,
+            "id": 8,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "C",
+            "delivered_messages_sha256": "59ddfc8f8d37ace00dc7904b999ced47a4ecb32b7f1efd58bb55d592f5e078f1",
+            "feasible": false,
+            "id": 9,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": false,
+            "choice": "D",
+            "delivered_messages_sha256": "3d1814a05317d799df5c5700791a1add67567670d622186c96560bd199a4b967",
+            "feasible": true,
+            "id": 10,
+            "optimal": true,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          },
+          {
+            "availability_changed": true,
+            "choice": "B",
+            "delivered_messages_sha256": "1da3da7483365ba75171137bf73a93920c8b39d18dcf120f2f73028d85454fc5",
+            "feasible": false,
+            "id": 11,
+            "optimal": false,
+            "revision_1_correct": true,
+            "revision_2_correct": true
+          }
+        ]
+      },
+      "model_actors": 0,
+      "native_returncode": 0,
+      "pairing": "SS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": "dc8c943bceb81710b24f23475a89f3b0d3cd0a67a01a803e322842b753810088",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": "ce632d34d8f019404c1345914a2a9b3e630cd1fd55b6172519184ff1792cf06c",
+          "actor": "script",
+          "model_turns": 0,
+          "native_agent_name": "seatlab-dispatch-handoff",
+          "requested_model": null,
+          "served_model": null,
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "measured",
+      "trial_id": "a61c91ef-cfa8-4b95-82da-6eed1e8b3546"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s2003-fresh-MM",
+      "condition": "fresh",
+      "error": "model_invalid_or_refused_decisions",
+      "fingerprint": null,
+      "metrics": null,
+      "model_actors": 2,
+      "native_returncode": 0,
+      "pairing": "MM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": null,
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "invalid_or_refused_decisions",
+          "telemetry": {
+            "cache_creation_input_tokens": 1510,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 2905,
+            "duration_ms": 3337,
+            "estimated_cost_usd": 0.009854,
+            "input_tokens": 2,
+            "output_tokens": 381
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": null,
+          "actor": "model",
+          "model_turns": 1,
+          "native_agent_name": "seatlab-first-party",
+          "requested_model": "claude-sonnet-5-5",
+          "served_model": "claude-sonnet-5-5",
+          "stage": "complete",
+          "telemetry": {
+            "cache_creation_input_tokens": 1256,
+            "cache_read_input_tokens": 0,
+            "duration_api_ms": 5746,
+            "duration_ms": 5842,
+            "estimated_cost_usd": 0.010768,
+            "input_tokens": 2,
+            "output_tokens": 574
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "invalid",
+      "trial_id": "81d2c185-6a76-4487-9420-7d391a0bda6a"
+    },
+    {
+      "attempted": false,
+      "cell_id": "s2003-fresh-MS",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": null,
+      "metrics": null,
+      "model_actors": 1,
+      "native_returncode": null,
+      "pairing": "MS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": null,
+          "actor": "script",
+          "model_turns": null,
+          "native_agent_name": null,
+          "requested_model": null,
+          "served_model": null,
+          "stage": null,
+          "telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": null,
+            "input_tokens": null,
+            "output_tokens": null
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": null,
+          "actor": "model",
+          "model_turns": null,
+          "native_agent_name": null,
+          "requested_model": null,
+          "served_model": null,
+          "stage": null,
+          "telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": null,
+            "input_tokens": null,
+            "output_tokens": null
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "not_attempted",
+      "trial_id": null
+    },
+    {
+      "attempted": false,
+      "cell_id": "s2003-fresh-SM",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": null,
+      "metrics": null,
+      "model_actors": 1,
+      "native_returncode": null,
+      "pairing": "SM",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": null,
+          "actor": "model",
+          "model_turns": null,
+          "native_agent_name": null,
+          "requested_model": null,
+          "served_model": null,
+          "stage": null,
+          "telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": null,
+            "input_tokens": null,
+            "output_tokens": null
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": null,
+          "actor": "script",
+          "model_turns": null,
+          "native_agent_name": null,
+          "requested_model": null,
+          "served_model": null,
+          "stage": null,
+          "telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": null,
+            "input_tokens": null,
+            "output_tokens": null
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "not_attempted",
+      "trial_id": null
+    },
+    {
+      "attempted": false,
+      "cell_id": "s2003-fresh-SS",
+      "condition": "fresh",
+      "error": null,
+      "fingerprint": null,
+      "metrics": null,
+      "model_actors": 0,
+      "native_returncode": null,
+      "pairing": "SS",
+      "seats": {
+        "dispatch": {
+          "accepted_view_sha256": null,
+          "actor": "script",
+          "model_turns": null,
+          "native_agent_name": null,
+          "requested_model": null,
+          "served_model": null,
+          "stage": null,
+          "telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": null,
+            "input_tokens": null,
+            "output_tokens": null
+          }
+        },
+        "inventory": {
+          "accepted_view_sha256": null,
+          "actor": "script",
+          "model_turns": null,
+          "native_agent_name": null,
+          "requested_model": null,
+          "served_model": null,
+          "stage": null,
+          "telemetry": {
+            "cache_creation_input_tokens": null,
+            "cache_read_input_tokens": null,
+            "duration_api_ms": null,
+            "duration_ms": null,
+            "estimated_cost_usd": null,
+            "input_tokens": null,
+            "output_tokens": null
+          }
+        }
+      },
+      "seed": 2003,
+      "status": "not_attempted",
+      "trial_id": null
+    }
+  ],
+  "complete": false,
+  "cost_basis": "provider_cli_estimate_not_an_invoice",
+  "counts": {
+    "attempted": 13,
+    "by_model_actors": {
+      "0": {
+        "attempted": 3,
+        "measured": 3,
+        "registered": 4
+      },
+      "1": {
+        "attempted": 6,
+        "measured": 6,
+        "registered": 8
+      },
+      "2": {
+        "attempted": 4,
+        "measured": 3,
+        "registered": 4
+      }
+    },
+    "invalid": 1,
+    "measured": 12,
+    "not_attempted": 3,
+    "registered": 16,
+    "unmeasured": 0
+  },
+  "episodes_per_cell": 12,
+  "listener_comparisons": [
+    {
+      "baseline_cell_id": "s2001-fresh-SS",
+      "condition": "fresh",
+      "contrast": "SS_to_SM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-fresh-SM"
+    },
+    {
+      "baseline_cell_id": "s2001-fresh-MS",
+      "condition": "fresh",
+      "contrast": "MS_to_MM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-fresh-MM"
+    },
+    {
+      "baseline_cell_id": "s2001-reordered-SS",
+      "condition": "reordered",
+      "contrast": "SS_to_SM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 2,
+        "became_optimal": 4,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 4,
+        "episodes": 12,
+        "feasible_delta": 2,
+        "optimal_delta": 4
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-reordered-SM"
+    },
+    {
+      "baseline_cell_id": "s2001-reordered-MS",
+      "condition": "reordered",
+      "contrast": "MS_to_MM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 2,
+        "became_optimal": 4,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 4,
+        "episodes": 12,
+        "feasible_delta": 2,
+        "optimal_delta": 4
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-reordered-MM"
+    },
+    {
+      "baseline_cell_id": "s2003-reordered-SS",
+      "condition": "reordered",
+      "contrast": "SS_to_SM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 3,
+        "became_optimal": 1,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 2,
+        "choices_changed": 5,
+        "episodes": 12,
+        "feasible_delta": 3,
+        "optimal_delta": -1
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2003,
+      "status": "compared",
+      "treatment_cell_id": "s2003-reordered-SM"
+    },
+    {
+      "baseline_cell_id": "s2003-reordered-MS",
+      "condition": "reordered",
+      "contrast": "MS_to_MM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 3,
+        "became_optimal": 3,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 3,
+        "episodes": 12,
+        "feasible_delta": 3,
+        "optimal_delta": 3
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2003,
+      "status": "compared",
+      "treatment_cell_id": "s2003-reordered-MM"
+    },
+    {
+      "baseline_cell_id": "s2003-fresh-SS",
+      "condition": "fresh",
+      "contrast": "SS_to_SM",
+      "delivered_messages_equal": null,
+      "differences": null,
+      "messages_changed_episode_ids": null,
+      "seed": 2003,
+      "status": "unavailable",
+      "treatment_cell_id": "s2003-fresh-SM"
+    },
+    {
+      "baseline_cell_id": "s2003-fresh-MS",
+      "condition": "fresh",
+      "contrast": "MS_to_MM",
+      "delivered_messages_equal": null,
+      "differences": null,
+      "messages_changed_episode_ids": null,
+      "seed": 2003,
+      "status": "unavailable",
+      "treatment_cell_id": "s2003-fresh-MM"
+    }
+  ],
+  "max_model_budget_usd": 4.8,
+  "max_model_turns": 16,
+  "model": "anthropic/claude-sonnet-5-5",
+  "observation_binding": "accepted_whole_view_digest_not_proof_of_understanding",
+  "per_turn_budget_usd": 0.3,
+  "preflight": "verified",
+  "registered_plan_sha256": "e7880012bac604251fada9d3597ab38ff42626f1c71615468f5efde711b18f27",
+  "schema": "seatlab.native-team-report/v1",
+  "speaker_comparisons": [
+    {
+      "baseline_cell_id": "s2001-fresh-SS",
+      "condition": "fresh",
+      "contrast": "SS_to_MS",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-fresh-MS"
+    },
+    {
+      "baseline_cell_id": "s2001-fresh-SM",
+      "condition": "fresh",
+      "contrast": "SM_to_MM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-fresh-MM"
+    },
+    {
+      "baseline_cell_id": "s2001-reordered-SS",
+      "condition": "reordered",
+      "contrast": "SS_to_MS",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-reordered-MS"
+    },
+    {
+      "baseline_cell_id": "s2001-reordered-SM",
+      "condition": "reordered",
+      "contrast": "SM_to_MM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2001,
+      "status": "compared",
+      "treatment_cell_id": "s2001-reordered-MM"
+    },
+    {
+      "baseline_cell_id": "s2003-reordered-SS",
+      "condition": "reordered",
+      "contrast": "SS_to_MS",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 0,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 0,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 0
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2003,
+      "status": "compared",
+      "treatment_cell_id": "s2003-reordered-MS"
+    },
+    {
+      "baseline_cell_id": "s2003-reordered-SM",
+      "condition": "reordered",
+      "contrast": "SM_to_MM",
+      "delivered_messages_equal": true,
+      "differences": {
+        "became_feasible": 0,
+        "became_optimal": 4,
+        "ceased_to_be_feasible": 0,
+        "ceased_to_be_optimal": 0,
+        "choices_changed": 4,
+        "episodes": 12,
+        "feasible_delta": 0,
+        "optimal_delta": 4
+      },
+      "messages_changed_episode_ids": [],
+      "seed": 2003,
+      "status": "compared",
+      "treatment_cell_id": "s2003-reordered-MM"
+    },
+    {
+      "baseline_cell_id": "s2003-fresh-SS",
+      "condition": "fresh",
+      "contrast": "SS_to_MS",
+      "delivered_messages_equal": null,
+      "differences": null,
+      "messages_changed_episode_ids": null,
+      "seed": 2003,
+      "status": "unavailable",
+      "treatment_cell_id": "s2003-fresh-MS"
+    },
+    {
+      "baseline_cell_id": "s2003-fresh-SM",
+      "condition": "fresh",
+      "contrast": "SM_to_MM",
+      "delivered_messages_equal": null,
+      "differences": null,
+      "messages_changed_episode_ids": null,
+      "seed": 2003,
+      "status": "unavailable",
+      "treatment_cell_id": "s2003-fresh-MM"
+    }
+  ],
+  "stop": {
+    "cell_id": "s2003-fresh-MM",
+    "reason": "cell_not_measured"
+  },
+  "usage": {
+    "attempted_model_seats_with_unknown_turn_count": 0,
+    "confirmed_model_turns_in_measured_cells": 12,
+    "known_cli_estimate_usd": 0.11137810000000001,
+    "model_calls_with_known_cli_estimate": 14,
+    "model_calls_with_unknown_cli_estimate": 0,
+    "model_turns_recorded": 14
+  }
+}
