@@ -47,6 +47,27 @@ manifest (at a `--tasks` root, a `--manifest` root, or the build root of the tas
 the same label, instance and condition. The tool imports `family.py` from the task folder (and, with
 `--family-hooks DIR`, `DIR/<family>.py`): run it on folders you built.
 
+The score check alone cannot tell a folder of another build when the final answer was wrong, and
+those are the trials that found, lost and clobbered answers are about. So a folder that is not
+provably the one the trial ran (every folder of a readable name, and an opaque name's folder that was
+rebuilt or moved) must also match the run, else it is unusable with the problem "task folder rebuilt
+with different parameters (<what differs>)", and the details are listed per trial:
+
+- the seats and the message limits that the world recorded (`world-state.json` or `score.json` seats,
+  the limits in the `start` event);
+- for each seat under test whose trajectory shows its instruction (terminus-2 puts it in the first user
+  message), the folder's `instructions/<seat>.md` up to its "Answer format" section, compared with
+  whitespace collapsed (the example-leak check reads the answer format from the trajectory, so a later
+  fix of a family's example does not hide an old leak);
+- when the run's build is known (its own folder's `task.toml`, or for an opaque name the manifest entry
+  of that name, which `build_tasks.py` writes with `build`: seed, difficulty, `n_seats`, `team_seats`,
+  `max_text`, `max_messages`, `scripted_seats`, `submitter`, `announce`, and `instructions_sha256`):
+  every build parameter, and the sha256 of each instruction file not checked by its trajectory.
+
+A readable name's manifest entry is not used (a later build of the same name replaces it), and a
+manifest written before build parameters existed gives none: then only the world record and the
+trajectories are compared.
+
 ## Outputs and rules
 
 Missing is not zero: a value a file does not record is `n/a` (JSON `null`) and is left out of means.
