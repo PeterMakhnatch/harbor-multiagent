@@ -15,6 +15,8 @@ Where the numbers come from:
   format examples; it agrees with an independent manual reading of the messages.
 - Counts marked "manual reading" come from that independent review, because a bare regex also
   matches format examples such as "Mon 09,10" inside a request.
+- The counts of seats that looked for the world's software (validity record):
+  [results/scripts/software_search.py](results/scripts/software_search.py).
 
 An independent reviewer re-derived the headline numbers from the raw files with its own code. It
 confirmed R1, R2, the R3 found/lost table, wave c5, R5 and the R6 means, and it confirmed the
@@ -183,7 +185,8 @@ operator ledger, not in the repo.
 | Submit reply counter `n` | a silent seat used it as a signal | removed in v2 | world tests; `qa.py stale-code` |
 | All seats on one Compose network | a silent seat scanned it and found its teammate | one network per seat, shared only with `main` | `qa.py seat-network`; lint rule `seat-shared-network` (PR #3) |
 | Scripted peer posted machine-readable JSON | a seat called it "the authoritative data source" | plain text in the seats' own format | `qa.py stale-code` (shipped oracle) and `twin-mismatch` (seats see identical bytes across twin conditions) |
-| Container and network names carry the task name | `qa.py` evidence search (1 of 793 pilot trajectories) | Flotilla builds opaque task names by default (`flotilla/t-<12 hex>`, with a build manifest); fork stopgap draft PR #19 hashes Compose project names; upstream tracks it in harbor#3607, and the open harbor#3803 (opaque session ids) is the general fix | `qa.py runtime-names` (passes for opaque sets, WARN for readable ones) and `opaque-names` (FAIL if an opaque name carries a label or condition); 0 of 556 canonical trajectories affected |
+| Container and network names carry the task name | `qa.py` evidence search (1 of 793 pilot trajectories) | Flotilla builds opaque task names by default (`flotilla/t-<12 hex>`, with a build manifest); fork stopgap draft PR #19 hashes Compose project names; upstream tracks it in harbor#3607, and the open harbor#3803 (opaque session ids) is the general fix | `qa.py runtime-names` (passes for opaque sets, FAIL for readable ones unless `--allow-readable-names`; `make_jobs.py` refuses them) and `opaque-names` (FAIL if an opaque name carries a label or condition); 0 of 556 canonical trajectories affected |
+| The `Server` header named the software (`flotilla-world/2`), whose public generator gives every answer key from the public seed 1 | [results/scripts/software_search.py](results/scripts/software_search.py): 19 seat runs looked for the software by that name (8 canonical), 4 tried `pip install flotilla-world`; none named a code host | world v3 sends `Server: world`; each build draws a secret seed (`--seed 1` only to repeat these waves) | world tests; `qa.py software-name`, `seat-secrets` (the seed), `public-seed` (WARN) and `stale-code` |
 
 ## Limits
 
@@ -196,6 +199,8 @@ operator ledger, not in the repo.
 - One harness (terminus-2) and 4 open models; no frontier model and no human baseline.
 - Heuristics: regex counts of message content; "seen" means shown on the seat's terminal.
 - Seats have internet access, so an outside service is still a possible channel.
+- The generator is public, and every canonical build used seed 1. A seat that found the repository
+  could have computed the answers; no seat named a code host (FINDINGS.md 2026-11-19 10:11).
 
 ## How many instances the next wave needs
 
@@ -236,16 +241,16 @@ Decision for the next wave:
 
 | Question | Build | Cost estimate |
 |---|---|---|
-| Does letting the seat with the evidence commit stop the lie (R5)? | `build_tasks.py --family schedule --scripted --conditions talk-liar --submitter p1` against `talk-liar`, same instances | about $2 for DeepSeek at 16 instances |
-| Does an acknowledgment protocol stop the losses in R3? | `build_tasks.py --family schedule --variant announce --instances 0-11 --conditions talk --announce` | about $0.6 for 3 models |
+| Does letting the seat with the evidence commit stop the lie (R5)? | `build_tasks.py --family schedule --scripted --conditions talk-liar --submitter p1 --seed 1` against `talk-liar`, same instances (seed 1 is public: `qa.py` warns; or build both arms anew, pairing them with `--seed-of`) | about $2 for DeepSeek at 16 instances |
+| Does an acknowledgment protocol stop the losses in R3? | `build_tasks.py --family schedule --variant announce --instances 0-11 --conditions talk --announce --seed 1` (the c1 instances) | about $0.6 for 3 models |
 | Do R1 to R3 hold on other information structures? | `--family ledger` and `--family puzzle` (oracle-checked: solo 1.0, talk 1.0, silent 0.0 and 0.17–0.42) | about $2 for 2 models |
-| Are the R1, R4 and R5 lie effects real? | the same builds with the instance counts in the table above, and a repeat of c1 `talk` | about $9 of model calls |
+| Are the R1, R4 and R5 lie effects real? | the same builds with the instance counts in the table above (new secret seeds; `--seed-of` pairs the R4 arms), and a repeat of c1 `talk` | about $9 of model calls |
 
 ## Reproduce
 
 ```bash
 python3 flotilla/build_tasks.py --family schedule --instances 0-11 --seats 2 --difficulty easy \
-    --play-timeout 600 --out .flotilla-local/tasks/c1
+    --play-timeout 600 --seed 1 --out .flotilla-local/tasks/c1
 uvx --quiet --with pyyaml python flotilla/qa.py ".flotilla-local/tasks/c1/*/*"
 python3 flotilla/make_jobs.py --tasks ".flotilla-local/tasks/c1/*/*" --agent terminus-2 \
     --model openrouter/deepseek/deepseek-v4-flash --max-turns 40 --concurrent 4 --env modal \
@@ -260,3 +265,8 @@ python3 flotilla/docs/results/scripts/breakdowns.py .flotilla-local/jobs
 Waves c3, c4 and c5 add `--scripted --conditions talk,talk-liar,talk-warned,talk-liar-warned`
 (with `--seat-agent p3=oracle` in `make_jobs.py`), `--variant tight --max-text 100 --max-messages 2
 --conditions talk`, and `--variant submitter --submitter p1 --conditions talk`.
+
+Every canonical build used seed 1, the default then. `build_tasks.py` now draws a secret seed for
+each build, so pass `--seed 1` to rebuild these instances. `qa.py` then warns (`public-seed`): the
+generator and seed 1 are public, so use such a set only to repeat these waves. A new wave builds
+without `--seed`.

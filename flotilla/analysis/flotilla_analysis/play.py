@@ -144,7 +144,7 @@ class SeatPlay:
 
 @dataclass
 class Play:
-    world_version: str  # "1", "2" or "unknown"
+    world_version: str  # "1", "2", "3" or "unknown"
     world_version_source: str
     messages: int | None
     pairs: list[Pair]

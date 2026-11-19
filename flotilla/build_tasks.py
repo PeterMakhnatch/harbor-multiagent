@@ -4,12 +4,15 @@
     python3 flotilla/build_tasks.py --family schedule --variant tight --max-messages 3 --max-text 200
 
 Writes flotilla/tasks/<label>/t-<12 hex>/, one folder per task, and flotilla/tasks/manifest.json, which
-maps each task name to its label, instance, condition and seats (all git-ignored: answer keys and seat
-tokens must not be published, because seats have public network access). Task names are opaque
-(`flotilla/t-<12 hex>`), because Harbor names a trial's Docker containers and networks after the task
-folder and seats can read those names; `--readable-names` writes `<label>-<iii>-<condition>` instead, for
-debugging only. The same seed always gives the same instances; names and tokens are random per build.
-See CONTRACT.md 2, 3 and 8.
+maps each task name to its label, instance, condition, seats and build parameters, the seed among them
+(all git-ignored: answer keys, seat tokens and seeds must not be published, because seats have public
+network access). Task names are opaque (`flotilla/t-<12 hex>`), because Harbor names a trial's Docker
+containers and networks after the task folder and seats can read those names; `--readable-names` writes
+`<label>-<iii>-<condition>` instead, for debugging only. The family generators are public, so the seed is
+a secret: each build draws a random one, and only the manifest, task.toml and task.json record it. The
+same seed always gives the same instances: `--seed N` reproduces a build, and `--seed-of PATH` gives a
+build the seed of the tasks under PATH, so that the two builds pair instance by instance. Names and tokens
+are random per build. See CONTRACT.md 2, 3 and 8.
 """
 
 from __future__ import annotations
@@ -37,6 +40,12 @@ CONDITIONS = ("solo", "silent", "talk")
 PLAY_TIMEOUT_SEC = 900.0
 MANIFEST = "manifest.json"  # at the build root (--out), outside every task folder: no seat reads it
 OPAQUE_NAME = re.compile(r"^t-[0-9a-f]{12}$")
+# The generators are public, so a seat that knows a build's seed can compute its answer keys. A seed below
+# PUBLIC_SEED_BELOW is public in effect (every build before secret seeds used --seed 1, and a small seed can be
+# found by trying them all): qa.py warns (public-seed). A drawn seed is below SEED_LIMIT = 2**53, so that every
+# JSON reader (JavaScript, jq) holds it exactly.
+PUBLIC_SEED_BELOW = 1_000_000
+SEED_LIMIT = 2**53
 
 
 def world_constant(name: str) -> int:
@@ -279,6 +288,29 @@ def opaque_name(salt: bytes, label: str, instance: int, condition: str) -> str:
     return "t-" + hashlib.sha256(salt + json.dumps([label, instance, condition]).encode()).hexdigest()[:12]
 
 
+def secret_seed() -> int:
+    """A random seed for one build, from PUBLIC_SEED_BELOW up to SEED_LIMIT (about 53 bits): a seat that finds the
+    public generator still cannot try the seeds until its calendars match (CONTRACT.md 2)."""
+    return PUBLIC_SEED_BELOW + secrets.randbelow(SEED_LIMIT - PUBLIC_SEED_BELOW)
+
+
+def seed_of(path: Path) -> int:
+    """The seed of the tasks under a folder (a build root, a label folder or one task folder), read from their
+    task.toml, for a build that pairs with them. They must share one seed. No message names a seed."""
+    seeds = set()
+    for toml in sorted(path.rglob("task.toml")):
+        try:
+            seed = (tomllib.loads(toml.read_text()).get("metadata") or {}).get("seed")
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(seed, int) and not isinstance(seed, bool):
+            seeds.add(seed)
+    if len(seeds) != 1:
+        found = "no task with a seed" if not seeds else f"tasks of {len(seeds)} different seeds"
+        raise SystemExit(f"--seed-of {path}: it holds {found}; name a folder of one build")
+    return seeds.pop()
+
+
 def earlier_tasks(label_dir: Path, family: str, variant: str) -> dict[str, tuple[int, str]]:
     """Folder name -> (instance, condition) of the tasks of this label that earlier builds wrote, read from their
     task.toml (so that readable folders of a build before opaque names count too)."""
@@ -456,7 +488,13 @@ def main() -> None:
     parser.add_argument("--instances", default="0-11", help="e.g. 0-11 or 0,3,5")
     parser.add_argument("--seats", type=int, default=2)
     parser.add_argument("--difficulty", default="easy")
-    parser.add_argument("--seed", type=int, default=1)
+    seeds = parser.add_mutually_exclusive_group()
+    seeds.add_argument("--seed", type=int,
+                       help="reproduce the instances of a build made with this seed (the canonical waves used "
+                       "--seed 1, which is public: qa.py warns); default: a secret random seed for each build")
+    seeds.add_argument("--seed-of", type=Path, metavar="PATH",
+                       help="use the seed of the tasks under PATH (a label folder of an earlier build), so that "
+                       "this build has the same instances; the seed stays out of the command and the output")
     parser.add_argument("--conditions", default=",".join(CONDITIONS))
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: the tasks go "
@@ -490,12 +528,22 @@ def main() -> None:
         conditions = ("talk", "talk-liar")
     if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else args.seats) + 1)]:
         parser.error(f"--submitter {args.submitter} is not a seat of this build")
-    built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, args.seed,
+    kept = "only the manifest, task.toml and task.json record it"
+    if args.seed is not None:
+        seed = args.seed
+        said = (f"{seed}, given with --seed; it is public (below {PUBLIC_SEED_BELOW:,}), so qa.py warns (public-seed)"
+                if seed < PUBLIC_SEED_BELOW else f"given with --seed ({kept})")
+    elif args.seed_of is not None:
+        seed, said = seed_of(args.seed_of), f"the seed of the tasks under {args.seed_of} ({kept})"
+    else:
+        seed, said = secret_seed(), f"secret, drawn for this build ({kept})"
+    built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, seed,
                   conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
                   args.play_timeout, max_text=args.max_text, max_messages=args.max_messages,
                   submitter=args.submitter, announce=args.announce, readable_names=args.readable_names)
     print(f"built {len(built)} tasks under {args.out}")
     print(f"manifest: {args.out / MANIFEST} ({'readable' if args.readable_names else 'opaque'} names)")
+    print(f"seed: {said}")
 
 
 if __name__ == "__main__":

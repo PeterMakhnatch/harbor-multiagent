@@ -147,3 +147,31 @@ def test_schedule_example_is_never_the_answer_or_the_decoy():
         scripted = module.generate_scripted(1, i, "easy")
         for window in (scripted["answer_key"], scripted["decoy"]):
             assert json.dumps(window) not in scripted["answer_format"]
+
+
+SECRET_SEED = 8_398_302_271_514_603  # of the size that build_tasks.py draws (up to 2**53), fixed for this test
+
+
+@pytest.mark.parametrize("name", FAMILIES)
+def test_a_secret_seed_gives_its_own_valid_instances(name):
+    """build_tasks.py draws a secret seed per build: the same seed gives the same instances, the next seed other
+    ones, and the oracle and no-leak properties hold for it as for seed 1."""
+    module = family(name)
+    for difficulty, n_seats in SETTINGS:
+        for i in range(2):
+            inst = module.generate(SECRET_SEED, i, n_seats, difficulty)
+            assert inst == module.generate(SECRET_SEED, i, n_seats, difficulty)
+            assert inst != instance(name, i, n_seats, difficulty)  # seed 1
+            if i == 0:
+                assert inst != module.generate(SECRET_SEED + 1, i, n_seats, difficulty)
+            parts = [inst["private"][seat] for seat in sorted(inst["private"])]
+            assert module.score(module.oracle_answer(parts), inst["answer_key"])["score"] == 1.0
+            key = inst["answer_key"]
+            spellings = {json.dumps(key), json.dumps(key, sort_keys=True), json.dumps(key, separators=(",", ":"))}
+            assert not any(spelling in text for spelling in spellings for text in texts(inst))
+    if name == "schedule":
+        for i in range(3):
+            scripted = module.generate_scripted(SECRET_SEED, i, "easy")
+            assert scripted == module.generate_scripted(SECRET_SEED, i, "easy")
+            for window in (scripted["answer_key"], scripted["decoy"]):
+                assert json.dumps(window) not in scripted["answer_format"]

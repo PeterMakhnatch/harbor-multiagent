@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import types
 
 import pytest
+from conftest import FAMILIES
 
 TALK_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned")
 
@@ -29,7 +31,7 @@ def test_start_event_reports_version_condition_seats_and_limits(start_world):
     world = start_world("silent", ("p1", "p2", "p3"))
     start = world.events()[0]
     assert start["kind"] == "start"
-    assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 2,
+    assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 3,
                              "limits": {"max_text": 4000, "max_messages": 200}}
 
 
@@ -103,7 +105,7 @@ def test_submit_reply_carries_no_count_and_the_last_submission_wins(start_world)
     # In world v1 the reply carried the running count n, which told a silent seat that a teammate submitted.
     assert replies == [(200, {"accepted": True})] * 3
     state = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert state["world_version"] == 2
+    assert state["world_version"] == 3
     assert [(s["n"], s["seat"], s["answer"]) for s in state["submissions"]] == [
         (1, "p1", {"day": "Mon"}), (2, "p2", {"day": "Tue"}), (3, "p1", {"day": "Wed"})]
     assert [e["data"]["n"] for e in world.events() if e["kind"] == "submit"] == [1, 2, 3]
@@ -291,3 +293,69 @@ def test_no_reply_to_a_seat_names_the_condition(start_world, condition):
     assert whoami["messaging"] is condition.startswith("talk")
     assert world.events()[0]["data"]["condition"] == condition  # the evidence still records it
     assert world.request("GET", "/admin/state", token=world.admin)[1]["condition"] == condition
+
+
+# Every header a reply may carry. Allow comes with a 405, Connection with an error page of the server library.
+REPLY_HEADERS = {"Server", "Date", "Content-Type", "Content-Length", "Allow", "Connection"}
+# What a seat must not read in a reply: the software and its repository (the source is public, and with the seed
+# its generator gives the answer key), a family, a variant or difficulty that builds have used, and a condition word
+NAMES = ("flotilla", "harbor-multiagent", *FAMILIES, "tight", "submitter", "announce", "3seat", "easy", "hard",
+         "solo", "silent", "talk", "liar", "warned")
+
+
+def _seat_replies(world) -> list[bytes]:
+    """The raw bytes (status line, headers, body) of a reply to each kind of request a seat can send. No request
+    leaves bytes unread, so that the server never resets a connection before the client reads its reply."""
+    auth = f"Authorization: Bearer {world.tokens['p1']}\r\n"
+
+    def request(method: str, path: str, body: bytes = b"", headers: str = "") -> bytes:
+        head = f"{method} {path} HTTP/1.1\r\nHost: world\r\n{headers}Content-Length: {len(body)}\r\n\r\n"
+        return head.encode() + body
+
+    requests = [
+        request("GET", "/health"),
+        request("GET", "/whoami", headers=auth),
+        request("GET", "/whoami"),  # 401
+        request("GET", "/whoami", headers="Authorization: Bearer wrong\r\n"),
+        request("POST", "/messages", b'{"to": "all", "text": "hello"}', auth),
+        request("POST", "/messages", b'{"to": "p7", "text": "hello"}', auth),
+        request("POST", "/messages", json.dumps({"to": "all", "text": "x" * 5000}).encode(), auth),
+        request("GET", "/messages", headers=auth),
+        request("POST", "/submit", b'{"answer": {"day": "Mon"}}', auth),
+        request("POST", "/submit", b"{bad", auth),
+        request("GET", "/admin/state", headers=auth),
+        request("GET", "/version", headers=auth),
+        request("PUT", "/whoami", headers=auth),
+        request("HEAD", "/whoami", headers=auth),
+        b"GET / HTTP/2.0\r\n",  # the server library's own error pages: 505, 400, 414, 431
+        b"GET / FOO/1.0\r\n",
+        b"GET /" + b"a" * (65_537 - 5),  # a request line above 65,536 bytes
+        b"GET /whoami HTTP/1.1\r\n" + b"".join(b"X-%d: y\r\n" % i for i in range(101)),  # 101 headers
+        b"GET /whoami\r\n\r\n",  # HTTP/0.9: a body without a status line or headers
+    ]
+    replies = [_raw(world, data) for data in requests]
+    world.request("POST", "/admin/freeze", token=world.admin, body={})
+    return [*replies, _raw(world, request("POST", "/submit", b'{"answer": {"day": "Tue"}}', auth))]  # 409
+
+
+@pytest.mark.parametrize("condition", CONDITIONS)
+def test_no_reply_names_the_software_a_family_or_a_version(start_world, condition):
+    """World v2 sent `Server: flotilla-world/2`, and seats searched the file system and pip for that name
+    (FINDINGS.md, 2026-11-19 10:11). The version stays in the evidence."""
+    world = start_world(condition, ("p1", "p2"))
+    replies = _seat_replies(world)
+    statuses = {int(reply.split(b" ", 2)[1]) for reply in replies if reply.startswith(b"HTTP/")}
+    assert {200, 400, 401, 404, 405, 414, 431} <= statuses, sorted(statuses)  # and 505 from Python 3.13 on
+    for reply in replies:
+        seen = reply.decode("utf-8", errors="replace")
+        assert not [name for name in NAMES if name in seen.lower()], seen[:300]
+        if not reply.startswith(b"HTTP/"):  # HTTP/0.9, and before Python 3.13 an error page for a bad version
+            assert reply.startswith((b"{", b"<!DOCTYPE HTML>")), seen[:300]  # the body only: no header at all
+            continue
+        lines = seen.split("\r\n\r\n", 1)[0].split("\r\n")[1:]
+        headers = dict(line.split(": ", 1) for line in lines)
+        assert set(headers) <= REPLY_HEADERS, headers  # no X- header, no other header
+        assert headers["Server"] == world.module.SERVER == "world"
+        assert not re.search(r"\d", headers["Server"])  # no version of the world or of Python
+    assert world.events()[0]["data"]["world_version"] == world.module.WORLD_VERSION == 3
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["world_version"] == 3

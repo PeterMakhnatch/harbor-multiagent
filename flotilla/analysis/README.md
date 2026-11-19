@@ -68,6 +68,11 @@ A readable name's manifest entry is not used (a later build of the same name rep
 manifest written before build parameters existed gives none: then only the world record and the
 trajectories are compared.
 
+Each build draws a secret seed (CONTRACT.md 2), so a rebuild without `--seed` or `--seed-of` holds other
+instances and differs in `seed`. To read jobs of a build whose folders are gone, rebuild with its seed:
+`--seed 1` for every build before secret seeds, else `--seed-of` an archived folder or the seed in the
+manifest entry's `build` record.
+
 ## Outputs and rules
 
 Missing is not zero: a value a file does not record is `n/a` (JSON `null`) and is left out of means.
