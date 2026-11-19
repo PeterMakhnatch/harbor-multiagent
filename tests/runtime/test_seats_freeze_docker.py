@@ -1,10 +1,12 @@
 """What a seat leaves running when play ends, on real Docker with the oracle in
-both seats; no model APIs are used.
+both seats; no model APIs are used. Both seats run as a non-root user, player.
 
 p1, under test, ends as soon as p2 has started, and leaves a detached child
 behind. p2, a supporting agent, is still running when play ends and has a
 background child of its own. Each of the three posts to the world DELAY_SEC
 after p1 has ended, and the verifier reads the world GRACE_SEC after that.
+From its start, p2 also runs a loop that sends SIGCONT to every process it may
+signal, to undo the freeze.
 """
 
 import asyncio
@@ -84,7 +86,7 @@ set -eu
 post() {{ python3 -c "import urllib.request as u; u.urlopen('http://main:8080/$1', b'')"; }}
 posted() {{ python3 -c "import urllib.request as u; u.urlopen('http://main:8080/$1')" 2>/dev/null; }}
 
-echo "$SEAT started"
+echo "$SEAT started as $(id -un)"
 if [ "$SEAT" = p1 ]; then
   until posted p2_started; do sleep 0.2; done
   post p1_ended
@@ -92,6 +94,7 @@ if [ "$SEAT" = p1 ]; then
   exit 0
 fi
 post p2_started
+(end=$((SECONDS + {DELAY_SEC})); while [ $SECONDS -lt $end ]; do kill -s CONT -1 || :; done) 2>/dev/null &
 until posted p1_ended; do sleep 0.2; done
 (sleep {DELAY_SEC}; post p2_child) &
 sleep {DELAY_SEC}
@@ -203,9 +206,9 @@ async def test_nothing_a_seat_left_running_acts_on_the_world_after_play(
         assert seat.freeze.finished_at >= result.agent_execution.finished_at
     # A frozen seat is still collected from, by copy and by exec.
     p2_log = trial.paths.trial_dir / "seats" / "p2" / "agent" / "oracle.txt"
-    assert p2_log.read_text() == "p2 started\n"
+    assert p2_log.read_text() == "p2 started as player\n"
     p2_artifact = trial.paths.artifacts_dir / "logs" / "agent" / "oracle.txt"
-    assert p2_artifact.read_text() == "p2 started\n"
+    assert p2_artifact.read_text() == "p2 started as player\n"
     assert _collected_notes(trial) == BEFORE
 
 

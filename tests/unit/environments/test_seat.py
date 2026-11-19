@@ -171,7 +171,11 @@ async def test_freeze_stops_the_seat_as_root_and_returns_its_counts(project, sea
 
     command = _commands(project)[-1]
     assert command[:6] == ["exec", "-u", "root", "maya", "sh", "-c"]
-    assert command[-1].startswith("exec bash -c 'kill -s STOP -- -1 ")
+    assert shlex.split(command[-1])[:3] == ["exec", "bash", "-c"]
+    script = shlex.split(command[-1])[3]
+    # SIGSTOP goes out again before each check, not once before the first.
+    stop = script.index("kill -s STOP -- -1")
+    assert script.index("for _ in") < stop < script.index("/proc/")
     assert project._run_docker_compose_command.call_args.kwargs["timeout_sec"] == 30
 
 

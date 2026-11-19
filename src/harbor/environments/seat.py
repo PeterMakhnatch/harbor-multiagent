@@ -17,14 +17,17 @@ from harbor.models.task.config import EnvironmentConfig
 from harbor.models.trial.paths import TrialPaths
 
 # Sends SIGSTOP to every process the caller may signal but PID 1 and itself
-# (kill -1), then reads each process's state from /proc until none is left
-# running or a second has passed, and prints how many are stopped and how many
-# are not. kill's exit status says nothing: it is 0 when no process could be
-# signalled. The state is the field after the last ")" of /proc/<pid>/stat, so
-# a process cannot name itself stopped.
+# (kill -1) and reads each process's state from /proc, again every 0.1 s until
+# none is left running or a second has passed, and prints how many are stopped
+# and how many are not. The signal goes out again each time because a process
+# that was inside its own kill(-1, SIGCONT) when it was stopped continues the
+# processes the freeze had already stopped, and only then stops itself.
+# kill's exit status says nothing: it is 0 when no process could be signalled.
+# The state is the field after the last ")" of /proc/<pid>/stat, so a process
+# cannot name itself stopped.
 _FREEZE = """\
-kill -s STOP -- -1 2>/dev/null
 for _ in 1 2 3 4 5 6 7 8 9 10; do
+  kill -s STOP -- -1 2>/dev/null
   stopped=0 running=0
   for dir in /proc/[0-9]*; do
     case ${dir#/proc/} in 1 | $$) continue ;; esac
@@ -119,7 +122,11 @@ class SeatEnvironment(BaseEnvironment):
         work: they start new processes, which are not stopped. PID 1 cannot be
         stopped from inside its container and is not counted: with Compose
         ``init: true`` it is the init process, without it the service's own
-        command."""
+        command. The counts hold only while the seat's agent cannot change what
+        root runs here, as when it runs as a non-root ``user:`` and the image's
+        shell belongs to root: an agent that is root can replace bash. Two or
+        more processes that keep sending each other SIGCONT can stay running;
+        they are counted as running."""
         result = await self.exec(_FREEZE, user="root", timeout_sec=_FREEZE_TIMEOUT_SEC)
         counts = re.search(r"stopped=(\d+) running=(\d+)", result.stdout or "")
         if result.return_code != 0 or counts is None:
