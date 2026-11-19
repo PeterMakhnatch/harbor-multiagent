@@ -9,7 +9,7 @@ import stat
 from collections.abc import Iterable
 from itertools import chain
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 DATASET_COMMIT = "c0301a650db95958924bb080192c09fef39389a5"
 MINUTES_PER_TICK = 10
@@ -22,6 +22,15 @@ _STRATA = ("2", "3", "4", "5")
 _MEMBER_FILES = {f"m{i}": f"Member{i}_final_schedule.json" for i in range(1, 6)}
 _CASE_NUMBER = re.compile(r"[1-9][0-9]*")
 _INTERVAL = re.compile(r"([0-9]{2}):([0-9]{2})-([0-9]{2}):([0-9]{2})")
+
+
+class ReferenceAgreement(TypedDict):
+    """Compare published gold with the feasible starts shared by all calendars."""
+
+    agrees: bool
+    only_in_reference: list[int]
+    only_in_calendars: list[int]
+    intersection: list[int]
 
 
 def _require_directory(path: Path) -> Path:
@@ -234,7 +243,7 @@ def member_starts(
     return starts
 
 
-def evaluate_reference(case: dict[str, Any]) -> dict[str, bool | list[int]]:
+def evaluate_reference(case: dict[str, Any]) -> ReferenceAgreement:
     """Compare published gold with strict common feasibility; do not alter gold."""
     members = case["members"]
     if members.keys() != _MEMBER_FILES.keys():

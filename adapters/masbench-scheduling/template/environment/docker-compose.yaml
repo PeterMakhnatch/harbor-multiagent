@@ -1,0 +1,62 @@
+x-player: &player
+  build: ./player
+  user: player
+  working_dir: /home/player
+  command: ["sleep", "infinity"]
+  init: true
+  network_mode: none
+  security_opt: ["no-new-privileges:true"]
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    build: .
+    user: root
+    command: ["python3", "-B", "-u", "/opt/calendar/calendar_world.py", "--keepalive"]
+    init: true
+    network_mode: none
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -f /ports/m1/input.json && test -f /ports/m2/input.json &&
+          test -f /ports/m3/input.json && test -f /ports/m4/input.json &&
+          test -f /ports/m5/input.json
+      interval: 1s
+      timeout: 2s
+      retries: 30
+    volumes:
+      - exchange-m1:/ports/m1
+      - exchange-m2:/ports/m2
+      - exchange-m3:/ports/m3
+      - exchange-m4:/ports/m4
+      - exchange-m5:/ports/m5
+  m1:
+    <<: *player
+    environment: {CALENDAR_ROLE: m1}
+    volumes: ["exchange-m1:/exchange"]
+  m2:
+    <<: *player
+    environment: {CALENDAR_ROLE: m2}
+    volumes: ["exchange-m2:/exchange"]
+  m3:
+    <<: *player
+    environment: {CALENDAR_ROLE: m3}
+    volumes: ["exchange-m3:/exchange"]
+  m4:
+    <<: *player
+    environment: {CALENDAR_ROLE: m4}
+    volumes: ["exchange-m4:/exchange"]
+  m5:
+    <<: *player
+    environment: {CALENDAR_ROLE: m5}
+    volumes: ["exchange-m5:/exchange"]
+
+volumes:
+  exchange-m1: {}
+  exchange-m2: {}
+  exchange-m3: {}
+  exchange-m4: {}
+  exchange-m5: {}

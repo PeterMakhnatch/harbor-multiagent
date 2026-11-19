@@ -1,0 +1,31 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/calendar.json"]
+
+[task]
+name = "harbor/masbench-scheduling"
+description = "Five participants coordinate a meeting without sharing their private calendars."
+keywords = ["scheduling", "multi-agent", "coordination"]
+
+[verifier]
+timeout_sec = 120.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[agents.m1]
+under_test = true
+
+[agents.m2]
+under_test = true
+
+[agents.m3]
+under_test = true
+
+[agents.m4]
+under_test = true
+
+[agents.m5]
+under_test = true
