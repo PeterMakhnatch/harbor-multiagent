@@ -30,6 +30,9 @@ pytestmark = [pytest.mark.runtime, pytest.mark.integration, pytest.mark.asyncio]
 
 DELAY_SEC = 12
 GRACE_SEC = 6
+# How long after play ends the freeze may finish; a fraction of a second on
+# local Docker.
+WINDOW_SEC = 5
 BEFORE = {"p2_started", "p1_ended"}
 LATE = ("p1_child", "p2_child", "p2_harness")
 
@@ -197,6 +200,10 @@ async def test_nothing_a_seat_left_running_acts_on_the_world_after_play(
     assert result.agent_execution is not None
     assert result.agent_execution.finished_at is not None
     assert result.seat_results is not None
+    p1 = next(seat for seat in result.seat_results if seat.seat == "p1")
+    # Play ended when p1, the only agent under test, ended.
+    assert p1.agent_execution is not None and p1.agent_execution.finished_at
+    play_ended = p1.agent_execution.finished_at
     for seat in result.seat_results:
         assert seat.freeze is not None, seat.seat
         failed = seat.freeze.exception_info
@@ -204,6 +211,8 @@ async def test_nothing_a_seat_left_running_acts_on_the_world_after_play(
         # The service's own `sleep infinity` and at least one leftover.
         assert seat.freeze.stopped is not None and seat.freeze.stopped >= 2
         assert seat.freeze.finished_at >= result.agent_execution.finished_at
+        window = (seat.freeze.finished_at - play_ended).total_seconds()
+        assert 0 <= window < WINDOW_SEC, (seat.seat, window)
     # A frozen seat is still collected from, by copy and by exec.
     p2_log = trial.paths.trial_dir / "seats" / "p2" / "agent" / "oracle.txt"
     assert p2_log.read_text() == "p2 started as player\n"

@@ -363,8 +363,12 @@ class SeatsTrial(SingleStepTrial):
         """Once play has started, stop every process in every seat at once
         (SeatEnvironment.freeze), so that nothing a seat left running acts on
         the world while logs and artifacts are collected and the verifier runs.
-        Separate verifier mode stops main before sidecar evidence is collected
-        for the same reason; seats are stopped in place because they are still
+        It comes after the cancelled runs have ended, so that no agent, such as
+        one whose harness runs in Harbor's process and sends each command as an
+        exec, starts a process in its seat after the freeze; a seat process can
+        still act in the time between the end of play and the freeze. Separate
+        verifier mode stops main before sidecar evidence is collected for the
+        same reason; seats are stopped in place because they are still
         collected from. A seat is frozen once, here or in _recover_outputs.
         main holds the world and the verifier and is never frozen, and neither
         is a seat with ``freeze = false``."""
