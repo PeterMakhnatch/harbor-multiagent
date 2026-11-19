@@ -21,14 +21,32 @@ TALK_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned")
 Findings = set[tuple[str, str, str, str]]
 
 
+def build_set(out: Path, readable_names: bool) -> Path:
+    """Instance 0 of schedule (2 seats), schedule.liar (scripted peer, all four talk conditions) and ledger."""
+    BUILD.build("schedule", [0], 2, "easy", 1, BUILD.CONDITIONS, out, readable_names=readable_names)
+    BUILD.build("schedule", [0], 2, "easy", 1, TALK_CONDITIONS, out, variant="liar", scripted=True,
+                readable_names=readable_names)
+    BUILD.build("ledger", [0], 2, "easy", 1, BUILD.CONDITIONS, out, readable_names=readable_names)
+    return out
+
+
 @pytest.fixture(scope="module")
 def built(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Instance 0 of schedule (2 seats), schedule.liar (scripted peer, all four talk conditions) and ledger."""
-    out = tmp_path_factory.mktemp("built")
-    BUILD.build("schedule", [0], 2, "easy", 1, BUILD.CONDITIONS, out)
-    BUILD.build("schedule", [0], 2, "easy", 1, TALK_CONDITIONS, out, variant="liar", scripted=True)
-    BUILD.build("ledger", [0], 2, "easy", 1, BUILD.CONDITIONS, out)
-    return out
+    """The set with readable names, so that each planted fault below can name its task folder."""
+    return build_set(tmp_path_factory.mktemp("built"), readable_names=True)
+
+
+@pytest.fixture(scope="module")
+def opaque(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The same set with opaque names, as build_tasks.py writes it by default."""
+    return build_set(tmp_path_factory.mktemp("opaque"), readable_names=False)
+
+
+def opaque_task(out: Path, label: str, condition: str) -> Path:
+    """The folder of instance 0 of a label in a condition, found in the build manifest."""
+    entries = json.loads((out / "manifest.json").read_text())["tasks"].values()
+    (path,) = [e["path"] for e in entries if (e["label"], e["instance"], e["condition"]) == (label, 0, condition)]
+    return out / path
 
 
 def findings(out: Path) -> Findings:
@@ -68,9 +86,99 @@ def test_a_fresh_build_has_no_fail(built, baseline):
     assert len(tasks) == 10
     assert [f for f in found if f.level == "FAIL"] == []
     assert {f.rule for f in found} <= {"solo-sufficient", "runtime-names"}
-    # Harbor's Docker names carry the task name, and the scripted variant's label is `liar` (a WARN per label)
-    assert [(f.rule, f.task) for f in found if f.rule == "runtime-names"] == [("runtime-names", "schedule.liar")]
+    # Harbor's Docker names carry a readable folder name, so each label gets a WARN; schedule.liar's say 'liar'
+    names = {f.task: f.detail for f in found if f.rule == "runtime-names"}
+    assert sorted(names) == ["ledger", "schedule", "schedule.liar"]
+    assert "reads 'liar', 'schedule', 'talk', 'warned'" in names["schedule.liar"]
+    assert "reads 'schedule', 'silent', 'solo', 'talk'" in names["schedule"]
     assert {(f.rule, f.task, f.seat, f.detail) for f in found} == baseline
+
+
+def test_an_opaque_build_passes_runtime_names(opaque):
+    found, tasks = QA.check(QA.find_tasks([str(opaque / "*" / "*")]))
+    assert len(tasks) == 10 and {task.names for task in tasks} == {"opaque"}
+    assert {f.rule for f in found} <= {"solo-sufficient"}  # no FAIL, and no runtime-names WARN
+    assert {(task.label, task.instance, task.condition) for task in tasks} == {
+        *(("schedule", 0, c) for c in BUILD.CONDITIONS), *(("ledger", 0, c) for c in BUILD.CONDITIONS),
+        *(("schedule.liar", 0, c) for c in TALK_CONDITIONS)}
+
+
+def rename_task(task: Path, name: str) -> None:
+    path = task / "task.toml"
+    path.write_text(re.sub(r'^name = ".*"$', f'name = "{name}"', path.read_text(), count=1, flags=re.MULTILINE))
+
+
+@pytest.mark.parametrize(("name", "detail"), [
+    ("flotilla/schedule.liar-000-talk-liar",
+     "its task name flotilla/schedule.liar-000-talk-liar says 'liar', 'schedule', 'talk'"),
+    ("flotilla/t-0123456789ab-talk", "its task name flotilla/t-0123456789ab-talk says 'talk'"),
+    ("flotilla/t-0123456789", "its task name flotilla/t-0123456789 is not of the form flotilla/t-<12 hex>"),
+    ("other/t-0123456789ab", "its task name other/t-0123456789ab is not of the form flotilla/t-<12 hex>"),
+])
+def test_an_opaque_name_that_says_what_the_task_is_fails(opaque, tmp_path, name, detail):
+    baseline = findings(opaque)
+    out = tmp_path / "set"
+    shutil.copytree(opaque, out)
+    task = opaque_task(out, "schedule.liar", "talk-liar")
+    rename_task(task, name)
+    assert findings(out) - baseline == {("opaque-names", task.name, "*", detail)}  # not runtime-names
+
+
+def test_twins_of_an_opaque_build_are_found_by_their_metadata(opaque, tmp_path):
+    baseline = findings(opaque)
+    out = tmp_path / "set"
+    shutil.copytree(opaque, out)
+    twin, task = opaque_task(out, "schedule.liar", "talk"), opaque_task(out, "schedule.liar", "talk-liar")
+    plant_twin_briefing(task)
+    assert findings(out) - baseline == {
+        ("twin-mismatch", task.name, "p1", f"env.SEAT_BRIEFING differs from {twin.name} (schedule.liar-000-talk) at note")}
+
+
+def test_short_variant_words_do_not_fail_an_opaque_name(tmp_path):
+    """`t` is in every opaque name and `ab` may be: only the hex part is checked, and hex-only words are left out."""
+    for variant in ("t", "ab"):
+        BUILD.build("ledger", [0], 2, "easy", 1, ("talk",), tmp_path, variant=variant)
+    found, tasks = QA.check(QA.find_tasks([str(tmp_path)]))
+    assert len(tasks) == 2 and not [f for f in found if f.rule in ("opaque-names", "runtime-names")]
+
+
+def test_an_opaque_folder_that_says_what_the_task_is_fails(opaque, tmp_path):
+    out = tmp_path / "set"
+    shutil.copytree(opaque, out)
+    task = opaque_task(out, "ledger", "silent")
+    task.rename(task.with_name("ledger-000-silent"))
+    found, _tasks = QA.check(QA.find_tasks([str(out)]))
+    new = {(f.rule, f.task, f.detail) for f in found if f.task == "ledger-000-silent"}
+    assert new == {("opaque-names", "ledger-000-silent", "its folder name ledger-000-silent says 'ledger', 'silent'")}
+    assert not [f for f in found if f.rule == "runtime-names"]  # an opaque task's name is opaque-names' FAIL
+
+
+@pytest.mark.parametrize(("source", "label"), [("../task.toml", "task.toml"),
+                                               ("../../../manifest.json", "the build manifest (manifest.json)"),
+                                               ("../../..", "the build manifest (manifest.json)")])
+def test_a_seat_may_not_mount_task_toml_or_the_manifest(opaque, tmp_path, source, label):
+    """Both say the condition of an opaque task: a seat must not read them (CONTRACT.md 2)."""
+    baseline = findings(opaque)
+    out = tmp_path / "set"
+    shutil.copytree(opaque, out)
+    task = opaque_task(out, "schedule", "talk")
+    edit_compose(task, lambda c: c["services"]["p1"].update(volumes=[f"{source}:/home/player/x:ro"]))
+    new = findings(out) - baseline
+    assert {(rule, seat) for rule, _task, seat, _detail in new} == {("seat-secrets", "p1")}
+    assert any(detail.endswith(f"which holds {label}") or f", {label}" in detail for *_rest, detail in new), new
+
+
+def test_the_report_says_what_an_opaque_task_is(opaque, tmp_path):
+    out = tmp_path / "set"
+    shutil.copytree(opaque, out)
+    task = opaque_task(out, "schedule", "talk")
+    plant_admin_token(task)
+    qa = [sys.executable, str(FLOTILLA / "qa.py"), str(out)]
+    text = subprocess.run(qa, capture_output=True, text=True, check=False)
+    assert text.returncode == 1 and f"{task.name} (schedule-000-talk)" in text.stdout
+    rows = json.loads(subprocess.run([*qa, "--json"], capture_output=True, text=True, check=False).stdout)["findings"]
+    assert {(r["rule"], r["label"], r["instance"], r["condition"]) for r in rows if r["task"] == task.name} == {
+        ("seat-secrets", "schedule", 0, "talk")}
 
 
 # --- One planted fault per rule (FINDINGS.md names the real runs where each one happened) ---

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from flotilla_analysis.load import Evidence, Trial, read_json
+from flotilla_analysis.names import Identity, rebuilt_folders
 
 TOLERANCE = 1e-9
 _SEAT = re.compile(r'^\s+SEAT:\s*(".*")\s*$')
@@ -80,10 +81,18 @@ def compose_briefings(text: str) -> dict[str, Any]:
 
 
 def find_task_dir(trial: Trial, roots: list[Path]) -> Path | None:
+    """The trial's task folder, or the folder of the same task rebuilt since the run: by name under each
+    root, then the folders that a build manifest (``manifest.json`` at a root, or at the build root of the
+    trial's task path) lists for the same label, instance and condition, since a rebuilt opaque task has
+    another name."""
     name = trial.task_name.split("/", 1)[1]
     candidates = [Path(trial.task_path)] if trial.task_path else []
     for root in roots:
         candidates += [root / trial.label / name, root / name]
+    same = Identity(trial.label, trial.instance, trial.condition)
+    build_roots = [Path(trial.task_path).parent.parent] if trial.task_path else []
+    for root in [*roots, *build_roots]:
+        candidates += rebuilt_folders(root, same)
     for candidate in candidates:
         if (candidate / "environment" / "task.json").is_file():
             return candidate

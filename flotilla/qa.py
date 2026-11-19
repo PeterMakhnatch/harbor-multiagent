@@ -5,8 +5,9 @@
 
 Real runs found validity faults that each corrupted a condition (docs/FINDINGS.md): an answer example
 that equalled one instance's answer key, a world reply that named the condition, a reply counter that
-was a side channel, one Compose network for all seats, and a scripted peer whose format looked more
-authoritative than plain text. World version 2 fixed them in code. This checker reads a built task set
+was a side channel, one Compose network for all seats, a scripted peer whose format looked more
+authoritative than plain text, and Docker names that carried the task name. World version 2 and opaque
+task names fixed them in code. This checker reads a built task set
 and reports every fault of these kinds that it finds (see RULES). It reads files and calls the task's
 own family module (solution/family.py); it starts no container and opens no connection. No output
 names a token or an answer key. Exit status: 1 when any finding is a FAIL, 2 when no task folder
@@ -58,16 +59,19 @@ WORLD_VERSION: int = BUILD.WORLD_VERSION
 RULES: dict[str, tuple[str, str]] = {
     "example-leak": ("FAIL", "a JSON example in a seat's instruction scores 1 against the answer key or the decoy"),
     "condition-leak": ("FAIL", "a byte that a seat under test reads names its condition or reveals it"),
+    "opaque-names": ("FAIL", ("a task built with opaque names has a task or folder name that is not t-<12 hex>, "
+                              "or that names a condition, its family or its variant")),
     "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart (talk and talk-liar, "
                                "talk-warned and talk-liar-warned)")),
     "seat-network": ("FAIL", "a seat is not alone with main on a network of its own"),
-    "seat-secrets": ("FAIL", ("a seat gets the answer key, task.json, a world, family or score file, the admin "
-                              "token or another seat's token")),
+    "seat-secrets": ("FAIL", ("a seat gets the answer key, task.json, task.toml, the build manifest, a world, "
+                              "family or score file, the admin token or another seat's token")),
     "token-map": ("FAIL", "seat tokens are not distinct, or main does not map each one to its seat"),
     "stale-code": ("FAIL", "the task ships a world, scorer, oracle or family file that differs from this checkout"),
     "qa-error": ("FAIL", "a task file is missing or unreadable, so the task cannot be checked"),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
-    "runtime-names": ("WARN", "the Docker names that Harbor derives from the task name say 'liar'"),
+    "runtime-names": ("WARN", ("the Docker names that Harbor derives from the task folder's name say the condition "
+                               "or the label (a set built with --readable-names)")),
 }
 TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"))  # each pair must look the same to a seat
 REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned")
@@ -80,6 +84,9 @@ SHIPPED = {"environment/world.py": "world/world.py", "environment/score.py": "wo
 MIN_TOKEN_CHARS = 16  # a shorter token could be guessed by another seat
 MAX_READ_BYTES = 2_000_000
 TASK_NAME = re.compile(r"^(?P<label>.+)-(?P<instance>\d+)-(?P<condition>[a-z]+(?:-[a-z]+)*)$")
+OPAQUE_NAME: re.Pattern[str] = BUILD.OPAQUE_NAME  # t-<12 hex>, the folder name; the task name is flotilla/<it>
+CONDITION_WORDS = tuple(sorted({word for name in BUILD.CONDITION_TEXT for word in name.split("-")}))
+HEX_ONLY = re.compile(r"^[0-9a-f]+$")
 
 
 @dataclass(frozen=True)
@@ -114,6 +121,7 @@ class Task:
     instance: int | None = None
     condition: str = ""
     family_name: str = ""
+    names: str = ""  # [metadata] names: "opaque", "readable", or "" for a set built before opaque names
     seats: list[str] = field(default_factory=list)  # the [agents.<seat>] tables
     under_test: list[str] = field(default_factory=list)  # the seats a model plays
     compose: dict[str, Any] = field(default_factory=dict)
@@ -134,6 +142,13 @@ class Task:
 
     def error(self, detail: str, seat: str = "*") -> None:
         self.errors.append(Finding("qa-error", self.name, seat, detail))
+
+    @property
+    def shown(self) -> str:
+        """The folder name, and for an opaque name what the task is (the report is for the operator, not a seat)."""
+        if self.names != "opaque" or self.instance is None:
+            return self.name
+        return f"{self.name} ({self.label}-{self.instance:03d}-{self.condition})"
 
     def env(self, service: str) -> dict[str, str]:
         """The environment of a service as its container gets it."""
@@ -201,6 +216,7 @@ def load_task(path: Path) -> Task:
     instance = meta.get("instance", int(parsed["instance"]) if parsed else None)
     task.instance = instance if isinstance(instance, int) else None
     task.condition = str(meta.get("condition") or (parsed["condition"] if parsed else ""))
+    task.names = str(meta.get("names") or "")
     agents = config.get("agents") if isinstance(config.get("agents"), dict) else {}
     task.seats = sorted(agents)
     task.under_test = [seat for seat in task.seats if (agents[seat] or {}).get("under_test", True) is not False]
@@ -555,6 +571,30 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
                           f"instruction lacks the warning sentence of the {task.condition} condition")
 
 
+def name_words(task: Task, name: str) -> list[str]:
+    """The words in a name that say what the task is: a word of a condition name, or of the task's label (family and
+    variant). A word of hex digits only is left out, because an opaque name holds such strings by chance."""
+    words = {*CONDITION_WORDS, *re.split(r"[^a-z0-9]+", task.label.lower())}
+    return sorted(word for word in words if word and not HEX_ONLY.match(word) and word in name.lower())
+
+
+def check_opaque_names(task: Task) -> Iterator[Finding]:
+    """A task built with opaque names ([metadata] names = "opaque", the default) says nothing about itself in its
+    folder name, after which Harbor names the trial and its Docker containers and networks (check_runtime_names),
+    or in its task name, which Harbor's results and environment names carry: they are t-<12 hex> and
+    flotilla/t-<12 hex> (CONTRACT.md 2)."""
+    if task.names != "opaque":
+        return
+    for what, name, form in (("folder name", task.path.name, "t-<12 hex>"),
+                             ("task name", task.task_name, "flotilla/t-<12 hex>")):
+        bare = name.removeprefix("flotilla/") if what == "task name" else name
+        words = name_words(task, bare.removeprefix("t-"))  # the fixed parts say nothing (and a variant may be `t`)
+        if words:
+            yield Finding("opaque-names", task.name, "*", f"its {what} {name} says {', '.join(map(repr, words))}")
+        elif not OPAQUE_NAME.match(bare) or (what == "task name" and not name.startswith("flotilla/")):
+            yield Finding("opaque-names", task.name, "*", f"its {what} {name} is not of the form {form}")
+
+
 def check_seat_network(task: Task) -> Iterator[Finding]:
     """Each seat is alone with main on a network of its own, where main has the alias `world`. In world v1 all seats
     shared one network, and a silent seat could reach its teammate (FINDINGS.md, 2026-11-19 05:10)."""
@@ -607,10 +647,13 @@ def check_seat_network(task: Task) -> Iterator[Finding]:
 
 
 def protected_files(task: Task, seat: str) -> dict[Path, str]:
-    """Files of the task folder that a seat must never get: main's files, the family module and the other seats'
-    instructions (their private information)."""
+    """Files that a seat must never get: main's files, the family module, the other seats' instructions (their
+    private information), task.toml and the build manifest (both say the condition of an opaque task)."""
     paths = {task.env_dir / name: f"environment/{name}" for name in WORLD_FILES}
     paths[task.path / "solution" / "family.py"] = "solution/family.py"
+    paths[task.path / "task.toml"] = "task.toml"
+    for root in (task.path.parent, task.path.parent.parent):  # <out>/<label>/<task>: the manifest is at <out>
+        paths[root / BUILD.MANIFEST] = f"the build manifest ({BUILD.MANIFEST})"
     paths.update((task.path / "instructions" / f"{other}.md", f"instructions/{other}.md")
                  for other in task.seats if other != seat)
     return {path.resolve(): label for path, label in paths.items() if path.exists()}
@@ -777,8 +820,8 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
 
 
-TASK_RULES = (check_example_leak, check_condition_leak, check_seat_network, check_seat_secrets, check_token_map,
-              check_stale_code, check_solo_sufficient)
+TASK_RULES = (check_example_leak, check_condition_leak, check_opaque_names, check_seat_network, check_seat_secrets,
+              check_token_map, check_stale_code, check_solo_sufficient)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -838,13 +881,13 @@ def check_twins(tasks: list[Task]) -> Iterator[Finding]:
             a, b = by_condition[first], by_condition[second]
             if a.under_test != b.under_test:
                 yield Finding("twin-mismatch", b.name, "*", f"its seats under test are {', '.join(b.under_test)}; "
-                              f"in {a.name}, {', '.join(a.under_test)}")
+                              f"in {a.shown}, {', '.join(a.under_test)}")
             for seat in sorted(set(a.under_test) & set(b.under_test)):
                 theirs, mine = a.view(seat), b.view(seat)
                 for name in sorted(set(theirs) | set(mine)):
                     if name != "env.SEAT_TOKEN" and theirs.get(name) != mine.get(name):
                         yield Finding("twin-mismatch", b.name, seat,
-                                      describe_difference(name, mine.get(name), theirs.get(name), a.name))
+                                      describe_difference(name, mine.get(name), theirs.get(name), a.shown))
 
 
 def compose_project(name: str) -> str:
@@ -854,21 +897,25 @@ def compose_project(name: str) -> str:
 
 
 def check_runtime_names(tasks: list[Task]) -> Iterator[Finding]:
-    """Harbor names a trial after the first 32 characters of the task name (models/trial/config.py) and the trial's
-    Compose project `<trial>__env`, and Docker's DNS gives seats the container and network names: a silent seat read
-    `schedule-004-silent__cdeu7ht__env-main-1` by a reverse lookup (job w2-schedule-qwen3-6-35b-2seat, FINDINGS.md
-    2026-11-19 05:10). A name that says "liar" tells honest and unwarned seats about the liar. The task folder cannot
-    fix this (Harbor can), so it is a WARN, once per label."""
-    by_label: dict[tuple[str, str], list[str]] = defaultdict(list)
+    """Harbor names a local task's trial after the first 32 characters of the task folder's name (models/task/id.py,
+    models/trial/config.py) and the trial's Compose project `<trial>__env`, and Docker's DNS gives seats the
+    container and network names: a silent seat read `schedule-004-silent__cdeu7ht__env-main-1` by a reverse lookup
+    (job w2-schedule-qwen3-6-35b-2seat, FINDINGS.md 2026-11-19 06:20). A readable folder name says the condition,
+    and in schedule.liar 'liar' too, to honest and unwarned seats. Opaque names (the default) say nothing, and an
+    opaque task whose name says something is opaque-names' FAIL. So this WARN, once per label, is about sets built
+    with --readable-names (or before opaque names): never run one in a wave."""
+    by_label: dict[tuple[str, str], list[tuple[str, list[str]]]] = defaultdict(list)
     for task in tasks:
-        prefix = task.task_name.rsplit("/", 1)[-1][:32].rstrip("_-")
-        if LIAR.search(prefix):
-            by_label[(str(task.path.parent), task.label)].append(prefix)
-    for (_parent, label), prefixes in sorted(by_label.items()):
+        prefix = task.path.name[:32].rstrip("_-")
+        words = name_words(task, prefix)
+        if words and task.names != "opaque":
+            by_label[(str(task.path.parent), task.label)].append((prefix, words))
+    for (_parent, label), found in sorted(by_label.items()):
+        words = sorted({word for _prefix, said in found for word in said})
         yield Finding("runtime-names", label, "*",
-                      f"{len(prefixes)} tasks: Harbor names Docker containers and networks after the task "
-                      f"(for example {compose_project(prefixes[0])}__<id>__env-main-1); a seat that looks up an "
-                      "address reads 'liar'")
+                      f"{len(found)} tasks: Harbor names Docker containers and networks after the task folder "
+                      f"(for example {compose_project(found[0][0])}__<id>__env-main-1); a seat that looks up an "
+                      f"address reads {', '.join(map(repr, words))}: build without --readable-names")
 
 
 # --- Running and reporting -------------------------------------------------------------------------------------
@@ -917,10 +964,11 @@ def summary(findings: list[Finding], tasks: list[Task]) -> dict[str, Any]:
 
 def render_text(findings: list[Finding], tasks: list[Task]) -> str:
     facts = summary(findings, tasks)
+    shown = {task.name: task.shown for task in tasks}
     lines = []
     if findings:
-        rows = [("LEVEL", "RULE", "TASK", "SEAT", "DETAIL"), *((f.level, f.rule, f.task, f.seat, f.detail)
-                                                               for f in findings)]
+        rows = [("LEVEL", "RULE", "TASK", "SEAT", "DETAIL"),
+                *((f.level, f.rule, shown.get(f.task, f.task), f.seat, f.detail) for f in findings)]
         widths = [max(len(row[i]) for row in rows) for i in range(4)]
         lines += ["  ".join(cell.ljust(width) for cell, width in zip(row, widths)) + "  " + row[4] for row in rows]
     else:
@@ -936,8 +984,11 @@ def render_text(findings: list[Finding], tasks: list[Task]) -> str:
 
 def render_json(findings: list[Finding], tasks: list[Task]) -> str:
     paths = {task.name: str(task.path) for task in tasks} | {task.label: str(task.path.parent) for task in tasks}
+    identity = {task.name: {"label": task.label, "instance": task.instance, "condition": task.condition}
+                for task in tasks}  # a finding about a whole label (runtime-names) names the label as its task
     rows = [{"level": f.level, "rule": f.rule, "task": f.task, "seat": f.seat, "detail": f.detail,
-             "path": paths.get(f.task)} for f in findings]
+             "path": paths.get(f.task),
+             **identity.get(f.task, {"label": f.task, "instance": None, "condition": None})} for f in findings]
     return json.dumps({**summary(findings, tasks), "findings": rows}, indent=2)
 
 

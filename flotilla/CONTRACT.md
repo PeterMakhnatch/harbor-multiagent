@@ -32,13 +32,46 @@ For one family, model and instance set, with paired instances:
 ## 2. Task instances and names
 
 A family module generates instances from `(seed, instance, n_seats, difficulty)`. Every instance is
-built in every condition. Task directory and Harbor task name:
+built in every condition. A task's name and its folder name say nothing about the task (no family,
+variant, instance or condition):
 
 ```
-flotilla/tasks/<label>/<label>-<instance:03d>-<condition>/
-task.toml: [task] name = "flotilla/<label>-<instance:03d>-<condition>"
-<label> = <family> or <family>.<variant>   (e.g. schedule, schedule.3seat, ledger.hard)
+flotilla/tasks/<label>/t-<12 hex>/              the task folder
+task.toml: [task] name = "flotilla/t-<12 hex>"
+flotilla/tasks/manifest.json                    task name -> what the task is
+<label> = <family> or <family>.<variant>        (e.g. schedule, schedule.3seat, ledger.hard)
+<12 hex> = the first 12 hex digits of SHA-256(salt, label, instance, condition)
 ```
+
+`flotilla/tasks` is the build root (`build_tasks.py --out`). The salt is random for each build and is
+not stored, so names differ between builds and a name cannot be derived from a task. Why: Harbor names
+a trial after the first 32 characters of the task folder's name, and the trial's Compose project,
+containers and networks after the trial; Docker's DNS gives a seat these names (a silent seat read
+`schedule-004-silent__cdeu7ht__env-main-1`, FINDINGS.md 2026-11-19 06:20). The folder `<label>/` only
+groups a label's tasks for the operator: Harbor names nothing after the path above the task folder,
+and no seat sees that path.
+
+`manifest.json` lies at the build root, outside every task folder, so no seat reads it. It maps each
+task name to `path` (relative to the build root), `label`, `family`, `variant`, `instance`,
+`condition`, `seats` and `built` (UTC). It holds no token and no answer key:
+
+```json
+{"format": "flotilla-manifest", "version": 1, "tasks": {"flotilla/t-3f9c2a7b10de": {"path": "schedule/t-3f9c2a7b10de",
+  "label": "schedule", "family": "schedule", "variant": "", "instance": 4, "condition": "silent",
+  "seats": ["p1", "p2"], "built": "2026-11-19T18:00:00Z"}}}
+```
+
+A build replaces each task folder of the same label, instance and condition that an earlier build
+wrote (readable or opaque), so a label never holds two folders of one task. The manifest keeps every
+name built at its root, also the names of replaced folders, so that jobs of an earlier build can still
+be read. Do not publish a manifest while its tasks can still run: a seat that reads its own name could
+look the name up.
+
+`build_tasks.py --readable-names` writes the layout used before opaque names, for debugging only:
+`flotilla/tasks/<label>/<label>-<instance:03d>-<condition>/`, task name
+`flotilla/<label>-<instance:03d>-<condition>`. `qa.py` warns about such a set (`runtime-names`); never
+run one in a wave. `qa.py` fails a task built with opaque names whose task name or folder name is not
+of the opaque form or names a condition, its family or its variant (`opaque-names`).
 
 A variant changes the seat count or the difficulty of a family. Results of different labels are
 never pooled.
@@ -47,9 +80,15 @@ Before a wave, every built task set must pass `flotilla/qa.py` with no FAIL find
 "Check a task set before a wave"). A set that fails is fixed and built again, never run.
 
 `[metadata]` in `task.toml` carries `family`, `variant`, `instance`, `condition`, `n_seats`,
-`team_seats`, `difficulty`, `seed`, `max_text`, `max_messages` and `play_timeout_sec` (and
-`scripted_seats` in scripted variants). The analysis parses the task name first and falls back to
-nothing else.
+`team_seats`, `difficulty`, `seed`, `max_text`, `max_messages`, `play_timeout_sec` and `names`
+(`opaque` or `readable`), and `scripted_seats` in scripted variants. `environment/task.json` also
+carries `family`, `variant`, `instance` and `condition` (section 3). No seat reads either file, nor
+the manifest (`qa.py seat-secrets`).
+
+The analysis learns what a trial's task is from a readable task name, else from `task.toml`
+`[metadata]` in the trial's task folder (`task_id.path` in `result.json`) when that folder still holds
+the task of that name, else from a build manifest: one given with `flotilla-analyze --manifest`, the
+one in a `--tasks` folder, or the one at the build root of the task folder.
 
 ## 3. Seats and environment
 
@@ -194,6 +233,8 @@ With limits too small for the briefings, `talk` falls to the `silent` floor.
 
 ## 9. Analysis inputs
 
-A Harbor job folder per run wave. Per trial: `result.json` (task name, `seat_results` with agent,
-model, usage, exceptions; `verifier_result.rewards.reward`), `artifacts/logs/world/*.jsonl|json`,
-`seats/<seat>/agent/trajectory.json`.
+A Harbor job folder per run wave. Per trial: `result.json` (task name, `task_id.path`, `seat_results`
+with agent, model, usage, exceptions; `verifier_result.rewards.reward`),
+`artifacts/logs/world/*.jsonl|json`, `seats/<seat>/agent/trajectory.json`. For opaque task names, the
+task folder's `task.toml` or the build's `manifest.json` (section 2): keep the manifest with the jobs
+when the task folders are removed.

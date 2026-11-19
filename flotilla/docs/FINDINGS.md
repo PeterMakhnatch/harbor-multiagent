@@ -167,6 +167,11 @@ Inferred:
 ## 2026-11-19 06:20 ET — Harbor's container names carry the task name, and the condition with it
 
 > Corrected: with all canonical trials finished, the count is 0 of 556.
+>
+> Fixed in Flotilla later the same day: `build_tasks.py` gives tasks opaque names by default
+> (`flotilla/t-<12 hex>`, a contract change, CONTRACT.md 2), so the Docker names say nothing about
+> the task with any Harbor. `qa.py` warns about a set with readable names (`runtime-names`) and fails
+> an opaque name that says what its task is (`opaque-names`).
 
 Found by the QA builder in pilot data. Harbor names the Compose project after the trial, so container
 and network names start with the task name, for example `schedule-004-silent__cdeu7ht__env-main-1`.
