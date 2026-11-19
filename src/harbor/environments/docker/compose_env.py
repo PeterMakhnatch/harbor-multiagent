@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from collections.abc import Mapping
@@ -6,6 +7,29 @@ from typing import Literal
 from pydantic import BaseModel
 
 from harbor.models.trial.config import ServiceVolumeConfig
+
+_COMPOSE_PROJECT_PREFIX = "hb-"
+_COMPOSE_PROJECT_HASH_LEN = 12
+
+
+def compose_project_name(session_id: str) -> str:
+    """Return the Docker Compose project name for an environment session.
+
+    Compose puts the project name into every container name
+    (``<project>-<service>-1``), network name (``<project>_<network>``) and
+    named volume name. Processes in the environment can read these: Docker's
+    DNS answers reverse lookups with the container and network names, and a
+    named volume's host path is in ``/proc/self/mountinfo``. A session id starts
+    with the trial name, which starts with the task name, and a task name can
+    carry a condition, a role or a hint. So the project name is a hash of the
+    session id, not the session id itself.
+
+    The name is the same for one session id in every process, so start, exec,
+    stop and cleanup always find the same project. It is a valid Compose project
+    name and a valid DNS label.
+    """
+    digest = hashlib.sha256(session_id.encode()).hexdigest()
+    return f"{_COMPOSE_PROJECT_PREFIX}{digest[:_COMPOSE_PROJECT_HASH_LEN]}"
 
 
 class ComposeInfraEnvVars(BaseModel):

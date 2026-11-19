@@ -27,6 +27,7 @@ from harbor.environments.definition import (
     environment_content_hash,
     should_upload_environment_dir,
 )
+from harbor.environments.docker import compose_env
 from harbor.environments.options import EnvironmentOptions
 from harbor.environments.resource_policies import (
     validate_cpu_granularity,
@@ -412,6 +413,21 @@ class BaseEnvironment(ABC):
             self.environment_dir,
             docker_image=self.task_env_config.docker_image,
         )
+
+    @cached_property
+    def compose_project_name(self) -> str:
+        """Docker Compose project name for this environment's session.
+
+        A hash of ``session_id`` (see ``compose_env.compose_project_name``), so
+        container, network and volume names do not carry the trial or task
+        name. Every Compose call uses this name. Its first use logs the mapping
+        at debug level, so the trial log tells which project is the trial's.
+        """
+        name = compose_env.compose_project_name(self.session_id)
+        self.logger.debug(
+            f"Docker Compose project for session {self.session_id}: {name}"
+        )
+        return name
 
     @staticmethod
     def _normalize_extra_docker_compose_paths(

@@ -559,7 +559,7 @@ class _BeamCompose(DinDComposeOps):
 
     @property
     def _project_name(self) -> str:
-        return _sanitize_compose_project_name(self._env.session_id)
+        return self._env.compose_project_name
 
     def _compose_cmd(self, subcommand: list[str]) -> str:
         parts = [

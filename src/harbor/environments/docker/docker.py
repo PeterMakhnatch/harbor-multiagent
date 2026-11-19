@@ -94,22 +94,6 @@ def _sanitize_docker_image_name(name: str) -> str:
     return name
 
 
-def _sanitize_docker_compose_project_name(name: str) -> str:
-    """
-    Sanitize a name to be a valid Docker Compose project name.
-
-    See: https://docs.docker.com/compose/how-tos/project-name/
-    """
-    # Convert to lowercase
-    name = name.lower()
-    # If the first character is not alphanumeric, prepend '0'
-    if not re.match(r"^[a-z0-9]", name):
-        name = "0" + name
-    # Replace any character that is not a-z, 0-9, -, or _ with -
-    name = re.sub(r"[^a-z0-9_-]", "-", name)
-    return name
-
-
 class DockerOptions(EnvironmentOptions):
     """User-facing kwargs for DockerEnvironment."""
 
@@ -758,7 +742,7 @@ class DockerEnvironment(BaseEnvironment):
         full_command = [
             *runtime.compose,
             "--project-name",
-            _sanitize_docker_compose_project_name(self.session_id),
+            self.compose_project_name,
         ]
         if runtime.supports_compose_project_directory:
             full_command.extend(
@@ -1563,11 +1547,10 @@ class DockerEnvironment(BaseEnvironment):
                 ["-f", shlex.quote(str(path.resolve().absolute()))]
             )
 
-        project_name = _sanitize_docker_compose_project_name(self.session_id)
         compose_base = [
             *type(self).runtime().compose,
             "--project-name",
-            project_name,
+            self.compose_project_name,
         ] + compose_file_args
         cleanup_mounts_compose = (
             f"; rm -rf {shlex.quote(self._mounts_compose_temp_dir.name)}"

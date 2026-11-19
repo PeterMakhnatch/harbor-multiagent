@@ -83,6 +83,7 @@ class _FakeRuntaEnvironment:
         self.writes: dict[str, str] = {}
         self._network_policy = NetworkPolicy(network_mode=NetworkMode.PUBLIC)
         self.logger = logging.getLogger("test-runta-harbor")
+        self.compose_project_name = "hb-0123456789ab"
 
     def _runtime_resource_name(self, suffix: str) -> str:
         return f"test-{suffix}"

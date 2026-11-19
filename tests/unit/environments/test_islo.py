@@ -1506,9 +1506,11 @@ class TestComposeDetection:
 
 
 class TestComposeProjectName:
-    def test_lowercased_and_dashes(self, temp_dir, monkeypatch):
+    def test_is_a_hash_of_the_session_id(self, temp_dir, monkeypatch):
         env = _make_compose_env(temp_dir, monkeypatch)
-        assert env._compose_project_name == "test-session-123"
+        # Session "Test.Session.123"; the name must not carry it.
+        assert env._compose_project_name == env.compose_project_name
+        assert env._compose_project_name == "hb-f7c63cefb27e"
 
     def test_strips_disallowed_characters(self, temp_dir, monkeypatch):
         monkeypatch.setenv("ISLO_API_KEY", "test-key")
@@ -1788,7 +1790,7 @@ class TestComposeCmd:
         cmd = env._compose_cmd(["build"])
         parts = _shlex.split(cmd)
         idx = parts.index("-p")
-        assert parts[idx + 1] == "test-session-123"
+        assert parts[idx + 1] == "hb-f7c63cefb27e"
 
 
 class TestComposeSandboxLogPath:

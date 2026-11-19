@@ -367,7 +367,7 @@ class _RuntaComposeStrategy(_RuntaStrategy):
 
     def __init__(self, env: "RuntaEnvironment") -> None:
         super().__init__(env)
-        self._project_name = env._runtime_resource_name("compose").lower()
+        self._project_name = env.compose_project_name
         self._use_prebuilt = False
         self._extra_targets = [
             f"{self._COMPOSE_DIR}/docker-compose-extra-{index}.yaml"

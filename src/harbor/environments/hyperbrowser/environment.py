@@ -43,10 +43,7 @@ from harbor.environments.docker.compose_env import (
     legacy_log_mount_env_vars,
     merge_compose_env,
 )
-from harbor.environments.docker.docker import (
-    _sanitize_docker_compose_project_name,
-    _sanitize_docker_image_name,
-)
+from harbor.environments.docker.docker import _sanitize_docker_image_name
 from harbor.environments.hyperbrowser.image_context import (
     hyperbrowser_docker_build_context_hash,
 )
@@ -314,7 +311,7 @@ class _HyperbrowserDinD(DinDComposeOps):
 
     @property
     def _project_name(self) -> str:
-        return _sanitize_docker_compose_project_name(self._env.session_id)
+        return self._env.compose_project_name
 
     def _compose_cmd(self, subcommand: list[str]) -> str:
         parts = [
