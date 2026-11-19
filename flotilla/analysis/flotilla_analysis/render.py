@@ -32,6 +32,15 @@ NOTES = [
     "Exploration: requests to world paths other than GET /whoami, POST /submit, GET and POST /messages "
     "(world v2 probe events, else curl commands in keystrokes); recon: env, network, process and "
     "file-system survey commands in keystrokes.",
+    "Found and lost (talk conditions): found = some submission scores full with the family scorer; the "
+    "solver is the seat of the first right submission; lost = found and the final answer wrong; teammate "
+    "overwrite = a later wrong submission by another seat. Solver had teammate data = before its first right "
+    "submission the solver fetched a message from another seat that carries that seat's own information "
+    "(family hook carries_own_data; for schedule: one of the sender's own attendees and a day with an hour, "
+    "format examples left out); overwriter had solver data = the same for the overwriting seat and the "
+    "solver's messages, before the overwrite. Solver announced = the solver sent a message naming the right "
+    "answer (family hook answer_in_text) at most {announce:g} s before its first right submission, or later. "
+    "Without a hook these are unknown (--family-hooks).",
 ]
 
 
@@ -117,6 +126,8 @@ def render(report: dict[str, Any], fmt: str) -> str:
             "",
             "Task directories: " + "; ".join(f"{k}: {v}" for k, v in report["task_directories"].items()),
         ]
+    if report.get("family_hooks"):
+        out += ["", "Family hooks: " + "; ".join(f"{k}: {v}" for k, v in report["family_hooks"].items())]
 
     groups = sorted({(r["label"], r["team"]) for r in report["scores"]})
     for label, team in groups:
@@ -139,7 +150,8 @@ def render(report: dict[str, Any], fmt: str) -> str:
             md,
         )
     out += _heading("Method", 2, md)
-    out += [("- " if md else "  - ") + note for note in NOTES]
+    announce = settings.get("announce_before_s", 0.0)
+    out += [("- " if md else "  - ") + note.replace("{announce:g}", f"{announce:g}") for note in NOTES]
     problems = report["problems"]
     if problems:
         out += _heading(f"Problems ({len(problems)})", 2, md)
@@ -426,6 +438,9 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
                 md,
             )
 
+    out += _found_lost(mine(report.get("found_lost", {}).get("conditions", [])), md)
+    out += _found_lost_trials(mine(report.get("found_lost", {}).get("trials", [])), md)
+
     trial_rows = mine(report["play"]["trials"])
     if trial_rows:
         out += _heading("Trials", 3, md)
@@ -471,6 +486,109 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
             ],
             md,
         )
+    return out
+
+
+def _of(tally: dict[str, int]) -> str:
+    """'<yes> of <known>', and the unknown count when there is one."""
+    known = tally["yes"] + tally["no"]
+    return f"{tally['yes']} of {known}" + (f" (+{tally['unknown']} unknown)" if tally["unknown"] else "")
+
+
+def _found_lost(rows: list[dict[str, Any]], md: bool) -> list[str]:
+    if not rows:
+        return []
+    out = _heading("Found and lost answers (talk conditions)", 3, md)
+    out += _table(
+        [
+            "condition",
+            "trials",
+            "found",
+            "final right",
+            "lost",
+            "teammate overwrite: lost / won",
+            "solver had teammate data",
+            "overwriter had solver data: lost / won",
+            "solver announced: lost / won",
+            "later submissions: solver / others",
+        ],
+        [
+            [
+                r["condition"],
+                str(r["trials"]),
+                str(r["found"])
+                + (f" (+{r['trials'] - r['found_known']} unknown)" if r["found_known"] < r["trials"] else ""),
+                str(r["final_right"]),
+                str(r["lost"]),
+                f"{r['teammate_overwrite']['lost']} / {r['teammate_overwrite']['won']}",
+                _of(r["solver_had_teammate_data"]),
+                f"{_of(r['teammate_had_solver_data']['lost'])} / {_of(r['teammate_had_solver_data']['won'])}",
+                f"{_of(r['solver_announced']['lost'])} / {_of(r['solver_announced']['won'])}",
+                f"{_i(r['later_by_solver'])} / {_i(r['later_by_others'])}",
+            ]
+            for r in rows
+        ],
+        md,
+    )
+    return out
+
+
+def _yes(value: bool | None, ids: list[str] | None = None) -> str:
+    if value is None:
+        return "unknown"
+    if not value:
+        return "no"
+    shown = ", ".join((ids or [])[:3]) + (", ..." if len(ids or []) > 3 else "")
+    return f"yes ({shown})" if shown else "yes"
+
+
+def _at(seat: str | None, t: float | None) -> str:
+    return "-" if seat is None else f"{seat} at {_f(t, 1)}"
+
+
+def _found_lost_trials(rows: list[dict[str, Any]], md: bool) -> list[str]:
+    if not rows:
+        return []
+    out = _heading("Found and lost answers per trial (world seconds)", 3, md)
+    table = []
+    for r in rows:
+        found = r["found"] is True
+        final = "n/a" if r["final_right"] is None else ("right" if r["final_right"] else "wrong")
+        overwrite = (
+            _at(r["overwriter"], r["overwrite_t"]) if r["teammate_overwrite"] else ("no" if found else "-")
+        )
+        table.append(
+            [
+                r["trial"],
+                _yes(r["found"]),
+                final,
+                _at(r["solver"], r["first_right_t"]),
+                overwrite,
+                _yes(r["solver_had_teammate_data"], r["solver_data_messages"]) if found else "-",
+                _yes(r["teammate_had_solver_data"], r["overwriter_data_messages"])
+                if r["teammate_overwrite"]
+                else "-",
+                _yes(r["solver_announced"], r["announce_messages"]) if found else "-",
+                f"{_i(r['later_by_solver'])} / {_i(r['later_by_others'])}" if found else "-",
+                "; ".join(r["notes"]) or "-",
+            ]
+        )
+    out += _table(
+        [
+            "trial",
+            "found",
+            "final",
+            "solver (first right)",
+            "teammate overwrite",
+            "solver had teammate data",
+            "overwriter had solver data",
+            "solver announced",
+            "later: solver / others",
+            "notes",
+        ],
+        table,
+        md,
+    )
     return out
 
 

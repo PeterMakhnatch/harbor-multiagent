@@ -1,5 +1,5 @@
-"""What happened during play in one trial: the message funnel, the answer churn, exploration, and
-what each seat did.
+"""What happened during play in one trial: the message funnel, the answer churn, found and lost answers,
+exploration, and what each seat did.
 
 Message funnel, per (message, intended recipient) pair:
 
@@ -26,8 +26,10 @@ from flotilla_analysis.load import Evidence, Trajectory, Trial
 from flotilla_analysis.tasks import (
     TaskInfo,
     answer_examples,
+    answer_in_text,
     answer_score,
     answer_valid,
+    carries_own_data,
     final_answer,
     own_briefing_score,
     recorded_score,
@@ -36,6 +38,10 @@ from flotilla_analysis.tasks import (
 
 WINDOW = 24  # characters, whitespace removed
 FULL = 1.0 - 1e-9  # a score at least this high is correct
+# A solver's message sent up to this many world seconds before its first right submission still
+# announces it: seats often post "the slot is X, submitting now" and submit on their next turn (3 to 6 s
+# later in the canonical runs); proposals and candidate lists came 13 s or more before.
+ANNOUNCE_BEFORE = 10.0
 
 
 def compact(text: str) -> str:
@@ -90,6 +96,33 @@ class Churn:
 
 
 @dataclass
+class FoundLost:
+    """What happened to the right answer in a trial with messaging (a talk condition).
+
+    None means unknown; ``notes`` says why. The solver is the seat of the first submission that the family
+    scorer gives full marks, in the world's submission order.
+    """
+
+    found: bool | None  # some seat submitted the right answer at some point
+    final_right: bool | None  # the recorded final score is full
+    lost: bool | None  # found, and the final answer is wrong
+    solver: str | None = None
+    first_right_t: float | None = None  # world time of the first right submission
+    teammate_overwrite: bool | None = None  # a later wrong submission by another seat
+    overwriter: str | None = None  # the seat of the first such submission
+    overwrite_t: float | None = None
+    solver_had_teammate_data: bool | None = None  # see found_lost()
+    solver_data_messages: list[str] = field(default_factory=list)
+    teammate_had_solver_data: bool | None = None  # the overwriter; None when there is no overwrite
+    overwriter_data_messages: list[str] = field(default_factory=list)
+    solver_announced: bool | None = None
+    announce_messages: list[str] = field(default_factory=list)
+    later_by_solver: int | None = None  # submissions after the first right one
+    later_by_others: int | None = None
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
 class SeatPlay:
     seat: str
     steps: int | None
@@ -127,6 +160,7 @@ class Play:
     example_leak: bool | None = None  # the answer key is an answer example shown in an instruction
     example_source: str = ""  # "trajectory" (what the seat saw) or "instructions" (the task folder)
     liar: str | None = None  # correct, deceived, corrupted or unknown; None when the task has no decoy
+    found_lost: FoundLost | None = None  # talk conditions only
 
     @property
     def delivered(self) -> int:
@@ -421,6 +455,151 @@ def liar_outcome(evidence: Evidence, task: TaskInfo, final: float | None) -> str
     return "deceived" if deceived else "corrupted"
 
 
+def _either(values: list[bool | None]) -> bool | None:
+    """True if any value is True; else None if any is unknown; else False (also for no values)."""
+    if any(v is True for v in values):
+        return True
+    return None if any(v is None for v in values) else False
+
+
+def _delivered_by(events: list[dict[str, Any]], seat: str, until: float) -> set[str]:
+    """Ids of the messages that ``seat`` fetched (``deliver`` events) at or before world time ``until``."""
+    found: set[str] = set()
+    for event in events:
+        t = _number(event.get("t"))
+        if event.get("kind") == "deliver" and event.get("seat") == seat and t is not None and t <= until:
+            found |= {str(i) for i in (event.get("data") or {}).get("ids") or []}
+    return found
+
+
+def _data_from(
+    messages: list[dict[str, Any]],
+    events: list[dict[str, Any]] | None,
+    task: TaskInfo,
+    *,
+    receiver: str,
+    senders: set[str] | None,
+    until: float | None,
+) -> tuple[bool | None, list[str], str]:
+    """Whether ``receiver`` fetched, at or before world time ``until``, a message from another seat (or
+    from one of ``senders``) that carries its sender's own information; the ids of those messages; why
+    unknown."""
+    if events is None:
+        return None, [], "deliveries not recorded (no events.jsonl)"
+    if until is None:
+        return None, [], "the submission has no world time"
+    fetched = _delivered_by(events, receiver, until)
+    values, ids, why = [], [], ""
+    for message in messages:
+        sender = str(message.get("from"))
+        if str(message.get("id")) not in fetched or sender == receiver:
+            continue
+        if senders is not None and sender not in senders:
+            continue
+        value, reason = carries_own_data(task, sender, str(message.get("text") or ""))
+        values.append(value)
+        if value:
+            ids.append(str(message.get("id")))
+        elif value is None:
+            why = why or reason
+    result = _either(values)
+    return result, ids, why if result is None else ""
+
+
+def found_lost(trial: Trial, evidence: Evidence, task: TaskInfo, final: float | None) -> FoundLost | None:
+    """Found, kept or lost: what happened to the right answer in a talk trial (None for other conditions).
+
+    - found: some submission scores full with the family scorer; final_right: the recorded final score is
+      full; lost: found and not final_right. The solver is the seat of the first right submission (world
+      submission order).
+    - teammate_overwrite: after the first right submission, another seat submitted a wrong answer; the
+      overwriter is the seat of the first such submission.
+    - solver_had_teammate_data: at or before the world time of its first right submission, the solver
+      fetched a message from another seat that carries that seat's own information (the family hook
+      ``carries_own_data(text, private)``; ``private`` is the sender's briefing).
+    - teammate_had_solver_data: the same, for the overwriter and the solver's messages, before the
+      overwrite; None when there is no overwrite.
+    - solver_announced: the solver sent a message that names the right answer (the family hook
+      ``answer_in_text(text, key)``) at most ANNOUNCE_BEFORE seconds before its first right submission or
+      any time after it.
+    - later_by_solver / later_by_others: submissions after the first right one.
+
+    A measure that needs a hook the family module lacks is None ("unknown"), unless no message qualifies.
+    """
+    if not trial.condition.startswith("talk"):
+        return None
+    final_right = None if final is None else final >= FULL
+    submissions = evidence.submissions
+    if submissions is None:
+        return FoundLost(None, final_right, None, notes=["submissions not recorded"])
+    scores = [answer_score(task, s.get("answer")) for s in submissions]
+    if not task.usable or any(score is None for score in scores):
+        return FoundLost(None, final_right, None, notes=[task.problem or "the family scorer failed"])
+    right = [i for i, score in enumerate(scores) if score is not None and score >= FULL]
+    if not right:
+        return FoundLost(False, final_right, False)
+    first = right[0]
+    solver = str(submissions[first].get("seat"))
+    first_t = _number(submissions[first].get("t"))
+    later = list(range(first + 1, len(submissions)))
+    wrong = [i for i in later if str(submissions[i].get("seat")) != solver and (scores[i] or 0.0) < FULL]
+    result = FoundLost(
+        found=True,
+        final_right=final_right,
+        lost=None if final_right is None else not final_right,
+        solver=solver,
+        first_right_t=first_t,
+        teammate_overwrite=bool(wrong),
+        later_by_solver=sum(1 for i in later if str(submissions[i].get("seat")) == solver),
+        later_by_others=sum(1 for i in later if str(submissions[i].get("seat")) != solver),
+    )
+    if wrong:
+        result.overwriter = str(submissions[wrong[0]].get("seat"))
+        result.overwrite_t = _number(submissions[wrong[0]].get("t"))
+    messages = evidence.messages
+    if messages is None:
+        result.notes.append("messages not recorded: data and announcement measures unknown")
+        return result
+    had, ids, why = _data_from(messages, evidence.events, task, receiver=solver, senders=None, until=first_t)
+    result.solver_had_teammate_data, result.solver_data_messages = had, ids
+    if why:
+        result.notes.append(f"solver_had_teammate_data: {why}")
+    if result.overwriter is not None:
+        had, ids, why = _data_from(
+            messages,
+            evidence.events,
+            task,
+            receiver=result.overwriter,
+            senders={solver},
+            until=result.overwrite_t,
+        )
+        result.teammate_had_solver_data, result.overwriter_data_messages = had, ids
+        if why:
+            result.notes.append(f"teammate_had_solver_data: {why}")
+    values: list[bool | None] = []
+    why = ""
+    for message in messages:
+        if str(message.get("from")) != solver or message.get("to") == solver:
+            continue
+        t = _number(message.get("t"))
+        if t is None or first_t is None:
+            values.append(None)
+            why = why or "a message or the first right submission has no world time"
+            continue
+        if t < first_t - ANNOUNCE_BEFORE:
+            continue
+        value, reason = answer_in_text(task, str(message.get("text") or ""))
+        values.append(value)
+        if value:
+            result.announce_messages.append(str(message.get("id")))
+        elif value is None:
+            why = why or reason
+    result.solver_announced = _either(values)
+    if result.solver_announced is None:
+        result.notes.append(f"solver_announced: {why}")
+    return result
+
+
 def world_version(evidence: Evidence, task: TaskInfo) -> tuple[str, str]:
     """The world version the trial ran, from the trial's own evidence first."""
     start = next((e for e in evidence.events or [] if e.get("kind") == "start"), None)
@@ -503,4 +682,5 @@ def analyze(trial: Trial, evidence: Evidence, trajectories: dict[str, Trajectory
         example_leak=leak,
         example_source=leak_source,
         liar=liar_outcome(evidence, task, final),
+        found_lost=found_lost(trial, evidence, task, final),
     )
