@@ -57,6 +57,8 @@ Precedence: **CLI flags > task.toml > dataset.toml > defaults**.
 | `verifier-network-download` | ✓ | Separate verifiers cloning external repositories, saving external downloads, or piping downloads into a shell. |
 | `agent-image-test-leak` | ✓ | Explicit `COPY`/`ADD` references to `tests/test.sh`, `tests/test_*.py`, or `solution/solve.sh` in agent Dockerfiles. |
 
+In a multi-agent task, the Dockerfile checks also read each Dockerfile that a seat's `build` names in `environment/docker-compose.yaml`, as an agent image. They do not follow `extends`, `include`, or interpolated paths.
+
 ## Compose checks
 
 Requires the **Docker CLI**. Tasks without Compose files do not run these checks. The `seat-` rules read only the `environment/docker-compose.yaml` of a multi-agent task, so selecting only them needs no Docker for other tasks.

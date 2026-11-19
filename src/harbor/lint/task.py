@@ -8,11 +8,13 @@ import stat
 import tomllib
 import warnings
 from collections.abc import Iterator
+from os.path import normpath
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import UnionType
 from typing import Annotated, Any, Union, get_args, get_origin
 from urllib.parse import urlsplit
 
+import yaml
 from packaging.requirements import InvalidRequirement, Requirement
 from pydantic import AliasChoices, AliasPath, BaseModel, ValidationError
 
@@ -641,6 +643,42 @@ def _lint_dockerfile(path: Path, *, agent: bool, shell: bool) -> list[LintFindin
     return findings
 
 
+def _seat_dockerfiles(
+    config: TaskConfig, paths: TaskPaths, files: set[Path]
+) -> set[Path]:
+    """Task Dockerfiles that seat services build, without running Compose.
+
+    Reads each seat's ``build`` from the task's Compose file, including YAML
+    merge keys. ``extends``, ``include`` and interpolation are not followed,
+    and a remote context names no task file.
+    """
+    compose = paths.environment_dir / "docker-compose.yaml"
+    if not config.agents or compose not in files:
+        return set()
+    try:
+        data = yaml.safe_load(compose.read_text())
+    except (yaml.YAMLError, ValueError):
+        return set()  # Compose checks report a file Compose cannot load.
+    services = data.get("services") if isinstance(data, dict) else None
+    if not isinstance(services, dict):
+        return set()
+    dockerfiles = set()
+    for seat in config.agents:
+        service = services.get(seat)
+        build = service.get("build") if isinstance(service, dict) else None
+        if isinstance(build, str):
+            build = {"context": build}
+        if not isinstance(build, dict) or "dockerfile_inline" in build:
+            continue
+        context = build.get("context", ".")
+        dockerfile = build.get("dockerfile", "Dockerfile")
+        if isinstance(context, str) and isinstance(dockerfile, str):
+            path = Path(normpath(paths.environment_dir / context / dockerfile))
+            if path in files:  # A regular file within the task.
+                dockerfiles.add(path)
+    return dockerfiles
+
+
 def _lint_sources(
     config: TaskConfig, paths: TaskPaths, files: set[Path]
 ) -> list[LintFinding]:
@@ -663,6 +701,10 @@ def _lint_sources(
                 )
             )
     builds = {paths.environment_dir / "Dockerfile": config.environment.os}
+    # Seats run agents, so their images are agent images too.
+    seat_images = _seat_dockerfiles(config, paths, files)
+    for path in seat_images:
+        builds.setdefault(path, config.environment.os)
     scripts: dict[Path, bool] = {}
     for step in config.steps or [None]:
         try:
@@ -694,7 +736,7 @@ def _lint_sources(
             findings.extend(
                 _lint_dockerfile(
                     path,
-                    agent=path.parent == paths.environment_dir,
+                    agent=path.parent == paths.environment_dir or path in seat_images,
                     shell=os == TaskOS.LINUX,
                 )
             )

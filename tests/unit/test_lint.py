@@ -1334,6 +1334,62 @@ def test_rejected_seat_instruction_is_reported_once(
     ]
 
 
+def leaky_image(directory: Path) -> None:
+    directory.mkdir()
+    (directory / "Dockerfile").write_text(
+        f"FROM {IMAGE}\nCOPY tests/test.sh /grader/\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        "./player",
+        {"context": "player"},
+        {"context": ".", "dockerfile": "player/Dockerfile"},
+        {"context": "..", "dockerfile": "environment/player/Dockerfile"},
+    ],
+)
+def test_seat_images_are_agent_images(seat_task: Path, build):
+    (seat_task / "instructions/p2.md").write_text("Support the other agent.\n")
+    leaky_image(seat_task / "environment/player")
+    leaky_image(seat_task / "environment/db")  # A sidecar is not an agent image.
+    (seat_task / "environment/docker-compose.yaml").write_text(f"""
+x-player: &player
+  build: {json.dumps(build)}
+services:
+  db: {{build: ./db}}
+  p1: *player
+  p2:
+    <<: *player
+""")
+
+    findings = lint_task(seat_task, selected_rules={LintRule.AGENT_IMAGE_TEST_LEAK})
+    assert [(Path(f.path).relative_to(seat_task), f.line) for f in findings] == [
+        (Path("environment/player/Dockerfile"), 2)
+    ]
+
+
+@pytest.mark.parametrize(
+    "compose",
+    [
+        "services: {p1: {build: '${CONTEXT}'}}",
+        "services: {p1: {build: 'https://example.com/player.git'}}",
+        "services: {p1: {build: {context: player, dockerfile_inline: 'FROM x'}}}",
+        "services: {p1: {image: player}, p2: {build: ../../outside}}",
+        "services: [",
+        "[]",
+    ],
+    ids=["interpolated", "remote", "inline", "external", "malformed", "not-a-map"],
+)
+def test_unresolved_seat_images_are_not_read(seat_task: Path, compose: str):
+    (seat_task / "instructions/p2.md").write_text("Support the other agent.\n")
+    leaky_image(seat_task / "environment/player")
+    (seat_task / "environment/docker-compose.yaml").write_text(compose)
+
+    assert lint_task(seat_task, selected_rules={LintRule.AGENT_IMAGE_TEST_LEAK}) == []
+
+
 @pytest.mark.parametrize("main", [False, True])
 def test_seat_tasks_report_main_seat_instead_of_shared_verifier(
     seat_task: Path, main: bool
