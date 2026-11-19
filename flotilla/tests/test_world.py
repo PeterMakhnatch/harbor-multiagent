@@ -298,8 +298,9 @@ def test_no_reply_to_a_seat_names_the_condition(start_world, condition):
 # Every header a reply may carry. Allow comes with a 405, Connection with an error page of the server library.
 REPLY_HEADERS = {"Server", "Date", "Content-Type", "Content-Length", "Allow", "Connection"}
 # What a seat must not read in a reply: the software and its repository (the source is public, and with the seed
-# its generator gives the answer key), a family, and a condition word
-NAMES = ("flotilla", "harbor-multiagent", *FAMILIES, "solo", "silent", "talk", "liar", "warned")
+# its generator gives the answer key), a family, a variant or difficulty that builds have used, and a condition word
+NAMES = ("flotilla", "harbor-multiagent", *FAMILIES, "tight", "submitter", "announce", "3seat", "easy", "hard",
+         "solo", "silent", "talk", "liar", "warned")
 
 
 def _seat_replies(world) -> list[bytes]:
