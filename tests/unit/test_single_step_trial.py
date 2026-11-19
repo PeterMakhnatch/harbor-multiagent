@@ -1,3 +1,4 @@
+import json
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -611,6 +612,31 @@ def test_scrub_covers_text_outside_strings_in_invalid_json(tmp_path: Path) -> No
     _scrub_trial(tmp_path, agent)._scrub_jobs_dir()
 
     assert broken.read_text() == '{"token": "[REDACTED]", [REDACTED]'
+
+
+def test_scrub_covers_wrapped_secrets_and_leaves_binary_files(
+    tmp_path: Path,
+) -> None:
+    # Not a real key; as long as an OpenRouter key.
+    secret = "sk-or-v1-" + "0123456789abcdef" * 4
+    agent = SimpleNamespace(
+        extra_env={"OPENROUTER_API_KEY": secret}, mcp_header_env=_NO_MCP_HEADERS
+    )
+    # mini-swe-agent prints its spec list wrapped at 80 columns.
+    wrapped = f"{secret[:51]}\n{secret[51:]}"
+    log = tmp_path / "mini-swe-agent.txt"
+    log.write_text(f"'model.model_kwargs.api_key=\"{wrapped}\"']\n")
+    trajectory = tmp_path / "trajectory.json"
+    trajectory.write_text(json.dumps({"observation": f"key {wrapped} ok"}))
+    binary = tmp_path / "recording.bin"
+    data = b"\0" + wrapped.encode() + b"\n" + secret.encode()
+    binary.write_bytes(data)
+
+    _scrub_trial(tmp_path, agent)._scrub_jobs_dir()
+
+    assert log.read_text() == "'model.model_kwargs.api_key=\"[REDACTED]\"']\n"
+    assert json.loads(trajectory.read_text()) == {"observation": "key [REDACTED] ok"}
+    assert binary.read_bytes() == data
 
 
 def test_scrub_isolates_a_cut_off_jsonl_line(tmp_path: Path) -> None:
