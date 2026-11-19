@@ -60,11 +60,12 @@ timeout_sec = 120.0
 under_test = false
 ```
 
-Each `[agents.<service>]` table takes two optional keys:
+Each `[agents.<service>]` table takes three optional keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `under_test` | `true` | The run lasts until every agent under test has ended. Agents with `under_test = false` are supporting agents: they never hold the run open, and Harbor cancels them when it ends. Scoring is unaffected. |
+| `freeze` | `true` | When the run ends, Harbor stops every process in this agent's container, before it collects logs and artifacts and runs the verifier. Set it to `false` when the verifier needs this agent's processes running. See [When the run ends](#when-the-run-ends). |
 | `mcp_servers` | `[]` | MCP servers for this agent only, declared as `[[agents.<service>.mcp_servers]]` with the same fields as [`[[environment.mcp_servers]]`](/tasks/environment#mcps). They are added to the task-wide list for that agent. |
 
 At least one agent must be under test. In the example, p1 is under test and p2 supports it, so the run ends when p1 ends.
@@ -211,12 +212,28 @@ harbor run -c examples/configs/features/seats-job.yaml
 2. Harbor installs every agent into its container at the same time. Each install has its own agent setup timeout. If any install fails, the trial fails before any agent runs.
 3. All agents start together, each with its own instruction.
 4. The run ends when every agent under test has ended, or when the agent timeout runs out.
-5. Harbor cancels the agents still running, as it does for a single agent at its timeout. The containers stay up.
-6. Harbor copies each agent's `/logs/agent` to `seats/<service>/agent/` in the trial folder, and records its trajectory, token usage and cost as it does for a single agent. It does this for every agent, under test or not.
-7. Harbor collects the task's artifacts.
-8. When verification is enabled, Harbor copies the trial's `seats/` folder into `main` at `/logs/seats/`.
-9. The verifier runs once, in `main`, with every container still up.
-10. Harbor stops the project.
+5. Harbor cancels the agents still running, as it does for a single agent at its timeout.
+6. Harbor freezes each agent's container: it stops every process in it. The containers stay up.
+7. Harbor copies each agent's `/logs/agent` to `seats/<service>/agent/` in the trial folder, and records its trajectory, token usage and cost as it does for a single agent. It does this for every agent, under test or not.
+8. Harbor collects the task's artifacts.
+9. When verification is enabled, Harbor copies the trial's `seats/` folder into `main` at `/logs/seats/`.
+10. The verifier runs once, in `main`, with every container still up.
+11. Harbor stops the project.
+
+### When the run ends
+
+Cancelling an agent ends Harbor's side of its run. The harness keeps running in its container, and so does anything an agent started and left behind. Harbor freezes each agent's container so that leftover agent processes cannot act on the environment while it collects logs and artifacts and while the verifier runs.
+
+To freeze a container, Harbor runs one command in it as root. The command sends `SIGSTOP` to every process and checks that each has stopped. Nothing is killed and the container stays up, so Harbor still copies files out of it and runs commands in it.
+
+- `main` is never frozen, even when it is an agent's service: the environment and the verifier run there. Services that are not an agent's are not touched.
+- A container's PID 1 cannot be stopped from inside it. With `init: true`, as in the example, PID 1 is the init process and the service's own command stops with everything else. Without it, the service's command is PID 1 and keeps running.
+- The command stops every process it can see. An agent's container that shares another service's PID namespace (`pid:` in Compose) stops that service's processes too, so give that agent `freeze = false`.
+- A frozen process keeps its connections open and does not answer. An environment that serves one request at a time can wait on a request a frozen agent left unfinished.
+- An agent with `freeze = false` is not frozen. Use it when the verifier, a `[[verifier.collect]]` command or the environment needs an answer from a process in that agent's container.
+- When a freeze fails or leaves a process running, for example in a container whose root user lacks `CAP_KILL`, Harbor logs a warning, records the error in the agent's `freeze` entry in `result.json`, and continues. The trial is still verified.
+
+A stopped process does not act on the stop signal, so `docker compose down` waits out a frozen container's stop grace period before it kills it. Set `stop_grace_period: 0s` on agent services to skip the wait.
 
 ### When an agent fails
 
@@ -228,7 +245,7 @@ The trial's `exception_info` is the first agent error in `[agents.<service>]` or
 
 ## The verifier
 
-The verifier runs once, in `main`, after the run ends and while every container is still up. It can query the environment's services, read volumes shared with `main`, and read each agent's logs and trajectory under `/logs/seats/<service>/agent/`.
+The verifier runs once, in `main`, after the run ends and while every container is still up. It can query the environment's services, read volumes shared with `main`, and read each agent's logs and trajectory under `/logs/seats/<service>/agent/`. Agents' containers are [frozen](#when-the-run-ends) by then: a process in one does not answer unless its agent has `freeze = false`.
 
 The example's `tests/test.sh` writes one reward. It checks that p1's note reached the world and that both agents left a trajectory:
 
@@ -255,13 +272,15 @@ The job summary reports each key.
   - `agent_info` is the first agent under test.
   - `agent_setup` and `agent_execution` span all agents.
   - Token and cost totals sum every agent.
-  - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
+  - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution`, `freeze` and `exception_info`.
+  - `freeze` records when the agent's container was frozen (`finished_at`), how many processes were stopped (`stopped`), and the `error` if the freeze failed. It is `null` for an agent that was not frozen.
 
 ## Limitations
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.
 - On `modal`, use the VM runtime (`environment.kwargs: {modal_vm_runtime: true}`). Modal's default sandbox puts every Compose service on host networking, which fails any task that declares `networks:`.
 - The verifier runs in `main`; separate verifiers are not supported.
+- Freezing runs inside each agent's container. It does not stop `main`, a container's PID 1, or what an agent does before the freeze lands, a fraction of a second after the run ends on local Docker. An agent that is root in its container can replace the shell that Harbor runs there.
 - Network mode must be `public`.
 - Simulated users (`user_agent`) are not supported.
 - A multi-agent task cannot have `[[steps]]`.
