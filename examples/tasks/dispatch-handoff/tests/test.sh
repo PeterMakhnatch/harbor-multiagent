@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+
+reward=$(python3 /tests/score.py /logs/world/handoff.json)
+mkdir -p /logs/verifier
+staged_reward=$(mktemp /logs/verifier/.reward.XXXXXX)
+trap 'rm -f -- "$staged_reward"' EXIT
+printf '%s\n' "$reward" > "$staged_reward"
+mv -- "$staged_reward" /logs/verifier/reward.json

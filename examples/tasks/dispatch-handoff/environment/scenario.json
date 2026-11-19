@@ -1,0 +1,6 @@
+{
+  "schema": "seatlab.scenario/v1",
+  "seed": 17,
+  "episodes": 12,
+  "condition": "fresh"
+}
