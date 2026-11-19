@@ -80,6 +80,7 @@ from harbor.viewer.trial_utils import (
     agent_name_from_result,
     model_info_from_model_name,
     partial_trial_result_from_config,
+    primary_agent_config,
     task_name_from_config,
     trial_summary_from_config,
 )
@@ -1288,6 +1289,27 @@ def _register_job_endpoints(
             raise HTTPException(status_code=404, detail=f"Step '{step}' not found")
         return step_dir
 
+    def _resolve_agent_root(
+        trial_dir: Path, step: str | None, seat: str | None
+    ) -> Path:
+        """Return the directory whose ``agent/`` holds the trajectory and logs.
+
+        ``seat`` selects one agent of a multi-agent trial, in
+        ``trial_dir/seats/{seat}`` (the trial result's ``seat_results`` names
+        them); otherwise this is ``_resolve_step_root``. A trial has seats or
+        steps, never both.
+        """
+        if seat is None:
+            return _resolve_step_root(trial_dir, step)
+        if step is not None:
+            raise HTTPException(status_code=400, detail="Pass step or seat, not both")
+        seat_dir = (trial_dir / "seats" / seat).resolve()
+        if seat_dir.parent != trial_dir.resolve() / "seats":
+            raise HTTPException(status_code=400, detail="Invalid seat name")
+        if not seat_dir.is_dir():
+            raise HTTPException(status_code=404, detail=f"Seat '{seat}' not found")
+        return seat_dir
+
     def _find_trial_recording(trial_dir: Path) -> tuple[Path, str] | None:
         """Find an OSWorld-style trial recording under agent/recording.mp4."""
         recording_path = trial_dir / "agent" / RECORDING_FILE_NAME
@@ -1766,7 +1788,9 @@ def _register_job_endpoints(
                 if not config:
                     continue
                 agent_name = agent_name_from_config(config)
-                model_info = model_info_from_model_name(config.agent.model_name)
+                model_info = model_info_from_model_name(
+                    primary_agent_config(config).model_name
+                )
                 source = config.task.source
                 task_name = task_name_from_config(config)
                 key = (
@@ -2395,8 +2419,12 @@ def _register_job_endpoints(
         job_name: str,
         trial_name: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
+        seat: str | None = Query(
+            default=None, description="Seat of a multi-agent trial to scope to"
+        ),
     ) -> dict[str, Any] | None:
-        """Get trajectory.json content for a trial (optionally a specific step)."""
+        """Get trajectory.json content for a trial (optionally a specific step,
+        or a specific seat of a multi-agent trial)."""
         trial_dir = _validate_trial_path(job_name, trial_name)
         if not trial_dir.exists():
             raise HTTPException(
@@ -2404,7 +2432,7 @@ def _register_job_endpoints(
                 detail=f"Trial '{trial_name}' not found in job '{job_name}'",
             )
 
-        root = _resolve_step_root(trial_dir, step)
+        root = _resolve_agent_root(trial_dir, step, seat)
         trajectory_path = root / "agent" / "trajectory.json"
         if not trajectory_path.exists():
             return None
@@ -2753,6 +2781,9 @@ def _register_job_endpoints(
         job_name: str,
         trial_name: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
+        seat: str | None = Query(
+            default=None, description="Seat of a multi-agent trial to scope to"
+        ),
     ) -> dict[str, Any]:
         """Get agent log files (oracle.txt, setup/stdout.txt, command-*/stdout.txt)."""
         trial_dir = _validate_trial_path(job_name, trial_name)
@@ -2762,7 +2793,7 @@ def _register_job_endpoints(
                 detail=f"Trial '{trial_name}' not found in job '{job_name}'",
             )
 
-        root = _resolve_step_root(trial_dir, step)
+        root = _resolve_agent_root(trial_dir, step, seat)
         agent_dir = root / "agent"
         logs: dict[str, Any] = {
             "oracle": None,

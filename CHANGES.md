@@ -32,6 +32,7 @@ several Harbor agents in one environment, each in its own Compose service
 | `docs-mintlify/docs.json` | Lists `tasks/multi-agent` in the Tasks group. |
 | `src/harbor/cli/trials.py` | `harbor trial start` lists a seat trial's participants (`seat: harness model`, agents under test marked) where it prints `Agent:` for one agent. |
 | `src/harbor/trial/trial.py` | `Trial.create` routes seat tasks to `SeatsTrial`, and refuses `participants` on a task without seats and a regrade of a seat task. `_scrub_jobs_dir` takes its secrets from a new `_secrets_to_scrub`, so a seat trial scrubs once with every seat's secrets. `_secrets_to_scrub`, `_validate_agent_capabilities` and `_compute_agent_setup_timeout_sec` take an optional agent and agent config, defaulting to `self.agent` and `self.config.agent`, so a seat trial passes each seat's instead of swapping trial fields; Harbor's callers are unchanged. |
+| `src/harbor/viewer/server.py`, `src/harbor/viewer/trial_utils.py` | The `trajectory` and `agent-logs` endpoints take `seat`, as they take `step`, and read `seats/<seat>/agent/`; a seat name that leaves `seats/` is refused. A seat trial that has only `config.json` (still running) is labelled by its first participant, where it was labelled `oracle`, the default agent it never runs. The viewer page has no seat selector yet. |
 
 Readers of `agent_info` are untouched: a seat trial fills it with its first
 agent under test. Readers of `exception_info` are untouched too: a seat
@@ -48,3 +49,4 @@ agent's.
 | `examples/tasks/hello-seats/`, `examples/configs/features/seats-trial.yaml`, `examples/configs/features/seats-job.yaml` | A runnable two-agent example task and the trial and job configs that run it. |
 | `tests/unit/models/test_task_config_seats.py`, `tests/unit/models/test_trial_participants.py`, `tests/unit/environments/test_seat.py`, `tests/unit/environments/test_dind_service_upload.py`, `tests/unit/trial/test_seats.py` | Unit tests; none needs Docker. |
 | `tests/runtime/test_hello_seats_docker.py` | Runs hello-seats with the oracle in both seats on real Docker. |
+| `tests/unit/viewer/test_seat_trajectories.py` | Tests of the viewer API on a small synthetic seat trial that each test writes. |
