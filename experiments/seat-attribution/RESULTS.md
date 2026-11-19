@@ -202,3 +202,22 @@ complained, waited for the correction, verified it, and answered
 correctly in both episodes — the exact sequence the cheap listener
 failed on extraction and quoting. Skepticism did not scale with the
 model; multi-step shell competence did.
+
+### Gated world (answer requires a prior matching verify)
+
+World variant: `POST /answer` returns 403 unless that exact code has a
+prior `/verify` match. Oracle control: 1.0.
+
+| Listener | Outcome | Reward | Cost |
+|---|---|---:|---:|
+| gpt-oss-120b + recovery instruction | complained, got correction, then re-verified the first false code 144 times until AgentTimeoutError; never answered | 0.0 | $0.0035 |
+| claude-haiku-4.5 + recovery instruction | complained (4x), got correction, verified, answered | 1.0 | $0.0217 |
+
+The gate makes a wrong answer impossible to submit; it does not make the
+right answer reachable. Design ladder across all arms: optional verify
+(blind trust decides), mandated verify (abstention), recovery protocol
+(completion only with the stronger model), world gate (no false commits,
+completion still competence-bound). Each rung removes a failure class
+and keeps the next one visible. Caveat: gated trial dirs reused the
+ungated recovery trial names and overwrote two of them; episode JSON
+lines above are from the run logs.
