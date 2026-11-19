@@ -151,6 +151,16 @@ class Job:
 
     @staticmethod
     def _preflight_agents(config: JobConfig, agents: list[AgentConfig]) -> None:
+        if config.participants:
+            # A seat task runs the participants, never agents or user_agent;
+            # check_job_seats refuses a seat job that sets those.
+            if agents:
+                AgentFactory.run_participants_preflight(
+                    config.participants,
+                    skip_credential_checks=config.skip_credential_checks
+                    or config.install_only,
+                )
+            return
         for agent in agents:
             if config.user_agent is not None:
                 AgentFactory.run_preflight(
@@ -168,12 +178,6 @@ class Job:
         if agents and config.user_agent is not None:
             AgentFactory.run_preflight(
                 config.user_agent,
-                skip_credential_checks=config.skip_credential_checks
-                or config.install_only,
-            )
-        if agents:
-            AgentFactory.run_participants_preflight(
-                config.participants,
                 skip_credential_checks=config.skip_credential_checks
                 or config.install_only,
             )

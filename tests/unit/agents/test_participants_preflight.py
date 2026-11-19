@@ -48,6 +48,9 @@ class FailingPreflightAgent(NopAgent):
 
 
 FAILING = f"{__name__}:FailingPreflightAgent"
+# A seat trial never runs agent or user_agent; these would fail if checked.
+UNUSED_AGENT = {"import_path": FAILING}
+UNUSED_USER_AGENT = {"import_path": FAILING, "bridge": {"kind": "acp"}}
 
 
 def _participants() -> list[Participant]:
@@ -119,6 +122,13 @@ def checked(monkeypatch) -> list[tuple[str | None, str | None, bool]]:
 
     monkeypatch.setattr(AgentFactory, "run_preflight", record)
     return calls
+
+
+@pytest.fixture
+def no_environment_preflight(monkeypatch):
+    monkeypatch.setattr(
+        "harbor.environments.factory.EnvironmentFactory.run_preflight", lambda **_: None
+    )
 
 
 def _start_trial(tmp_path: Path, monkeypatch, **config):
@@ -254,12 +264,25 @@ def test_trial_start_creates_the_trial_for_a_roster_with_credentials(
 
 
 @pytest.mark.parametrize(
+    "unused",
+    [{"agent": UNUSED_AGENT}, {"user_agent": UNUSED_USER_AGENT}],
+    ids=["agent", "user_agent"],
+)
+def test_trial_start_checks_participants_in_place_of_agent(
+    tmp_path: Path, monkeypatch, checked, unused
+):
+    result, created = _start_trial(tmp_path, monkeypatch, participants=ROSTER, **unused)
+
+    assert result.exit_code == 1
+    assert NO_KEY in str(result.exception.__cause__)
+    assert [seat for seat, _, _ in checked] == ["p1", "p2"]
+    assert created == []
+
+
+@pytest.mark.parametrize(
     "bypass", [{}, {"skip_credential_checks": True}, {"install_only": True}]
 )
-def test_job_cli_preflight_checks_participants(monkeypatch, bypass):
-    monkeypatch.setattr(
-        "harbor.environments.factory.EnvironmentFactory.run_preflight", lambda **_: None
-    )
+def test_job_cli_preflight_checks_participants(no_environment_preflight, bypass):
     config = JobConfig(participants=ROSTER, **bypass)
 
     if bypass:
@@ -294,11 +317,7 @@ async def test_job_checks_the_roster_once_for_all_its_trials(
     job._close_logger_handlers()
 
     assert len(job) == 4
-    assert checked == [
-        (None, "oracle", False),
-        ("p1", "oracle", False),
-        ("p2", "terminus-2", False),
-    ]
+    assert checked == [("p1", "oracle", False), ("p2", "terminus-2", False)]
 
 
 def test_job_that_runs_no_agent_checks_no_participant(checked):
@@ -307,6 +326,25 @@ def test_job_that_runs_no_agent_checks_no_participant(checked):
     Job._preflight_agents(config, [])
 
     assert checked == []
+
+
+@pytest.mark.parametrize(
+    "unused",
+    [{"agents": [UNUSED_AGENT]}, {"user_agent": UNUSED_USER_AGENT}],
+    ids=["agents", "user_agent"],
+)
+async def test_jobs_check_participants_in_place_of_agents(
+    tmp_path: Path, no_environment_preflight, checked, unused
+):
+    config = _seat_job(tmp_path, **unused)
+
+    with pytest.raises(SystemExit):
+        _run_preflight(config)
+    with pytest.raises(ValueError, match=NO_KEY):
+        await Job.create(config)
+    with pytest.raises(ValueError, match=NO_KEY):
+        await resolve_config(config)
+    assert [seat for seat, _, _ in checked] == ["p1", "p2"] * 3
 
 
 async def test_server_resolution_checks_participants(tmp_path: Path):
@@ -324,18 +362,14 @@ async def test_server_checks_the_roster_once_for_all_its_trials(
 ):
     resolved = await resolve_config(_seat_job(tmp_path))
 
-    assert [seat for seat, _, _ in checked if seat] == ["p1", "p2"]
+    assert [seat for seat, _, _ in checked] == ["p1", "p2"]
 
     # The server validates a queued trial again, alone, before it runs.
     checked.clear()
     await validate_trials(
         resolved.trials[:1], resolved.lock.trials[:1], skip_credential_checks=True
     )
-    assert checked == [
-        (None, "oracle", True),
-        ("p1", "oracle", True),
-        ("p2", "terminus-2", True),
-    ]
+    assert checked == [("p1", "oracle", True), ("p2", "terminus-2", True)]
 
 
 @pytest.mark.parametrize(
@@ -425,11 +459,8 @@ async def test_single_agent_job_leaves_a_task_that_does_not_load_to_its_trial(
 
 
 def test_configs_without_participants_check_only_their_agent(
-    tmp_path: Path, monkeypatch, checked
+    tmp_path: Path, monkeypatch, no_environment_preflight, checked
 ):
-    monkeypatch.setattr(
-        "harbor.environments.factory.EnvironmentFactory.run_preflight", lambda **_: None
-    )
     config = JobConfig(agents=[AgentConfig(name="nop")])
     only_the_agent = [(None, "nop", False)]
 

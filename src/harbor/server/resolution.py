@@ -88,6 +88,7 @@ async def validate_trials(
             if key in limits and limits[key] != config.agent.n_concurrent:
                 raise APIError("BadRequest", "Conflicting agent concurrency limits.")
             limits[key] = config.agent.n_concurrent
+        # The relay serves agent only; it raises for a seat job's default agent.
         agent = (
             relay_agent_config(
                 config.agent, "http://relay.invalid/inference", "preflight"
@@ -95,21 +96,25 @@ async def validate_trials(
             if relay_inference
             else config.agent
         )
-        AgentFactory.run_preflight(
-            agent,
-            bridge=config.user_agent.bridge.kind if config.user_agent else None,
-            skip_credential_checks=skip_credential_checks,
-        )
-        if config.user_agent is not None:
+        if config.participants:
+            # A seat task runs the participants, never agent or user_agent;
+            # check_seats refuses a seat trial that sets those. Every trial of
+            # a job has the job's participants; check them once.
+            if config.participants != checked_participants:
+                AgentFactory.run_participants_preflight(
+                    config.participants, skip_credential_checks=skip_credential_checks
+                )
+                checked_participants = config.participants
+        else:
             AgentFactory.run_preflight(
-                config.user_agent, skip_credential_checks=skip_credential_checks
+                agent,
+                bridge=config.user_agent.bridge.kind if config.user_agent else None,
+                skip_credential_checks=skip_credential_checks,
             )
-        # Every trial of a job has the job's participants; check them once.
-        if config.participants != checked_participants:
-            AgentFactory.run_participants_preflight(
-                config.participants, skip_credential_checks=skip_credential_checks
-            )
-            checked_participants = config.participants
+            if config.user_agent is not None:
+                AgentFactory.run_preflight(
+                    config.user_agent, skip_credential_checks=skip_credential_checks
+                )
         EnvironmentFactory.validate_resource_policies(config.environment)
         download = downloads[config.task.get_task_id()]
         task = Task(
