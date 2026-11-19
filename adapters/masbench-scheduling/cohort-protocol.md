@@ -1,0 +1,19 @@
+# Native full-cohort replication and interactive extension
+
+This protocol follows a four-case development smoke run. It is not a blind release evaluation. All 200 reference answers and the offline controls are already known. The purpose of replication is to test the behavior of the isolated five-seat implementation against the offline implementation. It is not an estimate of model ability.
+
+## Primary replication
+
+Run `full` and `first8` on every published scheduling case, ordered by numeric stratum and case number. The 4 smoke cases (2/1, 3/1, 4/1, 5/1) already occupy their 8 cells. Do not rerun them to replace observations. The remaining 196 cases add 392 native trials. The registered total is 400 distinct native trials and 2,000 seat executions if all cells verify. Use fresh private directories. Freeze the reviewed task and executable once before the cohort. Allow other workers to run disjoint case groups. Use no model calls.
+
+A primary cell is valid only if the existing native collector verifies the 5 active seat records, the acknowledged leader input, the independent score, and the UUID. Check for duplicate or missing `(case_id,mode)` across batch boundaries. Report reviewed source differences separately. Report failed, invalid, unfinished, and unattempted cells even if their offline choice is known. Do not rerun an incomplete cell to increase the primary score. An explicit `null` is a completed decision. The primary endpoint is agreement between the native choice and the registered offline choice, not a sum of rewards. Report the proportion of real schedule choices that meet the reference and physical constraints separately.
+
+## Secondary interactive protocols
+
+Compare the cursor simulation against an actual multi-round world. The `m1` process, not the broker, chooses each requested bound and the final answer. The four other processes must each receive and answer every round until termination. The broker may forward requests, verify grammar, and retain acknowledgments. It must not use hidden times or the answer key to choose a bound or answer. If the coordinator is silent, nobody chooses on its behalf. Apply the same experiment first to 2/1, 3/1, 4/1 and 5/1. Then use the next 5 numeric cases in each stratum (20 fresh cases). Publish the number of rounds, disclosures, and original reference matches, including deliberate nulls. Use separate native UUIDs. Correct choices copied from offline simulation do not count as native evidence.
+
+Compare one-round exact encodings on all 200 cases in a separate offline analysis. Specify the complete bitset as one bit per tick with a fixed ordering and horizon. Specify runs as ordered inclusive `[start,stop]` pairs for maximal adjacent starts. Use all five sets and no unpublished gold when encoding. Encode compact JSON for cost comparisons on the same basis as `cursor.py`. Include framing and hashes only as a separately named measurement; never combine body bytes and transport overhead. Exact recoverability and earliest-choice agreement must hold for every case. A smaller payload does not establish a privacy or latency improvement. Register this arm before inspecting its cohort measurements.
+
+## Admission and limits
+
+Run at most one of our native trials at once on this Docker daemon. Leave the registered hourly control its window. A drain or operator stop prevents new admissions; do not erase results. Use a fresh launch process with model credentials removed. Do not call a cloud service. Publish only projected data and counters with the original attribution. Keep private reports and local paths in private state.
