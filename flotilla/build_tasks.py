@@ -219,7 +219,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
             )
             for seat in scripted_seats:  # a scripted peer posts its part, honestly or not
-                lying = condition == "talk-liar"
+                lying = "liar" in condition
                 briefings[seat] = {
                     "script": "liar" if lying else "honest",
                     "text": (inst["liar_text"] if lying else inst["private_text"])[seat],
