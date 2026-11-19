@@ -1,7 +1,7 @@
 # Changes from Harbor
 
 This repository is upstream Harbor ([harbor-framework/harbor](https://github.com/harbor-framework/harbor))
-merged up to `7592cfa6` (v0.26.0), plus multi-agent tasks:
+merged up to `f42969ac` (v0.26.0 plus 28 commits on main), plus multi-agent tasks:
 several Harbor agents in one environment, each in its own Compose service
 (its seat). See [docs-mintlify/tasks/multi-agent.mdx](docs-mintlify/tasks/multi-agent.mdx).
 
