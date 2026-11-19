@@ -1,31 +1,50 @@
-"""The world: notes that seats post, kept in memory and in /logs/world/notes.jsonl.
+"""The world: notes that seats post, kept in memory for one session.
 
-At start, the world writes a new random token to /tokens/<seat>/token for each
-seat. Compose mounts each /tokens/<seat> volume in main and in that one seat
-only, so a seat can read its own token and no other. POST /note must send the
-token as "Authorization: Bearer <token>", and the world records the token's
-seat as the note's author.
+Each start of the world is a new session. It writes a new random token to
+/tokens/<seat>/token for each seat and starts with no notes, so a token from
+an earlier start stops working and no note outlives its session. Compose
+mounts each /tokens/<seat> volume in main and in that one seat only. POST
+/note must send the token as "Authorization: Bearer <token>", and the world
+records the token's seat as the note's author.
+
+After play ends, the task's collect hook runs `world.py save <path>`, which
+writes the notes, as GET /notes returns them, to <path>. The verifier grades
+that file, and Harbor saves the same file as the trial's artifact.
 """
 
 import json
 import secrets
+import sys
 import threading
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-NOTES_PATH = Path("/logs/world/notes.jsonl")
 TOKENS_DIR = Path("/tokens")
+NOTES_URL = "http://127.0.0.1:8080/notes"
 MAX_BODY_BYTES = 64 * 1024
 NOTES: list[dict[str, str | None]] = []
 TOKENS: dict[str, str] = {}  # seat -> token
 LOCK = threading.Lock()
 
 
-def issue_tokens() -> None:
-    """Write a new token for every seat that has a directory in TOKENS_DIR."""
-    for seat_dir in TOKENS_DIR.iterdir():
-        TOKENS[seat_dir.name] = secrets.token_hex(16)
-        (seat_dir / "token").write_text(TOKENS[seat_dir.name])
+def write_whole(path: Path, text: str) -> None:
+    """Replace path with text in one step, so that no reader sees part of it."""
+    partial = path.with_name(f".{path.name}.partial")
+    partial.write_text(text)
+    partial.replace(path)
+
+
+def start_session() -> None:
+    """Forget every note, and write a new token for every seat that has a
+    directory in TOKENS_DIR."""
+    with LOCK:
+        NOTES.clear()
+        TOKENS.clear()
+        for seat_dir in sorted(TOKENS_DIR.iterdir()):
+            if seat_dir.is_dir():
+                TOKENS[seat_dir.name] = secrets.token_hex(16)
+                write_whole(seat_dir / "token", TOKENS[seat_dir.name])
 
 
 def seat_of(authorization: str) -> str | None:
@@ -37,6 +56,14 @@ def seat_of(authorization: str) -> str | None:
         if secrets.compare_digest(token.strip().encode(), seat_token.encode()):
             return seat
     return None
+
+
+def save_notes(path: Path, url: str = NOTES_URL) -> None:
+    """Write the running world's notes, as GET /notes returns them, to path."""
+    with urllib.request.urlopen(url, timeout=10) as response:
+        notes = json.load(response)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_whole(path, json.dumps(notes, indent=2) + "\n")
 
 
 class World(BaseHTTPRequestHandler):
@@ -79,11 +106,6 @@ class World(BaseHTTPRequestHandler):
             self._reply(403, {"error": f"this token is {author}'s"})
             return
         reply_to = body.get("reply_to")
-        with LOCK:
-            ids = [note["id"] for note in NOTES]
-        if reply_to is not None and reply_to not in ids:
-            self._reply(400, {"error": f"no note has the id {reply_to!r}"})
-            return
         note = {
             "id": secrets.token_hex(4),
             "author": author,
@@ -91,14 +113,21 @@ class World(BaseHTTPRequestHandler):
             "reply_to": reply_to,
         }
         with LOCK:
-            NOTES.append(note)
-            with NOTES_PATH.open("a") as notes_file:
-                notes_file.write(json.dumps(note) + "\n")
+            known = reply_to is None or any(n["id"] == reply_to for n in NOTES)
+            if known:
+                NOTES.append(note)
+        if not known:
+            self._reply(400, {"error": f"no note has the id {reply_to!r}"})
+            return
         self._reply(201, note)
 
 
 if __name__ == "__main__":
-    NOTES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    NOTES_PATH.touch()
-    issue_tokens()
-    ThreadingHTTPServer(("0.0.0.0", 8080), World).serve_forever()
+    match sys.argv[1:]:
+        case []:
+            start_session()
+            ThreadingHTTPServer(("0.0.0.0", 8080), World).serve_forever()
+        case ["save", path]:
+            save_notes(Path(path))
+        case _:
+            sys.exit("usage: world.py [save PATH]")

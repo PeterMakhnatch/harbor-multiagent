@@ -1,5 +1,7 @@
 schema_version = "1.4"
-artifacts = ["/logs/world/notes.jsonl"]
+# The collect hook below writes this file after play ends. The verifier grades
+# it, and Harbor saves it, so the saved record is the graded one.
+artifacts = ["/logs/world/notes.json"]
 
 [task]
 name = "harbor/hello-seats"
@@ -13,6 +15,13 @@ tags = ["seats", "trivial"]
 
 [verifier]
 timeout_sec = 120.0
+
+# Runs in main after play ends, before Harbor collects the artifacts and the
+# verifier runs. A note that the world accepts later is neither graded nor
+# saved.
+[[verifier.collect]]
+command = "python3 /world/world.py save /logs/world/notes.json"
+timeout_sec = 30.0
 
 [agent]
 timeout_sec = 600.0

@@ -1,14 +1,19 @@
 """The hello-seats world sets a note's author from the seat token the request
-sends, so one seat cannot post as another."""
+sends, so one seat cannot post as another. Each start is a new session, with
+new tokens and no notes, and `save_notes` writes the notes that the verifier
+grades and Harbor keeps."""
 
 import http.client
 import importlib.util
 import json
+import sys
 import threading
 from collections.abc import Iterator
+from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -22,36 +27,60 @@ WORLD_PATH = (
     / "environment"
     / "world.py"
 )
+SEATS = ("p1", "p2")
 
 
-@pytest.fixture
-def world(tmp_path: Path) -> Iterator[tuple[ModuleType, int]]:
-    """The world module, with tokens issued to p1 and p2, served on a free
-    local port."""
+def start_world(tokens_dir: Path) -> ModuleType:
+    """A new copy of the world module, as a new world process has, with
+    TOKENS_DIR at tokens_dir and its session started."""
     spec = importlib.util.spec_from_file_location("hello_seats_world", WORLD_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Unable to load {WORLD_PATH}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.TOKENS_DIR = tmp_path / "tokens"
-    module.NOTES_PATH = tmp_path / "notes.jsonl"
-    for seat in ("p1", "p2"):
-        (module.TOKENS_DIR / seat).mkdir(parents=True)
-    module.issue_tokens()
+    setattr(module, "TOKENS_DIR", tokens_dir)
+    module.start_session()
+    return module
+
+
+@contextmanager
+def serving(module: ModuleType) -> Iterator[int]:
+    """Serve the world on a free local port, and yield the port."""
     server = ThreadingHTTPServer(("127.0.0.1", 0), module.World)
     thread = threading.Thread(
         target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
     )
     thread.start()
     try:
-        yield module, server.server_port
+        yield server.server_port
     finally:
         server.shutdown()
         server.server_close()
         thread.join()
 
 
-def post_note(port: int, body: dict, token: str | None) -> tuple[int, dict]:
+@pytest.fixture
+def tokens_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A directory per seat, as Compose mounts the token volumes in main."""
+    # Loading world.py must not write __pycache__ into the example task.
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    for seat in SEATS:
+        (tmp_path / "tokens" / seat).mkdir(parents=True)
+    return tmp_path / "tokens"
+
+
+@pytest.fixture
+def world(tokens_dir: Path) -> Iterator[tuple[ModuleType, int]]:
+    """The world module, with tokens issued to p1 and p2, served on a free
+    local port."""
+    module = start_world(tokens_dir)
+    with serving(module) as port:
+        yield module, port
+
+
+def post_note(
+    port: int, body: dict[str, Any], token: str | None
+) -> tuple[int, dict[str, Any]]:
     headers = {"Content-Type": "application/json"}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
@@ -64,15 +93,45 @@ def post_note(port: int, body: dict, token: str | None) -> tuple[int, dict]:
         connection.close()
 
 
-def test_each_seat_gets_a_new_token_in_its_own_directory(world):
+def get_notes(port: int) -> list[dict[str, Any]]:
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        connection.request("GET", "/notes")
+        return json.loads(connection.getresponse().read())
+    finally:
+        connection.close()
+
+
+def token_files(tokens_dir: Path) -> dict[str, str]:
+    return {seat: (tokens_dir / seat / "token").read_text() for seat in SEATS}
+
+
+def test_each_seat_gets_a_new_token_in_its_own_directory(world, tokens_dir):
     module, _ = world
-    tokens = {
-        seat: (module.TOKENS_DIR / seat / "token").read_text() for seat in module.TOKENS
-    }
+    tokens = token_files(tokens_dir)
     assert tokens == module.TOKENS
-    assert sorted(tokens) == ["p1", "p2"]
     assert tokens["p1"] != tokens["p2"]
     assert all(len(token) == 32 for token in tokens.values())
+
+
+def test_a_restart_rotates_every_token_and_starts_with_no_notes(tokens_dir):
+    first = start_world(tokens_dir)
+    with serving(first) as port:
+        status, _ = post_note(port, {"text": "hello from p2"}, first.TOKENS["p2"])
+        assert status == 201
+
+    # A new world process: its memory is new, the token volumes keep their files.
+    second = start_world(tokens_dir)
+    assert all(second.TOKENS[seat] != first.TOKENS[seat] for seat in SEATS)
+    assert token_files(tokens_dir) == second.TOKENS
+    with serving(second) as port:
+        assert get_notes(port) == []
+        assert post_note(port, {"text": "hello from p2"}, first.TOKENS["p2"])[0] == 401
+        status, note = post_note(port, {"text": "hello from p2"}, second.TOKENS["p2"])
+        assert (status, note["author"]) == (201, "p2")
+    # The world writes the token files whole: no partial file is left over.
+    files = sorted(path.relative_to(tokens_dir) for path in tokens_dir.rglob("*"))
+    assert [path.as_posix() for path in files] == ["p1", "p1/token", "p2", "p2/token"]
 
 
 def test_the_author_is_the_seat_whose_token_was_sent(world):
@@ -81,7 +140,7 @@ def test_the_author_is_the_seat_whose_token_was_sent(world):
     assert status == 201
     assert note["author"] == "p2"
     assert note["reply_to"] is None
-    assert json.loads(module.NOTES_PATH.read_text()) == note
+    assert get_notes(port) == [note]
 
 
 @pytest.mark.parametrize("token", [None, "", "not-a-seat-token"])
@@ -125,3 +184,20 @@ def test_a_reply_must_name_an_existing_note(world):
     assert status == 201
     assert p1_note["reply_to"] == p2_note["id"]
     assert module.NOTES == [p2_note, p1_note]
+
+
+def test_saved_notes_do_not_change_when_a_note_arrives_later(world, tmp_path):
+    module, port = world
+    _, p2_note = post_note(port, {"text": "hello from p2"}, module.TOKENS["p2"])
+    reply = {"text": "hello from p1", "reply_to": p2_note["id"]}
+    _, p1_note = post_note(port, reply, module.TOKENS["p1"])
+    saved = tmp_path / "world" / "notes.json"
+
+    module.save_notes(saved, f"http://127.0.0.1:{port}/notes")
+
+    assert json.loads(saved.read_text()) == [p2_note, p1_note] == get_notes(port)
+    assert [path.name for path in saved.parent.iterdir()] == ["notes.json"]
+    before = saved.read_bytes()
+    assert post_note(port, reply, module.TOKENS["p1"])[0] == 201
+    assert len(get_notes(port)) == 3
+    assert saved.read_bytes() == before
