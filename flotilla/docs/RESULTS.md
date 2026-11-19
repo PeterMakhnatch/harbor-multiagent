@@ -184,13 +184,48 @@ operator ledger, not in the repo.
 - Heuristics: regex counts of message content; "seen" means shown on the seat's terminal.
 - Seats have internet access, so an outside service is still a possible channel.
 
+## How many instances the next wave needs
+
+Computed by [results/scripts/power.py](results/scripts/power.py): it resamples the observed paired
+outcomes (one trial per instance and arm) and finds the smallest N in a grid at which the exact
+two-sided sign-flip test reaches p < 0.05 in at least 80% of 4,000 draws. Cost is the observed model
+cost per instance for both arms, times N (Modal not included).
+
+| Comparison | instances now | effect | +/− instances | exact p now | instances for 80% power | model cost at that N |
+|---|---|---|---|---|---|---|
+| R1 gain, DeepSeek V4 Flash: talk − silent | 12 | +0.917 | 11/0 | 0.001 | 12 | $0.83 |
+| R1 gain, Qwen 3.6 35B-A3B: talk − silent | 12 | +0.500 | 7/1 | 0.070 | 24 | $2.69 |
+| R1 gain, GPT-OSS-120B: talk − silent | 12 | +0.500 | 7/1 | 0.070 | 24 | $0.38 |
+| R4, DeepSeek V4 Flash: talk − narrow channel | 12 | +0.417 | 5/0 | 0.062 | 20 | $0.88 |
+| R3, DeepSeek V4 Flash: submitter role − talk | 12 | +0.000 | 1/1 | 1.000 | > 256 | n/a |
+| R4, Qwen 3.6 35B-A3B: talk − narrow channel | 12 | +0.417 | 6/1 | 0.125 | 32 | $2.31 |
+| R3, Qwen 3.6 35B-A3B: submitter role − talk | 12 | +0.167 | 3/1 | 0.625 | 128 | $7.16 |
+| R4, GPT-OSS-120B: talk − narrow channel | 12 | +0.333 | 5/1 | 0.219 | 40 | $0.99 |
+| R3, GPT-OSS-120B: submitter role − talk | 12 | -0.167 | 0/2 | 0.500 | 48 | $1.20 |
+| R5 lie effect, DeepSeek V4 Flash: honest − liar | 8 | +0.500 | 4/0 | 0.125 | 16 | $1.22 |
+| R5 warning benefit, DeepSeek V4 Flash: liar warned − liar | 8 | +0.250 | 3/1 | 0.625 | 80 | $9.68 |
+| R5 deception cut, DeepSeek V4 Flash: deceived(liar) − deceived(liar warned) | 8 | +0.250 | 3/1 | 0.625 | 80 | $9.68 |
+| R5 lie effect, Qwen 3.6 35B-A3B: honest − liar | 5 | +0.800 | 4/0 | 0.125 | 12 | $0.66 |
+| R5 warning benefit, Qwen 3.6 35B-A3B: liar warned − liar | 5 | +0.200 | 2/1 | 1.000 | 128 | $9.01 |
+| R5 deception cut, Qwen 3.6 35B-A3B: deceived(liar) − deceived(liar warned) | 5 | +0.600 | 3/0 | 0.250 | 12 | $0.84 |
+
+Decision for the next wave:
+
+- Worth replicating at these sizes (about $9 of model calls in total): the R1 gains of Qwen and
+  GPT-OSS (24 instances), the R4 narrow-channel drops (20 to 40), and the R5 lie effects (12 to 16).
+- Not worth replicating in this design: the warning effects and the submitter-role effects need 48
+  to more than 256 instances. Change the design first (for example, a lie that is harder to catch,
+  or a role protocol that the world enforces), or drop these questions.
+- These estimates assume that the observed shares are the true ones; with 5 to 12 instances they are
+  uncertain, so treat each N as an order of magnitude.
+
 ## Next experiments (built and QA-checked, not run)
 
 | Question | Build | Cost estimate |
 |---|---|---|
 | Does an acknowledgment protocol stop the losses in R3? | `build_tasks.py --family schedule --variant announce --instances 0-11 --conditions talk --announce` | about $0.6 for 3 models |
 | Do R1 to R3 hold on other information structures? | `--family ledger` and `--family puzzle` (oracle-checked: solo 1.0, talk 1.0, silent 0.0 and 0.17–0.42) | about $2 for 2 models |
-| Are the c4, c5 and warning effects real? | the same builds with `--instances 0-35`, and a repeat of c1 `talk` | about $6 for 2 models |
+| Are the R1, R4 and R5 lie effects real? | the same builds with the instance counts in the table above, and a repeat of c1 `talk` | about $9 of model calls |
 
 ## Reproduce
 
