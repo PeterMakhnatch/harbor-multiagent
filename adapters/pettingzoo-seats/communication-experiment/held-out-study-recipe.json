@@ -1,0 +1,1589 @@
+{
+  "checks": [
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s101-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s101-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s101-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s101-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s101-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s101-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s101-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s101-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s101-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s101-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s101-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s101-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s101-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-plain-blind/episodes.jsonl",
+      "target_order": "cells/s101-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s101-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s101-plain-plain/episodes.jsonl",
+      "source_order": "cells/s101-plain-plain/order.json",
+      "target": "cells/s101-plain-blind/episodes.jsonl",
+      "target_order": "cells/s101-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s102-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s102-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s102-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s102-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s102-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s102-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s102-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s102-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s102-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s102-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s102-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s102-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s102-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-plain-blind/episodes.jsonl",
+      "target_order": "cells/s102-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s102-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s102-plain-plain/episodes.jsonl",
+      "source_order": "cells/s102-plain-plain/order.json",
+      "target": "cells/s102-plain-blind/episodes.jsonl",
+      "target_order": "cells/s102-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s103-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s103-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s103-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s103-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s103-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s103-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s103-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s103-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s103-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s103-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s103-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s103-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s103-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-plain-blind/episodes.jsonl",
+      "target_order": "cells/s103-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s103-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s103-plain-plain/episodes.jsonl",
+      "source_order": "cells/s103-plain-plain/order.json",
+      "target": "cells/s103-plain-blind/episodes.jsonl",
+      "target_order": "cells/s103-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s104-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s104-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s104-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s104-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s104-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s104-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s104-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s104-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s104-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s104-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s104-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s104-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s104-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-plain-blind/episodes.jsonl",
+      "target_order": "cells/s104-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s104-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s104-plain-plain/episodes.jsonl",
+      "source_order": "cells/s104-plain-plain/order.json",
+      "target": "cells/s104-plain-blind/episodes.jsonl",
+      "target_order": "cells/s104-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s105-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s105-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s105-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s105-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s105-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s105-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s105-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s105-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s105-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s105-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s105-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s105-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s105-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-plain-blind/episodes.jsonl",
+      "target_order": "cells/s105-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s105-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s105-plain-plain/episodes.jsonl",
+      "source_order": "cells/s105-plain-plain/order.json",
+      "target": "cells/s105-plain-blind/episodes.jsonl",
+      "target_order": "cells/s105-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s106-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s106-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s106-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s106-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s106-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s106-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s106-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s106-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s106-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s106-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s106-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s106-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s106-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-plain-blind/episodes.jsonl",
+      "target_order": "cells/s106-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s106-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s106-plain-plain/episodes.jsonl",
+      "source_order": "cells/s106-plain-plain/order.json",
+      "target": "cells/s106-plain-blind/episodes.jsonl",
+      "target_order": "cells/s106-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s107-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s107-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s107-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s107-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s107-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s107-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s107-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s107-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s107-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s107-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s107-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s107-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s107-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-plain-blind/episodes.jsonl",
+      "target_order": "cells/s107-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s107-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s107-plain-plain/episodes.jsonl",
+      "source_order": "cells/s107-plain-plain/order.json",
+      "target": "cells/s107-plain-blind/episodes.jsonl",
+      "target_order": "cells/s107-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s108-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s108-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s108-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s108-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s108-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s108-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s108-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s108-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s108-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s108-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s108-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s108-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s108-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-plain-blind/episodes.jsonl",
+      "target_order": "cells/s108-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s108-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s108-plain-plain/episodes.jsonl",
+      "source_order": "cells/s108-plain-plain/order.json",
+      "target": "cells/s108-plain-blind/episodes.jsonl",
+      "target_order": "cells/s108-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s109-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s109-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s109-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s109-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s109-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s109-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s109-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s109-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s109-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s109-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s109-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s109-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s109-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-plain-blind/episodes.jsonl",
+      "target_order": "cells/s109-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s109-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s109-plain-plain/episodes.jsonl",
+      "source_order": "cells/s109-plain-plain/order.json",
+      "target": "cells/s109-plain-blind/episodes.jsonl",
+      "target_order": "cells/s109-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s110-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s110-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s110-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s110-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s110-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s110-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s110-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s110-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s110-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s110-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s110-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s110-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s110-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-plain-blind/episodes.jsonl",
+      "target_order": "cells/s110-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s110-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s110-plain-plain/episodes.jsonl",
+      "source_order": "cells/s110-plain-plain/order.json",
+      "target": "cells/s110-plain-blind/episodes.jsonl",
+      "target_order": "cells/s110-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s111-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s111-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s111-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s111-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s111-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s111-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s111-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s111-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s111-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s111-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s111-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s111-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s111-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-plain-blind/episodes.jsonl",
+      "target_order": "cells/s111-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s111-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s111-plain-plain/episodes.jsonl",
+      "source_order": "cells/s111-plain-plain/order.json",
+      "target": "cells/s111-plain-blind/episodes.jsonl",
+      "target_order": "cells/s111-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s112-rotate-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s112-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s112-rotate-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s112-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s112-plain-rotate-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s112-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s112-plain-rotate-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-plain-rotate/episodes.jsonl",
+      "target_order": "cells/s112-plain-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s112-rotate-plain-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s112-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s112-rotate-plain-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-rotate-plain/episodes.jsonl",
+      "target_order": "cells/s112-rotate-plain/order.json"
+    },
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "s112-plain-blind-physical",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-plain-blind/episodes.jsonl",
+      "target_order": "cells/s112-plain-blind/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "s112-plain-blind-channel",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s112-plain-plain/episodes.jsonl",
+      "source_order": "cells/s112-plain-plain/order.json",
+      "target": "cells/s112-plain-blind/episodes.jsonl",
+      "target_order": "cells/s112-plain-blind/order.json"
+    }
+  ],
+  "schema": "seatlab.study-recipe/v1"
+}

@@ -1,0 +1,228 @@
+{
+  "cases": {
+    "s101": {
+      "blind-moves-different": "s101-plain-blind-physical",
+      "blind-moves-equal": "s101-plain-blind-physical",
+      "blind-physical-different": "s101-plain-blind-physical",
+      "blind-physical-equal": "s101-plain-blind-physical",
+      "cross-decoder-different": "s101-plain-rotate-physical",
+      "cross-encoder-different": "s101-rotate-plain-physical",
+      "rotation-moves-equal": "s101-rotate-rotate-physical",
+      "rotation-physical-equal": "s101-rotate-rotate-physical",
+      "rotation-signal-different": "s101-rotate-rotate-channel"
+    },
+    "s102": {
+      "blind-moves-different": "s102-plain-blind-physical",
+      "blind-moves-equal": "s102-plain-blind-physical",
+      "blind-physical-different": "s102-plain-blind-physical",
+      "blind-physical-equal": "s102-plain-blind-physical",
+      "cross-decoder-different": "s102-plain-rotate-physical",
+      "cross-encoder-different": "s102-rotate-plain-physical",
+      "rotation-moves-equal": "s102-rotate-rotate-physical",
+      "rotation-physical-equal": "s102-rotate-rotate-physical",
+      "rotation-signal-different": "s102-rotate-rotate-channel"
+    },
+    "s103": {
+      "blind-moves-different": "s103-plain-blind-physical",
+      "blind-moves-equal": "s103-plain-blind-physical",
+      "blind-physical-different": "s103-plain-blind-physical",
+      "blind-physical-equal": "s103-plain-blind-physical",
+      "cross-decoder-different": "s103-plain-rotate-physical",
+      "cross-encoder-different": "s103-rotate-plain-physical",
+      "rotation-moves-equal": "s103-rotate-rotate-physical",
+      "rotation-physical-equal": "s103-rotate-rotate-physical",
+      "rotation-signal-different": "s103-rotate-rotate-channel"
+    },
+    "s104": {
+      "blind-moves-different": "s104-plain-blind-physical",
+      "blind-moves-equal": "s104-plain-blind-physical",
+      "blind-physical-different": "s104-plain-blind-physical",
+      "blind-physical-equal": "s104-plain-blind-physical",
+      "cross-decoder-different": "s104-plain-rotate-physical",
+      "cross-encoder-different": "s104-rotate-plain-physical",
+      "rotation-moves-equal": "s104-rotate-rotate-physical",
+      "rotation-physical-equal": "s104-rotate-rotate-physical",
+      "rotation-signal-different": "s104-rotate-rotate-channel"
+    },
+    "s105": {
+      "blind-moves-different": "s105-plain-blind-physical",
+      "blind-moves-equal": "s105-plain-blind-physical",
+      "blind-physical-different": "s105-plain-blind-physical",
+      "blind-physical-equal": "s105-plain-blind-physical",
+      "cross-decoder-different": "s105-plain-rotate-physical",
+      "cross-encoder-different": "s105-rotate-plain-physical",
+      "rotation-moves-equal": "s105-rotate-rotate-physical",
+      "rotation-physical-equal": "s105-rotate-rotate-physical",
+      "rotation-signal-different": "s105-rotate-rotate-channel"
+    },
+    "s106": {
+      "blind-moves-different": "s106-plain-blind-physical",
+      "blind-moves-equal": "s106-plain-blind-physical",
+      "blind-physical-different": "s106-plain-blind-physical",
+      "blind-physical-equal": "s106-plain-blind-physical",
+      "cross-decoder-different": "s106-plain-rotate-physical",
+      "cross-encoder-different": "s106-rotate-plain-physical",
+      "rotation-moves-equal": "s106-rotate-rotate-physical",
+      "rotation-physical-equal": "s106-rotate-rotate-physical",
+      "rotation-signal-different": "s106-rotate-rotate-channel"
+    },
+    "s107": {
+      "blind-moves-different": "s107-plain-blind-physical",
+      "blind-moves-equal": "s107-plain-blind-physical",
+      "blind-physical-different": "s107-plain-blind-physical",
+      "blind-physical-equal": "s107-plain-blind-physical",
+      "cross-decoder-different": "s107-plain-rotate-physical",
+      "cross-encoder-different": "s107-rotate-plain-physical",
+      "rotation-moves-equal": "s107-rotate-rotate-physical",
+      "rotation-physical-equal": "s107-rotate-rotate-physical",
+      "rotation-signal-different": "s107-rotate-rotate-channel"
+    },
+    "s108": {
+      "blind-moves-different": "s108-plain-blind-physical",
+      "blind-moves-equal": "s108-plain-blind-physical",
+      "blind-physical-different": "s108-plain-blind-physical",
+      "blind-physical-equal": "s108-plain-blind-physical",
+      "cross-decoder-different": "s108-plain-rotate-physical",
+      "cross-encoder-different": "s108-rotate-plain-physical",
+      "rotation-moves-equal": "s108-rotate-rotate-physical",
+      "rotation-physical-equal": "s108-rotate-rotate-physical",
+      "rotation-signal-different": "s108-rotate-rotate-channel"
+    },
+    "s109": {
+      "blind-moves-different": "s109-plain-blind-physical",
+      "blind-moves-equal": "s109-plain-blind-physical",
+      "blind-physical-different": "s109-plain-blind-physical",
+      "blind-physical-equal": "s109-plain-blind-physical",
+      "cross-decoder-different": "s109-plain-rotate-physical",
+      "cross-encoder-different": "s109-rotate-plain-physical",
+      "rotation-moves-equal": "s109-rotate-rotate-physical",
+      "rotation-physical-equal": "s109-rotate-rotate-physical",
+      "rotation-signal-different": "s109-rotate-rotate-channel"
+    },
+    "s110": {
+      "blind-moves-different": "s110-plain-blind-physical",
+      "blind-moves-equal": "s110-plain-blind-physical",
+      "blind-physical-different": "s110-plain-blind-physical",
+      "blind-physical-equal": "s110-plain-blind-physical",
+      "cross-decoder-different": "s110-plain-rotate-physical",
+      "cross-encoder-different": "s110-rotate-plain-physical",
+      "rotation-moves-equal": "s110-rotate-rotate-physical",
+      "rotation-physical-equal": "s110-rotate-rotate-physical",
+      "rotation-signal-different": "s110-rotate-rotate-channel"
+    },
+    "s111": {
+      "blind-moves-different": "s111-plain-blind-physical",
+      "blind-moves-equal": "s111-plain-blind-physical",
+      "blind-physical-different": "s111-plain-blind-physical",
+      "blind-physical-equal": "s111-plain-blind-physical",
+      "cross-decoder-different": "s111-plain-rotate-physical",
+      "cross-encoder-different": "s111-rotate-plain-physical",
+      "rotation-moves-equal": "s111-rotate-rotate-physical",
+      "rotation-physical-equal": "s111-rotate-rotate-physical",
+      "rotation-signal-different": "s111-rotate-rotate-channel"
+    },
+    "s112": {
+      "blind-moves-different": "s112-plain-blind-physical",
+      "blind-moves-equal": "s112-plain-blind-physical",
+      "blind-physical-different": "s112-plain-blind-physical",
+      "blind-physical-equal": "s112-plain-blind-physical",
+      "cross-decoder-different": "s112-plain-rotate-physical",
+      "cross-encoder-different": "s112-rotate-plain-physical",
+      "rotation-moves-equal": "s112-rotate-rotate-physical",
+      "rotation-physical-equal": "s112-rotate-rotate-physical",
+      "rotation-signal-different": "s112-rotate-rotate-channel"
+    }
+  },
+  "criteria": [
+    {
+      "dimension": "accepted_action",
+      "id": "rotation-moves-equal",
+      "role": "p1",
+      "when": "equal"
+    },
+    {
+      "dimension": "selected_view",
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "rotation-signal-different",
+      "role": "p1",
+      "when": "different"
+    },
+    {
+      "dimension": "selected_view",
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "rotation-physical-equal",
+      "role": "p1",
+      "when": "equal"
+    },
+    {
+      "dimension": "accepted_action",
+      "id": "cross-decoder-different",
+      "role": "p1",
+      "when": "different"
+    },
+    {
+      "dimension": "accepted_action",
+      "id": "cross-encoder-different",
+      "role": "p1",
+      "when": "different"
+    },
+    {
+      "dimension": "accepted_action",
+      "id": "blind-moves-different",
+      "role": "p1",
+      "when": "different"
+    },
+    {
+      "dimension": "accepted_action",
+      "id": "blind-moves-equal",
+      "role": "p1",
+      "when": "equal"
+    },
+    {
+      "dimension": "selected_view",
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "blind-physical-different",
+      "role": "p1",
+      "when": "different"
+    },
+    {
+      "dimension": "selected_view",
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "blind-physical-equal",
+      "role": "p1",
+      "when": "equal"
+    }
+  ],
+  "schema": "seatlab.panel-design/v1"
+}
