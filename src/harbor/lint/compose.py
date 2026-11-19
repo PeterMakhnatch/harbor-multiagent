@@ -377,9 +377,10 @@ def lint_compose(
             for other, other_networks in seat_networks.items()
             if other != seat and networks & other_networks
         ):
+            key = "network_mode" if services[seat].get("network_mode") else "networks"
             emit(
                 LintRule.SEAT_SHARED_NETWORK,
-                f"services.{seat}.networks",
+                f"services.{seat}.{key}",
                 f"Seat shares a network with seat {', '.join(peers)}; give each "
                 "seat its own network, shared only with main.",
             )

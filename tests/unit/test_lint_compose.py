@@ -272,9 +272,10 @@ def test_seat_shared_network(model, path, services, expected):
     model["networks"] = {"a": {"name": "x"}, "b": {"name": "x"}, "p1-net": {}}
     findings = lint_compose(path, seats=["p1", "p2"])
     assert [f.message for f in findings if f.rule == "seat-shared-network"] == [
-        f"services.{seat}.networks: Seat shares a network with seat "
-        f"{'p2' if seat == 'p1' else 'p1'}; give each seat its own network, "
-        "shared only with main."
+        f"services.{seat}."
+        f"{'network_mode' if 'network_mode' in services[seat] else 'networks'}: "
+        f"Seat shares a network with seat {'p2' if seat == 'p1' else 'p1'}; "
+        "give each seat its own network, shared only with main."
         for seat in expected
     ]
 
