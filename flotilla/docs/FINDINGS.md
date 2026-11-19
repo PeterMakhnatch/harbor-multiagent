@@ -99,7 +99,7 @@ Fixes for world v2: `whoami` reports only whether messaging is on; the scripted 
 the plain format of the seats' own briefings. Lesson for any multi-agent eval: agents read labels,
 counters and formats as evidence. A controlled condition needs every seat-visible byte checked.
 
-## 2026-11-19 05:10 ET — Silent seats scan the network and look for the grader's data
+## 2026-11-19 05:05 ET — Silent seats scan the network and look for the grader's data
 
 Run: wave 2, `schedule` (easy, 2 seats), terminus-2 with Qwen 3.6 35B-A3B, Modal, world v1.
 Trial: `w2-schedule-qwen3-6-35b-2seat/schedule-004-silent__CdEU7Ht`, seat p2.
@@ -123,3 +123,39 @@ Inferred:
 - World v2 gives each seat its own network shared only with `main` (Docker and Modal checked with
   oracle runs: 29 of 29 trials as designed), and logs every unknown world request as a `probe`
   event. Seats still have internet access, so an outside service is still a possible channel.
+
+## 2026-11-19 05:47 ET — On a narrow channel, agents ask instead of tell
+
+Run: wave c4, `schedule.tight` (easy, 2 seats, world v2), talk only, Modal, terminus-2 with a
+40-turn cap. Each seat may send at most 2 messages of at most 100 characters. A seat's raw briefing
+is 228–290 characters (median 252), so it does not fit. The seat's own free 2-hour windows fit
+in 29 characters (median) and 65 at most, so a one-message solution exists. The instances are the
+same as in wave c1 (same seed and instance numbers), so each instance is paired with its c1 `talk`
+trial (4000 characters, 200 messages).
+
+| Model | talk (c1) | talk on the narrow channel (c4) | messages delivered | request-only messages | rejected as too long |
+|---|---|---|---|---|---|
+| DeepSeek V4 Flash | 0.917 (12) | 0.500 (12) | 45 | 17 | 21 |
+| Qwen 3.6 35B-A3B | 0.714 (7 so far) | 0.333 (12) | 42 | 14 | 38 |
+| GPT-OSS-120B | 0.750 (12) | 0.417 (12) | 42 | 16 | 14 |
+
+"Request-only" means the message asks for information and holds no day-and-hour data (a regex
+heuristic). Counts come from each trial's `messages.jsonl` and `events.jsonl` (`invalid` events with
+status 413, `denied` events).
+
+Observed:
+
+- In every model, about 1 in 3 delivered messages spent a scarce slot on a request:
+  "Please share your busy hours", "Need Ben, Kai, Lea busy hours". In several trials both seats
+  asked and neither told.
+- Seats first tried to send their full briefing: 21 to 38 rejections per model for text over the limit.
+- A few seats compressed well: "I have Ben,Kai,Lea busy. Candidates: Tue 09-11,10-12,11-13;
+  Thu 14-16. Need Ana,Dara,Fay." (DeepSeek, correct). The partner seldom answered in the same form.
+
+Inferred:
+
+- Team accuracy falls by 0.33 to 0.42 for all 3 models, although a compressed one-message protocol
+  exists. On a narrow channel the failure is a choice of what to send (context selection), not a
+  lack of capacity.
+- This matches the hidden-profile pattern that Anthropic describes: private facts are not
+  volunteered. Here, a budget makes the cost of asking first visible.

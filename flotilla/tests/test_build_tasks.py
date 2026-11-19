@@ -234,3 +234,27 @@ def test_command_line(tmp_path):
         "SEAT_BRIEFING"])["script"] for p in (tmp_path / "schedule.liar").iterdir()}
     assert lying == {"schedule.liar-000-talk": "honest", "schedule.liar-000-talk-warned": "honest",
                      "schedule.liar-000-talk-liar": "liar", "schedule.liar-000-talk-liar-warned": "liar"}
+
+
+def test_submitter_role_protocol(tmp_path):
+    """--submitter adds a role sentence to talk instructions only, and records it in task.json."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    builder = Path(__file__).resolve().parents[1] / "build_tasks.py"
+    subprocess.run(
+        [sys.executable, str(builder), "--family", "schedule", "--instances", "0", "--submitter", "p1",
+         "--out", str(tmp_path)],
+        check=True, capture_output=True,
+    )
+    root = tmp_path / "schedule"
+    talk = root / "schedule-000-talk"
+    p1 = (talk / "instructions" / "p1.md").read_text()
+    p2 = (talk / "instructions" / "p2.md").read_text()
+    assert "only you submit the team answer" in p1
+    assert "only seat p1 submits the team answer: do not submit" in p2
+    assert json.loads((talk / "environment" / "task.json").read_text())["submitter"] == "p1"
+    silent = (root / "schedule-000-silent" / "instructions" / "p1.md").read_text()
+    assert "Your team agreed" not in silent
