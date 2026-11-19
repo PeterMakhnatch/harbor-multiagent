@@ -35,7 +35,7 @@ def _result(tmp_path: Path) -> tuple[float, dict]:
 
 
 SCHEDULE_TASK = {"family": "schedule", "instance": 0, "condition": "talk", "seats": ["p1", "p2"],
-                 "world_version": 2, "answer_key": {"day": "Wed", "start": "14:00"}}
+                 "world_version": 3, "answer_key": {"day": "Wed", "start": "14:00"}}
 
 
 def test_the_verifier_scores_the_last_submission(tmp_path, start_world, monkeypatch, capsys):
@@ -46,7 +46,7 @@ def test_the_verifier_scores_the_last_submission(tmp_path, start_world, monkeypa
     score.main()
     reward, summary = _result(tmp_path)
     assert reward == 0.0  # p1 was right, but p2 submitted last
-    assert (summary["submitted_by"], summary["n_submissions"], summary["world_version"]) == ("p2", 2, 2)
+    assert (summary["submitted_by"], summary["n_submissions"], summary["world_version"]) == ("p2", 2, 3)
     assert summary["error"] is None
     state = json.loads((tmp_path / "verifier" / "world-state.json").read_text())
     assert state["frozen"] is True and len(state["submissions"]) == 2
