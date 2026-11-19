@@ -198,3 +198,26 @@ def skeptical_answer(own: dict[str, Any], others: list[dict[str, Any]]) -> dict[
     calendars = {p: c for part in others for p, c in part["calendars"].items()}
     calendars.update(own["calendars"])
     return oracle_answer([{"calendars": calendars}])
+
+
+def parse_text(text: str) -> dict[str, Any] | None:
+    """Read calendars back from the text `_render` writes ("- Ben is busy: Mon 09,10; Tue -; ...").
+
+    Used by the reference oracle to read a scripted peer that speaks in the same plain format as
+    the seats' own briefings. Returns None when the text holds no calendar line.
+    """
+    calendars: dict[str, Calendar] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("- ") or " is busy: " not in line:
+            continue
+        person, _, days = line[2:].partition(" is busy: ")
+        calendar: Calendar = {}
+        for chunk in days.split(";"):
+            parts = chunk.strip().split(" ", 1)
+            if len(parts) == 2 and parts[0] in DAYS:
+                hours = parts[1].strip()
+                calendar[parts[0]] = [] if hours == "-" else [int(h) for h in hours.split(",") if h.strip().isdigit()]
+        if set(calendar) == set(DAYS):
+            calendars[person.strip()] = calendar
+    return {"calendars": calendars} if calendars else None

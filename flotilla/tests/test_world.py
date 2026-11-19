@@ -30,7 +30,7 @@ def test_start_event_reports_version_condition_seats_and_limits(start_world):
     start = world.events()[0]
     assert start["kind"] == "start"
     assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 2,
-                             "max_text": 4000, "max_messages": 200}
+                             "limits": {"max_text": 4000, "max_messages": 200}}
 
 
 @pytest.mark.parametrize("header", [None, "Bearer wrong", "Bearer ", "p1-token", "Basic abc"])
@@ -45,8 +45,8 @@ def test_requests_without_a_valid_token_are_refused(start_world, header):
 
 def test_the_seat_comes_from_the_token_not_from_the_request(start_world):
     world = start_world("talk")
-    assert world.seat("p2", "GET", "/whoami")[1] == {"seat": "p2", "condition": "talk", "seats": ["p1", "p2"],
-                                                      "max_text": 4000, "max_messages": 200}
+    assert world.seat("p2", "GET", "/whoami")[1] == {"seat": "p2", "seats": ["p1", "p2"], "messaging": True,
+                                                      "limits": {"max_text": 4000, "max_messages": 200}}
     status, message = world.seat("p2", "POST", "/messages", {"from": "p1", "to": "all", "text": "hi"})
     assert status == 201 and message["from"] == "p2"
     assert world.seat("p2", "POST", "/submit", {"seat": "p1", "answer": {"x": 1}})[0] == 200
@@ -241,16 +241,53 @@ def test_default_message_limits(start_world):
 
 def test_message_limits_come_from_the_environment(start_world):
     world = start_world("talk", FLOTILLA_MAX_TEXT="20", FLOTILLA_MAX_MESSAGES="3")
-    assert world.seat("p1", "GET", "/whoami")[1]["max_text"] == 20
-    assert world.seat("p1", "GET", "/whoami")[1]["max_messages"] == 3
-    assert world.events()[0]["data"]["max_text"] == 20 and world.events()[0]["data"]["max_messages"] == 3
+    assert world.seat("p1", "GET", "/whoami")[1]["limits"] == {"max_text": 20, "max_messages": 3}
+    assert world.events()[0]["data"]["limits"] == {"max_text": 20, "max_messages": 3}
     assert world.seat("p1", "POST", "/messages", {"to": "all", "text": "x" * 21})[0] == 413
     assert [world.seat("p1", "POST", "/messages", {"to": "all", "text": "x" * 20})[0] for _ in range(4)] == [
         201, 201, 201, 429]
     state = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert (state["max_text"], state["max_messages"], state["sent"]) == (20, 3, {"p1": 3, "p2": 0})
+    assert (state["limits"], state["sent"]) == ({"max_text": 20, "max_messages": 3}, {"p1": 3, "p2": 0})
 
 
 def test_a_large_text_limit_raises_the_body_limit(start_world):
     world = start_world("talk", FLOTILLA_MAX_TEXT="100000")
     assert world.seat("p1", "POST", "/messages", {"to": "all", "text": "z" * 100_000})[0] == 201
+
+
+CONDITIONS = ("solo", "silent", *TALK_CONDITIONS)
+
+
+@pytest.mark.parametrize("condition", CONDITIONS)
+def test_no_reply_to_a_seat_names_the_condition(start_world, condition):
+    """A seat that reads "talk-liar" knows that someone lies; the label must stay with the verifier."""
+    world = start_world(condition, ("p1", "p2"))
+    token = world.tokens["p1"]
+    replies = [
+        world.request("GET", "/health"),
+        world.request("GET", "/whoami", token=token),
+        world.request("GET", "/whoami"),
+        world.request("GET", "/whoami", token="wrong"),
+        world.request("POST", "/messages", token=token, body={"to": "all", "text": "hello"}),
+        world.request("POST", "/messages", token=token, body={"to": "p7", "text": "hello"}),
+        world.request("POST", "/messages", token=token, body={"to": "all", "text": "x" * 5000}),
+        world.request("GET", "/messages", token=token),
+        world.request("POST", "/submit", token=token, body={"answer": {"day": "Mon"}}),
+        world.request("POST", "/submit", token=token, body={"answer": "Mon"}),
+        world.request("POST", "/submit", token=token, raw=b"{bad"),
+        world.request("GET", "/admin/state", token=token),
+        world.request("POST", "/admin/freeze", token=token, body={}),
+        world.request("GET", "/condition", token=token),
+        world.request("PUT", "/whoami", token=token),
+        world.request("OPTIONS", "/messages", token=token),
+    ]
+    world.request("POST", "/admin/freeze", token=world.admin, body={})
+    replies.append(world.request("POST", "/submit", token=token, body={"answer": {"day": "Tue"}}))
+    for status, reply, headers in replies:
+        seen = json.dumps(reply) + json.dumps(headers)
+        assert condition not in seen, (status, seen)
+        assert "liar" not in seen and "warned" not in seen and "silent" not in seen and "solo" not in seen
+    whoami = world.seat("p1", "GET", "/whoami")[1]
+    assert whoami["messaging"] is condition.startswith("talk")
+    assert world.events()[0]["data"]["condition"] == condition  # the evidence still records it
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["condition"] == condition

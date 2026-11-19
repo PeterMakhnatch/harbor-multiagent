@@ -18,9 +18,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-# Version 2: the submit reply no longer carries the submission count `n` (in version 1 a seat in
-# `silent` read it as a signal from its teammates), every request is logged, and the message limits
-# come from the environment.
+# Version 2: no reply to a seat names the condition (in version 1 /whoami did, and a seat read
+# "talk-liar" as a warning); the submit reply no longer carries the submission count `n` (a seat in
+# `silent` read it as a signal from its teammates); every request is logged; the message limits come
+# from the environment.
 WORLD_VERSION = 2
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -71,6 +72,12 @@ def record(kind: str, seat: str | None, data: dict[str, Any] | None = None) -> N
 
 def limits() -> dict[str, int]:
     return {"max_text": MAX_TEXT, "max_messages": MAX_MESSAGES_PER_SEAT}
+
+
+def whoami(seat: str) -> dict[str, Any]:
+    """What a seat may know about the run. Never the condition's name: it would tell a seat, for
+    example, that one of its teammates lies."""
+    return {"seat": seat, "seats": SEATS, "messaging": MESSAGING, "limits": limits()}
 
 
 def _no_constants(name: str) -> Any:
@@ -176,14 +183,14 @@ class World(BaseHTTPRequestHandler):
             if path == "/whoami":
                 with LOCK:
                     record("whoami", seat)
-                self._reply(200, {"seat": seat, "condition": CONDITION, "seats": SEATS, **limits()})
+                self._reply(200, whoami(seat))
             elif path == "/messages":
                 self._get_messages(seat)
             else:  # /admin/state
                 with LOCK:
                     record("state", seat)
                     self._reply(200, {"world_version": WORLD_VERSION, "condition": CONDITION, "seats": SEATS,
-                                      **limits(), **STATE})
+                                      "limits": limits(), **STATE})
             return
         body, reason = self._body()
         if body is None:
@@ -203,7 +210,7 @@ class World(BaseHTTPRequestHandler):
             return False
         with LOCK:
             record("denied", seat, {"path": "/messages", "reason": f"messaging is disabled ({CONDITION})"})
-        self._reply(403, {"error": f"messaging is disabled in this run (condition: {CONDITION})"})
+        self._reply(403, {"error": "messaging is disabled in this run"})
         return True
 
     def _send(self, seat: str, body: dict[str, Any]) -> None:
@@ -270,7 +277,8 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
     for name in ("events.jsonl", "messages.jsonl"):
         (LOGS / name).touch()
     with LOCK:
-        record("start", None, {"condition": CONDITION, "seats": SEATS, "world_version": WORLD_VERSION, **limits()})
+        record("start", None, {"condition": CONDITION, "seats": SEATS, "world_version": WORLD_VERSION,
+                               "limits": limits()})
     return server
 
 

@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--concurrent", type=int, default=2)
     parser.add_argument("--name", required=True, help="job name prefix")
+    parser.add_argument("--max-turns", type=int, help="cap the turns of every model seat (terminus-2 max_turns)")
     parser.add_argument("--seat-agent", action="append", default=[], metavar="SEAT=AGENT[:MODEL]",
                         help="override the agent of one seat, e.g. p3=oracle; repeatable")
     parser.add_argument("--env", choices=("docker", "modal"), default="docker",
@@ -49,6 +50,8 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     for seats, tasks in sorted(groups.items()):
         participant = {"name": args.agent} | ({"model_name": args.model} if args.model else {})
+        if args.max_turns:
+            participant["kwargs"] = {"max_turns": args.max_turns}
         overrides = {}
         for spec in args.seat_agent:
             seat, _, agent = spec.partition("=")

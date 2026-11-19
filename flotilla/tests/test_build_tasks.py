@@ -72,7 +72,7 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
         assert task.name == config["task"]["name"].split("/", 1)[1]
         assert meta | {} == {"family": family_name, "variant": "", "instance": meta["instance"], "condition": condition,
                              "n_seats": len(seats), "team_seats": n_seats, "difficulty": "easy", "seed": 1,
-                             "max_text": 4000, "max_messages": 200}
+                             "max_text": 4000, "max_messages": 200, "play_timeout_sec": 900.0}
         assert sorted(config["agents"]) == seats
         assert sorted(p.stem for p in (task / "instructions").iterdir()) == seats
         services = compose_services((task / "environment" / "docker-compose.yaml").read_text())

@@ -104,7 +104,7 @@ def test_briefings_travel_in_chunks_within_the_limits(size, max_text, max_messag
     assert all(len(text) <= max_text for text in texts)
     messages = [{"from": "p2", "text": text} for text in reversed(texts)]  # order does not matter
     parts, done = ORACLE.collect(messages, {"p2"})
-    assert parts == {"p2": json.loads(payload)} and done == {"p2"}
+    assert parts == {"p2": [json.loads(payload)]} and done == {"p2"}
 
 
 def test_a_briefing_that_cannot_fit_says_nothing_is_coming():
@@ -189,3 +189,26 @@ def test_oracle_talk_falls_back_quickly_when_briefings_cannot_fit(tmp_path, star
                             FLOTILLA_MAX_TEXT="200", FLOTILLA_MAX_MESSAGES="3")
     assert reward == 0.0  # each seat says nothing is coming and answers from its own part
     assert summary["n_messages"] == 2
+
+
+def test_the_oracle_reads_messaging_and_limits_from_whoami_in_both_world_versions():
+    v2 = {"seat": "p1", "seats": ["p1", "p2"], "messaging": False, "limits": {"max_text": 50, "max_messages": 2}}
+    assert (ORACLE.messaging(v2), ORACLE.limits(v2)) == (False, (50, 2))
+    v1 = {"seat": "p1", "condition": "talk-liar", "seats": ["p1", "p2"]}
+    assert (ORACLE.messaging(v1), ORACLE.limits(v1)) == (True, (4000, 200))
+    assert ORACLE.messaging({"condition": "silent"}) is False
+
+
+def test_plain_text_from_a_scripted_peer_is_read_with_the_familys_parser():
+    schedule = family("schedule")
+    inst = schedule.generate(1, 0, 3, "easy")
+    text = "Hi team, I am p3. " + inst["private_text"]["p3"].replace("Calendars you know", "Calendars I know")
+    chunks = ORACLE.plain_messages(text, 120)
+    assert len(chunks) > 1 and all(len(chunk) <= 120 for chunk in chunks)
+    parts, done = ORACLE.collect([{"from": "p3", "text": chunk} for chunk in chunks], {"p3"}, schedule.parse_text)
+    assert done == {"p3"}
+    merged = {}
+    for part in parts["p3"]:
+        merged.update(part["calendars"])
+    assert merged == inst["private"]["p3"]["calendars"]
+    assert ORACLE.collect([{"from": "p3", "text": text}], {"p3"}) == ({}, set())  # no parser: not read
