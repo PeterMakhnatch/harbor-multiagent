@@ -9,8 +9,12 @@ Where the numbers come from:
 - R1, R2, R5, R6 and all scores: `flotilla-analyze`; the full output is
   [results/2026-11-19-canonical-analysis.md](results/2026-11-19-canonical-analysis.md).
 - R3, R4, wave c5 and the pilot counts: [results/scripts/breakdowns.py](results/scripts/breakdowns.py).
-- Counts marked "manual reading" come from an independent review that read the messages one by one,
-  because a regex also matches format examples such as "Mon 09,10" inside a request.
+- R3 found, lost, overwrite, data-receipt and announcement counts: the `found_lost` section of
+  `flotilla-analyze` (run it with `--family-hooks flotilla/families`). Its family hook counts a message
+  as data only if it names one of the sender's own attendees with a day and an hour, after it removes
+  format examples; it agrees with an independent manual reading of the messages.
+- Counts marked "manual reading" come from that independent review, because a bare regex also
+  matches format examples such as "Mon 09,10" inside a request.
 
 An independent reviewer re-derived the headline numbers from the raw files with its own code. It
 confirmed R1, R2, the R3 found/lost table, wave c5, R5 and the R6 means, and it confirmed the
@@ -85,13 +89,15 @@ Talk condition of wave c1. "Found" means some seat submitted the right answer at
 | GPT-OSS-120B | 12 of 12 | 9 | 3 |
 
 - In 35 of the 36 trials, the first right submitter had received the teammate's calendar data
-  (manual reading). In GPT-OSS `schedule-007`, the right answer was the first of 8 windows that p1
+  (manual reading and `flotilla-analyze`). In GPT-OSS `schedule-007`, the right answer was the first of 8 windows that p1
   submitted without any teammate data.
 - Of the 7 lost trials, 6 end with a wrong answer from the teammate after the right one; this never
   happened in the 29 won trials. In 5 of those 6, the teammate had received none of the solver's
-  calendar data (manual reading). The 7th is GPT-OSS `schedule-007`, where p1 kept submitting.
-- The solver sent the answer to its teammate in 0 of the 7 lost trials and in 5 of the 29 won trials.
-  That difference is not significant (Fisher two-sided p = 0.56). Hypothesis, not a finding: the team
+  calendar data (manual reading and `flotilla-analyze`). The 7th is GPT-OSS `schedule-007`, where p1
+  kept submitting.
+- The solver sent the answer to its teammate in 0 of the 7 lost trials and in 6 of the 29 won trials
+  (`flotilla-analyze`, within 10 s before or any time after its first right submission; an earlier
+  5-second window gave 5 of 29). That difference is not significant (Fisher two-sided p = 0.32). Hypothesis, not a finding: the team
   loses answers when the solver finishes without telling its teammate.
 
 Wave c5 tests a role protocol: the instructions say only p1 submits (the world still accepts any seat).
@@ -170,7 +176,7 @@ operator ledger, not in the repo.
 | Submit reply counter `n` | a silent seat used it as a signal | removed in v2 | world tests; `qa.py stale-code` |
 | All seats on one Compose network | a silent seat scanned it and found its teammate | one network per seat, shared only with `main` | `qa.py seat-network`; lint rule `seat-shared-network` (PR #3) |
 | Scripted peer posted machine-readable JSON | a seat called it "the authoritative data source" | plain text in the seats' own format | `qa.py stale-code` (shipped oracle) and `twin-mismatch` (seats see identical bytes across twin conditions) |
-| Container and network names carry the task name | `qa.py` evidence search (1 of 793 pilot trajectories) | fork stopgap (draft PR #19, hashed Compose project names); upstream tracks it in harbor#3607, and the open harbor#3803 (opaque session ids) is the better fix | `qa.py runtime-names` (WARN); 0 of 556 canonical trajectories affected |
+| Container and network names carry the task name | `qa.py` evidence search (1 of 793 pilot trajectories) | Flotilla builds opaque task names by default (`flotilla/t-<12 hex>`, with a build manifest); fork stopgap draft PR #19 hashes Compose project names; upstream tracks it in harbor#3607, and the open harbor#3803 (opaque session ids) is the general fix | `qa.py runtime-names` (WARN); 0 of 556 canonical trajectories affected |
 
 ## Limits
 
@@ -239,7 +245,7 @@ python3 flotilla/make_jobs.py --tasks ".flotilla-local/tasks/c1/*/*" --agent ter
 # use the fork's Harbor (repo .venv), not a globally installed harbor
 .venv/bin/harbor run -c .flotilla-local/configs/canon/c1-ds-1seat.json -y   # then -2seat
 cd flotilla/analysis && python3 -m flotilla_analysis ../../.flotilla-local/jobs/c1-ds-* \
-    --tasks ../../.flotilla-local/tasks/c1
+    --tasks ../../.flotilla-local/tasks/c1 --family-hooks ../families
 python3 flotilla/docs/results/scripts/breakdowns.py .flotilla-local/jobs
 ```
 
