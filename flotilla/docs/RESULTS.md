@@ -148,7 +148,7 @@ operator ledger, not in the repo.
 | Submit reply counter `n` | a silent seat used it as a signal | removed in v2 | world tests; `qa.py stale-code` |
 | All seats on one Compose network | a silent seat scanned it and found its teammate | one network per seat, shared only with `main` | `qa.py seat-network`; lint rule `seat-shared-network` (PR #3) |
 | Scripted peer posted machine-readable JSON | a seat called it "the authoritative data source" | plain text in the seats' own format | `qa.py stale-code` (shipped oracle) and `twin-mismatch` (seats see identical bytes across twin conditions) |
-| Container and network names carry the task name | `qa.py` evidence search (1 of 793 pilot trajectories) | Harbor fix in progress (neutral Compose project names) | `qa.py runtime-names` (WARN); 0 of 556 canonical trajectories affected |
+| Container and network names carry the task name | `qa.py` evidence search (1 of 793 pilot trajectories) | fork stopgap (draft PR #19, hashed Compose project names); upstream tracks it in harbor#3607, and the open harbor#3803 (opaque session ids) is the better fix | `qa.py runtime-names` (WARN); 0 of 556 canonical trajectories affected |
 
 ## Limits
 

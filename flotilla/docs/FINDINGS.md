@@ -177,8 +177,10 @@ Observed:
 
 Inferred: the canonical results are not affected in practice, but the leak is real for any task whose
 name encodes a condition, role or hint, single-agent tasks included. `flotilla/qa.py` reports it as
-`runtime-names` (WARN). A Harbor fix (neutral, hashed Compose project names) is in progress as a
-draft PR in the fork; a Flotilla-side fix would need opaque task names and a contract change.
+`runtime-names` (WARN). A fork stopgap (hashed Compose project names) is draft PR #19. Upstream Harbor
+already tracks the leak (harbor-framework/harbor#3607); the open harbor#3803 makes runtime session ids
+opaque and also covers pod hostnames and agent session ids, so it is the better fix to support. A
+Flotilla-side fix would need opaque task names and a contract change.
 
 ## 2026-11-19 06:49 ET — Talking teams lose answers by finishing silently
 
