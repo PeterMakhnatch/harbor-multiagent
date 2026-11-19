@@ -57,3 +57,15 @@ submit it now?"
 Inferred: for this model the solo ceiling is limited by acting, not by reasoning. A team score must
 be read against that ceiling, and the analysis reports "no submission" separately from "wrong
 answer".
+
+## 2026-11-19 04:35 ET — Validity flaw: the answer example can be the answer
+
+Found by the families builder while writing tests. In world-v1 `schedule` tasks, every
+instruction shows the answer format with the example `{"day": "Wed", "start": "14:00"}`. For
+instance 005 the true answer is Wed 14:00, so a seat that copies the example scores 1 without any
+information. This inflates the `silent` floor for that instance. New builds choose an example that is
+neither the answer nor the decoy. The analysis flags such trials (`example_leak`) and leaves them out
+of the decomposition.
+
+Lesson for every multi-agent task: a format example in an instruction is information. Check it
+against the answer key in task QA.
