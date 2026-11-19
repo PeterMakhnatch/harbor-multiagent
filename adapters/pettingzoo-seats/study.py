@@ -69,6 +69,7 @@ def prepare(root: Path) -> None:
         )
     write_new(root / "plan.json", {"schema": "seatlab.pz-plan/v1", "cells": cells})
 
+
 def prepare_particle(root: Path) -> None:
     root = root.resolve()
     root.mkdir()
@@ -87,12 +88,18 @@ def prepare_particle(root: Path) -> None:
                 "task": {"path": str(root / "tasks" / name)},
                 "trials_dir": str(root / "trials"),
                 "trial_name": name,
-                "participants": [{"seat": seat, "name": "oracle"} for seat in sorted(bound)],
+                "participants": [
+                    {"seat": seat, "name": "oracle"} for seat in sorted(bound)
+                ],
                 "environment": {"type": "docker", "force_build": True, "delete": True},
             },
         )
-        cells.append({"id": cell_id, "game": game, "policies": bound, "trial_name": name})
-    write_new(root / "plan.json", {"schema": "seatlab.pz-particle-plan/v1", "cells": cells})
+        cells.append(
+            {"id": cell_id, "game": game, "policies": bound, "trial_name": name}
+        )
+    write_new(
+        root / "plan.json", {"schema": "seatlab.pz-particle-plan/v1", "cells": cells}
+    )
 
 
 def run(root: Path, cell_id: str, harbor: Path) -> int:

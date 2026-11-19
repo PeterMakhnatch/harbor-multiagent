@@ -25,7 +25,9 @@ class ParticlePrepareTest(unittest.TestCase):
             study.prepare_particle(root)
             plan = json.loads((root / "plan.json").read_text(encoding="utf-8"))
             self.assertEqual(plan["schema"], "seatlab.pz-particle-plan/v1")
-            self.assertEqual([cell["id"] for cell in plan["cells"]], ["spread-lll", "spread-llh"])
+            self.assertEqual(
+                [cell["id"] for cell in plan["cells"]], ["spread-lll", "spread-llh"]
+            )
             self.assertEqual(
                 [cell["policies"] for cell in plan["cells"]],
                 [
@@ -34,10 +36,26 @@ class ParticlePrepareTest(unittest.TestCase):
                 ],
             )
             for cell in plan["cells"]:
-                cfg = json.loads((root / "configs" / f"{cell['id']}.json").read_text(encoding="utf-8"))
-                self.assertEqual([item["seat"] for item in cfg["participants"]], ["p0", "p1", "p2"])
-                self.assertTrue(all(item["name"] == "oracle" for item in cfg["participants"]))
-                spec = json.loads((root / "tasks" / cell["trial_name"] / "environment" / "spec.json").read_text())
+                cfg = json.loads(
+                    (root / "configs" / f"{cell['id']}.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(
+                    [item["seat"] for item in cfg["participants"]], ["p0", "p1", "p2"]
+                )
+                self.assertTrue(
+                    all(item["name"] == "oracle" for item in cfg["participants"])
+                )
+                spec = json.loads(
+                    (
+                        root
+                        / "tasks"
+                        / cell["trial_name"]
+                        / "environment"
+                        / "spec.json"
+                    ).read_text()
+                )
                 self.assertEqual(spec["seed"], 19)
                 self.assertEqual(set(spec["roles"]), {"p0", "p1", "p2"})
 
