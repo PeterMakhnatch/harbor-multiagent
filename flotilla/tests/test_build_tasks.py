@@ -393,8 +393,12 @@ def test_seed_of_pairs_a_build_with_an_earlier_one(tmp_path):
 def test_a_small_seed_is_said_to_be_public(tmp_path):
     public = run_builder("--family", "puzzle", "--instances", "0", "--conditions", "solo", "--seed", "1",
                          "--out", str(tmp_path / "a"))
-    assert public.stdout.splitlines()[2] == (
-        "seed: 1, given with --seed; it is public (below 1,000,000), so qa.py warns (public-seed)")
+    says = ("it is public (below 1,000,000), so qa.py fails the set (public-seed) unless --allow-public-seed, "
+            "which is only for repeating a published build")
+    assert public.stdout.splitlines()[2] == f"seed: 1, given with --seed; {says}"
+    paired = run_builder("--family", "puzzle", "--instances", "0", "--conditions", "talk", "--seed-of",
+                         str(tmp_path / "a"), "--out", str(tmp_path / "c"))
+    assert paired.stdout.splitlines()[2] == f"seed: 1, the seed of the tasks under {tmp_path / 'a'}; {says}"
     given = run_builder("--family", "puzzle", "--instances", "0", "--conditions", "solo", "--seed", "1000000",
                         "--out", str(tmp_path / "b"))
     assert given.stdout.splitlines()[2] == (

@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 from flotilla_analysis.load import load, load_evidence, load_trajectories
+from flotilla_analysis.render import render
 from flotilla_analysis.report import build as report
 from flotilla_analysis.tasks import ran_here, task_info
 from tests import fixtures as fx
@@ -268,3 +269,20 @@ class RebuiltFolders(unittest.TestCase):
         assert folders(report([str(self.job)], resamples=20, draws=20)) == {
             "usable": 2
         }  # checked, and it matches
+
+
+    def test_no_report_names_a_seed(self):
+        """Each build draws a secret seed, so a rebuild without --seed differs in it; the reports (text, markdown,
+        JSON) say which build parameter differs, never a seed: a published report must not give the answer keys."""
+        run_seed, rebuilt_seed = 4_404_577_120_938_117, 5_505_577_120_938_118  # of the size that builds draw
+        self.build(seed=run_seed)
+        self.trials(seen=False)
+        self.build(seed=rebuilt_seed)
+        rep = report([str(self.job)], resamples=20, draws=20)
+        assert folders(rep) == {REBUILT + " (instructions, seed)": 2}  # the briefings differ too
+        assert all("seed differs" in p["reason"] for p in rep["problems"]) and len(rep["problems"]) == 2
+        for fmt in ("text", "markdown", "json"):
+            shown = render(rep, fmt)
+            assert REBUILT in shown and "seed differs" in shown
+            assert str(run_seed) not in shown and str(rebuilt_seed) not in shown, fmt
+            assert not re.search(r"\d{13,}", shown), fmt  # no other long number either
