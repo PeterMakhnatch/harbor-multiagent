@@ -94,7 +94,7 @@ def _plural(n: int, word: str) -> str:
 
 def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], condition: str,
                 max_text: int = DEFAULT_MAX_TEXT, max_messages: int = DEFAULT_MAX_MESSAGES,
-                submitter: str = "") -> str:
+                submitter: str = "", announce: bool = False) -> str:
     team = (
         "You work alone."
         if condition == "solo"
@@ -140,6 +140,9 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
                 f"send {submitter} the information it needs."
             )
         )
+    if announce and condition.startswith("talk"):
+        # An acknowledgment protocol: in canonical runs, teams lost answers when the solver finished silently.
+        lines.append("When you submit an answer, also send it to `all` in a message that starts with `SUBMITTED:`.")
     if condition.startswith("talk"):
         lines += [
             "",
@@ -257,7 +260,7 @@ def task_toml(name: str, meta: dict[str, Any], seats: list[str], title: str,
 def build(family_name: str, instances: list[int], n_seats: int, difficulty: str, seed: int,
           conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False,
           play_timeout: float = PLAY_TIMEOUT_SEC, max_text: int = DEFAULT_MAX_TEXT,
-          max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "") -> list[Path]:
+          max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False) -> list[Path]:
     family = load_family(family_name)
     family_file = ROOT / "families" / f"{family_name}.py"
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
@@ -295,6 +298,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             meta["play_timeout_sec"] = play_timeout
             if submitter:
                 meta["submitter"] = submitter
+            if announce:
+                meta["announce"] = True
             if scripted_seats:
                 meta["scripted_seats"] = list(scripted_seats)
             (task_dir / "task.toml").write_text(
@@ -304,7 +309,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 (task_dir / "instructions" / f"{seat}.md").write_text(
                     SCRIPTED_INSTRUCTION
                     if seat in scripted_seats
-                    else instruction(family, inst, seat, seats, condition, max_text, max_messages, submitter)
+                    else instruction(family, inst, seat, seats, condition, max_text, max_messages, submitter, announce)
                 )
             (env / "docker-compose.yaml").write_text(
                 compose(condition, seats, tokens, admin, briefings, max_text, max_messages)
@@ -320,6 +325,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          "world_version": WORLD_VERSION, "max_text": max_text, "max_messages": max_messages}
             if submitter:
                 task_json["submitter"] = submitter
+            if announce:
+                task_json["announce"] = True
             for extra in ("decoy", "witness", "scripted_seats"):
                 if extra in inst and scripted:
                     task_json[extra] = inst[extra]
@@ -374,6 +381,9 @@ def main() -> None:
     parser.add_argument("--submitter", default="",
                         help="in talk conditions, tell the seats that only this seat submits (a role protocol; "
                         "the world still accepts any seat's submission)")
+    parser.add_argument("--announce", action="store_true",
+                        help="in talk conditions, ask each seat to send every answer it submits to all teammates "
+                        "(an acknowledgment protocol)")
     parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
                         help="messages per seat (world default %(default)s)")
     args = parser.parse_args()
@@ -388,7 +398,7 @@ def main() -> None:
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, args.seed,
                   conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
                   args.play_timeout, max_text=args.max_text, max_messages=args.max_messages,
-                  submitter=args.submitter)
+                  submitter=args.submitter, announce=args.announce)
     print(f"built {len(built)} tasks under {args.out}")
 
 

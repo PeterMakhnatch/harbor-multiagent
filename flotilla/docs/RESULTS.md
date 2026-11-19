@@ -160,6 +160,14 @@ operator ledger, not in the repo.
 - Heuristics: "request-only" messages use a regex; "seen" means shown on the seat's terminal.
 - Seats have internet access, so an outside service is still a possible channel.
 
+## Next experiments (built and QA-checked, not run)
+
+| Question | Build | Cost estimate |
+|---|---|---|
+| Does an acknowledgment protocol stop the silent-finish losses (R3)? | `build_tasks.py --family schedule --variant announce --instances 0-11 --conditions talk --announce` | about $0.6 for 3 models |
+| Do R1 to R3 hold on other information structures? | `--family ledger` and `--family puzzle` (oracle-checked: solo 1.0, talk 1.0, silent 0.0 and 0.17–0.42) | about $2 for 2 models |
+| Are the warning effects (R5) real? | the c3 build with `--instances 0-23` | about $4 for 2 models |
+
 ## Reproduce
 
 ```bash

@@ -258,3 +258,25 @@ def test_submitter_role_protocol(tmp_path):
     assert json.loads((talk / "environment" / "task.json").read_text())["submitter"] == "p1"
     silent = (root / "schedule-000-silent" / "instructions" / "p1.md").read_text()
     assert "Your team agreed" not in silent
+
+
+def test_announce_protocol(tmp_path):
+    """--announce adds one acknowledgment sentence to talk instructions only."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    builder = Path(__file__).resolve().parents[1] / "build_tasks.py"
+    subprocess.run(
+        [sys.executable, str(builder), "--family", "schedule", "--instances", "0", "--announce",
+         "--out", str(tmp_path)],
+        check=True, capture_output=True,
+    )
+    root = tmp_path / "schedule"
+    for seat in ("p1", "p2"):
+        text = (root / "schedule-000-talk" / "instructions" / f"{seat}.md").read_text()
+        assert text.count("starts with `SUBMITTED:`") == 1
+    assert json.loads((root / "schedule-000-talk" / "environment" / "task.json").read_text())["announce"] is True
+    assert "SUBMITTED:" not in (root / "schedule-000-silent" / "instructions" / "p1.md").read_text()
+    assert "SUBMITTED:" not in (root / "schedule-000-solo" / "instructions" / "p1.md").read_text()
