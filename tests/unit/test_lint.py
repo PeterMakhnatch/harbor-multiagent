@@ -1353,8 +1353,9 @@ def test_seat_tasks_report_main_seat_instead_of_shared_verifier(
     )
 
 
+@pytest.mark.parametrize("seat_rules_only", [False, True])
 def test_seats_are_checked_in_the_environment_compose_file(
-    seat_task: Path, monkeypatch
+    seat_task: Path, monkeypatch, seat_rules_only: bool
 ):
     configure(
         seat_task, agent={}, verifier={}, agents={"p1": {}, "p2": {"under_test": False}}
@@ -1366,10 +1367,17 @@ def test_seats_are_checked_in_the_environment_compose_file(
     check_compose = Mock(return_value=[])
     monkeypatch.setattr("harbor.lint.task.lint_compose", check_compose)
 
-    lint_task(seat_task)
+    lint_task(
+        seat_task,
+        selected_rules={LintRule.SEAT_SHARED_VOLUME} if seat_rules_only else None,
+    )
+    # Seat rules alone skip a Compose file without seats.
+    expected = {compose: ["p1", "p2"]}
+    if not seat_rules_only:
+        expected[verifier_compose] = []
     assert {
         call.args[0]: call.kwargs["seats"] for call in check_compose.call_args_list
-    } == {compose: ["p1", "p2"], verifier_compose: []}
+    } == expected
 
 
 @pytest.mark.parametrize("content", ["", " \n\t", "# canary: secret\n\n"])

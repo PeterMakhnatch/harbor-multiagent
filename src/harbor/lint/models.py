@@ -64,6 +64,9 @@ COMPOSE_RULES = {
     LintRule.SEAT_SHARED_NAMESPACE,
 }
 
+# Compose rules that only report on seat tasks.
+SEAT_RULES = {LintRule.SEAT_SHARED_VOLUME, LintRule.SEAT_SHARED_NAMESPACE}
+
 
 class LintConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")

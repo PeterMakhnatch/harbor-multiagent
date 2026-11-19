@@ -286,14 +286,19 @@ def test_service_shares_seat_namespace(model, path, key, kind, service, mode, sh
     assert lint_compose(path) == []  # Tasks without seats have no seat findings.
 
 
+def add_seats(task: Path, *seats: str) -> None:
+    """Turn the task into a seat task with an instruction for each seat."""
+    configure(task, agent={}, verifier={}, agents={seat: {} for seat in seats})
+    (task / "instructions").mkdir()
+    for seat in seats:
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+
+
 @pytest.mark.parametrize("output", ["text", "json"])
 def test_seat_findings_never_print_compose_values(task, cli, model, output):
     # Compose interpolates these values, so they can hold host secrets.
     secret = "DO_NOT_PRINT"
-    configure(task, agent={}, verifier={}, agents={"p1": {}, "p2": {}})
-    (task / "instructions").mkdir()
-    for seat in ("p1", "p2"):
-        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+    add_seats(task, "p1", "p2")
     (task / "environment/docker-compose.yaml").write_text("services: {}")
     mount = {"type": "volume", "source": secret, "target": "/data"}
     model["services"].update(
@@ -590,17 +595,19 @@ def test_cli_non_compose_selection_without_docker(
 
 
 @pytest.mark.parametrize(
-    "rule",
+    "rule,seats",
     [
-        "compose-privileged",
-        "seat-shared-volume",
-        "seat-shared-namespace",
-        "unpinned-image",
-        "invalid-task-config",
-        "invalid-task-files",
+        ("compose-privileged", False),
+        ("unpinned-image", False),
+        ("invalid-task-config", False),
+        ("invalid-task-files", False),
+        ("seat-shared-volume", True),
+        ("seat-shared-namespace", True),
     ],
 )
-def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule):
+def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule, seats):
+    if seats:
+        add_seats(task, "p1")
     (task / "environment/docker-compose.yaml").write_text("services: {}")
     run = Mock(side_effect=FileNotFoundError("docker"))
     monkeypatch.setattr("harbor.lint.compose.subprocess.run", run)
@@ -608,6 +615,20 @@ def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule):
     assert result.exit_code == 2
     assert not result.stdout
     run.assert_called_once()
+
+
+@pytest.mark.parametrize("folder", ["environment", "tests", "steps/one/tests"])
+@pytest.mark.parametrize("rule", ["seat-shared-volume", "seat-shared-namespace"])
+def test_cli_seat_rules_without_seats_skip_docker(task, cli, monkeypatch, folder, rule):
+    compose = task / folder / "docker-compose.yaml"
+    compose.parent.mkdir(parents=True, exist_ok=True)
+    compose.write_text("services: {}")
+    run = Mock(side_effect=FileNotFoundError("docker"))
+    monkeypatch.setattr("harbor.lint.compose.subprocess.run", run)
+    result = CliRunner().invoke(cli, [str(task), "--json", "--select", rule])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == []
+    run.assert_not_called()
 
 
 def test_task_rule_selection_preserves_unfiltered_default(task, model):

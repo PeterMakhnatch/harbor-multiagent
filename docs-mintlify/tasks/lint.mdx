@@ -59,7 +59,7 @@ Precedence: **CLI flags > task.toml > dataset.toml > defaults**.
 
 ## Compose checks
 
-Requires the **Docker CLI**. Tasks without Compose files do not run these checks.
+Requires the **Docker CLI**. Tasks without Compose files do not run these checks. The `seat-` rules read only the `environment/docker-compose.yaml` of a multi-agent task, so selecting only them needs no Docker for other tasks.
 
 Harbor runtime variables use placeholder values; runtime host mounts are flagged as potentially external.
 Compose interpolation uses the applicable agent or verifier environment configuration; task values override shell values.

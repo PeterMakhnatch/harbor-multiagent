@@ -18,7 +18,13 @@ from pydantic import AliasChoices, AliasPath, BaseModel, ValidationError
 
 from harbor.constants import MAIN_SERVICE_NAME
 from harbor.lint.compose import lint_compose, lint_image
-from harbor.lint.models import COMPOSE_RULES, LintFinding, LintRule, sort_findings
+from harbor.lint.models import (
+    COMPOSE_RULES,
+    SEAT_RULES,
+    LintFinding,
+    LintRule,
+    sort_findings,
+)
 from harbor.models.task.artifacts import (
     convention_source_for_os,
     validate_artifact_entries,
@@ -796,6 +802,13 @@ def lint_task(
                     if config is not None and path.parent == paths.environment_dir
                     else []
                 )
+                # Without seats, seat rules report nothing and need no Docker.
+                if (
+                    not seats
+                    and selected_rules is not None
+                    and (selected_rules & COMPOSE_RULES) <= SEAT_RULES
+                ):
+                    continue
                 # One Compose file may be reused by verifiers with different envs.
                 for env in contexts.get(path, [{}]):
                     for finding in lint_compose(
