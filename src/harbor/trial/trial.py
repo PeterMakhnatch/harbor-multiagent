@@ -1344,10 +1344,10 @@ class Trial(ABC):
             if not path.is_file() or path.is_symlink():
                 continue
             try:
-                # The sample is an early exit for binary files: a NUL byte,
-                # or bytes that cannot start or continue UTF-8, end it. With
+                # The sample is the binary filter: a NUL byte, or bytes that
+                # cannot start or continue UTF-8, skip the file. With
                 # final=False, a character cut at the end of the sample does
-                # not. The strict decode of the whole file is the last check.
+                # not.
                 with path.open("rb") as file:
                     sample = file.read(_SCRUB_SAMPLE_BYTES)
                 if b"\0" in sample:
@@ -1358,10 +1358,13 @@ class Trial(ABC):
                     continue
                 # Bytes, not text mode: the locale's encoding and newline
                 # translation must not change anything but the secrets.
-                text = path.read_bytes().decode("utf-8")
+                # surrogateescape round-trips bytes that are not UTF-8 later
+                # in the file, so such a file is scrubbed, not skipped, and
+                # each of those bytes stays as it is.
+                text = path.read_bytes().decode("utf-8", errors="surrogateescape")
                 scrubbed = scrub_file_text(path, text, ordered_secrets)
                 if scrubbed != text:
-                    path.write_bytes(scrubbed.encode("utf-8"))
+                    path.write_bytes(scrubbed.encode("utf-8", errors="surrogateescape"))
             except (OSError, UnicodeDecodeError) as exc:
                 # Leave unreadable/unscrubbable files alone; don't delete them.
                 self.logger.debug(

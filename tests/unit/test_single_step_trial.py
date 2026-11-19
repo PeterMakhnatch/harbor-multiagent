@@ -497,34 +497,67 @@ def test_scrub_covers_text_whose_sample_ends_inside_a_character(
         b"head \xff tail\n" + _PASSWORD_LINE,
         b"head \xc3( tail\n" + _PASSWORD_LINE,
         b"head \xed\xa0\x80 tail\n" + _PASSWORD_LINE,
-        # The sample check keeps a trailing \xed\xa0 for later input, and the
-        # strict read of the whole file then finds the surrogate.
-        b"a" * (_SCRUB_SAMPLE_BYTES - 2) + b"\xed\xa0\x80\n" + _PASSWORD_LINE,
-        # The file itself ends inside a character.
-        _PASSWORD_LINE + "é".encode("utf-8")[:1],
     ],
-    ids=[
-        "nul",
-        "invalid-start-byte",
-        "cut-lead-byte",
-        "surrogate",
-        "surrogate-across-the-sample-end",
-        "cut-at-end-of-file",
-    ],
+    ids=["nul", "invalid-start-byte", "cut-lead-byte", "surrogate"],
 )
-def test_scrub_leaves_binary_and_invalid_utf8_files_unchanged(
-    tmp_path: Path, data: bytes
-) -> None:
-    """A file with a NUL byte in its sample, or one that is not valid UTF-8 as
-    a whole, is left byte for byte as it is, its secrets too. For UTF-8, the
-    strict read of the whole file is the last check; the sample check only
-    exits early."""
+def test_scrub_skips_a_file_whose_sample_is_binary(tmp_path: Path, data: bytes) -> None:
+    """A NUL byte, or bytes that cannot be UTF-8, in the sample mark a binary
+    file. It is left byte for byte as it is, its secrets too."""
     blob = tmp_path / "blob.bin"
     blob.write_bytes(data)
 
     _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
 
     assert blob.read_bytes() == data
+
+
+@pytest.mark.parametrize("default_encoding", [None, "cp1252"], ids=["host", "cp1252"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"a" * (_SCRUB_SAMPLE_BYTES + 100) + b"\xff\n" + _PASSWORD_LINE,
+        b"a" * (_SCRUB_SAMPLE_BYTES + 100) + b"caf\xe9\n" + _PASSWORD_LINE,
+        b"a" * (_SCRUB_SAMPLE_BYTES + 100) + b"\xe2\x82 cut\n" + _PASSWORD_LINE,
+        # The sample check keeps a trailing \xed\xa0 for later input; the rest
+        # of the surrogate comes after the sample.
+        b"a" * (_SCRUB_SAMPLE_BYTES - 2) + b"\xed\xa0\x80\n" + _PASSWORD_LINE,
+        # The file itself ends inside a character, as a killed writer can
+        # leave it.
+        _PASSWORD_LINE + "é".encode("utf-8")[:1],
+    ],
+    ids=[
+        "invalid-start-byte-after-sample",
+        "latin-1-after-sample",
+        "cut-character-after-sample",
+        "surrogate-across-the-sample-end",
+        "cut-at-end-of-file",
+    ],
+)
+def test_scrub_keeps_bytes_that_are_not_utf8_after_the_sample(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    data: bytes,
+    default_encoding: str | None,
+) -> None:
+    """A file whose sample can be UTF-8 text is scrubbed, even when bytes
+    later in it are not UTF-8: they round-trip through surrogateescape, so
+    only the secret changes. The cp1252 case sets the default text encoding
+    of pathlib to a single-byte encoding, under which main scrubbed such a
+    file through text mode."""
+    if default_encoding is not None:
+        monkeypatch.setattr(
+            io,
+            "text_encoding",
+            lambda encoding, stacklevel=2: (
+                default_encoding if encoding is None else encoding
+            ),
+        )
+    log = tmp_path / "agent.log"
+    log.write_bytes(data)
+
+    _scrub_trial(tmp_path, _PASSWORD_AGENT)._scrub_jobs_dir()
+
+    assert log.read_bytes() == data.replace(b"dummy-password-value", b"[REDACTED]")
 
 
 @pytest.mark.parametrize(
