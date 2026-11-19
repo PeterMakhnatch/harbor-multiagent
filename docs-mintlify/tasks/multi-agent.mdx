@@ -116,7 +116,7 @@ networks:
   play: {}
 ```
 
-Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`.
+Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`. They are on the same network, so they can also reach each other; to keep agents apart, see [`seat-shared-network`](/tasks/lint#seat-checks).
 
 ### An agent's container
 

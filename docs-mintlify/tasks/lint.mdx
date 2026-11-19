@@ -77,9 +77,23 @@ Compose interpolation uses the applicable agent or verifier environment configur
 | `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, or IPC namespace, and other services that join a seat's namespace with `service:<seat>` or the seat's `container_name`. |
 | `seat-shared-network` | — | Seats that can reach each other directly because they share a Compose network. Seats without `networks` all share the project's default network. |
 
-Seats are the services that run the agents of a [multi-agent task](/tasks/multi-agent). The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
+### Seat checks
+
+Seats are the services that run the agents of a [multi-agent task](/tasks/multi-agent). The `seat-` rules check the Compose file that the task author wrote, as `docker compose config` resolves it. They do not read the Compose files that Harbor adds at run time, inspect running containers, or test the isolation of the environment provider. A clean result means that the task's Compose file declares none of these kinds of sharing. It does not prove that the agents are isolated.
+
+The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
 
 `seat-shared-volume` does not follow `volumes_from` and does not compare bind mounts; `compose-writable-bind-mount` reports each writable bind mount. It compares volume subpaths as text, so it does not resolve symlinks inside a volume.
+
+Ignore a seat rule only when the task shares the resource on purpose, for example a workspace that all agents must edit, or host networking that the environment needs. Put the ignore in `task.toml` with a comment that gives the reason, so that a reviewer can tell intended sharing from a mistake:
+
+```toml title="task.toml"
+[metadata.harbor.lint]
+# p1 and p2 edit one shared repository; that is the task.
+ignore = ["seat-shared-volume"]
+```
+
+An ignore applies to the whole task, so it also hides sharing of the same kind that you did not intend.
 
 Enable `seat-shared-network` when the channel between agents is what the task measures, for example a task that disables messaging between seats. Agents that share a network can find each other by service name or by scanning the subnet. To keep them apart, give each seat its own network and attach `main` to all of them:
 
