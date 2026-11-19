@@ -1,0 +1,185 @@
+{
+  "arms": {
+    "ambiguous": [],
+    "bound_counts": {
+      "first": 1,
+      "full": 1
+    },
+    "expected": [
+      "full",
+      "first"
+    ],
+    "missing": []
+  },
+  "counts": {
+    "ambiguous_arms": 0,
+    "census_ambiguous": 0,
+    "census_errors_by_code": {},
+    "census_matched_by_job_and_trial_uuid": 2,
+    "census_matched_by_path": 2,
+    "census_missing": 0,
+    "census_orphans": 0,
+    "census_path_identity_conflicts": 0,
+    "census_rewards_matching_native": 2,
+    "census_rows_scanned": 2,
+    "census_team_reward_sum": 2.0,
+    "census_team_rewards_known": 2,
+    "choices_matching_expected": 2,
+    "distinct_native_trial_ids": 2,
+    "expected_arms": 2,
+    "missing_arms": 0,
+    "raw_team_reward_sum": 2.0,
+    "raw_team_rewards_known": 2,
+    "raw_trials": 2,
+    "reused_native_trial_ids": 0,
+    "seat_records_total": 4,
+    "trials_matching_parent_job_id": 2,
+    "unbound_trials": 0
+  },
+  "derived_root_empty_after": true,
+  "job": {
+    "discovered_trials": 2,
+    "issues": [],
+    "n_total_trials": 2,
+    "native_job_id": "2bd2aeca-4cee-46aa-ba0e-37fce0bcc309"
+  },
+  "prepared_plan_sha256": "a1b20c5090b36d1bd5b778e9064c968a8b351bba47ec22b69fccbf012c83c89e",
+  "reward_attribution": "shared_trial_reward_counted_once_per_native_trial_uuid",
+  "role_usage": {
+    "p1": {
+      "known_cache_tokens_trials": 0,
+      "known_input_tokens_trials": 0,
+      "known_output_tokens_trials": 0,
+      "null_cache_tokens_trials": 2,
+      "null_input_tokens_trials": 2,
+      "null_output_tokens_trials": 2,
+      "present_trials": 2,
+      "sum_cache_tokens": null,
+      "sum_input_tokens": null,
+      "sum_output_tokens": null
+    },
+    "p2": {
+      "known_cache_tokens_trials": 0,
+      "known_input_tokens_trials": 0,
+      "known_output_tokens_trials": 0,
+      "null_cache_tokens_trials": 2,
+      "null_input_tokens_trials": 2,
+      "null_output_tokens_trials": 2,
+      "present_trials": 2,
+      "sum_cache_tokens": null,
+      "sum_input_tokens": null,
+      "sum_output_tokens": null
+    }
+  },
+  "schema": "seatlab.receipt-job-census/v1",
+  "trials": [
+    {
+      "arm": "first",
+      "arm_error": null,
+      "census": {
+        "ambiguous": false,
+        "error": null,
+        "job_trial_matches": 1,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": 1.0,
+        "reward_matches_native": true
+      },
+      "choices_match_expected": true,
+      "issues": [],
+      "job_id_matches_parent": true,
+      "native_job_id": "2bd2aeca-4cee-46aa-ba0e-37fce0bcc309",
+      "native_team_reward": 1.0,
+      "native_trial_id": "8fb7068e-c8a2-461c-bccf-ed3594733108",
+      "native_trial_id_reused": false,
+      "seat_count": 2,
+      "seats": {
+        "p1": {
+          "has_exception": false,
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null,
+          "present": true
+        },
+        "p2": {
+          "has_exception": false,
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null,
+          "present": true
+        }
+      },
+      "world_receipts": {
+        "p1": {
+          "acknowledged_sha256": "f0d5af4d1a4d17872bd1f92378d6b1e9985b693996efeafc46dfaa559bf81a45",
+          "action": "amber",
+          "allowed_options": [
+            "amber"
+          ]
+        },
+        "p2": {
+          "acknowledged_sha256": "0823e6e1694ea51e0d293535eb9f4541050d634ce6059320af383639e157c7fa",
+          "action": "mint",
+          "allowed_options": [
+            "mint"
+          ]
+        }
+      }
+    },
+    {
+      "arm": "full",
+      "arm_error": null,
+      "census": {
+        "ambiguous": false,
+        "error": null,
+        "job_trial_matches": 1,
+        "path_identity_conflict": false,
+        "path_matches": 1,
+        "reward": 1.0,
+        "reward_matches_native": true
+      },
+      "choices_match_expected": true,
+      "issues": [],
+      "job_id_matches_parent": true,
+      "native_job_id": "2bd2aeca-4cee-46aa-ba0e-37fce0bcc309",
+      "native_team_reward": 1.0,
+      "native_trial_id": "af7504a2-005f-4340-8caa-553dddd33b5a",
+      "native_trial_id_reused": false,
+      "seat_count": 2,
+      "seats": {
+        "p1": {
+          "has_exception": false,
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null,
+          "present": true
+        },
+        "p2": {
+          "has_exception": false,
+          "n_cache_tokens": null,
+          "n_input_tokens": null,
+          "n_output_tokens": null,
+          "present": true
+        }
+      },
+      "world_receipts": {
+        "p1": {
+          "acknowledged_sha256": "9bd59e982bc9e5299c3d20e9e9565959bce8dc76a75cab25434d3ca8e511ea52",
+          "action": "cobalt",
+          "allowed_options": [
+            "amber",
+            "cobalt"
+          ]
+        },
+        "p2": {
+          "acknowledged_sha256": "b9ab125514c129c21f2dc35c5a14eda12c4a11e25a03c39c8c5a4e932b372273",
+          "action": "coral",
+          "allowed_options": [
+            "mint",
+            "coral"
+          ]
+        }
+      }
+    }
+  ]
+}
