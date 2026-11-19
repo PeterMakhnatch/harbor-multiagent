@@ -88,6 +88,16 @@ class StepResult(BaseModel):
     verifier: TimingInfo | None = None
 
 
+class SeatFreeze(BaseModel):
+    """One seat's freeze at the end of play: when it finished and how many
+    processes it left stopped. ``error`` is set when the freeze failed or left a
+    process running; it is not an exception and does not change reward_valid."""
+
+    finished_at: datetime
+    stopped: int | None = None
+    error: str | None = None
+
+
 class SeatResult(BaseModel):
     """One seat's agent run, recorded like a step's."""
 
@@ -97,6 +107,7 @@ class SeatResult(BaseModel):
     agent_result: AgentContext | None = None
     agent_setup: TimingInfo | None = None
     agent_execution: TimingInfo | None = None
+    freeze: SeatFreeze | None = None
     exception_info: ExceptionInfo | None = None
 
 

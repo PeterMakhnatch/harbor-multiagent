@@ -59,6 +59,15 @@ def test_seats_parse_with_graded_default_and_mcp():
     assert [server.name for server in config.agents["raj"].mcp_servers] == ["notes"]
 
 
+def test_seats_freeze_at_the_end_of_play_unless_they_opt_out():
+    config = TaskConfig.model_validate_toml(SEATS_TOML + "freeze = false\n")
+
+    assert config.agents["maya"].freeze is True
+    assert config.agents["raj"].freeze is False
+    again = TaskConfig.model_validate_toml(config.model_dump_toml())
+    assert again.agents["raj"].freeze is False
+
+
 def test_task_without_seats_dumps_no_agents_table():
     config = TaskConfig.model_validate_toml("[agent]\ntimeout_sec = 10\n")
 
