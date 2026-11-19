@@ -221,3 +221,19 @@ completion still competence-bound). Each rung removes a failure class
 and keeps the next one visible. Caveat: gated trial dirs reused the
 ungated recovery trial names and overwrote two of them; episode JSON
 lines above are from the run logs.
+
+## Variance baseline (same model, both seats, n=10)
+
+Stock hello-seats, terminus-2 + gpt-oss-120b in both seats, 0.5x timeout
+(300 s), one job, 23m42s wall, $0.019 total.
+
+- Reward 1.0 in 9 of 10 trials; 1 clean failure with no exceptions.
+- 2 trials carry p1 `AgentTimeoutError` beside reward 1.0: the tested
+  seat's work was done and graded, but its session did not end before the
+  timeout. A reader keying only on reward overstates cleanliness by
+  2/10 here; this is the case `seat_exception_beside_reward` (Eval Lab
+  jobs verify) exists for.
+- Per-seat cost spread is wide for an identical roster: p1 median
+  $0.0009, min $0.0004, max $0.0057 (the max is a timeout trial); p2
+  median $0.0005. Support-seat cost is never zero and belongs in every
+  team-vs-solo comparison.
