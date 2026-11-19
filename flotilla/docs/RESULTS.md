@@ -149,6 +149,12 @@ instance; "deceived" means the final answer is the liar's decoy.
   [0.05, 0.95] and Qwen 0.80 [0.24, 1.00]; the exact p is 0.125 for both, so neither is resolved.
   The warning effects have intervals that include 0.
 - GPT-OSS's failures are mostly other valid windows (16 of its 18 "corrupted" outcomes), not the decoy.
+- Who wrote the final answer matters, and this effect is resolved. Across the liar conditions of all
+  3 models (42 trials), when p1 (the only seat that can check the lie) wrote last, the team was correct
+  11 times and deceived once; when p2 wrote last, correct 5 times and deceived 14 times (Fisher
+  two-sided p = 0.0006; [results/scripts/liar_writes.py](results/scripts/liar_writes.py)). In 9 of the
+  15 deceived trials, the right answer had been submitted first. This is an association, because write
+  order is not randomized.
 - The world-v1 pilot was confounded (the seats could read the label `talk-liar`, and the liar also
   posted a machine-readable block). There, DeepSeek was deceived in 5 of 10 talk-liar trials; on
   world v2, in 5 of 8. These data do not show that the label changed DeepSeek's deception rate.
@@ -229,6 +235,7 @@ Decision for the next wave:
 
 | Question | Build | Cost estimate |
 |---|---|---|
+| Does letting the seat with the evidence commit stop the lie (R5)? | `build_tasks.py --family schedule --scripted --conditions talk-liar --submitter p1` against `talk-liar`, same instances | about $2 for DeepSeek at 16 instances |
 | Does an acknowledgment protocol stop the losses in R3? | `build_tasks.py --family schedule --variant announce --instances 0-11 --conditions talk --announce` | about $0.6 for 3 models |
 | Do R1 to R3 hold on other information structures? | `--family ledger` and `--family puzzle` (oracle-checked: solo 1.0, talk 1.0, silent 0.0 and 0.17–0.42) | about $2 for 2 models |
 | Are the R1, R4 and R5 lie effects real? | the same builds with the instance counts in the table above, and a repeat of c1 `talk` | about $9 of model calls |

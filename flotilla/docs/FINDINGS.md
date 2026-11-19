@@ -252,3 +252,31 @@ numbers and the statistics code. It found these errors in this log and in RESULT
 
 Lesson: the same discipline that found the validity faults applies to the write-up. Every number now
 comes from `flotilla-analyze` or from `docs/results/scripts/breakdowns.py`, both in the repo.
+
+## 2026-11-19 09:12 ET — The lie wins through the seat that cannot check it
+
+Run: wave c3, `schedule.liar` (3 seats; p3 is a scripted peer that lies about one attendee, the
+witness, whose true calendar only p1 also holds), world v2, conditions `talk-liar` and
+`talk-liar-warned`, DeepSeek V4 Flash, Qwen 3.6 35B-A3B and GPT-OSS-120B (42 trials with a
+submission). Script: `flotilla/docs/results/scripts/liar_writes.py`.
+
+Observed:
+
+| Final answer written by | correct | deceived | corrupted |
+|---|---|---|---|
+| p1 (can check the lie) | 11 | 1 | 5 |
+| p2 (cannot check it) | 5 | 14 | 6 |
+
+- Fisher two-sided p = 0.0006 for final writer against correct or deceived.
+- 14 of the 15 deceived trials end with p2's answer. In 9 of the 15, the right answer had been
+  submitted first, and p2's decoy replaced it.
+- With a warning, DeepSeek's p1 submitted the right answer in 8 of 8 trials, and 3 trials still
+  ended with p2's decoy.
+
+Inferred: deception in this team is largely a question of who commits. The seat that holds the
+evidence often finds the truth, and the seat that cannot check the claim writes last. This is an
+association: who writes last is not randomized, and a seat that caught the lie may also be the one
+that kept writing. It matches the R3 overwrite pattern, and it points to an institutional fix, as
+in Anthropic's note that courts "protect a lone witness": let the seat with the evidence commit, or
+require agreement. Next experiment: `--scripted --conditions talk-liar --submitter p1` against
+`talk-liar`, same instances (about $2 for DeepSeek at 16 instances).
