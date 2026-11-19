@@ -138,9 +138,11 @@ def _is_task_build_file(path: Path, root: Path) -> bool:
 
 def _source_files(
     root: Path, *, file_filter: TaskFileFilter
-) -> tuple[set[Path], set[Path], list[LintFinding]]:
+) -> tuple[set[Path], set[Path], set[Path], list[LintFinding]]:
+    """Return regular files, invalid ignore files, rejected paths and findings."""
     files: set[Path] = set()
     invalid_ignore_files: set[Path] = set()
+    rejected: set[Path] = set()
     findings = []
 
     def visit(path: Path, ancestors: frozenset[Path]) -> None:
@@ -191,6 +193,7 @@ def _source_files(
         except (ValueError, RuntimeError, OSError) as exc:
             if _is_operational_file_error(exc):
                 raise
+            rejected.add(path)
             findings.append(
                 LintFinding(
                     rule=LintRule.INVALID_TASK_FILES,
@@ -200,7 +203,7 @@ def _source_files(
             )
 
     visit(root, frozenset())
-    return files, invalid_ignore_files, findings
+    return files, invalid_ignore_files, rejected, findings
 
 
 def _artifact_overlaps_logs(entry: str | ArtifactConfig, os: TaskOS) -> bool:
@@ -235,6 +238,7 @@ def _lint_layout(
     files: set[Path],
     *,
     invalid_ignore_files: set[Path],
+    rejected: set[Path],
 ) -> list[LintFinding]:
     findings = []
 
@@ -252,18 +256,15 @@ def _lint_layout(
         )
     for seat in config.agents:
         filename = f"instructions/{seat}.md"
-        try:
-            instruction = paths.seat_instruction_path(seat)
-        except (ValueError, RuntimeError):
-            invalid(
-                paths.task_dir / filename,
-                f"Use a regular seat instruction at {filename} within the task, without symlink cycles.",
-            )
-            continue
-        if instruction not in files:
+        instruction = paths.seat_instruction_path(seat)
+        if instruction in files:
+            if not strip_canary(instruction.read_text()).strip():
+                invalid(
+                    instruction, f"Seat instruction is empty; add text to {filename}."
+                )
+        # The source scan already reports an unsafe instruction or directory.
+        elif rejected.isdisjoint((instruction, *instruction.parents)):
             invalid(instruction, f"Missing seat instruction; add {filename}.")
-        elif not strip_canary(instruction.read_text()).strip():
-            invalid(instruction, f"Seat instruction is empty; add text to {filename}.")
 
     overlapping: set[str] = set()
     for index, step in enumerate(config.steps or [None]):
@@ -725,7 +726,7 @@ def lint_task(
     if not root.is_dir():
         raise NotADirectoryError(root)
     paths = TaskPaths(root)
-    files, invalid_ignore_files, findings = _source_files(
+    files, invalid_ignore_files, rejected, findings = _source_files(
         root, file_filter=TaskFileFilter(root)
     )
     config = None
@@ -776,7 +777,11 @@ def lint_task(
     if config is not None:
         findings.extend(
             _lint_layout(
-                config, paths, files, invalid_ignore_files=invalid_ignore_files
+                config,
+                paths,
+                files,
+                invalid_ignore_files=invalid_ignore_files,
+                rejected=rejected,
             )
         )
         findings.extend(_lint_config(config, paths.config_path))

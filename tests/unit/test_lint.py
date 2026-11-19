@@ -1303,18 +1303,35 @@ def test_support_seat_requires_nonempty_instruction(
     ] == [("instructions/p2.md", LintRule.INVALID_TASK_FILES)]
 
 
-def test_rejected_seat_instruction_preserves_verifier_checks(seat_task: Path):
-    instruction = seat_task / "instructions/p2.md"
-    instruction.symlink_to(instruction.name)
+@pytest.mark.parametrize("unsafe", ["instructions/p2.md", "instructions"])
+def test_rejected_seat_instruction_is_reported_once(
+    seat_task: Path, tmp_path_factory: pytest.TempPathFactory, unsafe: str
+):
+    # A seat task needs no instruction.md, which the single-agent check requires.
+    (seat_task / "instruction.md").unlink()
     (seat_task / "tests/test.sh").unlink()
+    if unsafe == "instructions":
+        outside = tmp_path_factory.mktemp("outside-instructions")
+        for seat in ("p1", "p2"):
+            (outside / f"{seat}.md").write_text("Play your part.\n")
+        shutil.rmtree(seat_task / "instructions")
+        (seat_task / "instructions").symlink_to(outside, target_is_directory=True)
+    else:
+        (seat_task / unsafe).symlink_to("p2.md")
 
     findings = lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES})
-    assert {
-        (Path(f.path).relative_to(seat_task).as_posix(), f.rule) for f in findings
-    } == {
-        ("instructions/p2.md", LintRule.INVALID_TASK_FILES),
-        ("tests/test.sh", LintRule.INVALID_TASK_FILES),
-    }
+    assert [
+        (Path(f.path).relative_to(seat_task).as_posix(), f.message) for f in findings
+    ] == [
+        (
+            unsafe,
+            "Use a regular input file or directory within the task, without symlink cycles.",
+        ),
+        (
+            "tests/test.sh",
+            "Missing OS-compatible verifier script; add a test script or bundle tests in the verifier image.",
+        ),
+    ]
 
 
 @pytest.mark.parametrize("main", [False, True])
