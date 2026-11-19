@@ -8,6 +8,7 @@ seat that cannot talk must guess. Standard library only; deterministic for a see
 from __future__ import annotations
 
 import random
+import re
 from typing import Any
 
 FAMILY = "schedule"
@@ -67,7 +68,7 @@ def generate(seed: int, instance: int, n_seats: int, difficulty: str) -> dict[st
             continue
         return {
             "goal": _goal(people),
-            "answer_format": _answer_format(),
+            "answer_format": _answer_format(target),
             "private": {seat: {"calendars": part} for seat, part in parts.items()},
             "private_text": {seat: _render(part) for seat, part in parts.items()},
             "solo_private": {"calendars": calendars},
@@ -87,8 +88,11 @@ def _goal(people: list[str]) -> str:
     )
 
 
-def _answer_format() -> str:
-    return 'A JSON object: `{"day": "Wed", "start": "14:00"}` (day is one of Mon, Tue, Wed, Thu, Fri).'
+def _answer_format(*avoid: Window) -> str:
+    """The example window is never the instance's answer (or its decoy): an example that equals the
+    answer gives it away, for example to a seat that cannot talk."""
+    day, start = next(w for w in (("Wed", 14), ("Tue", 10), ("Mon", 11)) if w not in avoid)
+    return f'A JSON object: `{{"day": "{day}", "start": "{start:02d}:00"}}` (day is one of Mon, Tue, Wed, Thu, Fri).'
 
 
 def _render(calendars: dict[str, Calendar]) -> str:
@@ -111,15 +115,15 @@ def oracle_answer(private: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _norm_start(value: Any) -> str | None:
+    """"14", 14, "14:00" and "14:00:00" mean 14:00; "14:30" is a different time, so it is not 14:00."""
+    if isinstance(value, bool):
+        return None
     if isinstance(value, int):
         return f"{value:02d}:00"
     if isinstance(value, str):
-        text = value.strip()
-        if text.isdigit():
-            return f"{int(text):02d}:00"
-        hour = text.split(":", 1)[0]
-        if hour.isdigit():
-            return f"{int(hour):02d}:00"
+        match = re.fullmatch(r"(\d{1,2})(?::00(?::00)?)?", value.strip(), flags=re.ASCII)
+        if match:
+            return f"{int(match.group(1)):02d}:00"
     return None
 
 
@@ -174,7 +178,7 @@ def generate_scripted(seed: int, instance: int, difficulty: str) -> dict[str, An
             people = sorted(calendars)
             return {
                 "goal": _goal(people),
-                "answer_format": _answer_format(),
+                "answer_format": _answer_format(target, decoy),
                 "private": {"p1": {"calendars": p1}, "p2": {"calendars": p2}, "p3": {"calendars": p3_true}},
                 "private_text": {"p1": _render(p1), "p2": _render(p2), "p3": _render(p3_true)},
                 "liar_private": {"p3": {"calendars": p3_lie}},
