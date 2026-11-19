@@ -516,8 +516,8 @@ async def test_a_seat_with_freeze_off_is_left_running(tmp_path: Path):
 @pytest.mark.parametrize(
     "freeze, error",
     [
-        ({"return_value": (1, 2)}, "2 processes are still running"),
-        ({"side_effect": RuntimeError("exec failed")}, "exec failed"),
+        ({"return_value": (1, 2)}, "still running: 2 of 3 processes"),
+        ({"side_effect": RuntimeError("exec failed")}, "RuntimeError: exec failed"),
     ],
 )
 async def test_a_failed_freeze_is_recorded_and_warned_and_the_trial_is_still_graded(

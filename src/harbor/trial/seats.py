@@ -384,9 +384,9 @@ class SeatsTrial(SingleStepTrial):
         try:
             stopped, running = await seat.environment.freeze()
             if running:
-                error = f"{running} processes are still running"
+                error = f"still running: {running} of {stopped + running} processes"
         except Exception as e:
-            error = str(e)
+            error = f"{type(e).__name__}: {e}"
         seat.result.freeze = SeatFreeze(
             finished_at=self._now(), stopped=stopped, error=error
         )

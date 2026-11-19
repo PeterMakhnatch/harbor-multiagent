@@ -174,7 +174,7 @@ def test_a_failed_seat_freeze_is_recorded_and_is_not_an_exception():
     freeze = SeatFreeze(
         finished_at=datetime.now(timezone.utc),
         stopped=1,
-        error="2 processes are still running",
+        error="still running: 2 of 3 processes",
     )
     result = _result(
         verifier_result=VerifierResult(rewards={"reward": 1}),
