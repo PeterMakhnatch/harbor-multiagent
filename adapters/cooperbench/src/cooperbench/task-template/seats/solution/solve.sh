@@ -17,7 +17,7 @@ FILES=$({ grep '^diff --git ' "$PATCH" || true; } | sed 's|^diff --git a/.* b/||
 echo "$SEAT plans to modify: $FILES"
 coop-broadcast "I plan to modify: $FILES" || echo "$SEAT: coop-broadcast failed" >&2
 
-cd /workspace/repo
+cd "${COOPERBENCH_REPO:-/workspace/repo}"  # the override is for the unit tests
 git apply --ignore-whitespace --ignore-space-change "$PATCH" \
   || git apply --3way "$PATCH"
 echo "$SEAT applied its gold patch"

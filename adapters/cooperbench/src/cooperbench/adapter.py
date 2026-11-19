@@ -360,7 +360,7 @@ class CooperBenchAdapter:
         )
         self.agent_timeout_sec = agent_timeout_sec
         self.verifier_timeout_sec = verifier_timeout_sec
-        if agent_harness not in self.AGENT_HARNESSES:
+        if not seats and agent_harness not in self.AGENT_HARNESSES:
             raise ValueError(
                 f"Unknown agent harness: {agent_harness}. "
                 f"Choose from: {', '.join(self.AGENT_HARNESSES)}"
@@ -515,100 +515,77 @@ class CooperBenchAdapter:
     # at runtime so the pre-existing test_tool_calls_format_basic passes.
     _DSPY_T8563_TESTFIX = Path(__file__).parent / "fixes" / "dspy-t8563-testfix.patch"
 
-    _GOLD_PATCH_FIX_TASKS = (
-        ("stanfordnlp/dspy", "8635"),
-        ("react-hook-form/react-hook-form", "153"),
+    # Text fixes for two known bugs in gold patches: (old, new).
+    # dspy task 8635: min_instr_chars=30 rejects short mock responses in
+    # pre-existing tests.  Change default to 0.
+    _DSPY_T8635_FIX = (
+        "+        min_instr_chars=30,",
+        "+        min_instr_chars=0,",
+    )
+    # react-hook-form task 153, implementation: detect function vs options
+    # object (the test patch passes onFinally as a bare function).
+    _RHF_T153_IMPLEMENTATION_FIX = (
+        "+    (onValid, onInvalid, options) => async (e?, context?) => {\n"
+        "+      let onValidError: Error | undefined = undefined;",
+        "+    (onValid, onInvalid, optionsOrOnFinally) => async (e?, context?) => {\n"
+        "+      // Accept onFinally as a bare function (3rd positional arg) or as\n"
+        "+      // options.onFinally for backward compatibility with both call styles.\n"
+        "+      const options = typeof optionsOrOnFinally === 'function'\n"
+        "+        ? { onFinally: optionsOrOnFinally }\n"
+        "+        : optionsOrOnFinally;\n"
+        "+      let onValidError: Error | undefined = undefined;",
+    )
+    # react-hook-form task 153, type definition: accept function | options
+    # object.
+    _RHF_T153_TYPE_FIX = (
+        "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
+        "+  options?: {",
+        "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
+        "+  optionsOrOnFinally?: "
+        "((formState: FormState<TFieldValues>) => void | Promise<void>) | {",
     )
 
     def _apply_upstream_fixes(
         self,
         pair: CooperBenchPair,
-        paths: HarborTaskPaths | SeatTaskPaths,
-        gold_patches: Iterable[Path] | None = None,
+        paths: HarborTaskPaths,
     ) -> None:
-        """Apply fixes for known upstream CooperBench bugs.
-
-        ``gold_patches`` are the gold patches to fix: solution/combined.patch
-        in a sidecar task (the default), each seat's feature patch in a seat
-        task. A fix whose text a patch does not contain leaves it untouched.
-        """
-        if gold_patches is None:
-            gold_patches = [paths.solution_dir / "combined.patch"]
-        for patch_path in gold_patches:
-            self._fix_gold_patch(pair, patch_path)
-        self._fix_test_patches(pair, paths)
-
-    def _fix_gold_patch(self, pair: CooperBenchPair, patch_path: Path) -> None:
+        """Apply fixes for known upstream CooperBench bugs."""
         task_key = (pair.repo, pair.task_id)
-        if task_key not in self._GOLD_PATCH_FIX_TASKS:
-            return
-        original = patch_path.read_text(encoding="utf-8")
-        content = original
 
         # -- stanfordnlp/dspy task 8635 ------------------------------------
         # combined.patch sets min_instr_chars=30 which rejects short mock
         # responses in pre-existing tests.  Change default to 0.
         if task_key == ("stanfordnlp/dspy", "8635"):
-            content = content.replace(
-                "+        min_instr_chars=30,",
-                "+        min_instr_chars=0,",
-            )
+            patch_path = paths.solution_dir / "combined.patch"
+            content = patch_path.read_text(encoding="utf-8")
+            content = content.replace(*self._DSPY_T8635_FIX)
+            patch_path.write_text(content, encoding="utf-8")
 
         # -- react-hook-form task 153 --------------------------------------
         # combined.patch uses handleSubmit(onValid, onInvalid, options) where
         # options is an object, but the test patch passes onFinally as a bare
         # function in the 3rd positional arg.  Add runtime type detection.
         if task_key == ("react-hook-form/react-hook-form", "153"):
+            patch_path = paths.solution_dir / "combined.patch"
+            content = patch_path.read_text(encoding="utf-8")
+
             # Fix implementation: detect function vs options object
-            content = content.replace(
-                "+    (onValid, onInvalid, options) => async (e?, context?) => {\n"
-                "+      let onValidError: Error | undefined = undefined;",
-                "+    (onValid, onInvalid, optionsOrOnFinally) => async (e?, context?) => {\n"
-                "+      // Accept onFinally as a bare function (3rd positional arg) or as\n"
-                "+      // options.onFinally for backward compatibility with both call styles.\n"
-                "+      const options = typeof optionsOrOnFinally === 'function'\n"
-                "+        ? { onFinally: optionsOrOnFinally }\n"
-                "+        : optionsOrOnFinally;\n"
-                "+      let onValidError: Error | undefined = undefined;",
-            )
+            content = content.replace(*self._RHF_T153_IMPLEMENTATION_FIX)
 
             # Fix type definition: accept function | options object
-            content = content.replace(
-                "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
-                "+  options?: {",
-                "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
-                "+  optionsOrOnFinally?: "
-                "((formState: FormState<TFieldValues>) => void | Promise<void>) | {",
-            )
+            content = content.replace(*self._RHF_T153_TYPE_FIX)
 
-        if content == original:
-            return
-        patch_path.write_text(content, encoding="utf-8")
-        if task_key == ("react-hook-form/react-hook-form", "153"):
+            patch_path.write_text(content, encoding="utf-8")
+
             # Fix hunk headers (line counts changed)
             self._fix_patch_hunk_headers(patch_path)
-
-    def _fix_test_patches(
-        self,
-        pair: CooperBenchPair,
-        paths: HarborTaskPaths | SeatTaskPaths,
-    ) -> None:
-        task_key = (pair.repo, pair.task_id)
 
         # -- stanfordnlp/dspy task 8563 ------------------------------------
         # combined.patch changes format() return type; only feature 1's test
         # patch updates expectations.  Append a testfix patch to all test
         # patches so pre-existing tests pass with the new return type.
-        # A seat task's gold patches are only its two features, and the new
-        # return type is feature 1's, so there the fix applies only to pairs
-        # with feature 1.
-        features = {
-            pair.feature_a.cooperbench_feature_id,
-            pair.feature_b.cooperbench_feature_id,
-        }
-        if task_key == ("stanfordnlp/dspy", "8563") and (
-            not self.seats or "1" in features
-        ):
+        if task_key == ("stanfordnlp/dspy", "8563"):
             if self._DSPY_T8563_TESTFIX.exists():
                 testfix = self._DSPY_T8563_TESTFIX.read_text(encoding="utf-8")
                 (paths.tests_dir / "testfix.patch").write_text(
@@ -635,48 +612,100 @@ class CooperBenchAdapter:
                 test_sh.write_text(content, encoding="utf-8")
 
         # -- huggingface/datasets task 7309 ----------------------------------
-        # Pre-existing test_parquet_read_geoparquet expects dtype "string" but
-        # pyarrow >=20 returns "large_string".  Inject a fix hunk into both
-        # test patches so runner.sh (inside the Docker image) applies it.
         if task_key == ("huggingface/datasets", "7309"):
-            fix_hunk = (
-                "@@ -77,7 +77,7 @@ def test_parquet_read_geoparquet"
-                "(geoparquet_path, tmp_path):\n"
-                "     expected_features = {\n"
-                '         "pop_est": "float64",\n'
-                '-        "continent": "string",\n'
-                '-        "name": "string",\n'
-                '+        "continent": "large_string",\n'
-                '+        "name": "large_string",\n'
-                '         "gdp_md_est": "int64",\n'
-                '         "geometry": "binary",\n'
-                "     }\n"
+            self._fix_datasets_t7309_test_patches(paths.tests_dir)
+
+    def _apply_seat_upstream_fixes(
+        self,
+        pair: CooperBenchPair,
+        paths: SeatTaskPaths,
+        seat_patches: list[Path],
+    ) -> None:
+        """The upstream fixes for a seat task, whose gold patches are the
+        pair's own two features, not combined.patch. A gold-patch fix changes
+        a seat patch only if the patch holds all the text the fix replaces:
+        react-hook-form 153's two halves must change together, since the type
+        half alone leaves code that does not compile, and no single feature
+        patch holds both, so its feature patches stay as they are. dspy 8635's
+        fix applies to feature 6, the one feature patch that has the bug."""
+        task_key = (pair.repo, pair.task_id)
+        fixes: tuple[tuple[str, str], ...] = ()
+        if task_key == ("stanfordnlp/dspy", "8635"):
+            fixes = (self._DSPY_T8635_FIX,)
+        elif task_key == ("react-hook-form/react-hook-form", "153"):
+            fixes = (self._RHF_T153_IMPLEMENTATION_FIX, self._RHF_T153_TYPE_FIX)
+        for patch_path in seat_patches:
+            content = patch_path.read_text(encoding="utf-8")
+            if not fixes or not all(old in content for old, _ in fixes):
+                continue
+            for old, new in fixes:
+                content = content.replace(old, new)
+            patch_path.write_text(content, encoding="utf-8")
+            if task_key == ("react-hook-form/react-hook-form", "153"):
+                self._fix_patch_hunk_headers(patch_path)
+
+        # dspy 8563: the new format() return type is feature 1's. With
+        # feature 1 in the pair, the verifier appends testfix.patch to the
+        # other feature's test patch (seats/tests/test.sh does this itself);
+        # without it, the pre-existing expectation is the right one.
+        features = {
+            pair.feature_a.cooperbench_feature_id,
+            pair.feature_b.cooperbench_feature_id,
+        }
+        if (
+            task_key == ("stanfordnlp/dspy", "8563")
+            and "1" in features
+            and self._DSPY_T8563_TESTFIX.exists()
+        ):
+            (paths.tests_dir / "testfix.patch").write_text(
+                self._DSPY_T8563_TESTFIX.read_text(encoding="utf-8"), encoding="utf-8"
             )
-            for patch_name in ("tests1.patch", "tests2.patch"):
-                patch_path = paths.tests_dir / patch_name
-                content = patch_path.read_text(encoding="utf-8")
-                # Insert fix hunk in sorted position among existing hunks.
-                # Hunks must be in ascending old-file line order, with no
-                # blank lines between hunks (git would lose file context).
-                hunk_positions = [
-                    (m.start(), int(m.group(1)))
-                    for m in re.finditer(r"^@@ -(\d+)", content, re.MULTILINE)
-                ]
-                insert_before = None
-                for pos, line_num in hunk_positions:
-                    if line_num > 77:
-                        insert_before = pos
-                        break
-                if insert_before is not None:
-                    content = (
-                        content[:insert_before] + fix_hunk + content[insert_before:]
-                    )
-                else:
-                    # Append after all existing hunks
-                    if not content.endswith("\n"):
-                        content += "\n"
-                    content += fix_hunk
-                patch_path.write_text(content, encoding="utf-8")
+
+        if task_key == ("huggingface/datasets", "7309"):
+            self._fix_datasets_t7309_test_patches(paths.tests_dir)
+
+    @staticmethod
+    def _fix_datasets_t7309_test_patches(tests_dir: Path) -> None:
+        """huggingface/datasets task 7309: pre-existing
+        test_parquet_read_geoparquet expects dtype "string" but pyarrow >=20
+        returns "large_string".  Inject a fix hunk into both test patches so
+        runner.sh (inside the Docker image) applies it."""
+        fix_hunk = (
+            "@@ -77,7 +77,7 @@ def test_parquet_read_geoparquet"
+            "(geoparquet_path, tmp_path):\n"
+            "     expected_features = {\n"
+            '         "pop_est": "float64",\n'
+            '-        "continent": "string",\n'
+            '-        "name": "string",\n'
+            '+        "continent": "large_string",\n'
+            '+        "name": "large_string",\n'
+            '         "gdp_md_est": "int64",\n'
+            '         "geometry": "binary",\n'
+            "     }\n"
+        )
+        for patch_name in ("tests1.patch", "tests2.patch"):
+            patch_path = tests_dir / patch_name
+            content = patch_path.read_text(encoding="utf-8")
+            # Insert fix hunk in sorted position among existing hunks.
+            # Hunks must be in ascending old-file line order, with no
+            # blank lines between hunks (git would lose file context).
+            hunk_positions = [
+                (m.start(), int(m.group(1)))
+                for m in re.finditer(r"^@@ -(\d+)", content, re.MULTILINE)
+            ]
+            insert_before = None
+            for pos, line_num in hunk_positions:
+                if line_num > 77:
+                    insert_before = pos
+                    break
+            if insert_before is not None:
+                content = content[:insert_before] + fix_hunk + content[insert_before:]
+            else:
+                # Append after all existing hunks
+                if not content.endswith("\n"):
+                    content += "\n"
+                content += fix_hunk
+            patch_path.write_text(content, encoding="utf-8")
 
     @staticmethod
     def _fix_patch_hunk_headers(patch_path: Path) -> None:
@@ -903,7 +932,7 @@ class CooperBenchAdapter:
         solve_sh_path.chmod(0o755)
 
         # -- upstream bug fixes ------------------------------------------------
-        self._apply_upstream_fixes(pair, paths, gold_patches=seat_patches)
+        self._apply_seat_upstream_fixes(pair, paths, seat_patches)
 
         return task_dir
 

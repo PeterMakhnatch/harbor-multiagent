@@ -9,8 +9,11 @@ import subprocess
 import sys
 import threading
 import urllib.error
+import socket
+import time
 import urllib.request
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -23,6 +26,7 @@ from harbor.models.task.task import Task
 ADAPTER_SRC = Path(__file__).parents[3] / "adapters/cooperbench/src"
 sys.path.insert(0, str(ADAPTER_SRC))
 
+from cooperbench import main as cli  # noqa: E402
 from cooperbench.adapter import (  # noqa: E402
     CooperBenchAdapter,
     CooperBenchFeature,
@@ -181,6 +185,61 @@ def test_sidecar_mode_keeps_its_layout(tmp_path: Path, monkeypatch: pytest.Monke
     assert "[agents." not in (task_dir / "task.toml").read_text()
 
 
+def test_overwrite_switches_a_task_between_modes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setitem(
+        _combined_patch_cache, ("pallets/jinja", "1621"), PATCH_A + PATCH_B
+    )
+    out = tmp_path / "tasks"
+    CooperBenchAdapter(output_dir=out).generate_task(make_pair())
+    task_dir = CooperBenchAdapter(output_dir=out, seats=True).generate_task(
+        make_pair(), overwrite=True
+    )
+
+    assert not (task_dir / "instruction.md").exists()
+    assert not (task_dir / "environment/agent1").exists()
+    assert Task(task_dir).config.agents
+
+
+def test_seat_mode_takes_no_sidecar_harness():
+    adapter = CooperBenchAdapter(output_dir=Path("/tmp"), seats=True, agent_harness="x")
+    assert adapter.seats
+
+    with pytest.raises(ValueError, match="Unknown agent harness"):
+        CooperBenchAdapter(output_dir=Path("/tmp"), agent_harness="x")
+
+
+@pytest.mark.parametrize(
+    ("argv", "seats", "output_dir"),
+    [
+        ([], False, cli.DEFAULT_OUTPUT_DIR),
+        (["--seats"], True, cli.DEFAULT_SEATS_OUTPUT_DIR),
+        (["--seats", "--output-dir", "/tmp/x"], True, Path("/tmp/x")),
+    ],
+)
+def test_cli_parses_seat_mode(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], seats: bool, output_dir: Path
+):
+    monkeypatch.setattr(sys, "argv", ["cooperbench", *argv])
+    args = cli._parse_args()
+
+    assert (args.seats, args.output_dir, args.agent_harness) == (
+        seats,
+        output_dir,
+        "mini-swe-agent",
+    )
+
+
+def test_cli_refuses_a_sidecar_harness_with_seats(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        sys, "argv", ["cooperbench", "--seats", "--agent-harness", "openhands-sdk"]
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        cli._parse_args()
+    assert exit_info.value.code == 2
+
+
 def test_gold_patch_fixes_apply_to_the_seat_that_has_the_bug(tmp_path: Path):
     buggy = PATCH_A.replace("+VALIDATE = True", "+        min_instr_chars=30,")
     pair = make_pair("6", "5", repo="stanfordnlp/dspy", task_id="8635", patch_a=buggy)
@@ -200,7 +259,68 @@ def test_dspy_8563_test_fix_needs_feature_1_in_a_seat_task(
     task_dir = generate(tmp_path, pair)
 
     assert (task_dir / "tests/testfix.patch").exists() is fixed
-    assert ("/tests/testfix.patch" in (task_dir / "tests/test.sh").read_text()) is fixed
+    # The seat verifier appends testfix.patch itself; its test.sh is the template's.
+    assert (task_dir / "tests/test.sh").read_bytes() == (
+        SEATS_TEMPLATE / "tests/test.sh"
+    ).read_bytes()
+
+
+# react-hook-form 153, Feature 6's own gold patch: the type half of the fix
+# matches, the implementation half does not (an excerpt of the real patch).
+RHF_FEATURE_6_TYPE_HUNK = """diff --git a/src/types/form.ts b/src/types/form.ts
+--- a/src/types/form.ts
++++ b/src/types/form.ts
+@@ -628,4 +636,10 @@ export type UseFormHandleSubmit<
+     : never,
+-  onInvalid?: SubmitErrorHandler<TFieldValues>,
+-) => (e?: React.BaseSyntheticEvent) => Promise<void>;
++  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,
++  options?: {
++    preventFocusOnError?: boolean;
++  },
++) => (
++  e?: React.BaseSyntheticEvent,
++  context?: TSubmitContext,
++) => Promise<void>;
+ 
+"""
+RHF_IMPLEMENTATION_HUNK = """diff --git a/src/logic/createFormControl.ts b/src/logic/createFormControl.ts
+--- a/src/logic/createFormControl.ts
++++ b/src/logic/createFormControl.ts
+@@ -1,2 +1,4 @@
+ const handleSubmit =
++    (onValid, onInvalid, options) => async (e?, context?) => {
++      let onValidError: Error | undefined = undefined;
+ };
+"""
+
+
+def test_rhf_153_fix_leaves_a_patch_with_only_one_half_alone(tmp_path: Path):
+    pair = make_pair(
+        "6",
+        "5",
+        repo="react-hook-form/react-hook-form",
+        task_id="153",
+        patch_a=RHF_FEATURE_6_TYPE_HUNK,
+    )
+    task_dir = generate(tmp_path, pair)
+
+    patch = (task_dir / "solution/agent1.patch").read_text()
+    assert patch == RHF_FEATURE_6_TYPE_HUNK
+    assert "optionsOrOnFinally" not in patch
+
+
+def test_rhf_153_fix_changes_both_halves_together(tmp_path: Path):
+    both = RHF_IMPLEMENTATION_HUNK + RHF_FEATURE_6_TYPE_HUNK
+    pair = make_pair(
+        "6", "5", repo="react-hook-form/react-hook-form", task_id="153", patch_a=both
+    )
+    task_dir = generate(tmp_path, pair)
+
+    patch = (task_dir / "solution/agent1.patch").read_text()
+    assert "const options = typeof optionsOrOnFinally === 'function'" in patch
+    assert "+  optionsOrOnFinally?: ((formState" in patch
+    assert "@@ -1,2 +1,9 @@" in patch  # 5 more lines in the implementation hunk
 
 
 # -- the message service in main, and the seats' commands -------------------
@@ -215,23 +335,39 @@ def load_server() -> ModuleType:
     return module
 
 
-@pytest.fixture
-def service(tmp_path: Path) -> Iterator[dict[str, Any]]:
-    tokens_dir = tmp_path / "tokens"
+@contextmanager
+def serving(
+    root: Path, module: ModuleType | None = None, **limits: int
+) -> Iterator[dict[str, Any]]:
+    tokens_dir = root / "tokens"
     for seat in ("agent1", "agent2"):
-        (tokens_dir / seat).mkdir(parents=True)
-    server = load_server().make_server(
-        ["agent1", "agent2"], tokens_dir, tmp_path / "logs", host="127.0.0.1", port=0
+        (tokens_dir / seat).mkdir(parents=True, exist_ok=True)
+    server = (module or load_server()).make_server(
+        ["agent1", "agent2"],
+        tokens_dir,
+        root / "logs",
+        host="127.0.0.1",
+        port=0,
+        **limits,
     )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield {
-        "url": f"http://127.0.0.1:{server.server_address[1]}",
-        "token_files": {s: tokens_dir / s / "token" for s in ("agent1", "agent2")},
-        "logs": tmp_path / "logs",
-    }
-    server.shutdown()
-    server.server_close()
+    try:
+        yield {
+            "url": f"http://127.0.0.1:{server.server_address[1]}",
+            "port": server.server_address[1],
+            "token_files": {s: tokens_dir / s / "token" for s in ("agent1", "agent2")},
+            "logs": root / "logs",
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture
+def service(tmp_path: Path) -> Iterator[dict[str, Any]]:
+    with serving(tmp_path) as info:
+        yield info
 
 
 def call(service: dict[str, Any], method: str, path: str, seat: str | None, body=None):
@@ -311,7 +447,7 @@ def test_a_receive_drains_only_the_callers_inbox(service: dict[str, Any]):
     assert call(service, "POST", "/recv", None, {})[0] == 401
 
 
-def test_the_service_logs_every_message_and_request(service: dict[str, Any]):
+def test_the_service_logs_each_message_receive_and_bad_token(service: dict[str, Any]):
     call(service, "POST", "/send", "agent1", {"to": "agent2", "content": "hello"})
     call(service, "POST", "/recv", "agent2", {})
     call(service, "POST", "/recv", None, {})
@@ -381,3 +517,110 @@ def test_seat_commands_fail_loudly_on_a_bad_token(
     result = coop(service, "agent1", "send", "agent2", "hello")
     assert result.returncode == 1
     assert "HTTP 401" in result.stderr
+
+
+def test_a_restart_keeps_the_seats_tokens(tmp_path: Path):
+    with serving(tmp_path) as first:
+        tokens = {s: p.read_text() for s, p in first["token_files"].items()}
+    with serving(tmp_path) as second:
+        assert {s: p.read_text() for s, p in second["token_files"].items()} == tokens
+        assert call(second, "GET", "/peek", "agent1") == (200, {"unread": 0})
+
+
+def test_the_message_cap_holds_under_concurrent_sends(tmp_path: Path):
+    with serving(tmp_path, max_messages=5) as info:
+        statuses: list[int] = []
+
+        def send() -> None:
+            statuses.append(
+                call(info, "POST", "/send", "agent1", {"to": "agent2", "content": "x"})[
+                    0
+                ]
+            )
+
+        threads = [threading.Thread(target=send) for _ in range(40)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert sorted(statuses) == [201] * 5 + [429] * 35
+
+
+def test_messages_are_capped_in_utf8_bytes(tmp_path: Path):
+    with serving(tmp_path, max_bytes=100) as info:
+        emoji = "\U0001f600"  # 4 bytes in UTF-8
+        too_long = emoji * (65_536 // 4 + 1)
+        assert (
+            call(
+                info, "POST", "/send", "agent1", {"to": "agent2", "content": too_long}
+            )[0]
+            == 413
+        )
+        assert (
+            call(
+                info, "POST", "/send", "agent1", {"to": "agent2", "content": emoji * 20}
+            )[0]
+            == 201
+        )
+        status, reply = call(
+            info, "POST", "/send", "agent1", {"to": "agent2", "content": emoji * 6}
+        )
+        assert status == 429
+        assert "at most 100 bytes" in reply["error"]
+        line = (info["logs"] / "messages.jsonl").read_bytes().splitlines()[0]
+        assert emoji.encode() in line  # stored as UTF-8, not escaped
+
+
+def test_events_stop_at_their_cap(tmp_path: Path):
+    with serving(tmp_path, max_events=3) as info:
+        for _ in range(5):
+            call(info, "POST", "/recv", None, {})
+        events = (info["logs"] / "events.jsonl").read_text().splitlines()
+
+    assert [json.loads(line)["kind"] for line in events] == [
+        "bad_token",
+        "bad_token",
+        "events_capped",
+    ]
+
+
+@pytest.mark.parametrize("recipient", [[], {}, 7, None])
+def test_a_recipient_that_is_not_a_seat_name_is_refused(
+    service: dict[str, Any], recipient: object
+):
+    status, reply = call(
+        service, "POST", "/send", "agent1", {"to": recipient, "content": "x"}
+    )
+    assert status == 400
+    assert reply["error"].startswith("'to' must be one of")
+
+
+def test_stalled_connections_time_out_and_are_capped(tmp_path: Path):
+    module = load_server()
+    setattr(module, "REQUEST_TIMEOUT_SEC", 1)
+    with serving(tmp_path, module, max_connections=2) as info:
+        token = info["token_files"]["agent1"].read_text().strip()
+        stalled = []
+        for _ in range(2):  # each promises a body it never sends
+            conn = socket.create_connection(("127.0.0.1", info["port"]))
+            conn.sendall(
+                b"POST /send HTTP/1.0\r\nAuthorization: Bearer "
+                + token.encode()
+                + b"\r\nContent-Length: 100\r\n\r\n"
+            )
+            stalled.append(conn)
+        time.sleep(0.3)
+        extra = socket.create_connection(("127.0.0.1", info["port"]))
+        extra.settimeout(5)
+        extra.sendall(b"GET /health HTTP/1.0\r\n\r\n")
+        try:  # closed without a reply, both slots busy: EOF or a reset
+            reply = extra.recv(100)
+        except ConnectionResetError:
+            reply = b""
+        assert reply == b""
+        extra.close()
+        time.sleep(1.5)  # the stalled reads time out and free their slots
+        assert call(info, "GET", "/peek", "agent1") == (200, {"unread": 0})
+        for conn in stalled:
+            conn.close()

@@ -7,16 +7,23 @@ CooperBench's messaging for CLI agents (upstream
 drains the caller's inbox, and a broadcast is one message to each other
 agent. It differs in two ways:
 
-- Authentication. At start the service writes a new random token to
-  ``<tokens dir>/<seat>/token`` for each seat. Compose mounts each of those
-  directories in main and in that one seat only, so a seat can read its own
-  token and no other. Every request except ``GET /health`` must send
-  ``Authorization: Bearer <token>``, and the service takes the sender from the
-  token: a seat cannot send as another seat or read another seat's inbox.
-  Upstream's Redis inbox trusts a ``from`` field that the sender writes.
-- Evidence. Every message is written once to ``<log dir>/messages.jsonl`` and
-  every request to ``<log dir>/events.jsonl``, for the verifier and for
-  analysis.
+- Authentication. At start the service writes a random token to
+  ``<tokens dir>/<seat>/token`` for each seat (a restart keeps the tokens).
+  Compose mounts each of those directories in main and in that one seat only,
+  so a seat can read its own token and no other. Every request except
+  ``GET /health`` must send ``Authorization: Bearer <token>``, and the service
+  takes the sender from the token: a seat cannot send as another seat or read
+  another seat's inbox. Upstream's Redis inbox trusts a ``from`` field that
+  the sender writes.
+- Evidence. Each message is written once to ``<log dir>/messages.jsonl``.
+  Each send, receive, peek, refusal and bad token is an event in
+  ``<log dir>/events.jsonl``. The verifier and the analysis read both.
+
+Limits, so that a seat cannot exhaust main, where the verifier runs: a
+message is at most 64 KiB of UTF-8; a seat sends at most 2,000 messages and
+8 MiB in all; events.jsonl stops at 100,000 events; a request body is at most
+1 MiB and each read must arrive within 30 seconds; at most 32 connections are
+served at once.
 
 Standard library only. Configured by environment variables:
 
@@ -41,21 +48,48 @@ from pathlib import Path
 from typing import Any
 
 MAX_BODY_BYTES = 1_048_576
-MAX_MESSAGE_CHARS = 65_536
+MAX_MESSAGE_BYTES = 65_536
 MAX_MESSAGES_PER_SEAT = 2_000
+MAX_BYTES_PER_SEAT = 8_388_608
+MAX_EVENTS = 100_000
+REQUEST_TIMEOUT_SEC = 30
+MAX_CONNECTIONS = 32
+
+
+class Refused(Exception):
+    """A request the service turns down, with its HTTP status."""
+
+    def __init__(self, status: int, error: str):
+        super().__init__(error)
+        self.status = status
+        self.error = error
 
 
 class Board:
     """The inboxes, the tokens and the logs, behind one lock."""
 
-    def __init__(self, agents: list[str], tokens: dict[str, str], log_dir: Path):
+    def __init__(
+        self,
+        agents: list[str],
+        tokens: dict[str, str],
+        log_dir: Path,
+        *,
+        max_messages: int = MAX_MESSAGES_PER_SEAT,
+        max_bytes: int = MAX_BYTES_PER_SEAT,
+        max_events: int = MAX_EVENTS,
+    ):
         self.agents = agents
         self.tokens = tokens
+        self.max_messages = max_messages
+        self.max_bytes = max_bytes
+        self.max_events = max_events
         self.inboxes: dict[str, list[dict[str, Any]]] = {agent: [] for agent in agents}
         self.sent_by: dict[str, int] = {agent: 0 for agent in agents}
+        self.bytes_by: dict[str, int] = {agent: 0 for agent in agents}
         self.lock = threading.Lock()
         self.started = time.monotonic()
         self.seq = 0
+        self.events_written = 0
         self.next_id = 1
         log_dir.mkdir(parents=True, exist_ok=True)
         self.messages_path = log_dir / "messages.jsonl"
@@ -75,8 +109,14 @@ class Board:
         return None
 
     def event(self, seat: str | None, kind: str, data: dict[str, Any]) -> None:
-        """Append one event; the caller holds the lock."""
+        """Append one event; the caller holds the lock. The last event the
+        cap allows says that the log is full."""
+        if self.events_written >= self.max_events:
+            return
+        self.events_written += 1
         self.seq += 1
+        if self.events_written == self.max_events:
+            seat, kind, data = None, "events_capped", {"max_events": self.max_events}
         record = {
             "seq": self.seq,
             "t": round(time.monotonic() - self.started, 3),
@@ -87,9 +127,19 @@ class Board:
         with self.events_path.open("a") as events:
             events.write(json.dumps(record) + "\n")
 
-    def send(self, sender: str, recipient: str, content: str) -> dict[str, Any]:
+    def send(
+        self, sender: str, recipient: str, content: str, size: int
+    ) -> dict[str, Any]:
+        """Queue one message of ``size`` UTF-8 bytes, or raise Refused when the
+        sender has used up its messages or bytes."""
         now = time.time()
         with self.lock:
+            if self.sent_by[sender] >= self.max_messages:
+                raise Refused(429, f"a seat sends at most {self.max_messages} messages")
+            if self.bytes_by[sender] + size > self.max_bytes:
+                raise Refused(
+                    429, f"a seat sends at most {self.max_bytes} bytes of messages"
+                )
             message = {
                 "id": f"m{self.next_id}",
                 "from": sender,
@@ -100,13 +150,12 @@ class Board:
             }
             self.next_id += 1
             self.sent_by[sender] += 1
+            self.bytes_by[sender] += size
             self.inboxes[recipient].append(message)
-            with self.messages_path.open("a") as messages:
-                messages.write(json.dumps(message) + "\n")
+            with self.messages_path.open("a", encoding="utf-8") as messages:
+                messages.write(json.dumps(message, ensure_ascii=False) + "\n")
             self.event(
-                sender,
-                "send",
-                {"id": message["id"], "to": recipient, "chars": len(content)},
+                sender, "send", {"id": message["id"], "to": recipient, "bytes": size}
             )
         return message
 
@@ -125,6 +174,8 @@ class Board:
 
 def make_handler(board: Board) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
+        timeout = REQUEST_TIMEOUT_SEC  # per socket read, so a stalled client is dropped
+
         def log_message(self, format: str, *args: object) -> None:
             pass  # events.jsonl is the record
 
@@ -200,29 +251,68 @@ def make_handler(board: Board) -> type[BaseHTTPRequestHandler]:
             if "from" in body and body["from"] != seat:
                 self._refuse(seat, 403, f"this token is {seat}'s")
                 return
-            if recipient not in board.inboxes:
+            if not isinstance(recipient, str) or recipient not in board.inboxes:
                 self._refuse(seat, 400, f"'to' must be one of {board.agents}")
                 return
             if not isinstance(content, str):
                 self._refuse(seat, 400, "'content' must be a string")
                 return
-            if len(content) > MAX_MESSAGE_CHARS:
+            try:
+                size = len(content.encode("utf-8"))
+            except UnicodeEncodeError:
+                self._refuse(seat, 400, "'content' must be valid Unicode")
+                return
+            if size > MAX_MESSAGE_BYTES:
                 self._refuse(
-                    seat, 413, f"a message is at most {MAX_MESSAGE_CHARS} characters"
+                    seat, 413, f"a message is at most {MAX_MESSAGE_BYTES} bytes"
                 )
                 return
-            if board.sent_by[seat] >= MAX_MESSAGES_PER_SEAT:
-                self._refuse(
-                    seat, 429, f"a seat sends at most {MAX_MESSAGES_PER_SEAT} messages"
-                )
+            try:
+                message = board.send(seat, recipient, content, size)
+            except Refused as refused:
+                self._refuse(seat, refused.status, refused.error)
                 return
-            self._reply(201, board.send(seat, recipient, content))
+            self._reply(201, message)
 
     return Handler
 
 
+class Server(ThreadingHTTPServer):
+    """A threading HTTP server that serves at most ``max_connections`` at once
+    and closes any connection beyond that."""
+
+    daemon_threads = True
+
+    def __init__(
+        self,
+        address: tuple[str, int],
+        handler: type[BaseHTTPRequestHandler],
+        max_connections: int = MAX_CONNECTIONS,
+    ):
+        super().__init__(address, handler)
+        self.slots = threading.BoundedSemaphore(max_connections)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+
 def issue_tokens(agents: list[str], tokens_dir: Path) -> dict[str, str]:
-    """Write a new token into each seat's token directory and return them."""
+    """Write a token into each seat's token directory and return them. A
+    token already there (the service restarted) is kept, so the seats'
+    tokens stay valid."""
     tokens = {}
     for agent in agents:
         seat_dir = tokens_dir / agent
@@ -230,10 +320,19 @@ def issue_tokens(agents: list[str], tokens_dir: Path) -> dict[str, str]:
             raise SystemExit(
                 f"coop_server: no token directory for {agent} at {seat_dir}"
             )
-        tokens[agent] = secrets.token_hex(16)
         token_path = seat_dir / "token"
-        token_path.write_text(tokens[agent] + "\n")
-        token_path.chmod(0o644)
+        try:
+            existing = token_path.read_text().strip()
+        except OSError:
+            existing = ""
+        if len(existing) == 32 and all(c in "0123456789abcdef" for c in existing):
+            tokens[agent] = existing
+            continue
+        tokens[agent] = secrets.token_hex(16)
+        partial = seat_dir / ".token.partial"
+        partial.write_text(tokens[agent] + "\n")
+        partial.chmod(0o644)
+        os.replace(partial, token_path)
     return tokens
 
 
@@ -243,11 +342,13 @@ def make_server(
     log_dir: Path,
     host: str = "0.0.0.0",
     port: int = 8080,
-) -> ThreadingHTTPServer:
-    board = Board(agents, issue_tokens(agents, tokens_dir), log_dir)
-    server = ThreadingHTTPServer((host, port), make_handler(board))
-    server.daemon_threads = True
-    return server
+    **limits: int,
+) -> Server:
+    """The service, not yet serving. ``limits`` may set max_messages,
+    max_bytes, max_events and max_connections (the tests make them small)."""
+    max_connections = limits.pop("max_connections", MAX_CONNECTIONS)
+    board = Board(agents, issue_tokens(agents, tokens_dir), log_dir, **limits)
+    return Server((host, port), make_handler(board), max_connections)
 
 
 def main() -> None:
