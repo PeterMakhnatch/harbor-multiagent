@@ -1,0 +1,50 @@
+{
+  "checks": [
+    {
+      "fields": [
+        "/observation/0",
+        "/observation/1",
+        "/observation/2",
+        "/observation/3",
+        "/observation/4",
+        "/observation/5",
+        "/observation/6",
+        "/observation/7"
+      ],
+      "id": "physical-s5-plain-plain-vs-s5-rotate-rotate",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s5-plain-plain/episodes.jsonl",
+      "source_order": "cells/s5-plain-plain/order.json",
+      "target": "cells/s5-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s5-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/8",
+        "/observation/9",
+        "/observation/10"
+      ],
+      "id": "channel-s5-plain-plain-vs-s5-rotate-rotate",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s5-plain-plain/episodes.jsonl",
+      "source_order": "cells/s5-plain-plain/order.json",
+      "target": "cells/s5-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s5-rotate-rotate/order.json"
+    },
+    {
+      "fields": [
+        "/observation/99"
+      ],
+      "id": "missing-listener-pointer",
+      "kind": "role-trajectory",
+      "role": "p1",
+      "source": "cells/s5-plain-plain/episodes.jsonl",
+      "source_order": "cells/s5-plain-plain/order.json",
+      "target": "cells/s5-rotate-rotate/episodes.jsonl",
+      "target_order": "cells/s5-rotate-rotate/order.json"
+    }
+  ],
+  "schema": "seatlab.study-recipe/v1"
+}

@@ -1,4 +1,4 @@
-name: Verify a recorded Harbor job with the published SeatLab action
+name: Verify real Harbor job and participant behavior with published SeatLab actions
 on:
   push:
     branches: [example/seatlab-study-action]
@@ -33,6 +33,28 @@ jobs:
           set -euo pipefail
           test "$CHECKS" = 1 && test -s "$PAGE"
           jq -e '.status == "verified" and .files == 3 and .checks[0].kind == "alignment" and .checks[0].counts.pairs == 2' "$REPORT"
+      - name: Verify the role study from four native input files
+        id: motion
+        uses: PeterMakhnatch/harbor-seatlab@66de9cbafdbace07f6fffa127a5de43dc26ce401 # study-action-v1.1.0
+        with:
+          manifest: examples/seatlab-verify/observed-motion/study.json
+          expected-sha256: a7c36b7a8d0a29f9b0002823e8b4003fa300330990fcafcbf7b561dcf08d8e55
+      - name: Assert observed movement without treating absent input as measured
+        shell: bash
+        env:
+          REPORT: ${{ steps.motion.outputs.report }}
+        run: |
+          set -euo pipefail
+          jq -e '
+            def check($id): first(.checks[] | select(.id == $id));
+            .status == "verified" and .files == 4 and (.checks | length) == 3 and
+            (check("physical-s5-plain-plain-vs-s5-rotate-rotate") |
+              .selected_view.equal == 20 and .accepted_action.equal == 20) and
+            (check("channel-s5-plain-plain-vs-s5-rotate-rotate") |
+              .selected_view.first_different_step == 2 and .accepted_action.different == 0) and
+            (check("missing-listener-pointer") |
+              .selected_view.unknown == 20 and .accepted_action.unknown == 0)
+          ' "$REPORT"
       - name: Refuse a different trusted pin (expected negative control)
         id: wrong
         continue-on-error: true
@@ -56,5 +78,13 @@ jobs:
           path: |
             ${{ steps.job.outputs.report }}
             ${{ steps.job.outputs.html }}
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-role-trajectory
+          path: |
+            ${{ steps.motion.outputs.report }}
+            ${{ steps.motion.outputs.html }}
           if-no-files-found: error
           retention-days: 7
