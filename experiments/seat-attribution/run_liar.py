@@ -25,7 +25,7 @@ from harbor.trial.trial import Trial
 import os
 TASK = Path(os.environ.get("SEAT_TASK", Path(__file__).parent / "tasks/liar-scout"))
 ROOT = Path("/tmp/liar-scout-trials")
-MODEL = "openrouter/openai/gpt-oss-120b"
+MODEL = os.environ.get("SEAT_MODEL", "openrouter/openai/gpt-oss-120b")
 
 
 async def run_one(name: str, lie: bool, listener: Participant) -> dict:
@@ -85,16 +85,19 @@ async def main() -> None:
         model_name=MODEL,
         model_api_key_name="OPENROUTER_API_KEY",
     )
+    offset = int(os.environ.get("SEAT_EP_OFFSET", "2"))
+    tag = os.environ.get("SEAT_TAG", "")
     for i in range(count):
+        episode = f"{tag}{condition}{i + offset}"
         try:
             print(
-                json.dumps(await run_one(f"{condition}{i+2}", condition == "lie", listener)),
+                json.dumps(await run_one(episode, condition == "lie", listener)),
                 flush=True,
             )
         except Exception as exc:
             print(
                 json.dumps(
-                    {"episode": f"{condition}{i+2}", "error": f"{type(exc).__name__}: {exc}"[:300]}
+                    {"episode": episode, "error": f"{type(exc).__name__}: {exc}"[:300]}
                 ),
                 flush=True,
             )
