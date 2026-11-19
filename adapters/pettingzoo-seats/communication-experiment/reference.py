@@ -1,12 +1,16 @@
-"""Independent direct-engine reference for the 15 speaker-listener cells.
+"""Independent direct-engine reference for the speaker-listener cells.
 
-python reference.py ROOT --out NEW.json
+python reference.py ROOT --out NEW.json [--cohort initial|held-out]
 
 ROOT is a directory written by ``study.py prepare`` and, optionally, ``run``:
 ``plan.json`` (schema ``seatlab.pz-communication-plan/v1``), ``configs/<id>.json``,
 ``attempts/<id>/exit.json`` and ``trials/<trial_name>/`` with ``result.json`` and
 ``artifacts/logs/world/pettingzoo.json``. ROOT may be missing or partial: every
 registered cell is still reported. Nothing is rerun, retried or scored.
+
+Cohorts: ``initial`` is the original 15 cells (seeds 5, 19, 73). ``held-out`` is a
+separate preregistered 60-cell cohort (seeds 101..112 x the same 5 teams). The
+default is ``initial`` and its report is unchanged.
 
 The reference drives the installed ``mpe2.simple_speaker_listener_v4`` Parallel
 API itself and implements the written policy from the raw observation vector.
@@ -38,6 +42,7 @@ KWARGS = {"continuous_actions": False, "max_cycles": 20}
 MAX_WORLD_STEPS = 128
 PINS = {"mpe2": "1.1.1", "pettingzoo": "1.26.1"}
 SEEDS = (5, 19, 73)
+HELD_OUT_SEEDS = tuple(range(101, 113))
 TEAMS = (
     ("plain-plain", "plain", "plain"),
     ("rotate-rotate", "rotate", "rotate"),
@@ -45,11 +50,21 @@ TEAMS = (
     ("rotate-plain", "rotate", "plain"),
     ("plain-blind", "plain", "blind"),
 )
-CELLS = tuple(
-    (f"s{seed}-{team}", seed, team, speaker, listener)
-    for seed in SEEDS
-    for team, speaker, listener in TEAMS
-)
+
+
+def _cells_for(seeds: tuple[int, ...]) -> tuple[tuple[Any, ...], ...]:
+    return tuple(
+        (f"s{seed}-{team}", seed, team, speaker, listener)
+        for seed in seeds
+        for team, speaker, listener in TEAMS
+    )
+
+
+CELLS = _cells_for(SEEDS)
+HELD_OUT_CELLS = _cells_for(HELD_OUT_SEEDS)
+DEFAULT_COHORT = "initial"
+COHORTS = {"initial": (SEEDS, CELLS), "held-out": (HELD_OUT_SEEDS, HELD_OUT_CELLS)}
+
 BASELINE = "plain-plain"
 KINDS = {"rotate-rotate": "matched", "plain-rotate": "cross"}
 KINDS |= {"rotate-plain": "cross", "plain-blind": "blind"}
@@ -62,6 +77,13 @@ WORLD_KEYS = frozenset(
     {"schema", "case_sha256", "roles", "steps", "returns", "terminated", "truncated"}
 )
 Factory = Callable[[], Any]
+
+
+def _cohort(name: object) -> Any:
+    """Look up a registered cohort; an unknown name is an error, never a default."""
+    if not isinstance(name, str) or name not in COHORTS:
+        raise ValueError(f"unknown cohort: {name!r}")
+    return COHORTS[name]
 
 
 class RefError(Exception):
@@ -292,7 +314,9 @@ def _safe(name: object) -> bool:
     )
 
 
-def _plan(root: Path) -> tuple[str, dict[str, str]]:
+def _plan(
+    root: Path, cells_registered: tuple[tuple[Any, ...], ...] = CELLS
+) -> tuple[str, dict[str, str]]:
     """Return (plan status token, cell id -> trial name) for matching cells."""
     raw = _json(root / "plan.json")
     if raw is None:
@@ -302,7 +326,7 @@ def _plan(root: Path) -> tuple[str, dict[str, str]]:
         return "wrong_plan_schema", {}
     if not isinstance(cells, list):
         return "bad_plan", {}
-    want = {cid: (seed, team, sp, li) for cid, seed, team, sp, li in CELLS}
+    want = {cid: (seed, team, sp, li) for cid, seed, team, sp, li in cells_registered}
     names: dict[str, str] = {}
     for cell in cells:
         if not isinstance(cell, dict) or cell.get("id") not in want:
@@ -803,13 +827,16 @@ def _engine(factory: Factory | None) -> tuple[Factory | None, dict[str, Any]]:
     return made, info
 
 
-def build(root: Path, factory: Factory | None = None) -> dict[str, Any]:
-    """Register all 15 cells, measure what exists, and never fill gaps."""
+def build(
+    root: Path, factory: Factory | None = None, *, cohort: str = DEFAULT_COHORT
+) -> dict[str, Any]:
+    """Register every cohort cell, measure what exists, and never fill gaps."""
+    seeds, registered_cells = _cohort(cohort)
     made, engine = _engine(factory)
-    plan_status, names = _plan(root)
+    plan_status, names = _plan(root, registered_cells)
     owners: dict[str, list[str]] = {}
     cells, traces, natives = [], {}, {}
-    for cid, seed, team, speaker, listener in CELLS:
+    for cid, seed, team, speaker, listener in registered_cells:
         native = _native(root, cid, names.get(cid))
         if native["native_trial_id"]:
             owners.setdefault(native["native_trial_id"], []).append(cid)
@@ -852,7 +879,7 @@ def build(root: Path, factory: Factory | None = None) -> dict[str, Any]:
             row["comparison"] = compare(doc, traces[cid], row["seed"])
         natives[cid] = doc
     by_seed = []
-    for seed in SEEDS:
+    for seed in seeds:
         base_id = f"s{seed}-{BASELINE}"
         entry: dict[str, Any] = {"seed": seed, "independent": [], "native": []}
         for team, _speaker, _listener in TEAMS[1:]:
@@ -873,26 +900,31 @@ def build(root: Path, factory: Factory | None = None) -> dict[str, Any]:
                 native_item |= {"kind": KINDS[team], "measured": False}
             entry["native"].append(native_item)
         by_seed.append(entry)
-    return {
+    report: dict[str, Any] = {
         "schema": SCHEMA,
         "game": GAME,
         "engine": engine,
         "plan": plan_status,
         "registered": {
-            "cells": len(CELLS),
-            "seeds": list(SEEDS),
+            "cells": len(registered_cells),
+            "seeds": list(seeds),
             "teams": [team for team, _s, _l in TEAMS],
             "cycles": KWARGS["max_cycles"],
             "roles": dict(ROLES),
             "tolerance": TOLERANCE,
         },
-        "denominators": _denominators(cells, by_seed),
+        "denominators": _denominators(cells, by_seed, seeds),
         "cells": cells,
         "by_seed": by_seed,
     }
+    if cohort != DEFAULT_COHORT:
+        report["cohort"] = cohort
+    return report
 
 
-def _denominators(cells: list[dict], by_seed: list[dict]) -> dict[str, Any]:
+def _denominators(
+    cells: list[dict], by_seed: list[dict], seeds: tuple[int, ...] = SEEDS
+) -> dict[str, Any]:
     statuses = ("unregistered", "unattempted", "invalid", "complete")
     native = {s: sum(c["native"]["status"] == s for c in cells) for s in statuses}
     compared = [c["comparison"] for c in cells if c["comparison"] is not None]
@@ -923,7 +955,7 @@ def _denominators(cells: list[dict], by_seed: list[dict]) -> dict[str, Any]:
         "max_abs_observation_difference": max(obs) if obs else None,
         "max_abs_payoff_difference": max(pay) if pay else None,
         "contrasts": {
-            "registered": len(SEEDS) * (len(TEAMS) - 1),
+            "registered": len(seeds) * (len(TEAMS) - 1),
             "independent_measured": measured("independent"),
             "native_measured": measured("native"),
         },
@@ -946,8 +978,14 @@ def _public(value: object) -> bool:
     return False
 
 
-def write_report(root: Path, out: Path, factory: Factory | None = None) -> dict:
-    report = build(root, factory)
+def write_report(
+    root: Path,
+    out: Path,
+    factory: Factory | None = None,
+    *,
+    cohort: str = DEFAULT_COHORT,
+) -> dict:
+    report = build(root, factory, cohort=cohort)
     data = json.dumps(report, sort_keys=True, indent=2, allow_nan=False) + "\n"
     needles = {str(root.resolve())}
     if os.sep in str(root):
@@ -968,6 +1006,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path, metavar="ROOT")
     parser.add_argument("--out", required=True, type=Path, metavar="NEW.json")
+    parser.add_argument(
+        "--cohort",
+        choices=sorted(COHORTS),
+        default=DEFAULT_COHORT,
+        help="registered cohort (default: initial)",
+    )
     args = parser.parse_args(argv)
     if os.path.lexists(args.out):
         print("--out already exists", file=sys.stderr)
@@ -975,7 +1019,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.out.parent.is_dir():
         print("--out parent does not exist", file=sys.stderr)
         return 2
-    report = write_report(args.root, args.out)
+    report = write_report(args.root, args.out, cohort=args.cohort)
     if not report["engine"]["available"]:
         print("engine unavailable; cells kept unmeasured", file=sys.stderr)
         return 1

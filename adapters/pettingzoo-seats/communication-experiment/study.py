@@ -1,7 +1,12 @@
-"""Prepare and run the 15 registered speaker-listener trials. No retries.
+"""Prepare and run registered speaker-listener trials. No retries.
 
-python study.py prepare ROOT --python /ABS/python
+python study.py prepare ROOT --python /ABS/python [--cohort initial|held-out]
 python study.py run ROOT CELL --harbor /ABS
+
+The initial cohort is the 15 registered trials (seeds 5, 19, 73). The held-out
+cohort is a separate 60-trial cohort (seeds 101..112, the same five teams).
+Each root holds one cohort; run refuses any cell its plan did not register for
+that cohort.
 
 program_study.py cannot run these cells: its plan schema and --node input
 belong to the four RPS and Connect Four program trials. This command uses
@@ -35,6 +40,7 @@ ROLES = {"p0": "speaker_0", "p1": "listener_0"}
 KWARGS = {"continuous_actions": False, "max_cycles": 20}
 MAX_WORLD_STEPS = 128
 SEEDS = (5, 19, 73)
+HELD_OUT_SEEDS = tuple(range(101, 113))
 TEAMS = (
     ("plain-plain", "plain", "plain"),
     ("rotate-rotate", "rotate", "rotate"),
@@ -47,6 +53,17 @@ CELLS = tuple(
     for seed in SEEDS
     for team, speaker, listener in TEAMS
 )
+HELD_OUT_CELLS = tuple(
+    (f"s{seed}-{team}", seed, team, speaker, listener)
+    for seed in HELD_OUT_SEEDS
+    for team, speaker, listener in TEAMS
+)
+INITIAL = "initial"
+HELD_OUT = "held-out"
+COHORTS = {
+    INITIAL: (SEEDS, CELLS),
+    HELD_OUT: (HELD_OUT_SEEDS, HELD_OUT_CELLS),
+}
 REQUIRED_PINS = ("mpe2==1.1.1", "pettingzoo==1.26.1")
 TASK_POLICIES = {"p0": "low", "p1": "low"}
 
@@ -92,8 +109,8 @@ def _pins(path: Path) -> None:
         raise SystemExit("requirements missing " + ", ".join(missing))
 
 
-def world_spec(seed: int) -> dict[str, object]:
-    if seed not in SEEDS:
+def world_spec(seed: int, seeds: tuple[int, ...] = SEEDS) -> dict[str, object]:
+    if seed not in seeds:
         raise SystemExit(f"seed {seed} is not registered")
     spec: dict[str, object] = {
         "schema": SPEC_SCHEMA,
@@ -132,7 +149,10 @@ def _same_spec(tasks: list[Path], seed: int) -> None:
         raise SystemExit("task requirements do not keep the native pins")
 
 
-def prepare(root: Path, python: Path) -> None:
+def prepare(root: Path, python: Path, cohort: str = INITIAL) -> None:
+    if cohort not in COHORTS:
+        raise SystemExit(f"unknown cohort {cohort}")
+    seeds, rows = COHORTS[cohort]
     root = root.resolve()
     python_path = str(_exe(python, "--python"))
     script = str(_script(ACTOR))
@@ -140,13 +160,13 @@ def prepare(root: Path, python: Path) -> None:
     root.mkdir()
     suffix = secrets.token_hex(4)
     spec_for = {}
-    for seed in SEEDS:
+    for seed in seeds:
         path = root / "specs" / f"seed-{seed}.json"
-        write_new(path, world_spec(seed))
+        write_new(path, world_spec(seed, seeds))
         spec_for[seed] = path
     cells: list[dict[str, object]] = []
-    tasks_by_seed: dict[int, list[Path]] = {seed: [] for seed in SEEDS}
-    for cell_id, seed, team, speaker, listener in CELLS:
+    tasks_by_seed: dict[int, list[Path]] = {seed: [] for seed in seeds}
+    for cell_id, seed, team, speaker, listener in rows:
         name = f"{cell_id}-{suffix}"
         task = root / "tasks" / name
         materialize(spec_for[seed], task, dict(TASK_POLICIES), REQUIREMENTS)
@@ -179,18 +199,20 @@ def prepare(root: Path, python: Path) -> None:
         )
     for seed, tasks in tasks_by_seed.items():
         _same_spec(tasks, seed)
-    write_new(
-        root / "plan.json",
+    plan: dict[str, object] = {"schema": SCHEMA}
+    if cohort != INITIAL:
+        plan["cohort"] = cohort
+    plan.update(
         {
-            "schema": SCHEMA,
             "factory": FACTORY,
             "continuous_actions": False,
             "max_cycles": KWARGS["max_cycles"],
-            "seeds": list(SEEDS),
+            "seeds": list(seeds),
             "requirements": REQUIREMENTS.name,
             "cells": cells,
-        },
+        }
     )
+    write_new(root / "plan.json", plan)
 
 
 def _bound(saved: dict[str, Any], cell: dict[str, Any], script: str) -> None:
@@ -220,6 +242,65 @@ def _bound(saved: dict[str, Any], cell: dict[str, Any], script: str) -> None:
         seen.add(seat)
 
 
+def _registered(plan: dict[str, Any], cell_id: str) -> dict[str, Any]:
+    """Return the plan cell only if its cohort and tuple are registered."""
+    cohort = plan.get("cohort", INITIAL)
+    if type(cohort) is not str or cohort not in COHORTS:
+        raise SystemExit("plan cohort is not registered")
+    if cohort == INITIAL and "cohort" in plan:
+        raise SystemExit("plan cohort is not registered")
+    seeds, rows = COHORTS[cohort]
+    cells = plan.get("cells")
+    found = (
+        [c for c in cells if type(c) is dict and c.get("id") == cell_id]
+        if type(cells) is list
+        else []
+    )
+    mine = {row[0]: row for row in rows}
+    if plan.get("schema") != SCHEMA or len(found) != 1 or cell_id not in mine:
+        raise SystemExit(f"unknown cell {cell_id} for the {cohort} cohort")
+    if plan.get("seeds") != list(seeds):
+        raise SystemExit(f"plan seeds are not the {cohort} cohort")
+    cell = found[0]
+    _, seed, team, speaker, listener = mine[cell_id]
+    want = {
+        "id": cell_id,
+        "game": GAME,
+        "seed": seed,
+        "team": team,
+        "speaker": speaker,
+        "listener": listener,
+        "spec": f"seed-{seed}.json",
+    }
+    name = cell.get("trial_name")
+    if (
+        {k: v for k, v in cell.items() if k != "trial_name"} != want
+        or type(name) is not str
+        or not name.startswith(f"{cell_id}-")
+        or len(name) != len(cell_id) + 9
+        or any(c not in "0123456789abcdef" for c in name[-8:])
+    ):
+        raise SystemExit(f"cell {cell_id} does not match its registered tuple")
+    return cell
+
+
+def _task_world(saved: dict[str, Any], cell: dict[str, Any], cell_id: str) -> None:
+    task = saved.get("task")
+    path = task.get("path") if type(task) is dict else None
+    if type(path) is not str or not Path(path).is_absolute():
+        raise SystemExit("cell config must name an absolute task path")
+    try:
+        spec = json.loads(
+            (Path(path) / "environment" / "spec.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        raise SystemExit("cell task has no readable world spec") from None
+    seed = cell["seed"]
+    registered = SEEDS if seed in SEEDS else HELD_OUT_SEEDS
+    if spec != world_spec(seed, registered):
+        raise SystemExit(f"cell {cell_id} task world is not its registered seed")
+
+
 def run(root: Path, cell_id: str, harbor: Path) -> int:
     root = root.resolve()
     if not harbor.is_absolute():
@@ -227,13 +308,13 @@ def run(root: Path, cell_id: str, harbor: Path) -> int:
     harbor = harbor.resolve(strict=True)
     script = str(_script(ACTOR))
     plan = json.loads((root / "plan.json").read_text(encoding="utf-8"))
-    cells = [cell for cell in plan.get("cells", []) if cell.get("id") == cell_id]
-    if plan.get("schema") != SCHEMA or len(cells) != 1:
+    if type(plan) is not dict:
         raise SystemExit(f"unknown cell {cell_id}")
-    cell = cells[0]
+    cell = _registered(plan, cell_id)
     cfg = root / "configs" / f"{cell_id}.json"
     saved = json.loads(cfg.read_text(encoding="utf-8"))
     _bound(saved, cell, script)
+    _task_world(saved, cell, cell_id)
     trial = root / "trials" / cell["trial_name"]
     if saved.get("trial_name") != cell["trial_name"] or trial.exists():
         raise SystemExit("native result or trial directory already exists")
@@ -265,13 +346,14 @@ def main() -> int:
     prep = sub.add_parser("prepare")
     prep.add_argument("root", type=Path)
     prep.add_argument("--python", required=True, type=Path)
+    prep.add_argument("--cohort", choices=tuple(COHORTS), default=INITIAL)
     runner = sub.add_parser("run")
     runner.add_argument("root", type=Path)
-    runner.add_argument("cell", choices=tuple(row[0] for row in CELLS))
+    runner.add_argument("cell", choices=tuple(row[0] for row in CELLS + HELD_OUT_CELLS))
     runner.add_argument("--harbor", required=True, type=Path)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.root, args.python)
+        prepare(args.root, args.python, args.cohort)
         return 0
     return run(args.root, args.cell, args.harbor)
 
