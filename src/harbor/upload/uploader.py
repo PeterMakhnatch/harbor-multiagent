@@ -599,8 +599,11 @@ class Uploader:
                     )
                 agent_id = agent_cache[agent_key]
 
-            # One trial_model row per model the trial ran, with its usage.
-            model_usage: list[tuple[str, AgentContext | None]] = []
+            # One trial_model row per Hub model, with the usage of every agent
+            # configured with it. Two model keys can name one Hub model (the
+            # Hub stores a missing provider as "unknown"), and the row's
+            # insert keeps the first link, so usage is summed by model ID.
+            usage_by_model_id: dict[str, list[AgentContext]] = {}
             for model_info, usage in _trial_model_usage(trial_result):
                 model_key = (model_info.name, model_info.provider)
                 async with self._model_cache_lock:
@@ -609,7 +612,10 @@ class Uploader:
                             model_info.name,
                             model_info.provider,
                         )
-                    model_usage.append((model_cache[model_key], usage))
+                    model_id = model_cache[model_key]
+                contexts = usage_by_model_id.setdefault(model_id, [])
+                if usage is not None:
+                    contexts.append(usage)
 
             # Reserve the trial before writing Storage. Conflict-safe inserts
             # let an interrupted or concurrent attempt continue without
@@ -660,14 +666,15 @@ class Uploader:
                 ),
             )
 
-            for model_id, usage in model_usage:
+            for model_id, contexts in usage_by_model_id.items():
+                usage = _sum_usage(contexts)
                 await self.db.insert_trial_model(
                     trial_id=trial_result.id,
                     model_id=model_id,
-                    n_input_tokens=usage.n_input_tokens if usage else None,
-                    n_cache_tokens=usage.n_cache_tokens if usage else None,
-                    n_output_tokens=usage.n_output_tokens if usage else None,
-                    cost_usd=usage.cost_usd if usage else None,
+                    n_input_tokens=usage.n_input_tokens,
+                    n_cache_tokens=usage.n_cache_tokens,
+                    n_output_tokens=usage.n_output_tokens,
+                    cost_usd=usage.cost_usd,
                 )
 
             # Now that the row exists (authorizing the storage write), upload
@@ -764,36 +771,29 @@ def _load_job_from_disk(
 def _trial_model_usage(
     trial_result: TrialResult,
 ) -> list[tuple[ModelInfo, AgentContext | None]]:
-    """Each model a trial ran, with the token and cost usage recorded for it.
+    """Each agent's configured model, with the usage recorded for that agent.
 
     A single-agent trial has its agent's model and ``agent_result``. A
     multi-agent trial has no ``agent_result``; each seat in ``seat_results``
-    has its own agent, model and usage, and seats on the same model are
-    summed, as ``TrialResult.compute_token_cost_totals`` sums all seats.
+    has its own agent, model and usage. A seat's usage counts in full toward
+    its configured model, as a single agent's does. The per-model breakdown
+    some harnesses record in ``AgentContext.model_usage`` is not used: its
+    names carry no provider and need not match any configured model.
     """
     if not trial_result.seat_results:
         model_info = trial_result.agent_info.model_info
         return [] if model_info is None else [(model_info, trial_result.agent_result)]
-    seats_by_model: dict[
-        tuple[str, str | None], tuple[ModelInfo, list[AgentContext]]
-    ] = {}
-    for seat in trial_result.seat_results:
-        model_info = seat.agent_info.model_info if seat.agent_info else None
-        if model_info is None:
-            continue
-        key = (model_info.name, model_info.provider)
-        _, contexts = seats_by_model.setdefault(key, (model_info, []))
-        if seat.agent_result is not None:
-            contexts.append(seat.agent_result)
     return [
-        (model_info, _sum_usage(contexts) if contexts else None)
-        for model_info, contexts in seats_by_model.values()
+        (seat.agent_info.model_info, seat.agent_result)
+        for seat in trial_result.seat_results
+        if seat.agent_info is not None and seat.agent_info.model_info is not None
     ]
 
 
 def _sum_usage(contexts: list[AgentContext]) -> AgentContext:
-    """Token counts and cost summed over contexts; a field none of them
-    recorded stays None."""
+    """Token counts and cost summed over contexts, as
+    ``TrialResult.compute_token_cost_totals`` sums a trial's seats; a field
+    none of them recorded stays None."""
 
     def total(values: list[Any]) -> Any:
         known = [value for value in values if value is not None]

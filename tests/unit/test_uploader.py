@@ -1957,3 +1957,53 @@ class TestSeatTrialUpload:
         assert (restored / "seats" / "p1" / "agent" / "latest.json").read_text() == (
             SAFE_SEAT_TREE["seats/p1/agent/trajectory.json"]
         )
+
+    @pytest.mark.asyncio
+    async def test_seat_models_that_are_one_hub_model_share_its_row(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        """The Hub stores a missing provider as "unknown", so two model keys
+        get one model ID. insert_trial_model keeps the first link of a
+        (trial, model) pair, so the seats' usage must be summed into one row."""
+        mock_uploader.db.upsert_model.side_effect = lambda name, provider: (
+            f"model-{name}-{provider or 'unknown'}"
+        )
+        trial_result = _make_seat_trial_result()
+        p1, p2 = trial_result.seat_results or []
+        p1.agent_info = _seat_agent_info(ModelInfo(name="gpt-test", provider=None))
+        p2.agent_info = _seat_agent_info(ModelInfo(name="gpt-test", provider="unknown"))
+        trial_result.agent_info = p1.agent_info
+        job_dir = _write_seat_job_dir(tmp_path, trial_result)
+
+        await mock_uploader.upload_job(job_dir)
+
+        assert [
+            call.args for call in mock_uploader.db.upsert_model.await_args_list
+        ] == [("gpt-test", None), ("gpt-test", "unknown")]
+        mock_uploader.db.insert_trial_model.assert_awaited_once()
+        row = mock_uploader.db.insert_trial_model.await_args.kwargs
+        assert row["model_id"] == "model-gpt-test-unknown"
+        assert (
+            row["n_input_tokens"],
+            row["n_cache_tokens"],
+            row["n_output_tokens"],
+            row["cost_usd"],
+        ) == (1500, 900, 150, 0.375)
+
+    @pytest.mark.asyncio
+    async def test_single_agent_usage_row_is_its_agent_result(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        trial_result = _make_trial_result(rewards={"reward": 1.0})
+        job_dir, _, _ = _write_job_dir(tmp_path, [trial_result])
+
+        await mock_uploader.upload_job(job_dir)
+
+        mock_uploader.db.insert_trial_model.assert_awaited_once_with(
+            trial_id=trial_result.id,
+            model_id="model-claude-opus-4-1-anthropic",
+            n_input_tokens=100,
+            n_cache_tokens=10,
+            n_output_tokens=50,
+            cost_usd=0.012,
+        )

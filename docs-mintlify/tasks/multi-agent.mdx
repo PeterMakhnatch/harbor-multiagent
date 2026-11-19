@@ -267,4 +267,4 @@ The job summary reports each key.
 - A multi-agent task cannot have `[[steps]]`.
 - Multi-agent trials cannot be regraded.
 - Participants cannot set `override_timeout_sec`, `max_timeout_sec`, `n_concurrent`, `concurrency_group`, `skills`, `load_trajectory` or `extra_allowed_hosts`.
-- On the Hub, an uploaded seat trial names one agent, the first agent under test, and has no direct trajectory link. Its tokens and cost are recorded for each model in `seat_results`, summed over the seats on that model.
+- On the Hub, an uploaded seat trial names one agent, the first agent under test, and has no direct trajectory link. Its tokens and cost are recorded per configured model: one row for each model in `seat_results`, with the seats on that model summed. A seat that also calls other models, for example through a harness's subagents, has all its usage counted on its configured model, as a single agent has.
