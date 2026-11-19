@@ -98,6 +98,11 @@ class SeatResult(BaseModel):
     agent_setup: TimingInfo | None = None
     agent_execution: TimingInfo | None = None
     exception_info: ExceptionInfo | None = None
+    # Whether this seat's /logs/agent reached the trial dir. A failed
+    # download is logged and the trial still verifies, so without this
+    # field missing seat evidence is invisible in result.json. None means
+    # the producing version did not record it.
+    logs_downloaded: bool | None = None
 
 
 class TrialResult(BaseModel):
