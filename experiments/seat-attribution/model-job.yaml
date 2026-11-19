@@ -1,0 +1,20 @@
+jobs_dir: /tmp/seat-exp-jobs
+n_attempts: 3
+timeout_multiplier: 0.5
+n_concurrent_trials: 1
+quiet: false
+environment:
+  type: docker
+  force_build: false
+  delete: true
+participants:
+  - seat: p1
+    name: terminus-2
+    model_name: openrouter/openai/gpt-oss-120b
+    model_api_key_name: OPENROUTER_API_KEY
+  - seat: p2
+    name: terminus-2
+    model_name: openrouter/openai/gpt-oss-120b
+    model_api_key_name: OPENROUTER_API_KEY
+tasks:
+  - path: examples/tasks/hello-seats
