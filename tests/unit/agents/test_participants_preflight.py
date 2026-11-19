@@ -4,6 +4,7 @@ The roster is the one that showed the gap: an oracle in ``p1`` and a
 terminus-2 in ``p2`` whose model has no API key in the environment.
 """
 
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from harbor.agents.factory import AgentFactory
+from harbor.agents.nop import NopAgent
 from harbor.cli.jobs import _run_preflight
 from harbor.cli.main import app
 from harbor.job import Job
@@ -32,6 +34,19 @@ ROSTER = [
     {"seat": "p2", "name": "terminus-2", "model_name": "deepseek/deepseek-flash"},
 ]
 NO_KEY = "Participant for seat 'p2': terminus-2: no nonempty model API key selected"
+
+
+class FailingPreflightAgent(NopAgent):
+    """A harness whose own preflight fails, as one that is not installed."""
+
+    error: BaseException = RuntimeError("the harness is not installed")
+
+    @classmethod
+    def preflight(cls, kwargs=None, env=None) -> None:
+        raise cls.error
+
+
+FAILING = f"{__name__}:FailingPreflightAgent"
 
 
 def _participants() -> list[Participant]:
@@ -153,6 +168,31 @@ def test_every_failing_seat_is_named_in_one_error():
     )
     assert lines[1].startswith(NO_KEY)
     assert len(lines) == 2
+
+
+def test_a_seat_that_fails_another_way_does_not_hide_the_others():
+    roster = [Participant(seat="p1", import_path=FAILING), *_participants()[1:]]
+
+    with pytest.raises(ValueError) as error:
+        AgentFactory.run_participants_preflight(roster)
+
+    lines = str(error.value).splitlines()
+    assert lines[0] == (
+        "Participant for seat 'p1': RuntimeError: the harness is not installed"
+    )
+    assert lines[1].startswith(NO_KEY)
+    assert len(lines) == 2
+
+
+@pytest.mark.parametrize(
+    "interrupt", [KeyboardInterrupt, SystemExit, asyncio.CancelledError]
+)
+def test_an_interrupt_is_not_collected(monkeypatch, interrupt):
+    monkeypatch.setattr(FailingPreflightAgent, "error", interrupt())
+    roster = [Participant(seat="p1", import_path=FAILING), *_participants()[1:]]
+
+    with pytest.raises(interrupt):
+        AgentFactory.run_participants_preflight(roster)
 
 
 def test_skip_credential_checks_defers_only_the_credential_check():

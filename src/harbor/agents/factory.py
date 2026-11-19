@@ -231,21 +231,32 @@ class AgentFactory:
         """Run ``run_preflight`` for every participant of a seat task.
 
         A seat task runs its participants, not ``agent``, so they need the
-        checks ``agent`` gets. Every participant is checked before raising.
+        checks ``agent`` gets. Every participant is checked before raising,
+        whatever its check raises; an interrupt or a cancellation is raised
+        at once.
 
         Raises:
-            ValueError: One message with a line for each seat that failed.
+            ValueError: One message with a line for each seat that failed,
+                chained to the first seat's error.
         """
         problems = []
+        errors: list[Exception] = []
         for participant in participants:
             try:
                 cls.run_preflight(
                     participant, skip_credential_checks=skip_credential_checks
                 )
-            except (TypeError, ValueError) as exc:
-                problems.append(f"Participant for seat {participant.seat!r}: {exc}")
+            except Exception as exc:
+                detail = str(exc)
+                # A config error reads as its message; any other error also
+                # gets its type, as an import or harness failure needs it.
+                if not isinstance(exc, (TypeError, ValueError)):
+                    name = type(exc).__name__
+                    detail = f"{name}: {detail}" if detail else name
+                problems.append(f"Participant for seat {participant.seat!r}: {detail}")
+                errors.append(exc)
         if problems:
-            raise ValueError("\n".join(problems))
+            raise ValueError("\n".join(problems)) from errors[0]
 
     @classmethod
     def create_agent_from_name(
