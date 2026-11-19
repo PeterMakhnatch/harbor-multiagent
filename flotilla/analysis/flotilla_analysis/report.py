@@ -16,7 +16,7 @@ from typing import Any
 
 from flotilla_analysis import __version__, stats
 from flotilla_analysis.load import CONDITIONS, Job, Problem, Trial, load, load_evidence, load_trajectories
-from flotilla_analysis.play import FULL, WINDOW, Play, analyze
+from flotilla_analysis.play import ANNOUNCE_BEFORE, FULL, WINDOW, Play, analyze
 from flotilla_analysis.tasks import TaskInfo, own_briefing_score, task_info
 
 GroupKey = tuple[str, str]  # (label, team)
@@ -405,6 +405,82 @@ def play_section(groups: dict[GroupKey, list[Trial]], plays: dict[str, Play]) ->
     return {"conditions": condition_rows, "trials": trial_rows}
 
 
+def _tally(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
+    return {
+        "yes": sum(1 for r in rows if r[key] is True),
+        "no": sum(1 for r in rows if r[key] is False),
+        "unknown": sum(1 for r in rows if r[key] is None),
+    }
+
+
+def found_lost_section(groups: dict[GroupKey, list[Trial]], plays: dict[str, Play]) -> dict[str, Any]:
+    """Found, kept and lost answers in talk conditions (``play.found_lost``), per trial and per condition.
+
+    Won = found and final answer right; lost = found and final answer wrong. Data measures count over found
+    trials (the solver) and over trials with a teammate overwrite (the overwriter), split by won and lost.
+    """
+    trial_rows, condition_rows = [], []
+    for (label, team), trials in groups.items():
+        for condition in CONDITIONS:
+            members = [
+                t
+                for t in trials
+                if t.condition == condition and t.path in plays and plays[t.path].found_lost is not None
+            ]
+            if not members:
+                continue
+            rows = [
+                {
+                    "trial": t.trial_name,
+                    "path": t.path,
+                    "label": label,
+                    "team": team,
+                    "condition": condition,
+                    "instance": t.instance,
+                    **asdict(plays[t.path].found_lost),  # type: ignore[arg-type]
+                }
+                for t in members
+            ]
+            trial_rows += rows
+            found = [r for r in rows if r["found"] is True]
+            won = [r for r in found if r["final_right"] is True]
+            lost = [r for r in found if r["lost"] is True]
+            condition_rows.append(
+                {
+                    "label": label,
+                    "team": team,
+                    "condition": condition,
+                    "trials": len(rows),
+                    "found_known": sum(1 for r in rows if r["found"] is not None),
+                    "found": len(found),
+                    "final_right": sum(1 for r in rows if r["final_right"] is True),
+                    "won": len(won),
+                    "lost": len(lost),
+                    "teammate_overwrite": {
+                        "lost": sum(1 for r in lost if r["teammate_overwrite"]),
+                        "won": sum(1 for r in won if r["teammate_overwrite"]),
+                    },
+                    "solver_had_teammate_data": _tally(found, "solver_had_teammate_data"),
+                    "teammate_had_solver_data": {
+                        "lost": _tally(
+                            [r for r in lost if r["teammate_overwrite"]], "teammate_had_solver_data"
+                        ),
+                        "won": _tally(
+                            [r for r in won if r["teammate_overwrite"]], "teammate_had_solver_data"
+                        ),
+                    },
+                    "solver_announced": {
+                        "lost": _tally(lost, "solver_announced"),
+                        "won": _tally(won, "solver_announced"),
+                    },
+                    "later_by_solver": _sum(r["later_by_solver"] for r in found),
+                    "later_by_others": _sum(r["later_by_others"] for r in found),
+                    "trials_with_later_by_others": sum(1 for r in found if (r["later_by_others"] or 0) > 0),
+                }
+            )
+    return {"conditions": condition_rows, "trials": trial_rows}
+
+
 def seats_section(groups: dict[GroupKey, list[Trial]], plays: dict[str, Play]) -> dict[str, Any]:
     seat_rows, group_rows = [], []
     for (label, team), trials in groups.items():
@@ -496,6 +572,7 @@ def build(
     draws: int = stats.DRAWS,
     task_roots: list[Path] | None = None,
     keep_leaks: bool = False,
+    hook_dirs: list[Path] | None = None,
 ) -> dict[str, Any]:
     trials, jobs, problems = load(list(paths))
     roots = task_roots or []
@@ -512,7 +589,7 @@ def build(
         if not evidence.sources:
             problems.append(Problem(trial.path, "no world evidence (events, messages, score or world state)"))
             continue
-        infos[trial.path] = task_info(trial, evidence, roots)
+        infos[trial.path] = task_info(trial, evidence, roots, hook_dirs)
         plays[trial.path] = analyze(trial, evidence, load_trajectories(trial), infos[trial.path])
     leaks = {path: play.example_leak for path, play in plays.items()}
     return {
@@ -525,6 +602,7 @@ def build(
             "exact_sign_flip_max_nonzero": stats.EXACT_MAX_NONZERO,
             "seen_window_chars": WINDOW,
             "keep_example_leaks": keep_leaks,
+            "announce_before_s": ANNOUNCE_BEFORE,
         },
         "inputs": list(paths),
         "jobs": _jobs(jobs, trials),
@@ -534,10 +612,14 @@ def build(
         "cost": cost_section(groups),
         "play": play_section(groups, plays),
         "liar_design": liar_rows(groups, plays, seed, draws),
+        "found_lost": found_lost_section(groups, plays),
         "seats": seats_section(groups, plays),
         "own_briefing_check": briefing_check(trials, infos),
         "task_directories": dict(
             sorted(Counter("usable" if info.usable else str(info.problem) for info in infos.values()).items())
+        ),
+        "family_hooks": dict(
+            sorted(Counter(info.hooks_source or "none" for info in infos.values() if info.usable).items())
         ),
     }
 

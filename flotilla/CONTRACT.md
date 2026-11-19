@@ -169,6 +169,12 @@ Optional: `parse_text(text) -> dict | None` reads a private part back from its p
 oracle uses it to read a scripted peer). `score` must never raise, whatever JSON object it receives,
 and must never give credit for a wrong value.
 
+Optional analysis hooks (`flotilla-analyze` reads messages with them; they never change a score):
+`carries_own_data(text, private) -> bool` says whether a message text carries its sender's own
+information (`private` is the sender's private part), and is false for requests, including requests that
+quote a format example; `answer_in_text(text, key) -> bool` says whether a message text names the answer
+`key`. `schedule` implements both.
+
 Each family must also have tests (`flotilla/tests/`, run with `python3 -m pytest flotilla/tests`):
 generation is deterministic, `oracle_answer(all parts)` scores 1 on every instance, and
 `oracle_answer(one part)` scores clearly below 1 on most instances (the information is really split).

@@ -9,12 +9,15 @@ cd flotilla/analysis
 python3 -m flotilla_analysis ../../.flotilla-local/jobs                  # text
 python3 -m flotilla_analysis JOBS --format markdown --output report.md
 python3 -m flotilla_analysis JOBS --format json --seed 1                 # every number, per trial too
+python3 -m flotilla_analysis JOBS --tasks TASKS --family-hooks ../families  # text hooks for old task folders
 pip install .   # optional: installs the `flotilla-analyze` command
 ```
 
 `PATH` is a trial folder, a job folder, or any folder that holds job folders. The walk stops at the
 first folder whose `result.json` has `trial_name` (as Sextant does) and never follows directory links.
 `--tasks DIR` names where to find task folders when the path in `result.json` no longer exists.
+`--family-hooks DIR` (for example `flotilla/families`) supplies the family modules whose analysis hooks
+read message texts (see "Found and lost answers"); task folders built before a hook existed lack it.
 
 ## Inputs
 
@@ -26,11 +29,12 @@ Per trial: `result.json` (task name, `seat_results`, reward, `reward_valid`, tim
 submissions (the verifier wrote it after freezing the world; the JSONL artifacts were collected
 before verification); differences are reported per trial.
 
-The answer-dependent measures (clobbers, invalid answers, the acted-on proxy) also need the task
-folder: `environment/task.json` (answer key), `environment/family.py` and the seats' `SEAT_BRIEFING`
-in `environment/docker-compose.yaml`. A task folder is used only if its `task.json` names the same
-task and the family scorer gives the final answer the score the verifier recorded; otherwise those
-measures are `unknown`. The tool imports `family.py` from the task folder: run it on folders you built.
+The answer-dependent measures (clobbers, invalid answers, the acted-on proxy, found and lost answers)
+also need the task folder: `environment/task.json` (answer key), `environment/family.py` and the seats'
+`SEAT_BRIEFING` in `environment/docker-compose.yaml`. A task folder is used only if its `task.json` names
+the same task and the family scorer gives the final answer the score the verifier recorded; otherwise
+those measures are `unknown`. The tool imports `family.py` from the task folder (and, with
+`--family-hooks DIR`, `DIR/<family>.py`): run it on folders you built.
 
 ## Outputs and rules
 
@@ -101,6 +105,35 @@ the answer key, and for `schedule` its (day, start) must be one of `windows()`),
 answer was ever submitted, clobbers (a correct standing answer replaced by a wrong one), the last
 submitter, and the time of the first message (world seconds).
 
+**Found and lost answers** per talk trial (conditions `talk*`), and counted per label, team and
+condition (won = found and final answer right):
+
+- *found*: some submission scores full with the family scorer; *final_right*: the recorded final score is
+  full; *lost*: found and the final answer wrong. The *solver* is the seat of the first right submission
+  (world submission order).
+- *teammate_overwrite*: after the first right submission, another seat submitted a wrong answer (the
+  first such seat is the *overwriter*). *later_by_solver* and *later_by_others* count every submission
+  after the first right one.
+- *solver_had_teammate_data*: at or before the world time of its first right submission, the solver
+  fetched (a `deliver` event) a message from another seat that carries that seat's own information.
+  *teammate_had_solver_data*: the same for the overwriter and the solver's messages, before the overwrite.
+  "Carries its own information" is the family hook `carries_own_data(text, private)`, with the sender's
+  briefing as `private` (a scripted peer's posted part). A bare day-and-hour regex is not used: it also
+  matches format examples inside requests ("Please send Ben's hours (e.g. Mon 09,10)").
+- *solver_announced*: the solver sent a message that names the right answer (family hook
+  `answer_in_text(text, key)`) at most 10 s before its first right submission, or any time after it.
+  Seats often post "the slot is X, submitting now" and submit on their next turn: 3 to 6 s later in the
+  canonical runs, while proposals and candidate lists came 13 s or more before.
+
+For `schedule`, `carries_own_data` is true when the text names one of the sender's own attendees and a
+weekday with an hour ("Ana: Mon 09,10", "Ana:M9,15 T12", JSON calendars, or derived free windows
+"for Ana, Chen: Tue 13:00"), after leaving out format examples in parentheses or quotes after "e.g.",
+"like" or "format". A request names the receiver's attendees or nobody, so it does not count.
+`answer_in_text` reads weekday-and-hour mentions ("Thursday 14:00-16:00", "Thu 2pm") and written-out
+answer objects and scores them with the family scorer; a busy list "Thu 13,14" names only (Thu, 13).
+A measure that needs a hook the family module lacks is unknown, unless no message qualifies (then it
+is no). The report says which module supplied the hooks ("Family hooks").
+
 **Exploration** per trial and seat: requests to the world outside the documented API (anything but
 `GET /whoami`, `POST /submit`, `GET` and `POST /messages`), from world v2 `probe` events when the world
 logs them, else from curl commands in the keystrokes; and reconnaissance commands (environment: `env`,
@@ -121,6 +154,11 @@ requests by event kind (send, deliver, submit, whoami, denied, probe) and except
   and a seat that saves `GET /messages` to a file and parses it with a script uses the messages without
   seeing them (observed with GPT-OSS-120B in the 3-seat liar runs).
 - The acted-on proxy is generic and coarse; family-specific measures can replace it later.
+- The `schedule` text hooks are heuristics. On the canonical c1 talk trials they agree with a manual
+  reading (35 of 36 solvers had teammate data; 1 of 6 overwriters had the solver's data). They miss data
+  written with initials or without any attendee name ("A,C,K free: T11", "my free slots: Mon 11"), which
+  the narrow channel (c4) produced often, and they count a request that names the sender's own attendees
+  next to an unmarked example ("I have Ana; send yours as Mon 09,10"). *Received* means fetched, not read.
 - A task folder rebuilt with the same instances passes the score check even if other files (for
   example a newer world) changed; the world version then follows the folder unless the trial's own
   events record it. A `world_version` field in the world's `start` event would make it exact.

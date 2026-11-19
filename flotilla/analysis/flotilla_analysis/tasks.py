@@ -1,6 +1,7 @@
 """Task directories: the answer key, each seat's briefing and the family module.
 
-Only the answer-dependent measures need them (clobbers and the acted-on proxy). Task directories are
+Only the answer-dependent measures need them (clobbers, the acted-on proxy, found and lost answers;
+the last also uses the family's optional text hooks, ``HOOKS``). Task directories are
 git-ignored and are rebuilt with fresh seat tokens, so a directory is used for a trial only when it
 matches that trial: ``environment/task.json`` names the same family, variant, instance and condition,
 and the family scorer gives the final answer the score the verifier recorded.
@@ -35,10 +36,17 @@ class TaskInfo:
     briefings: dict[str, Any] = field(default_factory=dict)
     problem: str | None = None  # why the directory cannot be used; None when it can
     task_json: dict[str, Any] | None = None  # set when task.json names this trial's task
+    hooks: Any | None = None  # the module whose analysis hooks are used (HOOKS); scores use ``family``
+    hooks_source: str = ""  # "task folder", "--family-hooks <file>" or "" (none)
 
     @property
     def usable(self) -> bool:
         return self.problem is None
+
+
+# Optional analysis hooks of a family module (CONTRACT.md 7). They read message texts; scores never
+# depend on them.
+HOOKS = ("carries_own_data", "answer_in_text")
 
 
 def load_family(path: Path) -> Any:
@@ -100,7 +108,31 @@ def recorded_score(trial: Trial, evidence: Evidence | None) -> float | None:
     return trial.reward
 
 
-def task_info(trial: Trial, evidence: Evidence | None, roots: list[Path]) -> TaskInfo:
+def hook_module(family_name: str, family: Any, hook_dirs: list[Path]) -> tuple[Any | None, str]:
+    """The module whose analysis hooks a trial uses, and where it came from.
+
+    A ``<dir>/<family>.py`` from ``--family-hooks`` comes first, when its ``FAMILY`` is the trial's family:
+    task folders built before a hook existed carry an older copy of the family module. Otherwise the
+    task folder's own ``family.py``. Scores always come from the task folder's module.
+    """
+    for directory in hook_dirs:
+        path = directory / f"{family_name}.py"
+        if not path.is_file():
+            continue
+        try:
+            module = load_family(path)
+        except Exception:  # noqa: BLE001 - a broken hook module is not used
+            continue
+        if getattr(module, "FAMILY", None) == family_name:
+            return module, f"--family-hooks {path.name}"
+    if any(callable(getattr(family, name, None)) for name in HOOKS):
+        return family, "task folder"
+    return None, ""
+
+
+def task_info(
+    trial: Trial, evidence: Evidence | None, roots: list[Path], hook_dirs: list[Path] | None = None
+) -> TaskInfo:
     directory = find_task_dir(trial, roots)
     if directory is None:
         return TaskInfo(None, problem="task directory not found")
@@ -124,7 +156,16 @@ def task_info(trial: Trial, evidence: Evidence | None, roots: list[Path]) -> Tas
         return TaskInfo(
             directory, problem=f"cannot read seat briefings ({type(exc).__name__})", task_json=task
         )
-    info = TaskInfo(directory, family, task["answer_key"], briefings, task_json=task)
+    hooks, hooks_source = hook_module(trial.family, family, hook_dirs or [])
+    info = TaskInfo(
+        directory,
+        family,
+        task["answer_key"],
+        briefings,
+        task_json=task,
+        hooks=hooks,
+        hooks_source=hooks_source,
+    )
     known, answer = final_answer(evidence)
     score = recorded_score(trial, evidence)
     if not known or score is None:
@@ -243,3 +284,49 @@ def score_against(info: TaskInfo, answer: Any, key: Any) -> float | None:
         return float(family.score(answer, key)["score"])
     except Exception:  # noqa: BLE001
         return None
+
+
+def seat_private(info: TaskInfo, seat: str) -> Any | None:
+    """A seat's own private information: its briefing, or the ``part`` that a scripted peer posts (its
+    briefing also holds the script and the text it sends)."""
+    briefing = info.briefings.get(seat)
+    if isinstance(briefing, dict) and "script" in briefing and "part" in briefing:
+        return briefing["part"]
+    return briefing
+
+
+def _hook(info: TaskInfo, name: str) -> tuple[Any | None, str]:
+    if not info.usable:
+        return None, info.problem or "task directory unusable"
+    hook = getattr(info.hooks, name, None) if info.hooks is not None else None
+    if not callable(hook):
+        family = getattr(info.family, "FAMILY", None) or (info.task_json or {}).get("family") or "task's"
+        return None, f"the {family} family module has no {name} hook (see --family-hooks)"
+    return hook, ""
+
+
+def carries_own_data(info: TaskInfo, sender: str, text: str) -> tuple[bool | None, str]:
+    """Whether a message carries its sender's own information (the family's ``carries_own_data(text,
+    private)``), with the reason when unknown."""
+    hook, why = _hook(info, "carries_own_data")
+    if hook is None:
+        return None, why
+    private = seat_private(info, sender)
+    if private is None:
+        return None, f"no briefing for seat {sender}"
+    try:
+        return bool(hook(text, private)), ""
+    except Exception as exc:  # noqa: BLE001
+        return None, f"carries_own_data failed ({type(exc).__name__})"
+
+
+def answer_in_text(info: TaskInfo, text: str) -> tuple[bool | None, str]:
+    """Whether a message names the answer key (the family's ``answer_in_text(text, key)``), with the
+    reason when unknown."""
+    hook, why = _hook(info, "answer_in_text")
+    if hook is None:
+        return None, why
+    try:
+        return bool(hook(text, info.answer_key)), ""
+    except Exception as exc:  # noqa: BLE001
+        return None, f"answer_in_text failed ({type(exc).__name__})"

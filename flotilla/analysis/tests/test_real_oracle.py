@@ -54,6 +54,14 @@ class RealOracleCheck(unittest.TestCase):
             report["own_briefing_check"], [{"label": "schedule", "seat_briefings": 4, "sufficient_alone": 0}]
         )
         self.assertEqual({r["world_version"] for r in report["play"]["trials"]}, {"1"})
+        # the rebuilt folders carry the family's analysis hooks; each solver fetched its teammate's
+        # FLOTILLA-BRIEFING before submitting, and the oracle never announces its answer
+        self.assertEqual(report["family_hooks"], {"task folder": 6})
+        (found,) = report["found_lost"]["conditions"]
+        self.assertEqual((found["trials"], found["found"], found["won"], found["lost"]), (2, 2, 2, 0))
+        self.assertEqual(found["solver_had_teammate_data"], {"yes": 2, "no": 0, "unknown": 0})
+        self.assertEqual(found["solver_announced"]["won"], {"yes": 0, "no": 2, "unknown": 0})
+        self.assertEqual((found["later_by_solver"], found["later_by_others"]), (0, 2))
 
     def test_without_task_folders(self):
         report = build([str(DATA)])
@@ -62,3 +70,5 @@ class RealOracleCheck(unittest.TestCase):
         self.assertEqual(play["talk"]["acted_on"]["unknown"], 2)  # correct, but sufficiency is unknown
         self.assertEqual(play["silent"]["acted_on"]["no"], 2)  # wrong answers need no task folder
         self.assertEqual(play["silent"]["clobber_known_trials"], 0)
+        (found,) = report["found_lost"]["conditions"]  # found needs the answer key: unknown
+        self.assertEqual((found["trials"], found["found_known"], found["found"]), (2, 0, 0))
