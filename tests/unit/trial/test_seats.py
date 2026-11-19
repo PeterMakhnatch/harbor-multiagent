@@ -10,6 +10,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 
@@ -154,11 +155,13 @@ async def compose(command: list[str], **_: Any) -> ExecResult:
     return ExecResult(stdout="", return_code=0)
 
 
-async def _seats_trial(config: TrialConfig) -> SeatsTrial:
+async def _seats_trial(
+    config: TrialConfig, *, trial_id: UUID | None = None
+) -> SeatsTrial:
     EVENTS.clear()
     WAITERS.clear()
     RELEASE.clear()
-    trial = await Trial.create(config)
+    trial = await Trial.create(config, trial_id=trial_id)
     assert isinstance(trial, SeatsTrial)
     project = trial.agent_environment
     project._run_docker_compose_command = AsyncMock(side_effect=compose)
@@ -192,6 +195,26 @@ async def test_trial_create_routes_seat_tasks(tmp_path: Path):
     assert trial.agent is trial.seats[0].agent
     assert trial.seats[2].under_test is False
     assert trial.seats[0].paths.agent_dir == trial.paths.trial_dir / "seats/maya/agent"
+
+
+async def test_seat_trial_retains_reserved_id_in_result(tmp_path: Path):
+    reserved_id = UUID(int=1)
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        ),
+        trial_id=reserved_id,
+    )
+
+    result = await trial.run()
+
+    assert result.exception_info is None
+    assert result.id == reserved_id
+    saved_result = TrialResult.model_validate_json(trial.paths.result_path.read_text())
+    assert saved_result.id == reserved_id
 
 
 async def test_trial_create_keeps_ordinary_tasks_single_step(tmp_path: Path):

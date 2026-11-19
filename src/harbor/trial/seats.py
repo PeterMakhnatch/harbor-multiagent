@@ -16,6 +16,7 @@ import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, override
+from uuid import UUID
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.factory import AgentFactory
@@ -115,11 +116,15 @@ class SeatsTrial(SingleStepTrial):
         *,
         _task: Task | None = None,
         _task_download_result: TaskDownloadResult,
+        _trial_id: UUID | None = None,
     ):
         if _task is not None:
             check_launch(config, _task)
         super().__init__(
-            config, _task=_task, _task_download_result=_task_download_result
+            config,
+            _task=_task,
+            _task_download_result=_task_download_result,
+            _trial_id=_trial_id,
         )
 
     @override
