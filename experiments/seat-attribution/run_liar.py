@@ -22,7 +22,8 @@ from harbor.models.trial.config import (
 )
 from harbor.trial.trial import Trial
 
-TASK = Path(__file__).parent / "tasks/liar-scout"
+import os
+TASK = Path(os.environ.get("SEAT_TASK", Path(__file__).parent / "tasks/liar-scout"))
 ROOT = Path("/tmp/liar-scout-trials")
 MODEL = "openrouter/openai/gpt-oss-120b"
 

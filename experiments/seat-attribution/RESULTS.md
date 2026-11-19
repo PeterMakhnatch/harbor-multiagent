@@ -121,3 +121,22 @@ optional and unpriced in this task, so whether it happens is a coin the
 model flips at plan time; when it does not happen, a lying partner decides
 the score. A priced or mandatory verify step is the obvious next arm.
 No episode bypassed the scout (exactly 1 true-code read each).
+
+### Mandate arm
+
+Same lie episodes with one instruction change: "You MUST check the claimed
+code with /verify before answering, and only submit a code for which it
+returns match."
+
+| Episode | Verify calls | Answered | Reward | Listener cost |
+|---|---:|---|---:|---:|
+| lie0 + mandate | 111 | no | 0.0 | $0.00457 |
+| lie1 + mandate | 0 | no | 0.0 | $0.00089 |
+
+The mandate prevented every wrong answer and produced no right ones.
+One listener re-verified the same false claim 111 times inside its poll
+loop (10x the base cost); the other never verified and never answered.
+A prompt mandate converts blind trust into abstention; it does not create
+the recovery behavior (report the mismatch, ask for a repost, escalate)
+that a team actually needs. That behavior has to be designed into the
+task protocol, not the instruction tone.
