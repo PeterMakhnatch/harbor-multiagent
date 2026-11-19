@@ -69,9 +69,11 @@ The sha256 of each stored JSONL line is the published canonical byte check. The 
 
 `integrity_ok` means the published files agree with the manifest. It does not mean every case has a trial. `observations_complete` is true only when both arms are present for every registered case. Read `full_missing` and `first8_missing` before you read a rate.
 
-## Exploratory example
+## Final cohort
 
-These numbers come from one partial public bundle. They are not the sealed result. Run the SQL again on the final bundle.
+The [sealed result](cohort-results.md) contains all 200 registered pairs. The SQL reproduced all 200 first8 decisions. The 185 null decisions and 15 returned choices are observations, not missing cells.
+
+## Worked example
 
 Case `calendar:2-1` has a full action of 245. That action is in the published optimal set and the published feasible set. The native first8 action is an explicit null.
 
@@ -85,16 +87,3 @@ The full reports are longer than 8 starts. The check keeps the first 8 starts of
 
 Those five prefixes have no start in common. The prediction is null. It matches the native first8 null. The same prefixes equal the native first8 reports. A global first-8 cut would not build these five lists.
 
-On that same partial bundle, the summary was:
-
-| stratum | registered | full acquired | first8 acquired | distinct UUIDs | full null | first8 null | full official | first8 official | full feasible | first8 feasible | truncation agree | truncation missing |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 2 | 40 | 23 | 23 | 46 | 0 | 22 | 23 | 1 | 23 | 1 | 23 | 17 |
-| 3 | 60 | 23 | 23 | 46 | 0 | 22 | 23 | 1 | 23 | 1 | 23 | 37 |
-| 4 | 60 | 23 | 23 | 46 | 0 | 22 | 23 | 1 | 23 | 1 | 23 | 37 |
-| 5 | 40 | 23 | 23 | 46 | 0 | 19 | 23 | 4 | 23 | 4 | 23 | 17 |
-| all | 200 | 92 | 92 | 184 | 0 | 85 | 92 | 7 | 92 | 7 | 92 | 108 |
-
-Official and feasible counts are returned choices. They are not rates over 200. Full returned choices were 92. First8 returned choices were 7. The other 85 acquired first8 trials were explicit nulls.
-
-File identity was clean on that run: 184 distinct trial ids, no duplicate id, no extra key, and each full decision line matched `sources.jsonl`. `integrity_ok` was true. `observations_complete` was false because 108 cases in each arm were still missing. Do not replace this table with a sealed claim until the final bundle is checked.
