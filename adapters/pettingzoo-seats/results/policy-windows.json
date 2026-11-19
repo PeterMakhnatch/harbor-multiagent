@@ -1,0 +1,263 @@
+{
+  "attempted": 6,
+  "cells": [
+    {
+      "first_cycle_action": 1,
+      "id": "ascending-w0",
+      "native_trial_id": "294a0ecf-06da-4d77-9178-3cca3658bad9",
+      "p0_actions": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2
+      ],
+      "payoffs": {
+        "p0": 9,
+        "p1": -9
+      },
+      "policy_input_bytes": {
+        "p0": 1212,
+        "p1": 2503
+      },
+      "predictor_depth": 0,
+      "verified_decisions": 24,
+      "world_steps": 12
+    },
+    {
+      "first_cycle_action": 1,
+      "id": "ascending-w1",
+      "native_trial_id": "17450cbd-7450-4f5b-8862-476442e2875f",
+      "p0_actions": [
+        1,
+        2,
+        1,
+        0,
+        1,
+        2,
+        1,
+        0,
+        1,
+        2,
+        1,
+        0
+      ],
+      "payoffs": {
+        "p0": 12,
+        "p1": -12
+      },
+      "policy_input_bytes": {
+        "p0": 1883,
+        "p1": 2503
+      },
+      "predictor_depth": 1,
+      "verified_decisions": 24,
+      "world_steps": 12
+    },
+    {
+      "first_cycle_action": 1,
+      "id": "ascending-w4",
+      "native_trial_id": "372cca0f-6691-411c-9991-d6dff93222f2",
+      "p0_actions": [
+        1,
+        2,
+        1,
+        0,
+        1,
+        2,
+        1,
+        0,
+        1,
+        2,
+        1,
+        0
+      ],
+      "payoffs": {
+        "p0": 12,
+        "p1": -12
+      },
+      "policy_input_bytes": {
+        "p0": 3557,
+        "p1": 2503
+      },
+      "predictor_depth": 4,
+      "verified_decisions": 24,
+      "world_steps": 12
+    },
+    {
+      "first_cycle_action": 2,
+      "id": "mirrored-w0",
+      "native_trial_id": "132335c8-74ed-4090-b7e5-3d9da3963d08",
+      "p0_actions": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2
+      ],
+      "payoffs": {
+        "p0": 9,
+        "p1": -9
+      },
+      "policy_input_bytes": {
+        "p0": 1212,
+        "p1": 2503
+      },
+      "predictor_depth": 0,
+      "verified_decisions": 24,
+      "world_steps": 12
+    },
+    {
+      "first_cycle_action": 2,
+      "id": "mirrored-w1",
+      "native_trial_id": "979f7c86-7d6b-4d3b-b9df-104d666d135f",
+      "p0_actions": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        0,
+        1,
+        2,
+        1,
+        0,
+        1,
+        2
+      ],
+      "payoffs": {
+        "p0": 11,
+        "p1": -11
+      },
+      "policy_input_bytes": {
+        "p0": 1883,
+        "p1": 2503
+      },
+      "predictor_depth": 1,
+      "verified_decisions": 24,
+      "world_steps": 12
+    },
+    {
+      "first_cycle_action": 2,
+      "id": "mirrored-w4",
+      "native_trial_id": "bbf455df-cfa0-49ee-b89f-1010b483136d",
+      "p0_actions": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        0,
+        1,
+        2,
+        1,
+        0,
+        1,
+        2
+      ],
+      "payoffs": {
+        "p0": 11,
+        "p1": -11
+      },
+      "policy_input_bytes": {
+        "p0": 3557,
+        "p1": 2503
+      },
+      "predictor_depth": 4,
+      "verified_decisions": 24,
+      "world_steps": 12
+    }
+  ],
+  "current_only_fit_ascending_w1": {
+    "additional_minimum_errors": 6,
+    "counts": {
+      "cases": 1,
+      "eligible": 24,
+      "episodes": 2,
+      "excluded_missing": 0,
+      "excluded_unbound": 0,
+      "frames": 24,
+      "trials": 1
+    },
+    "full": {
+      "classes": 13,
+      "conflicting_classes": 0,
+      "maximum_matches": 24,
+      "minimum_errors": 0,
+      "repeated_classes": 8,
+      "repeated_frames": 19
+    },
+    "selected": {
+      "classes": 8,
+      "conflicting_classes": 2,
+      "maximum_matches": 18,
+      "minimum_errors": 6,
+      "repeated_classes": 6,
+      "repeated_frames": 22
+    }
+  },
+  "native_comparisons": [
+    {
+      "boundary_step": 4,
+      "id": "ascending-w0-vs-ascending-w1",
+      "kind": "team-alignment",
+      "matched_steps": 3,
+      "report_sha256": "74be2d7461031b4ab7035f01631ba138290c6a635bf2d8d0dad713e36c78dc8a",
+      "status": "step_changed"
+    },
+    {
+      "boundary_step": null,
+      "id": "ascending-w1-vs-ascending-w4",
+      "kind": "team-alignment",
+      "matched_steps": 12,
+      "report_sha256": "0647b76c38ee1d2d41b2d9fc57055f9d013bd55a70075d622d2cd49f1fbcafd9",
+      "status": "matched"
+    },
+    {
+      "boundary_step": 6,
+      "id": "mirrored-w0-vs-mirrored-w1",
+      "kind": "team-alignment",
+      "matched_steps": 5,
+      "report_sha256": "63884491a99171f2d4199765aa06093b5ddc5974eb8e98fce2f54a79c65122ec",
+      "status": "step_changed"
+    },
+    {
+      "boundary_step": null,
+      "id": "mirrored-w1-vs-mirrored-w4",
+      "kind": "team-alignment",
+      "matched_steps": 12,
+      "report_sha256": "2920fd3ff9a6b74a35071c831835aee31d476f30f76c37bcde7888848b02f880",
+      "status": "matched"
+    }
+  ],
+  "negative_controls": {
+    "changed_context_digest": {
+      "exit": 2,
+      "policy_file_published": false
+    },
+    "missing_role_receipt": {
+      "exit": 2,
+      "policy_file_published": false
+    }
+  },
+  "registered": 6,
+  "schema": "seatlab.pz-native-window-results/v1",
+  "study_sha256": "37cd9b1d87581675a52244dbf691553f6b747c7cca5ca56b2d299d9af6b974d2",
+  "valid": 6,
+  "verified_decisions": 144,
+  "world_steps": 72
+}

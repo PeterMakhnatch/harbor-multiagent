@@ -1,0 +1,674 @@
+{
+  "cells": [
+    {
+      "id": "s5-plain-plain",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "bf24f9d2-809e-4260-afa6-25b2bed13104",
+        "reason": null,
+        "returns": {
+          "p0": -28.849108548926253,
+          "p1": -28.849108548926253
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 5,
+      "team": "plain-plain"
+    },
+    {
+      "id": "s5-rotate-rotate",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "4635d563-1286-4330-9eb4-354520267212",
+        "reason": null,
+        "returns": {
+          "p0": -28.849108548926253,
+          "p1": -28.849108548926253
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 5,
+      "team": "rotate-rotate"
+    },
+    {
+      "id": "s5-plain-rotate",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "ab65b7c3-fa05-4409-bf1c-37aba610f925",
+        "reason": null,
+        "returns": {
+          "p0": -89.13456048497717,
+          "p1": -89.13456048497717
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 5,
+      "team": "plain-rotate"
+    },
+    {
+      "id": "s5-rotate-plain",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "eccecc25-1e94-4af0-b421-e8404c1b4134",
+        "reason": null,
+        "returns": {
+          "p0": -46.60338851081543,
+          "p1": -46.60338851081543
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 5,
+      "team": "rotate-plain"
+    },
+    {
+      "id": "s5-plain-blind",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "b4b0466a-3227-48c8-a9f6-847bc6cdf0af",
+        "reason": null,
+        "returns": {
+          "p0": -46.60338851081543,
+          "p1": -46.60338851081543
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 5,
+      "team": "plain-blind"
+    },
+    {
+      "id": "s19-plain-plain",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "e39adb4f-8c6f-4eb7-b5ab-4eed2f9505df",
+        "reason": null,
+        "returns": {
+          "p0": -5.029856308652303,
+          "p1": -5.029856308652303
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 19,
+      "team": "plain-plain"
+    },
+    {
+      "id": "s19-rotate-rotate",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "ee11a6bf-0984-4aaf-beef-5b291081daee",
+        "reason": null,
+        "returns": {
+          "p0": -5.029856308652303,
+          "p1": -5.029856308652303
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 19,
+      "team": "rotate-rotate"
+    },
+    {
+      "id": "s19-plain-rotate",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "89699933-f169-480e-aebc-fa07f7ba2708",
+        "reason": null,
+        "returns": {
+          "p0": -10.888132270540138,
+          "p1": -10.888132270540138
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 19,
+      "team": "plain-rotate"
+    },
+    {
+      "id": "s19-rotate-plain",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "be9963cc-4b43-46b1-b25f-6d4a284ac724",
+        "reason": null,
+        "returns": {
+          "p0": -13.08163361571519,
+          "p1": -13.08163361571519
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 19,
+      "team": "rotate-plain"
+    },
+    {
+      "id": "s19-plain-blind",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "19d1c0db-6663-4454-89f7-5541f07581ff",
+        "reason": null,
+        "returns": {
+          "p0": -10.888132270540138,
+          "p1": -10.888132270540138
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 19,
+      "team": "plain-blind"
+    },
+    {
+      "id": "s73-plain-plain",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "72ba142e-ac6b-4dd2-a045-98d08fb2b389",
+        "reason": null,
+        "returns": {
+          "p0": -1.8948673934316693,
+          "p1": -1.8948673934316693
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 73,
+      "team": "plain-plain"
+    },
+    {
+      "id": "s73-rotate-rotate",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "dd8461f2-4610-4125-a119-ac80332e8ce4",
+        "reason": null,
+        "returns": {
+          "p0": -1.8948673934316693,
+          "p1": -1.8948673934316693
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 73,
+      "team": "rotate-rotate"
+    },
+    {
+      "id": "s73-plain-rotate",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "fdd6a4e1-8c80-4fc0-b111-badc0948dd79",
+        "reason": null,
+        "returns": {
+          "p0": -20.246869186478342,
+          "p1": -20.246869186478342
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 73,
+      "team": "plain-rotate"
+    },
+    {
+      "id": "s73-rotate-plain",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "38d228e4-a7db-44a5-81af-607d5c9099b0",
+        "reason": null,
+        "returns": {
+          "p0": -20.090921578445947,
+          "p1": -20.090921578445947
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 73,
+      "team": "rotate-plain"
+    },
+    {
+      "id": "s73-plain-blind",
+      "native": {
+        "decisions": 40,
+        "exit_code": 0,
+        "native_trial_id": "27088add-c3a1-4d7c-bc60-5e24e3525646",
+        "reason": null,
+        "returns": {
+          "p0": -20.090921578445947,
+          "p1": -20.090921578445947
+        },
+        "status": "complete",
+        "terminated": {
+          "p0": false,
+          "p1": false
+        },
+        "truncated": {
+          "p0": true,
+          "p1": true
+        },
+        "world_steps": 20
+      },
+      "seed": 73,
+      "team": "plain-blind"
+    }
+  ],
+  "contrasts": [
+    {
+      "changed_listener_actions": 0,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": null,
+      "first_changed_listener_channel": 2,
+      "first_changed_listener_physics": null,
+      "first_changed_speaker_action": 1,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": true,
+        "max_abs_difference": 0.0
+      },
+      "listener_return": {
+        "abs_difference": 0.0,
+        "baseline": -28.849108548926253,
+        "team": -28.849108548926253
+      },
+      "seed": 5,
+      "team": "rotate-rotate"
+    },
+    {
+      "changed_listener_actions": 18,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 2,
+      "first_changed_listener_channel": null,
+      "first_changed_listener_physics": 3,
+      "first_changed_speaker_action": null,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.6592959174886346
+      },
+      "listener_return": {
+        "abs_difference": 60.28545193605092,
+        "baseline": -28.849108548926253,
+        "team": -89.13456048497717
+      },
+      "seed": 5,
+      "team": "plain-rotate"
+    },
+    {
+      "changed_listener_actions": 12,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 2,
+      "first_changed_listener_channel": 2,
+      "first_changed_listener_physics": 3,
+      "first_changed_speaker_action": 1,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.0565991401672363
+      },
+      "listener_return": {
+        "abs_difference": 17.754279961889175,
+        "baseline": -28.849108548926253,
+        "team": -46.60338851081543
+      },
+      "seed": 5,
+      "team": "rotate-plain"
+    },
+    {
+      "changed_listener_actions": 12,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 2,
+      "first_changed_listener_channel": null,
+      "first_changed_listener_physics": 3,
+      "first_changed_speaker_action": null,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.0565991401672363
+      },
+      "listener_return": {
+        "abs_difference": 17.754279961889175,
+        "baseline": -28.849108548926253,
+        "team": -46.60338851081543
+      },
+      "seed": 5,
+      "team": "plain-blind"
+    },
+    {
+      "changed_listener_actions": 0,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": null,
+      "first_changed_listener_channel": 2,
+      "first_changed_listener_physics": null,
+      "first_changed_speaker_action": 1,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": true,
+        "max_abs_difference": 0.0
+      },
+      "listener_return": {
+        "abs_difference": 0.0,
+        "baseline": -5.029856308652303,
+        "team": -5.029856308652303
+      },
+      "seed": 19,
+      "team": "rotate-rotate"
+    },
+    {
+      "changed_listener_actions": 12,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 4,
+      "first_changed_listener_channel": null,
+      "first_changed_listener_physics": 5,
+      "first_changed_speaker_action": null,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.0284423828125
+      },
+      "listener_return": {
+        "abs_difference": 5.858275961887835,
+        "baseline": -5.029856308652303,
+        "team": -10.888132270540138
+      },
+      "seed": 19,
+      "team": "plain-rotate"
+    },
+    {
+      "changed_listener_actions": 14,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 4,
+      "first_changed_listener_channel": 2,
+      "first_changed_listener_physics": 5,
+      "first_changed_speaker_action": 1,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.3280520141124725
+      },
+      "listener_return": {
+        "abs_difference": 8.051777307062885,
+        "baseline": -5.029856308652303,
+        "team": -13.08163361571519
+      },
+      "seed": 19,
+      "team": "rotate-plain"
+    },
+    {
+      "changed_listener_actions": 12,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 4,
+      "first_changed_listener_channel": null,
+      "first_changed_listener_physics": 5,
+      "first_changed_speaker_action": null,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.0284423828125
+      },
+      "listener_return": {
+        "abs_difference": 5.858275961887835,
+        "baseline": -5.029856308652303,
+        "team": -10.888132270540138
+      },
+      "seed": 19,
+      "team": "plain-blind"
+    },
+    {
+      "changed_listener_actions": 0,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": null,
+      "first_changed_listener_channel": 2,
+      "first_changed_listener_physics": null,
+      "first_changed_speaker_action": 1,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": true,
+        "max_abs_difference": 0.0
+      },
+      "listener_return": {
+        "abs_difference": 0.0,
+        "baseline": -1.8948673934316693,
+        "team": -1.8948673934316693
+      },
+      "seed": 73,
+      "team": "rotate-rotate"
+    },
+    {
+      "changed_listener_actions": 11,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 3,
+      "first_changed_listener_channel": null,
+      "first_changed_listener_physics": 4,
+      "first_changed_speaker_action": null,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.271855965256691
+      },
+      "listener_return": {
+        "abs_difference": 18.35200179304667,
+        "baseline": -1.8948673934316693,
+        "team": -20.246869186478342
+      },
+      "seed": 73,
+      "team": "plain-rotate"
+    },
+    {
+      "changed_listener_actions": 17,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 3,
+      "first_changed_listener_channel": 2,
+      "first_changed_listener_physics": 4,
+      "first_changed_speaker_action": 1,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.334479659795761
+      },
+      "listener_return": {
+        "abs_difference": 18.196054185014276,
+        "baseline": -1.8948673934316693,
+        "team": -20.090921578445947
+      },
+      "seed": 73,
+      "team": "rotate-plain"
+    },
+    {
+      "changed_listener_actions": 17,
+      "compared_listener_actions": 20,
+      "first_changed_listener_action": 3,
+      "first_changed_listener_channel": null,
+      "first_changed_listener_physics": 4,
+      "first_changed_speaker_action": null,
+      "listener_physics": {
+        "channel_components_excluded": 60,
+        "components_compared": 160,
+        "matched": false,
+        "max_abs_difference": 1.334479659795761
+      },
+      "listener_return": {
+        "abs_difference": 18.196054185014276,
+        "baseline": -1.8948673934316693,
+        "team": -20.090921578445947
+      },
+      "seed": 73,
+      "team": "plain-blind"
+    }
+  ],
+  "denominators": {
+    "agreed_cells": 15,
+    "compared_cells": 15,
+    "compared_decisions": 600,
+    "compared_observation_components": 4200,
+    "compared_payoffs": 30,
+    "compared_world_steps": 300,
+    "contrasts": {
+      "independent_measured": 12,
+      "native_measured": 12,
+      "registered": 12
+    },
+    "disagreed_cells": 0,
+    "independent": {
+      "failed": 0,
+      "ok": 15
+    },
+    "max_abs_observation_difference": 0.0,
+    "max_abs_payoff_difference": 0.0,
+    "native": {
+      "complete": 15,
+      "invalid": 0,
+      "unattempted": 0,
+      "unregistered": 0
+    },
+    "registered_cells": 15
+  },
+  "engine": {
+    "available": true,
+    "kwargs": {
+      "continuous_actions": false,
+      "max_cycles": 20
+    },
+    "mpe2": "1.1.1",
+    "pettingzoo": "1.26.1",
+    "pins_ok": true,
+    "reason": null,
+    "source": "mpe2.simple_speaker_listener_v4:parallel_env"
+  },
+  "schema": "seatlab.pz-native-communication-results/v1",
+  "study_sha256": "def6e88a9717b69467ccb29a1fcaaf50769fa357a8168416e13379eafa1f9482"
+}

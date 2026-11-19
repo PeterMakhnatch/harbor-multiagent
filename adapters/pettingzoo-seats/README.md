@@ -4,6 +4,8 @@ This adapter runs installed, trusted, discrete PettingZoo games on unmodified Ol
 
 Start with the [measured results and offline verification](results.md). The [smaller contribution on the personal fork](https://github.com/PeterMakhnatch/harbor-multiagent/pull/22) contains only the reusable task generator, runtime, presets and component tests.
 
+Two additional studies use the same native adapter. [Private policy history](window-experiment/results.md) measures the bytes each executable received. [Cooperative communication](communication-experiment/results.md) separates a changed signal from a changed listener move.
+
 Registered protocols: [classic games](protocol.md), [three-role particles](particle-protocol.md), [external programs](program-protocol.md), [source-only branches](branch-protocol.md), [private policy history](window-experiment/protocol.md) and [cooperative communication](communication-experiment/protocol.md).
 
 ## Lane 1. Run one named cell
