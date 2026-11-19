@@ -25,7 +25,9 @@ from harbor.models.trial.config import (
     TaskConfig,
     TrialConfig,
 )
+from harbor.server.models import SubmitRequest
 from harbor.server.resolution import resolve_config, validate_trials
+from tests.unit.test_server import ControlledExecutor, make_service, until, until_state
 
 # Native logins live in the home directory; keep the checks to the environment.
 pytestmark = pytest.mark.usefixtures("isolated_home")
@@ -490,3 +492,31 @@ async def test_server_checks_only_the_agent_of_a_config_without_participants(
     await resolve_config(config)
 
     assert checked == [(None, "nop", False)] * 2
+
+
+async def test_server_runs_participants_with_the_env_they_were_submitted_with(
+    tmp_path: Path,
+):
+    secret = "per-job-secret-not-in-server-environment"
+    job = {
+        "tasks": [{"path": str(_seat_task(tmp_path))}],
+        "participants": [ROSTER[0], {**ROSTER[1], "env": {"DEEPSEEK_API_KEY": secret}}],
+        "verifier": {"disable": True},
+    }
+    executor = ControlledExecutor()
+    service = make_service(tmp_path / "server", executor=executor)
+
+    async with service.running():
+        await service.submit(SubmitRequest.model_validate({"config": job}))
+        await until(lambda: executor.started)
+        rollout_id = executor.started[0]
+        participants = executor.results[rollout_id].config.participants
+        assert participants[1].env == {"DEEPSEEK_API_KEY": secret}
+
+        executor.gates[rollout_id].set()
+        await until_state(lambda: service.get_rollout(rollout_id), "finished")
+        stored = service.database.row("internal_rollout", rollout_id)
+        assert secret in json.dumps(stored["runtime_env"])
+        assert secret not in json.dumps(
+            {name: stored[name] for name in ("config", "lock")}
+        )
