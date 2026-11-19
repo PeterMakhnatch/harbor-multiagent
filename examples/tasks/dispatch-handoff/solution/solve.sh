@@ -2,6 +2,7 @@
 set -euo pipefail
 
 exec python3 - <<'PY'
+import hashlib
 import json
 import time
 from urllib.error import HTTPError
@@ -43,11 +44,17 @@ elif role == "dispatch":
 else:
     raise ValueError(f"Unexpected seat role: {role!r}")
 
+view_bytes = json.dumps(
+    view, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=True
+).encode("utf-8")
 request = Request(
     f"{base}/submit",
     method="POST",
     headers={"Content-Type": "application/json"},
     data=json.dumps({"rows": rows}, separators=(",", ":")).encode("utf-8"),
+)
+request.add_unredirected_header(
+    "X-SeatLab-View-SHA256", hashlib.sha256(view_bytes).hexdigest()
 )
 with http.open(request, timeout=5) as response:
     if json.load(response) != {"accepted": True}:

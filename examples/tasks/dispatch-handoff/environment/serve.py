@@ -3,6 +3,7 @@
 import json
 import logging
 import socket
+from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -37,13 +38,34 @@ class WorldServer(ThreadingHTTPServer):
         self.world = world
         self.lock = Lock()
         self.published = False
+        # None marks an accepted legacy submission, not an unsubmitted role.
+        self._accepted_acks: dict[Role, str | None] = {}
         super().__init__(("0.0.0.0", PORT), Handler)
 
-    def submit(self, role: Role, body: object) -> object:
+    def submit(self, role: Role, body: object, ack_sha256: str | None = None) -> object:
         with self.lock:
+            if ack_sha256 is not None:
+                canonical = json.dumps(
+                    self.world.view(role),
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=True,
+                    allow_nan=False,
+                ).encode("utf-8")
+                if ack_sha256 != sha256(canonical).hexdigest():
+                    raise ValueError("Acknowledgment does not match the current view")
+            if role in self._accepted_acks and self._accepted_acks[role] != ack_sha256:
+                raise ValueError("Cannot change an accepted acknowledgment")
             result = self.world.submit(role, body)
+            self._accepted_acks.setdefault(role, ack_sha256)
             if role == "dispatch" and not self.published:
-                _publish(self.world.evidence())
+                evidence = self.world.evidence()
+                evidence["observation_receipts"] = {
+                    seat: {"ack_sha256": accepted}
+                    for seat, accepted in self._accepted_acks.items()
+                    if accepted is not None
+                }
+                _publish(evidence)
                 self.published = True
             return result
 
@@ -119,13 +141,17 @@ class Handler(BaseHTTPRequestHandler):
         if role is None:
             self._reply(403, {"error": "seat required"})
             return
+        acks = self.headers.get_all("X-SeatLab-View-SHA256", [])
+        if len(acks) > 1:
+            self._reply(400, {"error": "expected at most one view acknowledgment"})
+            return
         try:
             body = self._submission()
         except (OSError, RecursionError, ValueError):
             self._reply(400, {"error": "invalid JSON body"})
             return
         try:
-            result = self._world_server.submit(role, body)
+            result = self._world_server.submit(role, body, acks[0] if acks else None)
         except NotReady:
             self._reply(409, {"error": "waiting for inventory"})
         except ValueError:

@@ -1,12 +1,21 @@
+import http.client
 import json
+import shlex
+import sys
+import urllib.request
+from contextlib import redirect_stdout
 from copy import deepcopy
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call, create_autospec
 
 import pytest
 
 from examples.seatlab import seat_agent
+from examples.seatlab.capsule import view_hash
+from harbor.agents.factory import AgentFactory
+from harbor.environments.base import ExecResult
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 
@@ -116,6 +125,32 @@ def _world(monkeypatch: pytest.MonkeyPatch, view: dict[str, Any]) -> AsyncMock:
     return world
 
 
+def _world_wire(
+    monkeypatch: pytest.MonkeyPatch, environment: SeatEnvironment, view: dict[str, Any]
+) -> Mock:
+    connection = create_autospec(http.client.HTTPConnection, instance=True)
+    world_body = json.dumps(view, indent=2).encode("utf-8")
+    response = Mock(status=200)
+    response.read.side_effect = [world_body, b'{"accepted":true}']
+    connection.getresponse.return_value = response
+    connection_factory = Mock(return_value=connection)
+    monkeypatch.setattr(http.client, "HTTPConnection", connection_factory)
+
+    def run_cli(*, command: str, timeout_sec: int) -> ExecResult:
+        python, flag, script, *args = shlex.split(command)
+        assert (python, flag, timeout_sec) == ("python", "-c", 6)
+        assert len(args) == {"GET": 2, "POST": 4}[args[0]]
+        output = StringIO()
+        with monkeypatch.context() as patch, redirect_stdout(output):
+            patch.setattr(sys, "argv", ["-c", *args])
+            exec(script, {})
+        connection_factory.assert_called_with("world", 8080, timeout=3)
+        return ExecResult(return_code=0, stdout=output.getvalue())
+
+    monkeypatch.setattr(environment, "exec", AsyncMock(side_effect=run_cli))
+    return connection.request
+
+
 def _hosted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> seat_agent.SeatAgent:
     monkeypatch.setenv("SEATLAB_FREE_MODEL", _MODEL)
     monkeypatch.setenv("SEATLAB_FREE_PROVIDER", _SLUG)
@@ -136,14 +171,23 @@ def _hosted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> seat_agent.SeatA
 async def test_arrival_uses_last_visible_bulletin(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, condition: str, bay: str
 ) -> None:
-    world = _world(monkeypatch, _dispatch_view(condition))
+    view = _dispatch_view(condition)
+    world = _world(monkeypatch, view)
     environment = _seat("dispatch")
     agent = seat_agent.SeatAgent(tmp_path, policy="arrival")
     context = AgentContext()
 
     await agent.run("", environment, context)
 
-    world.assert_awaited_with(environment, "/submit", {"rows": [{"id": 0, "bay": bay}]})
+    assert world.await_args_list == [
+        call(environment, "/view"),
+        call(
+            environment,
+            "/submit",
+            {"rows": [{"id": 0, "bay": bay}]},
+            view_sha256=view_hash(view),
+        ),
+    ]
     assert context.metadata is not None
     assert context.metadata["decision_source"] == "script"
     assert context.metadata["model_turns"] == 0
@@ -151,35 +195,61 @@ async def test_arrival_uses_last_visible_bulletin(
     assert agent.to_agent_info().model_info is None
 
 
-async def test_arrival_inventory_sends_both_reports(
+async def test_native_import_posts_inventory_actions_with_view_digest(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    world = _world(monkeypatch, _inventory_view())
+    view = _inventory_view()
     environment = _seat("inventory")
-    agent = seat_agent.SeatAgent(tmp_path, policy="arrival")
+    world = _world_wire(monkeypatch, environment, view)
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    agent = AgentFactory.create_agent_from_import_path(
+        "seat_agent:SeatAgent", tmp_path, policy="arrival"
+    )
 
     await agent.run("", environment, AgentContext())
 
-    world.assert_awaited_with(
-        environment, "/submit", {"rows": [{"id": 0, "reports": _REPORTS}]}
-    )
+    assert world.call_args_list == [
+        call("GET", "/view", body=None, headers={}),
+        call(
+            "POST",
+            "/submit",
+            body=json.dumps(
+                {"rows": [{"id": 0, "reports": _REPORTS}]}, separators=(",", ":")
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-SeatLab-View-SHA256": view_hash(view),
+            },
+        ),
+    ]
 
 
 async def test_hosted_submits_the_model_answer_without_oracle_repair(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     view = _dispatch_view("fresh")
-    world = _world(monkeypatch, view)
+    environment = _seat("dispatch")
+    world = _world_wire(monkeypatch, environment, view)
     router = Mock(side_effect=[_CATALOG, _ENDPOINTS, _response()])
     monkeypatch.setattr(seat_agent, "_openrouter", router)
-    environment = _seat("dispatch")
     agent = _hosted(monkeypatch, tmp_path)
     context = AgentContext()
 
     await agent.run("private instruction", environment, context)
 
     # D is visible but worse than B. Keep the model's choice as submitted.
-    world.assert_awaited_with(environment, "/submit", {"rows": [{"id": 0, "bay": "D"}]})
+    assert world.call_args_list == [
+        call("GET", "/view", body=None, headers={}),
+        call(
+            "POST",
+            "/submit",
+            body=b'{"rows":[{"id":0,"bay":"D"}]}',
+            headers={
+                "Content-Type": "application/json",
+                "X-SeatLab-View-SHA256": view_hash(view),
+            },
+        ),
+    ]
     assert router.call_count == 3
     for lookup in router.call_args_list[:2]:
         assert not lookup.kwargs
@@ -194,7 +264,11 @@ async def test_hosted_submits_the_model_answer_without_oracle_repair(
     }
     assert not {"models", "plugins", "tools"}.intersection(request)
     assert json.loads(request["messages"][1]["content"]) == view
-    assert "private instruction" not in json.dumps(request)
+    serialized_request = json.dumps(request)
+    assert "private instruction" not in serialized_request
+    assert str(tmp_path) not in serialized_request
+    assert view_hash(view) not in serialized_request
+    assert "X-SeatLab-View-SHA256" not in serialized_request
     assert context.metadata == {
         "schema": "seatlab.seat/v1",
         "policy": "hosted",
@@ -217,9 +291,60 @@ async def test_hosted_submits_the_model_answer_without_oracle_repair(
     assert (model.provider, model.name) == ("openrouter", _MODEL)
 
 
+@pytest.mark.parametrize("role", ["inventory", "dispatch"])
+def test_oracle_posts_actions_with_view_digest(
+    monkeypatch: pytest.MonkeyPatch, role: str
+) -> None:
+    if role == "inventory":
+        view = _inventory_view()
+        rows = [{"id": 0, "reports": _REPORTS}]
+    else:
+        view = _dispatch_view("reordered")
+        rows = [{"id": 0, "bay": "B"}]
+    http = create_autospec(urllib.request.OpenerDirector, instance=True)
+    http.open.side_effect = [
+        BytesIO(json.dumps(view, indent=2).encode("utf-8")),
+        BytesIO(b'{"accepted":true}'),
+    ]
+    monkeypatch.setattr(urllib.request, "build_opener", Mock(return_value=http))
+    task = Path(__file__).resolve().parents[2] / "tasks/dispatch-handoff"
+    source = (task / "solution/solve.sh").read_text(encoding="utf-8")
+    script = source.split("<<'PY'\n", 1)[1].removesuffix("\nPY\n")
+
+    exec(script, {})
+
+    assert http.open.call_count == 2
+    assert http.open.call_args_list[0].args == ("http://world:8080/view",)
+    (request,) = http.open.call_args.args
+    assert isinstance(request, urllib.request.Request)
+    assert request.full_url == "http://world:8080/submit"
+    assert request.get_method() == "POST"
+    assert {name.lower(): value for name, value in request.header_items()} == {
+        "content-type": "application/json",
+        "x-seatlab-view-sha256": view_hash(view),
+    }
+    assert request.data is not None
+    assert json.loads(request.data) == {"rows": rows}
+    redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+        request, None, 303, "See Other", {}, "http://world:8080/view"
+    )
+    assert redirected is not None
+    assert redirected.get_method() == "GET"
+    assert not redirected.has_header("X-seatlab-view-sha256")
+
+
 @pytest.mark.parametrize(
     "failure",
-    ["json", "duplicate", "tool", "model", "provider", "request_cost", "error"],
+    [
+        "json",
+        "duplicate",
+        "receipt",
+        "tool",
+        "model",
+        "provider",
+        "request_cost",
+        "error",
+    ],
 )
 async def test_hosted_fails_without_a_second_model_turn_or_commit(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str
@@ -231,6 +356,13 @@ async def test_hosted_fails_without_a_second_model_turn_or_commit(
         message["content"] = '```json\n{"rows":[]}\n```'
     elif failure == "duplicate":
         message["content"] = '{"rows":[{"id":0,"bay":"D","bay":"B"}]}'
+    elif failure == "receipt":
+        message["content"] = json.dumps(
+            {
+                "rows": [{"id": 0, "bay": "D"}],
+                "ack_sha256": view_hash(_dispatch_view("fresh")),
+            }
+        )
     elif failure == "tool":
         message["tool_calls"] = [{}]
     elif failure == "model":

@@ -10,6 +10,7 @@ import time
 from contextlib import closing
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, override
 
@@ -38,8 +39,12 @@ _SEAT_HTTP = f"""\
 import http.client, sys
 from contextlib import closing
 method, path = sys.argv[1:3]
-body = sys.argv[3].encode() if method == 'POST' else None
-headers = {{'Content-Type': 'application/json'}} if body is not None else {{}}
+if method == 'POST':
+    body = sys.argv[3].encode('utf-8')
+    headers = {{'Content-Type': 'application/json', 'X-SeatLab-View-SHA256': sys.argv[4]}}
+else:
+    body = None
+    headers = {{}}
 with closing(http.client.HTTPConnection('world', 8080, timeout=3)) as connection:
     connection.request(method, path, body=body, headers=headers)
     response = connection.getresponse()
@@ -204,11 +209,17 @@ def _checked_submission(value: dict[str, Any], role: str, episodes: int) -> None
 
 
 async def _world_request(
-    environment: BaseEnvironment, path: str, payload: dict[str, Any] | None = None
+    environment: BaseEnvironment,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    view_sha256: str | None = None,
 ) -> tuple[int, str]:
     args = ["python", "-c", _SEAT_HTTP, "GET" if payload is None else "POST", path]
     if payload is not None:
-        args.append(json.dumps(payload, separators=(",", ":")))
+        if view_sha256 is None:
+            raise ValueError("World submission requires a view digest")
+        args.extend((json.dumps(payload, separators=(",", ":")), view_sha256))
     result = await environment.exec(command=shlex.join(args), timeout_sec=6)
     status, sep, body = (result.stdout or "").partition("\n")
     if result.return_code != 0 or not sep or not re.fullmatch(r"[1-5][0-9]{2}", status):
@@ -554,6 +565,15 @@ class SeatAgent(BaseAgent):
         }
         view = await _view(environment)
         cases = _checked_view(view, role)
+        # Match the capsule encoding without adding a dependency to the native adapter.
+        view_bytes = json.dumps(
+            view,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+            ensure_ascii=True,
+        ).encode("utf-8")
+        view_sha256 = sha256(view_bytes).hexdigest()
         if self._policy == "arrival":
             context.n_input_tokens = context.n_cache_tokens = (
                 context.n_output_tokens
@@ -578,7 +598,9 @@ class SeatAgent(BaseAgent):
             )
             submission = _decision(result, route, context)
         _checked_submission(submission, role, len(cases))
-        status, body = await _world_request(environment, "/submit", submission)
+        status, body = await _world_request(
+            environment, "/submit", submission, view_sha256=view_sha256
+        )
         if status != 200:
             raise _Unmeasured(f"World decision rejected (HTTP {status})")
         acknowledgment = _json_object(body, "world submission")
