@@ -1,4 +1,4 @@
-"""Reference actor for one seat in the native calendar cursor protocol."""
+"""Reference actor for one seat in the native calendar cursor/hybrid8 protocol."""
 
 import argparse
 import hashlib
@@ -9,11 +9,16 @@ import stat
 import tempfile
 import time
 from bisect import bisect_left
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, TypeGuard
 
 ROLES = ("m1", "m2", "m3", "m4", "m5")
+MODES = ("cursor", "hybrid8")
 MAX_ROUNDS = 720
+HYBRID_SUFFIX_ROUND = 9
+SUFFIX_ENCODING = "suffix-hex"
+HEX_DIGITS = frozenset("0123456789abcdef")
 DEADLINE_SECONDS = 120
 POLL_SECONDS = 0.025
 MAX_MESSAGE_BYTES = 64 * 1024
@@ -41,7 +46,7 @@ def feasible_starts(view: dict[str, Any]) -> list[int]:
     """Compute local starts from occupied ticks, without crossing a day boundary."""
     if view.keys() != {"role", "mode", "horizon", "duration", "slots_per_day", "busy"}:
         raise ValueError("invalid calendar view fields")
-    if view["role"] not in ROLES or view["mode"] != "cursor":
+    if view["role"] not in ROLES or view["mode"] not in MODES:
         raise ValueError("invalid calendar view role or mode")
     horizon = view["horizon"]
     duration = view["duration"]
@@ -74,9 +79,94 @@ def next_start(starts: list[int], bound: int) -> int | None:
     return starts[index] if index < len(starts) else None
 
 
-def continue_query(number: int, bound: int, view: dict[str, Any]) -> dict[str, Any]:
+def suffix_mask(starts: Sequence[int], bound: int, horizon: int) -> str:
+    """Encode sorted distinct starts >= bound as canonical fixed-width lowercase hex."""
+    if type(horizon) is not int or horizon <= 0:
+        raise ValueError("horizon must be a positive integer")
+    if not _is_tick(bound, 0, horizon):
+        raise ValueError("invalid suffix bound")
+    if not isinstance(starts, Sequence) or isinstance(starts, (str, bytes, bytearray)):
+        raise ValueError("starts must be a sequence of integer ticks")
+    bits = 0
+    previous = -1
+    for tick in starts:
+        if not _is_tick(tick, previous + 1, horizon):
+            raise ValueError(
+                "starts must be strictly increasing integer ticks in the horizon"
+            )
+        previous = tick
+        if tick >= bound:
+            bits |= 1 << (tick - bound)
+    width = (horizon - bound + 3) // 4
+    return f"{bits:0{width}x}"
+
+
+def _parse_suffix_mask(mask: object, bound: int, horizon: int) -> int:
+    bit_count = horizon - bound
+    width = (bit_count + 3) // 4
+    if (
+        not isinstance(mask, str)
+        or len(mask) != width
+        or any(char not in HEX_DIGITS for char in mask)
+    ):
+        raise ValueError("invalid suffix mask encoding")
+    bits = int(mask, 16)
+    if bits >> bit_count:
+        raise ValueError("suffix mask sets bits outside the calendar horizon")
+    return bits
+
+
+def suffix_choice(
+    replies: dict[str, Any],
+    bound: int,
+    horizon: int,
+    *,
+    previous: dict[str, Any] | None = None,
+) -> int | None:
+    """Intersect five canonical suffix masks and return the earliest common start."""
+    if type(horizon) is not int or horizon <= 0:
+        raise ValueError("horizon must be a positive integer")
+    if not _is_tick(bound, 0, horizon):
+        raise ValueError("invalid suffix bound")
+    if not isinstance(replies, dict) or replies.keys() != set(ROLES):
+        raise ValueError("round must have one reply from each seat")
+    common = (1 << (horizon - bound)) - 1
+    for role in ROLES:
+        try:
+            bits = _parse_suffix_mask(replies[role], bound, horizon)
+        except ValueError as exc:
+            raise ValueError(f"{role}: {exc}") from exc
+        if previous is not None:
+            known = previous[role]
+            if known is None:
+                if bits != 0:
+                    raise ValueError(f"{role}: suffix mask contradicts exhaustion")
+            elif known >= bound and (bits & -bits) != 1 << (known - bound):
+                raise ValueError(
+                    f"{role}: suffix mask contradicts known start {known}"
+                )
+        common &= bits
+    if common == 0:
+        return None
+    return bound + (common & -common).bit_length() - 1
+
+
+def continue_query(
+    number: int,
+    bound: int,
+    view: dict[str, Any],
+    *,
+    encoding: str | None = None,
+) -> dict[str, Any]:
     """Build a query linked to the initial view or the preceding round bundle."""
-    return {"round": number, "bound": bound, "view_sha256": _digest(view)}
+    query: dict[str, Any] = {
+        "round": number,
+        "bound": bound,
+        "view_sha256": _digest(view),
+    }
+    if encoding is not None:
+        query["encoding"] = encoding
+    return query
 
 
 def finish_choice(bundle: dict[str, Any], start: int | None) -> dict[str, Any]:
@@ -192,11 +282,13 @@ def run_actor(role: str, exchange: Path, *, timeout: float = DEADLINE_SECONDS) -
     if view.get("role") != role:
         raise ValueError("calendar view is not for this seat")
     starts = feasible_starts(view)
+    mode = view["mode"]
     horizon = view["horizon"]
     initial_digest = _digest(view)
     out = exchange / "out"
     done = exchange / "done.json"
     coordinator = role == "m1"
+    max_rounds = min(horizon, HYBRID_SUFFIX_ROUND if mode == "hybrid8" else MAX_ROUNDS)
     expected_bound = 0
     previous_bound = -1
     previous_replies = None
@@ -205,9 +297,16 @@ def run_actor(role: str, exchange: Path, *, timeout: float = DEADLINE_SECONDS) -
     while True:
         suffix = f"{number:03d}.json"
         query_name = f"query-{suffix}"
+        suffix_round = mode == "hybrid8" and number == HYBRID_SUFFIX_ROUND
         if coordinator:
             _submit(
-                out / query_name, continue_query(number, expected_bound, prior_view)
+                out / query_name,
+                continue_query(
+                    number,
+                    expected_bound,
+                    prior_view,
+                    encoding=SUFFIX_ENCODING if suffix_round else None,
+                ),
             )
         path, query = _wait_for(deadline, done, exchange / query_name)
         if path == done:
@@ -216,42 +315,66 @@ def run_actor(role: str, exchange: Path, *, timeout: float = DEADLINE_SECONDS) -
             _check_done(query)
             return
         bound = query.get("bound")
+        expected_query_keys = (
+            {"round", "bound", "encoding"} if suffix_round else {"round", "bound"}
+        )
         if (
-            query.keys() != {"round", "bound"}
+            query.keys() != expected_query_keys
             or type(query["round"]) is not int
             or query["round"] != number
-            or number > min(horizon, MAX_ROUNDS)
+            or number > max_rounds
+            or (suffix_round and query["encoding"] != SUFFIX_ENCODING)
             or not _is_tick(bound, previous_bound + 1, horizon)
             or ((coordinator or number == 1) and bound != expected_bound)
         ):
             raise ValueError(f"invalid query: {query_name}")
-        tick = next_start(starts, bound)
-        _submit(
-            out / f"reply-{suffix}",
-            {
+        if suffix_round:
+            my_reply: int | str | None = suffix_mask(starts, bound, horizon)
+            reply_message = {
                 "role": role,
                 "round": number,
-                "next": tick,
+                "mask": my_reply,
                 "initial_sha256": initial_digest,
                 "query_sha256": _digest(query),
-            },
-        )
+            }
+        else:
+            my_reply = next_start(starts, bound)
+            reply_message = {
+                "role": role,
+                "round": number,
+                "next": my_reply,
+                "initial_sha256": initial_digest,
+                "query_sha256": _digest(query),
+            }
+        _submit(out / f"reply-{suffix}", reply_message)
         if coordinator:
             path, bundle = _wait_for(deadline, done, exchange / f"round-{suffix}")
+            expected_bundle_keys = (
+                {"round", "bound", "encoding", "replies"}
+                if suffix_round
+                else {"round", "bound", "replies"}
+            )
             if (
                 path == done
-                or bundle.keys() != {"round", "bound", "replies"}
+                or bundle.keys() != expected_bundle_keys
                 or type(bundle["round"]) is not int
                 or bundle["round"] != number
                 or type(bundle["bound"]) is not int
                 or bundle["bound"] != bound
+                or (suffix_round and bundle["encoding"] != SUFFIX_ENCODING)
             ):
                 raise ValueError(f"invalid round bundle: {suffix}")
             replies = bundle["replies"]
-            next_bound, choice = coordinate_round(
-                replies, bound=bound, horizon=horizon, previous=previous_replies
-            )
-            if replies[role] != tick:
+            if suffix_round:
+                choice = suffix_choice(
+                    replies, bound, horizon, previous=previous_replies
+                )
+                next_bound = None
+            else:
+                next_bound, choice = coordinate_round(
+                    replies, bound=bound, horizon=horizon, previous=previous_replies
+                )
+            if replies[role] != my_reply:
                 raise ValueError("round bundle changed the coordinator's own reply")
             if next_bound is None:
                 _submit(out / "choice.json", finish_choice(bundle, choice))

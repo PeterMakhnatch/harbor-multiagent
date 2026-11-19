@@ -1,4 +1,4 @@
-"""Run and collect registered, private five-seat Harbor cursor trials."""
+"""Run and collect registered, private five-seat Harbor interactive trials."""
 
 import argparse
 import os
@@ -16,9 +16,93 @@ from cases import DATASET_COMMIT, load_case
 
 ADAPTER = Path(__file__).resolve().parent
 MODE = "cursor"
+MODES = ("cursor", "hybrid8")
 PLAN_SCHEMA = "seatlab.calendar-interactive-plan/v1"
 ATTEMPT_SCHEMA = "seatlab.calendar-interactive-attempt/v1"
 RESULT_SCHEMA = "seatlab.calendar-interactive-result/v1"
+CURSOR_RESOURCE_KEYS = frozenset(
+    (
+        "round_trips",
+        "seat_exchanges",
+        "scalar_disclosures",
+        "distinct_disclosed_starts",
+        "request_payload_bytes",
+        "response_payload_bytes",
+        "payload_bytes",
+    )
+)
+HYBRID_RESOURCE_KEYS = CURSOR_RESOURCE_KEYS | frozenset(
+    (
+        "suffix_exchanges",
+        "suffix_masks",
+        "suffix_bit_positions",
+    )
+)
+INSTRUCTION_TEXT = {
+    "cursor": {
+        "round_limit": "There are at most 720 rounds.",
+        "query_format": "It contains only `round` and `bound`.",
+        "reply_value_spec": (
+            "- `next`: your first feasible start at or above `bound`, or JSON `null` "
+            "if there is none."
+        ),
+        "bundle_format": (
+            "This bundle contains `round`, `bound`, and `replies`. The `replies` "
+            "object has one start or `null` for each seat, `m1` through `m5`. Check "
+            "that the bundle matches the query and includes your own reply without "
+            "changes."
+        ),
+        "coordinate_rules": (
+            "- If any reply is `null`, choose `null`.\n"
+            "- If all 5 replies are the same start, choose that start.\n"
+            "- Otherwise, write the next `/exchange/out/query-NNN.json`. Set `round` "
+            "to the next round number. Set `bound` to the largest reply. Set "
+            "`view_sha256` to the digest of the complete current bundle."
+        ),
+    },
+    "hybrid8": {
+        "round_limit": (
+            "There are at most 9 rounds: up to 8 scalar rounds and at most 1 suffix "
+            "round on round 9."
+        ),
+        "query_format": (
+            "Rounds 1 through 8 contain only `round` and `bound`. Round 9 also "
+            'contains `encoding` set to `"suffix-hex"`.'
+        ),
+        "reply_value_spec": (
+            "- For rounds 1 through 8, `next`: your first feasible start at or above "
+            "`bound`, or JSON `null` if there is none.\n"
+            "- For round 9 with `encoding` set to `\"suffix-hex\"`, `mask` instead of "
+            "`next`: one lowercase fixed-width hexadecimal string of length "
+            "`ceil((horizon - bound) / 4)` with leading zeros and zero high padding, "
+            "where bit 0 represents `bound` and bit `k` is 1 iff `bound + k` is a "
+            "feasible start."
+        ),
+        "bundle_format": (
+            "For rounds 1 through 8, this bundle contains `round`, `bound`, and "
+            "`replies` mapping `m1` through `m5` to a start or `null`. For round 9, "
+            'this bundle also contains `encoding` set to `"suffix-hex"`, and '
+            "`replies` maps `m1` through `m5` to their lowercase hex masks. Check "
+            "that the bundle matches the query and includes your own reply without "
+            "changes."
+        ),
+        "coordinate_rules": (
+            "- On rounds 1 through 8, if any reply is `null`, choose `null`.\n"
+            "- On rounds 1 through 8, if all 5 replies are the same start, choose "
+            "that start.\n"
+            "- Otherwise on rounds 1 through 7, write the next "
+            "`/exchange/out/query-NNN.json` with `round` set to the next round "
+            "number, `bound` set to the largest reply, and `view_sha256` set to the "
+            "digest of the complete current bundle.\n"
+            "- If round 8 is nonterminal, write `/exchange/out/query-009.json` with "
+            "`round` set to 9, `bound` set to the largest reply from round 8, "
+            '`encoding` set to `"suffix-hex"`, and `view_sha256` set to the digest of '
+            "the round 8 bundle.\n"
+            "- On round 9, bitwise-AND all 5 masks. If the intersection is nonzero, "
+            "choose `bound + k` for the smallest set bit `k`; otherwise choose `null`."
+        ),
+    },
+}
 REPLACEMENTS = {
     "interactive_world.py": "environment/calendar_world.py",
     "interactive_client.py": "solution/client.py",
@@ -113,7 +197,16 @@ def _valid_digests(value, names):
     )
 
 
-def _task_payloads(case, reviewed):
+def _check_mode(mode):
+    study._require(
+        isinstance(mode, str) and mode in MODES,
+        f"--mode must be one of {', '.join(MODES)}",
+    )
+    return mode
+
+
+def _task_payloads(case, reviewed, mode=MODE):
+    mode = _check_mode(mode)
     payloads = {name: reviewed[f"template/{name}"] for name in BASE_FILES}
     payloads["environment/calendar_base.py"] = payloads["environment/calendar_world.py"]
     payloads.update({dest: reviewed[src] for src, dest in REPLACEMENTS.items()})
@@ -130,10 +223,13 @@ def _task_payloads(case, reviewed):
     )
     # Harbor already collects the default /logs/artifacts directory from main.
     payloads["task.toml"] = payloads["task.toml"].replace(old_artifact, b"")
-    payloads["environment/case.json"] = study._canonical({"mode": MODE, "case": case})
+    payloads["environment/case.json"] = study._canonical({"mode": mode, "case": case})
     instructions = Template(reviewed["interactive_instructions.md"].decode("utf-8"))
+    terms = INSTRUCTION_TEXT[mode]
     for seat, path in zip(study.SEATS, INSTRUCTIONS, strict=True):
-        payloads[path] = instructions.substitute(role=seat).encode("utf-8")
+        payloads[path] = instructions.substitute(
+            role=seat, mode=mode, **terms
+        ).encode("utf-8")
     return payloads
 
 
@@ -192,17 +288,18 @@ def _materialize(dataset, case, task, payloads):
             _checked_path(task, name).write_bytes(payloads[name])
 
 
-def _plan(study_id, source, case_ids, hashes):
+def _plan(study_id, source, case_ids, hashes, mode=MODE):
+    mode = _check_mode(mode)
     return {
         "schema": PLAN_SCHEMA,
         "study_id": study_id,
-        "mode": MODE,
+        "mode": mode,
         "source_sha256": study._sha(study._canonical(source)),
         "task_sha256": hashes,
         "cells": [
             {
                 "case_id": case_id,
-                "mode": MODE,
+                "mode": mode,
                 "trial_name": (
                     f"calendar-interactive-{study_id}-{case_id.replace('/', '-')}"
                 ),
@@ -314,8 +411,9 @@ def _stop(out):
     return (out / "STOP").exists() or (out / "STOP").is_symlink()
 
 
-def run(dataset: Path, out: Path, harbor: Path, case_spec: str):
+def run(dataset: Path, out: Path, harbor: Path, case_spec: str, mode: str = MODE):
     """Freeze source files and admit listed cases serially, once in this run."""
+    mode = _check_mode(mode)
     out = _root(out)
     study._require(not out.exists(), "--out must be a new directory")
     study._require(harbor.is_absolute(), "--harbor must be an absolute path")
@@ -343,10 +441,11 @@ def run(dataset: Path, out: Path, harbor: Path, case_spec: str):
         "cases": cases,
     }
     payloads = {
-        case_id: _task_payloads(case, reviewed) for case_id, case in cases.items()
+        case_id: _task_payloads(case, reviewed, mode=mode)
+        for case_id, case in cases.items()
     }
     hashes = {case_id: _digests(files) for case_id, files in payloads.items()}
-    plan = _plan(uuid4().hex, source, case_ids, hashes)
+    plan = _plan(uuid4().hex, source, case_ids, hashes, mode=mode)
     out.mkdir(mode=0o700)
     (out / "cells").mkdir(mode=0o700)
     study._write_once(out / "source.json", source)
@@ -363,7 +462,7 @@ def run(dataset: Path, out: Path, harbor: Path, case_spec: str):
             break
         case_id = cell["case_id"]
         print(
-            f"[{index}/{len(case_ids)}] {case_id} {MODE}", file=sys.stderr, flush=True
+            f"[{index}/{len(case_ids)}] {case_id} {mode}", file=sys.stderr, flush=True
         )
         case = cases[case_id]
         _run_cell(
@@ -401,8 +500,11 @@ def _fresh_native(result, cell):
         )
 
 
-def _collect_cell(out, registered_out, cell, case, task_hashes, verify):
+def _collect_cell(out, registered_out, cell, case, task_hashes, verify, mode):
     row = {"case_id": cell["case_id"], "status": "unattempted"}
+    if mode == "hybrid8":
+        # A public collector result can bind the registered case without exporting calendars.
+        row["case_sha256"] = study._sha(study._canonical(case))
     root, native = study._paths(out, cell)
     registered_root, registered_native = study._paths(registered_out, cell)
     reason = "invalid cell path"
@@ -431,7 +533,7 @@ def _collect_cell(out, registered_out, cell, case, task_hashes, verify):
         study._require(
             _task_hashes(task) == task_hashes
             and _read_file(task, "environment/case.json")
-            == study._canonical({"mode": MODE, "case": case})
+            == study._canonical({"mode": mode, "case": case})
             and study._canonical(config)
             == study._canonical(
                 study._native_config(registered_root / "task", registered_native, cell)
@@ -462,7 +564,22 @@ def _collect_cell(out, registered_out, cell, case, task_hashes, verify):
             raise ValueError(reason)
         _fresh_native(result, cell)
         reason = "invalid interactive world evidence"
-        score = verify(case, study._object(files["world"]))
+        world = study._object(files["world"])
+        study._require(world.get("mode") == mode, reason)
+        score = verify(case, world, expected_mode=mode)
+        resources = score.get("resources")
+        expected_keys = (
+            HYBRID_RESOURCE_KEYS if mode == "hybrid8" else CURSOR_RESOURCE_KEYS
+        )
+        study._require(
+            score.get("mode") == mode
+            and isinstance(resources, dict)
+            and resources.keys() == expected_keys
+            and all(
+                type(value) is int and value >= 0 for value in resources.values()
+            ),
+            reason,
+        )
         reason = "native reward mismatch"
         rewards = result["verifier_result"]["rewards"]
         study._require(
@@ -489,7 +606,7 @@ def _collect_cell(out, registered_out, cell, case, task_hashes, verify):
         return {**row, "status": "invalid", "reason": reason}
 
 
-def _summary(rows):
+def _summary(rows, mode=MODE):
     totals = {"planned": len(rows), **dict.fromkeys(STATUSES, 0)}
     totals.update(
         measured_nulls=0,
@@ -498,15 +615,32 @@ def _summary(rows):
         rounds=0,
         scalar_disclosures=0,
     )
+    if mode == "hybrid8":
+        totals.update(
+            suffix_exchanges=0,
+            suffix_masks=0,
+            suffix_bit_positions=0,
+            request_bytes=0,
+            response_bytes=0,
+            payload_bytes=0,
+        )
     for row in rows:
         totals[row["status"]] += 1
         if row["status"] == "verified":
             observed = row["observed"]
+            resources = observed["resources"]
             totals["measured_nulls"] += observed["choice"] is None
             totals["official_exact_matches"] += observed["official_exact_match"] is True
             totals["physically_feasible"] += observed["physically_feasible"] is True
-            totals["rounds"] += observed["resources"]["round_trips"]
-            totals["scalar_disclosures"] += observed["resources"]["scalar_disclosures"]
+            totals["rounds"] += resources["round_trips"]
+            totals["scalar_disclosures"] += resources["scalar_disclosures"]
+            if mode == "hybrid8":
+                totals["suffix_exchanges"] += resources["suffix_exchanges"]
+                totals["suffix_masks"] += resources["suffix_masks"]
+                totals["suffix_bit_positions"] += resources["suffix_bit_positions"]
+                totals["request_bytes"] += resources["request_payload_bytes"]
+                totals["response_bytes"] += resources["response_payload_bytes"]
+                totals["payload_bytes"] += resources["payload_bytes"]
     return totals
 
 
@@ -523,6 +657,7 @@ def collect(out: Path):
     plan = study._object(_read_file(out, "plan.json"))
     source = study._object(_read_file(out, "source.json"))
     study._uuid(plan["study_id"])
+    plan_mode = _check_mode(plan.get("mode"))
     registered_out = Path(source["out_path"])
     cases = source["cases"]
     reviewed = source["reviewed_sha256"]
@@ -545,13 +680,17 @@ def collect(out: Path):
             cases[case_id]["case_id"] == case_id
             and cases[case_id]["dataset_commit"] == DATASET_COMMIT
             and _valid_digests(hashes[case_id], TASK_FILES)
+            and hashes[case_id]["environment/case.json"]
+            == study._sha(
+                study._canonical({"mode": plan_mode, "case": cases[case_id]})
+            )
             and all(
                 hashes[case_id][target] == reviewed[name]
                 for target, name in TASK_SOURCE_FILES.items()
             )
             for case_id in case_ids
         )
-        and plan == _plan(plan["study_id"], source, case_ids, hashes),
+        and plan == _plan(plan["study_id"], source, case_ids, hashes, mode=plan_mode),
         "registered plan and source snapshot do not match",
     )
     study._require(
@@ -569,6 +708,7 @@ def collect(out: Path):
             cases[cell["case_id"]],
             hashes[cell["case_id"]],
             verify,
+            plan_mode,
         )
         for cell in sorted(
             plan["cells"], key=lambda cell: study._case_key(cell["case_id"])
@@ -588,9 +728,11 @@ def collect(out: Path):
     return {
         "schema": RESULT_SCHEMA,
         "study_id": plan["study_id"],
-        "mode": MODE,
-        "summary": _summary(rows),
-        "by_stratum": {stratum: _summary(group) for stratum, group in groups.items()},
+        "mode": plan_mode,
+        "summary": _summary(rows, mode=plan_mode),
+        "by_stratum": {
+            stratum: _summary(group, mode=plan_mode) for stratum, group in groups.items()
+        },
         "cells": rows,
     }
 
@@ -603,12 +745,13 @@ def main():
     launch.add_argument("--out", required=True, type=Path)
     launch.add_argument("--harbor", required=True, type=Path)
     launch.add_argument("--cases", required=True, metavar="ID,ID,...")
+    launch.add_argument("--mode", choices=MODES, default=MODE)
     lookup = subcommands.add_parser("collect", help="revalidate existing evidence")
     lookup.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
     try:
         if args.command == "run":
-            report = run(args.dataset, args.out, args.harbor, args.cases)
+            report = run(args.dataset, args.out, args.harbor, args.cases, mode=args.mode)
         else:
             report = collect(args.out)
     except (*EVIDENCE_ERRORS, subprocess.SubprocessError) as exc:

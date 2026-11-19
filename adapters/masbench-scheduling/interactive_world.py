@@ -17,8 +17,13 @@ else:
     import calendar_base as base
 
 MODE = "cursor"
+HYBRID_MODE = "hybrid8"
+MODES = (MODE, HYBRID_MODE)
 SCHEMA = "seatlab.calendar-interactive-world/v1"
 MAX_ROUNDS = 720
+HYBRID_SUFFIX_ROUND = 9
+SUFFIX_ENCODING = "suffix-hex"
+HEX_DIGITS = frozenset("0123456789abcdef")
 MAX_MESSAGE_BYTES = 1024
 
 
@@ -34,9 +39,10 @@ def _stamp(metadata):
 
 class InteractiveWorld:
     def __init__(self, case, mode, ports, artifact, *, seat_owner=None):
-        if mode != MODE:
+        if mode not in MODES:
             raise ValueError(f"unknown interactive calendar mode: {mode!r}")
         self.case_id = case["case_id"]
+        self.mode = mode
         self.horizon = case["horizon"]
         if type(self.horizon) is not int or self.horizon < 1:
             raise ValueError("invalid calendar horizon")
@@ -71,6 +77,19 @@ class InteractiveWorld:
 
     def _is_tick(self, value, *, bound=0):
         return type(value) is int and bound <= value < self.horizon
+
+    def _is_suffix_round(self, number):
+        return self.mode == HYBRID_MODE and number == HYBRID_SUFFIX_ROUND
+
+    def _is_suffix_mask(self, value, *, bound):
+        bits = self.horizon - bound
+        width = (bits + 3) // 4
+        return (
+            isinstance(value, str)
+            and len(value) == width
+            and all(char in HEX_DIGITS for char in value)
+            and (int(value, 16) >> bits) == 0
+        )
 
     def _available(self, role, expected):
         sources = self._sources[role]
@@ -123,7 +142,12 @@ class InteractiveWorld:
             raise ValueError(f"message changed after acceptance: {role}/{name}")
 
     def _accept_query(self, number, name):
-        if number > MAX_ROUNDS:
+        max_rounds = (
+            min(MAX_ROUNDS, HYBRID_SUFFIX_ROUND)
+            if self.mode == HYBRID_MODE
+            else MAX_ROUNDS
+        )
+        if number > max_rounds:
             raise ValueError("too many interactive calendar rounds")
         message = self._read("m1", name)
         if message is None:
@@ -131,17 +155,28 @@ class InteractiveWorld:
         submission, stamp = message
         previous = self._rounds[-1] if self._rounds else None
         prior_sha256 = previous["bundle_sha256"] if previous else self._views["m1"]
+        suffix_round = self._is_suffix_round(number)
+        expected_keys = (
+            {"round", "bound", "view_sha256", "encoding"}
+            if suffix_round
+            else {"round", "bound", "view_sha256"}
+        )
         if (
-            submission.keys() != {"round", "bound", "view_sha256"}
+            submission.keys() != expected_keys
             or type(submission["round"]) is not int
             or submission["round"] != number
             or submission["view_sha256"] != prior_sha256
+            or (suffix_round and submission["encoding"] != SUFFIX_ENCODING)
         ):
             raise ValueError("query does not acknowledge the current coordinator view")
         bound = submission["bound"]
         if not self._is_tick(bound, bound=previous["bound"] + 1 if previous else 0):
             raise ValueError("query bound must increase within the calendar horizon")
-        query = {"round": number, "bound": bound}
+        query = (
+            {"round": number, "bound": bound, "encoding": SUFFIX_ENCODING}
+            if suffix_round
+            else {"round": number, "bound": bound}
+        )
         self._sources["m1"][name] = stamp
         for role in base.ROLES:
             base.publish(self.ports / role / name, query)
@@ -163,9 +198,11 @@ class InteractiveWorld:
             if message is None:
                 continue
             reply, stamp = message
+            suffix_round = query.get("encoding") == SUFFIX_ENCODING
+            reply_field = "mask" if suffix_round else "next"
             if (
                 reply.keys()
-                != {"role", "round", "next", "initial_sha256", "query_sha256"}
+                != {"role", "round", reply_field, "initial_sha256", "query_sha256"}
                 or reply["role"] != role
                 or type(reply["round"]) is not int
                 or reply["round"] != query["round"]
@@ -175,12 +212,17 @@ class InteractiveWorld:
                 raise ValueError(
                     f"reply does not bind its seat, input and query: {role}"
                 )
-            tick = reply["next"]
-            if tick is not None and not self._is_tick(tick, bound=query["bound"]):
-                raise ValueError(f"invalid reply tick: {role}")
+            if suffix_round:
+                value = reply["mask"]
+                if not self._is_suffix_mask(value, bound=query["bound"]):
+                    raise ValueError(f"invalid reply mask: {role}")
+            else:
+                value = reply["next"]
+                if value is not None and not self._is_tick(value, bound=query["bound"]):
+                    raise ValueError(f"invalid reply tick: {role}")
             self._acknowledgments[role] = reply["initial_sha256"]
             self._sources[role][reply_name] = stamp
-            self._replies[role] = tick
+            self._replies[role] = value
 
         if len(self._replies) == len(base.ROLES):
             self._check_source("m1", query_name)
@@ -227,7 +269,7 @@ class InteractiveWorld:
         result = {
             "schema": SCHEMA,
             "case_id": self.case_id,
-            "mode": MODE,
+            "mode": self.mode,
             "initial_view_sha256": self._acknowledgments,
             "rounds": self._rounds,
             "choice": start,
