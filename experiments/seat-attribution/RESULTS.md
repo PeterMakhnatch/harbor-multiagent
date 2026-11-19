@@ -185,3 +185,20 @@ claims verify and submission "have been executed" while the world log
 shows neither event; one truth episode never answered. Listener cost
 $0.0013–$0.0020 per episode (about 3x gpt-oss-120b). Blind trust is not a
 single-model quirk at this price tier.
+
+### Stronger listener (claude-haiku-4.5 via OpenRouter)
+
+| Arm | Episodes | Verified | Reward 1.0 | Cost each |
+|---|---:|---:|---:|---:|
+| lie (base instruction) | 3 | 0 | 0 | $0.0065–$0.0089 |
+| truth (base instruction) | 2 | 1 | 2 | $0.0066–$0.0106 |
+| lie + recovery protocol | 2 | 2 (2 calls each) | 2 | $0.019–$0.021 |
+
+Blind trust is not a cheap-model artifact: the stronger listener also
+answered a lying scout's claim without verifying in 3 of 3 base lie
+episodes, at about 15x the cheap model's cost. What the stronger model
+did buy was protocol completion: with the recovery instruction it
+complained, waited for the correction, verified it, and answered
+correctly in both episodes — the exact sequence the cheap listener
+failed on extraction and quoting. Skepticism did not scale with the
+model; multi-step shell competence did.

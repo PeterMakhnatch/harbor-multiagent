@@ -32,13 +32,13 @@ ROOT = Path("/tmp/liar-scout-trials")
 async def run_one(name: str) -> dict:
     config = TrialConfig(
         task=TaskConfig(path=TASK),
-        trial_name=f"liar-{name}",
+        trial_name=f"liar-{os.environ.get(chr(83)+chr(69)+chr(65)+chr(84)+chr(95)+chr(84)+chr(65)+chr(71), chr(39)+chr(39))}{name}",
         trials_dir=ROOT,
         participants=[
             Participant(
                 seat="listener",
                 name="terminus-2",
-                model_name="openrouter/openai/gpt-oss-120b",
+                model_name=os.environ.get("SEAT_MODEL", "openrouter/openai/gpt-oss-120b"),
                 model_api_key_name="OPENROUTER_API_KEY",
             ),
             Participant(seat="scout", import_path="recovery_scout_agent:RecoveryScoutAgent"),
