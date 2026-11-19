@@ -275,7 +275,9 @@ def _config_matches(actual: object, expected: object) -> bool:
         return actual == {}
     if isinstance(expected, dict):
         return isinstance(actual, dict) and all(
-            isinstance(key, str) and key in actual and _config_matches(actual[key], value)
+            isinstance(key, str)
+            and key in actual
+            and _config_matches(actual.get(key), value)
             for key, value in expected.items()
         )
     if isinstance(expected, list):
