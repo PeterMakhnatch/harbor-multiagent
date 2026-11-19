@@ -76,6 +76,7 @@ async def validate_trials(
 ) -> None:
     downloads = await JobPlan.cache_tasks([config.task for config in configs])
     limits: dict[str, int] = {}
+    checked_participants = None
     for config, lock in zip(configs, locks, strict=True):
         if lock.schema_version != 2:
             raise APIError("BadRequest", "TrialLock schema_version must be 2.")
@@ -102,6 +103,12 @@ async def validate_trials(
             AgentFactory.run_preflight(
                 config.user_agent, skip_credential_checks=skip_credential_checks
             )
+        # Every trial of a job has the job's participants; check them once.
+        if config.participants != checked_participants:
+            AgentFactory.run_participants_preflight(
+                config.participants, skip_credential_checks=skip_credential_checks
+            )
+            checked_participants = config.participants
         EnvironmentFactory.validate_resource_policies(config.environment)
         download = downloads[config.task.get_task_id()]
         Task(

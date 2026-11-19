@@ -166,6 +166,12 @@ class Job:
                 skip_credential_checks=config.skip_credential_checks
                 or config.install_only,
             )
+        if agents:
+            AgentFactory.run_participants_preflight(
+                config.participants,
+                skip_credential_checks=config.skip_credential_checks
+                or config.install_only,
+            )
 
     @classmethod
     async def create(cls, config: JobConfig) -> "Job":

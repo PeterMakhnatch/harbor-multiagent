@@ -143,6 +143,10 @@ def _run_preflight(config: JobConfig) -> None:
                 skip_credential_checks=config.skip_credential_checks
                 or config.install_only,
             )
+        AgentFactory.run_participants_preflight(
+            config.participants,
+            skip_credential_checks=config.skip_credential_checks or config.install_only,
+        )
     except ValueError as exc:
         console.print(str(exc), style="red", markup=False, highlight=False)
         raise SystemExit(1) from None

@@ -884,6 +884,9 @@ def start(
                 AgentFactory.run_preflight(
                     config.user_agent, skip_credential_checks=config.install_only
                 )
+            AgentFactory.run_participants_preflight(
+                config.participants, skip_credential_checks=config.install_only
+            )
         except (TypeError, ValueError) as exc:
             console.print(f"[red]Error:[/red] {exc}")
             raise SystemExit(1) from exc
