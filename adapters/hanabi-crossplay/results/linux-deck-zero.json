@@ -1,0 +1,151 @@
+{
+  "cells": [
+    {
+      "decisions": 55,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 55,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "d22d98be9c68ce0cc50af6d9c001e55c89f2509eb1ca1c56ff70d4e2997d1394",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "d22d98be9c68ce0cc50af6d9c001e55c89f2509eb1ca1c56ff70d4e2997d1394",
+      "native_trial_id": "334095fe-10de-4376-b4a4-85c07901c219",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-fbd8741a9c75-d00-ll"
+    },
+    {
+      "decisions": 26,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 26,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "cbdc3eff9d4311c3bdb0677c97c30ac382e9e110a58dffe23a794670baf685df",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "cbdc3eff9d4311c3bdb0677c97c30ac382e9e110a58dffe23a794670baf685df",
+      "native_trial_id": "05a71061-9992-4ce8-8ecd-c2ab3035ddde",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-fbd8741a9c75-d00-lr"
+    },
+    {
+      "decisions": 16,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 16,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "73775ff4dd8ea67bdf9f50c555a49352f9c1e3f337718a9af6229fb1cfa62141",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "73775ff4dd8ea67bdf9f50c555a49352f9c1e3f337718a9af6229fb1cfa62141",
+      "native_trial_id": "5d45ea98-e7fc-4a84-a352-eeb8fe6dbd2d",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-fbd8741a9c75-d00-rl"
+    },
+    {
+      "decisions": 42,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 42,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "6e2c1b781e5d42ddf28bc9e01a3cdf44f5bb02434330a1e0e91febe242f45257",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "6e2c1b781e5d42ddf28bc9e01a3cdf44f5bb02434330a1e0e91febe242f45257",
+      "native_trial_id": "f81c1711-9c86-4f69-9db9-03ef8e2ec64d",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-fbd8741a9c75-d00-rr"
+    }
+  ],
+  "counts": {
+    "duplicate_uuids": 0,
+    "failed": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "matched": 4,
+    "registered": 4,
+    "unattempted": 0,
+    "valid": 4,
+    "valid_prediction_differs": 0
+  },
+  "deck_ids": [
+    0
+  ],
+  "duplicate_uuids": {},
+  "episodes": {
+    "all_episodes": "episodes.jsonl",
+    "episode_count": 8,
+    "matchups": {
+      "ll-to-lr": {
+        "complete_pairs": 1,
+        "pairs_manifest": "ll-to-lr-pairs.json",
+        "registered_pairs": 1,
+        "source_episodes": "ll-to-lr-source.jsonl",
+        "source_pairing": "LL",
+        "target_episodes": "ll-to-lr-target.jsonl",
+        "target_pairing": "LR",
+        "unchanged_role": "p0"
+      },
+      "ll-to-rl": {
+        "complete_pairs": 1,
+        "pairs_manifest": "ll-to-rl-pairs.json",
+        "registered_pairs": 1,
+        "source_episodes": "ll-to-rl-source.jsonl",
+        "source_pairing": "LL",
+        "target_episodes": "ll-to-rl-target.jsonl",
+        "target_pairing": "RL",
+        "unchanged_role": "p1"
+      }
+    }
+  },
+  "rates": {
+    "matched_of_registered": 1.0,
+    "matched_of_valid": 1.0,
+    "valid_of_registered": 1.0
+  },
+  "schema": "seatlab.hanabi-collect/v1"
+}

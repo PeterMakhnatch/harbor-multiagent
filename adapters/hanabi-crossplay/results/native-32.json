@@ -1,0 +1,858 @@
+{
+  "cells": [
+    {
+      "decisions": 55,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 55,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "d22d98be9c68ce0cc50af6d9c001e55c89f2509eb1ca1c56ff70d4e2997d1394",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "d22d98be9c68ce0cc50af6d9c001e55c89f2509eb1ca1c56ff70d4e2997d1394",
+      "native_trial_id": "7eef9640-1065-4459-bc92-ee30a541f8e6",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d00-ll"
+    },
+    {
+      "decisions": 26,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 26,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "cbdc3eff9d4311c3bdb0677c97c30ac382e9e110a58dffe23a794670baf685df",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "cbdc3eff9d4311c3bdb0677c97c30ac382e9e110a58dffe23a794670baf685df",
+      "native_trial_id": "b3c6aeed-fe7e-4462-ab48-fb685c39f725",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d00-lr"
+    },
+    {
+      "decisions": 16,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 16,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "73775ff4dd8ea67bdf9f50c555a49352f9c1e3f337718a9af6229fb1cfa62141",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "73775ff4dd8ea67bdf9f50c555a49352f9c1e3f337718a9af6229fb1cfa62141",
+      "native_trial_id": "0a5e8d6e-d138-48af-be26-ca2e71e13071",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d00-rl"
+    },
+    {
+      "decisions": 42,
+      "deck_id": 0,
+      "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+      "expected": {
+        "decisions": 42,
+        "deck_sha256": "54e2a0f0d5306169da6886abad5e16bfe2f04ae0f4eec7e6b91dab644d29f22c",
+        "history_sha256": "6e2c1b781e5d42ddf28bc9e01a3cdf44f5bb02434330a1e0e91febe242f45257",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "6e2c1b781e5d42ddf28bc9e01a3cdf44f5bb02434330a1e0e91febe242f45257",
+      "native_trial_id": "321d44c2-3a25-4bc3-aae8-82dedd127ea3",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d00-rr"
+    },
+    {
+      "decisions": 12,
+      "deck_id": 1,
+      "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+      "expected": {
+        "decisions": 12,
+        "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+        "history_sha256": "d878d2b52ad6bb2adb659d994e20912d202c233ba19d2ba58406223dc1e0a45e",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "d878d2b52ad6bb2adb659d994e20912d202c233ba19d2ba58406223dc1e0a45e",
+      "native_trial_id": "c9bf8728-9702-425c-ba47-6fa59daf08f9",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d01-ll"
+    },
+    {
+      "decisions": 14,
+      "deck_id": 1,
+      "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+      "expected": {
+        "decisions": 14,
+        "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+        "history_sha256": "42db96b0a72f4cbbdd8cec444d5970047bc8721c0b67833f2f63c3351d57b6d0",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "42db96b0a72f4cbbdd8cec444d5970047bc8721c0b67833f2f63c3351d57b6d0",
+      "native_trial_id": "91d33a29-8d76-43ab-828c-6af68364c2ed",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d01-lr"
+    },
+    {
+      "decisions": 32,
+      "deck_id": 1,
+      "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+      "expected": {
+        "decisions": 32,
+        "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+        "history_sha256": "184d4614603bd89d41e3918de571bb0356147696a386b152c108105e8a4492bd",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "184d4614603bd89d41e3918de571bb0356147696a386b152c108105e8a4492bd",
+      "native_trial_id": "8f1148b0-d85a-4d00-a388-e738bec91bb9",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d01-rl"
+    },
+    {
+      "decisions": 27,
+      "deck_id": 1,
+      "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+      "expected": {
+        "decisions": 27,
+        "deck_sha256": "d9e6ddc1c7a9bb03c7b61039fa2530fb071ecdc6b2bd0cdc67c7bf5de670049c",
+        "history_sha256": "87e26a959d2571141bc50c1eb525b0b8a6ea1ebb3daad372d62df5fad0492264",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "87e26a959d2571141bc50c1eb525b0b8a6ea1ebb3daad372d62df5fad0492264",
+      "native_trial_id": "4f1e1d5e-25fb-4317-8af6-0f6a923b1cae",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d01-rr"
+    },
+    {
+      "decisions": 12,
+      "deck_id": 2,
+      "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+      "expected": {
+        "decisions": 12,
+        "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+        "history_sha256": "dcd44e2a60668add6d5815c99fdba2aa9853c1db9ef615ed8b36448c0828a56d",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "dcd44e2a60668add6d5815c99fdba2aa9853c1db9ef615ed8b36448c0828a56d",
+      "native_trial_id": "01d33dfe-80b8-406f-a083-f5c4d5a9dba9",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d02-ll"
+    },
+    {
+      "decisions": 17,
+      "deck_id": 2,
+      "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+      "expected": {
+        "decisions": 17,
+        "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+        "history_sha256": "2674f6ff295cd13e0fef3bd8faa248806911db3f8760a174cfa10ad775274464",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "2674f6ff295cd13e0fef3bd8faa248806911db3f8760a174cfa10ad775274464",
+      "native_trial_id": "91f8b1d5-1220-4c90-a86d-f7fb93e5fb00",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d02-lr"
+    },
+    {
+      "decisions": 14,
+      "deck_id": 2,
+      "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+      "expected": {
+        "decisions": 14,
+        "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+        "history_sha256": "fd3c0f2a325e7cb41c55f4d782e886b6a3c24736e35f46f0035aeda23682d28c",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "fd3c0f2a325e7cb41c55f4d782e886b6a3c24736e35f46f0035aeda23682d28c",
+      "native_trial_id": "338793dd-e4a3-491e-9a70-09ea7999c016",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d02-rl"
+    },
+    {
+      "decisions": 12,
+      "deck_id": 2,
+      "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+      "expected": {
+        "decisions": 12,
+        "deck_sha256": "a986945436366d1b53e1a19315fb13a7c2ad6742d3387289ceca711a319396f6",
+        "history_sha256": "b1336da6545fba04c833c9b68533def6f821428ef4ecddc40e058c2721e0f8c1",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "b1336da6545fba04c833c9b68533def6f821428ef4ecddc40e058c2721e0f8c1",
+      "native_trial_id": "f7b16fc8-3910-4290-abdc-cb51f37b3a3f",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d02-rr"
+    },
+    {
+      "decisions": 12,
+      "deck_id": 3,
+      "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+      "expected": {
+        "decisions": 12,
+        "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+        "history_sha256": "88494df780274472b4c6163a633da5e89abb796f717f2e78159a20869e250272",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "88494df780274472b4c6163a633da5e89abb796f717f2e78159a20869e250272",
+      "native_trial_id": "a58f7994-e720-4af1-9573-383c024941f5",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d03-ll"
+    },
+    {
+      "decisions": 18,
+      "deck_id": 3,
+      "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+      "expected": {
+        "decisions": 18,
+        "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+        "history_sha256": "6e8af3e59b492030dd0d560024f09b1896a7fa097356a57c922be03c6a9967ea",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "6e8af3e59b492030dd0d560024f09b1896a7fa097356a57c922be03c6a9967ea",
+      "native_trial_id": "4a67526f-d2f6-4f26-9f26-ed85587ec999",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d03-lr"
+    },
+    {
+      "decisions": 20,
+      "deck_id": 3,
+      "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+      "expected": {
+        "decisions": 20,
+        "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+        "history_sha256": "61a73080e3107435b3ff2dc2809257bea6c20825db93a124d840c3222c2ab888",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "61a73080e3107435b3ff2dc2809257bea6c20825db93a124d840c3222c2ab888",
+      "native_trial_id": "596bb967-f699-4c45-b02d-cd156bd55007",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d03-rl"
+    },
+    {
+      "decisions": 24,
+      "deck_id": 3,
+      "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+      "expected": {
+        "decisions": 24,
+        "deck_sha256": "314e28facdb9f08e5c698c97f89279343ff7f6445caaf9c4d087d27b0491a9eb",
+        "history_sha256": "a0f3e4c3e68bd97aa6677de2116dddc2d8826aa0c7012ed2e2ca22b1ef4d62af",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "a0f3e4c3e68bd97aa6677de2116dddc2d8826aa0c7012ed2e2ca22b1ef4d62af",
+      "native_trial_id": "fcbc7aec-56d8-4a96-bb89-52c738927bf8",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d03-rr"
+    },
+    {
+      "decisions": 63,
+      "deck_id": 4,
+      "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+      "expected": {
+        "decisions": 63,
+        "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+        "history_sha256": "2040eefe98e09171ef5280ec626b76d6c61383584ade612793b3e0a293c922c1",
+        "scores": [
+          22,
+          22
+        ]
+      },
+      "history_sha256": "2040eefe98e09171ef5280ec626b76d6c61383584ade612793b3e0a293c922c1",
+      "native_trial_id": "f916f998-0985-4d5d-9bc8-6f9278bc151a",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.88,
+      "scores": [
+        22,
+        22
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d04-ll"
+    },
+    {
+      "decisions": 12,
+      "deck_id": 4,
+      "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+      "expected": {
+        "decisions": 12,
+        "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+        "history_sha256": "5731f1b1bc0229a1463d38f1738ad21135138f035868b159531ac68606c4468c",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "5731f1b1bc0229a1463d38f1738ad21135138f035868b159531ac68606c4468c",
+      "native_trial_id": "cbe894e0-d670-41f1-866b-43753003d388",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d04-lr"
+    },
+    {
+      "decisions": 18,
+      "deck_id": 4,
+      "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+      "expected": {
+        "decisions": 18,
+        "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+        "history_sha256": "4a2c3b0cbf9cab9aeb0c9cf7931b4d7c15d21346a26d716f80521b4d7bc76a23",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "4a2c3b0cbf9cab9aeb0c9cf7931b4d7c15d21346a26d716f80521b4d7bc76a23",
+      "native_trial_id": "835f060f-cc32-4c3d-8580-0b2c21aff62d",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d04-rl"
+    },
+    {
+      "decisions": 63,
+      "deck_id": 4,
+      "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+      "expected": {
+        "decisions": 63,
+        "deck_sha256": "b0988c0143a4ccc52f47e9db0fd39ac6f461068554f27302894873dd6401b049",
+        "history_sha256": "858734839ac634548741df47a7915a92a27fdd7c41a16254656fd7ae59c6b587",
+        "scores": [
+          22,
+          22
+        ]
+      },
+      "history_sha256": "858734839ac634548741df47a7915a92a27fdd7c41a16254656fd7ae59c6b587",
+      "native_trial_id": "f3a6ff78-a988-4775-9682-f13164e09468",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.88,
+      "scores": [
+        22,
+        22
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d04-rr"
+    },
+    {
+      "decisions": 21,
+      "deck_id": 5,
+      "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+      "expected": {
+        "decisions": 21,
+        "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+        "history_sha256": "30552072d041daaf07160b55003f5b3d4caa74a09a617347622ad931c4049c83",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "30552072d041daaf07160b55003f5b3d4caa74a09a617347622ad931c4049c83",
+      "native_trial_id": "173637ba-ab75-472f-9819-157a1544f87a",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d05-ll"
+    },
+    {
+      "decisions": 13,
+      "deck_id": 5,
+      "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+      "expected": {
+        "decisions": 13,
+        "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+        "history_sha256": "539cb969ddd0f43cb8858a6b8e18e372b6a1fa868083193f86d11284c1034ce5",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "539cb969ddd0f43cb8858a6b8e18e372b6a1fa868083193f86d11284c1034ce5",
+      "native_trial_id": "9efa7cea-5713-4aa1-9985-26dae6457a6d",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d05-lr"
+    },
+    {
+      "decisions": 18,
+      "deck_id": 5,
+      "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+      "expected": {
+        "decisions": 18,
+        "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+        "history_sha256": "6ebd23895f65a9f01ce59d54668b3b2f00993b80d7647ecca0ceccdfe04b2f69",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "6ebd23895f65a9f01ce59d54668b3b2f00993b80d7647ecca0ceccdfe04b2f69",
+      "native_trial_id": "de675510-ff12-4e6b-9bb6-358e796a693f",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d05-rl"
+    },
+    {
+      "decisions": 30,
+      "deck_id": 5,
+      "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+      "expected": {
+        "decisions": 30,
+        "deck_sha256": "7351baf93bc574a4667848722c04cde1580efc9ff13ae655603ee5f62713cf77",
+        "history_sha256": "3ec6f6be2a65a2af8d9fef4a4204a847ed663d5d3cb15f49453181d9a941f76f",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "3ec6f6be2a65a2af8d9fef4a4204a847ed663d5d3cb15f49453181d9a941f76f",
+      "native_trial_id": "cabaa530-cb3b-430e-b3a6-1d1cb691d6bd",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d05-rr"
+    },
+    {
+      "decisions": 18,
+      "deck_id": 6,
+      "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+      "expected": {
+        "decisions": 18,
+        "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+        "history_sha256": "edf1deb2c6b31e8a1f0a12e27ee80da0747b13b04b2576cc08f017ec387933c6",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "edf1deb2c6b31e8a1f0a12e27ee80da0747b13b04b2576cc08f017ec387933c6",
+      "native_trial_id": "eb164b12-7c3c-4b36-b63b-477870c6b3ae",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d06-ll"
+    },
+    {
+      "decisions": 17,
+      "deck_id": 6,
+      "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+      "expected": {
+        "decisions": 17,
+        "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+        "history_sha256": "d1e540c3a08c32acf78ae89956b495108c109694aef2085d3220b8e2c2239ae5",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "d1e540c3a08c32acf78ae89956b495108c109694aef2085d3220b8e2c2239ae5",
+      "native_trial_id": "14afb08a-ed24-458e-8f44-b638c39c8db9",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d06-lr"
+    },
+    {
+      "decisions": 34,
+      "deck_id": 6,
+      "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+      "expected": {
+        "decisions": 34,
+        "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+        "history_sha256": "5d8f94054956ec8771b301b4b02d0244774725f944f50f603e4b9c1626c69292",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "5d8f94054956ec8771b301b4b02d0244774725f944f50f603e4b9c1626c69292",
+      "native_trial_id": "bf09865a-703e-47f4-8c4c-b7110eb7da2f",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d06-rl"
+    },
+    {
+      "decisions": 42,
+      "deck_id": 6,
+      "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+      "expected": {
+        "decisions": 42,
+        "deck_sha256": "84930022156d3da8b0cb8954a1ded173b5337964f97c5b3d91bac7cabc8865eb",
+        "history_sha256": "d75c0f14b8dff286cab3799e8012656e3e720c42b44b78e74b6de3f4b6ee5466",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "d75c0f14b8dff286cab3799e8012656e3e720c42b44b78e74b6de3f4b6ee5466",
+      "native_trial_id": "4669a319-fe29-4161-b514-32de01e62be5",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d06-rr"
+    },
+    {
+      "decisions": 35,
+      "deck_id": 7,
+      "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+      "expected": {
+        "decisions": 35,
+        "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+        "history_sha256": "4a35939a6a4f998ca7d65e7724398e6d991a3d830854326bb8cd9398ab9b2719",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "4a35939a6a4f998ca7d65e7724398e6d991a3d830854326bb8cd9398ab9b2719",
+      "native_trial_id": "b01f6c5b-609b-4ba4-8cf8-2027126e2f30",
+      "pairing": "LL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d07-ll"
+    },
+    {
+      "decisions": 13,
+      "deck_id": 7,
+      "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+      "expected": {
+        "decisions": 13,
+        "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+        "history_sha256": "a87f94aa6b7f47b35b1b759667b125b48c50ac0aaebe27e981c8469bc1ee178c",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "a87f94aa6b7f47b35b1b759667b125b48c50ac0aaebe27e981c8469bc1ee178c",
+      "native_trial_id": "a2e16ba7-4c0c-4e0d-99e6-05ae85007bde",
+      "pairing": "LR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d07-lr"
+    },
+    {
+      "decisions": 36,
+      "deck_id": 7,
+      "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+      "expected": {
+        "decisions": 36,
+        "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+        "history_sha256": "db4cf06df15756fbd9d95a10b0c4bdb9b35eed7ead8b634a1668bcc8fc0e8f15",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "db4cf06df15756fbd9d95a10b0c4bdb9b35eed7ead8b634a1668bcc8fc0e8f15",
+      "native_trial_id": "f5466c07-c70a-4adc-8b8b-8328cef46b7f",
+      "pairing": "RL",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d07-rl"
+    },
+    {
+      "decisions": 35,
+      "deck_id": 7,
+      "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+      "expected": {
+        "decisions": 35,
+        "deck_sha256": "fe8e4d499862b0fdfcdd47a73a76784e9a25154b94ab95328aa13a7a41e0a87f",
+        "history_sha256": "34dd9f2f5f471661de4d9cb2dcf8df4c00aaf0c51fe739e19fa03d569f8a7a4c",
+        "scores": [
+          0,
+          0
+        ]
+      },
+      "history_sha256": "34dd9f2f5f471661de4d9cb2dcf8df4c00aaf0c51fe739e19fa03d569f8a7a4c",
+      "native_trial_id": "27f11bad-e6eb-4c01-803e-37346101ae01",
+      "pairing": "RR",
+      "reason": null,
+      "reward": 0.0,
+      "scores": [
+        0,
+        0
+      ],
+      "status": "matched",
+      "trial_name": "han-536edcf7ceb3-d07-rr"
+    }
+  ],
+  "counts": {
+    "duplicate_uuids": 0,
+    "failed": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "matched": 32,
+    "registered": 32,
+    "unattempted": 0,
+    "valid": 32,
+    "valid_prediction_differs": 0
+  },
+  "deck_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "duplicate_uuids": {},
+  "episodes": {
+    "all_episodes": "episodes.jsonl",
+    "episode_count": 64,
+    "matchups": {
+      "ll-to-lr": {
+        "complete_pairs": 8,
+        "pairs_manifest": "ll-to-lr-pairs.json",
+        "registered_pairs": 8,
+        "source_episodes": "ll-to-lr-source.jsonl",
+        "source_pairing": "LL",
+        "target_episodes": "ll-to-lr-target.jsonl",
+        "target_pairing": "LR",
+        "unchanged_role": "p0"
+      },
+      "ll-to-rl": {
+        "complete_pairs": 8,
+        "pairs_manifest": "ll-to-rl-pairs.json",
+        "registered_pairs": 8,
+        "source_episodes": "ll-to-rl-source.jsonl",
+        "source_pairing": "LL",
+        "target_episodes": "ll-to-rl-target.jsonl",
+        "target_pairing": "RL",
+        "unchanged_role": "p1"
+      }
+    }
+  },
+  "rates": {
+    "matched_of_registered": 1.0,
+    "matched_of_valid": 1.0,
+    "valid_of_registered": 1.0
+  },
+  "schema": "seatlab.hanabi-collect/v1"
+}
