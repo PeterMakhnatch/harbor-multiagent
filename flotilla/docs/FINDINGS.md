@@ -159,3 +159,23 @@ Inferred:
   lack of capacity.
 - This matches the hidden-profile pattern that Anthropic describes: private facts are not
   volunteered. Here, a budget makes the cost of asking first visible.
+
+## 2026-11-19 06:20 ET — Harbor's container names carry the task name, and the condition with it
+
+Found by the QA builder in pilot data. Harbor names the Compose project after the trial, so container
+and network names start with the task name, for example `schedule-004-silent__cdeu7ht__env-main-1`.
+Docker's DNS answers reverse lookups with these names, on local Docker and inside Modal VMs.
+
+Observed:
+
+- In 1 of 793 pilot seat trajectories (world v1), a silent Qwen 3.6 seat read its own condition
+  this way during network reconnaissance.
+- In the canonical waves (world v2, one network per seat), 0 of 532 seat trajectories observed a
+  task or condition name (search of every observation for `schedule...(solo|silent|talk|liar|warned)...__`).
+- In `schedule.liar`, every condition's names contain `liar`, including the honest-peer `talk`
+  arm, so a seat that looks can learn that a liar exists.
+
+Inferred: the canonical results are not affected in practice, but the leak is real for any task whose
+name encodes a condition, role or hint, single-agent tasks included. `flotilla/qa.py` reports it as
+`runtime-names` (WARN). A Harbor fix (neutral, hashed Compose project names) is in progress as a
+draft PR in the fork; a Flotilla-side fix would need opaque task names and a contract change.
