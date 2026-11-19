@@ -65,3 +65,25 @@ channel still exists — instructions and the oracle inline
 `Authorization: Bearer <token>`, trajectories record commands and outputs,
 and host-side scrubbing cannot know a world-issued secret — but it was not
 exercised by this model on this attempt.
+
+## Addendum: delayed partner (same day)
+
+Setup: fixed token-auth task with `jq` added to the player image (local
+copy only), p1 = terminus-2 + gpt-oss-120b (must reply to p2's note),
+p2 = scripted poster with a configurable delay. Question: does the tested
+seat wait, commit early, or quit?
+
+| p2 delay | Attempts | Reward 1.0 | p1 cost each |
+|---:|---:|---:|---|
+| 0 s | 3 | 2 | $0.00103, $0.00086, $0.00049 |
+| 25 s | 2 | 2 | $0.00096, $0.00054 |
+
+The model waits. In every attempt it delegated waiting to one blocking
+shell poll loop, so a 25 s partner delay cost no extra model turns and no
+extra tokens. No early commit and no fabricated `reply_to` was observed.
+The one delay-0 failure was shell quoting of the reply JSON (two rejected
+POSTs, then the agent stopped), not timing. Commit-before-reading failures
+need a task where waiting costs model turns; this task does not create
+that pressure. Scripts: `delay_agents.py`, `run_delay.py` beside this file
+(task copy with jq was local; set `SEAT_TASK` to a hello-seats copy whose
+player image installs jq).
