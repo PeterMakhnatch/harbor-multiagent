@@ -1,0 +1,9 @@
+{
+  "schema": "seatlab.pz-world/v1",
+  "api": "parallel",
+  "factory": "pettingzoo.classic.rps_v2:parallel_env",
+  "kwargs": {"max_cycles": 6},
+  "roles": {"p0": "player_0", "p1": "player_1"},
+  "seed": 19,
+  "max_world_steps": 128
+}
