@@ -257,6 +257,18 @@ The job summary reports each key.
   - Token and cost totals sum every agent.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
 
+### Automatic retry records
+
+When a local job schedules an automatic retry for a seat trial, Harbor
+appends a record to `retry-attempts.jsonl` in the job directory before replacing
+the failed attempt. The record includes the old attempt UUID, its number in the
+queue invocation, and the exception types for the trial and failing seats.
+It does not include logs, exception messages, or credentials.
+
+A record does not mean that the replacement starts or succeeds. The trial
+directory and job totals still describe only the retained result. The file
+does not record removals requested with `harbor job resume`.
+
 ## Limitations
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.

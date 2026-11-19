@@ -200,6 +200,39 @@ class TrialQueue:
                 )
                 return result
 
+            if trial_config.participants:
+                import json
+
+                job_id = result.config.job_id
+                finished_at = result.finished_at
+                trial_exception = result.exception_info
+                record = {
+                    "schema": "harbor-seat-retry-attempt/v1",
+                    "job_id": str(job_id) if job_id is not None else None,
+                    "trial_id": str(result.id),
+                    "trial_name": result.trial_name,
+                    "attempt": attempt + 1,
+                    "finished_at": (
+                        finished_at.isoformat() if finished_at is not None else None
+                    ),
+                    "trial_exception_type": (
+                        trial_exception.exception_type
+                        if trial_exception is not None
+                        else None
+                    ),
+                    "seat_exceptions": [
+                        {"seat": seat.seat, "exception_type": error.exception_type}
+                        for seat in result.seat_results or ()
+                        if (error := seat.exception_info) is not None
+                    ],
+                }
+                sidecar = trial.paths.trial_dir.parent / "retry-attempts.jsonl"
+                try:
+                    with sidecar.open("a", encoding="utf-8") as stream:
+                        stream.write(json.dumps(record, separators=(",", ":")) + "\n")
+                except OSError:
+                    self._logger.warning("Could not record seat retry attempt")
+
             shutil.rmtree(trial.paths.trial_dir, ignore_errors=True)
 
             delay_sec = self._calculate_backoff_delay_sec(attempt)
