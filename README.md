@@ -61,6 +61,8 @@ verifier, and the limitations.
 
 [SeatLab](examples/seatlab/native-model-results.md) compares the server's message log with the agents' submitted actions. It includes 616 archived trials and a new experiment with 2 model seats. The [replication guide](examples/seatlab/replication.md#run-2-new-model-seats-in-harbor) shows how to run the experiment, record model costs, and read the results with stock Eval Lab. The published results need no API key.
 
+To connect an existing harness, try the [calendar team with a prompt-only callback](examples/seatlab/replication.md#try-a-native-team-without-an-api-key). Run the no-key demo first. Then replace the fixed replies with your own model. Harbor runs both seats and scores their actual submissions. Your model stays in a separate host process.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a

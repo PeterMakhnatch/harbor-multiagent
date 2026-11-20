@@ -272,6 +272,9 @@ def _decode_wire(wire: str, *, ready: bool) -> tuple[int, ...] | None:
 class CalendarSeat(BaseAgent):
     """One host actor, with only its own scoped Flotilla API and local view."""
 
+    _declared_model: str | None = DECLARED_MODEL
+    _run_prefix = "cf-"
+
     def __init__(
         self,
         logs_dir: Path,
@@ -301,7 +304,7 @@ class CalendarSeat(BaseAgent):
             or bool(extra_env)
         ):
             raise ValueError("Invalid calendar seat configuration")
-        declared = None if control else DECLARED_MODEL
+        declared = None if control else self._declared_model
         if model_name not in (None, declared):
             raise ValueError("Invalid calendar model declaration")
         self._own = calendar_protocol.decode_list(_json({"starts": own_starts}))
@@ -312,7 +315,7 @@ class CalendarSeat(BaseAgent):
             override_setup_timeout_sec=override_setup_timeout_sec,
         )
         self._block = calendar_protocol.Block(world, direction, repetition)
-        self._run = f"{self._block.id}-{arm}"
+        self._run = f"{self._run_prefix}{self._block.id.removeprefix('cf-')}-{arm}"
         self._arm = arm
         self._seat = seat
         self._is_control = control
