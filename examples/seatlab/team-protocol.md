@@ -64,6 +64,20 @@ python -m examples.seatlab.committee.analysis "$PRIVATE_STUDY" --spend-dir "$SEA
   --study "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"
 ```
 
+### Live recommendation: should 3 peers receive a designated analyst's advice?
+
+**Registered before the first recommendation trial.** These are fresh interactive Harbor teams, not second votes on frozen ballots. Test the delivery of advice without giving the team more model calls.
+
+1. Each of 4 model seats shares 1 real dossier fact using the novelty instruction. Once all 4 posts arrive, each seat privately drafts a choice and citations. It sees no peer choices at this stage. The adapter posts that ballot to the native thread using blinded aliases.
+2. A designated seat, the chair, sees the same evidence and all 4 draft ballots. It makes 1 new model call to recommend a choice and citations. It can recommend any visible choice, including a wrong one. No code computes a recommendation.
+3. All 4 seats wait for the real chair post. Each final voter sees its own evidence and the 4 actual drafts. `shown` also shows the chair recommendation to every voter. `masked` shows it only to the chair. Both arms write identical *types* of posts, but independent models can submit different content. Each seat submits exactly 1 stock vote. A draft ballot never counts as a native vote.
+
+Use all 6 label maps, 2 repetitions per map and 2 delivery arms. For map `m` and repetition `r`, chair seat index is `(2*m+r) mod 4`. Each seat chairs 3 matched pairs. Start `masked` when `m+r` is even; otherwise start `shown`. Use the same stock task, model, direct ledger and existing limits. A complete trial takes 13 direct calls. Schedule 24 first attempts and at most 312 calls. Stop the cohort on the first incomplete trial. Keep its charges and unattempted slots. Do not retry or replace it.
+
+Primary: native team reward, `shown − masked`, paired within map and repetition. Average pairs within map, then weight the 6 maps equally. With no pair in any map, report a partial result, not a 6-map estimate. Secondary: correct votes, changes towards the chair among 3 nonchair voters, and changes from wrong to correct or correct to wrong. Count only actual submitted choices. Report draft disagreement, differences in facts and first ballots across paired teams, and the chair's own accuracy. Never infer that a model used advice solely because its vote agreed. The 6 maps repeat one vendor problem.
+
+The stock server returns the whole thread. The host selects which messages reach each model. Bind each prompt to its source board snapshot, native action and seat receipt. The control masks the chair **from 3 model requests**, not from the native server. The 2 arms use the same number of posts, ballots, and calls when complete.
+
 ### Voting follow-up: does computing totals before choosing help?
 
 **Registered before the first follow-up call.** The previous teams supplied all 4 private facts in 11 trials without a single winning majority. This study changes the voting interface, not the sender instruction. No tool computes the totals for the model, chooses its vote, repairs arithmetic, or changes the native verifier.
