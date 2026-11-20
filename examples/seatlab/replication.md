@@ -161,6 +161,8 @@ Run repetition, world, then direction. Within a block, run `blind` first if thei
 
 Primary: the paired change in native verifier success, `peer − blind`. Average complete contrasts within a world, then weight the 12 worlds equally. Withhold the full-panel estimate if any world lacks a complete pair. Report coverage, each arm, direction, and repetition. Secondary: whether a sender reports the true start, reports its exact local set, or changes its list after the recheck. When both arms deliver the same revised list, report how often the receiver changes its answer despite identical input. Twelve synthetic worlds and one provider bound generalization. A successful submission does not prove that either model computed the full calendar correctly.
 
+An invalid model action can count as a native zero only when the retained response fails the grammar and the stock verifier confirms that no submission succeeded. Report this case separately. An absent model response or native reward is unknown, not zero. Alongside the primary result, report accepted-decision pairs and bounds that give each unknown binary reward its full range from 0 to 1.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
