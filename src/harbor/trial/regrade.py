@@ -436,6 +436,11 @@ class RegradeTrial(Trial):
                 f"Source trial '{source_dir.name}' has no readable result.json; "
                 "nothing to regrade."
             )
+        if self._source_result.seat_results or self._source_result.config.participants:
+            raise RegradeError(
+                f"Source trial '{source_dir.name}' has seats; "
+                "regrade does not support multi-agent trials."
+            )
         if self.config.verifier.disable:
             raise RegradeError("Regrade with verification disabled does nothing.")
         task_error = check_task_regradable(self.task.task_dir)
