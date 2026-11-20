@@ -29,3 +29,48 @@ Each analyst has 5 shared facts and 1 private fact. The shared facts favor the w
 - Keep all 8 turns' actual served models, token-based costs, and unresolved reservations. Use the same temperature, JSON-only transport, account balance floor, and cumulative $1 local cap as the [direct Flash protocol](replication.md#direct-deepseek-cohort-amendment-before-its-first-call). This experiment does not reset the allowance. Stop on an accounting guard or a systematic platform failure. Do not retry failed generations.
 
 The 6 label maps repeat **one underlying team problem**. They are not 6 independent tasks. The fixed one-message budget tests information selection; it does not measure whether agents would speak voluntarily in an open conversation.
+
+### What the 4 analysts did
+
+**The novelty cue changed what analysts shared. It did not produce a winning majority.** Both arms used the same voting instruction. Each vote used the analyst's own dossier and the 4 real posts.
+
+| Measured outcome | Open instruction | Novelty instruction |
+|---|---:|---:|
+| Complete native teams | 11 | 11 |
+| Private facts in 44 posts | 5 | 44 |
+| Teams that published at least 3 distinct private facts | 0 | 11 |
+| Correct individual votes | 3 / 44 | 14 / 44 |
+| Teams with a correct majority | 1 / 11 | 0 / 11 |
+
+Within matched trials, the cue added **3.58 distinct private facts per team** after weighting each label map equally. The cue added 0.92 correct votes per team with the same weighting. This was not enough to produce a majority in any novelty trial. The one open team that won posted no private facts. A winning vote alone does not establish successful evidence sharing. These observations concern **one vendor problem and one model**, not all team tasks.
+
+We scheduled 24 trials and completed 11 pairs across all 6 label maps. In trial `hp-m5-r1-open`, 1 analyst returned an invalid share action. The other 3 submitted a fact and timed out waiting for the fourth. No vote requests ran. The driver stopped before `hp-m5-r1-novelty`. Neither cell counted as a loss. We did not retry either cell.
+
+The [public per-seat results](results/committee-sharing.json) include all 24 slots and the actual submitted votes and citations for the 22 complete trials. The [cost report](results/committee-sharing-cost.json) covers all 180 direct requests, including the 4 paid share requests in the incomplete trial. The list-price estimate is **$0.007414092**: 11,264 cached input tokens, 40,370 uncached input tokens, and 2,208 output tokens. No reservation remains open. This estimate is not an invoice.
+
+Run the following commands from the fork root. Use a project-local Harbor 0.26.0 installation. Use a separate private output directory and the [existing direct spend guard](replication.md#run-a-new-blinded-listener-experiment). `plan` and `analysis` run offline. `run` starts a native Docker trial and can charge for up to 8 direct calls.
+
+```bash
+export PYTHONPATH="$PWD/src:$PWD/examples/seatlab:$PWD/examples:$PWD"
+python -m examples.seatlab.committee.driver plan
+# TASK points to the exact unmodified hidden_profile_unshared task linked above.
+keys run -- python -m examples.seatlab.committee.driver run \
+  --out "$PRIVATE_STUDY" --harbor "$HARBOR" --task "$TASK" --cell hp-m0-r0-open
+python -m examples.seatlab.committee.analysis "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+### Voting follow-up: does computing totals before choosing help?
+
+**Registered before the first follow-up call.** The previous teams supplied all 4 private facts in 11 trials without a single winning majority. This study changes the voting interface, not the sender instruction. No tool computes the totals for the model, chooses its vote, repairs arithmetic, or changes the native verifier.
+
+Use the same unmodified task and direct model. Each seat in every new trial uses the original **novelty** sharing prompt, then votes on the 4 actual posts. Run 3 voter interfaces:
+
+- `plain`: use the original vote prompt and response format without changes.
+- `first`: ask the voter to write its 3 signed integer totals **before** its choice and citations.
+- `last`: ask it to write its choice and citations **before** the same 3 totals.
+
+Require each structured response to contain 3 labeled integer totals, 1 valid choice, and valid visible citations. Accept incorrect totals and choices that disagree with the model's own totals. Submit only the model's choice and citations to the stock world. Record the actual response field order without forcing it to match the requested order. Plain responses have no observed totals.
+
+Use each of the 6 label maps twice per interface: 36 new teams and at most 288 direct requests. For map `m` and repetition `r`, rotate `[plain, first, last]` left by `(m + r) mod 3`. Reverse the rotated order if `r = 1`. Use the same direct spend directory and limits. Keep each first attempt. Continue past a rejected model action only if the native evidence identifies that failure, any other failures are waiting on a missing peer, and all attempted calls are settled. Stop for a provider, budget, transport, evidence, or environment failure. Never retry a failed trial.
+
+Primary: `first − plain` in native team reward on complete pairs. Average repeats within map; weight all 6 maps equally. Secondary: `first − last`, correct individual votes, per-seat agreement between reported totals and the signed sum of *visible distinct* facts, agreement between the vote and the model's own largest reported total, actual response field order, and output tokens. Show differences in submitted messages across arms. Separately report matched comparisons where every analyst has the same observable evidence. Do not call unmatched team contexts identical. An incomplete arm never counts as a wrong vote. This is still 1 vendor problem.
