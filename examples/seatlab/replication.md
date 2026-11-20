@@ -197,6 +197,21 @@ python -m "$packet" compare-tables "$private_tasks/schedule"
 
 We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
 
+**Result on the 12 original task identities.** All 48 pairs completed. Both seats returned valid responses in all 96 native teams. The stock verifier accepted the meeting in 4/48 blind teams and 0/48 peer-informed teams. The registered equal-world difference was **−8.33 percentage points**. No outcomes were missing. The 4 blind wins came from 3 worlds. This result does not establish that peer feedback harms scheduling in general.
+
+| Observation | Blind recheck | Peer-informed recheck |
+| --- | ---: | ---: |
+| Sender changed its initial list | 22/48 | 27/48 |
+| Sender's revised list contained the common start | 19/48 | 17/48 |
+| Sender's revised list exactly matched its own calendar | 0/48 | 0/48 |
+| Receiver chose a start that fit its own calendar | 11/48 | 8/48 |
+| Native wins by receiver direction (0, 1) | 1/24, 3/24 | 0/24, 0/24 |
+| Native wins by repetition (0, 1) | 3/24, 1/24 | 0/24, 0/24 |
+
+None of the 96 initial lists exactly matched the reporting seat's calendar. In 13 pairs the sender delivered the same list twice. The receiver then saw identical final prompts but chose different starts in 10/13 pairs. All 4 wins came from pairs with different final prompts. Treat changes in the receiver's decision as model variation unless the paired comparison supports a stronger claim.
+
+The unmodified Eval Lab reader matched 96 distinct native trials and 192 paid seat calls. Another 96 paid calls generated the shared initial lists. All 288 calls settled. Direct model cost: **$0.013205205**, including the initial lists. See the [paired outcomes](results/flotilla-calendar-results.json), [Eval Lab reconciliation](results/flotilla-calendar-evallab.json), and [per-call costs](results/flotilla-calendar-cost.json). These files contain no private calendars, credentials, or raw model text.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
