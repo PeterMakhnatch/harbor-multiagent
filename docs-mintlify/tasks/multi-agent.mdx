@@ -280,6 +280,9 @@ It does not wait for task-wide artifact transfers or verification.
 On trial cancellation during play, the trial's `CANCEL` event precedes recovery and `SEAT_END`.
 Use `event.seat_result` for the seat's snapshot and `event.result` for the trial's snapshot at that event.
 A seat hook that raises or exceeds 0.5 seconds is logged and does not affect the trial outcome.
+If the hook is still pending when its 0.5-second wait expires, Harbor requests cancellation without waiting for it to finish.
+Harbor does the same if the trial is canceled while Harbor waits for the hook.
+A seat hook can delay or ignore cancellation. Do not rely on it to finish cleanup before verification.
 Seat hooks run outside the shared agent timeout. They are observers, not concurrency controls.
 
 ## Limitations
