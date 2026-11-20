@@ -94,6 +94,22 @@ Use each of the 6 label maps twice per interface: 36 new teams and at most 288 d
 
 Primary: `first − plain` in native team reward on complete pairs. Average repeats within map; weight all 6 maps equally. Secondary: `first − last`, correct individual votes, per-seat agreement between reported totals and the signed sum of *visible distinct* facts, agreement between the vote and the model's own largest reported total, actual response field order, and output tokens. Show differences in submitted messages across arms. Separately report matched comparisons where every analyst has the same observable evidence. Do not call unmatched team contexts identical. An incomplete arm never counts as a wrong vote. This is still 1 vendor problem.
 
+#### What changed when analysts wrote totals first?
+
+All 36 native teams completed. Every team shared all 4 private facts. The paired teams had the same observable facts in every registered comparison.
+
+| Outcome | Plain ballot | Totals before choice | Totals after choice |
+| --- | ---: | ---: | ---: |
+| Teams with a correct majority | 0 / 12 | 11 / 12 | 0 / 12 |
+| Correct individual votes | 10 / 48 | 45 / 48 | 11 / 48 |
+| All 3 reported totals exactly correct | Not requested | 0 / 48 | 5 / 48 |
+| Choice matched the highest reported total | Not requested | 48 / 48 | 23 / 48 |
+| Output tokens on voting turns | 963 | 1,697 | 1,761 |
+
+**Writing totals first changed the vote, but did not make the totals correct.** The primary increase in native majority wins was 91.7 percentage points. The increase was also 91.7 points against the totals-last interface. All 96 structured votes followed the requested field order. The host accepted wrong totals and never used them to choose or repair a vote. The results concern 1 model on 1 vendor problem. Do not treat an accurate vote as evidence of accurate arithmetic.
+
+The [native results](results/committee-tally-results.json) include both paired comparisons and each accepted readout. The [288 direct calls](results/committee-tally-cost.json) used 18,432 cached input tokens, 68,736 uncached input tokens, and 5,285 output tokens. The price estimate is **$0.013536696 USD**, not an invoice. No reservation remains open.
+
 ### Peer ballots: does showing the other 3 votes help a second decision?
 
 **Registered after the sharing study, before any second-ballot requests.** The source is the first `novelty` repetition for **every** label map. All 6 source teams completed. We know their original votes. We do not select teams by disagreement or outcome. This experiment changes a recorded team's information policy; it does not run those native teams again.
@@ -105,3 +121,35 @@ Use 3 second-ballot interfaces. Each makes 1 new direct request per seat. `priva
 Use 2 complete blocks: 6 source teams × 4 seats × 3 interfaces × 2 blocks = 144 planned requests. Rotate the interface order by `(map_index + seat_index + block) mod 3`. Reverse that order in block 1. Never retry a request or repair a vote. Keep a missing receipt distinct from a wrong answer. Use the same direct spend limit. Stop on a transport, identity, or budget failure.
 
 Primary: `choices − private` in the fraction of correct second votes. Secondary: `cited − choices`, strict group majority (3 of 4), changes towards a unique plurality among the 3 peers, changes away from an initially correct vote, and cost. Report all denominators. Pair by original team, seat, and block. Average seat pairs and blocks within each source team; weight the 6 teams equally. A group comparison requires all 4 second votes in both interfaces. This is 1 vendor problem, not 6 independent tasks. A second-ballot majority is a **derived** result and must never replace the native reward.
+
+#### What changed when analysts saw their peers' votes?
+
+All 144 new model decisions completed. The 3 interfaces used the same 24 source seats, each sampled twice. The original 6 Harbor results did not change.
+
+| New decision | Other ballots hidden | Peer choices | Peer choices and citations |
+| --- | ---: | ---: | ---: |
+| Correct second votes | 12 / 48 | 11 / 48 | 8 / 48 |
+| Initially correct votes changed to wrong | 4 / 16 | 5 / 16 | 8 / 16 |
+| Initially dissenting voters changed to the peers' plurality | 4 / 28 | 5 / 28 | 8 / 28 |
+| Groups with a strict majority | 8 / 12 | 8 / 12 | 11 / 12 |
+| Groups with a correct strict majority | 0 / 12 | 0 / 12 | 0 / 12 |
+
+Showing choices changed the correct-vote rate by −2.1 percentage points against hiding them. Adding citations changed it by −6.25 points against showing choices alone. All 6 maps contributed to both comparisons. More groups reached agreement when the model saw citations. None reached a correct majority. Even the hidden interface changed 4 originally correct answers without receiving a peer ballot. The groups are reconstructions, not live deliberations. The results apply to this packet and model.
+
+The [replay results](results/committee-peer-ballots.json) retain both blocks and all paired denominators. The [144 settled calls](results/committee-peer-ballots-cost.json) used 36,480 cached input tokens, 27,240 uncached input tokens, and 2,979 output tokens. The price estimate is **$0.005982840 USD**. No reservation remains open.
+
+#### Run your own second-ballot agent without the private archive
+
+The [public packet](results/peer-ballot-packet.json) contains 6 native source teams and the first actions of 24 seats. `verify`, `prompt`, and `decode` run offline with Python 3.12 or later. They do not require Harbor, Eval Lab, Docker, or an API key.
+
+```bash
+module=examples.seatlab.committee.ballot_packet
+packet=examples/seatlab/results/peer-ballot-packet.json
+digest=c8f743895f9e2fbecdf8b58201100bdb602186672a482c5545549408c5857095
+python -m "$module" verify "$packet" --expect-sha256 "$digest"
+python -m "$module" prompt "$packet" --expect-sha256 "$digest" --map 0 --seat 1 --arm choices > user.txt
+# Give your agent only user.txt, never the whole packet. Save its response in ballot.json.
+python -m "$module" decode "$packet" --expect-sha256 "$digest" --map 0 --seat 1 < ballot.json
+```
+
+Use `private` to hide the other ballots or `cited` to show their submitted citations. `decode` accepts a choice and citations visible to that voter. It does not correct a wrong choice. To reproduce the exact bytes, run `export "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"` with the original trial archive. The external digest binds the packet bytes. It does not independently authenticate the provider.
