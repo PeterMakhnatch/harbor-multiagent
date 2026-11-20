@@ -1287,14 +1287,16 @@ class Trial(ABC):
         # native config, neither of which appears in its extra_env. A seat
         # trial passes each seat's agent as primary_agent.
         for agent in (primary_agent, self.user_agent):
-            if not isinstance(agent, BaseInstalledAgent):
+            # Every agent can resolve a key, not only installed ones: terminus-2
+            # takes llm_kwargs.api_key or a host variable through model_connection.
+            if agent is None:
                 continue
             try:
                 api_key = agent.model_connection.api_key
             except Exception:
                 # A failed connection resolution must not skip other secrets.
                 continue
-            if api_key:
+            if isinstance(api_key, str) and api_key:
                 secrets.add(api_key)
         # ACP exec envs carry every MCP header under an AUTH-named variable.
         # Only the header credentials in mcp_header_env.secrets are secrets.

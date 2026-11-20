@@ -1774,6 +1774,30 @@ def _downloader_serving(stored: dict[str, bytes]) -> Downloader:
 
 
 class TestSeatTrialUpload:
+    def test_seat_credentials_stop_the_archive(self, tmp_path: Path) -> None:
+        """Review #1 (critical): seat logs of older runs can still hold another
+        seat's key; the upload must fail closed, not publish them."""
+        from harbor.upload.uploader import SeatCredentialError
+
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        log = trial_dir / "seats" / "p2" / "agent" / "terminus_2.log"
+        log.write_text("request header: Bearer sk-or-v1-" + "a1" * 32 + "\n")
+
+        with pytest.raises(SeatCredentialError) as error:
+            _create_trial_archive(trial_dir)
+        assert "seat p2" in str(error.value)
+        assert "sk-or-v1" not in str(error.value)
+
+    def test_clean_seat_logs_still_archive(self, tmp_path: Path) -> None:
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        log = trial_dir / "seats" / "p1" / "agent" / "terminus_2.log"
+        log.write_text("model said: sk is not a key; the skeleton key is a metaphor\n")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            assert "seats/p1/agent/terminus_2.log" in tar.getnames()
+
     def test_trial_archive_includes_each_seat(self, tmp_path: Path) -> None:
         trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
         (trial_dir / "seats" / "p1" / "scratch.txt").write_text("not an output")

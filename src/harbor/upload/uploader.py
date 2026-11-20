@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import logging
+import re
 import tarfile
 import time
 from collections.abc import Callable
@@ -922,10 +923,47 @@ def _add_seat_archive_entries(
             path = trial_dir / "seats" / seat / name
             if not path.exists() or path.resolve() != seats_dir / seat / name:
                 continue
+            _check_seat_credentials(path, seat)
             tar.add(
                 path,
                 arcname=f"{arcname_prefix}seats/{seat}/{name}",
                 filter=_keep_seat_member,
+            )
+
+
+# Credential shapes that must never leave the machine in a seat's files. Seat
+# logs of runs made before per-seat scrubbing can still hold another seat's key.
+_CREDENTIAL_PATTERNS = re.compile(
+    rb"(sk-(?:ant-|or-v1-|proj-)?[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|gh[pousr]_[A-Za-z0-9]{36,}"
+    rb"|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})"
+)
+_CREDENTIAL_SCAN_LIMIT = 64 * 1024 * 1024  # bytes per file
+
+
+class SeatCredentialError(ValueError):
+    """A seat's files hold a credential-shaped string; the trial is not uploaded."""
+
+
+def _check_seat_credentials(root: Path, seat: str) -> None:
+    """Refuse to archive seat files that look like they hold a credential.
+
+    Fails closed: the trial's upload stops with an error that names the file
+    (never the value), so it is not finalized and a later run can retry it
+    after the files are scrubbed.
+    """
+    paths = [root] if root.is_file() else sorted(root.rglob("*"))
+    for path in paths:
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            with path.open("rb") as handle:
+                data = handle.read(_CREDENTIAL_SCAN_LIMIT)
+        except OSError:
+            continue
+        if _CREDENTIAL_PATTERNS.search(data):
+            raise SeatCredentialError(
+                f"seat {seat}: {path.name} contains a credential-shaped string; "
+                "scrub the seat's files before uploading this trial"
             )
 
 

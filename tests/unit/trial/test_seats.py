@@ -702,3 +702,35 @@ def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
         f"  raj: {AGENT} (under test)",
         f"  lee: {AGENT}",
     ]
+
+
+async def test_terminus_seat_resolved_key_is_scrubbed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """terminus-2 is a plain BaseAgent, not an installed agent; its model key
+    (here from llm_kwargs.api_key) must still be scrubbed from seat logs."""
+    for name in ("OPENAI_API_KEY", "MSWEA_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    key = "terminus-native-model-key"
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            {
+                "seat": "maya",
+                "name": "terminus-2",
+                "model_name": "openai/gpt-4o",
+                "kwargs": {"llm_kwargs": {"api_key": key}},
+            },
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    seats = {seat.name: seat for seat in trial.seats}
+    assert seats["maya"].agent.model_connection.api_key == key
+    log = seats["raj"].paths.agent_dir / "terminus_2.log"
+    log.write_text(f"leaked: {key}\n")
+
+    trial._scrub_jobs_dir()
+
+    assert log.read_text() == "leaked: [REDACTED]\n"
