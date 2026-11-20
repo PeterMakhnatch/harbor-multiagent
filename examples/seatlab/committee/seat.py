@@ -1,4 +1,4 @@
-"""Run one native hidden-profile seat with two direct host model turns."""
+"""Run one native hidden-profile seat with direct host model turns."""
 
 import asyncio
 import json
@@ -18,7 +18,7 @@ from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 
 from ..visibility import deepseek
-from . import contract, schedule
+from . import contract, recommendation, schedule
 
 _SCHEMA = "seatlab.committee-seat/v1"
 _MODEL = f"deepseek/{deepseek.MODEL}"
@@ -168,6 +168,38 @@ async def _wait_for_chat(
         raise _SeatFailure("chat_barrier_timeout") from None
 
 
+async def _wait_for_recommendation_chat(
+    environment: SeatEnvironment,
+    map_index: int,
+    chair: str,
+    phase: str,
+    own: list[dict[str, Any]],
+) -> tuple[recommendation.Board, list[int]]:
+    try:
+        async with asyncio.timeout(_BARRIER_TIMEOUT_SEC):
+            while True:
+                chat = await _world(environment, _WorldAction.READ_CHAT)
+                try:
+                    view = recommendation.board(chat, map_index, chair)
+                except ValueError:
+                    raise _SeatFailure("invalid_chat_snapshot") from None
+                messages = chat["messages"]
+                if [row for row in messages if row["seat"] == own[0]["seat"]] != own:
+                    raise _SeatFailure("invalid_chat_snapshot")
+                if (
+                    len(view.facts["messages"]) == len(contract.ROLES)
+                    and (
+                        phase == "proposal"
+                        or len(view.proposals) == len(contract.ROLES)
+                    )
+                    and (phase != "vote" or view.recommendation is not None)
+                ):
+                    return view, [row["seq"] for row in messages]
+                await asyncio.sleep(_POLL_SEC)
+    except TimeoutError:
+        raise _SeatFailure("chat_barrier_timeout") from None
+
+
 def _accumulate_usage(context: AgentContext, usage: object) -> bool:
     if (
         not isinstance(usage, tuple)
@@ -204,7 +236,11 @@ class CommitteeSeat(BaseAgent):
             raise ValueError("Committee seat does not accept overrides")
         if (
             role not in contract.ROLES
-            or (arm not in contract.ARMS and arm not in schedule.TALLY_ARMS)
+            or (
+                arm not in contract.ARMS
+                and arm not in schedule.TALLY_ARMS
+                and arm not in schedule.RECOMMENDATION_ARMS
+            )
             or type(map_index) is not int
             or not 0 <= map_index < 6
             or not isinstance(run_id, str)
@@ -218,11 +254,27 @@ class CommitteeSeat(BaseAgent):
             for cell in schedule.tally_grid()
         ):
             raise ValueError("Invalid tally run identity")
+        chair = None
+        if arm in schedule.RECOMMENDATION_ARMS or run_id.startswith("rc-"):
+            cell = next(
+                (
+                    cell
+                    for cell in schedule.recommendation_grid()
+                    if cell["cell_id"] == run_id
+                    and cell["map_index"] == map_index
+                    and cell["arm"] == arm
+                ),
+                None,
+            )
+            if cell is None:
+                raise ValueError("Invalid recommendation run identity")
+            chair = schedule.chair(map_index, cell["repetition"])
         super().__init__(logs_dir=logs_dir, model_name=_MODEL, logger=logger)
         self._role = role
         self._map_index = map_index
         self._arm = arm
         self._run_id = run_id
+        self._chair = chair
         self._started = False
 
     @staticmethod
@@ -304,6 +356,75 @@ class CommitteeSeat(BaseAgent):
         record["status"] = "submitting"
         return action
 
+    async def _submit_chat(
+        self,
+        environment: SeatEnvironment,
+        phase: str,
+        record: dict[str, Any],
+        actions: dict[str, dict[str, Any]],
+        action: dict[str, Any],
+    ) -> dict[str, Any]:
+        actions[phase] = action
+        acknowledgment = await _world(environment, _WorldAction.SHARE, action)
+        if (
+            not _chat_message(acknowledgment)
+            or acknowledgment["seat"] != self._role
+            or acknowledgment["text"] != action["text"]
+        ):
+            raise _SeatFailure(f"{phase}_unacknowledged")
+        record["status"] = "submitted"
+        return acknowledgment
+
+    async def _play_recommendation(
+        self,
+        environment: SeatEnvironment,
+        context: AgentContext,
+        metadata: dict[str, Any],
+        actions: dict[str, dict[str, Any]],
+        dossier: dict[str, Any],
+        chair: str,
+        share_ack: dict[str, Any],
+    ) -> dict[str, Any]:
+        own = [share_ack]
+
+        async def turn(phase: str) -> dict[str, Any]:
+            metadata["phase"] = phase
+            view, seqs = await _wait_for_recommendation_chat(
+                environment, self._map_index, chair, phase, own
+            )
+            # Record the actual GET even when it includes faster peers' posts.
+            # The first ballot must still use only the frozen fact view.
+            metadata["read_msg_seqs"][phase] = seqs
+
+            def prompt() -> str:
+                if phase == "proposal":
+                    return contract.vote_prompt(dossier, view.facts, self._map_index)
+                return recommendation.turn_prompt(
+                    phase, dossier, view, self._map_index, self._role, chair, self._arm
+                )
+
+            def action(text: str) -> dict[str, Any]:
+                vote = contract.vote_action(text, dossier, view.facts, self._map_index)
+                if phase == "vote":
+                    return vote
+                return recommendation.post(phase, vote, self._map_index)
+
+            return await self._turn(
+                phase, context, metadata["turns"][phase], prompt, action
+            )
+
+        chat_phases = (
+            ("proposal", "recommend") if self._role == chair else ("proposal",)
+        )
+        for phase in chat_phases:
+            action = await turn(phase)
+            own.append(
+                await self._submit_chat(
+                    environment, phase, metadata["turns"][phase], actions, action
+                )
+            )
+        return await turn("vote")
+
     async def _play(
         self,
         environment: SeatEnvironment,
@@ -324,45 +445,53 @@ class CommitteeSeat(BaseAgent):
             context,
             share_record,
             lambda: contract.share_prompt(
-                dossier, self._map_index, "novelty" if tally else self._arm
+                dossier,
+                self._map_index,
+                "novelty" if tally or self._chair is not None else self._arm,
             ),
             lambda text: contract.share_action(text, dossier, self._map_index),
         )
-        actions["share"] = share
-        acknowledgment = await _world(environment, _WorldAction.SHARE, share)
-        if (
-            not _chat_message(acknowledgment)
-            or acknowledgment["seat"] != self._role
-            or acknowledgment["text"] != share["text"]
-        ):
-            raise _SeatFailure("share_unacknowledged")
-        share_record["status"] = "submitted"
+        acknowledgment = await self._submit_chat(
+            environment, "share", share_record, actions, share
+        )
 
-        metadata["phase"] = "barrier"
-        chat = await _wait_for_chat(environment, acknowledgment)
-
-        metadata["phase"] = "vote"
         vote_record = metadata["turns"]["vote"]
-        if tally:
-            vote = await self._turn(
-                "vote",
+        if self._chair is not None:
+            vote = await self._play_recommendation(
+                environment,
                 context,
-                vote_record,
-                lambda: contract.tally_prompt(
-                    dossier, chat, self._map_index, self._arm
-                ),
-                lambda text: contract.tally_action(
-                    text, dossier, chat, self._map_index, self._arm
-                ),
+                metadata,
+                actions,
+                dossier,
+                self._chair,
+                acknowledgment,
             )
         else:
-            vote = await self._turn(
-                "vote",
-                context,
-                vote_record,
-                lambda: contract.vote_prompt(dossier, chat, self._map_index),
-                lambda text: contract.vote_action(text, dossier, chat, self._map_index),
-            )
+            metadata["phase"] = "barrier"
+            chat = await _wait_for_chat(environment, acknowledgment)
+            metadata["phase"] = "vote"
+            if tally:
+                vote = await self._turn(
+                    "vote",
+                    context,
+                    vote_record,
+                    lambda: contract.tally_prompt(
+                        dossier, chat, self._map_index, self._arm
+                    ),
+                    lambda text: contract.tally_action(
+                        text, dossier, chat, self._map_index, self._arm
+                    ),
+                )
+            else:
+                vote = await self._turn(
+                    "vote",
+                    context,
+                    vote_record,
+                    lambda: contract.vote_prompt(dossier, chat, self._map_index),
+                    lambda text: contract.vote_action(
+                        text, dossier, chat, self._map_index
+                    ),
+                )
         actions["vote"] = vote
         if await _world(environment, _WorldAction.VOTE, vote) != {
             "seat": self._role,
@@ -384,6 +513,12 @@ class CommitteeSeat(BaseAgent):
         if self._started:
             raise _SeatFailure("seat_already_started")
         self._started = True
+        phases = ("share",)
+        if self._chair is not None:
+            phases += ("proposal",)
+            if self._role == self._chair:
+                phases += ("recommend",)
+        phases += ("vote",)
         turns: dict[str, dict[str, Any]] = {
             phase: {
                 "status": "not_started",
@@ -393,7 +528,7 @@ class CommitteeSeat(BaseAgent):
                 "response_sha256": None,
                 "action_sha256": None,
             }
-            for phase in ("share", "vote")
+            for phase in phases
         }
         metadata: dict[str, Any] = {
             "schema": _SCHEMA,
@@ -405,6 +540,8 @@ class CommitteeSeat(BaseAgent):
             "status": "running",
             "turns": turns,
         }
+        if self._chair is not None:
+            metadata["read_msg_seqs"] = {}
         context.metadata = metadata
         context.n_input_tokens = context.n_cache_tokens = context.n_output_tokens = None
         actions: dict[str, dict[str, Any]] = {}
