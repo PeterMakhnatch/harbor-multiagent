@@ -438,6 +438,16 @@ arm's oracle result: the solo oracle applies the two gold patches in turn,
 the team oracles merge two branches, and the pairs where each earns 1 can
 differ.
 
+#### What the arms cannot hide
+
+Opaque task names hide the arm and the pair from every name a seat can see,
+but not from the task itself: the instructions state the arm, and the
+problem statement and repository are public. A seat with the public network
+can look up the pair, its teammate's feature and the gold patches. Report the
+rate of seats that solve their teammate's feature alone (rogue solo) per arm
+next to any arms comparison, or the coordination numbers carry that hole
+unevenly across arms.
+
 #### How to run the arms
 
 1. Build the solo roster and the team roster into folders of their own, so
