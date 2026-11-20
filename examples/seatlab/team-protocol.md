@@ -123,3 +123,15 @@ python -m "$module" decode "$packet" --expect-sha256 "$digest" --map 0 --seat 1 
 ```
 
 Use `private` to hide the other ballots or `cited` to show their submitted citations. `decode` accepts a choice and citations visible to that voter. It does not correct a wrong choice. To reproduce the exact bytes, run `export "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"` with the original trial archive. The external digest binds the packet bytes. It does not independently authenticate the provider.
+
+### Does an index of distinct facts help an external voter add the evidence?
+
+This study transfers a native Harbor decision into Inspect AI. It runs new model decisions. It does not create a new Harbor team or change an original reward.
+
+Freeze the 6 source teams and 24 seats in the [published packet](results/peer-ballot-packet.json). Its SHA-256 is `c8f743895f9e2fbecdf8b58201100bdb602186672a482c5545549408c5857095`. Use only the facts that the original seat could see before its first vote. Withhold every source ballot and the task answer.
+
+Each Inspect sample requests signed option totals, then a choice and citations. `separate` uses the original totals-first prompt with a dossier and 4 submissions. `indexed` shows each distinct fact once. It preserves the option, signed points, private/shared provenance, dossier membership, and number of submitted copies. It does not add points or suggest a choice. This tests the *whole layout*, not deduplication alone.
+
+Run 2 blocks × 6 option maps × 4 seats × 2 layouts = 96 one-turn samples. Alternate which layout goes first by the parity of `block + map + seat`, with all indices starting at 0. Start with `separate` for even parity. Use one fixed direct DeepSeek model and the existing budget guard. Do not use tools, generation caches, retries, or fallback models. Stop at a provider, identity, or budget failure. Keep invalid responses and missing samples separate.
+
+Primary: compare the fraction with all 3 visible totals correct, `indexed − separate`. Pair the same seat, map, and block. Average matched pairs within each map, then give each map equal weight. Report how many maps and pairs contribute. Secondary: correct choice against the native world; agreement with a visible maximum; output field order; derived 3-of-4 majorities on complete paired groups; tokens and estimated cost. These 6 maps relabel 1 vendor problem. They are not 6 independent tasks. No result from this study establishes an improvement in native Harbor rewards.
