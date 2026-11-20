@@ -43,6 +43,52 @@ def _freeze_before_verifier(
     return max(ends) <= min(stops) and max(stops) <= datetime.fromisoformat(started)
 
 
+def _choice_policy(world: dict[str, Any] | None) -> dict[str, Any] | None:
+    if world is None:
+        return None
+    cases = world["cases"]
+    choices = [str(case["choice"]) for case in cases]
+    observations = [case.get("observation") or {} for case in cases]
+    counts = {kit: choices.count(kit) for kit in ("K1", "K2", "K3", "K4")}
+    policy = "other"
+    cycle = None
+    if choices and all(choice == choices[0] for choice in choices):
+        policy = "constant"
+    else:
+        for size in range(1, len(choices)):
+            if len(choices) % size:
+                continue
+            block = choices[:size]
+            if block * (len(choices) // size) == choices:
+                policy = "repeating_cycle"
+                cycle = "".join(block)
+                break
+    reports_hidden = all(
+        observation.get("left") is None and observation.get("right") is None
+        for observation in observations
+    )
+    uses_visible_intersection = all(
+        isinstance(observation.get("left"), list)
+        and isinstance(observation.get("right"), list)
+        and len(set(observation["left"]).intersection(observation["right"])) == 1
+        and case["choice"]
+        in set(observation["left"]).intersection(observation["right"])
+        for case, observation in zip(cases, observations, strict=True)
+    )
+    if uses_visible_intersection:
+        policy = "unique_intersection"
+    return {
+        "counts": counts,
+        "policy": policy,
+        "cycle": cycle,
+        "reports_hidden": reports_hidden,
+        "matches_scripted_k1_fallback": bool(choices) and set(choices) == {"K1"},
+        "matches_recorded_answer": all(
+            case["choice"] == case["correct"] for case in cases
+        ),
+    }
+
+
 def _summarize(job_dir: Path, mode: str) -> dict[str, Any]:
     (path,) = sorted(job_dir.glob("*/result.json"))
     trial = json.loads(path.read_bytes())
@@ -86,6 +132,7 @@ def _summarize(job_dir: Path, mode: str) -> dict[str, Any]:
         "valid_reward": trial["reward_valid"],
         "reward": (verifier_result.get("rewards") or {}).get("reward"),
         "cases": len(world["cases"]) if world is not None else None,
+        "builder_choices": _choice_policy(world),
         "trial_error": (trial.get("exception_info") or {}).get("exception_type"),
         "play_seconds": _duration(trial.get("agent_execution")),
         "all_seats_frozen_before_verifier": _freeze_before_verifier(

@@ -35,8 +35,8 @@ uv run --no-sync python examples/configs/features/kit_check_subscription.py \
   visible /tmp/kit-check-real-visible-1 --model "${CODEX_MODEL:?Set a native Codex model ID}"
 ```
 
-Repeat in the order `visible`, `silent`, `silent`, `visible`. On Peter's workstation, run each command through `/tmp/crucible-docker-slot.sh`. A trial uses the same model and role instructions in both modes. Only the world reports change. The model chooses a kit when reports are absent; it does not use the scripted `K1` fallback. The 24 cases in one trial are not independent model calls.
+Repeat in the order `visible`, `silent`, `silent`, `visible`. On Peter's workstation, run each command through `/tmp/crucible-docker-slot.sh`. A trial uses the same model and role instructions in both modes. Only the world reports change. The builder prompt has no scripted `K1` fallback. A model may still choose `K1` for every hidden case. The 24 cases in one trial are not independent model calls.
 
-Each `receipt.json` keeps seat execution time, model turn time, token use, and reward. Seat intervals overlap. Use `play_seconds` for trial play time, not the sum of seat intervals. Codex does not report subscription cost in USD, so the receipt leaves it unknown.
+The receipt field `builder_choices` separates those policies. A reward of `0.25` can come from always choosing `K1` or from repeating `K1K2K3K4`. Both can score 6 of 24 because the answer key is balanced. Do not read that reward as partial use of the hidden reviews.
 
 Use `--require-freeze` with a Harbor build that records seat freezes. This checks that all seats report a successful freeze after play and before the verifier starts. It does not certify the shared world or an isolated verifier.
