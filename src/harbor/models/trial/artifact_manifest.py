@@ -12,6 +12,8 @@ class ArtifactManifestEntry(BaseModel):
     """Compose service the artifact was collected from. None means main."""
     exclude: list[str] | None = None
     """Effective directory exclusions. None identifies a legacy manifest."""
+    phase: Literal["pre_verifier", "post_verifier"] | None = None
+    """When collection succeeded. None means unknown or not collected."""
 
 
 class ArtifactManifest(BaseModel):

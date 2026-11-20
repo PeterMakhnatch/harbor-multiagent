@@ -82,9 +82,12 @@ class ArtifactHandler:
         # or nests with an already-claimed one is warned and skipped instead of
         # overwriting (or polluting) the first claimant's content.
         self._claimed_targets: list[tuple[Path, ArtifactConfig]] = []
+        self._failed_downloads: list[
+            tuple[int, ArtifactConfig, ArtifactManifestEntry]
+        ] = []
 
     def begin_collection(self) -> None:
-        """Reset collision claims at the start of a collection pass.
+        """Reset collision claims and pending retries for a new collection.
 
         Claims must span the main + sidecar phases of one pass, not the whole
         trial: multi-step trials vacate the shared host artifacts dir between
@@ -92,6 +95,7 @@ class ArtifactHandler:
         claims would otherwise skip later entries that no longer collide.
         """
         self._claimed_targets.clear()
+        self._failed_downloads.clear()
 
     def _find_conflicting_claim(
         self, target: Path, artifact: ArtifactConfig
@@ -155,25 +159,71 @@ class ArtifactHandler:
         complete manifest.
         """
         artifacts_dir.mkdir(parents=True, exist_ok=True)
-        entries: list[ArtifactManifestEntry] = []
+        manifest = self._read_manifest(artifacts_dir)
         convention_source = self._environment_path_str(source_artifacts_dir)
 
-        for artifact in self._normalized_artifacts(artifacts, convention_source):
+        normalized = self._normalized_artifacts(artifacts, convention_source)
+        # Normalization can prepend one implicit entry; only retry declarations.
+        declared_count = len(self.artifacts) + len(artifacts or ())
+        implicit_convention = len(normalized) > declared_count
+        for index, artifact in enumerate(normalized):
             if (
                 services is not None
                 and effective_artifact_service(artifact) not in services
             ):
                 continue
-            entries.append(
-                await self._download_artifact(
-                    source_env=source_env,
-                    artifacts_dir=artifacts_dir,
-                    artifact=artifact,
-                    convention_source=convention_source,
-                )
+            entry = await self._download_artifact(
+                source_env=source_env,
+                artifacts_dir=artifacts_dir,
+                artifact=artifact,
+                convention_source=convention_source,
             )
+            if entry.status in ("ok", "empty"):
+                entry.phase = "pre_verifier"
+            elif entry.status == "failed" and not (index == 0 and implicit_convention):
+                self._failed_downloads.append((len(manifest.entries), artifact, entry))
+            manifest.entries.append(entry)
 
-        return self._write_manifest(artifacts_dir, entries)
+        self._write_manifest(artifacts_dir, manifest)
+        return manifest
+
+    async def retry_failed_artifacts(
+        self,
+        source_env: BaseEnvironment,
+        artifacts_dir: Path,
+        *,
+        source_artifacts_dir: EnvironmentPath,
+        services: Collection[str] | None = None,
+    ) -> None:
+        """Retry only failed declarations; preserve the first successful snapshot."""
+        if not self._failed_downloads:
+            return
+
+        pending, self._failed_downloads = self._failed_downloads, []
+        manifest = self._read_manifest(artifacts_dir)
+        convention_source = self._environment_path_str(source_artifacts_dir)
+        changed = False
+        for index, artifact, previous in pending:
+            if (
+                services is not None
+                and effective_artifact_service(artifact) not in services
+            ):
+                continue
+            if index >= len(manifest.entries) or manifest.entries[index] != previous:
+                continue
+            entry = await self._download_artifact(
+                source_env=source_env,
+                artifacts_dir=artifacts_dir,
+                artifact=artifact,
+                convention_source=convention_source,
+            )
+            if entry.status in ("ok", "empty"):
+                entry.phase = "post_verifier"
+                manifest.entries[index] = entry
+                changed = True
+
+        if changed:
+            self._write_manifest(artifacts_dir, manifest)
 
     async def upload_artifacts(
         self,
@@ -435,18 +485,13 @@ class ArtifactHandler:
             return "artifacts"
         return f"artifacts/{target.relative_to(artifacts_dir).as_posix()}"
 
-    def _write_manifest(
-        self,
-        artifacts_dir: Path,
-        new_entries: list[ArtifactManifestEntry],
-    ) -> ArtifactManifest:
-        """Write the manifest, appending to entries from earlier passes."""
+    def _read_manifest(self, artifacts_dir: Path) -> ArtifactManifest:
         manifest_path = artifacts_dir / _MANIFEST_FILENAME
 
-        existing_entries: list[ArtifactManifestEntry] = []
+        entries: list[ArtifactManifestEntry] = []
         if manifest_path.exists():
             try:
-                existing_entries = [
+                entries = [
                     ArtifactManifestEntry.model_validate(entry)
                     for entry in json.loads(manifest_path.read_text())
                 ]
@@ -455,12 +500,15 @@ class ArtifactHandler:
                     "Failed to read existing artifacts manifest", exc_info=True
                 )
 
-        manifest = ArtifactManifest(entries=[*existing_entries, *new_entries])
+        return ArtifactManifest(entries=entries)
+
+    def _write_manifest(self, artifacts_dir: Path, manifest: ArtifactManifest) -> None:
         if not manifest.entries:
-            return manifest
+            return
 
         try:
-            manifest_path.write_text(json.dumps(manifest.to_json_data(), indent=2))
+            (artifacts_dir / _MANIFEST_FILENAME).write_text(
+                json.dumps(manifest.to_json_data(), indent=2)
+            )
         except Exception:
             self.logger.debug("Failed to write artifacts manifest", exc_info=True)
-        return manifest

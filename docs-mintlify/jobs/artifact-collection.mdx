@@ -6,6 +6,11 @@ description: "Preserve files produced during a trial."
 Harbor collects artifacts after the agent phase for two purposes: 1. saving files for local inspection 2. transferring agent-produced
 files into a separate verifier sandbox.
 
+For a single-step trial, including a seat trial, Harbor retries failed declared
+artifacts after the verifier runs. Harbor leaves successful first collections
+in place. With a separate verifier, it retries only `main` artifacts, in the
+verifier sandbox rather than the stopped agent sandbox.
+
 ## Automatic artifact collection
 
 <Warning>
@@ -139,6 +144,11 @@ Learn more about [separate verifiers](/tasks/separate-verifier).
 Harbor writes `<trial-dir>/artifacts/manifest.json` as a collection report. Each
 entry records the artifact's source, host destination, service, file type, and
 status: `ok`, `empty`, `failed`, or `skipped`.
+
+An entry also records its collection `phase`: `pre_verifier` or `post_verifier`.
+This field records when Harbor collected the file, not which process wrote it.
+Failed and skipped entries have no collection phase. Older manifests can omit
+the field.
 
 Directory entries also record the `exclude` patterns used during collection,
 and regrade requires the updated declaration to use the same ones.

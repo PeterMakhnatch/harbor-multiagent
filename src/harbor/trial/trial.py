@@ -1018,6 +1018,7 @@ class Trial(ABC):
         env: dict[str, str] | None = None,
         step_name: str | None = None,
         step_cfg: StepConfig | None = None,
+        retry_artifacts_dir: Path | None = None,
     ) -> VerifierResult:
         plan = self._network_plan(step_cfg)
         with self.agent_environment.with_default_user(user):
@@ -1039,7 +1040,15 @@ class Trial(ABC):
                 with self._log_context(
                     "verification", self.agent_environment, step_name
                 ):
-                    return await self._verify_with_timeout(verifier, timeout_sec)
+                    try:
+                        return await self._verify_with_timeout(verifier, timeout_sec)
+                    finally:
+                        if retry_artifacts_dir is not None:
+                            await self._artifact_handler.retry_failed_artifacts(
+                                self.agent_environment,
+                                retry_artifacts_dir,
+                                source_artifacts_dir=self.agent_env_paths.artifacts_dir,
+                            )
 
     async def _run_separate_verifier(
         self,
@@ -1051,6 +1060,7 @@ class Trial(ABC):
         step_cfg: StepConfig | None = None,
         user: str | int | None,
         env: dict[str, str] | None = None,
+        retry_failed_artifacts: bool = False,
     ) -> VerifierResult:
         definition = resolve_verifier_environment_definition(
             self.task.config, self.task.paths, step_cfg
@@ -1109,7 +1119,18 @@ class Trial(ABC):
                     phase_policy=plan.verifier_phase,
                 ):
                     with self._log_context("verification", target_env, step_name):
-                        return await self._verify_with_timeout(verifier, timeout_sec)
+                        try:
+                            return await self._verify_with_timeout(
+                                verifier, timeout_sec
+                            )
+                        finally:
+                            if retry_failed_artifacts:
+                                await self._artifact_handler.retry_failed_artifacts(
+                                    target_env,
+                                    artifacts_dir,
+                                    source_artifacts_dir=env_paths.artifacts_dir,
+                                    services={MAIN_SERVICE_NAME},
+                                )
 
     @contextlib.asynccontextmanager
     async def _separate_verifier_env(

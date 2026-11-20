@@ -104,11 +104,13 @@ class SingleStepTrial(Trial):
                     timeout_sec=self._verifier_timeout_sec,
                     artifacts_dir=self.paths.artifacts_dir,
                     user=user,
+                    retry_failed_artifacts=True,
                 )
             else:
                 self.result.verifier_result = await self._run_shared_verifier(
                     timeout_sec=self._verifier_timeout_sec,
                     user=user,
+                    retry_artifacts_dir=self.paths.artifacts_dir,
                 )
         finally:
             self.result.verifier.finished_at = self._now()

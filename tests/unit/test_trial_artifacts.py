@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from harbor.models.task.config import TaskOS
+from harbor.models.trial.artifact_manifest import ArtifactManifestEntry
 from harbor.models.trial.config import ArtifactConfig
 from harbor.models.trial.paths import EnvironmentPaths
 from harbor.trial.artifact_handler import ArtifactHandler
@@ -276,6 +277,21 @@ async def test_download_failure_records_failed_manifest_entry(
     assert len(failed) == 1
     assert failed[0].source == "/data/dump.sql"
     assert failed[0].service == "db"
+    assert failed[0].phase is None
+
+
+def test_legacy_artifact_manifest_entry_has_unknown_phase() -> None:
+    entry = ArtifactManifestEntry.model_validate(
+        {
+            "source": "/data/dump.sql",
+            "destination": "artifacts/data/dump.sql",
+            "type": "file",
+            "status": "ok",
+        }
+    )
+
+    assert entry.status == "ok"
+    assert entry.phase is None
 
 
 @pytest.mark.unit
