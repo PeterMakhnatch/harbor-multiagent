@@ -205,6 +205,67 @@ Before any new model turn, fix worlds 00, 04, and 08, both role assignments, and
 
 The primary measurement is the native success difference, peer-informed minus blind, within each complete block. Average within world first. Withhold the 3-world estimate if any enrolled world has no pair. Report coverage, stock verifier scores, message delivery, prompt equality, and metered calls separately. This checks whether a third-party harness can run the same intervention on newly generated tasks. These 3 worlds are not held-out tasks, and this is not an independent model comparison.
 
+##### Try a native team without an API key
+
+Use a full checkout of this fork's `experiments/seatlab-calendar-public` branch, Python 3.12 or later, and local Docker with Compose. Keep the task and trial outputs private. Generated task files contain service credentials. The trial output contains role messages.
+
+```bash
+uv sync --locked
+python=.venv/bin/python
+umask 077
+private=$(realpath "$(mktemp -d)")
+generator=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+git fetch https://github.com/PeterMakhnatch/harbor-multiagent.git "$generator"
+git worktree add --detach "$private/generator" "$generator"
+"$python" "$private/generator/flotilla/build_tasks.py" --family schedule --instances 0-11 \
+  --seats 2 --difficulty easy --seed 1 --conditions talk --play-timeout 600 --out "$private/tasks"
+tasks="$private/tasks/schedule"
+module=examples.seatlab.visibility
+"$python" -m "$module.calendar_replica_source" --tasks "$tasks" --world 0
+"$python" -m "$module.calendar_client" demo --tasks "$tasks" --out "$private/demo" \
+  --world 0 --direction 0 --repetition 0
+"$python" -m "$module.calendar_replica_report" "$private/demo"
+```
+
+The demo sends empty availability lists and selects slot 0. It tests the harness, not a model. On our fresh world 00, the replay verified 6 callback turns and 2 native scores of 0. Both receivers saw identical final text and chose the same slot. Native token counts were null, not zero.
+
+##### Connect a model or another harness
+
+Call `play(tasks, out, block, respond)` from your host. `respond` must take 1 prompt string and return 1 response string. For example, this adapter calls an existing executable that reads one prompt from standard input:
+
+```python
+import subprocess
+from pathlib import Path
+from examples.seatlab.visibility.calendar_client import play
+from examples.seatlab.visibility.calendar_protocol import Block
+
+def respond(prompt: str) -> str:
+    return subprocess.run(["my-seat-model"], input=prompt, text=True,
+                          capture_output=True, check=True, timeout=100).stdout
+
+# tasks is the generated schedule directory. out is a new physical path
+# inside a private directory, outside the checkout.
+status = play(Path(tasks), Path(out), Block(world=0, direction=0, repetition=0), respond)
+```
+
+Use a new model context on each call. Do not add the block ID, arm name, other seat's table, or task path. A callback error stops the block. The harness forwards a grammar-invalid answer without a retry. The stock verifier scores the team's action; the relay never assigns a reward. Account for model calls in the external process. Report missing evidence separately from a native score of 0.
+
+Eval Lab can read each ordinary trial without importing it into a database. In an environment with the existing Eval Lab reader, run the following after the demo:
+
+```bash
+python -B - "$private/demo/native" <<'PY'
+import sys
+from pathlib import Path
+from evallab.results import load_trial
+
+for path in sorted(Path(sys.argv[1]).iterdir()):
+    trial = load_trial(path)
+    print(path.name, trial.primary_reward, len(trial.result["seat_results"]))
+PY
+```
+
+On the no-key demo, the stock reader returned both scores and all 4 seat records. The input, cache, and output token counts were null in all 4 records. Use external receipts for model usage. Do not replace those null values in the Harbor records.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
