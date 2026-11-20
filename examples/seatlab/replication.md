@@ -338,6 +338,19 @@ python -m examples.seatlab.visibility.calendar_list_run demo "$study" --draw 0
 python -m examples.seatlab.visibility.calendar_list_report "$study"
 ```
 
+**Result.** With the recorded lists, the receiver found the common start in **0/48** fresh decisions. With both exact local lists, it found it in **31/48**. The matched equal-world difference was **+64.58 percentage points**. All 192 model replies were valid and all 48 matched sets were complete.
+
+| Lists shown to receiver | Correct / 48 | World 0 / 16 | World 4 / 16 | World 8 / 16 |
+| --- | ---: | ---: | ---: | ---: |
+| Both recorded | 0 | 0 | 0 | 0 |
+| Receiver exact, sender recorded | 9 | 6 | 1 | 2 |
+| Receiver recorded, sender exact | 10 | 7 | 2 | 1 |
+| Both exact | 31 | 16 | 6 | 9 |
+
+Replacing only the receiver's list added 18.75 points. Replacing only the sender's list added 20.83 points. The joint increase exceeded the sum of these increases by 25 points. Even with both exact lists, the receiver missed the common start 17 times. It chose different slots on 11/24 identical-prompt draw pairs in that condition. These are observations from 3 fixed worlds, not 192 independent scheduling tasks.
+
+The unchanged stock `family.score` matched the replay for [all 105 world/slot combinations](results/flotilla-calendar-list-stock-check.json) and every new choice. No new native room ran. The [paired outcomes](results/flotilla-calendar-list-results.json) bind all 192 replies to [192 settled direct calls](results/flotilla-calendar-list-cost.json), at an estimated **$0.006340788**. There were no held or unmatched charges.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
