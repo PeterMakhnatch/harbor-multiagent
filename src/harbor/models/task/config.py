@@ -443,7 +443,8 @@ class EnvironmentConfig(BaselineNetworkPolicyConfig):
         default=False,
         exclude_if=lambda enabled: not enabled,
         description="Use the main image's CMD instead of Harbor's keepalive "
-        "on Docker and Podman. An explicit Compose command still takes precedence.",
+        "with Docker Compose (docker and kata environments). Other environments "
+        "reject this option. An explicit Compose command still takes precedence.",
     )
     os: TaskOS = Field(
         default=TaskOS.LINUX,

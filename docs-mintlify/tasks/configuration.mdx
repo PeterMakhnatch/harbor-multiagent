@@ -175,7 +175,8 @@ A few fields in `task.toml` are due to lack of convention or common pitfalls:
 </ParamField>
 
 <ParamField body="environment.use_image_command" type="boolean" default="false">
-  On Docker and Podman, use the `main` image's `CMD` instead of Harbor's keepalive.
+  Use the image's `CMD` instead of Harbor's keepalive in `main` only.
+  This requires Docker Compose in the `docker` or `kata` environment. Other environments, including Podman, reject this option.
   A Compose `command:` still takes precedence. The command must keep `main` running for the full trial.
   See [Multi-agent tasks](/tasks/multi-agent#the-main-container).
 </ParamField>

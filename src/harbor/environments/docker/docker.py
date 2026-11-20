@@ -120,6 +120,7 @@ class DockerOptions(EnvironmentOptions):
 class DockerEnvironment(BaseEnvironment):
     options_model = DockerOptions
     options: DockerOptions
+    _supports_image_command = True
     _DOCKER_COMPOSE_BUILD_PATH = COMPOSE_BUILD_PATH
     _DOCKER_COMPOSE_PREBUILT_PATH = COMPOSE_PREBUILT_PATH
     _DOCKER_COMPOSE_EGRESS_CONTROL_PATH = COMPOSE_EGRESS_CONTROL_PATH
