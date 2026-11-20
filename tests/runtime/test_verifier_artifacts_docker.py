@@ -36,6 +36,7 @@ async def test_verifier_output_artifacts_are_collected(
         "echo changed >/tmp/play-output.txt\n"
         "echo log >/logs/verifier/late.txt\n"
         "echo report >/tmp/verifier-output.txt\n"
+        "if test -d /shared; then echo late >/shared/seat-only.txt; fi\n"
         "echo 1 >/logs/verifier/reward.txt\n"
     )
     task_config = """\
@@ -47,6 +48,7 @@ artifacts = [
 ]
 """
     seats = mode == "seat-shared"
+    shared = mode != "single-separate"
     if seats:
         (task / "instructions").mkdir()
         (task / "instructions/p1.md").write_text("Do nothing.\n")
@@ -54,10 +56,19 @@ artifacts = [
             "services:\n"
             "  main:\n"
             '    command: ["sh", "-c", "echo play >/tmp/play-output.txt; sleep infinity"]\n'
+            "    volumes: [evidence:/shared]\n"
             "  p1:\n"
             "    image: ubuntu:24.04\n"
             '    command: ["sleep", "infinity"]\n'
             "    depends_on: [main]\n"
+            "    volumes: [evidence:/shared]\n"
+            "volumes:\n"
+            "  evidence: {}\n"
+        )
+        task_config = task_config.replace(
+            "]",
+            '  { source = "/shared/seat-only.txt", service = "p1" },\n'
+            '  "/logs/seats/p1/agent/oracle.txt",\n]',
         )
         task_config += "\n[agents.p1]\n"
     else:
@@ -87,14 +98,30 @@ artifacts = [
         for entry in json.loads(trial.paths.artifacts_manifest_path.read_text())
     ]
     entries = {entry.source: (entry.status, entry.phase) for entry in manifest}
-    assert len(manifest) == len(entries) == 5
+    assert len(manifest) == len(entries) == (7 if seats else 5)
+    assert all(entry.source_environment == "agent" for entry in manifest)
     assert entries["/tmp/play-output.txt"] == ("ok", "pre_verifier")
-    assert entries["/logs/verifier/late.txt"] == ("ok", "post_verifier")
-    assert entries["/tmp/verifier-output.txt"] == ("ok", "post_verifier")
+    late = ("ok", "post_verifier") if shared else ("failed", None)
+    assert entries["/logs/verifier/late.txt"] == late
+    assert entries["/tmp/verifier-output.txt"] == late
     assert entries["/tmp/never-created.txt"] == ("failed", None)
+    if seats:
+        assert entries["/shared/seat-only.txt"] == ("failed", None)
+        assert entries["/logs/seats/p1/agent/oracle.txt"] == ("failed", None)
+    warnings = json.loads(trial.paths.result_path.read_text()).get(
+        "artifact_collection_warnings", []
+    )
+    assert warnings == result.artifact_collection_warnings
+    assert len(warnings) == (3 if seats else int(shared))
+    if seats:
+        assert any("only main can be retried" in message for message in warnings)
 
     artifacts = trial.paths.artifacts_dir
     assert (artifacts / "tmp/play-output.txt").read_text() == "play\n"
-    assert (artifacts / "logs/verifier/late.txt").read_text() == "log\n"
-    assert (artifacts / "reports/output.txt").read_text() == "report\n"
+    if shared:
+        assert (artifacts / "logs/verifier/late.txt").read_text() == "log\n"
+        assert (artifacts / "reports/output.txt").read_text() == "report\n"
+    else:
+        assert not (artifacts / "logs/verifier/late.txt").exists()
+        assert not (artifacts / "reports/output.txt").exists()
     assert (trial.paths.verifier_dir / "late.txt").read_text() == "log\n"

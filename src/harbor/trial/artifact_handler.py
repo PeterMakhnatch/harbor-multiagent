@@ -1,15 +1,18 @@
 import asyncio
 import json
 import logging
+import posixpath
 import shutil
 import tempfile
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from pathlib import Path, PurePath, PurePosixPath
 
+from harbor.constants import MAIN_SERVICE_NAME
 from harbor.environments.base import BaseEnvironment, EnvironmentPath
 from harbor.environments.tar_transfer import copy_via_tar
 from harbor.models.task.artifacts import (
     effective_artifact_service,
+    is_absolute_container_path,
     is_convention_entry,
     artifact_is_covered_by,
     source_host_path,
@@ -21,7 +24,8 @@ from harbor.models.trial.artifact_manifest import (
     ArtifactManifestEntry,
 )
 from harbor.models.trial.config import ArtifactConfig
-from harbor.utils.path_safety import directory_move_plan
+from harbor.models.trial.paths import EnvironmentPaths
+from harbor.utils.path_safety import directory_move_plan, validate_output_path
 
 _MANIFEST_FILENAME = "manifest.json"
 
@@ -82,12 +86,9 @@ class ArtifactHandler:
         # or nests with an already-claimed one is warned and skipped instead of
         # overwriting (or polluting) the first claimant's content.
         self._claimed_targets: list[tuple[Path, ArtifactConfig]] = []
-        self._failed_downloads: list[
-            tuple[int, ArtifactConfig, ArtifactManifestEntry]
-        ] = []
 
     def begin_collection(self) -> None:
-        """Reset collision claims and pending retries for a new collection.
+        """Reset collision claims for a new collection.
 
         Claims must span the main + sidecar phases of one pass, not the whole
         trial: multi-step trials vacate the shared host artifacts dir between
@@ -95,7 +96,6 @@ class ArtifactHandler:
         claims would otherwise skip later entries that no longer collide.
         """
         self._claimed_targets.clear()
-        self._failed_downloads.clear()
 
     def _find_conflicting_claim(
         self, target: Path, artifact: ArtifactConfig
@@ -150,6 +150,7 @@ class ArtifactHandler:
         source_artifacts_dir: EnvironmentPath,
         artifacts: Sequence[str | ArtifactConfig] | None = None,
         services: Collection[str] | None = None,
+        pre_verifier: bool = False,
     ) -> ArtifactManifest:
         """Best-effort artifact download with a manifest of attempted sources.
 
@@ -162,11 +163,7 @@ class ArtifactHandler:
         manifest = self._read_manifest(artifacts_dir)
         convention_source = self._environment_path_str(source_artifacts_dir)
 
-        normalized = self._normalized_artifacts(artifacts, convention_source)
-        # Normalization can prepend one implicit entry; only retry declarations.
-        declared_count = len(self.artifacts) + len(artifacts or ())
-        implicit_convention = len(normalized) > declared_count
-        for index, artifact in enumerate(normalized):
+        for artifact in self._normalized_artifacts(artifacts, convention_source):
             if (
                 services is not None
                 and effective_artifact_service(artifact) not in services
@@ -177,11 +174,8 @@ class ArtifactHandler:
                 artifacts_dir=artifacts_dir,
                 artifact=artifact,
                 convention_source=convention_source,
+                pre_verifier=pre_verifier,
             )
-            if entry.status in ("ok", "empty"):
-                entry.phase = "pre_verifier"
-            elif entry.status == "failed" and not (index == 0 and implicit_convention):
-                self._failed_downloads.append((len(manifest.entries), artifact, entry))
             manifest.entries.append(entry)
 
         self._write_manifest(artifacts_dir, manifest)
@@ -193,37 +187,99 @@ class ArtifactHandler:
         artifacts_dir: Path,
         *,
         source_artifacts_dir: EnvironmentPath,
-        services: Collection[str] | None = None,
+        warn: Callable[[str], None],
     ) -> None:
-        """Retry only failed declarations; preserve the first successful snapshot."""
-        if not self._failed_downloads:
-            return
+        """Save missed files from the shared verifier's main service only."""
+        manifest = self._read_manifest(artifacts_dir, strict=True)
+        groups: dict[str, list[tuple[int, ArtifactManifestEntry]]] = {}
+        collected: set[str] = set()
+        for index, entry in enumerate(manifest.entries):
+            if entry.status == "failed":
+                groups.setdefault(entry.destination, []).append((index, entry))
+            elif entry.status in ("ok", "empty"):
+                collected.add(entry.destination)
 
-        pending, self._failed_downloads = self._failed_downloads, []
-        manifest = self._read_manifest(artifacts_dir)
-        convention_source = self._environment_path_str(source_artifacts_dir)
-        changed = False
-        for index, artifact, previous in pending:
+        env_paths = EnvironmentPaths.for_os(source_env.os)
+        reserved = (
+            self._environment_path_str(source_artifacts_dir),
+            env_paths.agent_dir.as_posix(),
+            env_paths.user_agent_dir.as_posix(),
+            (env_paths.logs_dir / "seats").as_posix(),
+            env_paths.tests_dir.as_posix(),
+        )
+        for destination, failures in groups.items():
+            if destination in collected:
+                continue
+            first = failures[0][1]
+            service = first.service or MAIN_SERVICE_NAME
+            label = f"Artifact {first.source!r} from service {service!r}"
+            if service != MAIN_SERVICE_NAME:
+                warn(f"{label} failed before verification; only main can be retried.")
+                continue
+            source = posixpath.normpath(first.source.replace("\\", "/"))
+            source_path = PurePosixPath(source.casefold())
             if (
-                services is not None
-                and effective_artifact_service(artifact) not in services
+                first.type != "file"
+                or not is_absolute_container_path(source)
+                or any(source_path.is_relative_to(path.casefold()) for path in reserved)
             ):
+                warn(f"{label} failed before verification; this path is not retried.")
                 continue
-            if index >= len(manifest.entries) or manifest.entries[index] != previous:
+            if any(
+                entry.source != first.source
+                or (entry.service or MAIN_SERVICE_NAME) != service
+                or entry.type != "file"
+                for _, entry in failures[1:]
+            ):
+                warn(f"{label} has conflicting declarations; it is not retried.")
                 continue
-            entry = await self._download_artifact(
-                source_env=source_env,
-                artifacts_dir=artifacts_dir,
-                artifact=artifact,
-                convention_source=convention_source,
-            )
-            if entry.status in ("ok", "empty"):
-                entry.phase = "post_verifier"
-                manifest.entries[index] = entry
-                changed = True
 
-        if changed:
-            self._write_manifest(artifacts_dir, manifest)
+            try:
+                target = artifacts_dir.parent / destination
+                validate_output_path(target, artifacts_dir)
+                if target.exists() or target == artifacts_dir:
+                    warn(f"{label} has an existing host path; it is not overwritten.")
+                    continue
+                user = None if source_env.os == TaskOS.WINDOWS else "root"
+                if not await source_env.is_file(first.source, user=user):
+                    warn(f"{label} is not a regular file after verification.")
+                    continue
+                with tempfile.TemporaryDirectory(
+                    prefix=".artifact-retry-",
+                    dir=artifacts_dir.parent,
+                    ignore_cleanup_errors=True,
+                ) as staging:
+                    snapshot = Path(staging) / "snapshot"
+                    await source_env.download_file(first.source, snapshot)
+                    if snapshot.is_symlink() or not snapshot.is_file():
+                        warn(f"{label} did not download as a regular file.")
+                        continue
+                    for index, entry in failures:
+                        manifest.entries[index] = entry.model_copy(
+                            update={
+                                "status": "ok",
+                                "phase": "post_verifier",
+                                "source_environment": "agent",
+                            }
+                        )
+                    manifest_file = Path(staging) / _MANIFEST_FILENAME
+                    manifest_file.write_text(
+                        json.dumps(manifest.to_json_data(), indent=2)
+                    )
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    snapshot.replace(target)
+                    try:
+                        manifest_file.replace(artifacts_dir / _MANIFEST_FILENAME)
+                    except OSError:
+                        target.unlink()
+                        raise
+            except Exception as exc:
+                for index, entry in failures:
+                    manifest.entries[index] = entry
+                warn(f"{label} still failed after verification ({type(exc).__name__}).")
+                self.logger.debug(
+                    "Post-verifier artifact transfer failed", exc_info=True
+                )
 
     async def upload_artifacts(
         self,
@@ -325,6 +381,7 @@ class ArtifactHandler:
         artifacts_dir: Path,
         artifact: ArtifactConfig,
         convention_source: str,
+        pre_verifier: bool,
     ) -> ArtifactManifestEntry:
         source = artifact.source
         service = effective_artifact_service(artifact)
@@ -420,6 +477,8 @@ class ArtifactHandler:
                 status="ok",
                 service=artifact.service,
                 exclude=list(artifact.exclude) if is_dir else [],
+                phase="pre_verifier" if pre_verifier else None,
+                source_environment="agent",
             )
         except Exception:
             self.logger.debug(
@@ -434,6 +493,7 @@ class ArtifactHandler:
                 status="failed",
                 service=artifact.service,
                 exclude=list(artifact.exclude) if is_dir else [],
+                source_environment="agent",
             )
 
     def _record_mounted_artifacts_dir(
@@ -453,6 +513,7 @@ class ArtifactHandler:
             status="ok" if has_contents else "empty",
             service=service,
             exclude=list(exclude),
+            source_environment="agent",
         )
 
     def _host_path(
@@ -485,17 +546,21 @@ class ArtifactHandler:
             return "artifacts"
         return f"artifacts/{target.relative_to(artifacts_dir).as_posix()}"
 
-    def _read_manifest(self, artifacts_dir: Path) -> ArtifactManifest:
+    def _read_manifest(
+        self, artifacts_dir: Path, *, strict: bool = False
+    ) -> ArtifactManifest:
         manifest_path = artifacts_dir / _MANIFEST_FILENAME
 
         entries: list[ArtifactManifestEntry] = []
-        if manifest_path.exists():
+        if strict or manifest_path.exists():
             try:
                 entries = [
                     ArtifactManifestEntry.model_validate(entry)
                     for entry in json.loads(manifest_path.read_text())
                 ]
             except Exception:
+                if strict:
+                    raise
                 self.logger.debug(
                     "Failed to read existing artifacts manifest", exc_info=True
                 )

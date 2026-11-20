@@ -460,7 +460,8 @@ class RegradeTrial(Trial):
         ``failed`` (collection did not capture the input) or ``skipped``
         (host-path collision: the recorded bytes belong to a different
         source) make the declaration incompatible; ``empty`` is an honest
-        empty directory and replays as one.
+        empty directory and replays as one. A file collected after verification
+        is an output, not a replay input.
         """
         problems = self._artifact_coverage_problems(
             source_artifacts_dir=self._source_paths.artifacts_dir,
@@ -481,6 +482,7 @@ class RegradeTrial(Trial):
         entries: list[ArtifactManifestEntry],
         declared_artifacts: Sequence[str | ArtifactConfig],
     ) -> list[str]:
+        post_verifier_paths = self._post_verifier_paths(entries, source_artifacts_dir)
         entries_by_key: dict[tuple[str, str], list[ArtifactManifestEntry]] = {}
         for entry in entries:
             key = (entry.service or MAIN_SERVICE_NAME, entry.source.rstrip("/"))
@@ -492,6 +494,18 @@ class RegradeTrial(Trial):
         )
         problems: list[str] = []
         for artifact in declared:
+            replay_path = artifact_host_path(source_artifacts_dir, artifact)
+            if post_verifier_paths:
+                resolved = replay_path.resolve()
+                if any(
+                    resolved.is_relative_to(path) or path.is_relative_to(resolved)
+                    for path in post_verifier_paths
+                ):
+                    problems.append(
+                        f"{artifact.source}: overlaps an artifact collected after "
+                        "verification; post-verifier outputs cannot be replayed"
+                    )
+                    continue
             key = (
                 effective_artifact_service(artifact),
                 artifact.source.rstrip("/"),
@@ -503,7 +517,6 @@ class RegradeTrial(Trial):
                     "the verifier would silently grade without it"
                 )
                 continue
-            replay_path = artifact_host_path(source_artifacts_dir, artifact)
             replay_destination = replay_path.relative_to(source_record_dir).as_posix()
             entry = next(
                 (
@@ -634,6 +647,21 @@ class RegradeTrial(Trial):
             ],
         )
 
+    @staticmethod
+    def _post_verifier_paths(
+        entries: Sequence[ArtifactManifestEntry], artifacts_dir: Path
+    ) -> set[Path]:
+        paths: set[Path] = set()
+        for entry in entries:
+            if entry.phase != "post_verifier":
+                continue
+            path = artifacts_dir.parent / entry.destination
+            if path == artifacts_dir or not path.is_relative_to(artifacts_dir):
+                raise RegradeError(f"Invalid post-verifier path: {entry.destination}")
+            validate_output_path(path, artifacts_dir)
+            paths.add(path.resolve())
+        return paths
+
     def _validate_recorded_outputs(self, sources: Sequence[Path]) -> None:
         """Only materialize links to recorded outputs, never other host files."""
         trial_root = self._source_paths.trial_dir.resolve()
@@ -687,6 +715,21 @@ class RegradeTrial(Trial):
             target_agent_dir = self.paths.step_agent_dir(step_name)
             target_artifacts_dir = self.paths.step_artifacts_dir(step_name)
 
+        entries = read_artifact_manifest(
+            self._source_paths.trial_dir, step_name=step_name
+        )
+        post_verifier_paths = self._post_verifier_paths(entries, source_artifacts_dir)
+
+        def ignore_post_verifier(root: str, names: list[str]) -> list[str]:
+            ignored = []
+            for name in names:
+                path = (Path(root) / name).resolve()
+                if path in post_verifier_paths or not post_verifier_paths.isdisjoint(
+                    path.parents
+                ):
+                    ignored.append(name)
+            return ignored
+
         copies = (
             (source_agent_dir, target_agent_dir),
             (source_artifacts_dir, target_artifacts_dir),
@@ -705,13 +748,18 @@ class RegradeTrial(Trial):
                     target,
                     symlinks=False,
                     dirs_exist_ok=True,
+                    ignore=ignore_post_verifier if post_verifier_paths else None,
                 )
+        if post_verifier_paths:
+            entries = [entry for entry in entries if entry.phase != "post_verifier"]
+            (target_artifacts_dir / "manifest.json").write_text(
+                json.dumps(
+                    [entry.model_dump(mode="json") for entry in entries], indent=2
+                )
+            )
         self._materialize_empty_artifacts(
             target_artifacts_dir=target_artifacts_dir,
-            entries=read_artifact_manifest(
-                self._source_paths.trial_dir,
-                step_name=step_name,
-            ),
+            entries=entries,
             declared_artifacts=declared_artifacts,
         )
 

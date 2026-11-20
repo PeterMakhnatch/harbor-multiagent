@@ -277,7 +277,7 @@ class SeatsTrial(SingleStepTrial):
             await self._emit(TrialEvent.AGENT_END)
         await self._collect_seats()
         self._record_seat_errors()
-        await self._collect_artifacts()
+        await self._collect_artifacts(pre_verifier=self._should_verify())
         if not self.config.verifier.disable:
             await self.agent_environment.upload_dir(
                 self.paths.trial_dir / "seats",

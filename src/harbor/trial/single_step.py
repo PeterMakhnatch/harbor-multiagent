@@ -43,7 +43,8 @@ class SingleStepTrial(Trial):
         # In separate mode the agent env has no further use after collection,
         # so the main service is stopped before sidecar evidence is pulled.
         await self._collect_artifacts(
-            stop_main_before_sidecars=(mode == VerifierEnvironmentMode.SEPARATE)
+            stop_main_before_sidecars=(mode == VerifierEnvironmentMode.SEPARATE),
+            pre_verifier=self._should_verify(),
         )
 
         if mode == VerifierEnvironmentMode.SEPARATE:
@@ -61,7 +62,7 @@ class SingleStepTrial(Trial):
         await self._stop_agent_environment()
 
     async def _collect_artifacts(
-        self, *, stop_main_before_sidecars: bool = False
+        self, *, stop_main_before_sidecars: bool = False, pre_verifier: bool = False
     ) -> None:
         if self._are_artifacts_collected:
             return
@@ -69,6 +70,7 @@ class SingleStepTrial(Trial):
         await self._collect_artifacts_phased(
             artifacts_dir=self.paths.artifacts_dir,
             stop_main_before_sidecars=stop_main_before_sidecars,
+            pre_verifier=pre_verifier,
         )
         self._are_artifacts_collected = True
 
@@ -86,11 +88,14 @@ class SingleStepTrial(Trial):
         finally:
             await self._sync_agent_output(self.result)
 
+    def _should_verify(self) -> bool:
+        info = self.result.exception_info
+        return not self.config.verifier.disable and (
+            info is None or info.policy.should_grade
+        )
+
     async def _run_verifier(self) -> None:
-        if self.config.verifier.disable or (
-            self.result.exception_info is not None
-            and not self.result.exception_info.policy.should_grade
-        ):
+        if not self._should_verify():
             return
 
         await self._emit(TrialEvent.VERIFICATION_START)
@@ -104,7 +109,6 @@ class SingleStepTrial(Trial):
                     timeout_sec=self._verifier_timeout_sec,
                     artifacts_dir=self.paths.artifacts_dir,
                     user=user,
-                    retry_failed_artifacts=True,
                 )
             else:
                 self.result.verifier_result = await self._run_shared_verifier(

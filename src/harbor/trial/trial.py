@@ -999,16 +999,53 @@ class Trial(ABC):
         return self.task.config.verifier.user
 
     async def _verify_with_timeout(
-        self, verifier: BaseVerifier, timeout_sec: float | None
+        self,
+        verifier: BaseVerifier,
+        timeout_sec: float | None,
+        *,
+        retry_artifacts_dir: Path | None = None,
     ) -> VerifierResult:
+        result: VerifierResult | None = None
         try:
-            return await asyncio.wait_for(verifier.verify(), timeout=timeout_sec)
+            async with asyncio.timeout(timeout_sec):
+                result = await verifier.verify()
+                if retry_artifacts_dir is not None:
+                    await self._retry_shared_verifier_artifacts(retry_artifacts_dir)
         except EnvironmentStartTimeoutError:
             raise
         except TimeoutError as exc:
-            raise VerifierTimeoutError(
-                f"Verifier execution timed out after {timeout_sec} seconds"
-            ) from exc
+            if result is None:
+                raise VerifierTimeoutError(
+                    f"Verifier execution timed out after {timeout_sec} seconds"
+                ) from exc
+            self._warn_artifact_collection(
+                "Post-verifier artifact collection exhausted the verifier timeout."
+            )
+        except asyncio.CancelledError:
+            if result is not None:
+                self._warn_artifact_collection(
+                    "Post-verifier artifact collection was cancelled."
+                )
+            raise
+        return result
+
+    async def _retry_shared_verifier_artifacts(self, artifacts_dir: Path) -> None:
+        try:
+            await self._artifact_handler.retry_failed_artifacts(
+                self.agent_environment,
+                artifacts_dir,
+                source_artifacts_dir=self.agent_env_paths.artifacts_dir,
+                warn=self._warn_artifact_collection,
+            )
+        except Exception as exc:
+            self._warn_artifact_collection(
+                f"Post-verifier artifact collection failed ({type(exc).__name__})."
+            )
+            self.logger.debug("Post-verifier artifact collection failed", exc_info=True)
+
+    def _warn_artifact_collection(self, message: str) -> None:
+        self.logger.warning(message)
+        self.result.artifact_collection_warnings.append(message)
 
     async def _run_shared_verifier(
         self,
@@ -1040,15 +1077,9 @@ class Trial(ABC):
                 with self._log_context(
                     "verification", self.agent_environment, step_name
                 ):
-                    try:
-                        return await self._verify_with_timeout(verifier, timeout_sec)
-                    finally:
-                        if retry_artifacts_dir is not None:
-                            await self._artifact_handler.retry_failed_artifacts(
-                                self.agent_environment,
-                                retry_artifacts_dir,
-                                source_artifacts_dir=self.agent_env_paths.artifacts_dir,
-                            )
+                    return await self._verify_with_timeout(
+                        verifier, timeout_sec, retry_artifacts_dir=retry_artifacts_dir
+                    )
 
     async def _run_separate_verifier(
         self,
@@ -1060,7 +1091,6 @@ class Trial(ABC):
         step_cfg: StepConfig | None = None,
         user: str | int | None,
         env: dict[str, str] | None = None,
-        retry_failed_artifacts: bool = False,
     ) -> VerifierResult:
         definition = resolve_verifier_environment_definition(
             self.task.config, self.task.paths, step_cfg
@@ -1119,18 +1149,7 @@ class Trial(ABC):
                     phase_policy=plan.verifier_phase,
                 ):
                     with self._log_context("verification", target_env, step_name):
-                        try:
-                            return await self._verify_with_timeout(
-                                verifier, timeout_sec
-                            )
-                        finally:
-                            if retry_failed_artifacts:
-                                await self._artifact_handler.retry_failed_artifacts(
-                                    target_env,
-                                    artifacts_dir,
-                                    source_artifacts_dir=env_paths.artifacts_dir,
-                                    services={MAIN_SERVICE_NAME},
-                                )
+                        return await self._verify_with_timeout(verifier, timeout_sec)
 
     @contextlib.asynccontextmanager
     async def _separate_verifier_env(
@@ -1698,6 +1717,7 @@ class Trial(ABC):
         step_cfg: StepConfig | None = None,
         step_artifacts: Sequence[str | ArtifactConfig] | None = None,
         stop_main_before_sidecars: bool = False,
+        pre_verifier: bool = False,
     ) -> None:
         """Collect artifacts in two passes: main first, then sidecar services.
 
@@ -1723,6 +1743,7 @@ class Trial(ABC):
             source_artifacts_dir=self.agent_env_paths.artifacts_dir,
             artifacts=step_artifacts,
             services={MAIN_SERVICE_NAME},
+            pre_verifier=pre_verifier,
         )
 
         sidecars = self._artifact_handler.sidecar_services(step_artifacts)
@@ -1752,6 +1773,7 @@ class Trial(ABC):
             source_artifacts_dir=self.agent_env_paths.artifacts_dir,
             artifacts=step_artifacts,
             services=sidecars,
+            pre_verifier=pre_verifier,
         )
 
     def _init_timeouts(self) -> None:

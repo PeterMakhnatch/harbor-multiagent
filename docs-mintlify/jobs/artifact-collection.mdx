@@ -6,10 +6,18 @@ description: "Preserve files produced during a trial."
 Harbor collects artifacts after the agent phase for two purposes: 1. saving files for local inspection 2. transferring agent-produced
 files into a separate verifier sandbox.
 
-For a single-step trial, including a seat trial, Harbor retries failed declared
-artifacts after the verifier runs. Harbor leaves successful first collections
-in place. With a separate verifier, it retries only `main` artifacts, in the
-verifier sandbox rather than the stopped agent sandbox.
+For a single-step trial with a shared verifier, including a seat trial, Harbor
+retries failed regular files from `main` after the verifier returns a reward.
+It uses the remaining verifier timeout and never overwrites a collected file.
+It does not retry directories, relative paths, or files from seats or sidecars.
+It also does not retry Harbor-managed agent logs, seat logs, tests, or the
+automatic artifact directory. A separate verifier saves its logs under
+`<trial-dir>/verifier/`; no declared artifacts are retried from its sandbox.
+
+`verifier.collect` hooks run only before grading. They capture pre-verifier
+state, so Harbor does not run them again or give them write access during retry.
+Retry failures are warnings in `trial.log` and `result.json` and do not change
+the reward. To keep the source sandbox after a retry fails, use `--no-delete`.
 
 ## Automatic artifact collection
 
@@ -145,10 +153,15 @@ Harbor writes `<trial-dir>/artifacts/manifest.json` as a collection report. Each
 entry records the artifact's source, host destination, service, file type, and
 status: `ok`, `empty`, `failed`, or `skipped`.
 
-An entry also records its collection `phase`: `pre_verifier` or `post_verifier`.
+A snapshot can record its collection `phase`: `pre_verifier` or `post_verifier`.
 This field records when Harbor collected the file, not which process wrote it.
-Failed and skipped entries have no collection phase. Older manifests can omit
-the field.
+It is unset for recovery, multi-step collection, disabled verification, live
+mounts, and entries without a successful collection. `source_environment`
+set to `agent` identifies the agent sandbox, which also hosts a shared verifier.
+Both fields are optional for older manifests.
+
+Regrade does not replay `post_verifier` snapshots. It refuses if a declared
+input depends on those files, and leaves the original record unchanged.
 
 Directory entries also record the `exclude` patterns used during collection,
 and regrade requires the updated declaration to use the same ones.

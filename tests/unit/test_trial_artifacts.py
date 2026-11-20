@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -278,6 +279,7 @@ async def test_download_failure_records_failed_manifest_entry(
     assert failed[0].source == "/data/dump.sql"
     assert failed[0].service == "db"
     assert failed[0].phase is None
+    assert failed[0].source_environment == "agent"
 
 
 def test_legacy_artifact_manifest_entry_has_unknown_phase() -> None:
@@ -292,6 +294,105 @@ def test_legacy_artifact_manifest_entry_has_unknown_phase() -> None:
 
     assert entry.status == "ok"
     assert entry.phase is None
+    assert entry.source_environment is None
+
+
+async def test_retry_downloads_duplicate_file_once_and_excludes_live_paths(
+    tmp_path: Path,
+) -> None:
+    output = "/tmp/report.txt"
+    seat_output = "/tmp/seat.txt"
+    seat_log = "/logs/seats/p1/agent/oracle.txt"
+    partial_dir = "/tmp/partial"
+    handler = _handler(
+        [
+            output,
+            output,
+            ArtifactConfig(source=seat_output, service="p1"),
+            seat_log,
+            partial_dir,
+        ]
+    )
+    environment = _mock_env(mounted=True)
+    environment.service_is_dir.side_effect = lambda path, **_: path == partial_dir
+    environment.service_download_file.side_effect = FileNotFoundError
+
+    async def partial_download(*, target_dir: Path, **_) -> None:
+        (target_dir / "stale.txt").write_text("partial old snapshot")
+        raise OSError("interrupted")
+
+    async def download(source: str, target: Path) -> None:
+        assert source == output
+        target.write_text("report")
+
+    environment.service_download_dir.side_effect = partial_download
+    environment.is_file.return_value = True
+    environment.download_file.side_effect = download
+    artifacts = tmp_path / "artifacts"
+    warnings: list[str] = []
+    await handler.download_artifacts(
+        environment,
+        artifacts,
+        source_artifacts_dir=ENV_ARTIFACTS_DIR,
+        pre_verifier=True,
+    )
+    await handler.retry_failed_artifacts(
+        environment,
+        artifacts,
+        source_artifacts_dir=ENV_ARTIFACTS_DIR,
+        warn=warnings.append,
+    )
+
+    entries = json.loads((artifacts / "manifest.json").read_text())
+    assert entries[0]["phase"] is None  # The mounted directory is not a snapshot.
+    assert entries[1] == entries[2]
+    assert entries[1]["phase"] == "post_verifier"
+    assert entries[1]["status"] == "ok"
+    assert entries[1]["source_environment"] == "agent"
+    assert [entry["status"] for entry in entries[3:]] == ["failed"] * 3
+    assert len(warnings) == 3
+    assert all(
+        any(path in message for message in warnings)
+        for path in (seat_output, seat_log, partial_dir)
+    )
+    environment.download_file.assert_awaited_once()
+    assert (artifacts / "tmp/report.txt").read_text() == "report"
+    assert (artifacts / "tmp/partial/stale.txt").read_text() == "partial old snapshot"
+
+
+async def test_cancelled_retry_does_not_publish_partial_file(tmp_path: Path) -> None:
+    environment = _mock_env(mounted=True)
+    environment.service_download_file.side_effect = FileNotFoundError
+    environment.is_file.return_value = True
+    handler = _handler(["/tmp/report.txt"])
+    artifacts = tmp_path / "artifacts"
+    await handler.download_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR
+    )
+    previous = (artifacts / "manifest.json").read_bytes()
+    started = asyncio.Event()
+
+    async def download(_, target: Path) -> None:
+        target.write_text("partial")
+        started.set()
+        await asyncio.Event().wait()
+
+    environment.download_file.side_effect = download
+    task = asyncio.create_task(
+        handler.retry_failed_artifacts(
+            environment,
+            artifacts,
+            source_artifacts_dir=ENV_ARTIFACTS_DIR,
+            warn=MagicMock(),
+        )
+    )
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not (artifacts / "tmp/report.txt").exists()
+    assert (artifacts / "manifest.json").read_bytes() == previous
+    assert not list(tmp_path.glob(".artifact-retry-*"))
 
 
 @pytest.mark.unit

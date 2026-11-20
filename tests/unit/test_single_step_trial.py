@@ -1,3 +1,4 @@
+import asyncio
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from harbor.models.task.verifier_mode import VerifierEnvironmentMode
 from harbor.models.trial.config import AgentConfig, TaskConfig, TrialConfig
 from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.models.trial.paths import EnvironmentPaths
+from harbor.models.verifier.result import VerifierResult
 from harbor.trial.errors import EnvironmentStartTimeoutError, VerifierTimeoutError
 from harbor.trial.single_step import SingleStepTrial
 
@@ -65,6 +67,7 @@ async def test_collect_artifacts_is_idempotent(tmp_path: Path) -> None:
         source_artifacts_dir=EnvironmentPaths().artifacts_dir,
         artifacts=None,
         services={MAIN_SERVICE_NAME},
+        pre_verifier=False,
     )
 
 
@@ -398,7 +401,10 @@ async def test_agent_error_policy_controls_grading_without_skipping_collection(
     )
     assert verifier.await_count == int(grade)
     trial._sync_agent_output.assert_awaited_once()
-    trial._collect_artifacts.assert_awaited_once()
+    trial._collect_artifacts.assert_awaited_once_with(
+        stop_main_before_sidecars=(mode == VerifierEnvironmentMode.SEPARATE),
+        pre_verifier=grade,
+    )
     trial._stop_agent_environment.assert_awaited_once()
 
 
@@ -432,6 +438,51 @@ async def test_verifier_errors_propagate_unchanged(
 
     assert exc_info.value is error
     assert trial.result.verifier.finished_at is not None
+
+
+@pytest.mark.parametrize("failure", [TimeoutError, RuntimeError])
+async def test_no_retry_if_verifier_does_not_return_a_reward(
+    tmp_path: Path, failure: type[Exception], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trial = _verifier_trial()
+    retry = AsyncMock()
+    monkeypatch.setattr(trial, "_retry_shared_verifier_artifacts", retry)
+    verifier = MagicMock(verify=AsyncMock(side_effect=failure))
+    expected = VerifierTimeoutError if failure is TimeoutError else failure
+
+    with pytest.raises(expected):
+        await trial._verify_with_timeout(verifier, 1, retry_artifacts_dir=tmp_path)
+
+    retry.assert_not_awaited()
+
+
+async def test_late_collection_uses_verifier_budget_without_losing_reward(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trial = _verifier_trial()
+    trial.logger = MagicMock()
+    trial.result.artifact_collection_warnings = []
+    cancelled = asyncio.Event()
+
+    async def retry(_artifacts_dir: Path) -> None:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(trial, "_retry_shared_verifier_artifacts", retry)
+    result = VerifierResult(rewards={"reward": 1})
+    verifier = MagicMock(verify=AsyncMock(return_value=result))
+
+    actual = await trial._verify_with_timeout(
+        verifier, 0.01, retry_artifacts_dir=tmp_path
+    )
+    assert actual is result
+    assert cancelled.is_set()
+    assert trial.result.artifact_collection_warnings == [
+        "Post-verifier artifact collection exhausted the verifier timeout."
+    ]
+    trial.logger.warning.assert_called_once()
 
 
 def _scrub_trial(tmp_path: Path, agent, user_agent=None) -> SingleStepTrial:
