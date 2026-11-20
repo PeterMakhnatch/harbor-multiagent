@@ -1056,3 +1056,15 @@ def test_a_failed_rebuild_keeps_the_manifest_and_the_folders_in_step(
         output_dir=root, seats=True, arms=["silent"]
     ).generate_task(make_pair(), arm="silent")
     assert entries_match_folders()[rebuilt.name]["arm"] == "silent"
+
+
+@pytest.mark.parametrize("scale", [float("inf"), float("nan"), 0.0, -1.0])
+def test_solo_budget_scale_must_be_positive_and_finite(tmp_path: Path, scale: float):
+    """An infinite scale would render timeout_sec = inf (review of #26)."""
+    with pytest.raises(ValueError, match="must be positive and finite"):
+        CooperBenchAdapter(
+            output_dir=tmp_path / "tasks",
+            seats=True,
+            arms=ARM_WORDS,
+            solo_budget_scale=scale,
+        )

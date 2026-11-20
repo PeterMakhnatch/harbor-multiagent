@@ -415,6 +415,11 @@ default, recorded as `solo_budget_scale` in `task.toml` `[metadata]`.
   (for example claude-code `max_turns`, mini-swe-agent `cost_limit`,
   openhands `max_iterations`, or Flotilla's `make_jobs.py --max-turns`). A
   task cannot set them, so the solo job must get each one times the scale.
+- The scaled timeout survives only if the job sets neither
+  `override_timeout_sec` nor `max_timeout_sec`: Harbor applies those to
+  every task and clamps or equalizes
+  the solo timeout without a warning, while `task.toml` still records the
+  scale. Nothing reads `solo_budget_scale` at run time; it records the build.
 - `--solo-budget-scale 1` is upstream CooperBench's solo budget: upstream
   gives the solo agent the same limits as each cooperating agent (100 steps
   and $3 in its mini-swe-agent configs). Solo scores at scale 2 do not

@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import math
 import argparse
 import logging
 import sys
@@ -135,8 +136,8 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--solo-budget-scale applies to the solo arm: add --arms solo")
     if args.solo_budget_scale is None:
         args.solo_budget_scale = 2.0
-    if args.solo_budget_scale <= 0:
-        parser.error("--solo-budget-scale must be positive")
+    if not math.isfinite(args.solo_budget_scale) or args.solo_budget_scale <= 0:
+        parser.error("--solo-budget-scale must be positive and finite")
     if args.seats and args.agent_harness is not None:
         parser.error(
             "--agent-harness applies to sidecar tasks; with --seats, the trial's "

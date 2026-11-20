@@ -25,6 +25,7 @@ GitHub:  https://github.com/cooperbench/CooperBench
 
 from __future__ import annotations
 
+import math
 import json
 import re
 import secrets
@@ -422,8 +423,10 @@ class CooperBenchAdapter:
             raise ValueError(f"arms must be distinct values from {self.ARMS}: {arms}")
         if self._arms_build and not seats:
             raise ValueError("arms apply to seat tasks: set seats=True")
-        if not solo_budget_scale > 0:
-            raise ValueError(f"solo_budget_scale must be positive: {solo_budget_scale}")
+        if not (math.isfinite(solo_budget_scale) and solo_budget_scale > 0):
+            raise ValueError(
+                f"solo_budget_scale must be positive and finite: {solo_budget_scale}"
+            )
         self.solo_budget_scale = solo_budget_scale
         self._manifest: dict[str, dict] | None = None
         self._output_checked = False
