@@ -351,7 +351,7 @@ def test_runs_once_and_scores_in_separate_views(archive, tmp_path, monkeypatch):
         value = next(responses)
         if isinstance(value, BaseException):
             raise value
-        return deepseek.SeatTurn(value, deepseek.REVISION)
+        return deepseek.SeatTurn(value, deepseek.REVISION, 12, 2, 4)
 
     monkeypatch.setattr(deepseek, "turn", turn)
     summary = listener.seal(root, study)

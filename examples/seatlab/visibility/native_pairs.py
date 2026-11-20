@@ -103,17 +103,30 @@ def _decision_hash(role: str, rows: list[dict[str, Any]]) -> str:
     return view_hash(ordered)
 
 
-def _ask_once(prompt: str, role: str, metadata: dict[str, Any]) -> str:
+async def _ask_once(
+    prompt: str, role: str, metadata: dict[str, Any], context: AgentContext
+) -> str:
     metadata.update(stage="direct_pending", model_turns=1)
     try:
-        turn = deepseek.turn(prompt, run_id=metadata["run_id"], role=role)
+        turn = await asyncio.to_thread(
+            deepseek.turn, prompt, run_id=metadata["run_id"], role=role
+        )
     except deepseek.SeatUnavailable as error:
+        if error.settled_usage is not None:
+            (
+                context.n_input_tokens,
+                context.n_cache_tokens,
+                context.n_output_tokens,
+            ) = error.settled_usage
         stage = error.category
         if not stage.isidentifier() or stage != stage.lower():
             stage = "direct_unavailable"
         native_model_agent._fail(metadata, stage)
     except Exception:
         native_model_agent._fail(metadata, "direct_failed")
+    context.n_input_tokens = turn.input_tokens
+    context.n_cache_tokens = turn.cache_tokens
+    context.n_output_tokens = turn.output_tokens
     metadata["requested_model"] = deepseek.MODEL
     metadata["served_model"] = turn.served_model
     return turn.text
@@ -197,7 +210,7 @@ class DirectFlashSeat(BaseAgent):
         except (OSError, ValueError, RecursionError, TypeError, seat_agent._Unmeasured):
             native_model_agent._fail(metadata, "invalid_view")
         metadata["prompt_sha256"] = _prompt_hash(prompt)
-        response = await asyncio.to_thread(_ask_once, prompt, role, metadata)
+        response = await _ask_once(prompt, role, metadata, context)
         try:
             if not isinstance(response, str) or len(response) > 8192:
                 raise ValueError("Invalid model response")

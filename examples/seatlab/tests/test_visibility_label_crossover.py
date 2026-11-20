@@ -118,7 +118,9 @@ def test_cli_publishes_label_counts_and_matched_pairs(
         assert role == "decision_maker"
         assert prompt == cell.prompt
         choice = cell.case.best_label if cell.arm == "visible" else "A"
-        return deepseek.SeatTurn(json.dumps({"choice": choice}), deepseek.REVISION)
+        return deepseek.SeatTurn(
+            json.dumps({"choice": choice}), deepseek.REVISION, 12, 2, 4
+        )
 
     monkeypatch.setattr(deepseek, "turn", turn)
     assert label_crossover.main(["fingerprint", str(root)]) == 0
@@ -218,7 +220,7 @@ def test_failed_or_interrupted_cells_are_consumed_without_scoring(
         response = next(responses)
         if isinstance(response, BaseException):
             raise response
-        return deepseek.SeatTurn(response, "deepseek-flash")
+        return deepseek.SeatTurn(response, "deepseek-flash", 12, 2, 4)
 
     monkeypatch.setattr(deepseek, "turn", turn)
     with pytest.raises(ValueError, match="reserve earlier listener cell 1"):

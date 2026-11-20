@@ -35,17 +35,27 @@ def _budget() -> Any:
 class SeatUnavailable(RuntimeError):
     """A fixed safe category, without provider text or account data."""
 
-    def __init__(self, category: str) -> None:
+    def __init__(
+        self,
+        category: str,
+        *,
+        settled_usage: tuple[int, int, int] | None = None,
+    ) -> None:
         self.category = category
+        # Present only after settlement, in total input, cached input, output order.
+        self.settled_usage = settled_usage
         super().__init__(category)
 
 
 @dataclass(frozen=True, slots=True)
 class SeatTurn:
-    """Text and the served model from the same completed provider response."""
+    """Provider response and verified token counts. Input includes cached tokens."""
 
     text: str
     served_model: str
+    input_tokens: int
+    cache_tokens: int
+    output_tokens: int
 
 
 def bind_host_key() -> None:
@@ -197,19 +207,17 @@ def _served_model(value: object) -> str:
     return value
 
 
-def _text(document: dict[str, Any]) -> str:
+def _text(document: dict[str, Any]) -> str | None:
     choices = document.get("choices")
     if (
         not isinstance(choices, list)
         or len(choices) != 1
         or not isinstance(choices[0], dict)
     ):
-        raise SeatUnavailable("provider_response_invalid")
+        return None
     message = choices[0].get("message")
     content = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(content, str):
-        raise SeatUnavailable("provider_response_invalid")
-    return content
+    return content if isinstance(content, str) else None
 
 
 def turn(prompt: str, *, run_id: str, role: str) -> SeatTurn:
@@ -236,7 +244,13 @@ def turn(prompt: str, *, run_id: str, role: str) -> SeatTurn:
         started_at=started,
         finished_at=finished,
     )
-    return SeatTurn(_text(document), served)
+    input_tokens = hit + miss
+    text = _text(document)
+    if text is None:
+        raise SeatUnavailable(
+            "provider_response_invalid", settled_usage=(input_tokens, hit, output)
+        )
+    return SeatTurn(text, served, input_tokens, hit, output)
 
 
 def ask(prompt: str, *, run_id: str, role: str) -> str:

@@ -154,7 +154,13 @@ def test_bound_key_leaves_environment_and_uses_direct_route(
     assert "DEEPSEEK_API_KEY" not in __import__("os").environ
     settled = _install(monkeypatch)
     result = deepseek.turn("seat", run_id="run-1", role="receiver")
-    assert result == deepseek.SeatTurn('{"ok":true}', "deepseek-v4.1-flash-1017")
+    assert result == deepseek.SeatTurn(
+        '{"ok":true}',
+        "deepseek-v4.1-flash-1017",
+        input_tokens=12,
+        cache_tokens=2,
+        output_tokens=4,
+    )
     assert deepseek.ask("seat", run_id="run-1", role="receiver") == '{"ok":true}'
     assert [(method, path) for method, path, _ in _Connection.calls] == [
         ("GET", "/user/balance"),
@@ -218,8 +224,9 @@ def test_unknown_usage_or_model_leaves_reservation(
         return response
 
     monkeypatch.setattr(_Connection, "getresponse", changed)
-    with pytest.raises(deepseek.SeatUnavailable, match=f"^{category}$"):
+    with pytest.raises(deepseek.SeatUnavailable, match=f"^{category}$") as raised:
         deepseek.turn("seat", run_id="run-1", role="receiver")
+    assert raised.value.settled_usage is None
     assert settled == []
 
 
@@ -238,8 +245,11 @@ def test_invalid_content_settles_verified_usage(
         return response
 
     monkeypatch.setattr(_Connection, "getresponse", changed)
-    with pytest.raises(deepseek.SeatUnavailable, match="^provider_response_invalid$"):
+    with pytest.raises(
+        deepseek.SeatUnavailable, match="^provider_response_invalid$"
+    ) as raised:
         deepseek.turn("seat", run_id="run-1", role="receiver")
+    assert raised.value.settled_usage == (12, 2, 4)
     assert settled == [
         {
             "run_id": "run-1",

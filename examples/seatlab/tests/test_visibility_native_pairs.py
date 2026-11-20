@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from runpy import run_path
 from stat import S_IMODE
-from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -140,9 +139,8 @@ async def _offline_world(
         pairs.deepseek,
         "turn",
         Mock(
-            side_effect=lambda prompt, *, run_id, role: SimpleNamespace(
-                text=answer(prompt),
-                served_model="deepseek-flash",
+            side_effect=lambda prompt, *, run_id, role: pairs.deepseek.SeatTurn(
+                answer(prompt), "deepseek-flash", 12, 2, 4
             )
         ),
     )
@@ -168,6 +166,12 @@ async def _offline_world(
             "agent_info": seat.to_agent_info().model_dump(mode="json"),
             "agent_result": context.model_dump(mode="json"),
         }
+        assert (
+            context.n_input_tokens,
+            context.n_cache_tokens,
+            context.n_output_tokens,
+        ) == (12, 2, 4)
+        assert context.cost_usd is None
         assert context.metadata is not None
         assert context.metadata["model_turns"] == 1
         assert context.metadata["stage"] == "complete"
@@ -205,9 +209,17 @@ async def test_original_delivery_only_changes_the_dispatch_bulletins(
         assert actual["reports"][1]["available"] != actual["after"]
 
 
-@pytest.mark.parametrize("unavailable", [True, False])
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "direct_unavailable",
+        "provider_response_invalid",
+        "invalid_model_decisions",
+        "submission_unacknowledged",
+    ],
+)
 async def test_actor_rejects_one_bad_answer_without_retry(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, unavailable: bool
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stage: str
 ) -> None:
     world = run_path(str(pairs.run_panel.TASK_DIR / "environment/seatworld.py"))[
         "World"
@@ -219,17 +231,22 @@ async def test_actor_rejects_one_bad_answer_without_retry(
             "episodes": 4,
         }
     )
-    view = AsyncMock(return_value=world.view("inventory"))
-    submit = AsyncMock()
+    world_view = world.view("inventory")
+    view = AsyncMock(return_value=world_view)
+    submit = AsyncMock(return_value=(409, '{"accepted":false}'))
     monkeypatch.setattr(pairs.deepseek, "MODEL", "deepseek-flash")
+    rows = world_view["cases"] if stage == "submission_unacknowledged" else []
     invoke = Mock(
-        return_value=SimpleNamespace(
-            text="private diagnostic or malformed answer",
-            served_model="deepseek-flash",
+        return_value=pairs.deepseek.SeatTurn(
+            json.dumps({"rows": rows}), "deepseek-flash", 12, 2, 4
         )
     )
-    if unavailable:
+    if stage == "direct_unavailable":
         invoke.side_effect = pairs.deepseek.SeatUnavailable("private diagnostic")
+    elif stage == "provider_response_invalid":
+        invoke.side_effect = pairs.deepseek.SeatUnavailable(
+            stage, settled_usage=(12, 2, 4)
+        )
     monkeypatch.setattr(pairs.seat_agent, "_view", view)
     monkeypatch.setattr(pairs.seat_agent, "_world_request", submit)
     monkeypatch.setattr(pairs.deepseek, "turn", invoke)
@@ -242,12 +259,25 @@ async def test_actor_rejects_one_bad_answer_without_retry(
     with pytest.raises(pairs.seat_agent._Unmeasured, match="already started"):
         await actor.run("", _environment("inventory"), context)
     invoke.assert_called_once()
-    submit.assert_not_awaited()
+    if stage == "submission_unacknowledged":
+        submit.assert_awaited_once()
+    else:
+        submit.assert_not_awaited()
+    assert (
+        context.n_input_tokens,
+        context.n_cache_tokens,
+        context.n_output_tokens,
+    ) == ((None, None, None) if stage == "direct_unavailable" else (12, 2, 4))
+    assert context.cost_usd is None
     assert context.metadata is not None
     assert context.metadata["model_turns"] == 1
-    assert context.metadata["served_model"] == (
-        None if unavailable else "deepseek-flash"
+    assert context.metadata["stage"] == stage
+    expected_served = (
+        "deepseek-flash"
+        if stage in {"invalid_model_decisions", "submission_unacknowledged"}
+        else None
     )
+    assert context.metadata["served_model"] == expected_served
     assert context.metadata["view_sha256"] is None
 
 
