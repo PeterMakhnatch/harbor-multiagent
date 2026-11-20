@@ -232,14 +232,11 @@ class JobStats(BaseModel):
                         seat_result.seat, {}
                     )
                     reward_bucket.setdefault(value, []).append(trial_result.trial_name)
-            if hasattr(seat_result, "recorded_exceptions"):
-                exception_types = {
-                    error.exception_type for error in seat_result.recorded_exceptions()
-                }
-            elif seat_result.exception_info is not None:
-                exception_types = {seat_result.exception_info.exception_type}
-            else:
-                exception_types = set()
+            exception_types = (
+                {seat_result.exception_info.exception_type}
+                if seat_result.exception_info is not None
+                else set()
+            )
             for exception_type in sorted(exception_types):
                 seat_stats.exception_stats.setdefault(exception_type, []).append(
                     trial_result.trial_name
@@ -340,14 +337,11 @@ class JobStats(BaseModel):
                         values.pop(value, None)
                     if not values:
                         seat_stats.reward_stats.pop(seat_result.seat, None)
-            if hasattr(seat_result, "recorded_exceptions"):
-                exception_types = {
-                    error.exception_type for error in seat_result.recorded_exceptions()
-                }
-            elif seat_result.exception_info is not None:
-                exception_types = {seat_result.exception_info.exception_type}
-            else:
-                exception_types = set()
+            exception_types = (
+                {seat_result.exception_info.exception_type}
+                if seat_result.exception_info is not None
+                else set()
+            )
             for exception_type in exception_types:
                 trial_list = seat_stats.exception_stats.get(exception_type, [])
                 if trial_result.trial_name in trial_list:
