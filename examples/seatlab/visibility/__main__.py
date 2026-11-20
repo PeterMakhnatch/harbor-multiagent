@@ -105,7 +105,10 @@ def replay(root: Path, population: str) -> dict[str, object]:
         "solo_controls": solos,
         "multi_seat_trials": count - solos,
         "intervention": "mute incoming roster-peer messages for one receiver at a time",
-        "source_verification": {"files_read": len(observed), "matched_before_and_after": True},
+        "source_verification": {
+            "files_read": len(observed),
+            "matched_before_and_after": True,
+        },
         "projection": dict(projection),
         "arms": arms,
     }
@@ -114,13 +117,18 @@ def replay(root: Path, population: str) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("population", choices=_POPULATIONS)
-    parser.add_argument("root", type=Path, help="root of this source population; see replication.md")
+    parser.add_argument(
+        "root", type=Path, help="root of this source population; see replication.md"
+    )
     args = parser.parse_args()
     try:
         report = replay(args.root, args.population)
     except (OSError, KeyError, TypeError, ValueError) as exc:
         # Native errors can contain a private path or the text of a message.
-        print(f"Replay refused the source evidence ({type(exc).__name__}).", file=sys.stderr)
+        print(
+            f"Replay refused the source evidence ({type(exc).__name__}).",
+            file=sys.stderr,
+        )
         return 2
     print(json.dumps(report, sort_keys=True, indent=2, allow_nan=False))
     return 0

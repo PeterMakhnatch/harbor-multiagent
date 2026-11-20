@@ -25,10 +25,14 @@ def _trial(path, key="private-trial"):
     )
 
 
-def test_public_report_counts_trials_not_fetches_or_other_seats_actions(tmp_path, monkeypatch):
+def test_public_report_counts_trials_not_fetches_or_other_seats_actions(
+    tmp_path, monkeypatch
+):
     private = tmp_path / "private-archive.json"
     private.write_text("hidden example content")
-    monkeypatch.setitem(report._POPULATIONS, "synthetic", (1, lambda _: [_trial(private)]))
+    monkeypatch.setitem(
+        report._POPULATIONS, "synthetic", (1, lambda _: [_trial(private)])
+    )
     result = report.replay(tmp_path, "synthetic")
     assert result["multi_seat_trials"] == 1
     assert result["projection"]["trials_with_changed_fetch"] == 1
@@ -38,7 +42,12 @@ def test_public_report_counts_trials_not_fetches_or_other_seats_actions(tmp_path
     assert arm["receipts"]["fetch"]["sum_seat_unique_messages"] == 1
     assert arm["receipts"]["bound"]["events"] == 0
     text = json.dumps(result)
-    for retained in [str(tmp_path), "private-trial", "private-id", "hidden example content"]:
+    for retained in [
+        str(tmp_path),
+        "private-trial",
+        "private-id",
+        "hidden example content",
+    ]:
         assert retained not in text
 
 

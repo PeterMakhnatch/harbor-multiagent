@@ -54,3 +54,116 @@ python -m examples.seatlab.visibility crucible-timeouts "$CRUCIBLE_ROOT"
 Each command prints aggregate JSON. It verifies all declared input files with SHA-256 before and after replay. A wrong panel, missing required identity, duplicate trial, or changed source stops publication. Incomplete event coverage remains explicit. A receipt count of 0 is not proof that an uninstrumented event never happened.
 
 **For a different Harbor task:** Adapt its first-party trial manifest and ordered server log to [`Trial` and `Event`](visibility/core.py). Use `available` for mailbox eligibility, `fetch` for peers returned to an authenticated receiver, and `bound` only for messages present in the captured model request. Use private message IDs, not message text. Maintain action order within each seat. Mark each seat's coverage `complete`, `partial`, or `unavailable`. Call `project(trial, muted_seat=receiver)` to make one change, or `summarize(trials)` to count the recorded changes by arm. This works without a change to Harbor's runtime.
+
+For the 2 source-specific outcome comparisons, run:
+
+```bash
+python -m examples.seatlab.visibility.boxes_behavior "$MUSTER_E1RUN"
+python -m examples.seatlab.visibility.stored_listener_variation "$CRUCIBLE_ROOT"
+```
+
+### Run a new blinded listener experiment
+
+`fingerprint`, `seal`, and `report` are offline. `run-cell` makes a **paid** direct request. Use a private study directory and a separate private spend directory. Record the verified opening balance and your own budget before the first call. Do not delete or reset the spend directory to bypass a budget or retry a failed call.
+
+```bash
+python -m examples.seatlab.visibility.listener fingerprint "$CRUCIBLE_ROOT"
+python -m examples.seatlab.visibility.listener seal "$CRUCIBLE_ROOT" "$STUDY"
+mkdir -m 700 "$SEATLAB_SPEND_DIR"
+export SEATLAB_SPEND_DIR
+python -m examples.seatlab.visibility.spend init "$SEATLAB_SPEND_DIR" \
+  --opening-balance-usd "$OPENING_BALANCE_USD" --lane-cap-usd "$CAP_USD"
+keys run -- python -m examples.seatlab.visibility.listener run-cell "$CRUCIBLE_ROOT" "$STUDY" 1
+python -m examples.seatlab.visibility.listener report "$CRUCIBLE_ROOT" "$STUDY"
+python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR"
+```
+
+`keys run --` supplies `DEEPSEEK_API_KEY` to the host process. Each numbered cell accepts one first attempt. The report separates an unrun cell, a reserved cell without a result, and a completed choice. The public report does not contain the answer key, prompt text, account balance, or private native trial identifiers.
+
+### Run 2 new model seats in Harbor
+
+Use the fork in a project-local virtual environment, with Docker running. Do not replace a global Harbor installation. Set `HARBOR` to the absolute path of the fork's `harbor` executable. Use the Python from the same environment. From the fork root:
+
+```bash
+export PYTHONPATH="$PWD/src:$PWD/examples/seatlab:$PWD/examples:$PWD"
+python -m examples.seatlab.visibility.native_pairs plan
+python -m examples.seatlab.visibility.native_pairs preflight --native-only --harbor "$HARBOR"
+```
+
+Neither command makes a model request. **The next command can charge for 2 direct DeepSeek calls.** Use a private output directory outside the checkout. Initialize the spend directory as above, once for the whole study. Start Docker trials one at a time:
+
+```bash
+keys run -- python -m examples.seatlab.visibility.native_pairs run \
+  --out "$NATIVE_STUDY" --harbor "$HARBOR" --cell s3101-r0-fresh
+```
+
+Use the order from `plan` for the remaining cells. Keep failed first attempts. The following command reports what ran, even for an incomplete study. It makes no calls:
+
+```bash
+python -m examples.seatlab.visibility.pair_report "$NATIVE_STUDY"
+```
+
+To compare native token fields with the direct receipts, run this from the fork root with **Eval Lab's Python**:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 "$EVAL_LAB/.venv/bin/python" \
+  -m examples.seatlab.visibility.native_usage --study "$NATIVE_STUDY" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --evallab-root "$EVAL_LAB"
+```
+
+This calls the stock raw trial reader, not a paid Eval Lab command. It does not change a trial or write to Eval Lab. Provide the same spend directory that the study used. A provider receipt names the cell and role but does not include a native trial UUID.
+
+### Label-crossover follow-up, before its first call
+
+The first listeners chose A on all 18 no-report requests. Accuracy alone could not separate a preference for that label from evidence use. This follow-up asks whether a listener chooses the **same physical route** when its label changes. It uses new generations. Do not combine them with the first 36.
+
+Use all 6 cases in the original sealed schedule `b95aa3434271a357cd297d8a56b1715ff8edae1fd4a8566441b4a0995c1dedda`. Show each case under the original mapping and its exact A/B complement. Keep the same scores, display order, instructions, direct model, and settings. The no-report prompt remains identical in both mappings. Switching the mapping also switches the private answer key. Never send that key to the model.
+
+Run 3 repetitions for each case, map, and arm: 72 new first attempts. Visit cases in the original order, then each repetition. Use the original map first if the zero-based case and repetition indices sum to an even number. Within a map, use the visible arm first if those indices plus the map index sum to an even number. Map index 0 means original; 1 means complementary. Never retry an invalid or missing call. Keep the same cumulative $1 local cap and $1.50 account floor; do not start a new budget.
+
+For each case, repetition, and visibility condition, pair the choices under opposite mappings. Changing the letter preserves the physical route. Keeping the letter changes it. Report both counts over complete pairs, separately with and without evidence. Report A choices, accuracy, and missing cells in each arm and mapping. These are 6 source cases and dependent comparisons, not 72 independent tasks.
+
+To reproduce, use `examples.seatlab.visibility.label_crossover` instead of `examples.seatlab.visibility.listener` in the commands above. Give it a new private study directory but the same spend directory. Its sealed schedule SHA-256 is `ed95b623c379a753fef313e39e02e612df1d69ffc986845d8484fcd47bc85e1f`. Run cells 1 through 72 in order. To read only this cohort's costs, use `python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-prefix mirror-`. Filtering the report does not reset the budget.
+
+### Give a receiver from another harness the same input
+
+The four files under `results/dispatch-s*-r1.json` are portable synthetic worlds. Each comes from repetition 1, the first repetition complete for all 4 seeds. The exporter checks both original native trials, the actual sender submissions, the reconstructed receiver text, the receiver decisions, and the stock scores. No private trial directory or Harbor install is needed to use a published packet.
+
+**Do not give a model the packet.** It contains the synthetic world, original decisions, and scores. Give the model only the output of `prompt`. Use the packet's `.system` as the separate system instruction. The native commitment covers the exact **user text**, not the system instruction or the HTTP body.
+
+```bash
+module=examples.seatlab.visibility.dispatch_packet
+packet=examples/seatlab/results/dispatch-s3101-r1.json
+digest=1e776f57ea691d88bdf81baed6a65cd5a4d23e66dcaae3fcae90044425dc770b
+python -m "$module" verify "$packet" --expect-sha256 "$digest"
+python -m "$module" prompt "$packet" fresh --expect-sha256 "$digest" > user.txt
+# Send user.txt to your receiver. Save its JSON response in choices.json.
+python -m "$module" score "$packet" fresh "$(cat choices.json)" --expect-sha256 "$digest"
+```
+
+Run `export "$NATIVE_STUDY" --pair 3101 1` with the original native interpreter to produce those exact packet bytes. `verify` checks consistency. An external SHA-256 binds the bytes to a published version. Neither check independently authenticates a provider. Scoring a new receiver does not turn its choices into original Harbor actions.
+
+### Can a receiver choose which missing update to request?
+
+**Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
+
+- Use repetition 1 for all 4 seeds. Use the posted inventory reports, not ground truth. The two input revisions were both **submitted**; the original native `fresh` dispatcher received revision 2 only. This follow-up constructs a new message schedule. It does not claim the original dispatcher received the new input.
+- Hold back revision 2 on exactly 2 of 4 shipments. Use all 6 unordered pairs of held-back updates once per world, arm, and service window. Initially deliver all 4 revision 1 reports and the other 2 revision 2 reports. Each receiver sees the same instructions, utilities, and case identifiers. It does not see the hidden stock, seed, mask, arm, or original choices.
+- Both arms first ask the same model to select 1 of the 4 cases to refresh. In `active`, deliver the selected case's submitted revision 2 report. In `queue`, deliver one of the unread reports. Choose the member at position `(seed_index + mask_index + window_index) mod 2` in the sorted pair. The model can spend its opportunity on an update already visible. Deliver exactly 1 report, including a repeat if selected. Tell the receiver which report arrived. Do not tell it the strategy or show its first-turn explanation.
+- Ask for final dispatch decisions under the same instruction in both arms. Call the same direct model twice per complete session, with no memory other than the explicit role view. Keep the receiver's actual decisions, including feasible but suboptimal choices. Never retry a model call or substitute a missing result.
+- Open the first service window at `2026-11-20T21:10:00Z`. Open the next two 180 and 330 minutes later. Each window lasts 30 minutes. Do not start an out-of-window turn or backfill a missed window. Alternate the first arm by the parity of `window_index + seed_index + mask_index`. There are 144 scheduled receiver sessions, 72 matched contrasts, and at most 288 direct requests. Use the **existing** spend directory and cumulative $1 local cap.
+- Primary: fraction of optimal final choices, `active − queue`, paired within world, mask, and window. Average complete contrasts within each world; weight the 4 worlds equally. With no complete contrast in a world, do not present a 4-world estimate. Report every available denominator and window separately. Secondary: feasible choices, requests for updates not yet delivered, and cases where the two delivery rules select the same update. The 4 worlds—not the 576 shipment decisions—bound generalization. The shared provider and adjacent times can also correlate replies.
+
+The [sealed plan](results/clarification-plan.json) has SHA-256 `aff5184e812e567db5939a058b43ca9097bb45adb30471394a6d3412dcc31171`. Supply a **physical absolute path**, without any symlink component, to the parent of your private output. On macOS, `/tmp` is a symlink. Use `realpath` to resolve it first. For a new replication, choose your own future start time. You can still read the published packets and results after a service window closes.
+
+```bash
+packets=$(realpath examples/seatlab/results)
+study="$(realpath "$PRIVATE_PARENT")/clarifications"
+python -m examples.seatlab.visibility.clarify_run seal "$packets" "$study" --start-utc "$START_UTC"
+python -m examples.seatlab.visibility.clarify_run plan "$study"
+# PAID: run only inside the corresponding window, with the same private spend directory.
+keys run -- python -m examples.seatlab.visibility.clarify_run run-window "$packets" "$study" 0
+# Offline: includes incomplete, invalid, and unattempted cells.
+python -m examples.seatlab.visibility.clarify_report "$packets" "$study"
+python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-prefix ask-
+```

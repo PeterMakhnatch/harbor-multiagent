@@ -1,0 +1,522 @@
+{
+  "cells": [
+    {
+      "condition": "gullibility_p00",
+      "counts": {
+        "decisions": 6,
+        "distinct_trials": 6,
+        "route_correct": 6
+      },
+      "denominator": 6,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 15,
+        "distinct_source_trials": 6,
+        "groups": 1,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 4,
+        "distinct_source_trials": 5,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 1
+    },
+    {
+      "condition": "gullibility_p00",
+      "counts": {
+        "decisions": 6,
+        "distinct_trials": 6,
+        "route_correct": 6
+      },
+      "denominator": 6,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 15,
+        "distinct_source_trials": 6,
+        "groups": 1,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 4,
+        "distinct_source_trials": 5,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 2
+    },
+    {
+      "condition": "gullibility_p00",
+      "counts": {
+        "decisions": 6,
+        "distinct_trials": 6,
+        "route_correct": 6
+      },
+      "denominator": 6,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 15,
+        "distinct_source_trials": 6,
+        "groups": 1,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 4,
+        "distinct_source_trials": 5,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 3
+    },
+    {
+      "condition": "gullibility_p00",
+      "counts": {
+        "decisions": 6,
+        "distinct_trials": 6,
+        "route_correct": 6
+      },
+      "denominator": 6,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 15,
+        "distinct_source_trials": 6,
+        "groups": 1,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 4,
+        "distinct_source_trials": 5,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 4
+    },
+    {
+      "condition": "gullibility_p00",
+      "counts": {
+        "decisions": 6,
+        "distinct_trials": 6,
+        "route_correct": 6
+      },
+      "denominator": 6,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 15,
+        "distinct_source_trials": 6,
+        "groups": 1,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 4,
+        "distinct_source_trials": 5,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 5
+    },
+    {
+      "condition": "gullibility_p00",
+      "counts": {
+        "decisions": 6,
+        "distinct_trials": 6,
+        "route_correct": 6
+      },
+      "denominator": 6,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 15,
+        "distinct_source_trials": 6,
+        "groups": 1,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 4,
+        "distinct_source_trials": 5,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 6
+    },
+    {
+      "condition": "gullibility_p50",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 11
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 9,
+        "comparison_pairs": 45,
+        "distinct_source_trials": 10,
+        "groups": 1,
+        "liar_disagreement": 9,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 1,
+        "comparison_pairs": 6,
+        "distinct_source_trials": 9,
+        "groups": 4,
+        "liar_disagreement": 1,
+        "shared_numeric_inputs": 4
+      },
+      "round": 1
+    },
+    {
+      "condition": "gullibility_p50",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 66,
+        "distinct_source_trials": 12,
+        "groups": 1,
+        "liar_disagreement": 41,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 24,
+        "distinct_source_trials": 10,
+        "groups": 2,
+        "liar_disagreement": 14,
+        "shared_numeric_inputs": 2
+      },
+      "round": 2
+    },
+    {
+      "condition": "gullibility_p50",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 11
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 9,
+        "comparison_pairs": 45,
+        "distinct_source_trials": 10,
+        "groups": 1,
+        "liar_disagreement": 9,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 9,
+        "distinct_source_trials": 7,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 3
+    },
+    {
+      "condition": "gullibility_p50",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 66,
+        "distinct_source_trials": 12,
+        "groups": 1,
+        "liar_disagreement": 41,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 13,
+        "distinct_source_trials": 10,
+        "groups": 3,
+        "liar_disagreement": 8,
+        "shared_numeric_inputs": 3
+      },
+      "round": 4
+    },
+    {
+      "condition": "gullibility_p50",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 11
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 9,
+        "comparison_pairs": 45,
+        "distinct_source_trials": 10,
+        "groups": 1,
+        "liar_disagreement": 9,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 9,
+        "distinct_source_trials": 7,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 5
+    },
+    {
+      "condition": "gullibility_p50",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 66,
+        "distinct_source_trials": 12,
+        "groups": 1,
+        "liar_disagreement": 41,
+        "shared_numeric_inputs": 1
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 12,
+        "distinct_source_trials": 10,
+        "groups": 3,
+        "liar_disagreement": 6,
+        "shared_numeric_inputs": 3
+      },
+      "round": 6
+    },
+    {
+      "condition": "gullibility_p100",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 46,
+        "distinct_source_trials": 12,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 17,
+        "distinct_source_trials": 11,
+        "groups": 3,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 3
+      },
+      "round": 1
+    },
+    {
+      "condition": "gullibility_p100",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 46,
+        "distinct_source_trials": 12,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 9,
+        "distinct_source_trials": 7,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "round": 2
+    },
+    {
+      "condition": "gullibility_p100",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 46,
+        "distinct_source_trials": 12,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 8,
+        "distinct_source_trials": 8,
+        "groups": 3,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 3
+      },
+      "round": 3
+    },
+    {
+      "condition": "gullibility_p100",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 46,
+        "distinct_source_trials": 12,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 7,
+        "distinct_source_trials": 8,
+        "groups": 3,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 3
+      },
+      "round": 4
+    },
+    {
+      "condition": "gullibility_p100",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 46,
+        "distinct_source_trials": 12,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 7,
+        "distinct_source_trials": 8,
+        "groups": 3,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 3
+      },
+      "round": 5
+    },
+    {
+      "condition": "gullibility_p100",
+      "counts": {
+        "decisions": 12,
+        "distinct_trials": 12,
+        "route_correct": 12
+      },
+      "denominator": 12,
+      "model": "deepseek/deepseek-chat",
+      "multiset_sensitivity": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 46,
+        "distinct_source_trials": 12,
+        "groups": 2,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 2
+      },
+      "ordered": {
+        "choice_disagreement": 0,
+        "comparison_pairs": 6,
+        "distinct_source_trials": 9,
+        "groups": 4,
+        "liar_disagreement": 0,
+        "shared_numeric_inputs": 4
+      },
+      "round": 6
+    }
+  ],
+  "matching": "condition_model_round_role_and_allowlisted_numbers",
+  "method": "first_decision_after_last_complete_authenticated_get",
+  "missing_evidence": {},
+  "native_trials": 30,
+  "not_conditioned_on": "full_prompt_or_history",
+  "payout": "omitted_not_per_decision",
+  "pooled": {
+    "counts": {
+      "decisions": 180,
+      "distinct_trials": 30,
+      "route_correct": 177
+    },
+    "denominator": 180,
+    "dependence": "rounds_and_pair_groups_are_dependent",
+    "multiset_sensitivity": {
+      "choice_disagreement": 27,
+      "comparison_pairs": 699,
+      "distinct_source_trials": 30,
+      "groups": 24,
+      "liar_disagreement": 150,
+      "shared_numeric_inputs": 24
+    },
+    "ordered": {
+      "choice_disagreement": 1,
+      "comparison_pairs": 151,
+      "distinct_source_trials": 30,
+      "groups": 46,
+      "liar_disagreement": 29,
+      "shared_numeric_inputs": 46
+    }
+  },
+  "primary": "actual_msg_seqs_order"
+}

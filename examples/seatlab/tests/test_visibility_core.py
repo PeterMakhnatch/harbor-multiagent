@@ -68,16 +68,24 @@ def test_projection_removes_only_one_recipients_incoming_peers(trial: Trial) -> 
     assert project(trial, "blue").events[5] == Event("fetch", "blue")
 
 
-def test_measurements_keep_evidence_repeats_and_known_action_order(trial: Trial) -> None:
+def test_measurements_keep_evidence_repeats_and_known_action_order(
+    trial: Trial,
+) -> None:
     amber, blue = measure_seats(trial)
     assert (amber.seat, blue.seat) == trial.seats
     assert (amber.status, blue.status) == ("changed", "changed")
     assert (amber.coverage, blue.coverage) == ("complete", "partial")
     assert amber.action_events == 2
     assert amber.receipts == {
-        "available": ReceiptCounts(1, 1, 1, before_action=1, after_action=0, no_known_action=0),
-        "fetch": ReceiptCounts(3, 4, 2, before_action=2, after_action=1, no_known_action=0),
-        "bound": ReceiptCounts(1, 1, 1, before_action=1, after_action=0, no_known_action=0),
+        "available": ReceiptCounts(
+            1, 1, 1, before_action=1, after_action=0, no_known_action=0
+        ),
+        "fetch": ReceiptCounts(
+            3, 4, 2, before_action=2, after_action=1, no_known_action=0
+        ),
+        "bound": ReceiptCounts(
+            1, 1, 1, before_action=1, after_action=0, no_known_action=0
+        ),
     }
     assert amber.first_affected is not None
     assert amber.first_affected.event_index == 2
@@ -167,7 +175,9 @@ def test_aggregate_keeps_coverage_and_availability_separate(trial: Trial) -> Non
         },
     }
     serialized = json.dumps(summary)
-    assert not any(value in serialized for value in (_PRIVATE, "amber", "blue", "world"))
+    assert not any(
+        value in serialized for value in (_PRIVATE, "amber", "blue", "world")
+    )
 
 
 def test_bound_input_is_not_counted_as_an_observed_fetch(trial: Trial) -> None:
@@ -188,7 +198,10 @@ def test_bound_input_is_not_counted_as_an_observed_fetch(trial: Trial) -> None:
         ({"seats": ["amber", "blue"]}, "roster must be a nonempty ordered tuple"),
         ({"coverage": {"amber": "complete"}}, "coverage must have one entry"),
         ({"events": []}, "events must be an ordered tuple"),
-        ({"events": (Event(cast(EventKind, _PRIVATE), "amber"),)}, "unknown event kind"),
+        (
+            {"events": (Event(cast(EventKind, _PRIVATE), "amber"),)},
+            "unknown event kind",
+        ),
         ({"events": (Event("action", _PRIVATE),)}, "event seat is not in the roster"),
         (
             {"events": (Event("fetch", "amber", (cast(MessagePair, (_PRIVATE,)),)),)},
@@ -211,6 +224,8 @@ def test_duplicate_trial_keys_are_rejected_across_arms(trial: Trial) -> None:
 
 
 def test_mute_requires_a_roster_seat(trial: Trial) -> None:
-    with pytest.raises(ValueError, match="muted seat is not in the trial roster") as result:
+    with pytest.raises(
+        ValueError, match="muted seat is not in the trial roster"
+    ) as result:
         project(trial, _PRIVATE)
     assert _PRIVATE not in str(result.value)

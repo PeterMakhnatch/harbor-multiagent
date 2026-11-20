@@ -103,7 +103,9 @@ def _validate(trial: Trial) -> set[str]:
         or not trial.seats
         or not all(_nonblank(seat) for seat in trial.seats)
     ):
-        raise ValueError("trial roster must be a nonempty ordered tuple of seat strings")
+        raise ValueError(
+            "trial roster must be a nonempty ordered tuple of seat strings"
+        )
     roster = set(trial.seats)
     if len(roster) != len(trial.seats):
         raise ValueError("trial roster contains duplicate seats")
@@ -125,8 +127,14 @@ def _validate(trial: Trial) -> set[str]:
         if not isinstance(event.messages, tuple):
             raise ValueError(f"event {index}: messages must be an ordered tuple")
         for pair in event.messages:
-            if not isinstance(pair, tuple) or len(pair) != 2 or not all(map(_nonblank, pair)):
-                raise ValueError(f"event {index}: expected a nonblank sender/message pair")
+            if (
+                not isinstance(pair, tuple)
+                or len(pair) != 2
+                or not all(map(_nonblank, pair))
+            ):
+                raise ValueError(
+                    f"event {index}: expected a nonblank sender/message pair"
+                )
     return roster
 
 
@@ -147,7 +155,9 @@ def project(trial: Trial, muted_seat: str | None = None) -> Trial:
     for event in trial.events:
         if event.seat == muted_seat and event.kind in _RECEIPTS:
             messages = tuple(
-                pair for pair in event.messages if not _is_peer(pair[0], muted_seat, roster)
+                pair
+                for pair in event.messages
+                if not _is_peer(pair[0], muted_seat, roster)
             )
             if len(messages) != len(event.messages):
                 event = replace(event, messages=messages)
@@ -220,7 +230,9 @@ def _measure_seats(trial: Trial, roster: set[str]) -> Iterator[SeatMeasurement]:
         if kind == "send":
             sent[seat].add(event.messages)
         elif kind in ("available", "fetch", "bound"):
-            messages = tuple(pair for pair in event.messages if _is_peer(pair[0], seat, roster))
+            messages = tuple(
+                pair for pair in event.messages if _is_peer(pair[0], seat, roster)
+            )
             if not messages:
                 continue
             last = last_action.get(seat)
@@ -244,7 +256,9 @@ def _measure_seats(trial: Trial, roster: set[str]) -> Iterator[SeatMeasurement]:
             seat=seat,
             coverage=coverage,
             status=_evidence_status(
-                changed=seat in first, channel_traffic=channel_traffic, complete=coverage == "complete"
+                changed=seat in first,
+                channel_traffic=channel_traffic,
+                complete=coverage == "complete",
             ),
             action_events=action_events[seat],
             sent=sent[seat].sent(),
@@ -280,10 +294,14 @@ class _ArmSummary:
     action_events: int = 0
     sent: Counter[str] = field(default_factory=lambda: _message_totals())
     receipts: dict[ReceiptKind, Counter[str]] = field(
-        default_factory=lambda: {kind: _message_totals(receipt=True) for kind in _RECEIPTS}
+        default_factory=lambda: {
+            kind: _message_totals(receipt=True) for kind in _RECEIPTS
+        }
     )
     first_affected: dict[ReceiptKind, Counter[ActionTiming]] = field(
-        default_factory=lambda: {kind: Counter(dict.fromkeys(_TIMING, 0)) for kind in _RECEIPTS}
+        default_factory=lambda: {
+            kind: Counter(dict.fromkeys(_TIMING, 0)) for kind in _RECEIPTS
+        }
     )
 
     def add(self, trial: Trial, measurements: Iterator[SeatMeasurement]) -> None:
@@ -304,7 +322,9 @@ class _ArmSummary:
             channel_traffic |= row.sent.events > 0
             if row.first_affected is not None:
                 changed = True
-                self.first_affected[row.first_affected.kind][row.first_affected.timing] += 1
+                self.first_affected[row.first_affected.kind][
+                    row.first_affected.timing
+                ] += 1
                 fetch, bound = row.receipts["fetch"], row.receipts["bound"]
                 if fetch.events or bound.events:
                     self.interventions["fetch_or_bound_changed_interventions"] += 1
@@ -313,7 +333,9 @@ class _ArmSummary:
                 if fetch.before_action:
                     self.interventions["fetch_before_action_interventions"] += 1
                 if fetch.before_action or bound.before_action:
-                    self.interventions["fetch_or_bound_before_action_interventions"] += 1
+                    self.interventions[
+                        "fetch_or_bound_before_action_interventions"
+                    ] += 1
             for kind, counts in row.receipts.items():
                 totals = self.receipts[kind]
                 _add_totals(totals, counts)
@@ -321,7 +343,9 @@ class _ArmSummary:
                 totals["after_action"] += counts.after_action
                 totals["no_known_action"] += counts.no_known_action
         status = _evidence_status(
-            changed=changed, channel_traffic=channel_traffic or changed, complete=complete
+            changed=changed,
+            channel_traffic=channel_traffic or changed,
+            complete=complete,
         )
         self.trial_status[status] += 1
 
@@ -336,12 +360,16 @@ class _ArmSummary:
             "action_events": self.action_events,
             "sent": dict(self.sent),
             "receipts": {kind: dict(counts) for kind, counts in self.receipts.items()},
-            "first_affected": {kind: dict(counts) for kind, counts in self.first_affected.items()},
+            "first_affected": {
+                kind: dict(counts) for kind, counts in self.first_affected.items()
+            },
         }
 
 
 def _message_totals(*, receipt: bool = False) -> Counter[str]:
-    counts: Counter[str] = Counter(events=0, message_occurrences=0, sum_seat_unique_messages=0)
+    counts: Counter[str] = Counter(
+        events=0, message_occurrences=0, sum_seat_unique_messages=0
+    )
     if receipt:
         for timing in _TIMING:
             counts[timing] = 0

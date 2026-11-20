@@ -46,7 +46,9 @@ def _task_slot(name: object) -> tuple[str, int]:
     raise ValueError("missing original Flotilla schedule task identity")
 
 
-def _matches_world(data: dict, seats: tuple[str, ...], condition: str, version: int) -> bool:
+def _matches_world(
+    data: dict, seats: tuple[str, ...], condition: str, version: int
+) -> bool:
     # Version 1 omitted the version field in both start and final state.
     return (
         data.get("seats") == list(seats)
@@ -63,7 +65,8 @@ def _snapshot_agrees(
         state.get("frozen") is True
         and isinstance(messages, list)
         and all(isinstance(row, dict) for row in messages)
-        and [(row.get("id"), row.get("from"), row.get("to")) for row in messages] == sends
+        and [(row.get("id"), row.get("from"), row.get("to")) for row in messages]
+        == sends
         and isinstance(submissions, list)
         and all(isinstance(row, dict) for row in submissions)
         and [(row.get("n"), row.get("seat")) for row in submissions] == submits
@@ -71,7 +74,11 @@ def _snapshot_agrees(
 
 
 def _read_evidence(
-    directory: Path, seats: tuple[str, ...], condition: str, version: int, play_ended: bool
+    directory: Path,
+    seats: tuple[str, ...],
+    condition: str,
+    version: int,
+    play_ended: bool,
 ) -> tuple[tuple[Event, ...], Coverage, tuple[Path, ...]]:
     tape = directory / "artifacts/logs/world/events.jsonl"
     try:
@@ -99,7 +106,9 @@ def _read_evidence(
             if not isinstance(kind, str) or not isinstance(data, dict):
                 break
             if seq == 1:
-                if kind != "start" or not _matches_world(data, seats, condition, version):
+                if kind != "start" or not _matches_world(
+                    data, seats, condition, version
+                ):
                     break
                 started = True
             elif kind == "start":
@@ -127,7 +136,9 @@ def _read_evidence(
                             events.append(Event("available", recipient, (pair,)))
                 elif kind == "deliver":
                     inbox = inboxes[seat]
-                    if condition != "talk" or data.get("ids") != [mid for _, mid in inbox]:
+                    if condition != "talk" or data.get("ids") != [
+                        mid for _, mid in inbox
+                    ]:
                         break
                     # This server event records the response prepared for this
                     # GET, not terminal output, an actor prompt, or actual use.
@@ -157,21 +168,25 @@ def _read_evidence(
         else:
             if state is not None:
                 sources += (snapshot,)
-                if _matches_world(state, seats, condition, version) and _snapshot_agrees(
-                    state, sends, submits
-                ):
+                if _matches_world(
+                    state, seats, condition, version
+                ) and _snapshot_agrees(state, sends, submits):
                     coverage = "complete"
     return tuple(events), coverage, sources
 
 
-def _load_job(root: Path, job: str, wave: str, counts: dict[str, int]) -> Iterator[Trial]:
+def _load_job(
+    root: Path, job: str, wave: str, counts: dict[str, int]
+) -> Iterator[Trial]:
     directory = root / job
     job_path = directory / "result.json"
     job_result = _object(job_path)
     if job_result is None or not isinstance(job_result.get("id"), str):
         raise ValueError(f"missing original Flotilla job: {job}")
 
-    expected = {(condition, n) for condition, count in counts.items() for n in range(count)}
+    expected = {
+        (condition, n) for condition, count in counts.items() for n in range(count)
+    }
     selected = {}
     for trial_dir in sorted(directory.iterdir()):
         if not trial_dir.is_dir():
@@ -181,8 +196,12 @@ def _load_job(root: Path, job: str, wave: str, counts: dict[str, int]) -> Iterat
         identity_path = result_path if result is not None else trial_dir / "config.json"
         config = result.get("config") if result is not None else _object(identity_path)
         if not isinstance(config, dict) or config.get("job_id") != job_result["id"]:
-            raise ValueError(f"unexpected trial directory in original Flotilla job: {job}")
-        if config.get("source_trial") is not None or (result and result.get("source") is not None):
+            raise ValueError(
+                f"unexpected trial directory in original Flotilla job: {job}"
+            )
+        if config.get("source_trial") is not None or (
+            result and result.get("source") is not None
+        ):
             raise ValueError(f"transferred trial in original Flotilla job: {job}")
         task = config.get("task")
         if not isinstance(task, dict):
@@ -229,9 +248,14 @@ def load(root: Path) -> Iterator[Trial]:
     """Load original job folders with the frozen decomposition task slots."""
     seen: set[str] = set()
     for wave, stem, size in _PANEL:
-        for suffix, counts in (("1seat", {"solo": 12}), ("2seat", {"silent": size, "talk": size})):
+        for suffix, counts in (
+            ("1seat", {"solo": 12}),
+            ("2seat", {"silent": size, "talk": size}),
+        ):
             for trial in _load_job(root, f"{stem}-{suffix}", wave, counts):
                 if trial.key in seen:
-                    raise ValueError("duplicate Flotilla trial identity in original jobs")
+                    raise ValueError(
+                        "duplicate Flotilla trial identity in original jobs"
+                    )
                 seen.add(trial.key)
                 yield trial

@@ -1,0 +1,104 @@
+{
+  "by_visibility_and_map": {
+    "none": {
+      "complementary": {
+        "A": 18,
+        "B": 0,
+        "correct": 6,
+        "correct_denominator": 18,
+        "correct_fraction_of_valid": 0.3333333333333333,
+        "distinct_prompts": 1,
+        "invalid": 0,
+        "not_run": 0,
+        "request_error": 0,
+        "reserved_without_result": 0,
+        "scheduled": 18,
+        "seat_unavailable": 0,
+        "valid": 18
+      },
+      "original": {
+        "A": 18,
+        "B": 0,
+        "correct": 12,
+        "correct_denominator": 18,
+        "correct_fraction_of_valid": 0.6666666666666666,
+        "distinct_prompts": 1,
+        "invalid": 0,
+        "not_run": 0,
+        "request_error": 0,
+        "reserved_without_result": 0,
+        "scheduled": 18,
+        "seat_unavailable": 0,
+        "valid": 18
+      }
+    },
+    "visible": {
+      "complementary": {
+        "A": 11,
+        "B": 7,
+        "correct": 11,
+        "correct_denominator": 18,
+        "correct_fraction_of_valid": 0.6111111111111112,
+        "distinct_prompts": 6,
+        "invalid": 0,
+        "not_run": 0,
+        "request_error": 0,
+        "reserved_without_result": 0,
+        "scheduled": 18,
+        "seat_unavailable": 0,
+        "valid": 18
+      },
+      "original": {
+        "A": 12,
+        "B": 6,
+        "correct": 12,
+        "correct_denominator": 18,
+        "correct_fraction_of_valid": 0.6666666666666666,
+        "distinct_prompts": 6,
+        "invalid": 0,
+        "not_run": 0,
+        "request_error": 0,
+        "reserved_without_result": 0,
+        "scheduled": 18,
+        "seat_unavailable": 0,
+        "valid": 18
+      }
+    }
+  },
+  "distinct_prompts": 9,
+  "eligible_cases": 6,
+  "map_pairs_by_visibility": {
+    "none": {
+      "both_valid": 18,
+      "letter_flip_preserves_route": 0,
+      "same_letter": 18,
+      "scheduled": 18
+    },
+    "visible": {
+      "both_valid": 18,
+      "letter_flip_preserves_route": 13,
+      "same_letter": 5,
+      "scheduled": 18
+    }
+  },
+  "original_schedule_sha256": "b95aa3434271a357cd297d8a56b1715ff8edae1fd4a8566441b4a0995c1dedda",
+  "planned_cells": 72,
+  "schedule_sha256": "ed95b623c379a753fef313e39e02e612df1d69ffc986845d8484fcd47bc85e1f",
+  "schema": "seatlab-listener-label-crossover-v1",
+  "scope": "Standalone choices on six archived worlds, not new native trials. Repeated calls and relabeling do not add independent worlds. The none prompt has identical text under both maps; only its scoring key changes.",
+  "selected_cases": 6,
+  "served_model_counts": {
+    "deepseek-flash": 72
+  },
+  "unique_worlds": 6,
+  "visible_vs_none_matched_crossover": {
+    "all_four_valid": 18,
+    "both_flip": 0,
+    "neither_flips": 5,
+    "none_only_flips": 0,
+    "scheduled": 18,
+    "visible_minus_none_flip_fraction": 0.7222222222222222,
+    "visible_only_flips": 13
+  },
+  "worlds_with_valid_responses": 6
+}
