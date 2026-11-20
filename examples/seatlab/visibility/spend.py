@@ -10,6 +10,7 @@ from contextlib import closing, contextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 _UNIT = (
     1_000_000_000  # integer nanodollars; the smallest list-price rate is 3 per token
@@ -21,6 +22,7 @@ _ROLES = {
     "inventory",
     "dispatch",
     "decision_maker",
+    "box_intent",
     "box_receiver",
     "analyst_1",
     "analyst_2",
@@ -59,7 +61,12 @@ def bind_host_spend_dir() -> None:
     """Keep the ledger location in the host; do not export it to native children."""
     global _HOST_LEDGER
     value = os.environ.pop("SEATLAB_SPEND_DIR", None)
-    if _HOST_LEDGER is not None or not value or not Path(value).is_absolute():
+    if (
+        _HOST_LEDGER is not None
+        or value is None
+        or value == ""
+        or not Path(value).is_absolute()
+    ):
         raise SpendRefused("host_spend_binding_invalid")
     root = Path(value)
     _location(root)
@@ -92,7 +99,7 @@ def _connect(root: Path | None = None):
         root = _HOST_LEDGER
     if root is None:
         value = os.environ.get("SEATLAB_SPEND_DIR")
-        if not value:
+        if value is None or value == "":
             raise SpendRefused("no_spend_directory")
         root = Path(value)
     path = _location(root)
@@ -188,12 +195,12 @@ def settle(
             raise SpendRefused("no_open_reservation")
 
 
-def report(root: Path, *, run_prefix: str | None = None) -> dict:
+def report(root: Path, *, run_prefix: str | None = None) -> dict[str, Any]:
     """Export public usage and cost, without account or request identifiers."""
     if run_prefix is not None and (not run_prefix or not run_prefix.isascii()):
         raise SpendRefused("invalid_run_prefix")
 
-    runs = []
+    runs: list[dict[str, str | int | None]] = []
     total_low = total_high = unresolved = 0
     with _connect(root) as db:
         for row in db.execute("SELECT * FROM calls ORDER BY run,role"):

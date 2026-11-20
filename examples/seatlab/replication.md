@@ -211,3 +211,60 @@ All 40 pairs completed across the 10 worlds. The peer-only repeat rate fell by 5
 Seven source worlds had earlier terminal evidence of the searcher's own observations. Across their 28 pairs, the peer-only repeat rate fell by 46.4 points. That evidence does not show what the original model read. These choices never reached the world. We cannot infer flags found, total coverage after later moves, or an increase in native team reward.
 
 The [paired evidence](results/muster-box-receiver-results.json) includes every denominator and numbering. The [80 settled calls](results/muster-box-receiver-cost.json) used 15,992 uncached input tokens, 0 cached input tokens, and 448 output tokens. The estimated cost was **$0.002667600 USD**, not an invoice.
+
+### Can 3 simultaneous searchers avoid claiming the same new box?
+
+**Registered before generating any intentions.** A searcher can select a new box while 2 teammates select the same new box. Keep the 10 source trials and cutoffs from the preceding experiment. Do not move a cutoff or replace a team. At that instant, require at least 1 verified prior observation and 1 remaining open for each seat. Require at least 3 globally unopened boxes. Only worlds 01, 02, and 06 qualify. Five other teams have an exhausted seat. Two have a seat with no prior open. No stock checkpoint survives.
+
+Give each searcher its own ordered box results and remaining budget. Give all 3 the numbers already opened by peers, but not the peers' flags. Give each an anonymous label: A, B, or C. Each independently proposes 1 box. Seal all 3 proposals before any seat receives feedback. Never execute them. Keep these exact proposals for both second decisions:
+
+| Input on revision | Masked | Shown |
+| --- | --- | --- |
+| Public rules, previous opens, own observations, label, own proposal | Same | Same |
+| Other 2 proposals | Not supplied | Actual proposed boxes and their authors' labels |
+
+Tell each seat to select its final box at the same time as its peers. It may keep or change its proposal. Do not assign priority, promise a reservation, enforce uniqueness, supply hidden placements, or reveal another seat's final choice. The stages are simultaneous in **information**, not necessarily in request time. Preserve each legal choice, including a duplicate.
+
+Use both box numberings, all 3 cyclic assignments of labels to seats, and 2 independent repetitions. Register 36 blocks: repetition, eligible world in ascending order, numbering, then label rotation. Run `masked` first when the sum of the repetition, zero-based world position, numbering, and rotation is even. Otherwise start with `shown`. Within each stage, call A, B, then C. Use the same direct model and settings. The maximum is 108 proposal calls and 216 revision calls. Do not retry. A grammar-invalid proposal prevents both revisions for that block. An invalid revision makes that team's aggregate unknown. Stop on a provider, funding, custody, or ledger failure.
+
+Primary: for the 3 final choices, count selections of historically unopened boxes, then subtract the number of **distinct** new boxes. This counts excess simultaneous claims. Three choices of the same new box count as 2, not 3. Report `shown − masked` within a complete block. Average blocks within each world, then weight the 3 worlds equally. Withhold the 3-world result if any world lacks a complete pair. Give coverage for all 36 blocks. Secondary: distinct new choices, historical repeats, changed proposals, and transitions for initially colliding versus initially noncolliding proposals. These are fixed-prefix decisions on 3 worlds, not restored native actions, full game outcomes, or a population estimate.
+
+#### Run the same decision stages with another harness
+
+The [public packet](results/muster-box-intentions-packet.json) is 2,428 bytes. Its SHA-256 is `a633e7fc6673036bca0989957396250f8db8b77f816be64b4f084dc210423e34`. These commands need neither Docker nor a provider key. Run them from this branch's root:
+
+```sh
+python -m examples.seatlab.visibility.intent_packet verify
+protocol=examples.seatlab.visibility.intent_protocol
+block=bi-i01-m0-l0-r0
+python -m "$protocol" plan
+python -m "$protocol" prompt "$block" --seat A --stage proposal
+```
+
+Start a new session for each seat. Give it only the rendered text. Decode each response on standard input with `python -m "$protocol" decode "$block"`. The decoder returns the original box number, including under reversed numbering. Seal all 3 decoded proposals before running either revision.
+
+```sh
+# Example decoded proposals in A, B, C order: 12, 18, 23.
+python -m "$protocol" prompt "$block" --seat A --stage masked --own 12
+python -m "$protocol" prompt "$block" --seat A --stage shown --proposals '[12,18,23]'
+```
+
+Repeat for B and C with the same sealed proposals. Give none of the seats another seat's final decision. Decode each revision once. An invalid response is missing, not a reason to ask again. The protocol does not open boxes or run the stock verifier.
+
+#### Showing intentions increased duplicate choices
+
+Disclosure helped the single searcher avoid past opens in the preceding experiment. It did **not** help 3 simultaneous searchers coordinate their next open. Both final arms selected 105 historically new boxes across 108 seat decisions. With intentions visible, more seats chose the **same** new box.
+
+| Across 36 matched blocks | Own proposal only | All 3 proposals |
+| --- | ---: | ---: |
+| Excess claims on the same new box | 14 | 23 |
+| Distinct new boxes selected, summed within blocks | 91 | 82 |
+| Selections of previously opened boxes | 3 | 3 |
+| Seats that changed their proposal | 4 | 9 |
+| Blocks where all 3 seats selected the same new box | 1 | 6 |
+
+The primary estimate was **+0.25 excess claims per team** with disclosure. All 3 worlds had the same difference: 3 more excess claims across 12 pairs. Disclosure increased excess claims in 10 pairs, reduced them in 1, and left 25 unchanged. The difference was larger under original numbering than reversed numbering (+0.44 versus +0.06).
+
+Of 14 blocks that began with a duplicate new proposal, none finished without a duplicate when proposals were visible. Two did when proposals were masked. A descriptive check explains where the extra duplicates came from: **all 9 seats that switched with disclosure left a unique proposal for a box a teammate had proposed and still chose.** Only 1 of the 4 masked switches had that pattern. These are observed choices, not evidence of model intent.
+
+All 36 proposal barriers verified. The [paired report](results/muster-box-intentions-results.json) includes every choice and rotation. The [direct cost ledger](results/muster-box-intentions-cost.json) matched all 324 calls with no unresolved hold. The estimated cost was **$0.012125736 USD**. These are 3 archived game states and 1 model. No selected box was opened. We did not measure new flags or a native team reward.

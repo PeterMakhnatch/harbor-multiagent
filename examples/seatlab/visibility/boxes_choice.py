@@ -53,29 +53,37 @@ def _json(value: object) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-def prompt(case: boxes_packet.Case, cell: Cell) -> str:
-    if case.instance != cell.instance or cell.arm not in _ARMS:
-        raise ValueError("wrong receiver view")
+def search_context(
+    case: boxes_packet.Case, numbering: int, *, show_peer_boxes: bool
+) -> tuple[str, ...]:
     own = []
     for box, room, flag in case.own:
         if (box - 1) // 10 + 1 != room:
             raise ValueError("box outside its source room")
-        display = map_box(box, cell.numbering)
+        display = map_box(box, numbering)
         own.append({"box": display, "room": (display - 1) // 10 + 1, "flag": flag})
     peers = (
-        "not supplied"
-        if cell.arm == "own"
-        else _json(sorted(map_box(box, cell.numbering) for box in case.peers))
+        _json(sorted(map_box(box, numbering) for box in case.peers))
+        if show_peer_boxes
+        else "not supplied"
     )
+    return (
+        "You are one of 3 teammates searching 60 boxes. The legal box numbers are 1 through 60.",
+        "Room 1 contains boxes 1-10, room 2 contains 11-20, and so on through room 6.",
+        "Exactly 2 rooms contain flags in every box. The other rooms contain no flags.",
+        "Each teammate can open 9 boxes. The team score is its number of distinct flag boxes opened, divided by 20.",
+        f"Your remaining opens: {case.budget_left}",
+        "Your previous results, oldest first: " + _json(own),
+        "Box numbers previously opened by teammates: " + peers,
+    )
+
+
+def prompt(case: boxes_packet.Case, cell: Cell) -> str:
+    if case.instance != cell.instance or cell.arm not in _ARMS:
+        raise ValueError("wrong receiver view")
     return "\n".join(
         (
-            "You are one of 3 teammates searching 60 boxes. The legal box numbers are 1 through 60.",
-            "Room 1 contains boxes 1-10, room 2 contains 11-20, and so on through room 6.",
-            "Exactly 2 rooms contain flags in every box. The other rooms contain no flags.",
-            "Each teammate can open 9 boxes. The team score is its number of distinct flag boxes opened, divided by 20.",
-            f"Your remaining opens: {case.budget_left}",
-            "Your previous results, oldest first: " + _json(own),
-            "Box numbers previously opened by teammates: " + peers,
+            *search_context(case, cell.numbering, show_peer_boxes=cell.arm == "shared"),
             'Choose 1 box to open next. Return JSON with only the integer field "box".',
         )
     )
