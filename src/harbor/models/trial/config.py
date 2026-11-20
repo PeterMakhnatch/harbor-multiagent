@@ -1,6 +1,7 @@
 import hashlib
 import json
 import warnings
+from collections import Counter
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict, override
@@ -244,10 +245,10 @@ class Participant(AgentConfig):
 
 
 def validate_participants(participants: list[Participant]) -> list[Participant]:
-    seats = [participant.seat for participant in participants]
-    if duplicates := sorted({seat for seat in seats if seats.count(seat) > 1}):
+    counts = Counter(participant.seat for participant in participants)
+    if duplicates := sorted(seat for seat, count in counts.items() if count > 1):
         raise ValueError(f"Seats {duplicates} have more than one participant.")
-    return participants
+    return sorted(participants, key=lambda participant: participant.seat)
 
 
 class UserAgentConfig(AgentConfig):
@@ -615,7 +616,11 @@ class TrialConfig(BaseModel):
 
         # Exclude identity fields from equality comparison.
         exclude = {"trial_name", "job_id"}
-        return self.model_dump(exclude=exclude) == other.model_dump(exclude=exclude)
+        # Seat kwargs can contain values such as Path that persist as strings.
+        mode = "json" if self.participants or other.participants else "python"
+        return self.model_dump(exclude=exclude, mode=mode) == other.model_dump(
+            exclude=exclude, mode=mode
+        )
 
     @model_validator(mode="after")
     def _validate_regrade_exclusivity(self):

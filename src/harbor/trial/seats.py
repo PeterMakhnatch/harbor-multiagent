@@ -19,7 +19,6 @@ from typing import Any, override
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.factory import AgentFactory
-from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
@@ -213,6 +212,9 @@ class SeatsTrial(SingleStepTrial):
             async with _seat_tasks() as group:
                 for seat in self.seats:
                     group.create_task(self._setup_seat(seat))
+        except Exception:
+            self._record_seat_errors()
+            raise
         finally:
             setup.finished_at = self._now()
         for seat in self.seats:
@@ -225,18 +227,23 @@ class SeatsTrial(SingleStepTrial):
         setup = TimingInfo(started_at=self._now())
         seat.result.agent_setup = setup
         try:
-            await asyncio.wait_for(
-                self._install_seat(seat), timeout=seat.setup_timeout_sec
-            )
-        except asyncio.TimeoutError as exc:
-            timeout = AgentSetupTimeoutError(
-                f"Seat {seat.name!r}: agent setup timed out after "
-                f"{seat.setup_timeout_sec} seconds"
-            )
-            seat.result.exception_info = ExceptionInfo.from_exception(timeout)
-            raise timeout from exc
+            try:
+                await asyncio.wait_for(
+                    self._install_seat(seat), timeout=seat.setup_timeout_sec
+                )
+            except TimeoutError as exc:
+                raise AgentSetupTimeoutError(
+                    f"Agent setup timed out after {seat.setup_timeout_sec} seconds"
+                ) from exc
         except Exception as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+            info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
+            seat.result.exception_info = info
+            if info.policy_override and info.policy_override.should_grade is True:
+                seat.logger.warning(
+                    "Cannot grade seat %r: agent setup failed before play", seat.name
+                )
             raise
         finally:
             setup.finished_at = self._now()
@@ -275,16 +282,22 @@ class SeatsTrial(SingleStepTrial):
         finally:
             execution.finished_at = self._now()
             await self._emit(TrialEvent.AGENT_END)
-        await self._collect_seats()
         self._record_seat_errors()
+        await self._collect_seats()
         await self._collect_artifacts(pre_verifier=self._should_verify())
         if not self.config.verifier.disable:
             await self.agent_environment.upload_dir(
                 self.paths.trial_dir / "seats",
                 (self.agent_env_paths.logs_dir / "seats").as_posix(),
             )
-        await self._run_verifier()
+            await self._run_verifier()
         await self._stop_agent_environment()
+
+    @override
+    def _should_verify(self) -> bool:
+        return not self.config.verifier.disable and all(
+            error.policy.should_grade for error in self.result.recorded_exceptions()
+        )
 
     @override
     async def _recover_outputs(self) -> None:
@@ -296,9 +309,10 @@ class SeatsTrial(SingleStepTrial):
         """Start every seat at once. Play ends when every agent under test has
         ended or the agent timeout ([agent] timeout_sec) runs out; the runs
         still going are then cancelled, as Trial cancels a single agent at its
-        timeout. Nothing in the containers is killed, and they stay up. A seat
-        error other than its agent exiting non-zero aborts play and fails the
-        trial, as it fails a single-agent trial."""
+        timeout. Nothing in the containers is killed, and they stay up. A
+        seat's run error ends that seat; other seats keep playing until the
+        normal stop condition.
+        """
         timeout_sec = self._agent_timeout_sec
         async with _seat_tasks() as group:
             tasks = {
@@ -318,6 +332,9 @@ class SeatsTrial(SingleStepTrial):
                         ),
                         exception_traceback="",
                         occurred_at=self._now(),
+                        policy_override=self.config.override_error_policy.get(
+                            AgentTimeoutError.__name__
+                        ),
                     )
                 tasks[seat.name].cancel()
 
@@ -329,18 +346,19 @@ class SeatsTrial(SingleStepTrial):
         seat.result.agent_result = context
         seat.result.agent_execution = execution
         try:
-            with seat.environment.scoped_exec_env(seat.agent.extra_env):
-                with self._log_context("agent", seat.environment):
-                    await seat.agent.run(
-                        instruction=seat.instruction,
-                        environment=seat.environment,
-                        context=context,
-                    )
-        except NonZeroAgentExitCodeError as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+            with (
+                seat.environment.scoped_exec_env(seat.agent.extra_env),
+                self._log_context("agent", seat.environment),
+            ):
+                await seat.agent.run(
+                    instruction=seat.instruction,
+                    environment=seat.environment,
+                    context=context,
+                )
         except Exception as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
-            raise
+            seat.result.exception_info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
         finally:
             execution.finished_at = self._now()
 
@@ -386,10 +404,10 @@ class SeatsTrial(SingleStepTrial):
             )
 
     def _record_seat_errors(self) -> None:
-        """Put the first seat's error on the trial, as SingleStepTrial._run_agent
-        records an agent's timeout or non-zero exit and still verifies. Every
-        seat keeps its own in seat_results. The message names the seat, and is
-        also written to the trial's exception.txt as Trial writes its own."""
+        """Copy the first seat error to the trial for diagnostics only.
+
+        Grading and reward validity use all the recorded errors.
+        """
         if self.result.exception_info is not None:
             return
         for seat in self.seats:
