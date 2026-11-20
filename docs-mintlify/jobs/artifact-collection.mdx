@@ -6,6 +6,20 @@ description: "Preserve files produced during a trial."
 Harbor collects artifacts after the agent phase for two purposes: 1. saving files for local inspection 2. transferring agent-produced
 files into a separate verifier sandbox.
 
+For a Linux single-step trial with a shared verifier, including a seat trial,
+Harbor retries failed regular files from `main` after the verifier returns a
+reward. It uses the remaining verifier timeout and never overwrites a collected
+file. It does not retry directories, relative paths, symlinked paths, or files
+from seats or sidecars. If Harbor cannot validate the resolved path, it does
+not retry the file. It also excludes Harbor-managed agent logs, seat logs, tests,
+and the automatic artifact directory. A separate verifier saves its logs under
+`<trial-dir>/verifier/`; no declared artifacts are retried from its sandbox.
+
+`verifier.collect` hooks run only before grading. They capture pre-verifier
+state, so Harbor does not run them again or give them write access during retry.
+Retry failures are warnings in `trial.log` and `result.json` and do not change
+the reward. To keep the source sandbox after a retry fails, use `--no-delete`.
+
 ## Automatic artifact collection
 
 <Warning>
@@ -139,6 +153,26 @@ Learn more about [separate verifiers](/tasks/separate-verifier).
 Harbor writes `<trial-dir>/artifacts/manifest.json` as a collection report. Each
 entry records the artifact's source, host destination, service, file type, and
 status: `ok`, `empty`, `failed`, or `skipped`.
+
+A snapshot can record its collection `phase`: `pre_verifier` or `post_verifier`.
+This field records when Harbor collected the file, not which process wrote it.
+It is unset for recovery, multi-step collection, disabled verification, live
+mounts, and entries without a successful collection. `source_environment`
+set to `agent` identifies the agent sandbox, which also hosts a shared verifier.
+Both fields are optional for older manifests.
+
+Regrade does not replay `post_verifier` snapshots. It refuses if a declared
+input depends on those files, or if a late file has hard links that could
+carry its bytes into replay. It leaves the original record unchanged.
+
+The automatic `/logs/artifacts/` directory can be a live bind mount. Its
+manifest status describes what Harbor saw before grading, but the verifier can
+change the files in it. The entry has no `phase` and no pre-grading snapshot
+or hashes. For backward compatibility, regrade still uses the final contents
+of that mount. Regrade cannot tell which of those bytes existed before grading.
+This behavior predates late collection and is not covered by the
+`post_verifier` replay guard. For replayable inputs, use explicit artifact
+paths outside the mount and keep the automatic directory empty.
 
 Directory entries also record the `exclude` patterns used during collection,
 and regrade requires the updated declaration to use the same ones.

@@ -138,6 +138,9 @@ class TrialResult(BaseModel):
     seat_results: list[SeatResult] | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
+    artifact_collection_warnings: list[str] = Field(
+        default_factory=list, exclude_if=lambda v: not v
+    )
 
     def recorded_exceptions(self) -> list[ExceptionInfo]:
         """Trial-level exception first, then step or seat exceptions in order.

@@ -455,6 +455,32 @@ class TestStreamedOutputLineLimit:
 
         assert streamed.stdout == buffered.stdout
 
+    async def test_cancelled_buffered_command_reaps_child(self):
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            "import time; print('ready', flush=True); time.sleep(60)",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        assert process.stdout is not None
+        try:
+            assert (await process.stdout.readline()).rstrip(b"\r\n") == b"ready"
+            async with asyncio.TaskGroup() as group:
+                command = group.create_task(
+                    DockerEnvironment._collect_buffered_output(
+                        process, timeout_sec=None
+                    )
+                )
+                await asyncio.sleep(0)  # Enter communicate before cancelling.
+                command.cancel()
+            assert command.cancelled()
+            assert process.returncode is not None
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+
 
 class TestIterStreamLines:
     """Line splitting must not depend on how reads happen to be chunked."""

@@ -256,7 +256,11 @@ class UnixOps:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, _ = await proc.communicate()
+        try:
+            stdout, _ = await proc.communicate()
+        except asyncio.CancelledError:
+            await self._env._terminate_process(proc)
+            raise
         if proc.returncode != 0:
             output = stdout.decode(errors="replace") if stdout else ""
             raise RuntimeError(

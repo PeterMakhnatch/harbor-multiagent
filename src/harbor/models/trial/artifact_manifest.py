@@ -12,6 +12,10 @@ class ArtifactManifestEntry(BaseModel):
     """Compose service the artifact was collected from. None means main."""
     exclude: list[str] | None = None
     """Effective directory exclusions. None identifies a legacy manifest."""
+    phase: Literal["pre_verifier", "post_verifier"] | None = None
+    """When a snapshot was collected. None means no known snapshot phase."""
+    source_environment: Literal["agent"] | None = None
+    """Sandbox read during collection. The agent sandbox also hosts a shared verifier."""
 
 
 class ArtifactManifest(BaseModel):
