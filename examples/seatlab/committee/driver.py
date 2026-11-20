@@ -396,7 +396,10 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("plan", help="print the registered schedule without running it")
+    plan = commands.add_parser(
+        "plan", help="print the registered schedule without running it"
+    )
+    plan.add_argument("--study", choices=("sharing", "tally"), default="sharing")
     preflight = commands.add_parser(
         "preflight", help="check stock task and installed Harbor"
     )
@@ -404,7 +407,9 @@ def main(argv: list[str] | None = None) -> int:
     for command in (preflight, run):
         command.add_argument("--harbor", type=Path, required=True)
         command.add_argument("--task", type=Path, required=True)
-    cells = {cell["cell_id"]: cell for cell in schedule.grid()}
+    sharing = schedule.grid()
+    tally = schedule.tally_grid()
+    cells = {cell["cell_id"]: cell for cell in (*sharing, *tally)}
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--cell", choices=cells, required=True)
     parsed = parser.parse_args(args)
@@ -414,12 +419,16 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 json.dumps(
                     {
-                        "schema": "seatlab.committee-plan/v1",
+                        "schema": (
+                            "seatlab.committee-tally-plan/v1"
+                            if parsed.study == "tally"
+                            else "seatlab.committee-plan/v1"
+                        ),
                         "task_git_tree": schedule.TASK_TREE,
                         "task_checksum": schedule.TASK_CHECKSUM,
                         "roles": schedule.ROLES,
                         "model": _MODEL,
-                        "cells": list(cells.values()),
+                        "cells": tally if parsed.study == "tally" else sharing,
                     },
                     indent=2,
                 )

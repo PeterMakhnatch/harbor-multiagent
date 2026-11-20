@@ -165,7 +165,9 @@ def test_blinded_projection_and_native_actions(
     rows = own_rows + submissions
     assert _scores(rows) == dict(zip(labels, (19, 32, 10), strict=True))
     unique = {row["fact"]: row for row in rows}
-    assert _scores(list(unique.values())) == dict(zip(labels, (19, 12, 10), strict=True))
+    assert _scores(list(unique.values())) == dict(
+        zip(labels, (19, 12, 10), strict=True)
+    )
     assert aliases["p4"] not in unique
 
     for native_option in _OPTIONS:
@@ -191,7 +193,9 @@ def test_blinded_projection_and_native_actions(
         )
 
 
-@pytest.mark.parametrize(("seat", "alias"), [(1, "K2"), (2, "K3"), (3, "K5"), (4, "K7")])
+@pytest.mark.parametrize(
+    ("seat", "alias"), [(1, "K2"), (2, "K3"), (3, "K5"), (4, "K7")]
+)
 def test_each_seat_can_share_its_own_private_fact(seat: int, alias: str) -> None:
     assert share_action(json.dumps({"fact": alias}), _dossier(seat), 0) == {
         "text": _stock_post(f"p{seat}")
@@ -210,7 +214,7 @@ def test_each_seat_can_share_its_own_private_fact(seat: int, alias: str) -> None
         '{"fact":["K2"]}',
         '{"fact":"K4","fact":"K2"}',
         '{"fact":"K2","facts":["K2"]}',
-        '{}',
+        "{}",
         '```json\n{"fact":"K2"}\n```',
         '{"fact":"K2"}{}',
     ],
@@ -285,7 +289,7 @@ def test_rejects_absent_or_duplicate_dossier_rows(dossier: dict) -> None:
         '{"id":"F_PRIV_1","option":"Option_B","points":-10}',
         '{"id":"F_SHARED_2","option":"Option_B"}',
         '{"id":"F_SHARED_2","option":"Option_B","points":10,"text":"narrative"}',
-        'Option_B gets 10 points',
+        "Option_B gets 10 points",
     ],
 )
 def test_rejects_invalid_native_chat_fact(dossier: dict, chat: dict, text: str) -> None:
@@ -296,7 +300,9 @@ def test_rejects_invalid_native_chat_fact(dossier: dict, chat: dict, text: str) 
         vote_action('{"choice":"X","cited":["K2"]}', dossier, chat, 0)
 
 
-def test_rejects_incomplete_or_ambiguous_chat_snapshot(dossier: dict, chat: dict) -> None:
+def test_rejects_incomplete_or_ambiguous_chat_snapshot(
+    dossier: dict, chat: dict
+) -> None:
     missing = deepcopy(chat)
     missing["messages"].pop()
     duplicate = deepcopy(chat)
@@ -307,7 +313,13 @@ def test_rejects_incomplete_or_ambiguous_chat_snapshot(dossier: dict, chat: dict
     invalid_seq["messages"][0]["seq"] = True
     inconsistent_speakers = deepcopy(chat)
     inconsistent_speakers["unique_speakers"] = [*_STOCK_ROLES[:3], _STOCK_ROLES[0]]
-    for invalid in (missing, duplicate, duplicate_seq, invalid_seq, inconsistent_speakers):
+    for invalid in (
+        missing,
+        duplicate,
+        duplicate_seq,
+        invalid_seq,
+        inconsistent_speakers,
+    ):
         with pytest.raises(ValueError):
             vote_prompt(dossier, invalid, 0)
 

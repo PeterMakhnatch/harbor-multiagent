@@ -8,6 +8,7 @@ from typing import NoReturn
 
 from .schedule import ARMS as ARMS
 from .schedule import ROLES as ROLES
+from .schedule import TALLY_ARMS
 
 _NATIVE_OPTIONS = ("Option_A", "Option_B", "Option_C")
 _LABELS = ("X", "Y", "Z")
@@ -22,6 +23,16 @@ _OBJECTIVE = (
     "confirmed facts for each option. Count each fact alias only once."
 )
 _NOVELTY_LINE = "Prefer a fact the other analysts cannot already see."
+_VOTE_FIELDS = {"choice", "cited"}
+_TALLY_FIELDS = _VOTE_FIELDS | {"totals"}
+_VOTE_FIELDS_FORMAT = '"choice":"<option label>","cited":["<fact alias>"]'
+_TOTALS_FORMAT = '"totals":{"X":<integer>,"Y":<integer>,"Z":<integer>}'
+_PLAIN_VOTE_FORMAT = f"Return only a JSON object: {{{_VOTE_FIELDS_FORMAT}}}."
+_TALLY_FORMATS = {
+    "first": f"{_TOTALS_FORMAT},{_VOTE_FIELDS_FORMAT}",
+    "last": f"{_VOTE_FIELDS_FORMAT},{_TOTALS_FORMAT}",
+}
+_MAX_TALLY_RESPONSE_CHARS = 8192
 
 
 def _aliases_for(map_index: int) -> dict[str, str]:
@@ -30,8 +41,7 @@ def _aliases_for(map_index: int) -> dict[str, str]:
         return sha256(key).digest(), fact_id
 
     return {
-        fact_id: f"K{i}"
-        for i, fact_id in enumerate(sorted(_FACT_IDS, key=sort_key), 1)
+        fact_id: f"K{i}" for i, fact_id in enumerate(sorted(_FACT_IDS, key=sort_key), 1)
     }
 
 
@@ -96,7 +106,9 @@ def _native_fact(row: dict[str, object]) -> tuple[str, _Fact]:
 
 def _dossier_facts(dossier: dict) -> dict[str, _Fact]:
     dossier = _object(
-        dossier, {"seat", "options", "rubric", "shared_facts", "private_facts"}, "dossier"
+        dossier,
+        {"seat", "options", "rubric", "shared_facts", "private_facts"},
+        "dossier",
     )
     seat, options, rubric = dossier["seat"], dossier["options"], dossier["rubric"]
     if not isinstance(seat, str) or seat not in _PRIVATE_IDS:
@@ -108,13 +120,16 @@ def _dossier_facts(dossier: dict) -> dict[str, _Fact]:
 
     facts = {}
     for key, expected_ids in (
-        ("shared_facts", _SHARED_IDS), ("private_facts", {_PRIVATE_IDS[seat]})
+        ("shared_facts", _SHARED_IDS),
+        ("private_facts", {_PRIVATE_IDS[seat]}),
     ):
         rows = dossier[key]
         if not isinstance(rows, list) or len(rows) != len(expected_ids):
             raise ValueError("invalid dossier fact count")
         for value in rows:
-            row = _object(value, {"id", "kind", "option", "points", "text"}, "dossier fact")
+            row = _object(
+                value, {"id", "kind", "option", "points", "text"}, "dossier fact"
+            )
             if not isinstance(row["kind"], str) or not isinstance(row["text"], str):
                 raise ValueError("invalid dossier fact description")
             fact_id, fact = _native_fact(row)
@@ -218,16 +233,27 @@ def share_action(text: str, dossier: dict, map_index: int) -> dict:
     raise ValueError("share fact is not in the dossier")
 
 
-def vote_prompt(dossier: dict, chat: dict, map_index: int) -> str:
-    """Show a seat its dossier and all four blinded public submissions."""
+@dataclass(frozen=True, slots=True)
+class _VoteView:
+    options: dict[str, str]
+    aliases: dict[str, str]
+    facts: dict[str, _Fact]
+    submissions: list[tuple[str, _Fact]]
+
+
+def _vote_view(dossier: dict, chat: dict, map_index: int) -> _VoteView:
     options, aliases = _mapping(map_index)
     facts = _dossier_facts(dossier)
-    submissions = _chat_facts(chat, facts)
-    submissions.sort(key=lambda row: aliases[row[0]])
+    return _VoteView(options, aliases, facts, _chat_facts(chat, facts))
+
+
+def _render_vote_prompt(view: _VoteView, response_format: str) -> str:
+    options, aliases = view.options, view.aliases
+    submissions = sorted(view.submissions, key=lambda row: aliases[row[0]])
     return "\n".join(
         (
             _OBJECTIVE,
-            _dossier_line(facts, options, aliases),
+            _dossier_line(view.facts, options, aliases),
             "Submissions: "
             + _compact_json(
                 [
@@ -239,25 +265,30 @@ def vote_prompt(dossier: dict, chat: dict, map_index: int) -> str:
             "Count that fact only once.",
             "Vote for an option. Cite one or more distinct fact aliases from the dossier "
             "or the submissions.",
-            'Return only a JSON object: {"choice":"<option label>","cited":["<fact alias>"]}.',
+            response_format,
         )
     )
 
 
-def vote_action(text: str, dossier: dict, chat: dict, map_index: int) -> dict:
-    """Decode a vote and its visible fact aliases to a native vote POST body."""
-    options, aliases = _mapping(map_index)
-    facts = _dossier_facts(dossier)
-    submissions = _chat_facts(chat, facts)
-    response = _read_json(text, {"choice", "cited"}, "vote response")
+def vote_prompt(dossier: dict, chat: dict, map_index: int) -> str:
+    """Show a seat its dossier and all four blinded public submissions."""
+    return _render_vote_prompt(_vote_view(dossier, chat, map_index), _PLAIN_VOTE_FORMAT)
+
+
+def _native_vote(response: dict[str, object], view: _VoteView) -> dict:
     choice, cited = response["choice"], response["cited"]
-    native_options = {label: option for option, label in options.items()}
+    native_options = {label: option for option, label in view.options.items()}
     if not isinstance(choice, str) or choice not in native_options:
         raise ValueError("unknown vote option label")
-    visible_ids = facts.keys() | {fact_id for fact_id, _ in submissions}
-    visible_aliases = {aliases[fact_id]: fact_id for fact_id in visible_ids}
-    if not isinstance(cited, list) or not cited or any(
-        not isinstance(alias, str) or alias not in visible_aliases for alias in cited
+    visible_ids = view.facts.keys() | {fact_id for fact_id, _ in view.submissions}
+    visible_aliases = {view.aliases[fact_id]: fact_id for fact_id in visible_ids}
+    if (
+        not isinstance(cited, list)
+        or not cited
+        or any(
+            not isinstance(alias, str) or alias not in visible_aliases
+            for alias in cited
+        )
     ):
         raise ValueError("vote must cite visible fact aliases")
     if len(cited) != len(set(cited)):
@@ -265,4 +296,52 @@ def vote_action(text: str, dossier: dict, chat: dict, map_index: int) -> dict:
     return {
         "choice": native_options[choice],
         "cited_facts": [visible_aliases[alias] for alias in cited],
+    }
+
+
+def vote_action(text: str, dossier: dict, chat: dict, map_index: int) -> dict:
+    """Decode a vote and its visible fact aliases to a native vote POST body."""
+    view = _vote_view(dossier, chat, map_index)
+    response = _read_json(text, _VOTE_FIELDS, "vote response")
+    return _native_vote(response, view)
+
+
+def tally_prompt(dossier: dict, chat: dict, map_index: int, arm: str) -> str:
+    """Change only the requested response format for the tally interfaces."""
+    if arm not in TALLY_ARMS:
+        raise ValueError("unknown tally arm")
+    if arm == "plain":
+        return vote_prompt(dossier, chat, map_index)
+    response_format = (
+        "Return only a JSON object with these fields in this order: "
+        f"{{{_TALLY_FORMATS[arm]}}}. Use signed integers for totals."
+    )
+    return _render_vote_prompt(_vote_view(dossier, chat, map_index), response_format)
+
+
+def tally_action(
+    text: str, dossier: dict, chat: dict, map_index: int, arm: str
+) -> tuple[dict, dict]:
+    """Return the native vote unchanged by totals and a separate private readout."""
+    if arm not in TALLY_ARMS:
+        raise ValueError("unknown tally arm")
+    structured = arm != "plain"
+    if structured and isinstance(text, str) and len(text) > _MAX_TALLY_RESPONSE_CHARS:
+        raise ValueError("tally vote response is too long")
+    view = _vote_view(dossier, chat, map_index)
+    response = _read_json(
+        text, _TALLY_FIELDS if structured else _VOTE_FIELDS, "vote response"
+    )
+    action = _native_vote(response, view)
+    totals = None
+    if structured:
+        totals = _object(response["totals"], set(_LABELS), "vote totals")
+        if any(type(value) is not int for value in totals.values()):
+            raise ValueError("vote totals must be integers")
+    plain_prompt = _render_vote_prompt(view, _PLAIN_VOTE_FORMAT)
+    return action, {
+        "view_sha256": sha256(plain_prompt.encode("utf-8")).hexdigest(),
+        "totals": totals,
+        "field_order": list(response),
+        "response_text": text,
     }

@@ -48,6 +48,8 @@ We scheduled 24 trials and completed 11 pairs across all 6 label maps. In trial 
 
 The [public per-seat results](results/committee-sharing.json) include all 24 slots and the actual submitted votes and citations for the 22 complete trials. The [cost report](results/committee-sharing-cost.json) covers all 180 direct requests, including the 4 paid share requests in the incomplete trial. The list-price estimate is **$0.007414092**: 11,264 cached input tokens, 40,370 uncached input tokens, and 2,208 output tokens. No reservation remains open. This estimate is not an invoice.
 
+Stock Eval Lab read 23 native result files. It matched all 22 accepted team rewards, including the zeros. Native token counts matched the 2 provider turns for 88 seats. They also matched the single paid turn for each of the 4 seats in the failed trial. The unattempted slot had no result. The [accounting comparison](results/committee-sharing-accounting.json) does not copy provider values into missing native fields. It uses only `evallab.results.load_trial` and needs no database.
+
 Run the following commands from the fork root. Use a project-local Harbor 0.26.0 installation. Use a separate private output directory and the [existing direct spend guard](replication.md#run-a-new-blinded-listener-experiment). `plan` and `analysis` run offline. `run` starts a native Docker trial and can charge for up to 8 direct calls.
 
 ```bash
@@ -57,6 +59,9 @@ python -m examples.seatlab.committee.driver plan
 keys run -- python -m examples.seatlab.committee.driver run \
   --out "$PRIVATE_STUDY" --harbor "$HARBOR" --task "$TASK" --cell hp-m0-r0-open
 python -m examples.seatlab.committee.analysis "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"
+# Read-only, with the Python environment that already contains Eval Lab:
+"$EVAL_LAB/.venv/bin/python" -B -m examples.seatlab.committee.accounting \
+  --study "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"
 ```
 
 ### Voting follow-up: does computing totals before choosing help?

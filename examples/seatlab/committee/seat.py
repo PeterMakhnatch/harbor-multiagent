@@ -18,7 +18,7 @@ from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 
 from ..visibility import deepseek
-from . import contract
+from . import contract, schedule
 
 _SCHEMA = "seatlab.committee-seat/v1"
 _MODEL = f"deepseek/{deepseek.MODEL}"
@@ -188,13 +188,20 @@ class CommitteeSeat(BaseAgent):
             raise ValueError("Committee seat does not accept overrides")
         if (
             role not in contract.ROLES
-            or arm not in contract.ARMS
+            or (arm not in contract.ARMS and arm not in schedule.TALLY_ARMS)
             or type(map_index) is not int
             or not 0 <= map_index < 6
             or not isinstance(run_id, str)
             or not run_id
         ):
             raise ValueError("Invalid committee seat configuration")
+        if arm in schedule.TALLY_ARMS and not any(
+            cell["cell_id"] == run_id
+            and cell["map_index"] == map_index
+            and cell["arm"] == arm
+            for cell in schedule.tally_grid()
+        ):
+            raise ValueError("Invalid tally run identity")
         super().__init__(logs_dir=logs_dir, model_name=_MODEL, logger=logger)
         self._role = role
         self._map_index = map_index
@@ -221,7 +228,9 @@ class CommitteeSeat(BaseAgent):
         context: AgentContext,
         record: dict[str, Any],
         build_prompt: Callable[[], str],
-        decode_action: Callable[[str], dict[str, Any]],
+        decode_action: Callable[
+            [str], dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]
+        ],
     ) -> dict[str, Any]:
         try:
             prompt = build_prompt()
@@ -260,7 +269,10 @@ class CommitteeSeat(BaseAgent):
             turn.output_tokens,
         )
         if (
-            any(type(count) is not int for count in (input_tokens, cache_tokens, output_tokens))
+            any(
+                type(count) is not int
+                for count in (input_tokens, cache_tokens, output_tokens)
+            )
             or not 0 <= cache_tokens <= input_tokens
             or output_tokens < 0
         ):
@@ -273,11 +285,14 @@ class CommitteeSeat(BaseAgent):
             record["status"] = "rejected"
             raise _SeatFailure("provider_response_invalid")
         try:
-            action = decode_action(turn.text)
+            decoded = decode_action(turn.text)
+            action, readout = decoded if isinstance(decoded, tuple) else (decoded, None)
             record["action_sha256"] = _digest(_canonical_json(action))
         except Exception:
             record["status"] = "rejected"
             raise _SeatFailure("invalid_model_action") from None
+        if readout is not None:
+            record["readout"] = readout
         record["status"] = "submitting"
         return action
 
@@ -294,12 +309,15 @@ class CommitteeSeat(BaseAgent):
             raise _SeatFailure("wrong_dossier_seat")
 
         metadata["phase"] = "share"
+        tally = self._arm in schedule.TALLY_ARMS
         share_record = metadata["turns"]["share"]
         share = await self._turn(
             "share",
             context,
             share_record,
-            lambda: contract.share_prompt(dossier, self._map_index, self._arm),
+            lambda: contract.share_prompt(
+                dossier, self._map_index, "novelty" if tally else self._arm
+            ),
             lambda text: contract.share_action(text, dossier, self._map_index),
         )
         actions["share"] = share
@@ -317,13 +335,26 @@ class CommitteeSeat(BaseAgent):
 
         metadata["phase"] = "vote"
         vote_record = metadata["turns"]["vote"]
-        vote = await self._turn(
-            "vote",
-            context,
-            vote_record,
-            lambda: contract.vote_prompt(dossier, chat, self._map_index),
-            lambda text: contract.vote_action(text, dossier, chat, self._map_index),
-        )
+        if tally:
+            vote = await self._turn(
+                "vote",
+                context,
+                vote_record,
+                lambda: contract.tally_prompt(
+                    dossier, chat, self._map_index, self._arm
+                ),
+                lambda text: contract.tally_action(
+                    text, dossier, chat, self._map_index, self._arm
+                ),
+            )
+        else:
+            vote = await self._turn(
+                "vote",
+                context,
+                vote_record,
+                lambda: contract.vote_prompt(dossier, chat, self._map_index),
+                lambda text: contract.vote_action(text, dossier, chat, self._map_index),
+            )
         actions["vote"] = vote
         if await _world(environment, _WorldAction.VOTE, vote) != {
             "seat": self._role,

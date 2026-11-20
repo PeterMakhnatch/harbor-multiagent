@@ -45,7 +45,9 @@ def _digest(text: str) -> str:
 
 
 def _action_hash(action: dict[str, Any]) -> str:
-    return _digest(json.dumps(action, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+    return _digest(
+        json.dumps(action, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    )
 
 
 class _World:
@@ -56,7 +58,9 @@ class _World:
             "seat": _ROLE,
             "options": ["Option_A", "Option_B", "Option_C"],
             "rubric": "Select the option with the highest points",
-            "shared_facts": [_fact(f"F_SHARED_{i}", "Option_B", i) for i in range(1, 6)],
+            "shared_facts": [
+                _fact(f"F_SHARED_{i}", "Option_B", i) for i in range(1, 6)
+            ],
             "private_facts": [_fact("F_PRIV_1", "Option_A", 9)],
         }
         self.own: dict[str, Any] = {}
@@ -80,10 +84,15 @@ class _World:
 
     def chat(self) -> dict[str, Any]:
         messages = [*self.peers, self.own] if self.release.is_set() else [self.own]
-        return {"messages": messages, "unique_speakers": sorted({row["seat"] for row in messages})}
+        return {
+            "messages": messages,
+            "unique_speakers": sorted({row["seat"] for row in messages}),
+        }
 
     async def _exec(self, *, command: str, timeout_sec: int) -> ExecResult:
-        python, isolated, flag, source, method, route, status, *args = shlex.split(command)
+        python, isolated, flag, source, method, route, status, *args = shlex.split(
+            command
+        )
         assert (python, isolated, flag, timeout_sec) == ("python", "-I", "-c", 6)
         assert "os.environ.get('SEAT_TOKEN'" in source
         assert "HTTPConnection('world', 8080" in source
@@ -111,7 +120,9 @@ class _World:
 
 
 def _agent(logs: Path) -> seat.CommitteeSeat:
-    return seat.CommitteeSeat(logs, _MODEL, role=_ROLE, map_index=_MAP, arm=_ARM, run_id=_CELL)
+    return seat.CommitteeSeat(
+        logs, _MODEL, role=_ROLE, map_index=_MAP, arm=_ARM, run_id=_CELL
+    )
 
 
 @pytest.fixture
@@ -127,9 +138,9 @@ def _receipt(logs: Path, context: AgentContext) -> dict[str, Any]:
         key: value for key, value in context.metadata.items() if key != "turns"
     }
     for phase, row in receipt["turns"].items():
-        assert {key: value for key, value in row.items() if key != "action"} == context.metadata[
-            "turns"
-        ][phase]
+        assert {
+            key: value for key, value in row.items() if key != "action"
+        } == context.metadata["turns"][phase]
     return receipt
 
 
@@ -150,7 +161,9 @@ async def test_scoped_two_phase_turns_wait_for_four_posts(
     context = AgentContext()
     agent = _agent(tmp_path)
     async with asyncio.TaskGroup() as tasks:
-        tasks.create_task(agent.run("Unused native instruction", world.environment, context))
+        tasks.create_task(
+            agent.run("Unused native instruction", world.environment, context)
+        )
         await asyncio.wait_for(world.partial_read.wait(), timeout=2)
         assert model.call_count == 1
         assert {route for _, route, _ in world.calls} == {"/dossier", "/chat/public"}
@@ -171,10 +184,15 @@ async def test_scoped_two_phase_turns_wait_for_four_posts(
     ]
     data = _receipt(tmp_path, context)
     assert (data["schema"], data["phase"], data["status"]) == (
-        "seatlab.committee-seat/v1", "done", "complete"
+        "seatlab.committee-seat/v1",
+        "done",
+        "complete",
     )
     assert (data["role"], data["run_id"], data["map_index"], data["arm"]) == (
-        _ROLE, _CELL, _MAP, _ARM
+        _ROLE,
+        _CELL,
+        _MAP,
+        _ARM,
     )
     for phase, prompt, response, served, action in (
         ("share", share_prompt, share, deepseek.REVISION, share_action),
@@ -189,7 +207,11 @@ async def test_scoped_two_phase_turns_wait_for_four_posts(
             "action_sha256": _action_hash(action),
             "action": action,
         }
-    assert (context.n_input_tokens, context.n_cache_tokens, context.n_output_tokens) == (24, 3, 12)
+    assert (
+        context.n_input_tokens,
+        context.n_cache_tokens,
+        context.n_output_tokens,
+    ) == (24, 3, 12)
     assert context.cost_usd is None
     path = tmp_path / _RECEIPT_NAME
     assert path.stat().st_mode & 0o777 == 0o600
@@ -231,7 +253,12 @@ async def test_wrong_seat_or_transport_failure_stops_before_model(
     receipt = _receipt(tmp_path, context)
     assert (receipt["status"], receipt["failure"]) == ("failed", category)
     assert receipt["turns"]["share"]["status"] == "not_started"
-    assert context.n_input_tokens is context.n_cache_tokens is context.n_output_tokens is None
+    assert (
+        context.n_input_tokens
+        is context.n_cache_tokens
+        is context.n_output_tokens
+        is None
+    )
 
 
 @pytest.mark.parametrize("phase", ["share", "vote"])
@@ -242,7 +269,9 @@ async def test_invalid_first_response_keeps_hash_without_post_or_retry(
     accepted_share = f'{{"fact":"{_alias("F_SHARED_2")}"}}'
     responses = [accepted_share, invalid] if phase == "vote" else [invalid]
     model = Mock(
-        side_effect=[deepseek.SeatTurn(text, deepseek.MODEL, 11, 3, 7) for text in responses]
+        side_effect=[
+            deepseek.SeatTurn(text, deepseek.MODEL, 11, 3, 7) for text in responses
+        ]
     )
     monkeypatch.setattr(deepseek, "turn", model)
     context = AgentContext()
@@ -258,7 +287,11 @@ async def test_invalid_first_response_keeps_hash_without_post_or_retry(
     assert record["status"] == "rejected"
     assert record["response_sha256"] == _digest(invalid)
     assert record["action_sha256"] is record["action"] is None
-    assert (context.n_input_tokens, context.n_cache_tokens, context.n_output_tokens) == (
+    assert (
+        context.n_input_tokens,
+        context.n_cache_tokens,
+        context.n_output_tokens,
+    ) == (
         11 * len(responses),
         3 * len(responses),
         7 * len(responses),
@@ -281,13 +314,24 @@ async def test_provider_failure_keeps_safe_category_and_prompt_hash(
         await _agent(tmp_path).run("", world.environment, context)
     if phase == "vote":
         assert model.call_count == 2
-        assert (context.n_input_tokens, context.n_cache_tokens, context.n_output_tokens) == (11, 3, 7)
-        assert [route for method, route, _ in world.calls if method == "POST"] == ["/chat/public"]
+        assert (
+            context.n_input_tokens,
+            context.n_cache_tokens,
+            context.n_output_tokens,
+        ) == (11, 3, 7)
+        assert [route for method, route, _ in world.calls if method == "POST"] == [
+            "/chat/public"
+        ]
         prompt = contract.vote_prompt(world.dossier, world.chat(), _MAP)
     else:
         model.assert_called_once()
         assert world.calls == [("GET", "/dossier", None)]
-        assert context.n_input_tokens is context.n_cache_tokens is context.n_output_tokens is None
+        assert (
+            context.n_input_tokens
+            is context.n_cache_tokens
+            is context.n_output_tokens
+            is None
+        )
         prompt = contract.share_prompt(world.dossier, _MAP, _ARM)
     receipt = _receipt(tmp_path, context)
     assert (receipt["phase"], receipt["failure"]) == (phase, "provider_timeout")
@@ -319,10 +363,16 @@ async def test_incomplete_or_duplicate_chat_does_not_start_vote(
     assert (receipt["phase"], receipt["failure"]) == ("barrier", expected)
     assert receipt["turns"]["share"]["status"] == "submitted"
     assert receipt["turns"]["vote"]["status"] == "not_started"
-    assert (context.n_input_tokens, context.n_cache_tokens, context.n_output_tokens) == (11, 3, 7)
+    assert (
+        context.n_input_tokens,
+        context.n_cache_tokens,
+        context.n_output_tokens,
+    ) == (11, 3, 7)
 
 
-async def test_existing_receipt_is_never_overwritten(tmp_path: Path, world: _World) -> None:
+async def test_existing_receipt_is_never_overwritten(
+    tmp_path: Path, world: _World
+) -> None:
     path = tmp_path / _RECEIPT_NAME
     path.write_text("first attempt", encoding="utf-8")
     with pytest.raises(NonZeroAgentExitCodeError, match="receipt_unavailable"):
