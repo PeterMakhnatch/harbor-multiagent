@@ -319,6 +319,25 @@ Primary: compare `ee − rr` within a case and draw. Measure whether the model's
 
 This isolates the final receiver. No sender reacts to a replacement. The offline score checks the same two-hour constraint as the native game, but it is **not** a new native trial or verifier reward.
 
+**Try the replay without Harbor, Docker, or a provider.** Run these commands from the repository root with Python 3.11 or newer:
+
+```bash
+python -m examples.seatlab.visibility.calendar_list_packet verify
+python -m examples.seatlab.visibility.calendar_list_protocol prompt rx-w00-d0-r0-blind er
+python -m examples.seatlab.visibility.calendar_list_protocol score rx-w00-d0-r0-blind '{"slot":11}'
+```
+
+The [public packet](results/flotilla-calendar-list-packet.json) binds the 24 recorded inputs to the original native trials. Its SHA-256 is `06ec8c6bceb14db004bc874c18709a7e2ce92837b653b1ba6ce45da23207d322`. The first command reconstructs all 24 prompts. The second prints exactly one role view. The third checks the reply, not the input list.
+
+To compare your own model, pass a function of one prompt to `calendar_list_run.collect(study, run, respond)`. The callback returns one raw string. Use `calendar_list_protocol plan` to list the registered run IDs. Give each worker different IDs and the same private study directory. A failed attempt remains claimed; another worker cannot accidentally buy a second reply. This protects the experiment from duplicate work. It is not a sandbox for an untrusted callback.
+
+```bash
+study="$(mktemp -d "$(realpath "${TMPDIR:-/tmp}")/calendar-list.XXXXXX")"
+# Free transport check. Use a different, empty study directory for real replies.
+python -m examples.seatlab.visibility.calendar_list_run demo "$study" --draw 0
+python -m examples.seatlab.visibility.calendar_list_report "$study"
+```
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
