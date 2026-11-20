@@ -35,8 +35,15 @@ def _budget() -> Any:
 class SeatUnavailable(RuntimeError):
     """A fixed safe category, without provider text or account data."""
 
-    def __init__(self, category: str) -> None:
+    def __init__(
+        self,
+        category: str,
+        *,
+        settled_usage: tuple[int, int, int] | None = None,
+    ) -> None:
         self.category = category
+        # Present only after settlement, in total input, cached input, output order.
+        self.settled_usage = settled_usage
         super().__init__(category)
 
 
@@ -128,7 +135,9 @@ def _balance() -> Decimal:
         raise SeatUnavailable("balance_unverified")
     row = usd[0]
     total = _decimal(row.get("total_balance"))
-    parts = _decimal(row.get("granted_balance")) + _decimal(row.get("topped_up_balance"))
+    parts = _decimal(row.get("granted_balance")) + _decimal(
+        row.get("topped_up_balance")
+    )
     if total != parts or total < _MIN_BALANCE:
         raise SeatUnavailable("balance_below_minimum")
     return total
@@ -184,7 +193,10 @@ def _usage(document: dict[str, Any]) -> tuple[int, int, int]:
     if any(type(value) is not int or value < 0 for value in values):
         raise SeatUnavailable("usage_unverified")
     hit, miss, output = values
-    if usage.get("prompt_tokens") != hit + miss or usage.get("total_tokens") != hit + miss + output:
+    if (
+        usage.get("prompt_tokens") != hit + miss
+        or usage.get("total_tokens") != hit + miss + output
+    ):
         raise SeatUnavailable("usage_unverified")
     return hit, miss, output
 
@@ -195,15 +207,17 @@ def _served_model(value: object) -> str:
     return value
 
 
-def _text(document: dict[str, Any]) -> str:
+def _text(document: dict[str, Any]) -> str | None:
     choices = document.get("choices")
-    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
-        raise SeatUnavailable("provider_response_invalid")
+    if (
+        not isinstance(choices, list)
+        or len(choices) != 1
+        or not isinstance(choices[0], dict)
+    ):
+        return None
     message = choices[0].get("message")
     content = message.get("content") if isinstance(message, dict) else None
-    if not isinstance(content, str):
-        raise SeatUnavailable("provider_response_invalid")
-    return content
+    return content if isinstance(content, str) else None
 
 
 def turn(prompt: str, *, run_id: str, role: str) -> SeatTurn:
@@ -230,7 +244,13 @@ def turn(prompt: str, *, run_id: str, role: str) -> SeatTurn:
         started_at=started,
         finished_at=finished,
     )
-    return SeatTurn(_text(document), served, hit + miss, hit, output)
+    input_tokens = hit + miss
+    text = _text(document)
+    if text is None:
+        raise SeatUnavailable(
+            "provider_response_invalid", settled_usage=(input_tokens, hit, output)
+        )
+    return SeatTurn(text, served, input_tokens, hit, output)
 
 
 def ask(prompt: str, *, run_id: str, role: str) -> str:

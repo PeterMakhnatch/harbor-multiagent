@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from multiprocessing import get_context
@@ -34,10 +35,21 @@ def test_bound_native_host_keeps_one_ledger_without_exporting_it(
     spend.initialize(ledger, _BALANCE, Decimal("1.00"))
     spend.bind_host_spend_dir()
     assert "SEATLAB_SPEND_DIR" not in os.environ
-    spend.reserve("hp-m0-r0-open-share", "analyst_1", balance_usd=_BALANCE)
-    assert spend.report(ledger)["unsettled_calls"] == 1
-    with pytest.raises(spend.SpendRefused, match="host_spend_binding_invalid"):
+
+    run_id = "hp-m0-r0-open-share"
+    roles = ["analyst_1", "analyst_2", "analyst_3", "analyst_4"]
+    for role in roles:
+        spend.reserve(run_id, role, balance_usd=_BALANCE)
+    with pytest.raises(spend.SpendRefused, match="^invalid_call_identity$"):
+        spend.reserve(run_id, "analyst_5", balance_usd=_BALANCE)
+    receipt = spend.report(ledger)
+    assert [call["role"] for call in receipt["calls"]] == roles
+    assert receipt["unsettled_calls"] == 4
+
+    monkeypatch.setenv("SEATLAB_SPEND_DIR", str(ledger))
+    with pytest.raises(spend.SpendRefused, match="^host_spend_binding_invalid$"):
         spend.bind_host_spend_dir()
+    assert "SEATLAB_SPEND_DIR" not in os.environ
 
 
 def _settle(run: str, *, started_at: datetime = _OFFPEAK) -> None:
@@ -91,7 +103,9 @@ def test_only_one_process_can_reserve_the_same_run_and_role(ledger: Path) -> Non
         results.join_thread()
 
     receipt = spend.report(ledger)
-    assert [(call["run"], call["role"]) for call in receipt["calls"]] == [("same-run", "inventory")]
+    assert [(call["run"], call["role"]) for call in receipt["calls"]] == [
+        ("same-run", "inventory")
+    ]
     assert receipt["unsettled_calls"] == 1
     assert receipt["upper_usd_including_holds"] == "0.010000000"
 
@@ -111,7 +125,9 @@ def test_pending_holds_count_against_the_balance_floor(
     assert spend.report(ledger)["unsettled_calls"] == holds
 
 
-def test_lane_cap_counts_outstanding_holds_and_completed_upper_cost(ledger: Path) -> None:
+def test_lane_cap_counts_outstanding_holds_and_completed_upper_cost(
+    ledger: Path,
+) -> None:
     spend.initialize(ledger, _BALANCE, Decimal("0.030015000"))
     for run in ("first", "second", "third"):
         spend.reserve(run, "inventory", balance_usd=_BALANCE)
@@ -212,7 +228,9 @@ def test_request_interval_bounds_peak_price_uncertainty(
 ) -> None:
     spend.initialize(ledger, _BALANCE, Decimal("1.00"))
     spend.reserve("priced-call", "inventory", balance_usd=_BALANCE)
-    _settle("priced-call", started_at=_OFFPEAK.replace(day=day, hour=hour, minute=minute))
+    _settle(
+        "priced-call", started_at=_OFFPEAK.replace(day=day, hour=hour, minute=minute)
+    )
 
     receipt = spend.report(ledger)
     (call,) = receipt["calls"]
@@ -264,3 +282,80 @@ def test_report_keeps_full_holds_and_does_not_invent_usage_or_export_keys(
     exported = json.dumps(receipt)
     assert unrelated_key not in exported
     assert str(ledger) not in exported
+
+
+def test_report_prefix_limits_rows_cost_and_holds_to_one_cohort(ledger: Path) -> None:
+    spend.initialize(ledger, _BALANCE, Decimal("0.030030"))
+    spend.reserve("mirror-trial", "inventory", balance_usd=_BALANCE)
+    _settle("mirror-trial")
+    spend.reserve("s3_trial", "inventory", balance_usd=_BALANCE)
+    _settle("s3_trial", started_at=_OFFPEAK.replace(hour=2))
+    spend.reserve("s3_trial", "dispatch", balance_usd=_BALANCE)
+    spend.reserve("s3-trial", "dispatch", balance_usd=_BALANCE)
+    spend.reserve("hp-trial", "dispatch", balance_usd=_BALANCE)
+
+    full = spend.report(ledger)
+    scoped = spend.report(ledger, run_prefix="s3")
+    assert scoped == {
+        **full,
+        "calls": [
+            call for call in full["calls"] if call["run"] in {"s3-trial", "s3_trial"}
+        ],
+        "unsettled_calls": 2,
+        "known_usd_low": "0.000009471",
+        "upper_usd_including_holds": "0.020018942",
+    }
+    assert spend.report(ledger, run_prefix="s3_") == {
+        **scoped,
+        "calls": [call for call in scoped["calls"] if call["run"] == "s3_trial"],
+        "unsettled_calls": 1,
+        "upper_usd_including_holds": "0.010018942",
+    }
+    for missing in ("s3%", "S3", "not-found"):
+        assert spend.report(ledger, run_prefix=missing) == {
+            **full,
+            "calls": [],
+            "unsettled_calls": 0,
+            "known_usd_low": "0.000000000",
+            "upper_usd_including_holds": "0.000000000",
+        }
+    with pytest.raises(spend.SpendRefused, match="^budget_cap$"):
+        spend.reserve("other-trial", "dispatch", balance_usd=_BALANCE)
+    assert spend.report(ledger) == full
+
+
+@pytest.mark.parametrize("run_prefix", ["", "mïrror-"])
+def test_report_rejects_empty_and_non_ascii_prefix(
+    ledger: Path, monkeypatch: pytest.MonkeyPatch, run_prefix: str
+) -> None:
+    with pytest.raises(spend.SpendRefused, match="^invalid_run_prefix$"):
+        spend.report(ledger, run_prefix=run_prefix)
+
+    monkeypatch.setattr(
+        sys, "argv", ["spend", "report", str(ledger), "--run-prefix", run_prefix]
+    )
+    with pytest.raises(spend.SpendRefused, match="^invalid_run_prefix$"):
+        spend.main()
+
+
+@pytest.mark.parametrize("run_prefix", [None, "mirror-"])
+def test_report_cli_keeps_json_format_and_accepts_run_prefix(
+    ledger: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    run_prefix: str | None,
+) -> None:
+    spend.initialize(ledger, _BALANCE, Decimal("1.00"))
+    spend.reserve("s3-trial", "dispatch", balance_usd=_BALANCE)
+    spend.reserve("mirror-trial", "dispatch", balance_usd=_BALANCE)
+    args = ["spend", "report", str(ledger)]
+    if run_prefix is not None:
+        args.extend(["--run-prefix", run_prefix])
+    monkeypatch.setattr(sys, "argv", args)
+
+    spend.main()
+
+    expected = spend.report(ledger, run_prefix=run_prefix)
+    assert (
+        capsys.readouterr().out == json.dumps(expected, sort_keys=True, indent=2) + "\n"
+    )
