@@ -10,8 +10,15 @@ _JSON_STRING_RE = re.compile(r'"[^"\\\n]*(?:\\.[^"\\\n]*)*(?:"|\\?$)', re.MULTIL
 
 # Output wrapped to a width breaks a long secret: a line break, with the
 # indentation or padding around it. JSON escapes that whitespace, once more
-# for each level of JSON nested in a string.
-_WRAP = r"(?:[ \t\r]|\\+[rt])*(?:\n|\\+n)(?:[ \t\r\n]|\\+[nrt])*"
+# for each level of JSON nested in a string. Every part is bounded and
+# possessive: a wrap never holds a character of a secret (no whitespace or
+# backslash), so a match never needs to give a wrap's characters back, and a
+# scan stays linear however long the runs of escapes in the text are.
+_WRAP = (
+    r"(?:[ \t\r]|\\{1,8}[rt]){0,128}+"
+    r"(?:\n|\\{1,8}n)"
+    r"(?:[ \t\r\n]|\\{1,8}[nrt]){0,128}+"
+)
 # Every character a wrap can hold. A text holds a wrapped secret only if it
 # holds the secret once both are without these characters.
 _WRAP_CHARS = b" \t\r\n\\nrt"
@@ -26,8 +33,8 @@ def _can_be_wrapped(secret: str) -> bool:
         len(secret) >= _MIN_WRAPPED_SECRET_LENGTH
         # Numbers often fill a column, one per line.
         and not secret.isdigit()
-        # A wrap could claim such a character of the secret: the regex would
-        # backtrack, and the scan would no longer be linear.
+        # A wrap could claim such a character of the secret, and the
+        # possessive wrap would then miss the secret.
         and not _WHITESPACE_OR_BACKSLASH_RE.search(secret)
     )
 
@@ -49,7 +56,7 @@ def _wrapped_secret_patterns(
         return {}
     remainder = _without_wrap_chars(text)
     return {
-        secret: re.compile(f"(?:{_WRAP})?".join(map(re.escape, secret)))
+        secret: re.compile(f"(?:{_WRAP})?+".join(map(re.escape, secret)))
         for secret in candidates
         if _without_wrap_chars(secret) in remainder
     }
