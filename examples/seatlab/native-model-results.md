@@ -134,3 +134,17 @@ All 11 valid `fresh` teams chose the optimal bay for all 4 shipments. The native
 We attempted all 24 trials. A launcher error stopped `s3101-r0-fresh` before either seat made a paid call. We fixed the launcher, kept the missing result, and did not retry it. The [per-seat cost record](results/visibility-native-cost.json) covers all 46 paid calls in the 23 valid trials. The listed token rates give **$0.003868956 USD**: 4,352 cached input tokens, 8,594 uncached input tokens, and 4,278 output tokens. No call has an unresolved reservation.
 
 Stock Eval Lab read 23 native team rewards and 46 submitted seat actions. None of those seats had native token counts. The [read-only comparison](results/visibility-native-usage.json) found a settled direct receipt for each of the 46 actions. It did not fill missing native fields from those receipts. The 2 seats in the failed launch remain unknown to the native reader.
+
+### Did asking for a particular missing report help?
+
+**First of 3 registered service windows.** Both arms made 2 new receiver calls and delivered 1 real sender update per session. In one arm, the model chose which shipment to refresh. In the other, the queue delivered an unread update.
+
+| First window, 4 source worlds | Model selects | Unread-first queue |
+| --- | ---: | ---: |
+| Sessions with an unread update delivered | 9 / 24 | 24 / 24 |
+| Optimal shipment choices | 76 / 96 | 86 / 96 |
+| Feasible shipment choices | 79 / 96 | 87 / 96 |
+
+The model spent 15 of its 24 selections on an update it already had. With equal weight per world, its optimal-choice rate was 10.4 percentage points below the queue in this window. The requests ran from 4:10 PM ET to 4:12 PM ET on November 20. This is not the 3-window result. These are new receivers acting on frozen sender reports, not new native team scores.
+
+The [first-window choices](results/clarification-window0.json), [cost ledger](results/clarification-window0-cost.json), and [timing reconciliation](results/clarification-window0-meter.json) are public. All 96 calls started inside the registered window and settled. The price estimate is **$0.005385600 USD**, not an invoice. The [protocol](replication.md#can-a-receiver-choose-which-missing-update-to-request) explains how to repeat the study.
