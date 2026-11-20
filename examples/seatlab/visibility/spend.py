@@ -21,6 +21,7 @@ _ROLES = {
     "inventory",
     "dispatch",
     "decision_maker",
+    "box_receiver",
     "analyst_1",
     "analyst_2",
     "analyst_3",

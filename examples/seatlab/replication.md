@@ -181,3 +181,17 @@ Both arms give a fresh receiver the same public rules, ordered own results, and 
 Use both the original numbering and the room-preserving relabeling `b → 61 − b`. Relabel the own observations, room numbers, peer list, and decoded choice together. Make 2 independent repetitions per map and arm: at most 80 first-time decisions. Visit repetition, instance `1..10`, then numbering index `0..1`. Use `own` first if `repetition + (instance − 1) + numbering_index` is even; otherwise use `shared` first. Use the same metered direct model, JSON instruction, temperature, and limits in every cell. Keep committed invalid responses separate from missing calls. Never retry a sample.
 
 Primary: the paired change in peer-only repeat rate, `shared − own`. Pair the same instance, numbering, and repetition. Average available complete contrasts within each instance; give instances equal weight. Give no 10-instance estimate if any lacks a complete pair. Report own repeats, peer-only repeats, new boxes, invalid choices, missing choices, and coverage of all pairs. Repeat the calculation for the sources whose prior own results appear in an earlier saved terminal observation. This extra check does not prove the original model saw that text. Do not execute the new choices, score hidden flags, or infer a full-team effect.
+
+**Try your own searcher.** The [public packet](results/muster-box-receiver-packet.json) has 10 eligible cutoffs. All receivers have 7 opens left. The packet contains each receiver's observations and the past peer box numbers. Give the agent only its projected prompt, not the packet or the classification.
+
+```bash
+module=examples.seatlab.visibility.boxes_choice
+python -m "$module" plan
+python -m "$module" prompt bx-i01-m0-r0-own > receiver.txt
+# Give receiver.txt to your agent with the system message "Answer only with JSON."
+python -m "$module" classify bx-i01-m0-r0-own < choice.json
+```
+
+Use `shared` instead of `own` to add the peer list. Use `m1` instead of `m0` to reverse the numbering. The classifier accepts all legal choices, including duplicates. It does not execute the choice or tell you whether it would find a flag. No network, Harbor installation, or Docker daemon is needed.
+
+To reproduce the packet, run `python -m examples.seatlab.visibility.boxes_packet export "$MUSTER_E1RUN/team-3" > packet.json`. Its SHA-256 is `dcd8806f26c170ee317b0ad0e0113739c4a1a87465c565487342221a40c84766`. The original archive is not needed to use the published packet.
