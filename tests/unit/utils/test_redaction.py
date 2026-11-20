@@ -228,11 +228,18 @@ def test_scrub_stays_linear_on_large_and_hostile_logs() -> None:
         # Almost the secret, over and over.
         (SECRET[:-1] + "\n  ") * 20_000,
     ]
+    # A secret of the letters that escapes end in, inside long runs of escapes:
+    # every n, r or t of the runs starts a match.
+    letters = "ntrntrntrntrntrntrntrntrnt" + "Xq9"
+    escapes = "\\n\\t\\r" * 40_000
+    secrets = sorted([*secrets, letters], key=len, reverse=True)
+    hostile.append(f"{escapes}{letters[:9]}\n{letters[9:]}{escapes}")
 
     # CPU time: a busy machine must not fail this.
     started = time.process_time()
     for text in hostile:
         scrubbed = scrub_file_text(LOG, f"{text}{SECRET[:9]}\n{SECRET[9:]}", secrets)
         assert scrubbed.endswith("[REDACTED]")
+        assert letters not in scrubbed.replace("\n", "")
 
     assert time.process_time() - started < 5
