@@ -266,6 +266,40 @@ PY
 
 On the no-key demo, the stock reader returned both scores and all 4 seat records. The input, cache, and output token counts were null in all 4 records. Use external receipts for model usage. Do not replace those null values in the Harbor records.
 
+##### Replicate the direct model cohort
+
+**Paid:** run the following only after you authorize a budget. Keep the same initialized `SEATLAB_SPEND_DIR` for the entire study. The [budget instructions](#run-a-new-blinded-listener-experiment) describe initialization. Do not reuse `rx-` identifiers from an earlier study or reset its ledger. The direct adapter makes at most 6 calls per block. It passes no provider key to Harbor.
+
+```bash
+study="$private/direct"
+id=rx-w00-d0-r0
+mkdir -m 700 "$study" "$study/$id"
+keys run -- "$python" -m "$module.calendar_client" direct --tasks "$tasks" \
+  --out "$study/$id/block" --meter "$study/$id/meter" \
+  --world 0 --direction 0 --repetition 0
+"$python" -m "$module.calendar_replica_report" "$study/$id/block"
+"$python" -m "$module.spend" report "$SEATLAB_SPEND_DIR" --run-prefix rx-
+```
+
+The direct adapter seals an external receipt for each first attempt. A Harbor turn receipt shows which text crossed the process boundary. The external receipt adds the served model and its token counts. The ledger records estimates for settled calls and a hold for unresolved calls. Matching those records does not verify the provider's invoice.
+
+To summarize your 12 paired blocks offline, run both readers:
+
+```bash
+"$python" -m "$module.calendar_replica_series" "$study"
+"$python" -m "$module.calendar_replica_meter" "$study" --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+The first command works for any harness. It compares only scores from matched native trials. It retains each missing slot and counts identical final inputs separately. The second command checks optional direct-adapter costs. Missing cost records do not erase a verified native outcome.
+
+##### The real model changed its choices, but neither team policy won
+
+All 12 registered pairs finished. The stock verifier scored all 24 model teams. The blind teams won **0 of 12** games. The peer-informed teams also won **0 of 12**. Every final response selected a legal slot. The equal-world paired difference was **0 percentage points**.
+
+The receiver's final input differed in all 12 pairs. Its chosen slot differed in 11. The native timelines verified all 48 game-message deliveries. The result is therefore not a missing score or an undelivered-message result. It also does not show that feedback has no effect in other scheduling games.
+
+The [paired outcomes](results/flotilla-calendar-external-results.json) identify the 24 distinct native trials by digest. Eval Lab independently read the same 24 scores and 48 seat records. All native token counts remained unknown. The [external meter](results/flotilla-calendar-external-meter.json) matched all 72 observed turns to settled direct calls, with no missing record or hold. The [estimated cost](results/flotilla-calendar-external-cost.json) was **$0.003356052 USD**: 24,184 cached input tokens, 15,486 uncached input tokens, and 1,601 output tokens. These are local list-price estimates, not an invoice.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
