@@ -1,12 +1,13 @@
 """Run one text-only Kit Check seat through the DeepSeek API on the host."""
 
+import asyncio
 import json
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from time import monotonic
 from typing import Any, override
+
+import httpx
 
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
@@ -64,7 +65,7 @@ def _calculated_cost(
     return cost, "peak" if peak else "off-peak"
 
 
-def _request(prompt: str) -> dict[str, Any]:
+async def _request(prompt: str) -> dict[str, Any]:
     if _API_KEY is None:
         raise RuntimeError("DeepSeek API key is not set")
     body = json.dumps(
@@ -76,28 +77,39 @@ def _request(prompt: str) -> dict[str, Any]:
             "thinking": {"type": "disabled"},
         }
     ).encode()
-    request = urllib.request.Request(
-        _URL,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(request, timeout=_TIMEOUT_SEC) as response:
-            payload = response.read(_MAX_RESPONSE_BYTES + 1)
-            status = response.status
-    except urllib.error.HTTPError as error:
-        error.close()
-        if error.code == 402:
-            raise RuntimeError("DeepSeek balance is too low") from None
-        raise RuntimeError(f"DeepSeek request failed with HTTP {error.code}") from None
-    except OSError:
+        async with (
+            asyncio.timeout(_TIMEOUT_SEC),
+            httpx.AsyncClient(
+                timeout=None, follow_redirects=False, trust_env=False
+            ) as client,
+            client.stream(
+                "POST",
+                _URL,
+                content=body,
+                headers={
+                    "Authorization": f"Bearer {_API_KEY}",
+                    "Content-Type": "application/json",
+                    "Accept-Encoding": "identity",
+                },
+            ) as response,
+        ):
+            status = response.status_code
+            if status == 402:
+                raise RuntimeError("DeepSeek balance is too low")
+            if status >= 300:
+                raise RuntimeError(f"DeepSeek request failed with HTTP {status}")
+            if status != 200:
+                raise RuntimeError("DeepSeek returned an unusable response")
+            payload = bytearray()
+            async for chunk in response.aiter_raw():
+                if len(payload) + len(chunk) > _MAX_RESPONSE_BYTES:
+                    raise RuntimeError("DeepSeek returned an unusable response")
+                payload.extend(chunk)
+    except (TimeoutError, httpx.TimeoutException):
+        raise RuntimeError("DeepSeek API request timed out") from None
+    except (httpx.RequestError, OSError, UnicodeEncodeError):
         raise RuntimeError("Could not reach the DeepSeek API") from None
-    if status != 200 or len(payload) > _MAX_RESPONSE_BYTES:
-        raise RuntimeError("DeepSeek returned an unusable response")
     try:
         parsed = json.loads(payload)
     except ValueError:
@@ -203,7 +215,7 @@ class DeepSeekKitAgent(BaseAgent):
         prompt = _prompt(instruction, self._role, observation)
         started = monotonic()
         try:
-            payload = _request(prompt)
+            payload = await _request(prompt)
         finally:
             context.metadata = {
                 **(context.metadata or {}),
