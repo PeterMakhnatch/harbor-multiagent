@@ -439,6 +439,13 @@ class EnvironmentConfig(BaselineNetworkPolicyConfig):
         description="A pre-built Docker image to use for the environment. When set, "
         "environment/Dockerfile is optional for supported environment types.",
     )
+    use_image_command: bool = Field(
+        default=False,
+        exclude_if=lambda enabled: not enabled,
+        description="Use the main image's CMD instead of Harbor's keepalive "
+        "with Docker Compose (docker and kata environments). Other environments "
+        "reject this option. An explicit Compose command still takes precedence.",
+    )
     os: TaskOS = Field(
         default=TaskOS.LINUX,
         description="Target operating system for the task's container. "

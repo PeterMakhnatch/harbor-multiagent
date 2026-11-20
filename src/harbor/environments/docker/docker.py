@@ -35,6 +35,7 @@ from harbor.environments.definition import (
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_EGRESS_CONTROL_PATH,
+    COMPOSE_IMAGE_COMMAND_PATH,
     COMPOSE_PREBUILT_PATH,
     COMPOSE_WINDOWS_KEEPALIVE_PATH,
     EGRESS_CONTROL_SIDECAR_CONTEXT_PATH,
@@ -119,6 +120,7 @@ class DockerOptions(EnvironmentOptions):
 class DockerEnvironment(BaseEnvironment):
     options_model = DockerOptions
     options: DockerOptions
+    _supports_image_command = True
     _DOCKER_COMPOSE_BUILD_PATH = COMPOSE_BUILD_PATH
     _DOCKER_COMPOSE_PREBUILT_PATH = COMPOSE_PREBUILT_PATH
     _DOCKER_COMPOSE_EGRESS_CONTROL_PATH = COMPOSE_EGRESS_CONTROL_PATH
@@ -419,10 +421,13 @@ class DockerEnvironment(BaseEnvironment):
 
         For Windows-container tasks, a keepalive override is inserted between
         build/prebuilt and the task's own docker-compose.yaml. This lets the
-        keepalive override the Linux `tail -f /dev/null` baked into
+        keepalive override the Linux `sleep infinity` baked into
         build/prebuilt, while still allowing a Windows task's own compose
         file to override the keepalive command if it needs a different
         long-running process.
+
+        Tasks that opt into the image command clear the keepalive before the
+        task's own files, so an explicit Compose command still wins.
 
         When egress control is enabled for Linux containers, the sidecar
         overlay is appended after task-authored compose files. A generated
@@ -455,6 +460,9 @@ class DockerEnvironment(BaseEnvironment):
 
         if self._is_windows_container:
             paths.append(self._DOCKER_COMPOSE_WINDOWS_KEEPALIVE_PATH)
+
+        if self.task_env_config.use_image_command:
+            paths.append(COMPOSE_IMAGE_COMMAND_PATH)
 
         if self._environment_docker_compose_path.exists():
             paths.append(self._environment_docker_compose_path)

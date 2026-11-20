@@ -9,15 +9,16 @@ from harbor.environments.capabilities import (
     EnvironmentCapabilities,
     EnvironmentResourceCapabilities,
 )
-from harbor.models.environment_type import EnvironmentType
 from harbor.environments.factory import EnvironmentFactory
-from harbor.models.trial.config import EnvironmentConfig as TrialEnvironmentConfig
+from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import (
     EnvironmentConfig,
     NetworkMode,
     NetworkPolicy,
+    TaskConfig,
     TaskOS,
 )
+from harbor.models.trial.config import EnvironmentConfig as TrialEnvironmentConfig
 from harbor.models.trial.config import ResourceMode
 from harbor.models.trial.paths import TrialPaths
 
@@ -253,6 +254,28 @@ def test_custom_stream_provider_rejected_before_import(tmp_path: Path, kwargs) -
 def test_linux_task_on_non_windows_environment_succeeds(tmp_path: Path) -> None:
     env = _construct(_StubEnvironment, tmp_path, TaskOS.LINUX)
     assert env.capabilities.windows is False
+
+
+@pytest.mark.parametrize("provider", [EnvironmentType.BOXD, EnvironmentType.PODMAN])
+def test_image_command_unsupported_before_start(
+    tmp_path: Path, provider: EnvironmentType
+) -> None:
+    task = TaskConfig.model_validate_toml("[environment]\nuse_image_command = true\n")
+    (tmp_path / "Dockerfile").write_text("FROM ubuntu:22.04\n")
+    with pytest.raises(
+        ValueError,
+        match=(
+            rf"use_image_command = true.*'{provider.value}' environment does not support"
+        ),
+    ):
+        EnvironmentFactory.create_environment(
+            type=provider,
+            environment_dir=tmp_path,
+            environment_name="test",
+            session_id="test",
+            trial_paths=TrialPaths(tmp_path / "trial"),
+            task_env_config=task.environment,
+        )
 
 
 def test_dynamic_network_policy_capability_defaults_false() -> None:

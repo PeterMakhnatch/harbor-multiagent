@@ -33,6 +33,7 @@ class PodmanEnvironment(DockerEnvironment):
 
     options_model = PodmanOptions
     options: PodmanOptions
+    _supports_image_command = False
 
     @classmethod
     @functools.cache

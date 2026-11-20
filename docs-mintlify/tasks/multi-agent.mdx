@@ -118,6 +118,29 @@ networks:
 
 Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`.
 
+### The main container
+
+Keep `main` running for the full trial. Harbor runs the verifier in `main` after the agents stop.
+Harbor's Docker Compose setup runs a keepalive in `main` unless you specify a Compose `command:`.
+If the image's `CMD` starts the world, set `use_image_command = true` in `[environment]` in `task.toml`.
+Use the `docker` or `kata` environment with a Harbor version that supports this option.
+
+```toml title="task.toml"
+[environment]
+use_image_command = true
+```
+
+This removes the keepalive from `main` only. It does not change seat services or other services.
+An explicit Compose `command:` for `main` still takes precedence.
+Other environments, including Podman, reject this option. Where Compose is supported, omit the option and set `main.command` in Compose instead.
+
+If a seat uses `service_healthy` to wait for `main`, `main` needs a healthcheck.
+Keep `main`'s Compose `healthcheck:` or define a `HEALTHCHECK` in the image.
+Check that the world is ready to accept connections.
+
+This option works with a Dockerfile or a prebuilt image. For a prebuilt image, pin the `main` image by digest, not `:latest`.
+A stale or changed tag can start a different world, because the image now controls startup.
+
 ### An agent's container
 
 - It keeps running: Harbor runs the agent inside it with `docker compose exec`. Use `command: ["sleep", "infinity"]` or a long-running process of its own.
