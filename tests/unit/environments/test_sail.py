@@ -378,6 +378,7 @@ class TestRegistryLogins:
         self, temp_dir, monkeypatch
     ):
         monkeypatch.setenv("HOME", str(temp_dir))
+        monkeypatch.setenv("USERPROFILE", str(temp_dir))
         self._docker_config(temp_dir)
 
         env = _make_env(
