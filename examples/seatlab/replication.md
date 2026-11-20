@@ -169,3 +169,45 @@ python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-pr
 ```
 
 After each window stops, run `python -m examples.seatlab.visibility.clarify_meter "$study" --spend-dir "$SEATLAB_SPEND_DIR"` offline. It checks both turns against the original ledger and the sealed time boundaries. A late finish differs from a late start. A missing timestamp does not establish that a call never occurred. The meter does not authenticate the provider or verify an invoice.
+
+### Does a shared list of opened boxes help the next searcher avoid duplicates?
+
+**Registered after a read-only coverage check and before the first fresh choice.** In the original cooperative Muster task, 3 seats search 60 boxes in 6 rooms. Opening a new flag box adds to team coverage. Opening it twice does not. We test the next receiver decision, not a new team reward.
+
+Use only the 30 ordinary `team-3` trials. For each of 10 registered instances, select the first native trial by `sha256("seatlab-box-target-v1:" + lowercase_trial_uuid)`. Choose roster position `(instance − 1) mod 3`. In verified service order, select its first accepted open after at least 2 own opens, at least 2 distinct peer-only boxes, and at least 4 globally unopened boxes. Stop the source **before** this open. Do not replace an ineligible selection. Check the public legal range and goal against the retained original instruction. Do not use native free text to prompt the new model.
+
+Both arms give a fresh receiver the same public rules, ordered own results, and remaining budget. Keep all numbers 1–60 legal. `own` does not supply a peer list. `shared` adds the sorted distinct numbers opened by peers before the cutoff, including numbers also opened by the selected seat. Do not supply peer flags, identities, messages, native commands, future opens, hidden placements, the original action, or the original score. A duplicate can still teach a searcher something. It is not necessarily a bad decision.
+
+Use both the original numbering and the room-preserving relabeling `b → 61 − b`. Relabel the own observations, room numbers, peer list, and decoded choice together. Make 2 independent repetitions per map and arm: at most 80 first-time decisions. Visit repetition, instance `1..10`, then numbering index `0..1`. Use `own` first if `repetition + (instance − 1) + numbering_index` is even; otherwise use `shared` first. Use the same metered direct model, JSON instruction, temperature, and limits in every cell. Keep committed invalid responses separate from missing calls. Never retry a sample.
+
+Primary: the paired change in peer-only repeat rate, `shared − own`. Pair the same instance, numbering, and repetition. Average available complete contrasts within each instance; give instances equal weight. Give no 10-instance estimate if any lacks a complete pair. Report own repeats, peer-only repeats, new boxes, invalid choices, missing choices, and coverage of all pairs. Repeat the calculation for the sources whose prior own results appear in an earlier saved terminal observation. This extra check does not prove the original model saw that text. Do not execute the new choices, score hidden flags, or infer a full-team effect.
+
+**Try your own searcher.** The [public packet](results/muster-box-receiver-packet.json) has 10 eligible cutoffs. All receivers have 7 opens left. The packet contains each receiver's observations and the past peer box numbers. Give the agent only its projected prompt, not the packet or the classification.
+
+```bash
+module=examples.seatlab.visibility.boxes_choice
+python -m "$module" plan
+python -m "$module" prompt bx-i01-m0-r0-own > receiver.txt
+# Give receiver.txt to your agent with the system message "Answer only with JSON."
+python -m "$module" classify bx-i01-m0-r0-own < choice.json
+```
+
+Use `shared` instead of `own` to add the peer list. Use `m1` instead of `m0` to reverse the numbering. The classifier accepts all legal choices, including duplicates. It does not execute the choice or tell you whether it would find a flag. No network, Harbor installation, or Docker daemon is needed.
+
+To reproduce the packet, run `python -m examples.seatlab.visibility.boxes_packet export "$MUSTER_E1RUN/team-3" > packet.json`. Its SHA-256 is `dcd8806f26c170ee317b0ad0e0113739c4a1a87465c565487342221a40c84766`. The original archive is not needed to use the published packet.
+
+#### What changed for the searcher?
+
+Sharing the box numbers removed all 20 peer-only repeats in the matched pairs. It did not just move duplicates from peers to the searcher's own boxes.
+
+| First accepted choice | Own history only | Own history and peer box numbers |
+| --- | ---: | ---: |
+| Globally unopened box | 19 / 40 | 40 / 40 |
+| Box previously opened only by a peer | 20 / 40 | 0 / 40 |
+| Box previously opened by the searcher | 1 / 40 | 0 / 40 |
+
+All 40 pairs completed across the 10 worlds. The peer-only repeat rate fell by 50 percentage points. With original numbering, it fell by 70 points. With reversed numbering, it fell by 30 points. Shared-history receivers selected an unopened box under both numberings. Eight worlds had fewer peer-only repeats; the other 2 had none under either interface.
+
+Seven source worlds had earlier terminal evidence of the searcher's own observations. Across their 28 pairs, the peer-only repeat rate fell by 46.4 points. That evidence does not show what the original model read. These choices never reached the world. We cannot infer flags found, total coverage after later moves, or an increase in native team reward.
+
+The [paired evidence](results/muster-box-receiver-results.json) includes every denominator and numbering. The [80 settled calls](results/muster-box-receiver-cost.json) used 15,992 uncached input tokens, 0 cached input tokens, and 448 output tokens. The estimated cost was **$0.002667600 USD**, not an invoice.
