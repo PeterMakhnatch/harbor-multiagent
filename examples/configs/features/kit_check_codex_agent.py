@@ -380,6 +380,7 @@ def _completion(
     unexpected_event = False
     turn_started = False
     tool_use = False
+    tool_types: list[str] = []
     for line in stdout.splitlines():
         if not line.strip():
             continue
@@ -397,6 +398,12 @@ def _completion(
             item_kind = item.get("type")
             if item_kind not in ("agent_message", "reasoning"):
                 tool_use = True
+                if (
+                    isinstance(item_kind, str)
+                    and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", item_kind)
+                    and item_kind not in tool_types
+                ):
+                    tool_types.append(item_kind)
             elif kind == "item.completed" and item_kind == "agent_message":
                 messages.append(item.get("text"))
         elif kind == "turn.started":
@@ -415,7 +422,10 @@ def _completion(
         context.n_cache_tokens = _usage_count(usage, "cached_input_tokens")
         context.n_output_tokens = _usage_count(usage, "output_tokens")
     if tool_use:
-        raise RuntimeError("Codex attempted a tool in a text-only Kit Check turn")
+        detail = ", ".join(tool_types) if tool_types else "unrecognized tool type"
+        raise RuntimeError(
+            f"Codex attempted a tool in a text-only Kit Check turn: {detail}"
+        )
     if unexpected_event or len(turns) != 1 or len(messages) != 1:
         raise RuntimeError("Codex did not complete a single text-only Kit Check turn")
     (message,) = messages

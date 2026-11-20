@@ -36,8 +36,8 @@ def _freeze_before_verifier(
     ended = [_finished(seat.get("agent_execution")) for seat in seats]
     stopped = [_finished(freeze) for freeze in freezes]
     started = verifier.get("started_at")
-    if not started or not all(ended) or not all(stopped):
-        return False
+    if not started:
+        return None
     ends = [datetime.fromisoformat(stamp) for stamp in ended if stamp is not None]
     stops = [datetime.fromisoformat(stamp) for stamp in stopped if stamp is not None]
     return max(ends) <= min(stops) and max(stops) <= datetime.fromisoformat(started)
