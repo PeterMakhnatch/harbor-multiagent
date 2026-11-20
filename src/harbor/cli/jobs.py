@@ -2627,14 +2627,17 @@ def resume(
                     e,
                 )
                 continue
-            if (
-                trial_result.exception_info is not None
-                and trial_result.exception_info.exception_type in filter_error_types_set
-            ):
+            matching_errors = sorted(
+                {
+                    error.exception_type
+                    for error in trial_result.recorded_exceptions()
+                    if error.exception_type in filter_error_types_set
+                }
+            )
+            if matching_errors:
                 console.print(
-                    f"Removing trial directory with {
-                        trial_result.exception_info.exception_type
-                    }: {trial_dir.name}"
+                    f"Removing trial directory with {', '.join(matching_errors)}: "
+                    f"{trial_dir.name}"
                 )
                 shutil.rmtree(trial_dir)
 
