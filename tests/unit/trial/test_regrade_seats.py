@@ -17,6 +17,7 @@ from harbor.job import Job
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig, SourceJobConfig
 from harbor.models.job.lock import TrialLock
+from harbor.models.job.result import JobStats
 from harbor.models.task.config import MCPServerConfig, VerifierEnvironmentMode
 from harbor.models.task.id import LocalTaskId
 from harbor.models.trial.config import (
@@ -38,7 +39,8 @@ from harbor.models.trial.result import (
     TrialResult,
 )
 from harbor.models.verifier.result import VerifierResult
-from harbor.trial.regrade import RegradeError, SeatsRegradeTrial
+from harbor.trial.hooks import TrialEvent, TrialHookEvent
+from harbor.trial.regrade import RegradeError, SeatsRegradeTrial, read_artifact_manifest
 from harbor.trial.trial import Trial
 from tests.unit.test_regrade import (
     CONVENTION_MANIFEST_ENTRY,
@@ -184,19 +186,25 @@ def _write_seat_source(
     return trial_dir
 
 
-def _regrade_config(task_dir: Path, source_dir: Path) -> TrialConfig:
+def _regrade_config(
+    task_dir: Path, source_dir: Path, *, participants: list[Participant] | None = None
+) -> TrialConfig:
     return TrialConfig(
         task=TrialTaskConfig(path=task_dir),
         trials_dir=source_dir.parent / "regrades",
-        participants=_participants(),
+        participants=participants if participants is not None else _participants(),
         source_trial=SourceTrialConfig(action="regrade", type="local", path=source_dir),
     )
 
 
 async def _regrade_with_stub_verifier(
-    config: TrialConfig,
+    config: TrialConfig, *, rewards: dict[str, float] | None = None
 ) -> tuple[Trial, TrialResult, AsyncMock]:
-    mock_verifier = AsyncMock(return_value=VerifierResult(rewards={"reward": 1.0}))
+    mock_verifier = AsyncMock(
+        return_value=VerifierResult(
+            rewards={"reward": 1.0} if rewards is None else rewards
+        )
+    )
     with patch(
         "harbor.trial.trial.EnvironmentFactory.create_environment_from_config",
         return_value=_stock_mock_env(),
@@ -205,6 +213,82 @@ async def _regrade_with_stub_verifier(
     with patch.object(trial, "_run_separate_verifier", mock_verifier):
         result = await trial.run()
     return trial, result, mock_verifier
+
+
+async def test_regrade_stats_keep_seat_keys_for_reordered_participants(tmp_path: Path):
+    task_dir = _seat_task(tmp_path)
+    participants = _participants()
+    participants[0].kwargs = {"config_path": tmp_path / "settings.json"}
+    source_dir = _write_seat_source(
+        tmp_path, task_dir, participants=participants, include_trial_exception=True
+    )
+    source_path = TrialPaths(source_dir).result_path
+    legacy_record = json.loads(source_path.read_text())
+    legacy_record["config"]["participants"].reverse()
+    legacy_record["seat_results"].reverse()
+    source_path.write_text(json.dumps(legacy_record))
+    config = _regrade_config(task_dir, source_dir, participants=participants[::-1])
+    assert [p.seat for p in config.participants] == ["maya", "raj"]
+
+    trial, result, verifier = await _regrade_with_stub_verifier(
+        config, rewards={"maya": 0.75, "raj": 0.25, "reward": 1.0}
+    )
+
+    assert result.reward_valid, result.exception_info
+    verifier.assert_awaited_once()
+    regraded = TrialResult.model_validate_json(trial.paths.result_path.read_text())
+    original = TrialResult.model_validate_json(source_path.read_text())
+    stats = JobStats.from_trial_results([regraded]).seat_stats
+    source_stats = JobStats.from_trial_results([original]).seat_stats
+    assert stats is not None and source_stats is not None
+    assert stats.keys() == source_stats.keys()
+    groups = {group.seat: group for group in stats.values()}
+    for seat, reward, tokens, errors in (
+        ("maya", 0.75, 2, 1),
+        ("raj", 0.25, 1, 0),
+    ):
+        group = groups[seat]
+        assert group.under_test == (seat == "maya")
+        assert group.n_participations == group.n_trials == 1
+        assert group.reward_stats == {seat: {reward: [result.trial_name]}}
+        assert group.n_errors == errors
+        assert group.complete_usage("n_input_tokens") == tokens
+
+
+@pytest.mark.parametrize("exact_override", [False, True])
+async def test_seat_regrade_applies_base_then_exact_error_override(
+    tmp_path: Path, exact_override: bool
+):
+    task_dir = _seat_task(tmp_path)
+    source_dir = _write_seat_source(
+        tmp_path,
+        task_dir,
+        include_trial_exception=True,
+        seat_exception_type="DerivedTimeout",
+    )
+    result_path = TrialPaths(source_dir).result_path
+    data = json.loads(result_path.read_text())
+    data["exception_info"]["policy_base_type"] = "AgentTimeoutError"
+    data["seat_results"][0]["exception_info"]["policy_base_type"] = "AgentTimeoutError"
+    result_path.write_text(json.dumps(data))
+    config = _regrade_config(task_dir, source_dir)
+    config.override_error_policy = {
+        "AgentTimeoutError": ErrorPolicyOverride(should_grade=False),
+    }
+    if exact_override:
+        config.override_error_policy["DerivedTimeout"] = ErrorPolicyOverride(
+            should_grade=True
+        )
+
+    _, result, verifier = await _regrade_with_stub_verifier(config)
+
+    assert result.exception_info is not None
+    assert result.exception_info.policy.should_grade == exact_override
+    assert result.seat_results is not None
+    error = result.seat_results[0].exception_info
+    assert error is not None
+    assert error.policy.should_grade == exact_override
+    assert verifier.await_count == int(exact_override)
 
 
 async def test_trial_create_dispatches_seat_regrade_and_forwards_id(tmp_path: Path):
@@ -674,6 +758,10 @@ async def test_seat_regrade_scrubs_every_participant_config(
 
 async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path: Path):
     task_dir = _task_dir(tmp_path)
+    task_toml = task_dir / "task.toml"
+    late_artifact = "/tmp/verifier-report.txt"
+    late_declaration = f'artifacts = ["{late_artifact}"]\n'
+    task_toml.write_text(late_declaration + task_toml.read_text())
     source = await _seats_trial(
         _config(
             task_dir,
@@ -682,32 +770,84 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
             _participant("lee"),
         )
     )
+    stages: list[tuple[str, str]] = []
+    verified = False
 
-    async def collect_artifact(*, source_dir, target_dir, service):
-        assert source_dir == "/logs/artifacts"
-        (target_dir / "snapshot.txt").write_text("recorded world state")
+    async def seat_end(event: TrialHookEvent) -> None:
+        assert event.seat_result is not None
+        stages.append(("seat-end", event.seat_result.seat))
 
+    async def collect_dir(source_dir, target_dir, *, service):
+        if source_dir == "/logs/artifacts":
+            (target_dir / "snapshot.txt").write_text("recorded world state")
+
+    async def collect_file(source_path, target_path, *, service=None):
+        assert source_path == late_artifact
+        stages.append(("artifact", "post-verifier" if verified else "pre-verifier"))
+        if not verified:
+            raise FileNotFoundError(source_path)
+        target_path.write_text("verifier output")
+
+    async def verify():
+        nonlocal verified
+        stages.append(("verifier", "run"))
+        verified = True
+        return VerifierResult(rewards={"maya": 1.0})
+
+    source.add_hook(TrialEvent.SEAT_END, seat_end)
     with (
         patch.object(
-            source.agent_environment, "service_is_dir", AsyncMock(return_value=True)
+            source, "_verify_with_timeout", Trial._verify_with_timeout.__get__(source)
+        ),
+        patch(
+            "harbor.trial.trial.VerifierFactory.create_verifier_from_config"
+        ) as factory,
+        patch.object(
+            source.agent_environment,
+            "service_is_dir",
+            AsyncMock(side_effect=lambda path, **_: path == "/logs/artifacts"),
         ),
         patch.object(
             source.agent_environment,
             "service_download_dir",
-            AsyncMock(side_effect=collect_artifact),
+            AsyncMock(side_effect=collect_dir),
+        ),
+        patch.object(
+            source.agent_environment,
+            "service_download_file",
+            AsyncMock(side_effect=collect_file),
+        ),
+        patch.object(source.agent_environment, "is_file", AsyncMock(return_value=True)),
+        patch.object(
+            source.agent_environment,
+            "download_file",
+            AsyncMock(side_effect=collect_file),
         ),
     ):
+        factory.return_value.verify = AsyncMock(side_effect=verify)
         recorded = await source.run()
+
     assert recorded.exception_info is None
     assert recorded.verifier_environment_mode == VerifierEnvironmentMode.SHARED
+    assert set(stages[:3]) == {("seat-end", seat) for seat in ("lee", "maya", "raj")}
+    assert stages[3:] == [
+        ("artifact", "pre-verifier"),
+        ("verifier", "run"),
+        ("artifact", "post-verifier"),
+    ]
+    entries = {
+        entry.source: entry for entry in read_artifact_manifest(source.paths.trial_dir)
+    }
+    assert entries["/logs/artifacts"].phase == "pre_verifier"
+    assert entries[late_artifact].status == "ok"
+    assert entries[late_artifact].phase == "post_verifier"
     source_lock = TrialLock.model_validate_json(source.paths.lock_path.read_text())
 
-    config = _regrade_config(task_dir, source.paths.trial_dir)
-    config.participants = recorded.config.participants
+    config = _regrade_config(
+        task_dir, source.paths.trial_dir, participants=recorded.config.participants
+    )
     _configure_seat_regrade(task_dir, acknowledge=False)
-
     refused, unacknowledged, verifier = await _regrade_with_stub_verifier(config)
-
     verifier.assert_not_awaited()
     assert unacknowledged.exception_info is not None
     assert unacknowledged.exception_info.exception_type == "RegradeError"
@@ -717,14 +857,31 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
     )
     assert "task drift:" in refused.paths.log_path.read_text()
 
-    task_toml = task_dir / "task.toml"
     task_toml.write_text(
         task_toml.read_text().replace(
             'environment_mode = "separate"\n',
             'environment_mode = "separate"\nregrade_from_seat_record = true\n',
         )
     )
-    config.trial_name = "acknowledged"
+    config.trial_name = "requires-late-artifact"
+    _, late_required, verifier = await _regrade_with_stub_verifier(config)
+    verifier.assert_not_awaited()
+    assert late_required.exception_info is not None
+    assert late_required.exception_info.exception_type == "RegradeError"
+    assert late_artifact in late_required.exception_info.exception_message
+    assert "post-verifier outputs cannot be replayed" in (
+        late_required.exception_info.exception_message
+    )
+    assert late_required.verifier_result is None
+
+    late_relative = Path(entries[late_artifact].destination)
+    late_path = source.paths.trial_dir / late_relative
+    assert late_path.read_text() == "verifier output"
+    alias_name = "late-alias.txt"
+    alias = source.paths.artifacts_dir / "logs/artifacts" / alias_name
+    alias.symlink_to(late_path)
+    task_toml.write_text(task_toml.read_text().removeprefix(late_declaration))
+    config.trial_name = "excludes-late-artifact"
     agent_env = _stock_mock_env()
     verifier_env = _stock_mock_env()
     fake_create, calls = _make_factory_recorder(agent_env, verifier_env)
@@ -734,6 +891,7 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
         if target_dir == "/logs/seats":
             uploaded[target_dir] = (source_dir / "maya/agent/log.txt").read_text()
         elif target_dir == "/logs/artifacts":
+            assert alias_name not in {path.name for path in source_dir.iterdir()}
             uploaded[target_dir] = (source_dir / "snapshot.txt").read_text()
 
     async def exec_verifier(command: str, **_):
@@ -761,6 +919,16 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
     agent_env.start.assert_not_awaited()
     verifier_env.start.assert_awaited_once()
     verifier_env.upload_dir.assert_any_await(trial.paths.seats_dir, "/logs/seats")
+    verifier_env.upload_file.assert_not_awaited()
+    assert not (trial.paths.trial_dir / late_relative).exists()
+    assert alias_name not in {
+        path.name for path in (trial.paths.artifacts_dir / "logs/artifacts").iterdir()
+    }
+    assert all(
+        entry.phase != "post_verifier"
+        for entry in read_artifact_manifest(trial.paths.trial_dir)
+    )
+    assert alias.read_text() == "verifier output"
     assert calls[0]["session_id"] != calls[1]["session_id"]
     assert calls[1]["environment_dir"] == task_dir / "environment"
 

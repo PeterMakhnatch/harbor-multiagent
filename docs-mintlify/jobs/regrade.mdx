@@ -41,6 +41,8 @@ harbor trial regrade 8f3c2a9e-1b4d-4c6f-9e2a-7d5b8c1f0a3e -p path/to/updated-tas
 - The updated task uses a [separate verifier](/tasks/separate-verifier).
 - Every artifact required by the updated verifier was collected by the source
   trial and still exists.
+- Regrade excludes `post_verifier` artifacts and their aliases. It refuses a
+  source if the updated verifier requires those bytes.
 
 Using a separate verifier for the source task is a good practice because it
 already grades from recorded artifacts. It is not required: a shared-verifier

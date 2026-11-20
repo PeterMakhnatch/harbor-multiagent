@@ -192,7 +192,7 @@ async def _seats_trial(config: TrialConfig) -> SeatsTrial:
     _fake_compose(trial)
 
     # Keep the real verifier phase and its log context, without running tests.
-    async def verify(*_: Any) -> VerifierResult:
+    async def verify(*_: Any, **_kwargs: Any) -> VerifierResult:
         note("verify")
         await trial.agent_environment.exec("echo verifying")
         return VerifierResult(rewards={"maya": 1})
@@ -359,10 +359,11 @@ async def test_regrade_refuses_seat_source_even_if_target_is_single_agent(
 
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "RegradeError"
-    assert (
-        "regrade does not support multi-agent trials"
-        in result.exception_info.exception_message
+    assert "Regrade requires a task with the same seats." in (
+        result.exception_info.exception_message
     )
+    assert result.verifier_result is None
+    assert not result.reward_valid
 
 
 @pytest.mark.parametrize(
@@ -722,7 +723,11 @@ async def test_all_seat_error_policies_gate_verification(
         )
     )
 
+    collect = AsyncMock(wraps=trial._collect_artifacts)
+    trial._collect_artifacts = collect
     result = await trial.run()
+
+    collect.assert_awaited_once_with(pre_verifier=should_grade)
 
     assert {e.exception_type for e in result.recorded_exceptions()} == {
         "NonZeroAgentExitCodeError",

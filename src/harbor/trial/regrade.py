@@ -1082,10 +1082,14 @@ class SeatsRegradeTrial(RegradeTrial):
                 )
 
         source_participants = {
-            p.seat: p.model_dump() for p in source_result.config.participants
+            p.seat: p.model_dump(mode="json", exclude_none=True)
+            for p in source_result.config.participants
         }
         for participant in self.config.participants:
-            if participant.model_dump() != source_participants[participant.seat]:
+            if (
+                participant.model_dump(mode="json", exclude_none=True)
+                != source_participants[participant.seat]
+            ):
                 raise RegradeError(
                     f"Participant for seat {participant.seat!r} does not match "
                     "the recorded participant."
@@ -1204,17 +1208,20 @@ class SeatsRegradeTrial(RegradeTrial):
 
     @override
     def _copy_source_exception(self, exception: ExceptionInfo) -> ExceptionInfo:
-        exception_type = exception.exception_type
-        source_config = self._source_result.config if self._source_result else None
-        policy_override = (
-            self.config.override_error_policy.get(exception_type)
-            or exception.policy_override
-            or (
-                source_config.override_error_policy.get(exception_type)
-                if source_config is not None
-                else None
-            )
+        keys = (exception.exception_type,)
+        if exception.policy_base_type is not None:
+            keys = (*keys, exception.policy_base_type)
+        overrides = self.config.override_error_policy
+        policy_override = next(
+            (overrides[key] for key in keys if key in overrides),
+            exception.policy_override,
         )
+        if policy_override is None and self._source_result is not None:
+            source_overrides = self._source_result.config.override_error_policy
+            policy_override = next(
+                (source_overrides[key] for key in keys if key in source_overrides),
+                None,
+            )
         return exception.model_copy(
             deep=True, update={"policy_override": policy_override}
         )
