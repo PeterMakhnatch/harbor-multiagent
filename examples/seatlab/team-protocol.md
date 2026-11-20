@@ -130,6 +130,18 @@ An accepted result includes 4 seats and 2 matching event digests. Only a new nat
 
 The [6 free controls](results/committee-prefix-controls.json) matched all 196 source events across 24 seat receipts. All 24 `masked` user texts matched the original model-request commitments. `shown` preserved the 6 chair texts and changed only the recommendation line for the other 18 seats. A matching hash establishes the submitted bytes, not the model's attention.
 
+**What changed with the history fixed?** All 24 new Harbor teams reproduced their registered prefix. Each reached the cut with 9 posts, 0 votes, and 0 completed seats. All 96 voters then made a fresh model call and submitted a native vote. None of the 6 frozen chair recommendations was correct.
+
+| Native outcome | Advice masked from peers | Same advice shown to peers |
+| --- | ---: | ---: |
+| Teams with a correct majority | 0 / 12 | 0 / 12 |
+| Correct final votes | 9 / 48 | 0 / 48 |
+| Initially dissenting peers that switched to the chair | 3 / 12 | 12 / 12 |
+
+The primary change in native majority reward was 0. Correct votes fell by 18.75 percentage points. Only 4 of 6 histories had a dissenting peer. The source-weighted increase in switching was 68.75 points **within those 4 histories**; the 6-history estimate is undefined. The chair chose the same vendor in all 12 paired runs with identical chair input. Its submitted citations differed in 2 pairs. These 6 histories reuse 1 vendor problem. They do not show what happens when the chair gives good advice.
+
+The [paired results](results/committee-prefix-results.json) include every map and both repetitions. The [direct ledger](results/committee-prefix-cost.json) records 24,576 cached input tokens, 22,284 uncached input tokens, and 2,016 output tokens. The price estimate is **$0.004625928 USD**, not an invoice. No reservation remains open. Separately, the [stock Eval Lab reader](results/committee-prefix-eval-lab.json) matched all 24 native rewards and the token counts of all 96 seats. This check read trial directories. It did not write to Eval Lab or call a model.
+
 ### Voting follow-up: does computing totals before choosing help?
 
 **Registered before the first follow-up call.** The previous teams supplied all 4 private facts in 11 trials without a single winning majority. This study changes the voting interface, not the sender instruction. No tool computes the totals for the model, chooses its vote, repairs arithmetic, or changes the native verifier.
