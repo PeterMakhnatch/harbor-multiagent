@@ -250,3 +250,21 @@ python -m "$protocol" prompt "$block" --seat A --stage shown --proposals '[12,18
 ```
 
 Repeat for B and C with the same sealed proposals. Give none of the seats another seat's final decision. Decode each revision once. An invalid response is missing, not a reason to ask again. The protocol does not open boxes or run the stock verifier.
+
+#### Showing intentions increased duplicate choices
+
+Disclosure helped the single searcher avoid past opens in the preceding experiment. It did **not** help 3 simultaneous searchers coordinate their next open. Both final arms selected 105 historically new boxes across 108 seat decisions. With intentions visible, more seats chose the **same** new box.
+
+| Across 36 matched blocks | Own proposal only | All 3 proposals |
+| --- | ---: | ---: |
+| Excess claims on the same new box | 14 | 23 |
+| Distinct new boxes selected, summed within blocks | 91 | 82 |
+| Selections of previously opened boxes | 3 | 3 |
+| Seats that changed their proposal | 4 | 9 |
+| Blocks where all 3 seats selected the same new box | 1 | 6 |
+
+The primary estimate was **+0.25 excess claims per team** with disclosure. All 3 worlds had the same difference: 3 more excess claims across 12 pairs. Disclosure increased excess claims in 10 pairs, reduced them in 1, and left 25 unchanged. The difference was larger under original numbering than reversed numbering (+0.44 versus +0.06).
+
+Of 14 blocks that began with a duplicate new proposal, none finished without a duplicate when proposals were visible. Two did when proposals were masked. A descriptive check explains where the extra duplicates came from: **all 9 seats that switched with disclosure left a unique proposal for a box a teammate had proposed and still chose.** Only 1 of the 4 masked switches had that pattern. These are observed choices, not evidence of model intent.
+
+All 36 proposal barriers verified. The [paired report](results/muster-box-intentions-results.json) includes every choice and rotation. The [direct cost ledger](results/muster-box-intentions-cost.json) matched all 324 calls with no unresolved hold. The estimated cost was **$0.012125736 USD**. These are 3 archived game states and 1 model. No selected box was opened. We did not measure new flags or a native team reward.
