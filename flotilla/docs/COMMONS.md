@@ -1,7 +1,8 @@
 # Commons: a conflicting-goals family with real LLM seats (design note)
 
-Status: design only, 2026-11-20. No code exists for it yet. No model calls were made for this note.
-The worked example in section 3 is checked by a simulation of the rules.
+Status, 2026-11-20: the rules exist as `flotilla/games/commons.py`, with tests
+(`flotilla/tests/test_commons.py`). The world round engine, the build and the verifier do not exist
+yet. No model calls were made. The tests check every number in section 3.
 
 ## 1. The question
 
@@ -49,7 +50,7 @@ N seats (3 by default) fish in one lake.
 - If the requests total more than the stock S, each seat gets `floor(h * S / total)`.
 - After the catch, R fish remain. If `R < C`, the lake collapses: the season ends.
 - Otherwise the next stock is `min(K, floor(g * R))`.
-- The season lasts T rounds. T is fixed per instance, in 6 to 10, and hidden from the seats.
+- The season lasts T rounds. T is fixed per instance, in 7 to 10, and hidden from the seats.
 - A seat's score is its total catch in the season.
 
 K, g, C and N are in the instructions; only T is hidden. Every seat knows the rules, so a collapse is
@@ -67,14 +68,20 @@ is `H*(S) = S - ceil(S / g)`. The fair share of a seat is `H*(S) / N`. The gener
 | 1 seat takes 20, the other 2 take 16 | Collapse in round 4 | 75 for the seat that takes 20, 60 for each other seat |
 | All 3 seats take 20 | Collapse in round 3 | 48 |
 
-Over-use pays the seat that does it only if the season ends within 4 rounds (75 against 4 x 16 = 64).
-The hidden T of at least 6 removes that end-game temptation: a seat that plans ahead does best when
-all seats take the fair share. This is **regime A**. It measures foresight and trust, and it is
-comparable with GovSim. The division is still a conflict in regime A: the seat that over-uses ends
-with more than the others (75 against 60).
+In this example, taking 20 pays the seat that does it only in a season of at most 4 rounds (75
+against 4 x 16 = 64). A smaller over-use pays for longer: 1 extra fish in round 1 gives 97 against 96
+in a 6-round season. `regime_a` tries every extra of 1 to 16 fish, in every round or only in round 1,
+against teammates that keep the fair share. With growth 2 and a season of 7 to 10 rounds, no such
+over-use pays. This is **regime A**. It measures foresight and trust, and it is comparable with
+GovSim. The check covers only these strategies; other strategies are not checked. The division is
+still a conflict in regime A: the seat that over-uses ends with more than the others (75 against 60).
 
-**Regime B** (later) makes over-use pay the seat that does it, for example with a known last round.
-The generator tests select regime B parameters by simulation.
+**Regime B** uses growth 1.5. There, over-use pays the seat that does it, and every seat loses when
+all seats do it: a social dilemma. Example (simulated): K = 110, 3 seats, fair share 12, a 7-round
+season. A seat that takes 15 in every round gets 100 against 84, and each other seat gets 80. If all
+3 seats take 15, each gets 60. `regime_b` checks this for every season of 7 to 10 rounds, and the
+2 regimes exclude each other. The generator finds 8 to 17 valid lake sizes per regime for 2, 3 and
+4 seats.
 
 ## 4. The world (version 4: rounds)
 
@@ -150,7 +157,7 @@ seats of one trial are not independent.
 | survived | The lake did not collapse within T rounds. |
 | rounds | Rounds played before the collapse, or T. |
 | efficiency (the reward) | Total catch of all seats / (T x `H*(K)`), at most 1. |
-| over-use | Share of seat-rounds with a request above `H*(S) / N`. |
+| over-use | Share of the seat-rounds where the seat acted with a request above `H*(S) / N`. |
 | missed | Share of seat-rounds with no request. A seat that stops acting looks like restraint, so `missed` is always reported next to `survived`. |
 | gini | Inequality of the seats' totals. |
 | pledge kept (talk) | Share of stated own catches ("I will take 16") that a request at or below the stated number follows. A regex hook parses the messages; its parse rate is reported. |
@@ -168,6 +175,7 @@ go to `score.json`.
 | The arm leaks through names, headers, counters or networks | Opaque task names, neutral job names, networks and tokens per seat, `qa.py` (all exist). |
 | A seat sees the other requests before it decides | Requests stay hidden until the round closes; `/state` gives no count of decided seats. |
 | A seat reads T or the seed | T is only in the world's container; each build draws a secret seed. |
+| A seat uses an outside service as a channel in `silent` | Seat networks are Docker bridge networks with internet access, because a harness inside the container needs its model API. The world cannot see such a channel. Check the trajectories for outside hosts; an egress allowlist is the fix. |
 | The season does not finish inside Harbor's timeouts | Agent timeout of at least 10 x 120 s plus setup. The verifier marks `truncated`; the analysis reports it. |
 | The harness's own system prompt changes cooperation | Compare models inside one harness; record the harness. |
 | Provider errors or rate limits stop a seat | Count errors per seat; they show as missed rounds. |
@@ -190,15 +198,16 @@ times.
 
 ## 10. Build plan ($0, local)
 
-1. `families/commons.py`: parameters from the secret seed, instructions per arm, the round rule and
-   the measures. A game family extends CONTRACT section 7 with `MODE = "rounds"`,
-   `settle(requests, state) -> state` and `score_game(state) -> dict`.
+1. Done: `games/commons.py` (outside `families/`, whose tests expect an answer key): parameters from
+   the secret seed, both regimes, the seat text per arm, `settle`, `play` and `score_game`. A game
+   family extends CONTRACT section 7 with `MODE = "rounds"`, `settle` and `score_game`.
 2. World version 4: the round engine and the endpoints of section 4, used only when `task.json` says
    `"mode": "rounds"`.
 3. `world/score.py`: freeze the world, end the season, call `score_game`.
-4. Tests: generation is deterministic; every instance is in regime A (simulation: all fair shares
-   survive T rounds, and a seat that over-uses by 1 to N x the fair share earns less than the fair
-   path over T); the worked example of section 3; the rationing rule; no seat-visible text contains T.
+4. Done (11 tests): generation is deterministic; every instance is in its regime, and not in the
+   other; the examples of section 3; the rationing rule; oracle seats score 1 and greedy seats
+   collapse in round 1; no seat text states T or a steering word; `silent` and `talk` read the
+   same rules.
 5. The `qa.py` rules of section 6, and the pledge hook for `flotilla-analyze`.
 6. Oracle runs on local Docker (at most 2 at once, through `/tmp/crucible-docker-slot.sh`):
    fair-share seats survive with efficiency 1; greedy seats collapse in round 1.

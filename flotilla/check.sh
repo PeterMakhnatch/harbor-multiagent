@@ -11,7 +11,7 @@ uvx --quiet --python "$PY" --with pytest --with pyyaml pytest -q -c flotilla/tes
 echo "== analysis tests"
 (cd flotilla/analysis && uvx --quiet --python "$PY" --with pytest pytest -q tests)
 echo "== lint"
-uvx --quiet ruff check flotilla/families flotilla/world flotilla/build_tasks.py flotilla/make_jobs.py \
+uvx --quiet ruff check flotilla/families flotilla/games flotilla/world flotilla/build_tasks.py flotilla/make_jobs.py \
     flotilla/qa.py flotilla/analysis/flotilla_analysis flotilla/analysis/tests
 echo "== build and QA"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/flotilla-check.XXXXXX")
