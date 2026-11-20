@@ -286,3 +286,26 @@ Primary: number of **new distinct flag boxes**, ownership minus neutral. The nat
 Secondary: native reward, number of distinct new boxes, excess claims on the same new box, historical repeats, and single-seat switches. Separate teams whose starting proposals already collide from those whose proposals do not. Count whether a seat keeps a proposal it owns, or selects outside all proposals if it does not own its proposal. Analyze both policies with the same definition. Report every missing or invalid arm. Publish only safe aggregates, decoded actions, and digests. Never publish the raw mailbox or model replies.
 
 Use the same direct model and settings as the preceding experiment. At most 216 new paid calls are eligible. Stop on an uncertain charge or custody failure. The analysis addresses this **single next move** on 3 fixed historical states. It does not measure a complete search policy, or establish a benefit on new games or models.
+
+**Run one seat without private files.** The following commands use only the published proposal triples and role histories. They never execute a game or call a model.
+
+```sh
+module=examples.seatlab.visibility
+run=bo-i01-m0-l0-r0-neutral
+python -m "$module.ownership_protocol" prompt "$run" --seat A
+printf '%s\n' '{"box":12}' | python -m "$module.ownership_protocol" decode "$run"
+```
+
+**Run the native verifier.** This step requires the unmodified original Muster `team-3` boxes tasks and the retained original `team-3` trials. An arbitrary regenerated task is not a substitute. Supply physical absolute paths for `$ARCHIVE`, `$TASKS`, and `$PRIVATE`. The local Harbor environment needs Docker. `$PRIVATE` must be an owner-only directory outside the checkout.
+
+```sh
+mkdir -m 700 "$PRIVATE/controls"
+python -m "$module.ownership_driver" demo --archive "$ARCHIVE" --tasks "$TASKS" \
+  --out "$PRIVATE/controls/$run" --block bi-i01-m0-l0-r0 --arm neutral
+python -m "$module.ownership_report" --archive "$ARCHIVE" --tasks "$TASKS" \
+  --study "$PRIVATE/controls"
+```
+
+The demo uses a fixed reply. It does not use a key. We verified all 3 original histories with [separate no-key controls](results/muster-box-ownership-controls.json). Eval Lab read all 9 native seat records. The stock rewards were 0.05, 0.10, and 0.10. The controls found no additional flags. They do not count as model evidence.
+
+For an authorized paid study, use `direct` instead of `demo`, a new private study directory, and the existing initialized `SEATLAB_SPEND_DIR`. Never resubmit an attempted ID. Use `ownership_protocol plan` for the registered order. Use `ownership_meter --study "$STUDY" --spend-dir "$SEATLAB_SPEND_DIR"` to check direct usage, unsettled charges, and native timing. The meter does not replace a native reward with an estimate.
