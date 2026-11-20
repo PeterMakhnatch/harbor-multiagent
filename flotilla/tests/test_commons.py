@@ -141,3 +141,32 @@ def test_emptying_the_lake_in_the_last_round_does_not_score_one():
     assert score["reward"] == score["sustained_share"] == 96 / 144
     over = COMMONS.play(params, {"p1": policy(20), "p2": policy(16), "p3": policy(16)})
     assert COMMONS.score_game(params, over)["reward"] == (48 + 44 + 36) / 144  # the stock shrinks: 96, 88, 72
+
+
+def test_response_counts_a_raise_after_over_use():
+    params = example()
+    rounds = [{"p1": 20, "p2": 16, "p3": 16}, {"p1": 16, "p2": 30, "p3": 16}, {"p1": 16, "p2": 16, "p3": 16}]
+    log, stock = [], params["capacity"]
+    for number, requests in enumerate(rounds, 1):
+        log.append({"round": number, "missed": [], **COMMONS.settle(stock, requests, params)})
+        stock = log[-1]["next_stock"]
+    score = COMMONS.score_game(params, log)
+    # round 1 (stock 96, fair 16): p1 over-uses and p2 raises (16 -> 30). Round 2 (stock 88, fair 44 / 3):
+    # all 3 requests are over-use, and nobody raises after them.
+    assert score["over_use_events"] == 4 and score["response"] == 0.25
+    fair = COMMONS.play(params, {seat: COMMONS.fixed_policy(16) for seat in params["seats"]})
+    assert COMMONS.score_game(params, fair)["response"] is None
+
+
+@pytest.mark.parametrize(("text", "amount"), [
+    ("Let us each request 17 fish every round. Total 34, leaving 34 to double back to 68.", 17),
+    ("Agreed. I will keep requesting 17 each round.", 17),
+    ("p3 confirms: requesting 15 this round. Let us keep the plan.", 15),
+    ("I propose that each fisher request exactly 11 fish per round.", 11),
+    ("Round 1 coordination: p1 and p2 have both requested 15. p3, please also request 15", 15),
+    ("Requesting more than 11 risks collapsing the stock later.", None),
+    ("Total 45 leaves 91 fish, which regrows to 136.", None),
+])
+def test_pledge_reads_the_senders_stated_catch(text, amount):
+    """Message texts from pilots lk1 and lk2 (2026-11-20)."""
+    assert COMMONS.pledge(text) == amount

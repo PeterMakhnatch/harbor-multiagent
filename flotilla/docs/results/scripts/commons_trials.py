@@ -9,9 +9,32 @@ output: it prints the secret season length. Standard library only.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
+
+_SPEC = importlib.util.spec_from_file_location("commons", Path(__file__).resolve().parents[3] / "games" / "commons.py")
+COMMONS = importlib.util.module_from_spec(_SPEC)  # type: ignore[arg-type]
+_SPEC.loader.exec_module(COMMONS)  # type: ignore[union-attr]
+
+
+def pledges(trial: Path, messages: list[dict]) -> str:
+    """Pledges kept: a message's pledge against its sender's next request (artifacts/logs/world/events.jsonl)."""
+    events_path = trial / "artifacts" / "logs" / "world" / "events.jsonl"
+    events = [json.loads(line) for line in events_path.read_text().splitlines()] if events_path.is_file() else []
+    requests = [(e["t"], e["seat"], e["data"]["amount"]) for e in events if e["kind"] == "request"]
+    parsed = evaluable = kept = 0
+    for message in messages:
+        amount = COMMONS.pledge(str(message.get("text")))
+        if amount is None:
+            continue
+        parsed += 1
+        later = [value for t, seat, value in requests if seat == message.get("from") and t > message.get("t", 0)]
+        if later:
+            evaluable += 1
+            kept += later[0] <= amount
+    return f"pledges: {parsed} of {len(messages)} messages, kept {kept} of {evaluable} with a later request"
 
 
 def usage(seat: dict) -> str:
@@ -37,6 +60,8 @@ def main() -> None:
             for message in state.get("messages") or []:
                 print(f"    message {message.get('id')} {message.get('from')}->{message.get('to')} at "
                       f"{message.get('t')} s: {str(message.get('text'))[:240]!r}")
+            if state.get("messages"):
+                print("    " + pledges(trial, state["messages"]))
             seats = result.get("seat_results") or []
             for seat in seats:
                 print("    " + usage(seat))

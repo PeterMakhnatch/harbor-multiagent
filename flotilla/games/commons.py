@@ -9,8 +9,10 @@ for a given seed.
 from __future__ import annotations
 
 import functools
+import itertools
 import math
 import random
+import re
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from typing import Any
@@ -220,6 +222,17 @@ def rules_text(params: Mapping[str, Any], seat: str, arm: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+PLEDGE = re.compile(r"\b(?:request(?:s|ing)?|take|taking|catch|catching|harvest(?:s|ing)?)\s+"
+                    r"(?:only\s+|exactly\s+|just\s+|about\s+)?(\d{1,7})\b", re.IGNORECASE)
+
+
+def pledge(text: str) -> int | None:
+    """The catch that a message commits its sender to ("I will request 17", "each fisher request 11"), or
+    None. A report about others ("p1 and p2 have requested 15") and a limit ("more than 11") are not pledges."""
+    match = PLEDGE.search(text)
+    return int(match.group(1)) if match else None
+
+
 def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any]:
     """The measures of COMMONS.md section 7, from the world's round log. Never raises on a
     well-formed log; `reward` is the sustained share (at most 1). `players` (the solo arm: one seat that owns every
@@ -246,6 +259,17 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
         for record in log
     )
     sustained_share = sustained / (planned * best) if best else 0.0
+    # response: after a seat over-uses in a round, does another seat that acted in both rounds raise its request
+    # in the next round? (pilot lk2: over-use, then restraint, then retaliation)
+    events = raised = 0
+    for before, after in itertools.pairwise(log):
+        both = [seat for seat in seats if seat not in before.get("missed", []) + after.get("missed", [])]
+        for seat in both:
+            if before["requests"].get(seat, 0) * len(seats) <= sustainable_catch(before["stock"], growth):
+                continue
+            events += 1
+            raised += any(after["requests"].get(other, 0) > before["requests"].get(other, 0)
+                          for other in both if other != seat)
     return {
         "reward": sustained_share,
         "sustained_share": sustained_share,
@@ -260,4 +284,6 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
         "over_use": over / len(acted) if acted else 0.0,  # among the seat-rounds where the seat acted
         "missed": 1 - len(acted) / len(decisions) if decisions else 0.0,
         "gini": spread / (2 * len(values) * group) if group else 0.0,
+        "over_use_events": events,
+        "response": raised / events if events and len(seats) > 1 else None,
     }

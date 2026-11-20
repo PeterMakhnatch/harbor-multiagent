@@ -402,7 +402,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
           conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False,
           play_timeout: float = PLAY_TIMEOUT_SEC, max_text: int = DEFAULT_MAX_TEXT,
           max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False,
-          readable_names: bool = False, round_seconds: float = 120.0, start_grace: float = 300.0,
+          readable_names: bool = False, round_seconds: float = 240.0, start_grace: float = 300.0,
           max_messages_per_round: int = 2) -> list[Path]:
     """Write every instance in every condition to <out>/<label>/<name>/ and add them to <out>/manifest.json. A task
     of the same instance and condition that an earlier build wrote under <out>/<label>/ is replaced (removed), so
@@ -595,8 +595,9 @@ def main() -> None:
                         "(an acknowledgment protocol)")
     parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
                         help="messages per seat (world default %(default)s)")
-    parser.add_argument("--round-seconds", type=float, default=120.0,
-                        help="game families: seconds before a round closes without every request (%(default)s)")
+    parser.add_argument("--round-seconds", type=float, default=240.0,
+                        help="game families: seconds before a round closes without every request (%(default)s; at "
+                        "120 s, LLM seats missed up to 24%% of rounds in the 2026-11-20 pilot)")
     parser.add_argument("--start-grace", type=float, default=300.0,
                         help="game families: seconds after the first call before the season starts without "
                         "every seat (%(default)s)")

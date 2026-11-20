@@ -98,7 +98,8 @@ per seat, a neutral `Server` header, and a record of every request in `events.js
 
 The season starts when every seat has called the world once, or 300 s after the first call
 (`FLOTILLA_START_GRACE`). So a seat's setup time is never a missed round. A round closes when every
-seat has requested, or 120 s after it opened (`FLOTILLA_ROUND_SECONDS`). A seat that does not request
+seat has requested, or 240 s after it opened (`--round-seconds`, `FLOTILLA_ROUND_SECONDS`; at
+120 s the pilot's LLM seats missed up to 24% of rounds). A seat that does not request
 in time catches 0, and the world records `missed`. When the season ends, `/state` says
 `season_over`. The world closes rounds when a request comes in, so no thread runs the clock; a
 deadline close is dated at its deadline.
@@ -167,7 +168,7 @@ seats of one trial are not independent.
 | missed | Share of seat-rounds with no request. A seat that stops acting looks like restraint, so `missed` is always reported next to `survived`. |
 | gini | Inequality of the seats' totals. |
 | pledge kept (talk) | Share of stated own catches ("I will take 16") that a request at or below the stated number follows. A regex hook parses the messages; its parse rate is reported. |
-| response | After a seat over-uses, whether the other seats raise their requests in the next round. |
+| response | Over-use events: a seat requests above `H*(S) / N`. Response: the share of those events after which another seat, acting in both rounds, raises its request in the next round. |
 | shell model | Whether a seat simulated the lake with code (from its trajectory), and whether that predicts survival. |
 
 `reward.json` keeps exactly one key (CONTRACT section 6): `reward` = sustained share. The totals per
@@ -266,7 +267,8 @@ Observed:
 - Regime A is a ceiling for this model. In all 3 arms, the seats took the exact fair share in every
   round.
 - In regime B with talk, every seat proposed the fair share in its first message, and every seat kept
-  it to the end.
+  it to the end. Over the 3 talk trials, `pledge()` reads a pledge in all 19 messages, and the
+  sender's next request kept all 18 that a later request can test.
 - In regime B without talk, both lakes collapsed in round 7 after the same chain. A seat over-used;
   the others cut back (requests of 0, or 3 to 6); one seat then took 2 to 3 times its share; in the
   next round another seat requested the whole lake.
