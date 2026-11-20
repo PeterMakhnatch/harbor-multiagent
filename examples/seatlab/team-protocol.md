@@ -108,6 +108,22 @@ Use 2 complete blocks: 6 source teams × 4 seats × 3 interfaces × 2 blocks = 1
 
 Primary: `choices − private` in the fraction of correct second votes. Secondary: `cited − choices`, strict group majority (3 of 4), changes towards a unique plurality among the 3 peers, changes away from an initially correct vote, and cost. Report all denominators. Pair by original team, seat, and block. Average seat pairs and blocks within each source team; weight the 6 teams equally. A group comparison requires all 4 second votes in both interfaces. This is 1 vendor problem, not 6 independent tasks. A second-ballot majority is a **derived** result and must never replace the native reward.
 
+#### What changed when analysts saw their peers' votes?
+
+All 144 new model decisions completed. The 3 interfaces used the same 24 source seats, each sampled twice. The original 6 Harbor results did not change.
+
+| New decision | Other ballots hidden | Peer choices | Peer choices and citations |
+| --- | ---: | ---: | ---: |
+| Correct second votes | 12 / 48 | 11 / 48 | 8 / 48 |
+| Initially correct votes changed to wrong | 4 / 16 | 5 / 16 | 8 / 16 |
+| Initially dissenting voters changed to the peers' plurality | 4 / 28 | 5 / 28 | 8 / 28 |
+| Groups with a strict majority | 8 / 12 | 8 / 12 | 11 / 12 |
+| Groups with a correct strict majority | 0 / 12 | 0 / 12 | 0 / 12 |
+
+Showing choices changed the correct-vote rate by −2.1 percentage points against hiding them. Adding citations changed it by −6.25 points against showing choices alone. All 6 maps contributed to both comparisons. More groups reached agreement when the model saw citations. None reached a correct majority. Even the hidden interface changed 4 originally correct answers without receiving a peer ballot. The groups are reconstructions, not live deliberations. The results apply to this packet and model.
+
+The [replay results](results/committee-peer-ballots.json) retain both blocks and all paired denominators. The [144 settled calls](results/committee-peer-ballots-cost.json) used 36,480 cached input tokens, 27,240 uncached input tokens, and 2,979 output tokens. The price estimate is **$0.005982840 USD**. No reservation remains open.
+
 #### Run your own second-ballot agent without the private archive
 
 The [public packet](results/peer-ballot-packet.json) contains 6 native source teams and the first actions of 24 seats. `verify`, `prompt`, and `decode` run offline with Python 3.12 or later. They do not require Harbor, Eval Lab, Docker, or an API key.

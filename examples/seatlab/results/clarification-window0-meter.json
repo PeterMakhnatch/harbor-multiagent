@@ -1,0 +1,187 @@
+{
+  "basis": "Direct ledger estimates and unresolved holds, not billed charges. Model names are ledger attestations, not independent verification. Window start bounds include both endpoints. A finish after close is not a late start. Missing ledger rows or timestamps do not establish that a call did not occur. Use the original study ledger; run IDs repeat across replications. Read after the runner stops. Receipt reconciliation does not replay scores.",
+  "overall": {
+    "counts": {
+      "anomalous_calls": 0,
+      "attested_named_model_calls": 96,
+      "complete_receipts": 48,
+      "complete_receipts_matched_to_ledger": 48,
+      "complete_receipts_with_in_window_starts": 48,
+      "finishes_after_close": 0,
+      "incomplete_receipts": 0,
+      "inside_starts_finishing_after_close": 0,
+      "invalid_finish_calls": 0,
+      "invalid_price_calls": 0,
+      "invalid_receipts": 0,
+      "invalid_start_calls": 0,
+      "invalid_usage_calls": 0,
+      "missing_receipts": 96,
+      "no_ledger_row_calls": 192,
+      "receipt_matched_calls": 96,
+      "scheduled_max_calls": 288,
+      "settled_calls": 96,
+      "starts_after_close": 0,
+      "starts_before_open": 0,
+      "starts_inside_window": 96,
+      "starts_outside_window": 0,
+      "unknown_finish_calls": 0,
+      "unknown_start_calls": 0,
+      "unsettled_calls": 0
+    },
+    "estimated_cost_usd": {
+      "known_settled_high": "0.005385600",
+      "known_settled_low": "0.005385600",
+      "unresolved_holds": "0.000000000",
+      "upper_including_holds": "0.005385600"
+    },
+    "settled_tokens": {
+      "cache_hit": 9600,
+      "cache_miss": 26880,
+      "output": 2208
+    }
+  },
+  "schema": "seatlab-clarification-meter-v1",
+  "windows": [
+    {
+      "anomalous_calls": [],
+      "anomalous_calls_omitted": 0,
+      "counts": {
+        "anomalous_calls": 0,
+        "attested_named_model_calls": 96,
+        "complete_receipts": 48,
+        "complete_receipts_matched_to_ledger": 48,
+        "complete_receipts_with_in_window_starts": 48,
+        "finishes_after_close": 0,
+        "incomplete_receipts": 0,
+        "inside_starts_finishing_after_close": 0,
+        "invalid_finish_calls": 0,
+        "invalid_price_calls": 0,
+        "invalid_receipts": 0,
+        "invalid_start_calls": 0,
+        "invalid_usage_calls": 0,
+        "missing_receipts": 0,
+        "no_ledger_row_calls": 0,
+        "receipt_matched_calls": 96,
+        "scheduled_max_calls": 96,
+        "settled_calls": 96,
+        "starts_after_close": 0,
+        "starts_before_open": 0,
+        "starts_inside_window": 96,
+        "starts_outside_window": 0,
+        "unknown_finish_calls": 0,
+        "unknown_start_calls": 0,
+        "unsettled_calls": 0
+      },
+      "end_utc": "2026-11-20T21:40:00Z",
+      "estimated_cost_usd": {
+        "known_settled_high": "0.005385600",
+        "known_settled_low": "0.005385600",
+        "unresolved_holds": "0.000000000",
+        "upper_including_holds": "0.005385600"
+      },
+      "first_actual_start_utc": "2026-11-20T21:10:00.601909Z",
+      "last_actual_finish_utc": "2026-11-20T21:12:02.686191Z",
+      "settled_tokens": {
+        "cache_hit": 9600,
+        "cache_miss": 26880,
+        "output": 2208
+      },
+      "start_utc": "2026-11-20T21:10:00Z",
+      "window": 0
+    },
+    {
+      "anomalous_calls": [],
+      "anomalous_calls_omitted": 0,
+      "counts": {
+        "anomalous_calls": 0,
+        "attested_named_model_calls": 0,
+        "complete_receipts": 0,
+        "complete_receipts_matched_to_ledger": 0,
+        "complete_receipts_with_in_window_starts": 0,
+        "finishes_after_close": 0,
+        "incomplete_receipts": 0,
+        "inside_starts_finishing_after_close": 0,
+        "invalid_finish_calls": 0,
+        "invalid_price_calls": 0,
+        "invalid_receipts": 0,
+        "invalid_start_calls": 0,
+        "invalid_usage_calls": 0,
+        "missing_receipts": 48,
+        "no_ledger_row_calls": 96,
+        "receipt_matched_calls": 0,
+        "scheduled_max_calls": 96,
+        "settled_calls": 0,
+        "starts_after_close": 0,
+        "starts_before_open": 0,
+        "starts_inside_window": 0,
+        "starts_outside_window": 0,
+        "unknown_finish_calls": 0,
+        "unknown_start_calls": 0,
+        "unsettled_calls": 0
+      },
+      "end_utc": "2026-11-21T00:40:00Z",
+      "estimated_cost_usd": {
+        "known_settled_high": "0.000000000",
+        "known_settled_low": "0.000000000",
+        "unresolved_holds": "0.000000000",
+        "upper_including_holds": "0.000000000"
+      },
+      "first_actual_start_utc": null,
+      "last_actual_finish_utc": null,
+      "settled_tokens": {
+        "cache_hit": 0,
+        "cache_miss": 0,
+        "output": 0
+      },
+      "start_utc": "2026-11-21T00:10:00Z",
+      "window": 1
+    },
+    {
+      "anomalous_calls": [],
+      "anomalous_calls_omitted": 0,
+      "counts": {
+        "anomalous_calls": 0,
+        "attested_named_model_calls": 0,
+        "complete_receipts": 0,
+        "complete_receipts_matched_to_ledger": 0,
+        "complete_receipts_with_in_window_starts": 0,
+        "finishes_after_close": 0,
+        "incomplete_receipts": 0,
+        "inside_starts_finishing_after_close": 0,
+        "invalid_finish_calls": 0,
+        "invalid_price_calls": 0,
+        "invalid_receipts": 0,
+        "invalid_start_calls": 0,
+        "invalid_usage_calls": 0,
+        "missing_receipts": 48,
+        "no_ledger_row_calls": 96,
+        "receipt_matched_calls": 0,
+        "scheduled_max_calls": 96,
+        "settled_calls": 0,
+        "starts_after_close": 0,
+        "starts_before_open": 0,
+        "starts_inside_window": 0,
+        "starts_outside_window": 0,
+        "unknown_finish_calls": 0,
+        "unknown_start_calls": 0,
+        "unsettled_calls": 0
+      },
+      "end_utc": "2026-11-21T03:10:00Z",
+      "estimated_cost_usd": {
+        "known_settled_high": "0.000000000",
+        "known_settled_low": "0.000000000",
+        "unresolved_holds": "0.000000000",
+        "upper_including_holds": "0.000000000"
+      },
+      "first_actual_start_utc": null,
+      "last_actual_finish_utc": null,
+      "settled_tokens": {
+        "cache_hit": 0,
+        "cache_miss": 0,
+        "output": 0
+      },
+      "start_utc": "2026-11-21T02:40:00Z",
+      "window": 2
+    }
+  ]
+}
