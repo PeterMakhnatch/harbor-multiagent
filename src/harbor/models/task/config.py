@@ -605,6 +605,14 @@ class VerifierConfig(PhaseNetworkPolicyConfig):
             "environment_mode='shared'."
         ),
     )
+    regrade_from_seat_record: bool = Field(
+        default=False,
+        exclude_if=lambda v: not v,
+        description=(
+            "Confirm that a separate verifier for a multi-agent regrade grades "
+            "recorded seat logs and artifacts without the original live services."
+        ),
+    )
     collect: list["VerifierCollectConfig"] = Field(
         default_factory=list,
         description=(

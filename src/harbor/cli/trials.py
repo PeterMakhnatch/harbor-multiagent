@@ -19,8 +19,8 @@ from harbor.cli.utils import (
 )
 from harbor.models.agent.name import AgentName
 from harbor.models.environment_type import EnvironmentType
-from harbor.models.task.config import normalize_cpus
 from harbor.models.model_api_format import ModelApiFormat
+from harbor.models.task.config import normalize_cpus
 from harbor.models.trial.config import (
     EnvironmentConfig,
     ResourceMode,
@@ -1279,6 +1279,8 @@ def regrade(
     against them in a separate verifier environment. Multi-step tasks are
     supported when every step uses a separate verifier and the source contains
     the same completed step sequence.
+    Multi-agent regrade starts fresh services and requires a verifier
+    explicitly configured to grade from the recorded seat logs and artifacts.
     """
     from uuid import UUID
 
@@ -1289,6 +1291,7 @@ def regrade(
     from harbor.models.trial.paths import TrialPaths
     from harbor.models.trial.result import TrialResult
     from harbor.trial.regrade import (
+        RegradeError,
         check_task_regradable,
         expand_task_path,
         local_task_name,
@@ -1466,6 +1469,7 @@ def regrade(
         environment=environment_config,
         verifier=verifier_config,
         artifacts=source_artifacts,
+        override_error_policy=source_result.config.override_error_policy,
         source_trial=(
             SourceTrialConfig(action="regrade", type="hub", trial_id=source_trial_id)
             if source_trial_id is not None
@@ -1486,7 +1490,11 @@ def regrade(
         console.print(f"New trial directory: {trials_dir / config.trial_name}")
         return await trial.run()
 
-    result = run_async(_create_and_run())
+    try:
+        result = run_async(_create_and_run())
+    except RegradeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise SystemExit(1) from None
 
     if result.exception_info:
         console.print(

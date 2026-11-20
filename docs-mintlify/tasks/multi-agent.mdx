@@ -261,9 +261,9 @@ The job summary reports each key.
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.
 - On `modal`, use the VM runtime (`environment.kwargs: {modal_vm_runtime: true}`). Modal's default sandbox puts every Compose service on host networking, which fails any task that declares `networks:`.
-- The verifier runs in `main`; separate verifiers are not supported.
+- In a live trial, the verifier runs in `main` in shared mode.
 - Network mode must be `public`.
 - Simulated users (`user_agent`) are not supported.
 - A multi-agent task cannot have `[[steps]]`.
-- Multi-agent trials cannot be regraded.
+- [Regrade](/jobs/regrade#regrade-a-multi-agent-trial) can grade recorded seat logs and artifacts, not live world state.
 - Participants cannot set `override_timeout_sec`, `max_timeout_sec`, `n_concurrent`, `concurrency_group`, `skills`, `load_trajectory` or `extra_allowed_hosts`.

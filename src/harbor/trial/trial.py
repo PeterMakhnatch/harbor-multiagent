@@ -480,11 +480,6 @@ class Trial(ABC):
             task.config, config.environment, config.verifier
         ):
             global_logger.warning("Task %s: %s", task.name, warning)
-        if config.participants and not task.config.agents:
-            raise ValueError(
-                f"Task {task.name} has no [agents.<service>] seats, so it takes "
-                "agent, not participants."
-            )
         if config.source_trial is not None:
             # TODO: one example could be harbor analyze
             if config.source_trial.action != "regrade":
@@ -516,6 +511,11 @@ class Trial(ABC):
                 _task_download_result=task_download_result,
                 _source_trial_dir=source_trial_dir,
                 _trial_id=trial_id,
+            )
+        if config.participants and not task.config.agents:
+            raise ValueError(
+                f"Task {task.name} has no [agents.<service>] seats, so it takes "
+                "agent, not participants."
             )
 
         if task.config.agents:

@@ -639,7 +639,10 @@ class Job:
                         participants=source_participants,
                         environment=self.config.environment,
                         verifier=self.config.verifier,
-                        override_error_policy=self.config.override_error_policy,
+                        override_error_policy=(
+                            trial_result.config.override_error_policy
+                            | self.config.override_error_policy
+                        ),
                         artifacts=source_artifacts,
                         job_id=self._id,
                         # Trials from a hub job are hub trials: record only

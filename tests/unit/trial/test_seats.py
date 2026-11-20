@@ -219,7 +219,9 @@ async def test_regrade_routes_seat_tasks_before_launch_checks(tmp_path: Path):
         _participant("maya"),
         _participant("raj"),
         _participant("lee"),
-        source_trial=SourceTrialConfig(action="regrade", type="local", path=tmp_path),
+        source_trial=SourceTrialConfig(
+            action="regrade", type="local", path=tmp_path / "missing-trial"
+        ),
     )
 
     trial = await Trial.create(config)
