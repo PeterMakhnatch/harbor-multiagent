@@ -140,6 +140,14 @@ class TrialResult(BaseModel):
     task_id: LocalTaskId | GitTaskId | PackageTaskId
     source: str | None = None
     task_checksum: str
+    source_task_checksum: str | None = Field(
+        default=None,
+        exclude_if=lambda v: v is None,
+        description=(
+            "Task checksum of the original agent run for a multi-agent regrade. "
+            "The verifier runs in a fresh environment against recorded files."
+        ),
+    )
     config: TrialConfig
     agent_info: AgentInfo
     agent_result: AgentContext | None = None

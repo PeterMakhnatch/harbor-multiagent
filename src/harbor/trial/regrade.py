@@ -1,10 +1,10 @@
 """Regrade trials: re-run verification against a recorded trial's outputs.
 
 A regrade trial replaces the agent phase with "restore recorded outputs":
-it copies ``agent/`` and ``artifacts/`` from a single-step source, or each
+it copies ``agent/`` and ``artifacts/`` from a single-step source, each
 ``steps/<name>/agent`` and ``steps/<name>/artifacts`` pair from a multi-step
-source, then runs separate verifiers against the seeded artifacts. The source
-trial is never modified.
+source, or ``seats/`` and ``artifacts/`` from a multi-seat source, then runs
+separate verifiers against the recorded outputs. The source is never modified.
 
 Regradability is defined by the record, not by how the source trial was
 originally verified: a trial is regradable iff the new verifier's declared
@@ -15,6 +15,7 @@ or separate verifiers is irrelevant.
 
 import asyncio
 import json
+import os
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
@@ -23,6 +24,8 @@ from uuid import UUID
 
 import filelock
 
+from harbor.agents.base import BaseAgent
+from harbor.agents.mcp_headers import resolve_mcp_header_env
 from harbor.agents.nop import NopAgent
 from harbor.constants import MAIN_SERVICE_NAME
 from harbor.models.job.config import SourceJobConfig
@@ -47,6 +50,7 @@ from harbor.models.trial.config import AgentConfig, TrialConfig
 from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import (
     ExceptionInfo,
+    SeatResult,
     StepResult,
     TimingInfo,
     TrialResult,
@@ -54,7 +58,9 @@ from harbor.models.trial.result import (
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.artifact_handler import artifact_host_path
 from harbor.trial.hooks import TrialEvent
+from harbor.trial.seats import summarize_seat_exception
 from harbor.trial.trial import Trial
+from harbor.utils.env import is_bool_env_value, is_sensitive_env_key, resolve_env_vars
 from harbor.utils.path_safety import validate_directory_copy, validate_output_path
 
 
@@ -113,6 +119,13 @@ def check_task_regradable(task_dir: Path) -> str | None:
             )
         return None
     if resolve_task_verifier_mode(config) != VerifierEnvironmentMode.SEPARATE:
+        if config.agents:
+            return (
+                f"Task at {task_dir} resolves to a shared-mode verifier. "
+                "Multi-agent regrade starts fresh services and cannot inspect "
+                "the original live world. Use a separate verifier that grades "
+                "recorded inputs from /logs/seats and /logs/artifacts."
+            )
         return (
             f"Task at {task_dir} resolves to a shared-mode verifier, which "
             "needs a live agent environment; regrade re-runs verification "
@@ -330,6 +343,15 @@ class RegradeTrial(Trial):
                 "a config with only source_trial.trial_id must be resolved "
                 "via Trial.create."
             )
+        source_root = source_trial_dir.expanduser().resolve()
+        target_root = (config.trials_dir / config.trial_name).expanduser().resolve()
+        if target_root.is_relative_to(source_root) or source_root.is_relative_to(
+            target_root
+        ):
+            raise RegradeError(
+                f"Regrade output directory {target_root} overlaps source trial "
+                f"directory {source_root}. Choose a different output directory."
+            )
         self._source_paths = TrialPaths(trial_dir=source_trial_dir)
         super().__init__(
             config,
@@ -346,10 +368,13 @@ class RegradeTrial(Trial):
         if not path.exists():
             return None
         try:
-            return TrialResult.model_validate_json(path.read_text())
+            return self._parse_source_result(path.read_text())
         except Exception as exc:
             self.logger.debug(f"Could not parse source trial result at {path}: {exc}")
             return None
+
+    def _parse_source_result(self, text: str) -> TrialResult:
+        return TrialResult.model_validate_json(text)
 
     @override
     def _init_agent(self) -> None:
@@ -436,10 +461,15 @@ class RegradeTrial(Trial):
                 f"Source trial '{source_dir.name}' has no readable result.json; "
                 "nothing to regrade."
             )
-        if self._source_result.seat_results or self._source_result.config.participants:
+        if not self.task.config.agents and (
+            self.config.participants
+            or self._source_result.config.participants
+            or self._source_result.seat_results is not None
+            or self._source_paths.seats_dir.exists()
+        ):
             raise RegradeError(
-                f"Source trial '{source_dir.name}' has seats; "
-                "regrade does not support multi-agent trials."
+                f"Source trial '{source_dir.name}' has a seat record. "
+                "Regrade requires a task with the same seats."
             )
         if self.config.verifier.disable:
             raise RegradeError("Regrade with verification disabled does nothing.")
@@ -804,6 +834,9 @@ class RegradeTrial(Trial):
             )
         if not is_agent_error:
             return None
+        return self._copy_source_exception(exception)
+
+    def _copy_source_exception(self, exception: ExceptionInfo) -> ExceptionInfo:
         return exception.model_copy(
             deep=True,
             update={
@@ -955,3 +988,276 @@ class MultiStepRegradeTrial(RegradeTrial):
         else:
             self.result.verifier_result = self._select_multi_step_reward()
         self.paths.cleanup_empty_mount_dirs()
+
+
+class SeatsRegradeTrial(RegradeTrial):
+    """Re-run one separate verifier against a recorded multi-seat trial.
+
+    Live seat trials require shared mode. Regrade starts fresh services and
+    gives the verifier recorded files, not the original live world.
+    """
+
+    _seats_with_incomplete_logs: tuple[str, ...] = ()
+
+    @override
+    def _parse_source_result(self, text: str) -> TrialResult:
+        data = json.loads(text)
+        result = TrialResult.model_validate(data)
+        # Check the raw record even when SeatResult does not yet model this field.
+        self._seats_with_incomplete_logs = tuple(
+            seat["seat"]
+            for seat in data.get("seat_results") or ()
+            if seat.get("logs_downloaded") is False
+        )
+        return result
+
+    @override
+    def _init_result(self) -> None:
+        super()._init_result()
+        # A seat trial runs its participants; the default `agent` never runs.
+        self.paths.config_path.write_text(
+            self.config.model_dump_json(indent=4, exclude={"agent"})
+        )
+        if self._source_result is None:
+            return
+        self.result.source_task_checksum = (
+            self._source_result.source_task_checksum
+            or self._source_result.task_checksum
+        )
+        if self._source_result.seat_results is not None:
+            self.result.seat_results = [
+                self._regrade_seat_result(seat_result)
+                for seat_result in self._source_result.seat_results
+            ]
+
+    def _regrade_seat_result(self, source_result: SeatResult) -> SeatResult:
+        """Preserve one seat's recorded run and its agent/setup error."""
+        seat_result = source_result.model_copy(deep=True)
+        if source_result.exception_info is not None:
+            seat_result.exception_info = self._copy_source_exception(
+                source_result.exception_info
+            )
+        return seat_result
+
+    @override
+    def _validate_regradable(self) -> None:
+        source_result = self._validate_source_record()
+        source_dir = self._source_paths.trial_dir
+        if (
+            source_result.step_results is not None
+            or self._source_paths.steps_dir.exists()
+        ):
+            raise RegradeError(
+                f"Source trial '{source_dir.name}' is multi-step; it cannot be "
+                "regraded with a seat task."
+            )
+        if not source_result.seat_results:
+            raise RegradeError(f"Source trial '{source_dir.name}' has no seat_results.")
+        if self._seats_with_incomplete_logs:
+            seats = ", ".join(repr(seat) for seat in self._seats_with_incomplete_logs)
+            raise RegradeError(
+                f"Source trial '{source_dir.name}': recorded seat logs are known "
+                f"incomplete for {seats}."
+            )
+        seats_dir = self._source_paths.seats_dir
+        if not seats_dir.is_dir() or seats_dir.is_symlink():
+            raise RegradeError(
+                f"Source trial '{source_dir.name}' needs a recorded seats/ directory."
+            )
+
+        expected = sorted(self.task.config.agents)
+        for label, names in (
+            ("regrade participants", [p.seat for p in self.config.participants]),
+            (
+                "source participants",
+                [p.seat for p in source_result.config.participants],
+            ),
+            ("source seat_results", [r.seat for r in source_result.seat_results]),
+            ("source seats/ entries", [entry.name for entry in seats_dir.iterdir()]),
+        ):
+            if sorted(names) != expected:
+                raise RegradeError(
+                    f"Seat roster mismatch: {label} lists {sorted(names)}, "
+                    f"but the task defines {expected}."
+                )
+
+        source_participants = {
+            p.seat: p.model_dump() for p in source_result.config.participants
+        }
+        for participant in self.config.participants:
+            if participant.model_dump() != source_participants[participant.seat]:
+                raise RegradeError(
+                    f"Participant for seat {participant.seat!r} does not match "
+                    "the recorded participant."
+                )
+        for seat_result in source_result.seat_results:
+            seat = seat_result.seat
+            if seat_result.under_test != self.task.config.agents[seat].under_test:
+                raise RegradeError(f"Seat {seat!r} changed its under_test setting.")
+            seat_dir = seats_dir / seat
+            agent_dir = seat_dir / "agent"
+            if (
+                not agent_dir.is_dir()
+                or seat_dir.is_symlink()
+                or agent_dir.is_symlink()
+            ):
+                raise RegradeError(
+                    f"Source trial '{source_dir.name}' needs a recorded "
+                    f"seats/{seat}/agent/ directory."
+                )
+        self._validate_seat_regrade_task()
+        self._validate_artifact_coverage()
+
+    def _validate_seat_regrade_task(self) -> None:
+        source_checksum = self.result.source_task_checksum
+        task_checksum = self.result.task_checksum
+        source_lock = self._trial_lock.source_trial
+        source_digest = (
+            source_lock.task.digest
+            if source_lock is not None and source_lock.task is not None
+            else None
+        )
+        task_digest = self._trial_lock.task.digest
+        if source_checksum != task_checksum or (
+            source_digest is not None and source_digest != task_digest
+        ):
+            self.logger.warning(
+                "Multi-agent regrade task drift: source checksum %s, regrade "
+                "checksum %s; source lock digest %s, regrade lock digest %s.",
+                source_checksum,
+                task_checksum,
+                source_digest or "unavailable",
+                task_digest,
+            )
+        if not self.task.config.verifier.regrade_from_seat_record:
+            raise RegradeError(
+                "Multi-agent regrade starts fresh services and does not restore "
+                "the live world. If the verifier grades recorded files from "
+                "/logs/seats and /logs/artifacts, set "
+                "[verifier] regrade_from_seat_record = true in task.toml."
+            )
+        self.logger.warning(
+            "Multi-agent regrade starts fresh services. Only recorded seat logs "
+            "and artifacts are restored; seat logs have no integrity manifest."
+        )
+
+    @override
+    def _seed_from_source(self) -> None:
+        source_seats_dir = self._source_paths.seats_dir
+        target_seats_dir = self.paths.seats_dir
+        self._validate_recorded_outputs([source_seats_dir])
+        validate_output_path(target_seats_dir, self.paths.trial_dir)
+        validate_directory_copy(source_seats_dir, target_seats_dir)
+        # Validated recorded seats become portable verifier inputs,
+        # including on providers that do not upload directory links.
+        shutil.copytree(
+            source_seats_dir,
+            target_seats_dir,
+            symlinks=False,
+            dirs_exist_ok=True,
+        )
+        super()._seed_from_source()
+
+    @override
+    async def _run(self) -> None:
+        source_result = self._source_result
+        if source_result is None:
+            raise RegradeError("Missing source result for multi-agent regrade.")
+        seat_exception = summarize_seat_exception(self.result.seat_results or [])
+        source_exception = self._source_agent_exception(source_result) or seat_exception
+        if source_result.exception_info is None and seat_exception is not None:
+            self.logger.warning(
+                "Source seat errors have no trial exception summary. "
+                "Rebuilt the summary without grading the inconsistent record."
+            )
+            self._write_source_exception(seat_exception)
+            return
+        if any(
+            not exception.policy.should_grade
+            for exception in [source_exception, *self.result.recorded_exceptions()]
+            if exception is not None
+        ):
+            self._write_source_exception(source_exception)
+            return
+
+        await self._emit(TrialEvent.VERIFICATION_START)
+        self.result.verifier = TimingInfo(started_at=self._now())
+        try:
+            self.result.verifier_result = await self._run_separate_verifier(
+                key="trial",
+                timeout_sec=self._verifier_timeout_sec,
+                artifacts_dir=self.paths.artifacts_dir,
+                seats_dir=self.paths.seats_dir,
+                user=self.task.config.verifier.user,
+            )
+        finally:
+            self.result.verifier.finished_at = self._now()
+
+        self._write_source_exception(source_exception)
+
+    def _write_source_exception(self, exception: ExceptionInfo | None) -> None:
+        if exception is not None:
+            self.result.exception_info = exception
+            self.paths.exception_message_path.write_text(
+                f"{exception.exception_message}\n{exception.exception_traceback}"
+            )
+
+    @override
+    def _copy_source_exception(self, exception: ExceptionInfo) -> ExceptionInfo:
+        exception_type = exception.exception_type
+        source_config = self._source_result.config if self._source_result else None
+        policy_override = (
+            self.config.override_error_policy.get(exception_type)
+            or exception.policy_override
+            or (
+                source_config.override_error_policy.get(exception_type)
+                if source_config is not None
+                else None
+            )
+        )
+        return exception.model_copy(
+            deep=True, update={"policy_override": policy_override}
+        )
+
+    @override
+    def _secrets_to_scrub(
+        self,
+        primary_agent: BaseAgent | None = None,
+        primary_config: AgentConfig | None = None,
+    ) -> set[str]:
+        secrets = super()._secrets_to_scrub(primary_agent, primary_config)
+        source = self._source_result
+        for participant in [
+            *self.config.participants,
+            *(source.config.participants if source is not None else []),
+        ]:
+            credential = participant.model_api_key_name
+
+            def get_env(key: str, env: dict[str, str] = participant.env) -> str | None:
+                value = env.get(key)
+                if value is None:
+                    return os.environ.get(key)
+                return resolve_env_vars({key: value})[key]
+
+            for key in participant.env.keys() | ({credential} if credential else set()):
+                if key != credential and not is_sensitive_env_key(key):
+                    continue
+                try:
+                    value = get_env(key)
+                except ValueError:
+                    continue
+                if value and not is_bool_env_value(value):
+                    secrets.add(value)
+            if participant.mcp_servers:
+                try:
+                    header_env = resolve_mcp_header_env(
+                        participant.mcp_servers, get_env
+                    )
+                except ValueError:
+                    continue
+                secrets.update(
+                    secret
+                    for secret in header_env.secrets
+                    if not is_bool_env_value(secret)
+                )
+        return secrets

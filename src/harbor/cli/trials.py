@@ -19,8 +19,8 @@ from harbor.cli.utils import (
 )
 from harbor.models.agent.name import AgentName
 from harbor.models.environment_type import EnvironmentType
-from harbor.models.task.config import normalize_cpus
 from harbor.models.model_api_format import ModelApiFormat
+from harbor.models.task.config import normalize_cpus
 from harbor.models.trial.config import (
     EnvironmentConfig,
     ResourceMode,
@@ -1279,6 +1279,8 @@ def regrade(
     against them in a separate verifier environment. Multi-step tasks are
     supported when every step uses a separate verifier and the source contains
     the same completed step sequence.
+    Multi-agent regrade starts fresh services and requires a verifier
+    explicitly configured to grade from the recorded seat logs and artifacts.
     """
     from uuid import UUID
 
@@ -1289,6 +1291,7 @@ def regrade(
     from harbor.models.trial.paths import TrialPaths
     from harbor.models.trial.result import TrialResult
     from harbor.trial.regrade import (
+        RegradeError,
         check_task_regradable,
         expand_task_path,
         local_task_name,
@@ -1435,24 +1438,26 @@ def regrade(
     if verifier_kwargs is not None:
         verifier_config.kwargs.update(parse_kwargs(verifier_kwargs))
 
-    # A regrade is a fork of the source trial: carry its agent config and
-    # extra artifact entries verbatim so config/lock keep describing the
-    # trial's real inputs (the agent itself is never re-run).
+    # A regrade is a fork of the source trial: carry its agent config,
+    # participants, and extra artifact entries verbatim so config/lock keep
+    # describing the trial's real inputs (the agent itself is never re-run).
     # result.json was validated above and embeds the original run config.
     # Losing config.json must not silently remove verifier inputs or identity.
     source_agent = source_result.config.agent
+    source_participants = source_result.config.participants
     source_artifacts = source_result.config.artifacts
     try:
         source_config = TrialConfig.model_validate_json(
             source_paths.config_path.read_text()
         )
         source_agent = source_config.agent
+        source_participants = source_config.participants
         source_artifacts = source_config.artifacts
     except Exception:
         console.print(
             "[yellow]Warning:[/yellow] could not parse the source trial's "
-            "config.json; using the agent config and artifacts recorded in "
-            "result.json."
+            "config.json; using the agent config, participants, and artifacts "
+            "recorded in result.json."
         )
 
     config = TrialConfig(
@@ -1460,9 +1465,11 @@ def regrade(
         trial_name=trial_name or "",
         trials_dir=trials_dir,
         agent=source_agent,
+        participants=source_participants,
         environment=environment_config,
         verifier=verifier_config,
         artifacts=source_artifacts,
+        override_error_policy=source_result.config.override_error_policy,
         source_trial=(
             SourceTrialConfig(action="regrade", type="hub", trial_id=source_trial_id)
             if source_trial_id is not None
@@ -1483,7 +1490,11 @@ def regrade(
         console.print(f"New trial directory: {trials_dir / config.trial_name}")
         return await trial.run()
 
-    result = run_async(_create_and_run())
+    try:
+        result = run_async(_create_and_run())
+    except RegradeError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise SystemExit(1) from None
 
     if result.exception_info:
         console.print(

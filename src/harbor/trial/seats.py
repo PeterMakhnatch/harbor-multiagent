@@ -14,7 +14,7 @@ import asyncio
 import contextlib
 import logging
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, override
 
@@ -107,6 +107,20 @@ def check_launch(config: TrialConfig, task: Task) -> None:
         problems.append("seat tasks support only public network_mode")
     if problems:
         raise ValueError(f"Task {task.name} cannot run: {'; '.join(problems)}.")
+
+
+def summarize_seat_exception(
+    seat_results: Sequence[SeatResult],
+) -> ExceptionInfo | None:
+    """Use the first seat error as the trial summary without changing the seat."""
+    for seat in seat_results:
+        if (info := seat.exception_info) is not None:
+            return info.model_copy(
+                update={
+                    "exception_message": f"Seat {seat.seat!r}: {info.exception_message}"
+                }
+            )
+    return None
 
 
 @contextlib.asynccontextmanager
@@ -528,18 +542,13 @@ class SeatsTrial(SingleStepTrial):
         """
         if self.result.exception_info is not None:
             return
-        for seat in self.seats:
-            info = seat.result.exception_info
-            if info is None:
-                continue
-            message = f"Seat {seat.name!r}: {info.exception_message}"
-            self.result.exception_info = info.model_copy(
-                update={"exception_message": message}
-            )
+        if (
+            info := summarize_seat_exception(self.result.seat_results or [])
+        ) is not None:
+            self.result.exception_info = info
             self.paths.exception_message_path.write_text(
-                f"{message}\n{info.exception_traceback}"
+                f"{info.exception_message}\n{info.exception_traceback}"
             )
-            return
 
     @override
     def _secrets_to_scrub(

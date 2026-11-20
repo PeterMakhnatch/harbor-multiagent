@@ -307,17 +307,23 @@ async def test_ordinary_trial_keeps_unattributed_hooks_and_logs(tmp_path: Path):
         )
 
 
-async def test_regrade_refuses_seat_tasks(tmp_path: Path):
+async def test_regrade_routes_seat_tasks_before_launch_checks(tmp_path: Path):
     config = _config(
         _task_dir(tmp_path),
         _participant("maya"),
         _participant("raj"),
         _participant("lee"),
-        source_trial=SourceTrialConfig(action="regrade", type="local", path=tmp_path),
+        source_trial=SourceTrialConfig(
+            action="regrade", type="local", path=tmp_path / "missing-trial"
+        ),
     )
 
-    with pytest.raises(ValueError, match="Regrade does not support seat tasks"):
-        await Trial.create(config)
+    trial = await Trial.create(config)
+    result = await trial.run()
+
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "RegradeError"
+    assert "readable result.json" in result.exception_info.exception_message
 
 
 async def test_regrade_refuses_seat_source_even_if_target_is_single_agent(

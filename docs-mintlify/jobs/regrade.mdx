@@ -52,6 +52,36 @@ Legacy artifact manifests do not record exclusion filters. When the updated task
 declares exclusions, Harbor warns and continues regrading these records. Changes
 to explicitly recorded filters still prevent regrading.
 
+## Regrade a multi-agent trial
+
+Run the original task in shared mode. Record any required live state as declared
+artifacts before the trial ends. Then edit the task for regrade:
+
+```toml
+[verifier]
+environment_mode = "separate"
+regrade_from_seat_record = true
+```
+
+Use a verifier that grades from `/logs/seats` and `/logs/artifacts`. Regrade
+starts fresh services. It does not restore files, containers, networks, or
+volumes from the original environment. For example, a verifier cannot query
+the original session from a database service. Collect a dump during the
+original run and grade the dump instead.
+
+The regrade task must keep the same seats and `under_test` flags. The source
+must contain matching participants, `seat_results`, and a `seats/<seat>/agent/`
+directory for every seat. Harbor refuses a source that records a failed log
+download for any seat. Absent or null download status makes no completeness
+claim. Seat logs have no integrity manifest. Harbor cannot prove that every
+log was collected or detect changes to log contents.
+
+Harbor warns when the task checksum or available lock digest changes.
+In `result.json`, `source_task_checksum` identifies the task that ran the agents.
+`task_checksum` identifies the task used for the fresh verifier.
+
+Use `harbor trial regrade` or `harbor job regrade` without `--launch`.
+
 ## How it works
 
 For each source trial, Harbor:
