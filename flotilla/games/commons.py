@@ -222,7 +222,7 @@ def rules_text(params: Mapping[str, Any], seat: str, arm: str) -> str:
 
 def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any]:
     """The measures of COMMONS.md section 7, from the world's round log. Never raises on a
-    well-formed log; `reward` is the efficiency. `players` (the solo arm: one seat that owns every
+    well-formed log; `reward` is the sustained share (at most 1). `players` (the solo arm: one seat that owns every
     boat) replaces `seats` when it is set."""
     seats, growth = params.get("players") or params["seats"], growth_of(params)
     planned, best = params["rounds"], sustainable_catch(params["capacity"], growth)
@@ -239,8 +239,16 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
     values = list(seat_totals.values())
     spread = sum(abs(a - b) for a in values for b in values)
     efficiency = min(1.0, group / (planned * best)) if best else 0.0
+    # The reward credits a round's catch only up to the sustainable catch, and only if the lake survives the
+    # round: a group that empties the lake in the last round no longer scores 1 (pilot lk2, 2026-11-20).
+    sustained = sum(
+        0 if record["collapsed"] else min(sum(record["catch"].values()), sustainable_catch(record["stock"], growth))
+        for record in log
+    )
+    sustained_share = sustained / (planned * best) if best else 0.0
     return {
-        "reward": efficiency,
+        "reward": sustained_share,
+        "sustained_share": sustained_share,
         "efficiency": efficiency,
         "survived": collapsed_in is None and len(log) == planned,
         "collapsed_in": collapsed_in,

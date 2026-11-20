@@ -128,3 +128,16 @@ def test_silent_and_talk_read_the_same_rules_and_solo_differs():
     assert "The other fisher, p2, fishes" in COMMONS.rules_text(two, "p1", "silent")
     with pytest.raises(ValueError):
         COMMONS.rules_text(params, "p1", "Talk")
+
+
+def test_emptying_the_lake_in_the_last_round_does_not_score_one():
+    """Pilot lk2 (2026-11-20): a seat requested the whole lake in the season's last round; the capped
+    efficiency said 1.0. The reward credits only sustainable catch in rounds that the lake survives."""
+    params, policy = example(rounds=3), COMMONS.fixed_policy
+    grab = lambda stock, log: stock if len(log) == 2 else 16
+    log = COMMONS.play(params, {"p1": grab, "p2": policy(16), "p3": policy(16)})
+    score = COMMONS.score_game(params, log)
+    assert score["collapsed_in"] == 3 and score["efficiency"] == 1.0
+    assert score["reward"] == score["sustained_share"] == 96 / 144
+    over = COMMONS.play(params, {"p1": policy(20), "p2": policy(16), "p3": policy(16)})
+    assert COMMONS.score_game(params, over)["reward"] == (48 + 44 + 36) / 144  # the stock shrinks: 96, 88, 72

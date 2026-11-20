@@ -163,7 +163,8 @@ def test_the_verifier_scores_the_season_and_freezes_the_world(start_world, tmp_p
     score = json.loads((tmp_path / "verifier" / "score.json").read_text())
     assert list(reward) == ["reward"]  # exactly one key (CONTRACT.md 6)
     assert score["truncated"] and score["rounds_played"] == 2 and score["rounds_planned"] == 3
-    assert score["totals"] == {"p1": 54, "p2": 48} and reward["reward"] == score["efficiency"] == 102 / 144
+    assert score["totals"] == {"p1": 54, "p2": 48} and score["efficiency"] == 102 / 144
+    assert reward["reward"] == score["sustained_share"] == 96 / 144  # round 2's 54 counts as the sustainable 48
     assert score["over_use"] == 1 / 4 and score["error"] is None
     assert world.seat("p1", "POST", "/harvest", {"amount": 1})[0] == 409  # frozen
 
