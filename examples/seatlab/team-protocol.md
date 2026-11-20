@@ -78,6 +78,23 @@ Primary: native team reward, `shown − masked`, paired within map and repetitio
 
 The stock server returns the whole thread. The host selects which messages reach each model. Bind each prompt to its source board snapshot, native action and seat receipt. The control masks the chair **from 3 model requests**, not from the native server. The 2 arms use the same number of posts, ballots, and calls when complete.
 
+#### What changed when peers received the chair's recommendation?
+
+All 24 native teams finished. Each made 13 direct calls. Showing advice did **not** change the primary outcome: neither arm produced a correct native majority in any of the 12 pairs.
+
+| Observed in Harbor | Advice masked from peers | Advice shown to peers |
+| --- | ---: | ---: |
+| Teams with a correct final majority | 0 / 12 | 0 / 12 |
+| Correct chair recommendations | 1 / 12 | 0 / 12 |
+| Correct draft votes | 10 / 48 | 11 / 48 |
+| Correct final votes | 8 / 48 | 0 / 48 |
+| Initially dissenting non-chair voters who switched to the chair's choice | 2 / 9 | 11 / 11 |
+| Non-chair voters who changed from correct to wrong | 2 / 36 | 11 / 36 |
+
+The visible recommendations were all wrong. All 11 initially dissenting peers switched to the recommended choice. This does not isolate the effect of an identical recommendation: all 12 pairs differed in at least one draft ballot or citation. The recommended choice or citations differed in 5 pairs. The model and the underlying vendor problem were the same throughout.
+
+The [native results](results/committee-recommendation-results.json) include each team and paired contrast. The [312 settled calls](results/committee-recommendation-cost.json) used 43,008 cached input tokens, 71,379 uncached input tokens, and 4,872 output tokens. The price estimate is **$0.013759074 USD**. Eval Lab's read-only `load_trial` matched all 24 native rewards and all 96 seat token records. No database write was needed.
+
 ### Voting follow-up: does computing totals before choosing help?
 
 **Registered before the first follow-up call.** The previous teams supplied all 4 private facts in 11 trials without a single winning majority. This study changes the voting interface, not the sender instruction. No tool computes the totals for the model, chooses its vote, repairs arithmetic, or changes the native verifier.
