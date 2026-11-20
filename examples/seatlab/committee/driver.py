@@ -23,6 +23,11 @@ _TASK_STEM = "hidden_profile_unshared"
 _TASK_NAME = "crucible/epistemic-crucible-hidden_profile_unshared"
 _MODEL = "deepseek/deepseek-flash"
 _IMPORT = "examples.seatlab.committee.seat:CommitteeSeat"
+_PREFIX_IMPORT = "examples.seatlab.committee.prefix_seat:PrefixSeat"
+_SEAT_SCHEMAS = {
+    _IMPORT: "seatlab.committee-seat/v1",
+    _PREFIX_IMPORT: "seatlab.prefix-seat/v1",
+}
 _HARBOR_VERSION = "0.26.0"
 # Allow time for the stock environment build, seat execution, and verifier.
 _TRIAL_TIMEOUT_SEC = 1800
@@ -197,7 +202,7 @@ def _preflight(harbor: Path, task: Path) -> tuple[Path, Path, dict[str, str]]:
 def _json_object(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_bytes())
     if not isinstance(value, dict):
-        raise ValueError("expected a JSON object")
+        raise TypeError("expected a JSON object")
     return value
 
 
@@ -231,7 +236,7 @@ def _launch(directory: Path, harbor: Path, python: Path, env: dict[str, str]) ->
     child_env = {key: value for key, value in env.items() if key in _PUBLIC_ENV}
     for name in _HOST_BINDINGS:
         value = os.environ.get(name)
-        if not value:
+        if value is None or value == "":
             raise _Rejected("host_binding_missing")
         child_env[name] = value
     with TemporaryDirectory(
@@ -264,7 +269,9 @@ def _launch(directory: Path, harbor: Path, python: Path, env: dict[str, str]) ->
             ).returncode
 
 
-def _trial_config(directory: Path, task: Path, cell: schedule.Cell) -> dict[str, Any]:
+def _trial_config(
+    directory: Path, task: Path, cell: schedule.Cell, *, agent_import: str = _IMPORT
+) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "task": {"path": str(task)},
@@ -280,7 +287,7 @@ def _trial_config(directory: Path, task: Path, cell: schedule.Cell) -> dict[str,
         "participants": [
             {
                 "seat": role,
-                "import_path": _IMPORT,
+                "import_path": agent_import,
                 "model_name": _MODEL,
                 "kwargs": {
                     "role": role,
@@ -315,14 +322,17 @@ def _completed(config: dict[str, Any]) -> bool:
             or len(seats) != len(schedule.ROLES)
         ):
             return False
-        expected = {p["seat"]: p["kwargs"] for p in config["participants"]}
+        expected = {
+            p["seat"]: (p["kwargs"], _SEAT_SCHEMAS[p["import_path"]])
+            for p in config["participants"]
+        }
         for seat in seats:
-            binding = expected.pop(seat["seat"])
+            binding, schema = expected.pop(seat["seat"])
             record = seat["agent_result"]["metadata"]
             if (
                 seat["under_test"] is not True
                 or seat["exception_info"] is not None
-                or record["schema"] != "seatlab.committee-seat/v1"
+                or record["schema"] != schema
                 or record["status"] != "complete"
                 or any(record[k] != v for k, v in binding.items())
             ):
@@ -332,7 +342,15 @@ def _completed(config: dict[str, Any]) -> bool:
     return not expected
 
 
-def _run(out: Path, cell: schedule.Cell, task: Path, harbor: Path) -> str | None:
+def _run(
+    out: Path,
+    cell: schedule.Cell,
+    task: Path,
+    harbor: Path,
+    *,
+    agent_import: str = _IMPORT,
+    checkpoint: tuple[str, str] | None = None,
+) -> str | None:
     _, team = _helpers()
     task = _task_dir(task)
     root = team._root(out)
@@ -348,13 +366,15 @@ def _run(out: Path, cell: schedule.Cell, task: Path, harbor: Path) -> str | None
     except FileExistsError:
         raise _Rejected("attempt_already_claimed_do_not_retry") from None
 
-    config = _trial_config(directory, task, cell)
+    config = _trial_config(directory, task, cell, agent_import=agent_import)
     attempt = {
         "schema": "seatlab.committee-attempt/v1",
         **cell,
         "trial_name": config["trial_name"],
         "task_git_tree": schedule.TASK_TREE,
     }
+    if checkpoint is not None:
+        attempt["packet_sha256"], attempt["prefix_sha256"] = checkpoint
     outcome: dict[str, Any] = {
         "schema": "seatlab.committee-launch/v1",
         "returncode": None,

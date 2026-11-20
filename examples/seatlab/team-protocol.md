@@ -107,6 +107,29 @@ In both arms all 4 voters make fresh model calls and submit new votes to the nat
 
 Primary: the mean paired change in native majority reward, `shown − masked`. Average the repetitions within each source, then give each source equal weight. Require all 6 sources to give a 6-source estimate. Secondary: non-chair voters switching to the chair among those who originally disagreed, final correct votes, and chair variation with identical input. Report the count of exact prefix matches. Never substitute a reconstructed majority for the native reward. The 6 source histories still come from 1 vendor problem.
 
+**Use the checkpoint with your own agent.** The [packet](results/committee-prefix-packet.json) contains the 6 stock world histories, not the original final votes. Do not give your agent the packet. It includes information for other seats. From the fork root, use Python 3.12 or later:
+
+```bash
+module=examples.seatlab.committee.prefix_driver
+python -m "$module" plan
+python -m "$module" prompt --map 0 --role analyst_2 --arm masked > voter.txt
+# Give only voter.txt and the system message "Answer only with JSON." to your agent.
+python -m "$module" decode --map 0 --role analyst_2 < response.json
+```
+
+These commands need no Harbor installation, model key, or Docker daemon. Compare `shown` with `masked` for the same role and map. `decode` rejects an illegal ballot. It does not correct a bad choice, open a world, or assign a reward.
+
+**Test native restoration without paying for votes.** Use the [unchanged source task](https://github.com/PeterMakhnatch/harbor-crucible/tree/25966562fc4be3fbc8a8c3b10d8460bd45c4aa55/tasks/epistemic-crucible/variants/hidden_profile_unshared) and an installed Harbor from this fork. Set `TASK` to its local task directory and `HARBOR` to the installed executable. Use a fresh private directory outside the checkout for `OUT`. The control never starts a model, voter, or verifier:
+
+```bash
+python -m examples.seatlab.committee.prefix_probe \
+  --map 0 --task "$TASK" --harbor "$HARBOR" --out "$OUT"
+```
+
+An accepted result includes 4 seats and 2 matching event digests. Only a new native trial that submits votes can produce a new verifier reward.
+
+The [6 free controls](results/committee-prefix-controls.json) matched all 196 source events across 24 seat receipts. All 24 `masked` user texts matched the original model-request commitments. `shown` preserved the 6 chair texts and changed only the recommendation line for the other 18 seats. A matching hash establishes the submitted bytes, not the model's attention.
+
 ### Voting follow-up: does computing totals before choosing help?
 
 **Registered before the first follow-up call.** The previous teams supplied all 4 private facts in 11 trials without a single winning majority. This study changes the voting interface, not the sender instruction. No tool computes the totals for the model, chooses its vote, repairs arithmetic, or changes the native verifier.
