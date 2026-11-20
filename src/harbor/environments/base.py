@@ -147,6 +147,7 @@ class BaseEnvironment(ABC):
 
     options_model: ClassVar[type[EnvironmentOptions] | None] = None
     options: EnvironmentOptions | None
+    _supports_image_command: ClassVar[bool] = False
 
     @classmethod
     def parse_options(
@@ -261,6 +262,14 @@ class BaseEnvironment(ABC):
             enable_environment_dir_upload: Upload loose environment files after startup.
                 Disabled for dedicated verifier images, which own their tests.
         """
+        if task_env_config.use_image_command and not self._supports_image_command:
+            environment_type = self.type()
+            reference = getattr(environment_type, "value", environment_type)
+            raise ValueError(
+                f"Task sets [environment].use_image_command = true, but the "
+                f"'{reference}' environment does not support it. Use Docker Compose, "
+                "or disable the option and set a Compose command if supported."
+            )
         if not hasattr(self, "options"):
             self.options = type(self).parse_options(
                 {"auto_mounting": auto_mounting, **kwargs}

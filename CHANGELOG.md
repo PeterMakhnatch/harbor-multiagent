@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Main image startup:** Set `[environment].use_image_command = true` to use `main`'s image `CMD` with Docker Compose (`docker` or `kata`). An explicit Compose command still wins. Other environments reject the option.
+
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.
 
 - **Global Rollouts viewer:** Browse rollouts across jobs with server-side status, error, and metadata filters, backed by global rollout listing and filter APIs.

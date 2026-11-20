@@ -13,6 +13,7 @@ EGRESS_CONTROL_SIDECAR_CONTEXT_PATH = (
     COMPOSE_DIR / "harbor-docker-egress-control-sidecar"
 )
 COMPOSE_WINDOWS_KEEPALIVE_PATH = COMPOSE_DIR / "docker-compose-windows-keepalive.yaml"
+COMPOSE_IMAGE_COMMAND_PATH = COMPOSE_DIR / "docker-compose-image-command.yaml"
 RESOURCES_COMPOSE_NAME = "docker-compose-resources.json"
 ENV_COMPOSE_NAME = "docker-compose-environment.json"
 

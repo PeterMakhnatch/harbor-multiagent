@@ -14,11 +14,17 @@ import pytest
 
 from harbor.environments.base import ExecResult
 from harbor.environments.docker import (
+    COMPOSE_IMAGE_COMMAND_PATH,
     RESOURCES_COMPOSE_NAME,
     write_resources_compose_file,
 )
 from harbor.environments.docker.docker import DockerEnvironment
-from harbor.models.task.config import EnvironmentConfig, NetworkMode, NetworkPolicy
+from harbor.models.task.config import (
+    EnvironmentConfig,
+    NetworkMode,
+    NetworkPolicy,
+    TaskConfig,
+)
 from harbor.models.trial.config import ResourceMode
 from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 
@@ -2226,6 +2232,83 @@ class TestValidateImageOS:
             await env._validate_image_os("missing-image:latest")  # no raise
 
 
+@pytest.mark.runtime
+@pytest.mark.parametrize("prebuilt", [False, True], ids=["build", "prebuilt"])
+@pytest.mark.parametrize(
+    ("use_image_command", "compose_command", "expected_command"),
+    [
+        pytest.param(True, None, None, id="image-command"),
+        pytest.param(False, None, ["sh", "-c", "sleep infinity"], id="keepalive"),
+        pytest.param(
+            True,
+            '["python3", "/world.py"]',
+            ["python3", "/world.py"],
+            id="explicit-compose-command",
+        ),
+    ],
+)
+async def test_effective_compose_main_command(
+    tmp_path: Path,
+    prebuilt: bool,
+    use_image_command: bool,
+    compose_command: str | None,
+    expected_command: list[str] | None,
+):
+    env_dir = tmp_path / "environment"
+    env_dir.mkdir()
+    task_toml = "[environment]\n"
+    if prebuilt:
+        task_toml += 'docker_image = "world:latest"\n'
+    else:
+        (env_dir / "Dockerfile").write_text(
+            'FROM python:3.12-slim\nCMD ["python3", "-m", "http.server"]\n'
+        )
+    task_compose = (
+        "services:\n"
+        "  main:\n"
+        "    healthcheck:\n"
+        '      test: ["CMD", "python3", "/ready.py"]\n'
+    )
+    if use_image_command:
+        task_toml += "use_image_command = true\n"
+    if compose_command is not None:
+        task_compose += f"    command: {compose_command}\n"
+    task_compose += (
+        "  player:\n"
+        "    image: ubuntu:22.04\n"
+        '    command: ["sleep", "infinity"]\n'
+        "    depends_on:\n"
+        "      main:\n"
+        "        condition: service_healthy\n"
+    )
+    (env_dir / "docker-compose.yaml").write_text(task_compose)
+
+    env = DockerEnvironment(
+        environment_dir=env_dir,
+        environment_name="test-task",
+        session_id="test-task__abc123",
+        trial_paths=TrialPaths(trial_dir=tmp_path / "trial"),
+        task_env_config=TaskConfig.model_validate_toml(task_toml).environment,
+    )
+    env._use_prebuilt = prebuilt
+
+    # Needs Docker Compose, but `config` does not need a daemon or image pull.
+    result = await env._run_docker_compose_command(
+        ["config", "--format", "json"], timeout_sec=10
+    )
+    assert result.stdout is not None
+    services = json.loads(result.stdout)["services"]
+    main = services["main"]
+    if prebuilt:
+        assert main["image"] == "world:latest"
+    else:
+        assert Path(main["build"]["context"]) == env_dir.resolve()
+    assert main.get("command") == expected_command
+    assert main["healthcheck"]["test"] == ["CMD", "python3", "/ready.py"]
+    assert services["player"]["command"] == ["sleep", "infinity"]
+    assert services["player"]["depends_on"]["main"]["condition"] == "service_healthy"
+
+
 class TestDockerComposePaths:
     """Tests for _docker_compose_paths ordering."""
 
@@ -2236,6 +2319,7 @@ class TestDockerComposePaths:
         task_os,
         with_task_compose,
         network_mode=NetworkMode.PUBLIC,
+        use_image_command: bool = False,
         extra_docker_compose: list[Path] | None = None,
     ):
         from harbor.models.task.config import TaskOS
@@ -2261,6 +2345,7 @@ class TestDockerComposePaths:
                 trial_paths=trial_paths,
                 task_env_config=EnvironmentConfig(
                     docker_image="ubuntu:22.04",
+                    use_image_command=use_image_command,
                     os=TaskOS(task_os),
                 ),
                 network_policy=NetworkPolicy(network_mode=network_mode),
@@ -2423,6 +2508,23 @@ class TestDockerComposePaths:
         keepalive_idx = paths.index(env._DOCKER_COMPOSE_WINDOWS_KEEPALIVE_PATH)
         task_compose_idx = paths.index(env._environment_docker_compose_path)
         assert keepalive_idx < task_compose_idx
+
+    @pytest.mark.parametrize("task_os", ["linux", "windows"])
+    def test_image_command_overlay_after_keepalive_before_task(self, temp_dir, task_os):
+        env = self._make_env(
+            temp_dir,
+            task_os=task_os,
+            with_task_compose=True,
+            use_image_command=True,
+        )
+        paths = env._docker_compose_paths
+        expected = [env._DOCKER_COMPOSE_BUILD_PATH]
+        if task_os == "windows":
+            expected.append(env._DOCKER_COMPOSE_WINDOWS_KEEPALIVE_PATH)
+        expected.extend(
+            [COMPOSE_IMAGE_COMMAND_PATH, env._environment_docker_compose_path]
+        )
+        assert paths == expected
 
 
 class TestResourcesComposeFile:
