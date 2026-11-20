@@ -39,10 +39,47 @@ def load_family(path: Path) -> Any:
     return module
 
 
+def score_game_task(task: dict[str, Any], game: Any) -> None:
+    """A game task (`"mode": "rounds"`, docs/COMMONS.md): score the world's round log with the game's
+    `score_game`. A season the world did not finish is scored as played (`truncated`)."""
+    try:
+        call("POST", "/admin/freeze")
+        state = call("GET", "/admin/state")
+        error = None
+    except OSError as exc:  # the world died: score no round
+        state, error = {"game": {"log": []}, "messages": []}, f"world unreachable: {type(exc).__name__}"
+    log = (state.get("game") or {}).get("log") or []
+    try:
+        result = game.score_game(task["game"], log)
+    except Exception as exc:  # noqa: BLE001 - a log the scorer cannot read earns nothing; the error is kept
+        result, error = {"reward": 0.0}, f"scorer failed: {type(exc).__name__}: {exc}"[:500]
+    reward = float(result["reward"])
+    if not 0.0 <= reward <= 1.0:
+        raise ValueError(f"game scorer returned {reward}, outside [0, 1]")
+    (VERIFIER / "reward.json").write_text(json.dumps({"reward": reward}) + "\n")
+    summary = {
+        "family": task["family"],
+        "mode": "rounds",
+        "instance": task.get("instance"),
+        "condition": task.get("condition"),
+        "seats": task.get("seats"),
+        "world_version": task.get("world_version", 4),
+        "n_messages": len(state.get("messages") or []),
+        "error": error,
+        **result,
+    }
+    (VERIFIER / "score.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (VERIFIER / "world-state.json").write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(summary, sort_keys=True))
+
+
 def main() -> None:
     VERIFIER.mkdir(parents=True, exist_ok=True)
     task = json.loads((WORLD_DIR / "task.json").read_text())
     family = load_family(WORLD_DIR / "family.py")
+    if task.get("mode") == "rounds":
+        score_game_task(task, family)
+        return
     try:
         call("POST", "/admin/freeze")
         state = call("GET", "/admin/state")

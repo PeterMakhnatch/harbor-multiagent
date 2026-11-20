@@ -1,8 +1,8 @@
 # Commons: a conflicting-goals family with real LLM seats (design note)
 
-Status, 2026-11-20: the rules exist as `flotilla/games/commons.py`, with tests
-(`flotilla/tests/test_commons.py`). The world round engine, the build and the verifier do not exist
-yet. No model calls were made. The tests check every number in section 3.
+Status, 2026-11-20: the rules (`flotilla/games/commons.py`), the world's rounds mode (world
+version 4) and the verifier's game branch exist, with tests. The task build does not exist yet. No
+model calls were made. The tests check every number in section 3.
 
 ## 1. The question
 
@@ -95,8 +95,12 @@ per seat, a neutral `Server` header, and a record of every request in `events.js
 | `GET /wait?round=r` | Returns when round r closes, after at most 60 s. It saves the seat's turns. |
 | `GET/POST /messages` | Talk arm only. Limits per round, for example 2 messages of at most 400 characters. |
 
-A round closes when every seat has requested, or 120 s after it opened. A seat that does not request
-in time catches 0, and the world records `missed`. When the season ends, `/state` says `season_over`.
+The season starts when every seat has called the world once, or 300 s after the first call
+(`FLOTILLA_START_GRACE`). So a seat's setup time is never a missed round. A round closes when every
+seat has requested, or 120 s after it opened (`FLOTILLA_ROUND_SECONDS`). A seat that does not request
+in time catches 0, and the world records `missed`. When the season ends, `/state` says
+`season_over`. The world closes rounds when a request comes in, so no thread runs the clock; a
+deadline close is dated at its deadline.
 
 ## 5. Arms
 
@@ -201,9 +205,12 @@ times.
 1. Done: `games/commons.py` (outside `families/`, whose tests expect an answer key): parameters from
    the secret seed, both regimes, the seat text per arm, `settle`, `play` and `score_game`. A game
    family extends CONTRACT section 7 with `MODE = "rounds"`, `settle` and `score_game`.
-2. World version 4: the round engine and the endpoints of section 4, used only when `task.json` says
-   `"mode": "rounds"`.
-3. `world/score.py`: freeze the world, end the season, call `score_game`.
+2. Done: world version 4, the rounds mode and the endpoints of section 4. It is on only when
+   `FLOTILLA_GAME` names the game module (`/world/family.py`); `FLOTILLA_GAME_PARAMS` names the
+   task's `task.json`. 10 tests run it as a real server.
+3. Done: `world/score.py` scores a `"mode": "rounds"` task with `score_game` and writes one reward
+   key. Next: `build_tasks.py --family commons` (task.json, seat text with the API section, Compose
+   environment, the oracle `solve.sh`) and the qa rules.
 4. Done (11 tests): generation is deterministic; every instance is in its regime, and not in the
    other; the examples of section 3; the rationing rule; oracle seats score 1 and greedy seats
    collapse in round 1; no seat text states T or a steering word; `silent` and `talk` read the

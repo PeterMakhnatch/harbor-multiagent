@@ -9,6 +9,7 @@ Standard library only. See flotilla/CONTRACT.md, sections 3 to 5.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import threading
@@ -17,6 +18,7 @@ from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 # Version 2: no reply to a seat names the condition (in version 1 /whoami did, and a seat read
 # "talk-liar" as a warning); the submit reply no longer carries the submission count `n` (a seat in
@@ -25,7 +27,10 @@ from typing import Any
 # Version 3: no reply names the software or its version (versions 1 and 2 sent the header
 # `Server: flotilla-world/<version>`, and seats searched the file system and pip for that name; the
 # source and its generator are public). The version is only in the start event and /admin/state.
-WORLD_VERSION = 3
+# Version 4: an optional rounds mode for game families (games/<game>.py, docs/COMMONS.md), on only when
+# FLOTILLA_GAME names the game module. It adds /state, /harvest and /wait and drops /submit; the
+# answer-slot families do not change.
+WORLD_VERSION = 4
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -50,6 +55,30 @@ ROUTES = {  # path -> methods
     "/admin/freeze": ("POST",),
 }
 LOCAL_CLIENTS = ("127.0.0.1", "::1")  # the Compose health check runs inside `main`
+GAME_PATH = os.environ.get("FLOTILLA_GAME", "")  # a game module; empty: the answer-slot world
+GAME_PARAMS_PATH = os.environ.get("FLOTILLA_GAME_PARAMS", "")  # its parameters, secrets included (never a seat's)
+ROUND_SECONDS = float(os.environ.get("FLOTILLA_ROUND_SECONDS") or 120)
+WAIT_SECONDS = float(os.environ.get("FLOTILLA_WAIT_SECONDS") or 60)
+START_GRACE = float(os.environ.get("FLOTILLA_START_GRACE") or 300)  # the season starts without a seat that never calls
+MAX_MESSAGES_PER_ROUND = int(os.environ.get("FLOTILLA_MAX_MESSAGES_PER_ROUND") or 0)  # 0: no limit per round
+
+
+def _load_game() -> tuple[Any, dict[str, Any]]:
+    if not GAME_PATH:
+        return None, {}
+    spec = importlib.util.spec_from_file_location("flotilla_game", GAME_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load the game {GAME_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    data = json.loads(Path(GAME_PARAMS_PATH).read_text())
+    return module, data.get("game", data)  # the task's task.json (its "game" key) or the parameters alone
+
+
+GAME, PARAMS = _load_game()
+if GAME is not None:
+    ROUTES = {path: methods for path, methods in ROUTES.items() if path != "/submit"} | {
+        "/state": ("GET",), "/harvest": ("POST",), "/wait": ("GET",)}
 
 START = time.monotonic()
 LOCK = threading.Lock()
@@ -59,6 +88,11 @@ STATE: dict[str, Any] = {
     "frozen": False,
     "sent": {seat: 0 for seat in SEATS},
 }
+if GAME is not None:
+    STATE["game"] = {
+        "round": 1, "stock": PARAMS["capacity"], "opened": None, "requests": {}, "log": [], "over": False,
+        "seen": [], "first_seen": None, "sent_round": {},
+    }
 _SEQ = [0]
 
 
@@ -82,6 +116,60 @@ def whoami(seat: str) -> dict[str, Any]:
     """What a seat may know about the run. Never the condition's name: it would tell a seat, for
     example, that one of its teammates lies."""
     return {"seat": seat, "seats": SEATS, "messaging": MESSAGING, "limits": limits()}
+
+
+def tick() -> None:
+    """Start the season when every seat has called once (or START_GRACE after the first call), and close
+    every round whose time is up. Lazy: each request calls it, so no thread runs the clock. Callers hold LOCK."""
+    game = STATE["game"]
+    if STATE["frozen"] or game["over"]:
+        return
+    t = now()
+    if game["opened"] is None:
+        first, everyone = game["first_seen"], len(game["seen"]) == len(SEATS)
+        if first is None or (not everyone and t < first + START_GRACE):
+            return
+        game["opened"] = t if everyone else first + START_GRACE
+        record("open", None, {"round": game["round"], "stock": game["stock"]})
+    while not game["over"] and t >= game["opened"] + ROUND_SECONDS:
+        close_round(game["opened"] + ROUND_SECONDS)
+
+
+def close_round(at: float) -> None:
+    """Settle the open round; a seat that did not request catches 0 and is `missed`. Callers hold LOCK."""
+    game = STATE["game"]
+    requests = {seat: game["requests"].get(seat, 0) for seat in SEATS}
+    missed = [seat for seat in SEATS if seat not in game["requests"]]
+    result = GAME.settle(game["stock"], requests, PARAMS)
+    game["log"].append({"round": game["round"], "missed": missed, "opened": game["opened"], "closed": round(at, 3),
+                        **result})
+    record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"]})
+    if result["collapsed"] or game["round"] >= PARAMS["rounds"]:
+        game["over"] = True
+        record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
+    else:
+        game["round"], game["stock"], game["requests"], game["opened"] = (
+            game["round"] + 1, result["next_stock"], {}, round(at, 3))
+        record("open", None, {"round": game["round"], "stock": game["stock"]})
+
+
+def game_view(seat: str) -> dict[str, Any]:
+    """What a seat may know: never the season length, never how many seats requested in the open round.
+    Callers hold LOCK."""
+    game = STATE["game"]
+    started, over = game["opened"] is not None, game["over"]
+    last = game["log"][-1] if game["log"] else None
+    return {
+        "season_started": started,
+        "season_over": over,
+        "round": game["round"] if started and not over else None,
+        "stock": (last["next_stock"] if last else game["stock"]) if over else game["stock"],
+        "closes_in": round(max(0.0, game["opened"] + ROUND_SECONDS - now()), 1) if started and not over else None,
+        "you_requested": seat in game["requests"],
+        "your_total": sum(entry["catch"].get(seat, 0) for entry in game["log"]),
+        "closed_rounds": [{key: entry[key] for key in ("round", "stock", "requests", "catch", "missed", "remaining",
+                                                       "collapsed")} for entry in game["log"]],
+    }
 
 
 def _no_constants(name: str) -> Any:
@@ -178,6 +266,13 @@ class World(BaseHTTPRequestHandler):
         seat = self._authorize()
         if seat is None:
             return
+        if GAME is not None and seat != "admin":
+            with LOCK:
+                game = STATE["game"]
+                if seat not in game["seen"]:
+                    game["seen"].append(seat)
+                    game["first_seen"] = now() if game["first_seen"] is None else game["first_seen"]
+                tick()
         methods = ROUTES.get(path)
         if methods is None or (path.startswith("/admin/") and seat != "admin"):
             self._probe(seat, method, path, 404)
@@ -192,6 +287,14 @@ class World(BaseHTTPRequestHandler):
                 self._reply(200, whoami(seat))
             elif path == "/messages":
                 self._get_messages(seat)
+            elif path == "/state":
+                with LOCK:
+                    tick()
+                    record("look", seat, {"round": STATE["game"]["round"]})
+                    view = game_view(seat)
+                self._reply(200, view)
+            elif path == "/wait":
+                self._wait(seat)
             else:  # /admin/state
                 with LOCK:
                     record("state", seat)
@@ -205,6 +308,8 @@ class World(BaseHTTPRequestHandler):
             self._send(seat, body)
         elif path == "/submit":
             self._submit(seat, body)
+        elif path == "/harvest":
+            self._harvest(seat, body)
         else:  # /admin/freeze
             with LOCK:
                 STATE["frozen"] = True
@@ -235,6 +340,14 @@ class World(BaseHTTPRequestHandler):
                           f"messages are limited to {MAX_TEXT} characters")
             return
         with LOCK:
+            if GAME is not None and MAX_MESSAGES_PER_ROUND:
+                tick()
+                key = f"{seat}:{STATE['game']['round']}"
+                if STATE["game"]["sent_round"].get(key, 0) >= MAX_MESSAGES_PER_ROUND:
+                    record("denied", seat, {"path": "/messages", "reason": "message limit per round"})
+                    self._reply(429, {"error": f"limit of {MAX_MESSAGES_PER_ROUND} messages per round reached"})
+                    return
+                STATE["game"]["sent_round"][key] = STATE["game"]["sent_round"].get(key, 0) + 1
             if STATE["sent"].get(seat, 0) >= MAX_MESSAGES_PER_SEAT:
                 record("denied", seat, {"path": "/messages", "reason": "message limit"})
                 self._reply(429, {"error": f"limit of {MAX_MESSAGES_PER_SEAT} messages per seat reached"})
@@ -276,6 +389,53 @@ class World(BaseHTTPRequestHandler):
         self._reply(200, {"accepted": True})
 
 
+    def _harvest(self, seat: str, body: dict[str, Any]) -> None:
+        amount = body.get("amount")
+        if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 10**6:
+            self._invalid(seat, "POST", "/harvest", 400, "bad amount", 'send {"amount": <a whole number, 0 or more>}')
+            return
+        with LOCK:
+            tick()
+            game = STATE["game"]
+            if STATE["frozen"] or game["over"]:
+                record("late", seat, {"amount": amount})
+                self._reply(409, {"error": "the season is over"})
+                return
+            if game["opened"] is None:
+                record("early", seat, {"amount": amount})
+                self._reply(409, {"error": "the season has not started; it starts when every fisher has called once"})
+                return
+            if seat in game["requests"]:
+                record("repeat", seat, {"round": game["round"], "amount": amount})
+                self._reply(409, {"error": "you already requested in this round"})
+                return
+            game["requests"][seat] = amount
+            number = game["round"]
+            record("request", seat, {"round": number, "amount": amount})
+            if len(game["requests"]) == len(SEATS):
+                close_round(now())
+        # The reply must not say how many seats have requested: in `silent` that count is a channel.
+        self._reply(201, {"round": number, "amount": amount})
+
+    def _wait(self, seat: str) -> None:
+        query = parse_qs(urlsplit(self.path).query).get("round", [""])[0]
+        if not query.isdigit():
+            self._invalid(seat, "GET", "/wait", 400, "bad round", "send /wait?round=<the round number>")
+            return
+        number, deadline = int(query), time.monotonic() + WAIT_SECONDS
+        while True:
+            with LOCK:
+                tick()
+                game = STATE["game"]
+                closed = game["over"] or (game["opened"] is not None and game["round"] > number)
+                if closed or time.monotonic() >= deadline:
+                    record("wait", seat, {"round": number, "closed": closed})
+                    view = game_view(seat)
+                    break
+            time.sleep(0.1)
+        self._reply(200, view)
+
+
 def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
     """Bind the server, open the logs and record the start event; the caller runs serve_forever()."""
     server = ThreadingHTTPServer((host, port), World)
@@ -284,7 +444,9 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
         (LOGS / name).touch()
     with LOCK:
         record("start", None, {"condition": CONDITION, "seats": SEATS, "world_version": WORLD_VERSION,
-                               "limits": limits()})
+                               "limits": limits()} | ({"game": PARAMS.get("family"), "round_seconds": ROUND_SECONDS,
+                                                      "max_messages_per_round": MAX_MESSAGES_PER_ROUND}
+                                                     if GAME is not None else {}))
     return server
 
 

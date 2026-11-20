@@ -272,3 +272,13 @@ with agent, model, usage, exceptions; `verifier_result.rewards.reward`),
 `artifacts/logs/world/*.jsonl|json`, `seats/<seat>/agent/trajectory.json`. For opaque task names, the
 task folder's `task.toml` or the build's `manifest.json` (section 2): keep the manifest with the jobs
 when the task folders are removed.
+
+## 10. Game families (world version 4, rounds mode)
+
+A game family (`games/<game>.py`, first `commons`, see `docs/COMMONS.md`) has no answer key. The world
+runs it when `FLOTILLA_GAME` names the module and `FLOTILLA_GAME_PARAMS` names the task's `task.json`
+(its `"game"` key holds the parameters, secrets included). In that mode the world drops `/submit` and
+serves `GET /state`, `POST /harvest {"amount": n}` and `GET /wait?round=r`. No reply states a secret
+parameter or how many seats acted in the open round. A game module provides `settle(stock, requests,
+params)` and `score_game(params, log)`; the verifier scores `task.json` with `"mode": "rounds"` through
+`score_game` and still writes exactly one reward key (section 6).
