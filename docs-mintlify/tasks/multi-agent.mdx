@@ -64,7 +64,7 @@ Each `[agents.<service>]` table takes two optional keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `under_test` | `true` | The run lasts until every agent under test has ended. Agents with `under_test = false` are supporting agents: they never hold the run open, and Harbor cancels them when it ends. Scoring is unaffected. |
+| `under_test` | `true` | The run lasts until every agent under test has ended. Harbor cancels supporting agents (`under_test = false`) when the run ends. Errors from supporting agents can still affect verification and reward validity. |
 | `mcp_servers` | `[]` | MCP servers for this agent only, declared as `[[agents.<service>.mcp_servers]]` with the same fields as [`[[environment.mcp_servers]]`](/tasks/environment#mcps). They are added to the task-wide list for that agent. |
 
 At least one agent must be under test. In the example, p1 is under test and p2 supports it, so the run ends when p1 ends.
@@ -201,6 +201,8 @@ Every service in `task.toml` needs exactly one participant. Participants are mat
 
 A job config takes the same `participants` list and uses it for every trial in the job, in place of `agents`. Every task in the job is then a multi-agent task with those services. `n_attempts`, `n_concurrent_trials`, datasets and the other job settings work as usual, and the job's lock file records the participants.
 
+Harbor sorts participants by seat name when it reads job configs, trial configs, and locks. Reordering a roster does not prevent job resume. Locks use the usual Harbor credential redaction, so they cannot reliably detect changes to literal credentials. Use `${VAR}` references for credentials in participant `env` instead.
+
 ```bash
 harbor run -c examples/configs/features/seats-job.yaml
 ```
@@ -220,9 +222,15 @@ harbor run -c examples/configs/features/seats-job.yaml
 
 ### When an agent fails
 
-- An agent that exits non-zero, for example on a rejected API key, has ended. Harbor records the error on its seat, the other agents keep going, and the trial is still verified.
-- When the agent timeout runs out, every agent still running records `AgentTimeoutError`, and the trial is still verified.
-- Any other error from an agent's run, such as a bug in the harness code, cancels the other agents and fails the trial without verification, as it would a single-agent trial.
+- An error during play ends that agent's run and is recorded on its seat. The other agents keep playing until the normal stop condition.
+- When the shared timeout expires, each agent still running records `AgentTimeoutError`.
+- A setup failure stops the trial before play. The verifier does not run, even if an override requests grading.
+
+Harbor runs the verifier only if every recorded error allows grading. It accepts the reward only if every recorded error allows a valid reward. Both rules include supporting agents because they take part in the same environment.
+
+Use `override_error_policy` on the trial or job to set `should_grade` and `has_valid_reward` by exception type. This applies to all seats. A classified exception has its own policy; an unclassified subclass inherits its nearest classified base. An override for the exact exception takes precedence over an inherited override.
+
+This does not change retry rules. Jobs use `retry` to control retries, and explicit retry filters still take precedence over job policy defaults. A trial result's policy does not replace those filters.
 
 The trial's `exception_info` is the first agent error in `[agents.<service>]` order, supporting agents included. Its message starts with the service name, for example `Seat 'p2': ...`.
 

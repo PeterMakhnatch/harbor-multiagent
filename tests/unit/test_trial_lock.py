@@ -3,8 +3,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
+import pytest
+from pydantic import ValidationError
+
 import harbor.models.job.lock as lock_models
-from harbor.models.trial.config import TaskConfig, TrialConfig
+from harbor.models.trial.config import Participant, TaskConfig, TrialConfig
 from harbor.models.trial.paths import TrialPaths
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.single_step import SingleStepTrial
@@ -134,6 +137,64 @@ def test_job_lock_equality_catches_mode_flips():
     assert job_lock("shared") == job_lock("shared")
     assert job_lock(None) != job_lock("separate")
     assert job_lock("shared") != job_lock("separate")
+
+
+def test_trial_and_job_lock_compare_participants_by_seat():
+    from harbor.models.job.config import RetryConfig
+
+    maya = Participant(
+        seat="maya", name="oracle", model_name="test-a", kwargs={"path": Path("out")}
+    )
+    raj = Participant(seat="raj", name="nop", model_name="test-b")
+
+    def lock(*participants):
+        data = _trial_lock_with_mode("shared").model_dump()
+        return lock_models.TrialLock.model_validate(
+            data | {"participants": participants}
+        )
+
+    trial = lock(maya, raj)
+    job = lock_models.JobLock(
+        n_concurrent_trials=1, retry=RetryConfig(), trials=[trial]
+    )
+    reordered = lock(raj, maya)
+    reordered_job = job.model_copy(update={"trials": [reordered]})
+
+    assert trial == reordered
+    assert job == reordered_job
+    payload = reordered_job.model_dump(mode="json")
+    payload["trials"][0]["participants"].reverse()  # Legacy file order.
+    restored = lock_models.JobLock.model_validate_json(json.dumps(payload))
+    assert [p.seat for p in restored.trials[0].participants] == ["maya", "raj"]
+    assert restored == job
+
+    for changed in (
+        maya.model_copy(update={"seat": "lee"}),
+        maya.model_copy(update={"name": "nop"}),
+        maya.model_copy(update={"model_name": "test-b"}),
+        maya.model_copy(update={"kwargs": {"path": Path("other")}}),
+        maya.model_copy(update={"env": {"FOO": "bar"}}),
+        maya.model_copy(update={"override_setup_timeout_sec": 5}),
+        maya.model_copy(update={"name": None, "import_path": "x:Y"}),
+    ):
+        changed_trial = lock(raj, changed)
+        assert trial != changed_trial
+        assert job != job.model_copy(update={"trials": [changed_trial]})
+    assert trial != lock(
+        maya.model_copy(update={"model_name": raj.model_name}),
+        raj.model_copy(update={"model_name": maya.model_name}),
+    )
+
+
+def test_trial_lock_rejects_duplicate_participants_on_disk():
+    payload = _trial_lock_with_mode("shared").model_dump(mode="json")
+    payload["participants"] = [
+        {"seat": "maya", "name": "nop"},
+        {"seat": "maya", "name": "oracle"},
+    ]
+
+    with pytest.raises(ValidationError, match=r"Seats \['maya'\] have more than one"):
+        lock_models.TrialLock.model_validate_json(json.dumps(payload))
 
 
 def _task_lock(digest_char="1"):

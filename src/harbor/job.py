@@ -55,6 +55,7 @@ from harbor.tasks.client import TaskClient, TaskDownloadResult, TaskIdType
 from harbor.telemetry import capture_job_finished_async, record_command_job_id
 from harbor.trial.hooks import HookCallback, TrialEvent, TrialHookEvent
 from harbor.trial.queue import TrialQueue
+from harbor.utils.env import is_env_template, is_sensitive_env_key
 from harbor.utils.logger import logger
 from harbor.utils.pass_at_k import compute_pass_at_k_by_evals
 
@@ -299,6 +300,18 @@ class Job:
 
         if not self._job_config_path.exists():
             return
+
+        if any(
+            value
+            and not is_env_template(value)
+            and (key == participant.model_api_key_name or is_sensitive_env_key(key))
+            for participant in self.config.participants
+            for key, value in participant.env.items()
+        ):
+            logger.warning(
+                "Cannot reliably compare literal participant credentials on resume. "
+                "Use ${VAR} references for credentials in participant env."
+            )
 
         existing_config = JobConfig.model_validate_json(
             self._job_config_path.read_text()

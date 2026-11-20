@@ -28,6 +28,7 @@ from harbor.models.trial.config import (
     TrialConfig,
     UserAgentConfig,
     VerifierConfig,
+    validate_participants,
 )
 from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.publisher.packager import Packager
@@ -202,6 +203,11 @@ class TrialLock(BaseModel):
     override_error_policy: dict[str, ErrorPolicyOverride] = Field(default_factory=dict)
     source_trial: SourceTrialLock | None = None
 
+    @field_validator("participants")
+    @classmethod
+    def _validate_participants(cls, value: list[Participant]) -> list[Participant]:
+        return validate_participants(value)
+
     @override
     def __eq__(self, other):
         if not isinstance(other, TrialLock):
@@ -220,7 +226,10 @@ class TrialLock(BaseModel):
             self.environment_build_timeout_multiplier,
             _lock_list_equality_key(self.extra_instructions),
             _frozen_value(self.agent, exclude={"skills"}),
-            tuple(_frozen_value(participant) for participant in self.participants),
+            tuple(
+                _frozen_value(participant.model_dump(mode="json", exclude_none=True))
+                for participant in self.participants
+            ),
             _user_agent_equality_key(
                 self.user_agent, bridge_input_names=set(self.bridge_inputs)
             ),
