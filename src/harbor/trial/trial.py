@@ -190,7 +190,7 @@ class Trial(ABC):
         self._effective_skills_dir = self._resolve_effective_skills_dir()
 
         self._hooks: dict[TrialEvent, list[TrialHookCallback]] = {
-            event: [] for event in TrialEvent
+            event: [self._journal_event] for event in TrialEvent
         }
 
         self._are_agent_logs_downloaded = False
@@ -571,6 +571,11 @@ class Trial(ABC):
             ),
             download_result,
         )
+
+    async def _journal_event(self, hook_event: TrialHookEvent) -> None:
+        with (self.paths.trial_dir / "trial-events.jsonl").open("a") as events:
+            events.write(hook_event.model_dump_json(include={"event", "timestamp"}))
+            events.write("\n")
 
     def add_hook(self, event: TrialEvent, hook: TrialHookCallback) -> None:
         self._hooks[event].append(hook)

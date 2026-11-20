@@ -724,6 +724,30 @@ async def test_a_cancelled_trial_writes_the_usage_collected_so_far(tmp_path: Pat
     assert written.compute_token_cost_totals()[3] == 0.5
 
 
+async def test_lifecycle_events_are_journaled_in_the_trial_dir(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+
+    await trial.run()
+
+    lines = (trial.paths.trial_dir / "trial-events.jsonl").read_text().splitlines()
+    events = [json.loads(line)["event"] for line in lines]
+    assert events == [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end",
+    ]
+
+
 async def test_result_json_records_every_seat(tmp_path: Path):
     trial = await _seats_trial(
         _config(
@@ -813,3 +837,33 @@ def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
         f"  lee: {AGENT}",
     ]
 
+
+def test_trial_start_preflights_every_participant(tmp_path: Path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from harbor.agents.factory import AgentFactory
+    from harbor.cli.main import app
+
+    preflighted: list[AgentConfig] = []
+    monkeypatch.setattr(
+        AgentFactory,
+        "run_preflight",
+        classmethod(lambda cls, config, **_: preflighted.append(config)),
+    )
+    monkeypatch.setattr(SeatsTrial, "run", AsyncMock(side_effect=RuntimeError("ran")))
+    launch = _config(
+        _task_dir(tmp_path),
+        _participant("maya"),
+        _participant("raj"),
+        _participant("lee"),
+    )
+    config_path = tmp_path / "launch.json"
+    config_path.write_text(launch.model_dump_json())
+
+    CliRunner().invoke(app, ["trial", "start", "--config", str(config_path)])
+
+    assert [getattr(config, "seat", None) for config in preflighted] == [
+        "maya",
+        "raj",
+        "lee",
+    ]
