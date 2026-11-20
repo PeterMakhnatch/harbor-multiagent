@@ -54,8 +54,10 @@ to explicitly recorded filters still prevent regrading.
 
 ## Regrade a multi-agent trial
 
-Run the original task in shared mode. Record any required live state as declared
-artifacts before the trial ends. Then edit the task for regrade:
+Run the original task in shared mode. If verification needs live state, export
+it to a declared artifact before the original verifier starts. Do not use the
+final contents of a writable artifact mount as a pre-verification snapshot.
+Then edit the task for regrade:
 
 ```toml
 [verifier]
@@ -63,18 +65,32 @@ environment_mode = "separate"
 regrade_from_seat_record = true
 ```
 
-Use a verifier that grades from `/logs/seats` and `/logs/artifacts`. Regrade
-starts fresh services. It does not restore files, containers, networks, or
-volumes from the original environment. For example, a verifier cannot query
-the original session from a database service. Collect a dump during the
-original run and grade the dump instead.
+Regrade starts fresh services. It does not restore the original live
+environment. Harbor provides the verifier with these recorded files:
+
+- Seat logs at `/logs/seats`.
+- Files collected from the artifact mount at `/logs/artifacts`.
+- Declared artifacts at their original `source` paths in the verifier
+  environment. These paths contain copies of the recorded files, not live state.
+
+For example, the verifier cannot query the original session from a database
+service. Collect a dump during the original run and grade the dump instead.
+
+The opt-in is your confirmation that the verifier grades recorded files.
+Harbor does not check whether the verifier uses state from the new services.
 
 The regrade task must keep the same seats and `under_test` flags. The source
-must contain matching participants, `seat_results`, and a `seats/<seat>/agent/`
-directory for every seat. Harbor refuses a source that records a failed log
-download for any seat. Absent or null download status makes no completeness
-claim. Seat logs have no integrity manifest. Harbor cannot prove that every
-log was collected or detect changes to log contents.
+must contain matching participants and `seat_results` in `result.json`, and a
+`seats/<seat>/agent/` directory for every seat. The regrade participants and
+any participant roster in source `config.json` or `lock.json` must agree with
+`result.json`. Harbor compares participant settings as stored in JSON, not by
+roster order. A missing file or an omitted roster is allowed for older
+records. An unreadable file or an invalid roster prevents regrade.
+
+Harbor refuses a source that records a failed log download for any seat.
+Absent or null download status makes no completeness claim. Seat logs have no
+integrity manifest. Harbor cannot prove that every log was collected or detect
+changes to log contents.
 
 Harbor warns when the task checksum or available lock digest changes.
 In `result.json`, `source_task_checksum` identifies the task that ran the agents.

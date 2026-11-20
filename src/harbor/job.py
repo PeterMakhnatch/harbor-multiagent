@@ -586,7 +586,7 @@ class Job:
                         "Skipping trial directory %s because result.json could "
                         "not be parsed: %s",
                         trial_dir,
-                        e,
+                        type(e).__name__,
                     )
                     continue
 
@@ -611,15 +611,16 @@ class Job:
                         trial_paths.config_path.read_text()
                     )
                     source_agent = source_trial_config.agent
-                    source_participants = source_trial_config.participants
+                    if "participants" in source_trial_config.model_fields_set:
+                        source_participants = source_trial_config.participants
                     source_artifacts = source_trial_config.artifacts
-                except (OSError, UnicodeError, ValidationError) as e:
+                except (OSError, UnicodeError, ValidationError):
+                    # A validation error can include agent settings or credentials.
                     logger.warning(
-                        "Could not parse source trial config at %s (%s); "
+                        "Could not parse source trial config at %s; "
                         "using the agent config, participants, and artifacts "
                         "recorded in result.json.",
                         trial_dir,
-                        e,
                     )
 
                 trial_configs.append(

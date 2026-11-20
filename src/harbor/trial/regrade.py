@@ -23,6 +23,7 @@ from typing import Literal, override
 from uuid import UUID
 
 import filelock
+from pydantic import TypeAdapter
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.mcp_headers import resolve_mcp_header_env
@@ -46,7 +47,7 @@ from harbor.models.task.verifier_mode import (
     resolve_task_verifier_mode,
 )
 from harbor.models.trial.artifact_manifest import ArtifactManifestEntry
-from harbor.models.trial.config import AgentConfig, TrialConfig
+from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import (
     ExceptionInfo,
@@ -124,7 +125,7 @@ def check_task_regradable(task_dir: Path) -> str | None:
                 f"Task at {task_dir} resolves to a shared-mode verifier. "
                 "Multi-agent regrade starts fresh services and cannot inspect "
                 "the original live world. Use a separate verifier that grades "
-                "recorded inputs from /logs/seats and /logs/artifacts."
+                "recorded seat logs and artifacts."
             )
         return (
             f"Task at {task_dir} resolves to a shared-mode verifier, which "
@@ -370,7 +371,11 @@ class RegradeTrial(Trial):
         try:
             return self._parse_source_result(path.read_text())
         except Exception as exc:
-            self.logger.debug(f"Could not parse source trial result at {path}: {exc}")
+            self.logger.debug(
+                "Could not parse source trial result at %s (%s)",
+                path,
+                type(exc).__name__,
+            )
             return None
 
     def _parse_source_result(self, text: str) -> TrialResult:
@@ -950,6 +955,7 @@ class SeatsRegradeTrial(RegradeTrial):
     """
 
     _seats_with_incomplete_logs: tuple[str, ...] = ()
+    _participant_roster_adapter = TypeAdapter(list[Participant])
 
     @override
     def _parse_source_result(self, text: str) -> TrialResult:
@@ -991,6 +997,36 @@ class SeatsRegradeTrial(RegradeTrial):
             )
         return seat_result
 
+    def _recorded_participant_rosters(self) -> list[tuple[str, list[Participant]]]:
+        rosters = []
+        for path in (self._source_paths.config_path, self._source_paths.lock_path):
+            try:
+                document = json.loads(path.read_bytes())
+                if not isinstance(document, dict):
+                    raise ValueError("Expected a JSON object.")
+                if "participants" not in document:
+                    continue
+                participants = self._participant_roster_adapter.validate_python(
+                    document["participants"]
+                )
+            except (OSError, ValueError) as exc:
+                if isinstance(exc, FileNotFoundError) and not path.is_symlink():
+                    continue
+                # Validation errors can include agent settings or credentials.
+                raise RegradeError(
+                    f"Source {path.name} has no readable participant record."
+                ) from None
+            rosters.append((f"source {path.name} participants", participants))
+        return rosters
+
+    @staticmethod
+    def _persisted_participant(participant: Participant) -> str:
+        # Compare the persisted form: a Path in agent kwargs becomes a JSON
+        # string. Sorting keys ignores object order without equating true and 1.
+        return json.dumps(
+            participant.model_dump(mode="json", exclude_none=True), sort_keys=True
+        )
+
     @override
     def _validate_regradable(self) -> None:
         source_result = self._validate_source_record()
@@ -1018,8 +1054,15 @@ class SeatsRegradeTrial(RegradeTrial):
             )
 
         expected = sorted(self.task.config.agents)
+        comparison_rosters = [
+            ("regrade participants", self.config.participants),
+            *self._recorded_participant_rosters(),
+        ]
         for label, names in (
-            ("regrade participants", [p.seat for p in self.config.participants]),
+            *(
+                (label, [p.seat for p in participants])
+                for label, participants in comparison_rosters
+            ),
             (
                 "source participants",
                 [p.seat for p in source_result.config.participants],
@@ -1034,14 +1077,19 @@ class SeatsRegradeTrial(RegradeTrial):
                 )
 
         source_participants = {
-            p.seat: p.model_dump() for p in source_result.config.participants
+            p.seat: self._persisted_participant(p)
+            for p in source_result.config.participants
         }
-        for participant in self.config.participants:
-            if participant.model_dump() != source_participants[participant.seat]:
-                raise RegradeError(
-                    f"Participant for seat {participant.seat!r} does not match "
-                    "the recorded participant."
-                )
+        for label, participants in comparison_rosters:
+            for participant in participants:
+                if (
+                    self._persisted_participant(participant)
+                    != source_participants[participant.seat]
+                ):
+                    raise RegradeError(
+                        f"Participant for seat {participant.seat!r} does not match "
+                        f"the recorded participant in result.json ({label})."
+                    )
         for seat_result in source_result.seat_results:
             seat = seat_result.seat
             if seat_result.under_test != self.task.config.agents[seat].under_test:
@@ -1084,13 +1132,16 @@ class SeatsRegradeTrial(RegradeTrial):
         if not self.task.config.verifier.regrade_from_seat_record:
             raise RegradeError(
                 "Multi-agent regrade starts fresh services and does not restore "
-                "the live world. If the verifier grades recorded files from "
-                "/logs/seats and /logs/artifacts, set "
+                "the live world. If the verifier grades recorded seat logs "
+                "from /logs/seats and artifacts from /logs/artifacts or "
+                "declared source paths, set "
                 "[verifier] regrade_from_seat_record = true in task.toml."
             )
         self.logger.warning(
-            "Multi-agent regrade starts fresh services. Only recorded seat logs "
-            "and artifacts are restored; seat logs have no integrity manifest."
+            "Multi-agent regrade starts fresh services; the original live world "
+            "is not restored. Seat logs go to /logs/seats, mounted artifacts to "
+            "/logs/artifacts, and declared artifacts to their source paths. "
+            "Seat logs have no integrity manifest."
         )
 
     @override

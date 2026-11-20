@@ -16,7 +16,7 @@ from harbor.environments.base import ExecResult
 from harbor.job import Job
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig, SourceJobConfig
-from harbor.models.job.lock import TrialLock
+from harbor.models.job.lock import TrialLock, build_trial_lock
 from harbor.models.task.config import MCPServerConfig, VerifierEnvironmentMode
 from harbor.models.task.id import LocalTaskId
 from harbor.models.trial.config import (
@@ -38,6 +38,7 @@ from harbor.models.trial.result import (
     TrialResult,
 )
 from harbor.models.verifier.result import VerifierResult
+from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.regrade import RegradeError, SeatsRegradeTrial
 from harbor.trial.trial import Trial
 from tests.unit.test_regrade import (
@@ -368,9 +369,18 @@ async def test_seat_regrade_rejects_incomplete_or_shared_task(
     assert expected in result.exception_info.exception_message
 
 
-@pytest.mark.parametrize("config_exists", [True, False])
+def _set_source_config_state(config_path: Path, state: str) -> None:
+    if state == "missing":
+        config_path.unlink()
+    elif state == "omitted-participants":
+        config = json.loads(config_path.read_text())
+        config.pop("participants")
+        config_path.write_text(json.dumps(config))
+
+
+@pytest.mark.parametrize("config_state", ["present", "missing", "omitted-participants"])
 async def test_job_regrade_carries_source_participants_and_policy(
-    tmp_path: Path, config_exists: bool
+    tmp_path: Path, config_state: str
 ):
     task_dir = _seat_task(tmp_path)
     source_job = tmp_path / "source-job"
@@ -379,8 +389,7 @@ async def test_job_regrade_carries_source_participants_and_policy(
     source_dir = _write_seat_source(
         source_job, task_dir, override_error_policy=source_policy
     )
-    if not config_exists:
-        TrialPaths(source_dir).config_path.unlink()
+    _set_source_config_state(TrialPaths(source_dir).config_path, config_state)
 
     job = await Job.create(
         JobConfig(
@@ -403,9 +412,9 @@ async def test_job_regrade_carries_source_participants_and_policy(
     )
 
 
-@pytest.mark.parametrize("config_exists", [True, False])
+@pytest.mark.parametrize("config_state", ["present", "missing", "omitted-participants"])
 def test_cli_regrade_carries_source_participants_and_policy(
-    tmp_path: Path, config_exists: bool
+    tmp_path: Path, config_state: str
 ):
     task_dir = _seat_task(tmp_path)
     source_policy = {"AgentTimeoutError": ErrorPolicyOverride(has_valid_reward=False)}
@@ -413,8 +422,7 @@ def test_cli_regrade_carries_source_participants_and_policy(
         tmp_path, task_dir, override_error_policy=source_policy
     )
     source_paths = TrialPaths(source_dir)
-    if not config_exists:
-        source_paths.config_path.unlink()
+    _set_source_config_state(source_paths.config_path, config_state)
     fake_trial = AsyncMock()
     fake_trial.run.return_value = TrialResult.model_validate_json(
         source_paths.result_path.read_text()
@@ -498,6 +506,116 @@ async def test_seat_regrade_refuses_inconsistent_roster_or_record(
     assert result.verifier_result is None
     assert not result.reward_valid
     verifier.assert_not_awaited()
+
+
+async def test_seat_regrade_accepts_nested_path_after_json_round_trip(tmp_path: Path):
+    task_dir = _seat_task(tmp_path)
+    participants = _participants()
+    input_path = task_dir / "instructions" / "maya.md"
+    participants[0].kwargs = {"profile": {"inputs": [input_path]}}
+    source_dir = _write_seat_source(
+        tmp_path, task_dir, participants=participants, include_trial_exception=True
+    )
+    config = _regrade_config(task_dir, source_dir)
+    config.participants = participants
+
+    trial, result, verifier = await _regrade_with_stub_verifier(config)
+
+    verifier.assert_awaited_once()
+    assert result.reward_valid
+    saved = TrialResult.model_validate_json(trial.paths.result_path.read_text())
+    assert saved.config.participants[0].kwargs == {
+        "profile": {"inputs": [str(input_path)]},
+    }
+
+
+@pytest.mark.parametrize(
+    ("source_roster", "expected_error"),
+    [
+        ("omitted", None),
+        ("empty", "Seat roster mismatch"),
+        ("malformed", "has no readable participant record"),
+        ("conflicting", "Participant for seat 'maya'"),
+    ],
+)
+async def test_seat_regrade_checks_source_config_participants(
+    tmp_path: Path, source_roster: str, expected_error: str | None
+):
+    task_dir = _seat_task(tmp_path)
+    source_dir = _write_seat_source(tmp_path, task_dir, include_trial_exception=True)
+    config_path = TrialPaths(source_dir).config_path
+    if source_roster == "malformed":
+        config_path.write_text("{")
+    else:
+        data = json.loads(config_path.read_text())
+        if source_roster == "omitted":
+            data.pop("participants")
+        elif source_roster == "empty":
+            data["participants"] = []
+        else:
+            data["participants"][0]["name"] = "nop"
+        config_path.write_text(json.dumps(data))
+
+    _, result, verifier = await _regrade_with_stub_verifier(
+        _regrade_config(task_dir, source_dir)
+    )
+
+    if expected_error is None:
+        verifier.assert_awaited_once()
+        assert result.reward_valid
+        return
+
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "RegradeError"
+    assert "config.json" in result.exception_info.exception_message
+    assert expected_error in result.exception_info.exception_message
+    assert result.verifier_result is None
+    verifier.assert_not_awaited()
+
+
+@pytest.mark.parametrize("lock_state", ["matching", "conflicting"])
+async def test_seat_regrade_checks_native_source_lock(tmp_path: Path, lock_state: str):
+    task_dir = _seat_task(tmp_path)
+    source_dir = _write_seat_source(tmp_path, task_dir, include_trial_exception=True)
+    paths = TrialPaths(source_dir)
+    source_config = TrialConfig.model_validate_json(paths.config_path.read_text())
+    lock = build_trial_lock(
+        trial_config=source_config,
+        task_download_result=TaskDownloadResult(
+            path=task_dir, download_time_sec=0, cached=False
+        ),
+    )
+    lock_only_value = "fixture-lock-only-profile"
+    if lock_state == "conflicting":
+        lock.participants[0].kwargs["profile"] = lock_only_value
+    paths.lock_path.write_text(lock.model_dump_json(exclude_none=True))
+
+    agent_env = _stock_mock_env()
+    verifier_env = _stock_mock_env()
+    fake_create, _ = _make_factory_recorder(agent_env, verifier_env)
+    with patch(
+        "harbor.trial.trial.EnvironmentFactory.create_environment_from_config",
+        side_effect=fake_create,
+    ):
+        trial = await Trial.create(_regrade_config(task_dir, source_dir))
+        trial.paths.verifier_dir.mkdir(parents=True, exist_ok=True)
+        trial.paths.reward_text_path.write_text("0.75")
+        result = await trial.run()
+
+    agent_env.start.assert_not_awaited()
+    if lock_state == "matching":
+        verifier_env.start.assert_awaited_once()
+        assert result.reward_valid
+        return
+
+    verifier_env.start.assert_not_awaited()
+    verifier_env.exec.assert_not_awaited()
+    assert result.verifier_result is None
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "RegradeError"
+    message = result.exception_info.exception_message
+    assert "lock.json" in message and "'maya'" in message
+    assert lock_only_value not in message
 
 
 @pytest.mark.parametrize("logs_downloaded", [False, True, None])
@@ -685,7 +803,7 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
 
     async def collect_artifact(*, source_dir, target_dir, service):
         assert source_dir == "/logs/artifacts"
-        (target_dir / "snapshot.txt").write_text("recorded world state")
+        (target_dir / "snapshot.txt").write_text("collected artifact")
 
     with (
         patch.object(
@@ -724,6 +842,12 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
             'environment_mode = "separate"\nregrade_from_seat_record = true\n',
         )
     )
+    live_config = recorded.config.model_copy(
+        update={"trial_name": "live-after-mode-change"}
+    )
+    with pytest.raises(ValueError, match=r"must run in main \(shared mode\)"):
+        await Trial.create(live_config)
+
     config.trial_name = "acknowledged"
     agent_env = _stock_mock_env()
     verifier_env = _stock_mock_env()
@@ -740,7 +864,7 @@ async def test_record_shared_edit_task_and_regrade_in_fresh_environment(tmp_path
         if "/tests/test.sh" in command and not command.startswith("chmod "):
             assert uploaded == {
                 "/logs/seats": "RECORDED=maya log\n",
-                "/logs/artifacts": "recorded world state",
+                "/logs/artifacts": "collected artifact",
             }
             trial.paths.reward_text_path.write_text("0.75")
         return ExecResult(return_code=0)

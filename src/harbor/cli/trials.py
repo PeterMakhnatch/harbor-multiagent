@@ -1292,6 +1292,7 @@ def regrade(
     from harbor.models.trial.result import TrialResult
     from harbor.trial.regrade import (
         RegradeError,
+        SeatsRegradeTrial,
         check_task_regradable,
         expand_task_path,
         local_task_name,
@@ -1451,7 +1452,8 @@ def regrade(
             source_paths.config_path.read_text()
         )
         source_agent = source_config.agent
-        source_participants = source_config.participants
+        if "participants" in source_config.model_fields_set:
+            source_participants = source_config.participants
         source_artifacts = source_config.artifacts
     except Exception:
         console.print(
@@ -1487,6 +1489,13 @@ def regrade(
         console.print(f"Regrading trial: {trial_dir.name}")
         console.print(f"Task: {source_result.task_name}")
         console.print(f"Verifier source: {new_task_dir}")
+        if isinstance(trial, SeatsRegradeTrial):
+            console.print(
+                "Multi-agent regrade starts fresh services, not the original "
+                "live world. Harbor restores seat logs to /logs/seats, mounted "
+                "artifacts to /logs/artifacts, and declared artifacts to their "
+                "source paths."
+            )
         console.print(f"New trial directory: {trials_dir / config.trial_name}")
         return await trial.run()
 
