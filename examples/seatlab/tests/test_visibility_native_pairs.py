@@ -1,6 +1,8 @@
 import importlib
 import json
 import os
+import subprocess
+from decimal import Decimal
 from pathlib import Path
 from runpy import run_path
 from stat import S_IMODE
@@ -399,52 +401,69 @@ def test_cli_reserves_only_one_private_first_attempt(
     assert receipt["seats"] == {"inventory": None, "dispatch": None}
 
 
-def test_host_child_exec_hides_dummy_key_from_entrypoint(tmp_path: Path) -> None:
+@pytest.mark.parametrize("bindable", [True, False])
+def test_native_host_keeps_paid_values_out_of_children(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, bindable: bool
+) -> None:
     secret = "dummy-not-a-credential"
+    ledger = tmp_path / "private-ledger"
+    balance = Decimal("2.00")
+    if bindable:
+        ledger.mkdir(mode=0o700)
+        pairs.spend.initialize(ledger, balance, Decimal("1.00"))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", secret)
+    monkeypatch.setenv("SEATLAB_SPEND_DIR", str(ledger))
+    monkeypatch.setenv("DOCKER_HOST", "unix:///unused.sock")
+    monkeypatch.delenv("DOCKER_CONTEXT", raising=False)
+
     entry = tmp_path / "fake-harbor"
     marker = tmp_path / "seen.json"
+    paid_names = ("DEEPSEEK_API_KEY", "SEATLAB_SPEND_DIR")
+    child_probe = f"import os; assert set({paid_names!r}).isdisjoint(os.environ)"
     entry.write_text(
-        "import json, os, sys\n"
-        f"path = {str(marker)!r}\n"
-        "open(path, 'w').write(json.dumps({\n"
-        "  'argv': sys.argv[1:],\n"
-        "  'env_has_key': 'DEEPSEEK_API_KEY' in os.environ,\n"
-        "}))\n"
-        "raise SystemExit(0)\n"
+        f"#!{pairs._host_python()}\n"
+        "import json, os, subprocess, sys\n"
+        "from decimal import Decimal\n"
+        "from pathlib import Path\n"
+        "if sys.argv[1:3] == ['trial', 'start']:\n"
+        f"    Path({str(marker)!r}).write_text(json.dumps(sys.argv[1:]))\n"
+        f"assert set({paid_names!r}).isdisjoint(os.environ)\n"
+        "if sys.argv[1:] == ['--version']:\n"
+        f"    print({pairs.run_panel.NATIVE_VERSION!r})\n"
+        "elif sys.argv[1:] == ['trial', 'schema']:\n"
+        "    print(json.dumps({'properties': {'participants': {}}}))\n"
+        "else:\n"
+        "    from examples.seatlab.visibility import deepseek, spend\n"
+        f"    assert deepseek._key() == {secret!r}\n"
+        "    spend.reserve('native-probe', 'inventory', balance_usd=Decimal('2.00'))\n"
+        f"    subprocess.run([sys.executable, '-c', {child_probe!r}], check=True)\n"
     )
-    env = os.environ.copy()
-    env["DEEPSEEK_API_KEY"] = secret
-    env["PYTHONPATH"] = pairs._host_env({})["PYTHONPATH"]
-    completed = __import__("subprocess").run(
-        [
-            pairs._host_python(),
-            "-m",
-            "examples.seatlab.visibility.native_pairs",
-            "_host_trial",
-            str(tmp_path / "config.json"),
-            str(entry),
-        ],
-        cwd=tmp_path,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert marker.is_file(), completed.stderr
-    seen = json.loads(marker.read_text())
-    assert completed.returncode == 0
-    assert seen["argv"] == ["trial", "start", "-c", str(tmp_path / "config.json")]
-    assert seen["env_has_key"] is False
-    assert secret not in marker.read_text()
-    assert secret not in completed.stdout
-    assert secret not in completed.stderr
+    entry.chmod(0o700)
+
+    harbor, env = pairs._preflight(entry)
+    assert set(paid_names).isdisjoint(env)
+    returncode = pairs._launch(tmp_path, harbor, env)
+    log = (tmp_path / "native.log").read_text()
+    assert secret not in log
+    assert str(ledger) not in log
+    if not bindable:
+        assert returncode == 1
+        assert "Native host spend binding failed" in log
+        assert not marker.exists()
+        return
+    assert returncode == 0, log
+    assert json.loads(marker.read_text()) == [
+        "trial",
+        "start",
+        "-c",
+        str(tmp_path / "config.json"),
+    ]
+    assert pairs.spend.report(ledger)["unsettled_calls"] == 1
 
 
 def test_child_startup_trace_imports_native_symbols() -> None:
-    env = os.environ.copy()
-    env.pop("DEEPSEEK_API_KEY", None)
-    env["PYTHONPATH"] = pairs._host_env({})["PYTHONPATH"]
-    completed = __import__("subprocess").run(
+    env = {"PYTHONPATH": pairs._host_env({})["PYTHONPATH"]}
+    completed = subprocess.run(
         [
             pairs._host_python(),
             "-c",

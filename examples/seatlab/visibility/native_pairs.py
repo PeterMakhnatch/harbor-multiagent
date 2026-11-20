@@ -25,7 +25,7 @@ import seat_agent
 import team_driver
 import team_report
 from capsule import encode_view, view_hash
-from examples.seatlab.visibility import deepseek
+from examples.seatlab.visibility import deepseek, spend
 from export_capsules import reconstructed_capsules
 
 from harbor.agents.base import BaseAgent
@@ -278,14 +278,19 @@ def _preflight(harbor: Path) -> tuple[Path, dict[str, str]]:
     harbor = harbor.resolve(strict=True)
     env = _host_env(run_panel._native_env(None))
     env.pop("DEEPSEEK_API_KEY", None)
+    env.pop("SEATLAB_SPEND_DIR", None)
     run_panel._check_native(harbor, env)
     return harbor, env
 
 
 def host_trial(config: Path, harbor: Path) -> int:
-    """Bind the host key, then run Harbor in this same Python process."""
+    """Bind the paid values on the host before Harbor can start children."""
     deepseek.bind_host_key()
-    os.environ.pop("DEEPSEEK_API_KEY", None)
+    try:
+        spend.bind_host_spend_dir()
+    except (OSError, spend.SpendRefused):
+        print("Native host spend binding failed", file=sys.stderr)
+        return 1
     sys.argv = [str(harbor), "trial", "start", "-c", str(config)]
     runpy.run_path(str(harbor), run_name="__main__")
     return 0
