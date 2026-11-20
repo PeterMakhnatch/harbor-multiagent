@@ -102,8 +102,9 @@ paths are unmeasured.
 
 New task `tasks/liar-scout/`: scripted scout claims a secret code (truth
 or a fixed lie, experimenter-set), model listener may verify before its
-single answer. Oracle control (both seats oracle): reward 1.0, event
-order read → note → verify → answer. Listener: terminus-2 +
+single answer. Oracle control (both seats oracle): reward 1.0, event order
+read → note → verify → answer. Nop control (nop listener, truthful
+scripted scout): reward 0.0 — the task pays nothing for an idle listener. Listener: terminus-2 +
 gpt-oss-120b.
 
 | Episode | Scout | Verified before answer | Reward | Listener cost |
