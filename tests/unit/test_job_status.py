@@ -26,11 +26,14 @@ from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.hooks import TrialEvent, TrialHookEvent
 
 
-def _make_job(tmp_path: Path, task_configs: list[TaskConfig] | None = None) -> Job:
+def _make_job(
+    tmp_path: Path, task_configs: list[TaskConfig] | None = None, **kwargs
+) -> Job:
     resolved_task_configs = task_configs or [TaskConfig(path=Path("/tmp/task"))]
     config = JobConfig(
         job_name="job-progress-test",
         jobs_dir=tmp_path,
+        **kwargs,
     )
     metrics = defaultdict(lambda: [Mean()])
     return Job(
@@ -417,6 +420,38 @@ async def test_job_resume_progress_starts_from_existing_trial_results(
         assert resumed_job._job_result.stats.n_completed_trials == 0
     finally:
         resumed_job._close_logger_handlers()
+
+
+def test_job_resume_matches_reordered_participants(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    maya = {"seat": "maya", "name": "nop", "kwargs": {"output": Path("out")}}
+    raj = {"seat": "raj", "name": "nop", "env": {"API_KEY": "sample"}}
+    first_job = _make_job(tmp_path, participants=[maya, raj], n_attempts=2)
+
+    completed = first_job._trial_configs[0]
+    trial_dir = first_job.job_dir / completed.trial_name
+    trial_dir.mkdir()
+    (trial_dir / "result.json").write_text(_trial_result(completed).model_dump_json())
+    for config, path in (
+        (first_job.config, first_job._job_config_path),
+        (completed, trial_dir / "config.json"),
+    ):
+        payload = config.model_dump(mode="json")
+        payload["participants"].reverse()  # The old disk format kept input order.
+        path.write_text(json.dumps(payload))
+    first_job._close_logger_handlers()
+
+    resumed = _make_job(tmp_path, participants=[raj, maya], n_attempts=2)
+    try:
+        assert "Cannot reliably compare literal participant credentials" in caplog.text
+        assert "sample" not in caplog.text
+        assert resumed._trial_configs[0] == completed
+        assert resumed._trial_configs[0].trial_name == completed.trial_name
+        assert len(resumed._remaining_trial_configs) == 1
+        assert resumed._remaining_trial_configs[0].trial_name != completed.trial_name
+    finally:
+        resumed._close_logger_handlers()
 
 
 @pytest.mark.unit

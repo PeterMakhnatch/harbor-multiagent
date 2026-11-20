@@ -11,6 +11,7 @@ from harbor.models.task.config import VerifierEnvironmentMode
 from harbor.models.task.id import GitTaskId, LocalTaskId, PackageTaskId
 from harbor.models.trial.config import TrialConfig
 from harbor.models.trial.error_policy import (
+    ERROR_POLICIES,
     ErrorPolicy,
     ErrorPolicyOverride,
     policy_for,
@@ -35,6 +36,9 @@ class ExceptionInfo(BaseModel):
     policy_override: ErrorPolicyOverride | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    policy_base_type: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @classmethod
     def from_exception(
@@ -43,18 +47,39 @@ class ExceptionInfo(BaseModel):
         *,
         override_error_policy: Mapping[str, ErrorPolicyOverride] | None = None,
     ) -> "ExceptionInfo":
+        error_type = type(e)
+        name = error_type.__name__
+        # Keep known exceptions' own policies. For an unclassified subclass,
+        # persist the nearest classified base so reloaded results agree.
+        base = None
+        if name not in ERROR_POLICIES:
+            base = next(
+                (
+                    parent.__name__
+                    for parent in error_type.__mro__[1:]
+                    if parent.__name__ in ERROR_POLICIES
+                ),
+                None,
+            )
+        overrides = override_error_policy or {}
+        override = overrides.get(name)
+        if override is None and base is not None:
+            override = overrides.get(base)
         return cls(
-            exception_type=type(e).__name__,
+            exception_type=name,
             exception_message=str(e),
-            exception_traceback=traceback.format_exc(),
+            exception_traceback="".join(traceback.format_exception(e)),
             occurred_at=datetime.now(UTC),
-            policy_override=(override_error_policy or {}).get(type(e).__name__),
+            policy_override=override,
+            policy_base_type=base,
         )
 
     @computed_field
     @property
     def policy(self) -> ErrorPolicy:
-        return policy_for(self.exception_type, self.policy_override)
+        return policy_for(
+            self.policy_base_type or self.exception_type, self.policy_override
+        )
 
 
 class ModelInfo(BaseModel):

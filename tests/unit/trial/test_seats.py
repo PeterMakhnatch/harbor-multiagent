@@ -57,6 +57,10 @@ def index(*event: str) -> int:
     return EVENTS.index(event)
 
 
+class CustomAgentExit(NonZeroAgentExitCodeError):
+    pass
+
+
 class ScriptedAgent(BaseAgent):
     """Ends at once, or when released if ``hold``, or as ``fail`` says."""
 
@@ -93,6 +97,8 @@ class ScriptedAgent(BaseAgent):
         try:
             if self.fail == "exit":
                 raise NonZeroAgentExitCodeError("exit 1")
+            if self.fail == "custom-exit":
+                raise CustomAgentExit("custom exit")
             if self.fail == "auth":
                 raise AgentAuthenticationError("401 invalid api key")
             if self.fail == "crash":
@@ -336,6 +342,8 @@ async def test_a_cancelled_trial_stays_cancelled_over_seat_errors(tmp_path: Path
 
     assert ("stopped", "lee") in EVENTS
     assert trial.result.exception_info is not None
+    lee = _seat_results(trial.result)["lee"].exception_info
+    assert lee is not None and lee.exception_type == "RuntimeError"
     assert trial.result.exception_info.exception_type == "CancelledError"
     assert not _verified(trial)
 
@@ -457,22 +465,36 @@ async def test_an_agent_failure_reaches_the_trial_and_job_stats_and_grades_by_po
     assert any(error in s.exception_stats for s in stats.evals.values())
 
 
-async def test_a_seat_crash_fails_the_trial_and_ends_play(tmp_path: Path):
+@pytest.mark.parametrize("should_grade", [False, True])
+async def test_a_seat_crash_ends_that_seat_and_grades_by_policy(
+    tmp_path: Path, should_grade: bool
+):
     trial = await _seats_trial(
         _config(
             _task_dir(tmp_path),
-            _participant("maya", hold=True),
+            _participant("maya", fail="crash"),
             _participant("raj", hold=True),
-            _participant("lee", fail="crash"),
+            _participant("lee", hold=True),
+            override_error_policy={
+                "RuntimeError": ErrorPolicyOverride(
+                    should_grade=should_grade, has_valid_reward=True
+                )
+            },
         )
     )
 
-    result = await trial.run()
+    run = asyncio.create_task(trial.run())
+    await seen("run", "maya", "You are maya.")
+    await seen("run", "raj", "You are raj.")
+    RELEASE["raj"].set()
+    result = await run
 
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "RuntimeError"
-    assert ("stopped", "maya") in EVENTS and ("stopped", "raj") in EVENTS
-    assert not _verified(trial)
+    assert result.exception_info.exception_message == "Seat 'maya': maya crashed"
+    assert ("ended", "raj") in EVENTS and ("stopped", "lee") in EVENTS
+    assert _verified(trial) is should_grade
+    assert result.reward_valid is should_grade
     assert EVENTS[-1] == ("stop",)
 
 
@@ -521,44 +543,110 @@ async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):
     assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
 
 
-@pytest.mark.parametrize(
-    ("fail", "error_type", "should_retry", "verified"),
-    [
-        ("exit", "NonZeroAgentExitCodeError", True, True),
-        ("timeout", "AgentTimeoutError", True, True),
-        ("setup", "AgentSetupTimeoutError", False, False),
-        ("setup-crash", "RuntimeError", False, False),
-        ("crash", "RuntimeError", False, False),
-    ],
-)
-async def test_seat_error_policy_override_reaches_the_trial(
-    tmp_path: Path, fail: str, error_type: str, should_retry: bool, verified: bool
+@pytest.mark.parametrize("timeout_seat", ["maya", "raj"])
+@pytest.mark.parametrize("should_grade", [False, True])
+@pytest.mark.parametrize("valid_reward", [False, True])
+async def test_all_seat_error_policies_gate_verification(
+    tmp_path: Path, timeout_seat: str, should_grade: bool, valid_reward: bool
 ) -> None:
-    policy = ErrorPolicyOverride(
-        should_retry=should_retry, has_valid_reward=not verified
-    )
-    participant = _participant("maya", hold=fail == "timeout", fail=fail)
-    if fail == "setup":
-        participant["override_setup_timeout_sec"] = 0.05
     trial = await _seats_trial(
         _config(
-            _task_dir(tmp_path, timeout_sec=0.2 if fail == "timeout" else 30),
-            participant,
-            _participant("raj"),
+            _task_dir(tmp_path, timeout_sec=0.2),
+            *(
+                _participant(seat, hold=True)
+                if seat == timeout_seat
+                else _participant(seat, fail="exit")
+                for seat in ("maya", "raj")
+            ),
             _participant("lee"),
+            override_error_policy={
+                "AgentTimeoutError": ErrorPolicyOverride(
+                    should_grade=should_grade, has_valid_reward=valid_reward
+                )
+            },
+        )
+    )
+
+    result = await trial.run()
+
+    assert {e.exception_type for e in result.recorded_exceptions()} == {
+        "NonZeroAgentExitCodeError",
+        "AgentTimeoutError",
+    }
+    assert _verified(trial) is should_grade
+    assert result.reward_valid is (should_grade and valid_reward)
+
+
+@pytest.mark.parametrize(
+    ("fail", "error_type"),
+    [("setup", "AgentSetupTimeoutError"), ("setup-crash", "RuntimeError")],
+)
+async def test_seat_setup_failure_never_grades_even_with_override(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, fail: str, error_type: str
+) -> None:
+    policy = ErrorPolicyOverride(should_grade=True, has_valid_reward=True)
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            {
+                **_participant("lee", fail=fail),
+                "override_setup_timeout_sec": 0.05,
+            },
             override_error_policy={error_type: policy},
         )
     )
 
     result = await trial.run()
 
-    for info in (_seat_results(result)["maya"].exception_info, result.exception_info):
+    assert result.exception_info is not None
+    for info in (_seat_results(result)["lee"].exception_info, result.exception_info):
         assert info is not None
         assert info.exception_type == error_type
         assert info.policy_override == policy
-        assert info.policy.should_retry is should_retry
-    assert (result.verifier_result is not None) is verified
-    assert result.reward_valid is False
+        assert f"{error_type}:" in info.exception_traceback.strip().splitlines()[-1]
+    assert result.exception_info.exception_message.startswith("Seat 'lee': ")
+    assert "Cannot grade seat 'lee': agent setup failed before play" in caplog.text
+    assert not any(e[0] == "run" for e in EVENTS)
+    assert not _verified(trial)
+    assert not result.reward_valid
+
+
+@pytest.mark.parametrize(
+    ("fail", "error_type", "graded"),
+    [
+        ("auth", "AgentAuthenticationError", False),
+        ("exit", "NonZeroAgentExitCodeError", True),
+        ("custom-exit", "CustomAgentExit", True),
+    ],
+)
+async def test_supporting_seat_errors_gate_grading_and_reward(
+    tmp_path: Path, fail: str, error_type: str, graded: bool
+) -> None:
+    policy = ErrorPolicyOverride(should_grade=True, has_valid_reward=False)
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", fail=fail),
+            override_error_policy={"NonZeroAgentExitCodeError": policy},
+        )
+    )
+
+    result = await trial.run()
+    restored = TrialResult.model_validate_json(result.model_dump_json())
+
+    assert ("ended", "maya") in EVENTS and ("ended", "raj") in EVENTS
+    assert _verified(trial) is graded
+    for record in (result, restored):
+        lee = _seat_results(record)["lee"]
+        assert not lee.under_test
+        assert lee.exception_info.exception_type == error_type
+        assert lee.exception_info.policy_override == (policy if graded else None)
+        assert not lee.exception_info.policy.has_valid_reward
+        assert not record.reward_valid
 
 
 async def test_install_only_sets_up_every_seat_and_plays_none(tmp_path: Path):
@@ -637,10 +725,10 @@ async def test_result_json_records_every_seat(tmp_path: Path):
         assert seat["agent_setup"]["finished_at"] is not None
         assert seat["agent_execution"]["finished_at"] is not None
     config = json.loads(trial.paths.config_path.read_text())
-    assert [p["seat"] for p in config["participants"]] == ["maya", "raj", "lee"]
+    assert [p["seat"] for p in config["participants"]] == ["lee", "maya", "raj"]
     assert "agent" not in config
     reloaded = TrialResult.model_validate_json(trial.paths.result_path.read_text())
-    assert [p.seat for p in reloaded.config.participants] == ["maya", "raj", "lee"]
+    assert [p.seat for p in reloaded.config.participants] == ["lee", "maya", "raj"]
 
 
 async def test_each_seat_logs_under_its_own_name(tmp_path: Path):

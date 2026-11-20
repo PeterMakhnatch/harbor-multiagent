@@ -602,4 +602,8 @@ class JobConfig(BaseModel):
 
         # Exclude non-replay identity/logging fields from equality comparison.
         exclude = {"job_name", "debug"}
-        return self.model_dump(exclude=exclude) == other.model_dump(exclude=exclude)
+        # Seat kwargs are compared as persisted, like TrialConfig.
+        mode = "json" if self.participants or other.participants else "python"
+        return self.model_dump(exclude=exclude, mode=mode) == other.model_dump(
+            exclude=exclude, mode=mode
+        )
