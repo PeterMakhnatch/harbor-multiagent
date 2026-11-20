@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from harbor.agents.oracle import OracleAgent
+from harbor.environments.base import BaseEnvironment
+from harbor.models.agent.context import AgentContext
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.trial.config import (
     EnvironmentConfig,
@@ -14,6 +17,7 @@ from harbor.models.trial.config import (
     TaskConfig,
     TrialConfig,
 )
+from harbor.trial.hooks import LogEntry
 from harbor.trial.trial import Trial
 
 pytestmark = [pytest.mark.runtime, pytest.mark.integration, pytest.mark.asyncio]
@@ -22,7 +26,9 @@ TASK = Path(__file__).resolve().parents[2] / "examples" / "tasks" / "hello-seats
 SEATS = ("p1", "p2")
 
 
-async def test_oracle_in_both_seats_earns_reward_one(tmp_path: Path):
+async def test_oracle_in_both_seats_earns_reward_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     config = TrialConfig(
         task=TaskConfig(path=TASK),
         # Parallel tests share the Docker daemon's Compose project namespace.
@@ -31,8 +37,29 @@ async def test_oracle_in_both_seats_earns_reward_one(tmp_path: Path):
         participants=[Participant(seat=seat, name="oracle") for seat in SEATS],
         environment=EnvironmentConfig(type=EnvironmentType.DOCKER, delete=True),
     )
+    entries: list[LogEntry] = []
+
+    async def capture(entry: LogEntry) -> None:
+        entries.append(entry)
+
+    run_oracle = OracleAgent.run
+
+    async def run_with_live_output(
+        agent: OracleAgent,
+        instruction: str,
+        environment: BaseEnvironment,
+        context: AgentContext,
+    ) -> None:
+        # Oracle redirects the solver's stdout to a file. Exercise the stream
+        # with a separate command in the same agent phase.
+        await environment.exec('echo "$SEAT live output"')
+        await run_oracle(agent, instruction, environment, context)
+
+    monkeypatch.setattr(OracleAgent, "run", run_with_live_output)
+
     async with asyncio.timeout(600):
         trial = await Trial.create(config)
+        trial.add_log_callback(capture)
         result = await trial.run()
 
     assert result.exception_info is None, result.exception_info
@@ -53,3 +80,10 @@ async def test_oracle_in_both_seats_earns_reward_one(tmp_path: Path):
     for seat in SEATS:
         oracle_log = trial.paths.trial_dir / "seats" / seat / "agent" / "oracle.txt"
         assert f"{seat} posts its note" in oracle_log.read_text()
+        assert any(
+            entry.seat == seat
+            and entry.phase == "agent"
+            and entry.stream == "stdout"
+            and entry.text.strip() == f"{seat} live output"
+            for entry in entries
+        )

@@ -13,6 +13,7 @@ container still up.
 import asyncio
 import contextlib
 import logging
+from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, override
@@ -22,6 +23,7 @@ from harbor.agents.factory import AgentFactory
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
+from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import NetworkMode, merge_mcp_servers
 from harbor.models.task.task import Task
 from harbor.models.task.verifier_mode import (
@@ -33,10 +35,29 @@ from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
-from harbor.trial.hooks import TrialEvent
+from harbor.trial.hooks import LogCallback, LogEntry, LogPhase, TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
+
+_LOG_BUFFER_SIZE = 256
+_LOG_CALLBACK_TIMEOUT_SEC = 0.5
+_LOG_DRAIN_TIMEOUT_SEC = 0.5
+
+
+@dataclass
+class _LogSubscriber:
+    callback: LogCallback
+    pending: deque[LogEntry] = field(default_factory=deque)
+    worker: asyncio.Task[None] | None = None
+    closed: bool = False
+    warned_overflow: bool = False
+
+    def close(self) -> None:
+        self.closed = True
+        self.pending.clear()
+        if self.worker is not None and not self.worker.done():
+            self.worker.cancel()
 
 
 @dataclass
@@ -99,6 +120,9 @@ async def _seat_tasks() -> AsyncIterator[asyncio.TaskGroup]:
     except BaseExceptionGroup as errors:
         current = asyncio.current_task()
         if current is not None and current.cancelling():
+            # TaskGroup can reissue cancellation when a child fails during
+            # cancellation. Let it arrive before the trial starts recovery.
+            await asyncio.sleep(0)
             raise asyncio.CancelledError
         raise errors.exceptions[0]
 
@@ -107,6 +131,7 @@ class SeatsTrial(SingleStepTrial):
     """SingleStepTrial with one agent per seat, all in the one environment."""
 
     seats: list[Seat]
+    _warned_unsupported_seat_streaming = False
 
     def __init__(
         self,
@@ -120,6 +145,8 @@ class SeatsTrial(SingleStepTrial):
         super().__init__(
             config, _task=_task, _task_download_result=_task_download_result
         )
+        self._log_subscribers: list[_LogSubscriber] = []
+        self._log_dispatch_closed = False
 
     @override
     def _init_agent(self) -> None:
@@ -221,6 +248,85 @@ class SeatsTrial(SingleStepTrial):
             seat.result.agent_info = seat.agent.to_agent_info()
         self.result.agent_info = self.agent.to_agent_info()
 
+    def _seat_log_context(
+        self, phase: LogPhase, seat: Seat
+    ) -> contextlib.AbstractContextManager[None]:
+        if not self._log_callbacks:
+            return contextlib.nullcontext()
+        backend = self.agent_environment.type()
+        if backend not in (EnvironmentType.DOCKER, EnvironmentType.PODMAN):
+            if not self._warned_unsupported_seat_streaming:
+                self._warned_unsupported_seat_streaming = True
+                self.logger.warning(
+                    "Live seat logs require the docker or podman environment; "
+                    "seat output will not stream on %s.",
+                    backend.value if isinstance(backend, EnvironmentType) else backend,
+                )
+            return contextlib.nullcontext()
+        return self._log_context(phase, seat.environment, seat=seat.name)
+
+    @override
+    async def _deliver_log(self, entry: LogEntry, callbacks: list[LogCallback]) -> None:
+        if self._log_dispatch_closed:
+            return
+        # Registration only appends, so each entry's callback list is a prefix.
+        for i, callback in enumerate(callbacks):
+            if i == len(self._log_subscribers):
+                self._log_subscribers.append(_LogSubscriber(callback))
+            subscriber = self._log_subscribers[i]
+            if subscriber.closed:
+                continue
+            if len(subscriber.pending) == _LOG_BUFFER_SIZE:
+                if not subscriber.warned_overflow:
+                    subscriber.warned_overflow = True
+                    self.logger.warning(
+                        "Trial log callback buffer is full; dropping chunks"
+                    )
+                continue
+            subscriber.pending.append(entry)
+            if subscriber.worker is None or subscriber.worker.done():
+                subscriber.worker = asyncio.create_task(self._drain_logs(subscriber))
+
+    async def _drain_logs(self, subscriber: _LogSubscriber) -> None:
+        def expire() -> None:
+            self.logger.warning(
+                "Trial log callback timed out after %s seconds; disabling subscription",
+                _LOG_CALLBACK_TIMEOUT_SEC,
+            )
+            subscriber.close()
+
+        loop = asyncio.get_running_loop()
+        while subscriber.pending:
+            entry = subscriber.pending.popleft()
+            deadline = loop.call_later(_LOG_CALLBACK_TIMEOUT_SEC, expire)
+            try:
+                await self._notify_log_callback(subscriber.callback, entry)
+            finally:
+                deadline.cancel()
+
+    @override
+    async def _finalize(self) -> None:
+        self._log_dispatch_closed = True
+        try:
+            workers = [
+                subscriber.worker
+                for subscriber in self._log_subscribers
+                if subscriber.worker is not None and not subscriber.worker.done()
+            ]
+            task = asyncio.current_task()
+            if workers and (task is None or not task.cancelling()):
+                _, pending = await asyncio.wait(workers, timeout=_LOG_DRAIN_TIMEOUT_SEC)
+                if pending:
+                    self.logger.warning(
+                        "Trial log callback drain timed out; dropping chunks"
+                    )
+        finally:
+            # A callback can ignore cancellation. Never join its worker here.
+            for subscriber in self._log_subscribers:
+                if not subscriber.closed:
+                    subscriber.close()
+            await super()._finalize()
+
     async def _setup_seat(self, seat: Seat) -> None:
         """Mirrors Trial._setup_agent for one seat, recording a failure on the
         seat as well as failing the trial."""
@@ -228,9 +334,10 @@ class SeatsTrial(SingleStepTrial):
         seat.result.agent_setup = setup
         try:
             try:
-                await asyncio.wait_for(
-                    self._install_seat(seat), timeout=seat.setup_timeout_sec
-                )
+                with self._seat_log_context("agent_setup", seat):
+                    await asyncio.wait_for(
+                        self._install_seat(seat), timeout=seat.setup_timeout_sec
+                    )
             except TimeoutError as exc:
                 raise AgentSetupTimeoutError(
                     f"Agent setup timed out after {seat.setup_timeout_sec} seconds"
@@ -265,8 +372,7 @@ class SeatsTrial(SingleStepTrial):
                 f"Seat {seat.name!r}: could not create {logs_dir}: {made.stdout}"
             )
         with environment.scoped_exec_env(seat.agent.extra_env):
-            with self._log_context("agent_setup", environment):
-                await seat.agent.setup(environment=environment)
+            await seat.agent.setup(environment=environment)
 
     @override
     async def _run(self) -> None:
@@ -275,6 +381,9 @@ class SeatsTrial(SingleStepTrial):
         /logs/seats/, then call Trial._run_verifier and
         _stop_agent_environment."""
         await self._emit(TrialEvent.AGENT_START)
+        for seat in self.seats:
+            seat.result.agent_execution = TimingInfo()
+        await self._emit_seat_hooks(TrialEvent.SEAT_START)
         execution = TimingInfo(started_at=self._now())
         self.result.agent_execution = execution
         try:
@@ -282,8 +391,7 @@ class SeatsTrial(SingleStepTrial):
         finally:
             execution.finished_at = self._now()
             await self._emit(TrialEvent.AGENT_END)
-        self._record_seat_errors()
-        await self._collect_seats()
+        await self._finish_seats()
         await self._collect_artifacts(pre_verifier=self._should_verify())
         if not self.config.verifier.disable:
             await self.agent_environment.upload_dir(
@@ -301,7 +409,7 @@ class SeatsTrial(SingleStepTrial):
 
     @override
     async def _recover_outputs(self) -> None:
-        await self._collect_seats()
+        await self._finish_seats()
         await self._collect_artifacts(stop_main_before_sidecars=False)
         await self._stop_agent_environment()
 
@@ -347,8 +455,8 @@ class SeatsTrial(SingleStepTrial):
         seat.result.agent_execution = execution
         try:
             with (
+                self._seat_log_context("agent", seat),
                 seat.environment.scoped_exec_env(seat.agent.extra_env),
-                self._log_context("agent", seat.environment),
             ):
                 await seat.agent.run(
                     instruction=seat.instruction,
@@ -362,14 +470,24 @@ class SeatsTrial(SingleStepTrial):
         finally:
             execution.finished_at = self._now()
 
-    async def _collect_seats(self) -> None:
-        """Mirrors Trial._sync_agent_output for every seat, under test or not."""
+    async def _emit_seat_hooks(self, event: TrialEvent) -> None:
+        if not self._hooks[event]:
+            return
+        async with asyncio.TaskGroup() as group:
+            for seat in self.seats:
+                if seat.result.agent_execution is not None:
+                    group.create_task(self._emit(event, seat=seat.name))
+
+    async def _finish_seats(self) -> None:
+        """Collect each seat's output and record results before notifying hooks."""
         if self._are_agent_logs_downloaded:
             return
+        self._record_seat_errors()
         async with _seat_tasks() as group:
             for seat in self.seats:
                 group.create_task(self._collect_seat(seat))
         self._are_agent_logs_downloaded = True
+        await self._emit_seat_hooks(TrialEvent.SEAT_END)
 
     async def _collect_seat(self, seat: Seat) -> None:
         """Mirrors Trial._download_role_logs into trial/seats/<seat>/agent,
