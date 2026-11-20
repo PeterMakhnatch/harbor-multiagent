@@ -143,6 +143,75 @@ python -m "$module" score "$packet" fresh "$(cat choices.json)" --expect-sha256 
 
 Run `export "$NATIVE_STUDY" --pair 3101 1` with the original native interpreter to produce those exact packet bytes. `verify` checks consistency. An external SHA-256 binds the bytes to a published version. Neither check independently authenticates a provider. Scoring a new receiver does not turn its choices into original Harbor actions.
 
+### Can the receiver help its teammate recheck a calendar?
+
+**Registered before the first calendar generation.** The 12 retained Flotilla `c1` talk worlds split 6 synthetic calendars evenly between 2 seats. Each world has exactly 1 common two-hour meeting. Earlier talk-versus-silent results do not say whether a receiver can help its sender correct a report. This study compares a peer-informed recheck with a blind recheck. It starts new teams; it does not replay the old free-text conversations.
+
+Use all 12 frozen worlds, both assignments of sender and receiver, and 2 repetitions. In each of 48 blocks, both seats independently list the starts they consider locally feasible. Each sees only its own 3 calendars, the public rules, and the numbering of the 35 legal starts. Reuse these **same 2 actual lists** in both arms. Accept any well-formed list, including an empty or factually wrong one. Never supply a corrected list.
+
+| Native step | Blind recheck | Peer-informed recheck |
+| --- | --- | --- |
+| Receiver → sender | Send a fixed ready message. | Send the receiver's actual initial list. |
+| Sender → receiver | Recheck the whole local calendar. Send the revised list. | Same instruction. The sender can also see the receiver's list. |
+| Receiver → world | Use its own calendar, its own initial list, and the delivered revision. Submit one start. | Identical inputs and instruction if the revised lists match. |
+
+Use the unchanged talk task's authenticated mailbox and native verifier in both arms. The receiver alone submits. No model sees the other seat's raw calendar, hidden key, old action, old reward, or arm name. No tool removes a bad candidate or selects the model's final answer. A no-key transport control can compute a local list, but it is never a model trial. Independent starts and both native roles use the same first-party model, temperature, JSON constraints, and per-call budget limit.
+
+Run repetition, world, then direction. Within a block, run `blind` first if their index sum is even; otherwise run `peer` first. Register at most 96 initial generations, 96 fresh native teams, and 192 native generations. Each native team sends 2 messages and makes at most 1 final submission. Use a new private directory for each first attempt. Do not retry or replace a sample. Stop on a transport, identity, funding, or evidence failure. Distinguish an invalid model response, an unattempted branch, and a native loss. Keep settled costs for incomplete trials.
+
+Primary: the paired change in native verifier success, `peer − blind`. Average complete contrasts within a world, then weight the 12 worlds equally. Withhold the full-panel estimate if any world lacks a complete pair. Report coverage, each arm, direction, and repetition. Secondary: whether a sender reports the true start, reports its exact local set, or changes its list after the recheck. When both arms deliver the same revised list, report how often the receiver changes its answer despite identical input. Twelve synthetic worlds and one provider bound generalization. A successful submission does not prove that either model computed the full calendar correctly.
+
+An invalid model action can count as a native zero only when the retained response fails the grammar and the stock verifier confirms that no submission succeeded. Report this case separately. An absent model response or native reward is unknown, not zero. Alongside the primary result, report accepted-decision pairs and bounds that give each unknown binary reward its full range from 0 to 1.
+
+**Result on the 12 original task identities.** All 48 pairs completed. Both seats returned valid responses in all 96 native teams. The stock verifier accepted the meeting in 4/48 blind teams and 0/48 peer-informed teams. The registered equal-world difference was **−8.33 percentage points**. No outcomes were missing. The 4 blind wins came from 3 worlds. This result does not establish that peer feedback harms scheduling in general.
+
+| Observation | Blind recheck | Peer-informed recheck |
+| --- | ---: | ---: |
+| Sender changed its initial list | 22/48 | 27/48 |
+| Sender's revised list contained the common start | 19/48 | 17/48 |
+| Sender's revised list exactly matched its own calendar | 0/48 | 0/48 |
+| Receiver chose a start that fit its own calendar | 11/48 | 8/48 |
+| Native wins by receiver direction (0, 1) | 1/24, 3/24 | 0/24, 0/24 |
+| Native wins by repetition (0, 1) | 3/24, 1/24 | 0/24, 0/24 |
+
+None of the 96 initial lists exactly matched the reporting seat's calendar. In 13 pairs the sender delivered the same list twice. The receiver then saw identical final prompts but chose different starts in 10/13 pairs. All 4 wins came from pairs with different final prompts. Treat changes in the receiver's decision as model variation unless the paired comparison supports a stronger claim.
+
+The unmodified Eval Lab reader matched 96 distinct native trials and 192 paid seat calls. Another 96 paid calls generated the shared initial lists. All 288 calls settled. Direct model cost: **$0.013205205**, including the initial lists. See the [paired outcomes](results/flotilla-calendar-results.json), [Eval Lab reconciliation](results/flotilla-calendar-evallab.json), and [per-call costs](results/flotilla-calendar-cost.json). These files contain no private calendars, credentials, or raw model text.
+
+**Try one seat with your own harness.** Use Python 3.11 or newer from the repository root. These commands need no Harbor install, Docker, provider, or private archive.
+
+```bash
+packet=examples.seatlab.visibility.calendar_packet
+protocol=examples.seatlab.visibility.calendar_protocol
+python -m "$packet" verify
+python -m "$protocol" prompt initial --world 0 --seat p1 > p1-user.txt
+python -m "$protocol" prompt initial --world 0 --seat p2 > p2-user.txt
+```
+
+Send each file to a separate model context. Save each response as `p1.json` or `p2.json`. Never give a model the combined packet. For the peer arm, use the real `p2` response below. For the blind arm, replace `@p2.json` with `'{"ready":true}'`. Keep both initial responses fixed.
+
+```bash
+python -m "$protocol" prompt recheck --world 0 --seat p1 --own @p1.json --peer @p2.json > recheck.txt
+# Send recheck.txt to the sender. Save its response as revised.json.
+python -m "$protocol" prompt final --world 0 --seat p2 --own @p2.json --sender @revised.json > decide.txt
+# Send decide.txt to the receiver. Save its response as decision.json.
+python -m "$protocol" decode slot @decision.json
+```
+
+`decode` translates the model's slot into a weekday and start time. It does not fix an invalid choice or assign a Harbor reward.
+
+**Rebuild the inputs from public source.** Use a checkout of the [fork's Flotilla generator at `71ddf40b`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3/flotilla). Keep the generated tasks private. They contain fresh service credentials.
+
+```bash
+umask 077
+private_tasks=$(mktemp -d)
+python "$GENERATOR_CHECKOUT/flotilla/build_tasks.py" --family schedule --instances 0-11 \
+  --seats 2 --difficulty easy --seed 1 --conditions talk --play-timeout 600 --out "$private_tasks"
+python -m "$packet" compare-tables "$private_tasks/schedule"
+```
+
+We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
