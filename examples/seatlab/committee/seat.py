@@ -168,6 +168,22 @@ async def _wait_for_chat(
         raise _SeatFailure("chat_barrier_timeout") from None
 
 
+def _accumulate_usage(context: AgentContext, usage: object) -> bool:
+    if (
+        not isinstance(usage, tuple)
+        or len(usage) != 3
+        or any(type(count) is not int for count in usage)
+    ):
+        return False
+    input_tokens, cache_tokens, output_tokens = usage
+    if not 0 <= cache_tokens <= input_tokens or output_tokens < 0:
+        return False
+    context.n_input_tokens = (context.n_input_tokens or 0) + input_tokens
+    context.n_cache_tokens = (context.n_cache_tokens or 0) + cache_tokens
+    context.n_output_tokens = (context.n_output_tokens or 0) + output_tokens
+    return True
+
+
 class CommitteeSeat(BaseAgent):
     """Give the model only the authenticated scoped view and the public reports."""
 
@@ -245,6 +261,11 @@ class CommitteeSeat(BaseAgent):
             )
         except deepseek.SeatUnavailable as exc:
             record["status"] = "unavailable"
+            settled_usage = exc.settled_usage
+            if settled_usage is not None and not _accumulate_usage(
+                context, settled_usage
+            ):
+                raise _SeatFailure("usage_unverified") from None
             category = exc.category
             if not isinstance(category, str) or category not in _SAFE_PROVIDER_FAILURES:
                 category = "model_unavailable"
@@ -263,24 +284,11 @@ class CommitteeSeat(BaseAgent):
         record["served_model"] = served
         # The direct route returns counts only after verifying and settling them.
         # Keep a billable turn even if its response fails the action codec.
-        input_tokens, cache_tokens, output_tokens = (
-            turn.input_tokens,
-            turn.cache_tokens,
-            turn.output_tokens,
-        )
-        if (
-            any(
-                type(count) is not int
-                for count in (input_tokens, cache_tokens, output_tokens)
-            )
-            or not 0 <= cache_tokens <= input_tokens
-            or output_tokens < 0
+        if not _accumulate_usage(
+            context, (turn.input_tokens, turn.cache_tokens, turn.output_tokens)
         ):
             record["status"] = "rejected"
             raise _SeatFailure("usage_unverified")
-        context.n_input_tokens = (context.n_input_tokens or 0) + input_tokens
-        context.n_cache_tokens = (context.n_cache_tokens or 0) + cache_tokens
-        context.n_output_tokens = (context.n_output_tokens or 0) + output_tokens
         if record["response_sha256"] is None:
             record["status"] = "rejected"
             raise _SeatFailure("provider_response_invalid")

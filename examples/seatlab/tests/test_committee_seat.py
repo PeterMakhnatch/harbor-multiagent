@@ -299,26 +299,46 @@ async def test_invalid_first_response_keeps_hash_without_post_or_retry(
     assert "printf" not in (tmp_path / _RECEIPT_NAME).read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("phase", ["share", "vote"])
+@pytest.mark.parametrize(
+    ("phase", "settled_usage", "expected_failure", "expected_usage"),
+    [
+        ("share", None, "provider_timeout", (None, None, None)),
+        ("vote", None, "provider_timeout", (11, 3, 7)),
+        ("share", (13, 5, 9), "provider_response_invalid", (13, 5, 9)),
+        ("vote", (13, 5, 9), "provider_response_invalid", (24, 8, 16)),
+        ("vote", (13, 5), "usage_unverified", (11, 3, 7)),
+        ("vote", (13, 5, -1), "usage_unverified", (11, 3, 7)),
+    ],
+)
 async def test_provider_failure_keeps_safe_category_and_prompt_hash(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, world: _World, phase: str
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    world: _World,
+    phase: str,
+    settled_usage: tuple[int, ...] | None,
+    expected_failure: str,
+    expected_usage: tuple[int | None, int | None, int | None],
 ) -> None:
     accepted = deepseek.SeatTurn(
         f'{{"fact":"{_alias("F_SHARED_2")}"}}', deepseek.MODEL, 11, 3, 7
     )
-    failure = deepseek.SeatUnavailable("provider_timeout")
+    failure = deepseek.SeatUnavailable(
+        "provider_timeout" if settled_usage is None else "provider_response_invalid",
+        settled_usage=cast(tuple[int, int, int] | None, settled_usage),
+    )
     model = Mock(side_effect=[accepted, failure] if phase == "vote" else [failure])
     monkeypatch.setattr(deepseek, "turn", model)
     context = AgentContext()
-    with pytest.raises(NonZeroAgentExitCodeError, match="provider_timeout"):
+    with pytest.raises(NonZeroAgentExitCodeError, match=expected_failure):
         await _agent(tmp_path).run("", world.environment, context)
+    assert (
+        context.n_input_tokens,
+        context.n_cache_tokens,
+        context.n_output_tokens,
+    ) == expected_usage
+    assert context.cost_usd is context.model_usage is None
     if phase == "vote":
         assert model.call_count == 2
-        assert (
-            context.n_input_tokens,
-            context.n_cache_tokens,
-            context.n_output_tokens,
-        ) == (11, 3, 7)
         assert [route for method, route, _ in world.calls if method == "POST"] == [
             "/chat/public"
         ]
@@ -326,19 +346,18 @@ async def test_provider_failure_keeps_safe_category_and_prompt_hash(
     else:
         model.assert_called_once()
         assert world.calls == [("GET", "/dossier", None)]
-        assert (
-            context.n_input_tokens
-            is context.n_cache_tokens
-            is context.n_output_tokens
-            is None
-        )
         prompt = contract.share_prompt(world.dossier, _MAP, _ARM)
     receipt = _receipt(tmp_path, context)
-    assert (receipt["phase"], receipt["failure"]) == (phase, "provider_timeout")
+    assert (receipt["phase"], receipt["status"], receipt["failure"]) == (
+        phase,
+        "failed",
+        expected_failure,
+    )
     record = receipt["turns"][phase]
     assert record["status"] == "unavailable"
     assert record["prompt_sha256"] == _digest(prompt)
     assert record["response_sha256"] is record["served_model"] is None
+    assert record["action_sha256"] is record["action"] is None
 
 
 @pytest.mark.parametrize("fault", ["timeout", "duplicate"])
