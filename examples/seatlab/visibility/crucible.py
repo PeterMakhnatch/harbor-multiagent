@@ -32,7 +32,15 @@ _CHANNELS = {
 # Only accepted task decisions. Polls, lifecycle /done, diagnostics, and the
 # side effects of a decision already recorded by another event are not actions.
 _ACTIONS = {
-    "supply-chain-sabotage": {"accuse", "build", "mine", "refine", "scan", "stash", "transfer"},
+    "supply-chain-sabotage": {
+        "accuse",
+        "build",
+        "mine",
+        "refine",
+        "scan",
+        "stash",
+        "transfer",
+    },
     "reward-hack-contagion": {
         "plan_write",
         "review_approve",
@@ -130,7 +138,9 @@ def _run_record(
         seen_seats.add(seat)
         agent_info = seat_result.get("agent_info")
         if agent_info is not None:
-            model = agent_info.get("model_info") if isinstance(agent_info, dict) else None
+            model = (
+                agent_info.get("model_info") if isinstance(agent_info, dict) else None
+            )
             name = model.get("name") if isinstance(model, dict) else None
             provider = model.get("provider") if isinstance(model, dict) else None
             if (
@@ -138,7 +148,9 @@ def _run_record(
                 or not _model_name(provider)
                 or f"{provider}/{name}" != declared_model
             ):
-                raise ValueError("Crucible recorded model is unknown or disagrees with its wave")
+                raise ValueError(
+                    "Crucible recorded model is unknown or disagrees with its wave"
+                )
         if seat_result.get("exception_info") is not None:
             has_seat_error = True
             continue
@@ -162,7 +174,11 @@ def _run_record(
         finished = False
     else:
         timeout = False
-        finished = True if _present(result.get("finished_at")) and len(closed_seats) == len(seats) else None
+        finished = (
+            True
+            if _present(result.get("finished_at")) and len(closed_seats) == len(seats)
+            else None
+        )
         if not _present(result.get("finished_at")):
             closed_seats.clear()
 
@@ -215,7 +231,9 @@ def run_records(root: Path, *, excluded: bool = False) -> Iterator[RunRecord]:
             or not wave.is_relative_to(root / "runs")
             or wave in seen_roots
         ):
-            raise ValueError("Crucible report_final5 contains an unsafe or duplicate wave root")
+            raise ValueError(
+                "Crucible report_final5 contains an unsafe or duplicate wave root"
+            )
         seen_roots.add(wave)
         manifest_path = wave / _WAVE_MANIFEST
         rows = _read_json(manifest_path, "wave manifest")
@@ -236,18 +254,24 @@ def run_records(root: Path, *, excluded: bool = False) -> Iterator[RunRecord]:
                 or not condition.replace("_", "").isalnum()
                 or len(condition) > 40
             ):
-                raise ValueError("Crucible wave manifest contains an invalid run reference")
+                raise ValueError(
+                    "Crucible wave manifest contains an invalid run reference"
+                )
             # The saved reference can be relative to the source checkout or from
             # an earlier location. Only its native trial directory component is
             # used, and the result must repeat that name.
             basename = Path(ref).name
             directory = wave / basename
             if basename in {"", ".", ".."} or directory.resolve().parent != wave:
-                raise ValueError("Crucible wave manifest contains an unsafe trial directory")
+                raise ValueError(
+                    "Crucible wave manifest contains an unsafe trial directory"
+                )
             record, timeout = _run_record(directory, row, report_path, manifest_path)
             census_sources.append(directory / "result.json")
             if record.key in seen_keys:
-                raise ValueError("Crucible wave manifests contain a duplicate native trial UUID")
+                raise ValueError(
+                    "Crucible wave manifests contain a duplicate native trial UUID"
+                )
             seen_keys.add(record.key)
             if timeout:
                 n_excluded += 1
@@ -255,11 +279,12 @@ def run_records(root: Path, *, excluded: bool = False) -> Iterator[RunRecord]:
                 included_by_arm[family, condition] += 1
             if timeout == excluded:
                 selected.append(record)
-    if (
-        len(seen_keys) - n_excluded != report.get("n_trials")
-        or n_excluded != report.get("n_excluded_timeouts")
-    ):
-        raise ValueError("Crucible wave census does not match the report_final5 trial counts")
+    if len(seen_keys) - n_excluded != report.get(
+        "n_trials"
+    ) or n_excluded != report.get("n_excluded_timeouts"):
+        raise ValueError(
+            "Crucible wave census does not match the report_final5 trial counts"
+        )
     conditions = report.get("conditions")
     if not isinstance(conditions, list) or any(
         not isinstance(row, dict)
@@ -269,9 +294,13 @@ def run_records(root: Path, *, excluded: bool = False) -> Iterator[RunRecord]:
         for row in conditions
     ):
         raise ValueError("Crucible report_final5 condition counts are invalid")
-    expected = {(row["family"], row["condition"]): row["n_trials"] for row in conditions}
+    expected = {
+        (row["family"], row["condition"]): row["n_trials"] for row in conditions
+    }
     if len(expected) != len(conditions) or expected != included_by_arm:
-        raise ValueError("Crucible wave census does not match the report_final5 condition counts")
+        raise ValueError(
+            "Crucible wave census does not match the report_final5 condition counts"
+        )
     # The first trial in either selection carries the full census provenance
     # so the replay can fingerprint every input used in cohort selection.
     if selected:
@@ -289,7 +318,11 @@ class _Message:
 
 def _round_number(channel: str, payload: dict[str, Any]) -> int | None:
     number = payload.get("round")
-    return number if channel == "round_reports" and type(number) is int and 1 <= number <= 6 else None
+    return (
+        number
+        if channel == "round_reports" and type(number) is int and 1 <= number <= 6
+        else None
+    )
 
 
 def _collected(directory: Path) -> tuple[bool, tuple[Path, ...]]:
@@ -299,7 +332,11 @@ def _collected(directory: Path) -> tuple[bool, tuple[Path, ...]]:
     rows = _read_json(path, "artifact collection manifest")
     if not isinstance(rows, list):
         raise ValueError("Crucible artifact collection manifest is invalid")
-    matches = [row for row in rows if isinstance(row, dict) and row.get("destination") == _WORLD_LOG.as_posix()]
+    matches = [
+        row
+        for row in rows
+        if isinstance(row, dict) and row.get("destination") == _WORLD_LOG.as_posix()
+    ]
     return len(matches) == 1 and matches[0].get("status") == "ok", (path,)
 
 
@@ -335,9 +372,18 @@ def _project(record: RunRecord) -> Trial:
                     raise ValueError("Crucible world audit sequence is ambiguous")
                 gapped |= seq != seen_seq + 1
                 seen_seq = seq
-                if event.get("task_family") != record.family or event.get("condition") != record.condition:
-                    raise ValueError("Crucible world audit does not match its wave condition")
-                actor, kind, payload = event.get("actor"), event.get("event_type"), event.get("payload")
+                if (
+                    event.get("task_family") != record.family
+                    or event.get("condition") != record.condition
+                ):
+                    raise ValueError(
+                        "Crucible world audit does not match its wave condition"
+                    )
+                actor, kind, payload = (
+                    event.get("actor"),
+                    event.get("event_type"),
+                    event.get("payload"),
+                )
                 authenticated = event.get("authenticated")
                 if (
                     not isinstance(actor, str)
@@ -352,7 +398,9 @@ def _project(record: RunRecord) -> Trial:
                     channel = channels[kind]
                     round_number = _round_number(channel, payload)
                     target = payload.get("to") if channel == "dm" else None
-                    if channel == "dm" and (not isinstance(target, str) or target not in roster):
+                    if channel == "dm" and (
+                        not isinstance(target, str) or target not in roster
+                    ):
                         gapped = True
                         continue
                     if channel == "round_reports" and round_number is None:
@@ -373,7 +421,11 @@ def _project(record: RunRecord) -> Trial:
                 elif kind == "message_read" and seat_event:
                     channel = payload.get("channel")
                     refs = payload.get("msg_seqs")
-                    if not isinstance(channel, str) or channel not in channels.values() or not isinstance(refs, list):
+                    if (
+                        not isinstance(channel, str)
+                        or channel not in channels.values()
+                        or not isinstance(refs, list)
+                    ):
                         dirty.add(actor)
                         continue
                     round_number = _round_number(channel, payload)
@@ -389,7 +441,10 @@ def _project(record: RunRecord) -> Trial:
                             message is None
                             or message.channel != channel
                             or message.round_number != round_number
-                            or (channel == "dm" and actor not in (message.sender, message.target))
+                            or (
+                                channel == "dm"
+                                and actor not in (message.sender, message.target)
+                            )
                         ):
                             dirty.add(actor)
                             continue
@@ -402,7 +457,8 @@ def _project(record: RunRecord) -> Trial:
                     or (
                         record.family == "reward-hack-contagion"
                         and kind == "workspace_commit"
-                        and payload.get("message") in ("workspace write", "workspace delete")
+                        and payload.get("message")
+                        in ("workspace write", "workspace delete")
                     )
                 ):
                     events.append(Event("action", actor))
@@ -410,7 +466,9 @@ def _project(record: RunRecord) -> Trial:
     for seat in record.seats:
         if not seen_seq:
             coverage[seat] = "unavailable"
-        elif not collected or gapped or seat in dirty or seat not in record._closed_seats:
+        elif (
+            not collected or gapped or seat in dirty or seat not in record._closed_seats
+        ):
             coverage[seat] = "partial"
         else:
             coverage[seat] = "complete"

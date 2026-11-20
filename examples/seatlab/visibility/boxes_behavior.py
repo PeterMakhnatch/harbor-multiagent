@@ -30,8 +30,11 @@ def _trials(root: Path) -> list[Trial]:
         raise ValueError("E1 behavior panel has an unresolved world audit")
     return trials
 
+
 def _source_instance(trial: Trial) -> tuple[int, Fraction]:
-    job_config, _, trial_result = (json.loads(path.read_bytes()) for path in trial.sources[:3])
+    job_config, _, trial_result = (
+        json.loads(path.read_bytes()) for path in trial.sources[:3]
+    )
     lock = json.loads((trial.sources[2].parent / "lock.json").read_bytes())
     name = trial_result["trial_name"]
     instance = int(name.split("__", 1)[0].removeprefix("boxes-i"))
@@ -77,7 +80,11 @@ def _rows(path: Path) -> Iterator[dict]:
 
 
 def _accepted(row: dict) -> bool:
-    return row.get("late") is not True and row.get("ok") is True and isinstance(row.get("seat"), str)
+    return (
+        row.get("late") is not True
+        and row.get("ok") is True
+        and isinstance(row.get("seat"), str)
+    )
 
 
 def _audit(trial: Trial) -> tuple[tuple[tuple[str, str, str], ...], int]:
@@ -108,13 +115,18 @@ def _audit(trial: Trial) -> tuple[tuple[tuple[str, str, str], ...], int]:
         response = row.get("response")
         if kind == "msg" and method == "POST":
             message_id = response.get("id") if isinstance(response, dict) else None
-            if type(message_id) is not int or response.get("from") != seat or message_id in posts:
+            if (
+                type(message_id) is not int
+                or response.get("from") != seat
+                or message_id in posts
+            ):
                 raise ValueError(f"{trial.arm} has an unresolved accepted message")
             posts[message_id] = seat
         elif kind == "msgs" and method == "GET":
             batch = response.get("messages") if isinstance(response, dict) else None
             if not isinstance(batch, list) or any(
-                not isinstance(item, dict) or item.get("from") != posts.get(item.get("id"))
+                not isinstance(item, dict)
+                or item.get("from") != posts.get(item.get("id"))
                 for item in batch
             ):
                 raise ValueError(f"{trial.arm} has an unresolved message fetch")
@@ -124,7 +136,11 @@ def _audit(trial: Trial) -> tuple[tuple[tuple[str, str, str], ...], int]:
     seen: dict[int, set[str]] = defaultdict(set)
     opened: list[tuple[str, str, str]] = []
     for row in rows[:-1]:
-        if not _accepted(row) or row.get("kind") != "open" or row.get("method") != "POST":
+        if (
+            not _accepted(row)
+            or row.get("kind") != "open"
+            or row.get("method") != "POST"
+        ):
             continue
         response = row.get("response")
         box = response.get("box") if isinstance(response, dict) else None
@@ -185,7 +201,11 @@ def _dispersion(values: list[Fraction]) -> list[Fraction]:
 def _count(
     rows: list[tuple[str, str, str]], timing: str, ordinal: str | None = None
 ) -> dict[str, int]:
-    selected = [row for row in rows if row[1] == timing and (ordinal is None or row[0] == ordinal)]
+    selected = [
+        row
+        for row in rows
+        if row[1] == timing and (ordinal is None or row[0] == ordinal)
+    ]
     own = sum(row[2] == "own" for row in selected)
     peer_only = sum(row[2] == "peer" for row in selected)
     both = sum(row[2] == "both" for row in selected)
@@ -200,13 +220,16 @@ def _count(
 
 def analyze(root: Path) -> dict[str, object]:
     """Return path-free native-trial aggregates for the actual E1 contrast."""
-    grouped: dict[tuple[str, int], list[tuple[Fraction, tuple[tuple[str, str, str], ...], int, int]]] = (
-        defaultdict(list)
-    )
+    grouped: dict[
+        tuple[str, int],
+        list[tuple[Fraction, tuple[tuple[str, str, str], ...], int, int]],
+    ] = defaultdict(list)
     for trial in _trials(root):
         instance, reward = _source_instance(trial)
         actions, fetch_seats = _audit(trial)
-        grouped[(trial.arm, instance)].append((reward, actions, fetch_seats, len(trial.seats)))
+        grouped[(trial.arm, instance)].append(
+            (reward, actions, fetch_seats, len(trial.seats))
+        )
 
     by_arm: dict[str, dict[str, object]] = {}
     for arm in _ARMS:
@@ -222,7 +245,9 @@ def analyze(root: Path) -> dict[str, object]:
                 raise ValueError(f"{arm} does not preserve 3 scored native trials")
             rewards.append(_mean(reward_values, muster._ATTEMPTS))
             repeats.append(_mean(repeat_values, muster._ATTEMPTS))
-            arm_actions.extend(action for _, actions, _, _ in rows for action in actions)
+            arm_actions.extend(
+                action for _, actions, _, _ in rows for action in actions
+            )
             instances.append(
                 {
                     "instance": instance,
@@ -247,9 +272,7 @@ def analyze(root: Path) -> dict[str, object]:
         }
 
     team = [
-        row
-        for instance in range(1, 11)
-        for row in grouped[("e1/team-3", instance)]
+        row for instance in range(1, 11) for row in grouped[("e1/team-3", instance)]
     ]
     team_flat = [action for _, actions, _, _ in team for action in actions]
     timings = ("before", "no-fetch", "after")
@@ -263,13 +286,17 @@ def analyze(root: Path) -> dict[str, object]:
         "talk": {
             "trials": len(team),
             "seats": sum(seats for *_, seats in team),
-            "trials_with_peer_fetch": sum(fetch_seats > 0 for _, _, fetch_seats, _ in team),
+            "trials_with_peer_fetch": sum(
+                fetch_seats > 0 for _, _, fetch_seats, _ in team
+            ),
             "seats_with_peer_fetch": sum(fetch_seats for _, _, fetch_seats, _ in team),
             "before_first_peer_fetch": _count(team_flat, "before"),
             "no_peer_fetch": _count(team_flat, "no-fetch"),
             "after_first_peer_fetch": _count(team_flat, "after"),
             "early_late": {
-                ordinal: {timing: _count(team_flat, timing, ordinal) for timing in timings}
+                ordinal: {
+                    timing: _count(team_flat, timing, ordinal) for timing in timings
+                }
                 for ordinal in ("early", "late")
             },
         },

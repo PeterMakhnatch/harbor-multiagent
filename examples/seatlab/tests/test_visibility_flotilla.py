@@ -30,7 +30,10 @@ def _tape(directory: Path, *records: dict, version: int = 2) -> Path:
     tape.parent.mkdir(parents=True)
     rows = (_record("start", **start), *records)
     tape.write_text(
-        "".join(json.dumps(dict(row, seq=seq, t=1.0)) + "\n" for seq, row in enumerate(rows, 1)),
+        "".join(
+            json.dumps(dict(row, seq=seq, t=1.0)) + "\n"
+            for seq, row in enumerate(rows, 1)
+        ),
         encoding="utf-8",
     )
     return tape
@@ -38,18 +41,23 @@ def _tape(directory: Path, *records: dict, version: int = 2) -> Path:
 
 def _snapshot(directory: Path, *, messages: list, submissions: list) -> Path:
     state = directory / "verifier/world-state.json"
-    _json(state, {
-        "world_version": 2,
-        "condition": "talk",
-        "seats": list(_SEATS),
-        "frozen": True,
-        "messages": messages,
-        "submissions": submissions,
-    })
+    _json(
+        state,
+        {
+            "world_version": 2,
+            "condition": "talk",
+            "seats": list(_SEATS),
+            "frozen": True,
+            "messages": messages,
+            "submissions": submissions,
+        },
+    )
     return state
 
 
-def test_fetches_preserve_server_order_repeats_and_empty_results(tmp_path: Path) -> None:
+def test_fetches_preserve_server_order_repeats_and_empty_results(
+    tmp_path: Path,
+) -> None:
     tape = _tape(
         tmp_path,
         _record("deliver", "p2", ids=[]),
@@ -69,10 +77,14 @@ def test_fetches_preserve_server_order_repeats_and_empty_results(tmp_path: Path)
             {"id": "m2", "from": "p2", "to": "p2", "text": "My reminder."},
             {"id": "m3", "from": "p2", "to": "p1", "text": "Thanks."},
         ],
-        submissions=[{"n": 1, "seat": "p2", "answer": {"day": "Mon", "start": "09:00"}}],
+        submissions=[
+            {"n": 1, "seat": "p2", "answer": {"day": "Mon", "start": "09:00"}}
+        ],
     )
 
-    events, coverage, sources = flotilla._read_evidence(tmp_path, _SEATS, "talk", 2, True)
+    events, coverage, sources = flotilla._read_evidence(
+        tmp_path, _SEATS, "talk", 2, True
+    )
     assert (coverage, sources) == ("complete", (tape, state))
     assert events == (
         Event("fetch", "p2"),
@@ -94,18 +106,24 @@ def test_pilot_receipt_is_kept_without_a_verifier_snapshot(tmp_path: Path) -> No
         _record("deliver", "p2", ids=["m1"]),
         version=1,
     )
-    events, coverage, sources = flotilla._read_evidence(tmp_path, _SEATS, "talk", 1, True)
+    events, coverage, sources = flotilla._read_evidence(
+        tmp_path, _SEATS, "talk", 1, True
+    )
     assert (coverage, sources) == ("partial", (tape,))
     assert events == (
         Event("send", "p1", (("p1", "m1"),)),
         Event("available", "p2", (("p1", "m1"),)),
         Event("fetch", "p2", (("p1", "m1"),)),
     )
-    assert flotilla._read_evidence(tmp_path, _SEATS, "talk", 2, True)[1] == "unavailable"
+    assert (
+        flotilla._read_evidence(tmp_path, _SEATS, "talk", 2, True)[1] == "unavailable"
+    )
 
 
 @pytest.mark.parametrize("ids", [["m2"], ["m1", "m1"], []])
-def test_inconsistent_fetch_does_not_get_receipt_credit(tmp_path: Path, ids: list) -> None:
+def test_inconsistent_fetch_does_not_get_receipt_credit(
+    tmp_path: Path, ids: list
+) -> None:
     _tape(
         tmp_path,
         _record("send", "p1", id="m1", to="p2"),
@@ -120,21 +138,29 @@ def test_inconsistent_fetch_does_not_get_receipt_credit(tmp_path: Path, ids: lis
     )
 
 
-def test_state_tail_does_not_create_in_window_receipts_or_actions(tmp_path: Path) -> None:
+def test_state_tail_does_not_create_in_window_receipts_or_actions(
+    tmp_path: Path,
+) -> None:
     tape = _tape(tmp_path, _record("send", "p1", id="m1", to="p2"))
     state = _snapshot(
         tmp_path,
         messages=[{"id": "m1", "from": "p1", "to": "p2", "text": "Tuesday is free."}],
         submissions=[{"n": 1, "seat": "p2", "answer": {"day": "Tue", "start": 9}}],
     )
-    events, coverage, sources = flotilla._read_evidence(tmp_path, _SEATS, "talk", 2, True)
+    events, coverage, sources = flotilla._read_evidence(
+        tmp_path, _SEATS, "talk", 2, True
+    )
     assert (coverage, sources) == ("partial", (tape, state))
     assert events == (
         Event("send", "p1", (("p1", "m1"),)),
         Event("available", "p2", (("p1", "m1"),)),
     )
     tape.unlink()
-    assert flotilla._read_evidence(tmp_path, _SEATS, "talk", 2, True) == ((), "unavailable", ())
+    assert flotilla._read_evidence(tmp_path, _SEATS, "talk", 2, True) == (
+        (),
+        "unavailable",
+        (),
+    )
 
 
 def _job(root: Path, condition: str = "solo") -> tuple[Path, dict]:
@@ -149,7 +175,7 @@ def _job(root: Path, condition: str = "solo") -> tuple[Path, dict]:
 
 def test_missing_result_does_not_drop_solo_trial(tmp_path: Path) -> None:
     trial_dir, _ = _job(tmp_path)
-    trial, = flotilla._load_job(tmp_path, "c1-ds-1seat", "c1", {"solo": 1})
+    (trial,) = flotilla._load_job(tmp_path, "c1-ds-1seat", "c1", {"solo": 1})
     assert trial.key == "flotilla:c1-ds-1seat/original-attempt"
     assert trial.arm == "c1/v2/solo"
     assert trial.seats == ("p1",)

@@ -57,9 +57,7 @@ def _model(record: RunRecord) -> str:
     config = result.get("config") if isinstance(result, dict) else None
     participants = config.get("participants") if isinstance(config, dict) else None
     names = {
-        row.get("model_name")
-        for row in participants or []
-        if isinstance(row, dict)
+        row.get("model_name") for row in participants or [] if isinstance(row, dict)
     }
     if len(names) != 1 or not isinstance(next(iter(names)), str):
         raise ValueError("Crucible recorded model is unavailable")
@@ -93,10 +91,14 @@ def _reports(
         if seat in seen:
             raise _Invalid("duplicate")
         seen.add(seat)
-        ordered.append((
-            seat,
-            listener._scores(payload.get("claim"), listener._FIELDS[seat], "invalid"),
-        ))
+        ordered.append(
+            (
+                seat,
+                listener._scores(
+                    payload.get("claim"), listener._FIELDS[seat], "invalid"
+                ),
+            )
+        )
     if seen != set(listener._FIELDS):
         raise _Invalid("incomplete")
     return tuple(ordered)
@@ -112,15 +114,22 @@ def _observe(record: RunRecord, model: str) -> list[_Observation | str]:
     results: list[_Observation | str] = []
     for round_number in _ROUNDS:
         candidates = [
-            row for row in rows
-            if row.get("actor") == _RECEIVER and listener._is_round(row, round_number)
+            row
+            for row in rows
+            if row.get("actor") == _RECEIVER
+            and listener._is_round(row, round_number)
             and row.get("event_type") in {"message_read", "decision"}
         ]
-        decision = next((row for row in candidates if row.get("event_type") == "decision"), None)
+        decision = next(
+            (row for row in candidates if row.get("event_type") == "decision"), None
+        )
         if decision is None:
             results.append("missing")
             continue
-        if decision.get("authenticated") is not True or decision.get("visibility") != "world_audit":
+        if (
+            decision.get("authenticated") is not True
+            or decision.get("visibility") != "world_audit"
+        ):
             results.append("invalid")
             continue
         payload = decision["payload"]
@@ -129,7 +138,8 @@ def _observe(record: RunRecord, model: str) -> list[_Observation | str]:
             results.append("invalid")
             continue
         reads = [
-            row for row in candidates
+            row
+            for row in candidates
             if row.get("event_type") == "message_read" and row["seq"] < decision["seq"]
         ]
         ordered = None
@@ -156,17 +166,19 @@ def _observe(record: RunRecord, model: str) -> list[_Observation | str]:
             results.append("invalid")
             continue
         counts = Counter(ordered)
-        results.append(_Observation(
-            record.condition,
-            model,
-            round_number,
-            ordered,
-            tuple(sorted((item, counts[item]) for item in counts)),
-            _ROUTES.index(choice),
-            _FLAGS.index(flag),
-            truth,
-            record.key,
-        ))
+        results.append(
+            _Observation(
+                record.condition,
+                model,
+                round_number,
+                ordered,
+                tuple(sorted((item, counts[item]) for item in counts)),
+                _ROUTES.index(choice),
+                _FLAGS.index(flag),
+                truth,
+                record.key,
+            )
+        )
     return results
 
 
@@ -180,8 +192,14 @@ def _disagreements(values: list[int]) -> int:
 def _pairs(rows: list[_Observation], key: str) -> dict[str, int]:
     grouped: dict[tuple[Any, ...], list[_Observation]] = defaultdict(list)
     for row in rows:
-        grouped[(row.condition, row.model, row.round_number, getattr(row, key))].append(row)
-    repeated = [group for group in grouped.values() if len({row.evidence_key for row in group}) >= 2]
+        grouped[(row.condition, row.model, row.round_number, getattr(row, key))].append(
+            row
+        )
+    repeated = [
+        group
+        for group in grouped.values()
+        if len({row.evidence_key for row in group}) >= 2
+    ]
     choice = liar = pair_total = 0
     trials: set[str] = set()
     for group in repeated:
@@ -212,7 +230,8 @@ def _counts(rows: Iterable[_Observation]) -> dict[str, int]:
 def analyze(root: Path) -> dict[str, Any]:
     """Return collection-independent aggregate counts for the Crucible cohort."""
     records = [
-        record for record in run_records(root)
+        record
+        for record in run_records(root)
         if record.family == listener.FAMILY and record.condition in listener.POLICIES
     ]
     models = {record.key: _model(record) for record in records}
@@ -229,15 +248,19 @@ def analyze(root: Path) -> dict[str, Any]:
     for condition in listener.POLICIES:
         for round_number in _ROUNDS:
             selected = by_cell[condition, round_number]
-            cells.append({
-                "condition": condition,
-                "model": models[next(row.evidence_key for row in selected)] if selected else None,
-                "round": round_number,
-                "denominator": len(selected),
-                "counts": _counts(selected),
-                "ordered": _pairs(selected, "ordered"),
-                "multiset_sensitivity": _pairs(selected, "multiset"),
-            })
+            cells.append(
+                {
+                    "condition": condition,
+                    "model": models[next(row.evidence_key for row in selected)]
+                    if selected
+                    else None,
+                    "round": round_number,
+                    "denominator": len(selected),
+                    "counts": _counts(selected),
+                    "ordered": _pairs(selected, "ordered"),
+                    "multiset_sensitivity": _pairs(selected, "multiset"),
+                }
+            )
     return {
         "method": "first_decision_after_last_complete_authenticated_get",
         "primary": "actual_msg_seqs_order",

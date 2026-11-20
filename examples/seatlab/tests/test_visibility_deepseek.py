@@ -58,13 +58,23 @@ class _Response:
 class _Connection:
     calls: list[tuple[str, str, bytes | None]] = []
 
-    def __init__(self, host: str, port: int | None = None, *, timeout: object = None, context: object = None, **_: object) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int | None = None,
+        *,
+        timeout: object = None,
+        context: object = None,
+        **_: object,
+    ) -> None:
         assert host == "api.deepseek.com"
         assert port in (None, 443)
         assert context is not None
         assert timeout in (10, 60)
 
-    def request(self, method: str, path: str, body: bytes | None, headers: dict[str, str]) -> None:
+    def request(
+        self, method: str, path: str, body: bytes | None, headers: dict[str, str]
+    ) -> None:
         assert headers["Authorization"] == f"Bearer {_PRIVATE}"
         assert (body is None) == ("Content-Type" not in headers)
         self.calls.append((method, path, body))
@@ -87,7 +97,7 @@ class _Connection:
             )
         document = {
             "model": "deepseek-v4.1-flash-1017",
-            "choices": [{"message": {"content": "{\"ok\":true}"}}],
+            "choices": [{"message": {"content": '{"ok":true}'}}],
             "usage": {
                 "prompt_tokens": 12,
                 "completion_tokens": 4,
@@ -125,7 +135,9 @@ def _install(
     monkeypatch.setattr(deepseek, "_budget", lambda: spend)
     monkeypatch.setattr(spend, "reserve", reserve)
     monkeypatch.setattr(spend, "settle", settle)
-    monkeypatch.setattr(deepseek, "datetime", type("Clock", (), {"now": staticmethod(lambda tz: _NOW)}))
+    monkeypatch.setattr(
+        deepseek, "datetime", type("Clock", (), {"now": staticmethod(lambda tz: _NOW)})
+    )
     _Connection.calls.clear()
     return settled
 
@@ -167,7 +179,9 @@ def test_bound_key_leaves_environment_and_uses_direct_route(
     assert settled[0]["cache_hit"] == 2
 
 
-def test_preflight_reads_balance_without_reservation(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_preflight_reads_balance_without_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install(monkeypatch)
     assert deepseek.preflight()["balance_ok"] is True
     assert _Connection.calls == [("GET", "/user/balance", None)]
@@ -209,7 +223,9 @@ def test_unknown_usage_or_model_leaves_reservation(
     assert settled == []
 
 
-def test_invalid_content_settles_verified_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_invalid_content_settles_verified_usage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settled = _install(monkeypatch)
     original = _Connection.getresponse
 
@@ -250,7 +266,9 @@ def test_budget_refusal_sends_no_generation(monkeypatch: pytest.MonkeyPatch) -> 
     assert [path for _, path, _ in _Connection.calls] == ["/user/balance"]
 
 
-def test_transport_failure_keeps_exception_safe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_transport_failure_keeps_exception_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install(monkeypatch)
 
     def fail(self: _Connection) -> _Response:
@@ -269,7 +287,9 @@ def test_http_exception_has_fixed_category(monkeypatch: pytest.MonkeyPatch) -> N
         raise HTTPException(_PRIVATE)
 
     monkeypatch.setattr(_Connection, "getresponse", fail)
-    with pytest.raises(deepseek.SeatUnavailable, match="^provider_unavailable$") as raised:
+    with pytest.raises(
+        deepseek.SeatUnavailable, match="^provider_unavailable$"
+    ) as raised:
         deepseek.preflight()
     assert _PRIVATE not in str(raised.value)
 
@@ -279,7 +299,9 @@ def test_invalid_balance_text_is_rejected() -> None:
         deepseek._decimal("not-a-balance")
 
 
-def test_default_connection_wraps_before_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_connection_wraps_before_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     events: list[str] = []
     raw_sent = bytearray()
 
@@ -327,7 +349,9 @@ def test_default_connection_wraps_before_authorization(monkeypatch: pytest.Monke
 
     original_context = ssl.create_default_context
 
-    def create_context(*args: object, cafile: str | None = None, **kwargs: object) -> ssl.SSLContext:
+    def create_context(
+        *args: object, cafile: str | None = None, **kwargs: object
+    ) -> ssl.SSLContext:
         assert cafile == certifi.where()
         return original_context(*args, cafile=cafile, **kwargs)
 

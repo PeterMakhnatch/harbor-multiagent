@@ -56,18 +56,25 @@ def _run(
             "finished_at": "2026-01-01T00:01:00Z",
             "verifier_result": {"rewards": {"reward": 1}},
             "config": {
-                "participants": [{"seat": seat, "model_name": _MODEL} for seat in seats],
+                "participants": [
+                    {"seat": seat, "model_name": _MODEL} for seat in seats
+                ],
             },
             "seat_results": [
                 {
                     "seat": seat,
-                    "agent_info": {"model_info": {"provider": "fixture", "name": "model"}},
+                    "agent_info": {
+                        "model_info": {"provider": "fixture", "name": "model"}
+                    },
                     "agent_execution": {"finished_at": "2026-01-01T00:00:59Z"},
                 }
                 for seat in seats
             ],
             "exception_info": (
-                {"exception_type": exception, "exception_message": "unrelated timeout text"}
+                {
+                    "exception_type": exception,
+                    "exception_message": "unrelated timeout text",
+                }
                 if exception
                 else None
             ),
@@ -82,7 +89,10 @@ def _run(
         log.parent.mkdir(parents=True, exist_ok=True)
         log.write_text(
             "".join(
-                json.dumps({"seq": i, "task_family": family, "condition": condition, **event}) + "\n"
+                json.dumps(
+                    {"seq": i, "task_family": family, "condition": condition, **event}
+                )
+                + "\n"
                 for i, event in enumerate(events, 1)
             )
             + ('{"seq":' if clipped else ""),
@@ -123,28 +133,57 @@ def test_census_uses_report_and_wave_rows_and_keeps_timeout_separate(tmp_path):
     family = "migration-turf-war"
     actor = "migrator_c"
     seats = (actor, "migrator_ruby", "migrator_ts")
-    events = [_event("repo_commit", "world", authenticated=False), _event("repo_commit", actor)]
+    events = [
+        _event("repo_commit", "world", authenticated=False),
+        _event("repo_commit", actor),
+    ]
     _index(
         tmp_path,
         [
             _run(tmp_path, 1, family, "aligned_control", seats, events),
-            _run(tmp_path, 2, family, "aligned_control", seats, events, exception="AgentError"),
+            _run(
+                tmp_path,
+                2,
+                family,
+                "aligned_control",
+                seats,
+                events,
+                exception="AgentError",
+            ),
         ],
         [
             _run(
-                tmp_path, 3, family, "aligned_control", seats, events,
-                wave="wave-timeout", exception="AgentTimeoutError",
+                tmp_path,
+                3,
+                family,
+                "aligned_control",
+                seats,
+                events,
+                wave="wave-timeout",
+                exception="AgentTimeoutError",
             )
         ],
     )
     _run(tmp_path, 4, family, "aligned_control", seats, events)
-    _run(tmp_path, 5, family, "aligned_control", seats, events, wave="wave-listed-oracle-pilot")
+    _run(
+        tmp_path,
+        5,
+        family,
+        "aligned_control",
+        seats,
+        events,
+        wave="wave-listed-oracle-pilot",
+    )
     primary, non_timeout_error = load(tmp_path)
     (timeout,) = load_excluded(tmp_path)
     assert [trial.key for trial in (primary, non_timeout_error, timeout)] == [
         str(UUID(int=i)) for i in (1, 2, 3)
     ]
-    assert [trial.finished for trial in (primary, non_timeout_error, timeout)] == [True, False, False]
+    assert [trial.finished for trial in (primary, non_timeout_error, timeout)] == [
+        True,
+        False,
+        False,
+    ]
     assert primary.seats == seats
     assert primary.coverage == dict.fromkeys(seats, "complete")
     assert timeout.coverage == dict.fromkeys(seats, "partial")
@@ -157,11 +196,15 @@ def test_census_uses_report_and_wave_rows_and_keeps_timeout_separate(tmp_path):
         "runs/wave-timeout/wave1_manifest.json",
         "runs/wave-timeout/native-3/result.json",
     }
-    assert {path.relative_to(tmp_path).as_posix() for path in primary.sources} == census | {
+    assert {
+        path.relative_to(tmp_path).as_posix() for path in primary.sources
+    } == census | {
         "runs/wave-listed/native-1/artifacts/manifest.json",
         f"runs/wave-listed/native-1/{_LOG.as_posix()}",
     }
-    assert {path.relative_to(tmp_path).as_posix() for path in timeout.sources} == census | {
+    assert {
+        path.relative_to(tmp_path).as_posix() for path in timeout.sources
+    } == census | {
         "runs/wave-timeout/native-3/artifacts/manifest.json",
         f"runs/wave-timeout/native-3/{_LOG.as_posix()}",
     }
@@ -169,9 +212,16 @@ def test_census_uses_report_and_wave_rows_and_keeps_timeout_separate(tmp_path):
 
 def test_census_rejects_duplicate_across_cohorts_and_unknown_observed_model(tmp_path):
     family = "epistemic-crucible"
-    first = _run(tmp_path, 1, family, "hidden_profile_solo_ceiling", ("solo_analyst",), None)
+    first = _run(
+        tmp_path, 1, family, "hidden_profile_solo_ceiling", ("solo_analyst",), None
+    )
     second = _run(
-        tmp_path, 2, family, "hidden_profile_solo_ceiling", ("solo_analyst",), None,
+        tmp_path,
+        2,
+        family,
+        "hidden_profile_solo_ceiling",
+        ("solo_analyst",),
+        None,
         exception="AgentTimeoutError",
     )
     _index(tmp_path, [first], [second])
@@ -195,7 +245,14 @@ def test_supply_preserves_repeated_fetches_nonpeer_entries_and_order(tmp_path):
         _event("chat_public", first, text=_STATE),
         _event("chat_public", second, text=_STATE),
         _event("chat_dm", first, to=second, text=_STATE),
-        _event("chat_dm", "world", authenticated=False, visibility="world_private", to=second, text=_STATE),
+        _event(
+            "chat_dm",
+            "world",
+            authenticated=False,
+            visibility="world_private",
+            to=second,
+            text=_STATE,
+        ),
         _event("message_read", second, channel="public", msg_seqs=[]),
         _event("message_read", second, channel="public", msg_seqs=[2]),
         _event("message_read", second, channel="public", msg_seqs=[1, 2]),
@@ -220,15 +277,25 @@ def test_supply_preserves_repeated_fetches_nonpeer_entries_and_order(tmp_path):
         ("action", ()),
     ]
     muted = project(trial, second)
-    assert [e.messages for e in muted.events if e.seat == second and e.kind == "fetch"] == [
-        (), ((second, "2"),), ((second, "2"),), ((second, "2"),), (("world", "4"),),
+    assert [
+        e.messages for e in muted.events if e.seat == second and e.kind == "fetch"
+    ] == [
+        (),
+        ((second, "2"),),
+        ((second, "2"),),
+        ((second, "2"),),
+        (("world", "4"),),
     ]
     assert tuple(e for e in muted.events if e.seat != second) == tuple(
         e for e in trial.events if e.seat != second
     )
     seats = {seat.seat: seat for seat in measure_seats(trial)}
     changed = seats[second].receipts["fetch"]
-    assert (changed.events, changed.message_occurrences, changed.unique_messages) == (3, 4, 2)
+    assert (changed.events, changed.message_occurrences, changed.unique_messages) == (
+        3,
+        4,
+        2,
+    )
     assert changed.before_action == 3
     assert seats[first].receipts["fetch"].no_known_action == 1
     assert seats[silent].coverage == "complete"
@@ -269,17 +336,30 @@ def test_round_scope_dangling_reference_and_solo_without_audit(tmp_path):
         _event("scout_report", scout, round=1),
         _event("scout_report", scout, round=2),
         _event("chat_message", scout, text=_STATE),
-        _event("message_read", decision_maker, channel="round_reports", round=2, msg_seqs=[1, 2, 3]),
+        _event(
+            "message_read",
+            decision_maker,
+            channel="round_reports",
+            round=2,
+            msg_seqs=[1, 2, 3],
+        ),
         _event("observation_read", scout, round=2),
         _event("decision", decision_maker, round=2, choice="route_alpha"),
     ]
     _index(
         tmp_path,
         [
-            _run(tmp_path, 1, family, "gullibility_p00", (scout, decision_maker), events),
+            _run(
+                tmp_path, 1, family, "gullibility_p00", (scout, decision_maker), events
+            ),
             _run(tmp_path, 2, family, "hidden_profile_solo_ceiling", (solo,), None),
             _run(
-                tmp_path, 3, family, "gullibility_p00", (scout, decision_maker), events,
+                tmp_path,
+                3,
+                family,
+                "gullibility_p00",
+                (scout, decision_maker),
+                events,
                 clipped=True,
             ),
         ],
@@ -311,10 +391,17 @@ def test_migration_board_and_failed_artifact_status(tmp_path):
     ]
     _index(
         tmp_path,
-        [_run(
-            tmp_path, 1, family, "aligned_control", (first, second), events,
-            collection_status="failed",
-        )],
+        [
+            _run(
+                tmp_path,
+                1,
+                family,
+                "aligned_control",
+                (first, second),
+                events,
+                collection_status="failed",
+            )
+        ],
     )
     (trial,) = load(tmp_path)
     assert trial.events == (

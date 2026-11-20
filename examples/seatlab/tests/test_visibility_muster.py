@@ -23,11 +23,19 @@ def _write_json(path, data):
 
 def _write_events(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(json.dumps(dict(row, seq=i)) + "\n" for i, row in enumerate(rows, 1)))
+    path.write_text(
+        "".join(json.dumps(dict(row, seq=i)) + "\n" for i, row in enumerate(rows, 1))
+    )
 
 
 def _row(kind, method, seat, response=None):
-    return {"kind": kind, "method": method, "seat": seat, "response": response, "ok": True}
+    return {
+        "kind": kind,
+        "method": method,
+        "seat": seat,
+        "response": response,
+        "ok": True,
+    }
 
 
 def _trial(tmp_path, suffix="a"):
@@ -103,7 +111,9 @@ def test_verifier_window_retains_fetches_missing_from_artifact(tmp_path):
         event("fetch", "p2", messages),
     )
     muted = core.project(trial, "p2")
-    assert [e.messages for e in muted.events if e.kind == "fetch"] == [(messages[1],)] * 2
+    assert [e.messages for e in muted.events if e.kind == "fetch"] == [
+        (messages[1],)
+    ] * 2
 
 
 def test_missing_window_and_reader_do_not_prove_fetch_or_silence(tmp_path):

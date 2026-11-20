@@ -31,7 +31,14 @@ def _panel(tmp_path):
             }
             tasks.append(task)
             for attempt in range(3):
-                trial_id = str(UUID(int=1000 + instance * 10 + attempt + (100 if arm == "team-3" else 0)))
+                trial_id = str(
+                    UUID(
+                        int=1000
+                        + instance * 10
+                        + attempt
+                        + (100 if arm == "team-3" else 0)
+                    )
+                )
                 trial = job / f"boxes-i{instance:02d}__{attempt}"
                 trial.mkdir(parents=True)
                 (trial / "lock.json").write_text(
@@ -57,7 +64,12 @@ def _panel(tmp_path):
                             "seat": seat,
                             "ok": True,
                             "request": {"box": box},
-                            "response": {"box": box, "room": 1, "flag": True, "budget_left": 0},
+                            "response": {
+                                "box": box,
+                                "room": 1,
+                                "flag": True,
+                                "budget_left": 0,
+                            },
                         }
                     )
                 opens.append(
@@ -85,9 +97,13 @@ def _panel(tmp_path):
                             "config": {
                                 "job_id": job_id,
                                 "task": dict(task),
-                                "participants": [{"seat": seat} for seat in ("p1", "p2", "p3")],
+                                "participants": [
+                                    {"seat": seat} for seat in ("p1", "p2", "p3")
+                                ],
                             },
-                            "seat_results": [{"seat": seat} for seat in ("p1", "p2", "p3")],
+                            "seat_results": [
+                                {"seat": seat} for seat in ("p1", "p2", "p3")
+                            ],
                             "reward_valid": True,
                             "exception_info": None,
                             "finished_at": "2026-11-20T00:00:00",
@@ -102,14 +118,24 @@ def _panel(tmp_path):
                     "n_attempts": 3,
                     "tasks": tasks,
                     "participants": [
-                        {"seat": seat, "resume_trajectory": False, "load_trajectory": None}
+                        {
+                            "seat": seat,
+                            "resume_trajectory": False,
+                            "load_trajectory": None,
+                        }
                         for seat in ("p1", "p2", "p3")
                     ],
                 }
             )
         )
         (job / "result.json").write_text(
-            json.dumps({"id": job_id, "n_total_trials": 30, "finished_at": "2026-11-20T00:00:00"})
+            json.dumps(
+                {
+                    "id": job_id,
+                    "n_total_trials": 30,
+                    "finished_at": "2026-11-20T00:00:00",
+                }
+            )
         )
 
 
@@ -126,7 +152,11 @@ def test_equal_instance_means_do_not_pair_attempts(tmp_path, monkeypatch):
     assert result["talk"]["no_peer_fetch"]["accepted_opens"] == 90
     assert result["talk"]["before_first_peer_fetch"]["accepted_opens"] == 0
     assert result["talk"]["seats_with_peer_fetch"] == 0
-    assert result["unresolved"] == {"world_audits": 0, "accepted_opens": 0, "peer_fetches": 0}
+    assert result["unresolved"] == {
+        "world_audits": 0,
+        "accepted_opens": 0,
+        "peer_fetches": 0,
+    }
     text = json.dumps(boxes._json(result))
     assert str(tmp_path) not in text
     assert "boxes-i01__0" not in text
@@ -151,7 +181,14 @@ def test_future_fetch_is_before_and_failed_fetch_is_not_verified(tmp_path):
             "ok": True,
             "response": {"id": 1, "from": "p1", "text": "hidden"},
         },
-        {"kind": "open", "method": "POST", "seat": "p2", "ok": True, "request": {"box": 1}, "response": {"box": 1}},
+        {
+            "kind": "open",
+            "method": "POST",
+            "seat": "p2",
+            "ok": True,
+            "request": {"box": 1},
+            "response": {"box": 1},
+        },
         {
             "kind": "msgs",
             "method": "GET",
@@ -160,8 +197,21 @@ def test_future_fetch_is_before_and_failed_fetch_is_not_verified(tmp_path):
             "late": True,
             "response": {"messages": [{"id": 1, "from": "p1"}]},
         },
-        {"kind": "msgs", "method": "GET", "seat": "p2", "ok": False, "response": {"error": "denied"}},
-        {"kind": "open", "method": "POST", "seat": "p3", "ok": True, "request": {"box": 1}, "response": {"box": 1}},
+        {
+            "kind": "msgs",
+            "method": "GET",
+            "seat": "p2",
+            "ok": False,
+            "response": {"error": "denied"},
+        },
+        {
+            "kind": "open",
+            "method": "POST",
+            "seat": "p3",
+            "ok": True,
+            "request": {"box": 1},
+            "response": {"box": 1},
+        },
         {
             "kind": "msgs",
             "method": "GET",
@@ -169,14 +219,45 @@ def test_future_fetch_is_before_and_failed_fetch_is_not_verified(tmp_path):
             "ok": True,
             "response": {"messages": [{"id": 1, "from": "p1", "text": "hidden"}]},
         },
-        {"kind": "open", "method": "POST", "seat": "p2", "ok": True, "request": {"box": 1}, "response": {"box": 1}},
-        {"kind": "open", "method": "POST", "seat": "p1", "ok": True, "request": {"box": 2}, "response": {"box": 2}},
-        {"kind": "open", "method": "POST", "seat": "p1", "ok": True, "request": {"box": 2}, "response": {"box": 2}},
-        {"kind": "admin.close", "method": "POST", "seat": None, "ok": True, "response": {"closed": True, "events": 10}},
+        {
+            "kind": "open",
+            "method": "POST",
+            "seat": "p2",
+            "ok": True,
+            "request": {"box": 1},
+            "response": {"box": 1},
+        },
+        {
+            "kind": "open",
+            "method": "POST",
+            "seat": "p1",
+            "ok": True,
+            "request": {"box": 2},
+            "response": {"box": 2},
+        },
+        {
+            "kind": "open",
+            "method": "POST",
+            "seat": "p1",
+            "ok": True,
+            "request": {"box": 2},
+            "response": {"box": 2},
+        },
+        {
+            "kind": "admin.close",
+            "method": "POST",
+            "seat": None,
+            "ok": True,
+            "response": {"closed": True, "events": 10},
+        },
     ]
     world.parent.mkdir()
-    world.write_text("".join(json.dumps(dict(row, seq=i)) + "\n" for i, row in enumerate(rows, 1)))
-    trial = boxes.Trial("hidden-id", "e1/team-3", ("p1", "p2", "p3"), (), {}, True, (world,))
+    world.write_text(
+        "".join(json.dumps(dict(row, seq=i)) + "\n" for i, row in enumerate(rows, 1))
+    )
+    trial = boxes.Trial(
+        "hidden-id", "e1/team-3", ("p1", "p2", "p3"), (), {}, True, (world,)
+    )
     actions, fetch_seats = boxes._audit(trial)
     assert fetch_seats == 1
     assert [row[1:] for row in actions] == [

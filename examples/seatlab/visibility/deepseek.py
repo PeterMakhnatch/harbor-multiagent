@@ -125,7 +125,9 @@ def _balance() -> Decimal:
         raise SeatUnavailable("balance_unverified")
     row = usd[0]
     total = _decimal(row.get("total_balance"))
-    parts = _decimal(row.get("granted_balance")) + _decimal(row.get("topped_up_balance"))
+    parts = _decimal(row.get("granted_balance")) + _decimal(
+        row.get("topped_up_balance")
+    )
     if total != parts or total < _MIN_BALANCE:
         raise SeatUnavailable("balance_below_minimum")
     return total
@@ -181,7 +183,10 @@ def _usage(document: dict[str, Any]) -> tuple[int, int, int]:
     if any(type(value) is not int or value < 0 for value in values):
         raise SeatUnavailable("usage_unverified")
     hit, miss, output = values
-    if usage.get("prompt_tokens") != hit + miss or usage.get("total_tokens") != hit + miss + output:
+    if (
+        usage.get("prompt_tokens") != hit + miss
+        or usage.get("total_tokens") != hit + miss + output
+    ):
         raise SeatUnavailable("usage_unverified")
     return hit, miss, output
 
@@ -194,7 +199,11 @@ def _served_model(value: object) -> str:
 
 def _text(document: dict[str, Any]) -> str:
     choices = document.get("choices")
-    if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+    if (
+        not isinstance(choices, list)
+        or len(choices) != 1
+        or not isinstance(choices[0], dict)
+    ):
         raise SeatUnavailable("provider_response_invalid")
     message = choices[0].get("message")
     content = message.get("content") if isinstance(message, dict) else None

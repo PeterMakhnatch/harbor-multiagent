@@ -13,12 +13,27 @@ _BETA = {"latency": 10, "reliability": 20, "safety": 30}
 def _record(root: Path, key: str) -> RunRecord:
     directory = root / key
     directory.mkdir()
-    (directory / "result.json").write_text(json.dumps({
-        "config": {"participants": [{"model_name": "model-a"}, {"model_name": "model-a"}]}
-    }))
+    (directory / "result.json").write_text(
+        json.dumps(
+            {
+                "config": {
+                    "participants": [
+                        {"model_name": "model-a"},
+                        {"model_name": "model-a"},
+                    ]
+                }
+            }
+        )
+    )
     return RunRecord(
-        directory, listener.FAMILY, "gullibility_p00", key,
-        ("decision_maker",), True, frozenset(), (),
+        directory,
+        listener.FAMILY,
+        "gullibility_p00",
+        key,
+        ("decision_maker",),
+        True,
+        frozenset(),
+        (),
     )
 
 
@@ -26,17 +41,19 @@ def _write_round(record: RunRecord, fetch_order: tuple[str, ...]) -> None:
     rows: list[dict] = []
 
     def add(kind, actor, authenticated, visibility, recipients, **payload):
-        rows.append({
-            "seq": len(rows) + 1,
-            "task_family": listener.FAMILY,
-            "condition": record.condition,
-            "event_type": kind,
-            "actor": actor,
-            "authenticated": authenticated,
-            "visibility": visibility,
-            "recipients": recipients,
-            "payload": payload,
-        })
+        rows.append(
+            {
+                "seq": len(rows) + 1,
+                "task_family": listener.FAMILY,
+                "condition": record.condition,
+                "event_type": kind,
+                "actor": actor,
+                "authenticated": authenticated,
+                "visibility": visibility,
+                "recipients": recipients,
+                "payload": payload,
+            }
+        )
         return rows[-1]["seq"]
 
     report_seqs = {}
@@ -47,31 +64,69 @@ def _write_round(record: RunRecord, fetch_order: tuple[str, ...]) -> None:
             for route, values in (("route_alpha", _ALPHA), ("route_beta", _BETA))
         }
         add(
-            "observation_truth", "world", False, "world_private", [seat],
-            round=1, seat=seat, attributes=list(fields), read_seq=read_seq, **claim,
+            "observation_truth",
+            "world",
+            False,
+            "world_private",
+            [seat],
+            round=1,
+            seat=seat,
+            attributes=list(fields),
+            read_seq=read_seq,
+            **claim,
         )
         report_seqs[seat] = add(
-            "scout_report", seat, True, "public", ["decision_maker"],
-            round=1, seat=seat, claim=claim,
+            "scout_report",
+            seat,
+            True,
+            "public",
+            ["decision_maker"],
+            round=1,
+            seat=seat,
+            claim=claim,
         )
     first = report_seqs[fetch_order[0]]
     complete = [report_seqs[seat] for seat in fetch_order]
     add(
-        "message_read", "decision_maker", True, "world_audit", [],
-        round=1, channel="round_reports", msg_seqs=[first],
+        "message_read",
+        "decision_maker",
+        True,
+        "world_audit",
+        [],
+        round=1,
+        channel="round_reports",
+        msg_seqs=[first],
     )
     add(
-        "message_read", "decision_maker", True, "world_audit", [],
-        round=1, channel="round_reports", msg_seqs=complete,
+        "message_read",
+        "decision_maker",
+        True,
+        "world_audit",
+        [],
+        round=1,
+        channel="round_reports",
+        msg_seqs=complete,
     )
     # A later incomplete GET must not replace the last complete GET.
     add(
-        "message_read", "decision_maker", True, "world_audit", [],
-        round=1, channel="round_reports", msg_seqs=[first],
+        "message_read",
+        "decision_maker",
+        True,
+        "world_audit",
+        [],
+        round=1,
+        channel="round_reports",
+        msg_seqs=[first],
     )
     add(
-        "decision", "decision_maker", True, "world_audit", [],
-        round=1, choice="route_beta", flagged_liar="scout_2",
+        "decision",
+        "decision_maker",
+        True,
+        "world_audit",
+        [],
+        round=1,
+        choice="route_beta",
+        flagged_liar="scout_2",
     )
     path = record.directory / listener._EVENT_LOG
     path.parent.mkdir(parents=True)
@@ -81,9 +136,15 @@ def _write_round(record: RunRecord, fetch_order: tuple[str, ...]) -> None:
 def _obs(key: str, choice: int, flag: int, ordered: tuple) -> variation._Observation:
     counts = Counter(ordered)
     return variation._Observation(
-        "gullibility_p00", "model-a", 1, ordered,
+        "gullibility_p00",
+        "model-a",
+        1,
+        ordered,
         tuple(sorted((item, counts[item]) for item in counts)),
-        choice, flag, 0, key,
+        choice,
+        flag,
+        0,
+        key,
     )
 
 
@@ -105,7 +166,8 @@ def test_reversed_fetch_order_splits_primary_only(tmp_path, monkeypatch):
 
     result = variation.analyze(tmp_path)
     cell = next(
-        row for row in result["cells"]
+        row
+        for row in result["cells"]
         if row["condition"] == "gullibility_p00" and row["round"] == 1
     )
     assert result["not_conditioned_on"] == "full_prompt_or_history"
@@ -123,7 +185,9 @@ def test_reversed_fetch_order_splits_primary_only(tmp_path, monkeypatch):
 
 def test_same_wrong_choice_and_flag_do_not_disagree():
     evidence = (("scout_2", ((4, 5), (6, 7))),)
-    result = variation._pairs([_obs("a", 1, 2, evidence), _obs("b", 1, 2, evidence)], "ordered")
+    result = variation._pairs(
+        [_obs("a", 1, 2, evidence), _obs("b", 1, 2, evidence)], "ordered"
+    )
     assert result["comparison_pairs"] == 1
     assert result["choice_disagreement"] == 0
     assert result["liar_disagreement"] == 0
