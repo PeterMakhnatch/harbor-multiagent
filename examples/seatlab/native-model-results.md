@@ -98,6 +98,39 @@ We made 36 fresh, isolated requests to direct `deepseek-flash`. Each of the 6 se
 | Choices of A | 18 / 18 | 12 / 18 |
 | Within-case repeat pairs with different choices | 0 / 18 | 4 / 18 |
 
-The unchanged accuracy hides 6 changes: 3 favored the visible reports and 3 favored no reports. The result shows that the reports changed some choices. It does not show that they improved accuracy. These were new listener decisions, not new teams or counterfactual scores for the original teams.
+The arms differed on 6 matched choices. Three favored the visible reports and 3 favored no reports. The requests used independent samples. We cannot tell which single response would have changed, or assign a new score to an archived team.
 
 The [per-request cost ledger](results/visibility-listener-cost.json) records 36 settled calls, 4,752 uncached input tokens, and 180 output tokens. The token-based estimate was **$0.000820800 USD**, with no unresolved reservation. This is an estimate at the direct provider's listed rate, not an invoice.
+
+### Did the listener follow the evidence or keep the same letter?
+
+We ran [72 new requests](results/visibility-label-crossover.json). Each case appeared under both its original labels and an exact swap of A and B. If the listener selects a *different* letter after the swap, it selects the *same physical route*.
+
+| Result across 6 archived cases | No reports | Visible reports |
+| --- | ---: | ---: |
+| Same physical route under both label maps | 0 / 18 pairs | 13 / 18 pairs |
+| Correct route across both label maps | 18 / 36 choices | 23 / 36 choices |
+| Chose the displayed letter A | 36 / 36 choices | 23 / 36 choices |
+
+The no-report prompt was identical under both maps. The listener always chose A. With reports, its choices followed the physical route in 13 pairs, but still kept the same letter in 5. This separates label preference from sensitivity to evidence. It does not show that the listener always interprets the reports correctly.
+
+All 72 calls returned a valid first response. They repeat 6 source worlds, not 72 independent tasks. The [per-call cost record](results/visibility-label-crossover-cost.json) gives a token-based estimate of **$0.001641600 USD**, with no unresolved reservation.
+
+### Did current inventory reports help a new Harbor team?
+
+Yes, in all 4 registered Dispatch Handoff worlds. A direct `deepseek-flash` agent reported inventory. A second agent chose a loading bay for each of 4 shipments. Both agents ran in both arms. The `fresh` arm delivered the inventory reports. The `silent` arm delivered none. Neither model saw the arm name.
+
+| World seed | Complete pairs | Fresh minus silent: share of optimal choices |
+| --- | ---: | ---: |
+| 3101 | 2 | +0.50 |
+| 3103 | 3 | +0.50 |
+| 3109 | 3 | +0.50 |
+| 3119 | 3 | +0.25 |
+
+The [registered result](results/visibility-native-pairs.json) gives each world equal weight: **+43.75 percentage points**. The dispatcher selected a different bay on 19 of the 44 matched shipments. Within the same world and arm, no choice differed across repeated runs: 0 of 40 comparisons with reports and 0 of 48 without them. These comparisons reuse shipments. They are not independent tasks.
+
+All 11 valid `fresh` teams chose the optimal bay for all 4 shipments. The native verifier scored the accepted choices against the final inventory. These results measure the value of this channel in this task. They do not show that chat helps teams in general.
+
+We attempted all 24 trials. A launcher error stopped `s3101-r0-fresh` before either seat made a paid call. We fixed the launcher, kept the missing result, and did not retry it. The [per-seat cost record](results/visibility-native-cost.json) covers all 46 paid calls in the 23 valid trials. The listed token rates give **$0.003868956 USD**: 4,352 cached input tokens, 8,594 uncached input tokens, and 4,278 output tokens. No call has an unresolved reservation.
+
+Stock Eval Lab read 23 native team rewards and 46 submitted seat actions. None of those seats had native token counts. The [read-only comparison](results/visibility-native-usage.json) found a settled direct receipt for each of the 46 actions. It did not fill missing native fields from those receipts. The 2 seats in the failed launch remain unknown to the native reader.

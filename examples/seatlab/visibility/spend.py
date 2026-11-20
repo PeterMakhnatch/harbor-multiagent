@@ -11,7 +11,9 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-_UNIT = 1_000_000_000  # integer nanodollars; the smallest list-price rate is 3 per token
+_UNIT = (
+    1_000_000_000  # integer nanodollars; the smallest list-price rate is 3 per token
+)
 _HOLD = 10_000_000  # $0.01 for <=8192 request bytes, <=512 output tokens, no tools
 _FLOOR = 1_500_000_000
 _SHARED_CAP = 10 * _UNIT
@@ -34,7 +36,11 @@ def _usd(nano: int) -> str:
 
 def _location(root: Path) -> Path:
     info = root.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != os.getuid()
+        or info.st_mode & 0o077
+    ):
         raise SpendRefused("private_spend_directory_required")
     return root / "direct-flash.sqlite3"
 
@@ -67,7 +73,12 @@ def _connect(root: Path | None = None):
             raise SpendRefused("no_spend_directory")
         root = Path(value)
     path = _location(root)
-    with closing(sqlite3.connect(path.as_uri() + "?mode=rw", uri=True, timeout=15)) as db, db:
+    with (
+        closing(
+            sqlite3.connect(path.as_uri() + "?mode=rw", uri=True, timeout=15)
+        ) as db,
+        db,
+    ):
         db.row_factory = sqlite3.Row
         yield db
 
@@ -87,7 +98,10 @@ def reserve(run_id: str, role: str, *, balance_usd: Decimal) -> None:
             raise SpendRefused("account_balance_increased_reconcile_first")
         if balance - holds < _FLOOR:
             raise SpendRefused("balance_floor")
-        if charged + holds > cap or max(opening - balance, charged) + holds > _SHARED_CAP:
+        if (
+            charged + holds > cap
+            or max(opening - balance, charged) + holds > _SHARED_CAP
+        ):
             raise SpendRefused("budget_cap")
         try:
             db.execute(
@@ -135,34 +149,56 @@ def settle(
             "UPDATE calls SET hit=?,miss=?,output=?,served_model=?,started_at=?,finished_at=?,"
             "cost_low=?,cost_high=? WHERE run=? AND role=? AND cost_high IS NULL",
             (
-                cache_hit, cache_miss, output, served_model, started_at.astimezone(UTC).isoformat(),
-                finished_at.astimezone(UTC).isoformat(), low, high, run_id, role,
+                cache_hit,
+                cache_miss,
+                output,
+                served_model,
+                started_at.astimezone(UTC).isoformat(),
+                finished_at.astimezone(UTC).isoformat(),
+                low,
+                high,
+                run_id,
+                role,
             ),
         )
         if result.rowcount != 1:
             raise SpendRefused("no_open_reservation")
 
 
-def report(root: Path) -> dict:
-    """Export only run labels, roles, tokens and cost. No account or request identifiers."""
+def report(root: Path, *, run_prefix: str | None = None) -> dict:
+    """Export public usage and cost, without account or request identifiers."""
+    if run_prefix is not None and (not run_prefix or not run_prefix.isascii()):
+        raise SpendRefused("invalid_run_prefix")
+
     runs = []
     total_low = total_high = unresolved = 0
     with _connect(root) as db:
         for row in db.execute("SELECT * FROM calls ORDER BY run,role"):
+            if run_prefix is not None and not row["run"].startswith(run_prefix):
+                continue
             measured = row["cost_high"] is not None
             unresolved += not measured
             total_low += row["cost_low"] if measured else 0
             total_high += row["cost_high"] if measured else _HOLD
-            runs.append({
-                "run": row["run"], "role": row["role"], "served_model": row["served_model"],
-                "cache_hit": row["hit"], "cache_miss": row["miss"], "output": row["output"],
-                "estimated_usd_low": _usd(row["cost_low"]) if measured else None,
-                "estimated_usd_high": _usd(row["cost_high"]) if measured else None,
-                "unsettled_hold_usd": _usd(0 if measured else _HOLD),
-            })
+            runs.append(
+                {
+                    "run": row["run"],
+                    "role": row["role"],
+                    "served_model": row["served_model"],
+                    "cache_hit": row["hit"],
+                    "cache_miss": row["miss"],
+                    "output": row["output"],
+                    "estimated_usd_low": _usd(row["cost_low"]) if measured else None,
+                    "estimated_usd_high": _usd(row["cost_high"]) if measured else None,
+                    "unsettled_hold_usd": _usd(0 if measured else _HOLD),
+                }
+            )
     return {
-        "schema": "seatlab.direct-flash-cost/v1", "currency": "USD", "calls": runs,
-        "unsettled_calls": unresolved, "known_usd_low": _usd(total_low),
+        "schema": "seatlab.direct-flash-cost/v1",
+        "currency": "USD",
+        "calls": runs,
+        "unsettled_calls": unresolved,
+        "known_usd_low": _usd(total_low),
         "upper_usd_including_holds": _usd(total_high),
         "price_source": "https://api-docs.deepseek.com/quick_start/pricing",
     }
@@ -175,12 +211,19 @@ def main() -> None:
     init.add_argument("private_dir", type=Path)
     init.add_argument("--opening-balance-usd", type=Decimal, required=True)
     init.add_argument("--lane-cap-usd", type=Decimal, required=True)
-    sub.add_parser("report").add_argument("private_dir", type=Path)
+    report_cli = sub.add_parser("report")
+    report_cli.add_argument("private_dir", type=Path)
+    report_cli.add_argument(
+        "--run-prefix", help="select runs with this nonempty literal ASCII prefix"
+    )
     args = cli.parse_args()
     if args.command == "init":
-        initialize(args.private_dir.resolve(), args.opening_balance_usd, args.lane_cap_usd)
+        initialize(
+            args.private_dir.resolve(), args.opening_balance_usd, args.lane_cap_usd
+        )
     else:
-        print(json.dumps(report(args.private_dir.resolve()), sort_keys=True, indent=2))
+        receipt = report(args.private_dir.resolve(), run_prefix=args.run_prefix)
+        print(json.dumps(receipt, sort_keys=True, indent=2))
 
 
 if __name__ == "__main__":

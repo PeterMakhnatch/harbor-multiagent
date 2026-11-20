@@ -11,12 +11,14 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from uuid import UUID
 
 from .crucible import run_records
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .crucible import RunRecord
 
 SALT = "seatlab-listener-v1"
@@ -99,9 +101,15 @@ class _Cell:
 
 @dataclass(frozen=True)
 class _Schedule:
+    run_prefix: ClassVar[str] = "listen"
+
     candidates: dict[str, tuple[str, ...]]
     cases: tuple[_Case, ...]
     cells: tuple[_Cell, ...]
+    source_paths: tuple[Path, ...]
+
+    def run_id(self, cell_id: int) -> str:
+        return f"{self.run_prefix}-{cell_id:02d}"
 
     def receipt(self) -> dict[str, Any]:
         from . import deepseek
@@ -131,7 +139,9 @@ class _Schedule:
                     "fetch_seq": case.data.fetch_seq if case.data else None,
                     "first_decision_seq": case.data.decision_seq if case.data else None,
                     "report_seqs": case.data.report_seqs if case.data else None,
-                    "observation_truth_seqs": case.data.truth_seqs if case.data else None,
+                    "observation_truth_seqs": case.data.truth_seqs
+                    if case.data
+                    else None,
                 }
                 for case in self.cases
             ],
@@ -152,13 +162,23 @@ class _Schedule:
     def seal_bytes(self) -> bytes:
         return _encode(self.receipt())
 
+    def summary(self, raw: bytes) -> dict[str, Any]:
+        return {
+            "schedule_sha256": _sha(raw),
+            "selected_cases": len(self.cases),
+            "eligible_cases": sum(case.data is not None for case in self.cases),
+            "planned_cells": len(self.cells),
+        }
+
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
 def _encode(value: object) -> bytes:
-    return (json.dumps(value, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode()
+    return (
+        json.dumps(value, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
+    ).encode()
 
 
 def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -206,8 +226,7 @@ def _scores(source: object, fields: tuple[str, str], reason: str) -> Report:
             raise _Ineligible(reason)
         first, second = (values.get(field) for field in fields)
         if any(
-            type(value) is not int or not 0 <= value <= 100
-            for value in (first, second)
+            type(value) is not int or not 0 <= value <= 100 for value in (first, second)
         ):
             raise _Ineligible(reason)
         scores.append((first, second))
@@ -356,8 +375,7 @@ def _prompt(data: _Data, swap: bool, arm: str) -> str:
         a, b = report[::-1] if swap else report
         for label, scores in (("A", a), ("B", b)):
             first, second = (
-                f"{field}={score}"
-                for field, score in zip(fields, scores, strict=True)
+                f"{field}={score}" for field, score in zip(fields, scores, strict=True)
             )
             rows.append(f"{label}: {first}, {second}")
     return _HEADER + "\n".join(rows) + "\n"
@@ -403,13 +421,16 @@ def build_schedule(root: Path) -> _Schedule:
     root = root.resolve()
     candidates: dict[str, dict[str, RunRecord]] = {policy: {} for policy in POLICIES}
     seen: dict[str, RunRecord] = {}
+    source_paths: set[Path] = set()
     for record in run_records(root):
+        source_paths.update(record._sources)
         if record.family != FAMILY or record.condition not in candidates:
             continue
         uuid = str(UUID(record.key))
         previous = seen.get(uuid)
         if previous is not None and (
-            previous.directory != record.directory or previous.condition != record.condition
+            previous.directory != record.directory
+            or previous.condition != record.condition
         ):
             raise ValueError("ambiguous stored UUID in listener source cohort")
         seen[uuid] = record
@@ -445,21 +466,24 @@ def build_schedule(root: Path) -> _Schedule:
                             prompts[arm],
                         )
                     )
-    return _Schedule(ordered, tuple(cases), tuple(cells))
+    return _Schedule(ordered, tuple(cases), tuple(cells), tuple(sorted(source_paths)))
 
 
-def _choice_object(pairs: list[tuple[str, Any]]) -> str:
+def _choice_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     if len(pairs) != 1 or pairs[0][0] != "choice" or pairs[0][1] not in ("A", "B"):
         raise ValueError("choice object is not exact")
-    return pairs[0][1]
+    return dict(pairs)
 
 
 def parse_response(response: str) -> Label | None:
     """Accept only {"choice":"A"} or {"choice":"B"}, with no extra content."""
     try:
         value = json.loads(response, object_pairs_hook=_choice_object)
-    except (json.JSONDecodeError, ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         return None
+    if not isinstance(value, dict):
+        return None
+    value = value["choice"]
     if value == "A":
         return "A"
     if value == "B":
@@ -475,27 +499,28 @@ def _study_path(root: Path, study: Path) -> Path:
 
 
 def seal(root: Path, study: Path) -> dict[str, Any]:
+    return _seal_study(root, study, build_schedule)
+
+
+def _seal_study(
+    root: Path, study: Path, build: Callable[[Path], _Schedule]
+) -> dict[str, Any]:
     study = _study_path(root, study)
-    plan = build_schedule(root)
+    plan = build(root)
     raw = plan.seal_bytes()
     study.mkdir(mode=0o700)
     (study / "schedule.json").write_bytes(raw)
-    return _summary(plan, raw)
+    return plan.summary(raw)
 
 
-def _summary(plan: _Schedule, raw: bytes) -> dict[str, Any]:
-    return {
-        "schedule_sha256": _sha(raw),
-        "selected_cases": len(plan.cases),
-        "eligible_cases": sum(case.data is not None for case in plan.cases),
-        "planned_cells": len(plan.cells),
-    }
-
-
-def _checked_schedule(root: Path, sealed: bytes) -> _Schedule:
-    plan = build_schedule(root)
+def _checked_schedule(
+    root: Path, sealed: bytes, build: Callable[[Path], _Schedule]
+) -> _Schedule:
+    plan = build(root)
     if plan.seal_bytes() != sealed:
-        raise ValueError("the archive or protocol no longer matches the sealed schedule")
+        raise ValueError(
+            "the archive or protocol no longer matches the sealed schedule"
+        )
     return plan
 
 
@@ -517,12 +542,18 @@ def _record_result(path: Path, outcome: dict[str, Any]) -> None:
 
 def run_cell(root: Path, study: Path, cell_id: int) -> dict[str, Any]:
     """Consume one cell permanently before calling the registered transport."""
+    return _run_cell(root, study, cell_id, build_schedule)
+
+
+def _run_cell(
+    root: Path, study: Path, cell_id: int, build: Callable[[Path], _Schedule]
+) -> dict[str, Any]:
     study = _study_path(root, study)
     with (study / "schedule.json").open("rb") as schedule_file:
         # Serialize starts across processes; keep order even if a caller interrupts a cell.
         fcntl.flock(schedule_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         sealed = schedule_file.read()
-        plan = _checked_schedule(root, sealed)
+        plan = _checked_schedule(root, sealed, build)
         if not 1 <= cell_id <= len(plan.cells):
             raise ValueError("cell ID is not in the sealed listener schedule")
         directory = _cell_dir(study, cell_id)
@@ -541,7 +572,7 @@ def run_cell(root: Path, study: Path, cell_id: int) -> dict[str, Any]:
         try:
             completed = deepseek.turn(
                 plan.cells[cell_id - 1].prompt,
-                run_id=f"listen-{cell_id:02d}",
+                run_id=plan.run_id(cell_id),
                 role=_RECEIVER,
             )
         except deepseek.SeatUnavailable as error:
@@ -563,34 +594,65 @@ def run_cell(root: Path, study: Path, cell_id: int) -> dict[str, Any]:
         return {key: value for key, value in outcome.items() if key != "response"}
 
 
-def _outcome(study: Path, digest: str, cell: _Cell) -> tuple[str, Label | None]:
+@dataclass(frozen=True)
+class _Outcome:
+    status: str
+    label: Label | None = None
+    served_model: str | None = None
+
+
+def _outcome(study: Path, digest: str, cell: _Cell) -> _Outcome:
     directory = _cell_dir(study, cell.id)
     if not directory.exists():
-        return "not_run", None
+        return _Outcome("not_run")
     path = directory / "outcome.json"
     if not path.exists():
-        return "reserved_without_result", None
+        return _Outcome("reserved_without_result")
     row = json.loads(path.read_bytes())
     if (
         not isinstance(row, dict)
         or row.get("schedule_sha256") != digest
+        or type(row.get("cell")) is not int
         or row.get("cell") != cell.id
     ):
         raise ValueError(f"listener outcome does not match sealed cell {cell.id}")
     status = row.get("status")
     if status in ("seat_unavailable", "request_error"):
-        return status, None
+        return _Outcome(status)
     response = row.get("response")
     label = parse_response(response) if isinstance(response, str) else None
     if not isinstance(response, str) or status != ("valid" if label else "invalid"):
         raise ValueError(f"invalid outcome for listener cell {cell.id}")
     from . import deepseek
 
-    if row.get("served_model") not in deepseek._ACCEPTED_MODELS:
+    served_model = row.get("served_model")
+    if served_model not in (
+        deepseek.MODEL,
+        deepseek.REVISION,
+        deepseek.REVISION.lower(),
+    ):
         raise ValueError(
             f"listener cell {cell.id} completed response has no exact served model"
         )
-    return status, label
+    return _Outcome(status, label, served_model)
+
+
+def _report_inputs(
+    root: Path, study: Path, build: Callable[[Path], _Schedule]
+) -> tuple[_Schedule, bytes, dict[int, _Outcome]]:
+    study = _study_path(root, study)
+    sealed = (study / "schedule.json").read_bytes()
+    plan = _checked_schedule(root, sealed, build)
+    digest = _sha(sealed)
+    return plan, sealed, {cell.id: _outcome(study, digest, cell) for cell in plan.cells}
+
+
+def _count_outcome(counts: Counter[str], cell: _Cell, outcome: _Outcome) -> None:
+    counts["scheduled"] += 1
+    counts[outcome.status] += 1
+    if outcome.label is not None:
+        counts[outcome.label] += 1
+        counts["correct"] += int(outcome.label == cell.case.best_label)
 
 
 def _repeat_disagreement(labels: list[Label]) -> dict[str, int]:
@@ -602,9 +664,7 @@ def _repeat_disagreement(labels: list[Label]) -> dict[str, int]:
     return {"A*B": mixed, "denominator": valid * (valid - 1) // 2}
 
 
-def _arm_summary(
-    counts: Counter[str], disagreement: dict[str, int]
-) -> dict[str, Any]:
+def _choice_summary(counts: Counter[str]) -> dict[str, Any]:
     valid, correct = counts["valid"], counts["correct"]
     return {
         **{
@@ -623,23 +683,20 @@ def _arm_summary(
             )
         },
         "correct_fraction_of_valid": correct / valid if valid else None,
-        "repeat_disagreement": disagreement,
     }
+
+
+def _arm_summary(counts: Counter[str], disagreement: dict[str, int]) -> dict[str, Any]:
+    return {**_choice_summary(counts), "repeat_disagreement": disagreement}
 
 
 def report(root: Path, study: Path) -> dict[str, Any]:
     """Score local outcomes against private truth and describe arms separately."""
-    study = _study_path(root, study)
-    sealed = (study / "schedule.json").read_bytes()
-    plan = _checked_schedule(root, sealed)
-    digest = _sha(sealed)
+    plan, sealed, outcomes = _report_inputs(root, study, build_schedule)
     all_arms: dict[str, Counter[str]] = {arm: Counter() for arm in ARMS}
     all_pairs: Counter[str] = Counter()
-    pooled_disagreement = {
-        arm: {"A*B": 0, "denominator": 0} for arm in ARMS
-    }
+    pooled_disagreement = {arm: {"A*B": 0, "denominator": 0} for arm in ARMS}
     by_case = []
-    outcomes = {cell.id: _outcome(study, digest, cell) for cell in plan.cells}
     for case in plan.cases:
         counts: dict[str, Counter[str]] = {arm: Counter() for arm in ARMS}
         labels: dict[str, list[Label]] = {arm: [] for arm in ARMS}
@@ -647,13 +704,10 @@ def report(root: Path, study: Path) -> dict[str, Any]:
         for cell in plan.cells:
             if cell.case.id != case.id:
                 continue
-            status, label = outcomes[cell.id]
-            arms = counts[cell.arm]
-            arms["scheduled"] += 1
-            arms[status] += 1
+            outcome = outcomes[cell.id]
+            _count_outcome(counts[cell.arm], cell, outcome)
+            label = outcome.label
             if label is not None:
-                arms[label] += 1
-                arms["correct"] += int(label == case.best_label)
                 labels[cell.arm].append(label)
             replicas.setdefault(cell.replicate, {})[cell.arm] = label
         pairs: Counter[str] = Counter(scheduled=len(replicas))
@@ -685,7 +739,7 @@ def report(root: Path, study: Path) -> dict[str, Any]:
             }
         )
     return {
-        **_summary(plan, sealed),
+        **plan.summary(sealed),
         "scope": _LIMIT,
         "eligible_best_label_counts": {
             label: sum(case.best_label == label for case in plan.cases)
@@ -705,8 +759,6 @@ def report(root: Path, study: Path) -> dict[str, Any]:
     }
 
 
-
-
 def _pair_summary(counts: Counter[str]) -> dict[str, int]:
     return {
         key: counts[key]
@@ -721,28 +773,45 @@ def _pair_summary(counts: Counter[str]) -> dict[str, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    return _main(
+        argv,
+        description=__doc__,
+        name="listener",
+        build=build_schedule,
+        summarize=report,
+    )
+
+
+def _main(
+    argv: list[str] | None,
+    *,
+    description: str | None,
+    name: str,
+    build: Callable[[Path], _Schedule],
+    summarize: Callable[[Path, Path], dict[str, Any]],
+) -> int:
+    parser = argparse.ArgumentParser(description=description)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("fingerprint", "seal", "run-cell", "report"):
-        command = sub.add_parser(name)
+    for subcommand in ("fingerprint", "seal", "run-cell", "report"):
+        command = sub.add_parser(subcommand)
         command.add_argument("root", type=Path, metavar="ROOT")
-        if name != "fingerprint":
+        if subcommand != "fingerprint":
             command.add_argument("study", type=Path, metavar="STUDY")
-        if name == "run-cell":
+        if subcommand == "run-cell":
             command.add_argument("cell", type=int, metavar="CELL_ID")
     args = parser.parse_args(argv)
     try:
         if args.command == "fingerprint":
-            plan = build_schedule(args.root)
-            payload = _summary(plan, plan.seal_bytes())
+            plan = build(args.root)
+            payload = plan.summary(plan.seal_bytes())
         elif args.command == "seal":
-            payload = seal(args.root, args.study)
+            payload = _seal_study(args.root, args.study, build)
         elif args.command == "run-cell":
-            payload = run_cell(args.root, args.study, args.cell)
+            payload = _run_cell(args.root, args.study, args.cell, build)
         else:
-            payload = report(args.root, args.study)
+            payload = summarize(args.root, args.study)
     except (OSError, ValueError) as error:
-        parser.exit(2, f"listener: {error}\n")
+        parser.exit(2, f"{name}: {error}\n")
     print(json.dumps(payload, indent=2, sort_keys=True))
     return int(payload.get("status") in ("seat_unavailable", "request_error"))
 

@@ -80,6 +80,39 @@ python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR"
 
 `keys run --` supplies `DEEPSEEK_API_KEY` to the host process. Each numbered cell accepts one first attempt. The report separates an unrun cell, a reserved cell without a result, and a completed choice. The public report does not contain the answer key, prompt text, account balance, or private native trial identifiers.
 
+### Run 2 new model seats in Harbor
+
+Use the fork in a project-local virtual environment, with Docker running. Do not replace a global Harbor installation. Set `HARBOR` to the absolute path of the fork's `harbor` executable. Use the Python from the same environment. From the fork root:
+
+```bash
+export PYTHONPATH="$PWD/src:$PWD/examples/seatlab:$PWD/examples:$PWD"
+python -m examples.seatlab.visibility.native_pairs plan
+python -m examples.seatlab.visibility.native_pairs preflight --native-only --harbor "$HARBOR"
+```
+
+Neither command makes a model request. **The next command can charge for 2 direct DeepSeek calls.** Use a private output directory outside the checkout. Initialize the spend directory as above, once for the whole study. Start Docker trials one at a time:
+
+```bash
+keys run -- python -m examples.seatlab.visibility.native_pairs run \
+  --out "$NATIVE_STUDY" --harbor "$HARBOR" --cell s3101-r0-fresh
+```
+
+Use the order from `plan` for the remaining cells. Keep failed first attempts. The following command reports what ran, even for an incomplete study. It makes no calls:
+
+```bash
+python -m examples.seatlab.visibility.pair_report "$NATIVE_STUDY"
+```
+
+To compare native token fields with the direct receipts, run this from the fork root with **Eval Lab's Python**:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 "$EVAL_LAB/.venv/bin/python" \
+  -m examples.seatlab.visibility.native_usage --study "$NATIVE_STUDY" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --evallab-root "$EVAL_LAB"
+```
+
+This calls the stock raw trial reader, not a paid Eval Lab command. It does not change a trial or write to Eval Lab. Provide the same spend directory that the study used. A provider receipt names the cell and role but does not include a native trial UUID.
+
 ### Label-crossover follow-up, before its first call
 
 The first listeners chose A on all 18 no-report requests. Accuracy alone could not separate a preference for that label from evidence use. This follow-up asks whether a listener chooses the **same physical route** when its label changes. It uses new generations. Do not combine them with the first 36.
@@ -89,3 +122,5 @@ Use all 6 cases in the original sealed schedule `b95aa3434271a357cd297d8a56b1715
 Run 3 repetitions for each case, map, and arm: 72 new first attempts. Visit cases in the original order, then each repetition. Use the original map first if the zero-based case and repetition indices sum to an even number. Within a map, use the visible arm first if those indices plus the map index sum to an even number. Map index 0 means original; 1 means complementary. Never retry an invalid or missing call. Keep the same cumulative $1 local cap and $1.50 account floor; do not start a new budget.
 
 For each case, repetition, and visibility condition, pair the choices under opposite mappings. Changing the letter preserves the physical route. Keeping the letter changes it. Report both counts over complete pairs, separately with and without evidence. Report A choices, accuracy, and missing cells in each arm and mapping. These are 6 source cases and dependent comparisons, not 72 independent tasks.
+
+To reproduce, use `examples.seatlab.visibility.label_crossover` instead of `examples.seatlab.visibility.listener` in the commands above. Give it a new private study directory but the same spend directory. Its sealed schedule SHA-256 is `ed95b623c379a753fef313e39e02e612df1d69ffc986845d8484fcd47bc85e1f`. Run cells 1 through 72 in order. To read only this cohort's costs, use `python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-prefix mirror-`. Filtering the report does not reset the budget.

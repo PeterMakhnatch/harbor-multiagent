@@ -50,15 +50,25 @@ def _archive_events(policy: str) -> list[dict]:
         for seat, fields in _FIELDS.items():
             scores = {
                 route: {field: values[field] for field in fields}
-                for route, values in zip(("route_alpha", "route_beta"), truth, strict=True)
+                for route, values in zip(
+                    ("route_alpha", "route_beta"), truth, strict=True
+                )
             }
             # Identical repeated observations, linked to distinct authenticated reads.
             for _ in range(2 if seat == "scout_1" else 1):
-                read_seq = append("observation_read", seat, "world_audit", [], round=round_number)
+                read_seq = append(
+                    "observation_read", seat, "world_audit", [], round=round_number
+                )
                 append(
-                    "observation_truth", "world", "world_private", [seat],
-                    round=round_number, seat=seat, attributes=list(fields),
-                    read_seq=read_seq, **{route: dict(values) for route, values in scores.items()},
+                    "observation_truth",
+                    "world",
+                    "world_private",
+                    [seat],
+                    round=round_number,
+                    seat=seat,
+                    attributes=list(fields),
+                    read_seq=read_seq,
+                    **{route: dict(values) for route, values in scores.items()},
                 )
             # Report claims are not truth; do not silently replace them with observations.
             claim = {route: dict(values) for route, values in scores.items()}
@@ -69,26 +79,50 @@ def _archive_events(policy: str) -> list[dict]:
             claim["note"] = "CLAIM_NOTE"
             refs.append(
                 append(
-                    "scout_report", seat, "public", list(_SEATS),
-                    round=round_number, seat=seat, claim=claim, note="REPORT_NOTE",
+                    "scout_report",
+                    seat,
+                    "public",
+                    list(_SEATS),
+                    round=round_number,
+                    seat=seat,
+                    claim=claim,
+                    note="REPORT_NOTE",
                 )
             )
         for partial in (refs[:1], list(reversed(refs))):
             append(
-                "message_read", _RECEIVER, "world_audit", [], round=round_number,
-                channel="round_reports", msg_seqs=partial,
+                "message_read",
+                _RECEIVER,
+                "world_audit",
+                [],
+                round=round_number,
+                channel="round_reports",
+                msg_seqs=partial,
             )
         append(
-            "decision", _RECEIVER, "world_audit", [], round=round_number,
+            "decision",
+            _RECEIVER,
+            "world_audit",
+            [],
+            round=round_number,
             choice="route_beta" if round_number == 1 else "route_alpha",
         )
         # A later fetch and revision must not change the reconstructed input.
         append(
-            "message_read", _RECEIVER, "world_audit", [], round=round_number,
-            channel="round_reports", msg_seqs=[],
+            "message_read",
+            _RECEIVER,
+            "world_audit",
+            [],
+            round=round_number,
+            channel="round_reports",
+            msg_seqs=[],
         )
         append(
-            "decision", _RECEIVER, "world_audit", [], round=round_number,
+            "decision",
+            _RECEIVER,
+            "world_audit",
+            [],
+            round=round_number,
             choice="route_alpha" if round_number == 1 else "route_beta",
         )
     return rows
@@ -150,14 +184,23 @@ def test_sealed_sampling_and_prompt_blinding(archive):
     ]
     assert [case.best_label for case in plan.cases] == ["A", "A", "B", "B", "A", "A"]
     for policy, group in plan.candidates.items():
-        distinct = {str(UUID(row.key)): row for row in records if row.condition == policy}
+        distinct = {
+            str(UUID(row.key)): row for row in records if row.condition == policy
+        }
         assert group == tuple(sorted(distinct, key=lambda key: _by_hash(distinct[key])))
-        assert tuple(case.uuid for case in plan.cases if case.policy == policy) == group[:2]
+        assert (
+            tuple(case.uuid for case in plan.cases if case.policy == policy)
+            == group[:2]
+        )
     for idx, case in enumerate(plan.cases):
         cells = [cell for cell in plan.cells if cell.case == case]
-        by_rep = [tuple(cell.arm for cell in cells if cell.replicate == k) for k in (1, 2, 3)]
+        by_rep = [
+            tuple(cell.arm for cell in cells if cell.replicate == k) for k in (1, 2, 3)
+        ]
         forward = ("visible", "none")
-        assert by_rep == [forward if (idx + k) % 2 == 0 else forward[::-1] for k in range(3)]
+        assert by_rep == [
+            forward if (idx + k) % 2 == 0 else forward[::-1] for k in range(3)
+        ]
         assert case.data is not None
         assert case.data.fetch_seq + 1 == case.data.decision_seq
         assert len(case.data.truth_seqs) == 4
@@ -165,8 +208,17 @@ def test_sealed_sampling_and_prompt_blinding(archive):
         assert '{"choice":"A"}' in visible
         assert "exactly A or B" not in visible
         for forbidden in (
-            "CLAIM_NOTE", "REPORT_NOTE", "unknown_attribute", "99", "scout_", "round",
-            case.uuid, "gullibility", "alpha", "beta", "private_best_label",
+            "CLAIM_NOTE",
+            "REPORT_NOTE",
+            "unknown_attribute",
+            "99",
+            "scout_",
+            "round",
+            case.uuid,
+            "gullibility",
+            "alpha",
+            "beta",
+            "private_best_label",
         ):
             assert forbidden not in visible
         lines = visible.split("Data:\n")[1].splitlines()
@@ -179,7 +231,8 @@ def test_sealed_sampling_and_prompt_blinding(archive):
 
 def _round_rows(rows: list[dict], round_number: int, kind: str) -> list[dict]:
     return [
-        row for row in rows
+        row
+        for row in rows
         if row["event_type"] == kind and row["payload"].get("round") == round_number
     ]
 
@@ -202,7 +255,9 @@ def _round_rows(rows: list[dict], round_number: int, kind: str) -> list[dict]:
 )
 def test_selected_case_stays_ineligible_without_replacement(archive, damage, reason):
     root, records = archive
-    candidates = sorted((row for row in records if row.condition == _POLICIES[0]), key=_by_hash)
+    candidates = sorted(
+        (row for row in records if row.condition == _POLICIES[0]), key=_by_hash
+    )
     # Use round 2 to permit deliberately pointing a fetch back into round 1.
     selected = candidates[1]
     path = selected.directory / _FILE
@@ -248,6 +303,7 @@ def test_selected_case_stays_ineligible_without_replacement(archive, damage, rea
     assert len(plan.cells) == 30
     assert not any(cell.case.id == "p00-r2" for cell in plan.cells)
 
+
 @pytest.mark.parametrize(
     ("response", "expected"),
     [
@@ -256,6 +312,10 @@ def test_selected_case_stays_ineligible_without_replacement(archive, damage, rea
         ('{"choice": "A"}', "A"),
         ("A", None),
         ("B", None),
+        ('"A"', None),
+        ('"B"', None),
+        ('["A"]', None),
+        ('{"choice":{"choice":"A"}}', None),
         ("", None),
         ('{"choice":"A"} trailing', None),
         ('{"choice":"A","choice":"B"}', None),
@@ -279,7 +339,7 @@ def test_runs_once_and_scores_in_separate_views(archive, tmp_path, monkeypatch):
         [
             ' {"choice":"A"}\n',
             '{"choice":"B"}',
-            "A or B",
+            '"A"',
             deepseek.SeatUnavailable("balance_floor"),
             RuntimeError("internal"),
             KeyboardInterrupt(),
@@ -291,12 +351,15 @@ def test_runs_once_and_scores_in_separate_views(archive, tmp_path, monkeypatch):
         value = next(responses)
         if isinstance(value, BaseException):
             raise value
-        return deepseek.SeatTurn(value, "deepseek-v4.1-flash-1017")
+        return deepseek.SeatTurn(value, deepseek.REVISION)
 
     monkeypatch.setattr(deepseek, "turn", turn)
     summary = listener.seal(root, study)
     assert summary["planned_cells"] == 36
-    assert summary["schedule_sha256"] == hashlib.sha256((study / "schedule.json").read_bytes()).hexdigest()
+    assert (
+        summary["schedule_sha256"]
+        == hashlib.sha256((study / "schedule.json").read_bytes()).hexdigest()
+    )
     with pytest.raises(FileExistsError, match="study"):
         listener.seal(root, study)
     with pytest.raises(ValueError, match="earlier listener cell 1"):
@@ -305,9 +368,13 @@ def test_runs_once_and_scores_in_separate_views(archive, tmp_path, monkeypatch):
 
     results = [listener.run_cell(root, study, i) for i in range(1, 6)]
     assert [row["status"] for row in results] == [
-        "valid", "valid", "invalid", "seat_unavailable", "request_error",
+        "valid",
+        "valid",
+        "invalid",
+        "seat_unavailable",
+        "request_error",
     ]
-    assert results[0]["served_model"] == "deepseek-v4.1-flash-1017"
+    assert results[0]["served_model"] == "DeepSeek-V4.1-Flash-1017"
     assert "response" not in results[0]
     assert "SUBSCRIPTION" not in (study / "schedule.json").read_text(encoding="utf-8")
     with pytest.raises(KeyboardInterrupt):
@@ -316,13 +383,12 @@ def test_runs_once_and_scores_in_separate_views(archive, tmp_path, monkeypatch):
         with pytest.raises(ValueError, match="retries are not allowed"):
             listener.run_cell(root, study, i)
     assert seen == [
-        (cell.prompt, f"listen-{cell.id:02d}", _RECEIVER)
-        for cell in plan.cells[:6]
+        (cell.prompt, f"listen-{cell.id:02d}", _RECEIVER) for cell in plan.cells[:6]
     ]
     invalid = json.loads((study / "cell-003/outcome.json").read_bytes())
-    assert invalid["response"] == "A or B"
+    assert invalid["response"] == '"A"'
     valid = json.loads((study / "cell-001/outcome.json").read_bytes())
-    assert valid["served_model"] == "deepseek-v4.1-flash-1017"
+    assert valid["served_model"] == "DeepSeek-V4.1-Flash-1017"
     unavailable = json.loads((study / "cell-004/outcome.json").read_bytes())
     assert unavailable["category"] == "balance_floor"
 
