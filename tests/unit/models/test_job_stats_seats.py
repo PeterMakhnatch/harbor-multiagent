@@ -513,3 +513,95 @@ def test_legacy_job_omits_unavailable_seat_stats(has_version: bool) -> None:
     assert restored.trial_results[0].seat_results
     new = JobStats.from_trial_results([_trial_result(rewards={"reward": 1})])
     assert new.model_dump(mode="json")["seat_stats"] == {}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("with_survivor", [False, True])
+def test_double_remove_does_not_mutate_stats(with_survivor: bool) -> None:
+    trial = _trial_result("removed", seats=[_seat_result("maya")])
+    survivor = _trial_result("survivor", seats=[_seat_result("maya")])
+    stats = JobStats.from_trial_results([trial, survivor] if with_survivor else [trial])
+    stats.remove_trial(trial)
+    before = stats.model_dump()
+
+    with pytest.raises(ValueError, match="contribution not recorded"):
+        stats.remove_trial(trial)
+
+    assert stats.model_dump() == before
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "mismatch",
+    ["seat assignment", "usage presence", "usage amount", "reward", "exception"],
+)
+def test_changed_trial_cannot_retract_recorded_contribution(mismatch: str) -> None:
+    survivor = _trial_result(
+        "survivor", seats=[_seat_result("maya"), _seat_result("lee")]
+    )
+    recorded_cost = None if mismatch == "usage presence" else 0.5
+    trial = _trial_result(
+        "removed",
+        seats=[_seat_result("maya"), _seat_result("lee", cost=recorded_cost)],
+        rewards={"maya": 1},
+    )
+    original = JobStats.from_trial_results([survivor, trial])
+    stats = JobStats.model_validate_json(original.model_dump_json())
+    before = stats.model_dump()
+    changed = trial.model_copy(deep=True)
+    assert changed.seat_results is not None
+    second = changed.seat_results[1]
+    if mismatch == "seat assignment":
+        second.under_test = not second.under_test
+    elif mismatch in {"usage presence", "usage amount"}:
+        assert second.agent_result is not None
+        second.agent_result.cost_usd = 0.25
+    elif mismatch == "reward":
+        changed.verifier_result = VerifierResult(rewards={"maya": 0})
+    else:
+        second.exception_info = ExceptionInfo.from_exception(RuntimeError("changed"))
+
+    with pytest.raises(ValueError, match="contribution not recorded or changed"):
+        stats.remove_trial(changed)
+
+    assert stats.model_dump() == before
+    stats.remove_trial(TrialResult.model_validate_json(trial.model_dump_json()))
+    assert _by_seat(stats)["lee"].cost_usd == 0.5
+
+
+@pytest.mark.unit
+def test_missing_later_seat_group_refuses_removal_before_mutating() -> None:
+    trial = _trial_result(
+        "recorded",
+        seats=[_seat_result("maya"), _seat_result("lee")],
+        rewards={"maya": 1},
+    )
+    stats = JobStats.from_trial_results([trial])
+    groups = _groups(stats)
+    del groups[next(key for key, group in groups.items() if group.seat == "lee")]
+    before = stats.model_dump()
+
+    with pytest.raises(ValueError, match="seat group .* is missing contributions"):
+        stats.remove_trial(trial)
+
+    assert stats.model_dump() == before
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("completed", [0, 1])
+def test_increment_of_legacy_stats_keeps_seat_coverage_unavailable(
+    completed: int,
+) -> None:
+    stats = JobStats.model_validate({"n_completed_trials": completed})
+    trial = _trial_result("new", seats=[_seat_result("maya")], rewards={"maya": 1})
+
+    stats.increment(trial)
+
+    assert stats.n_completed_trials == completed + 1
+    assert stats.n_input_tokens == _context("maya").n_input_tokens
+    assert stats.seat_stats is None
+    before = stats.model_dump()
+    assert "seat_stats" not in before
+    with pytest.raises(ValueError, match="original contributions are unavailable"):
+        stats.remove_trial(trial)
+    assert stats.model_dump() == before

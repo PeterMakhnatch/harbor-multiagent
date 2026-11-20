@@ -57,6 +57,11 @@ were not produced, as in historical v1 results. An explicit empty mapping means
 the producer aggregated the available trial results and found no seat results.
 Do not infer an empty aggregate from a missing field or backfill one on load.
 
+Incrementing an aggregate with missing seat statistics leaves them unavailable.
+`stats.trial_contribution_digests` records which trial contributions can be
+retracted. If this field is missing, rebuild from the original trial results
+before retracting a trial instead of attempting to reverse an untracked total.
+
 ## Config output
 
 `job init` and `trial init` write sparse editable templates, omitting unset fields
