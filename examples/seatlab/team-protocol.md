@@ -151,3 +151,42 @@ Each Inspect sample requests signed option totals, then a choice and citations. 
 Run 2 blocks × 6 option maps × 4 seats × 2 layouts = 96 one-turn samples. Alternate which layout goes first by the parity of `block + map + seat`, with all indices starting at 0. Start with `separate` for even parity. Use one fixed direct DeepSeek model and the existing budget guard. Do not use tools, generation caches, retries, or fallback models. Stop at a provider, identity, or budget failure. Keep invalid responses and missing samples separate.
 
 Primary: compare the fraction with all 3 visible totals correct, `indexed − separate`. Pair the same seat, map, and block. Average matched pairs within each map, then give each map equal weight. Report how many maps and pairs contribute. Secondary: correct choice against the native world; agreement with a visible maximum; output field order; derived 3-of-4 majorities on complete paired groups; tokens and estimated cost. These 6 maps relabel 1 vendor problem. They are not 6 independent tasks. No result from this study establishes an improvement in native Harbor rewards.
+
+#### Run the Harbor packet in Inspect AI
+
+This task lives on [Peter's fork, `experiments/seatlab-inspect-replay`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/experiments/seatlab-inspect-replay/examples/seatlab). It does not require a change to upstream Harbor.
+
+```bash
+git clone --depth 1 --single-branch --branch experiments/seatlab-inspect-replay https://github.com/PeterMakhnatch/harbor-multiagent.git
+cd harbor-multiagent
+```
+
+From the root of this fork, install Inspect in a separate Python 3.12 environment. You do not need Harbor, Eval Lab, Docker, or the private trials. The protocol library pin matters: Inspect 0.3.276 imports `acp.helpers`, which the 1.0.0 release removes.
+
+```bash
+work=$(mktemp -d)
+python3.12 -m venv "$work/venv"
+"$work/venv/bin/python" -m pip install 'inspect-ai==0.3.276' 'agent-client-protocol==0.12.1'
+task=examples/seatlab/inspect_replay.py@seatlab_facts
+"$work/venv/bin/inspect" eval "$task" --model mockllm/model --limit 1 --display none --log-dir "$work/smoke"
+```
+
+This command checks that Inspect can load and score 1 sample. It does not measure a model. To evaluate your own model, set `MODEL` to an Inspect model name. Check your provider's price before running the next command. Inspect's standard provider does not use the SeatLab spend guard.
+
+```bash
+"$work/venv/bin/inspect" eval "$task" --model "$MODEL" --epochs 1 --max-samples 1 \
+  --max-retries 0 --retry-on-error=0 --log-dir "$work/model"
+```
+
+Keep the `.eval` file private. It contains prompts and model responses. The task gives the model only the selected seat's evidence. The scorer reads the sealed packet separately. It does not send the packet or hidden answer to the model.
+
+To summarize a private log, pass its exact `.eval` path. The report checks the recorded inputs against the sealed packet. It reports missing samples separately from wrong answers.
+
+```bash
+packet=examples/seatlab/results/peer-ballot-packet.json
+digest=c8f743895f9e2fbecdf8b58201100bdb602186672a482c5545549408c5857095
+"$work/venv/bin/python" -m examples.seatlab.committee.inspect_report "$packet" "$LOG" \
+  --expect-sha256 "$digest" > "$work/receiver-results.json"
+```
+
+The registered direct run uses `python -m examples.seatlab.committee.inspect_direct --log-dir "$NEW_PRIVATE_DIR"` instead of the generic Inspect model command. It requires an initialized `SEATLAB_SPEND_DIR` and a direct `DEEPSEEK_API_KEY`. It refuses to restart this cohort after a reservation. Pass `--spend-dir "$SEATLAB_SPEND_DIR"` to the report for this run. The ledger can confirm cell identity, model, and token counts. It does not authenticate the response text.
