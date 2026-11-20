@@ -72,3 +72,32 @@ The clearest contrast is within Muster. All 30 talking teams fetched a peer mess
 **None of these archives binds a peer message to an exact model request.** The counts show what the receiver fetched, not what the model used. No archived score estimates what would happen with a silent team. The [8 separate Crucible timeouts](results/visibility-crucible-timeouts.json) are outside the 616. Seven still recorded a peer fetch before an action. Dropping failed trials can drop evidence of team behavior.
 
 The [replay instructions](replication.md#replay-the-original-server-evidence) include the expected archive roots and the adapter contract for a new task. The public results contain counts, not messages, seat IDs, or private trial paths.
+
+### What the original teams did
+
+In Muster, 3 agents opened boxes on 10 task instances. Each instance had 3 attempts with chat and 3 without chat. With chat, teams less often opened a box another seat had already opened.
+
+| [Muster boxes](results/visibility-muster-behavior.json) | Without chat | With chat |
+| --- | ---: | ---: |
+| Native trials | 30 | 30 |
+| Mean reward, equal weight per instance | 0.515 | 0.857 |
+| Mean share of opens that repeated another seat's open, equal weight per instance | 39.8% | 18.1% |
+| Repeated opens / all accepted opens | 321 / 806 | 146 / 791 |
+
+All 90 talking seats fetched a peer message. Of their 791 accepted opens, 163 preceded that seat's first fetch. Of those 163, 26 repeated a peer's open. This is a comparison of original team behavior, not a rescore after removing chat.
+
+In [30 original Crucible teams](results/visibility-crucible-variation.json), decision makers chose the correct route in 177 of 180 rounds. We matched different trials by model, scout policy, round, reporting seat, numeric claims, and report order. Among 151 matched pairs, the route differed in 1 and the flagged scout differed in 29. Ignoring order admitted 699 pairs; the route differed in 27 and the flag differed in 150. These pairs share source trials. Equal numeric evidence does not establish equal prompts, prior rounds, or model requests.
+
+### Did new listeners use the archived reports?
+
+We made 36 fresh, isolated requests to direct `deepseek-flash`. Each of the 6 selected historical cases had 3 repeats per arm. All requests returned a valid choice on their first attempt. Without reports, the model chose A on every request. A happened to be correct in 4 of the 6 cases.
+
+| [Standalone listeners](results/visibility-listener.json) | No reports | Visible reports |
+| --- | ---: | ---: |
+| Correct choices | 12 / 18 | 12 / 18 |
+| Choices of A | 18 / 18 | 12 / 18 |
+| Within-case repeat pairs with different choices | 0 / 18 | 4 / 18 |
+
+The unchanged accuracy hides 6 changes: 3 favored the visible reports and 3 favored no reports. The result shows that the reports changed some choices. It does not show that they improved accuracy. These were new listener decisions, not new teams or counterfactual scores for the original teams.
+
+The [per-request cost ledger](results/visibility-listener-cost.json) records 36 settled calls, 4,752 uncached input tokens, and 180 output tokens. The token-based estimate was **$0.000820800 USD**, with no unresolved reservation. This is an estimate at the direct provider's listed rate, not an invoice.

@@ -54,3 +54,28 @@ python -m examples.seatlab.visibility crucible-timeouts "$CRUCIBLE_ROOT"
 Each command prints aggregate JSON. It verifies all declared input files with SHA-256 before and after replay. A wrong panel, missing required identity, duplicate trial, or changed source stops publication. Incomplete event coverage remains explicit. A receipt count of 0 is not proof that an uninstrumented event never happened.
 
 **For a different Harbor task:** Adapt its first-party trial manifest and ordered server log to [`Trial` and `Event`](visibility/core.py). Use `available` for mailbox eligibility, `fetch` for peers returned to an authenticated receiver, and `bound` only for messages present in the captured model request. Use private message IDs, not message text. Maintain action order within each seat. Mark each seat's coverage `complete`, `partial`, or `unavailable`. Call `project(trial, muted_seat=receiver)` to make one change, or `summarize(trials)` to count the recorded changes by arm. This works without a change to Harbor's runtime.
+
+For the 2 source-specific outcome comparisons, run:
+
+```bash
+python -m examples.seatlab.visibility.boxes_behavior "$MUSTER_E1RUN"
+python -m examples.seatlab.visibility.stored_listener_variation "$CRUCIBLE_ROOT"
+```
+
+### Run a new blinded listener experiment
+
+`fingerprint`, `seal`, and `report` are offline. `run-cell` makes a **paid** direct request. Use a private study directory and a separate private spend directory. Record the verified opening balance and your own budget before the first call. Do not delete or reset the spend directory to bypass a budget or retry a failed call.
+
+```bash
+python -m examples.seatlab.visibility.listener fingerprint "$CRUCIBLE_ROOT"
+python -m examples.seatlab.visibility.listener seal "$CRUCIBLE_ROOT" "$STUDY"
+mkdir -m 700 "$SEATLAB_SPEND_DIR"
+export SEATLAB_SPEND_DIR
+python -m examples.seatlab.visibility.spend init "$SEATLAB_SPEND_DIR" \
+  --opening-balance-usd "$OPENING_BALANCE_USD" --lane-cap-usd "$CAP_USD"
+keys run -- python -m examples.seatlab.visibility.listener run-cell "$CRUCIBLE_ROOT" "$STUDY" 1
+python -m examples.seatlab.visibility.listener report "$CRUCIBLE_ROOT" "$STUDY"
+python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR"
+```
+
+`keys run --` supplies `DEEPSEEK_API_KEY` to the host process. Each numbered cell accepts one first attempt. The report separates an unrun cell, a reserved cell without a result, and a completed choice. The public report does not contain the answer key, prompt text, account balance, or private native trial identifiers.
