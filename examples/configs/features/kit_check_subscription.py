@@ -115,12 +115,15 @@ def _summarize(job_dir: Path, mode: str) -> dict[str, Any]:
                 "model": (seat.get("agent_info") or {}).get("model_info"),
                 "setup_seconds": _duration(seat.get("agent_setup")),
                 "execution_seconds": _duration(seat.get("agent_execution")),
-                "model_turn_seconds": metadata.get("codex_turn_seconds"),
-                "auth": metadata.get("codex_auth"),
+                "model_turn_seconds": metadata.get(
+                    "model_turn_seconds", metadata.get("codex_turn_seconds")
+                ),
+                "auth": metadata.get("model_auth", metadata.get("codex_auth")),
                 "input_tokens": usage.get("n_input_tokens"),
                 "cached_input_tokens": usage.get("n_cache_tokens"),
                 "output_tokens": usage.get("n_output_tokens"),
                 "cost_usd": usage.get("cost_usd"),
+                "calculated_cost_usd": metadata.get("calculated_cost_usd"),
                 "error": (seat.get("exception_info") or {}).get("exception_type"),
                 "freeze": seat.get("freeze"),
             }

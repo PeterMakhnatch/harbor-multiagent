@@ -40,3 +40,12 @@ Repeat in the order `visible`, `silent`, `silent`, `visible`. On Peter's worksta
 The receipt field `builder_choices` separates those policies. A reward of `0.25` can come from always choosing `K1` or from repeating `K1K2K3K4`. Both can score 6 of 24 because the answer key is balanced. Do not read that reward as partial use of the hidden reviews.
 
 Use `--require-freeze` with a Harbor build that records seat freezes. This checks that all seats report a successful freeze after play and before the verifier starts. It does not certify the shared world or an isolated verifier.
+
+## Compare with DeepSeek
+
+This path spends money. It uses `deepseek-flash` through the DeepSeek API. The host calls the API. The seat does not receive the API key. The receipt leaves provider cost unknown and adds `calculated_cost_usd` from the published Flash price. The runner stops before a trial when the account balance is below $1.50. It also stops the lane when one trial changes the balance by more than $0.50.
+
+```bash
+keys run -- python examples/configs/features/kit_check_deepseek.py \
+  silent /tmp/kit-check-deepseek-silent-1 --require-freeze
+```
