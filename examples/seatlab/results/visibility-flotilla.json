@@ -1,0 +1,769 @@
+{
+  "arms": {
+    "c1/v2/silent": {
+      "action_events": 916,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 0,
+      "fetch_or_bound_before_action_interventions": 0,
+      "fetch_or_bound_changed_interventions": 0,
+      "finished": {
+        "finished": 48,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        }
+      },
+      "recipient_interventions": 96,
+      "seat_coverage": {
+        "complete": 96,
+        "partial": 0,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 0,
+        "no_channel_traffic": 96,
+        "no_demonstrated_delivery": 0
+      },
+      "sent": {
+        "events": 0,
+        "message_occurrences": 0,
+        "sum_seat_unique_messages": 0
+      },
+      "trial_status": {
+        "changed": 0,
+        "no_channel_traffic": 48,
+        "no_demonstrated_delivery": 0
+      },
+      "trials": 48,
+      "trials_with_changed_availability": 0,
+      "trials_with_changed_availability_before_action": 0,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 0,
+      "trials_with_changed_fetch_before_action": 0
+    },
+    "c1/v2/solo": {
+      "action_events": 49,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 0,
+      "fetch_or_bound_before_action_interventions": 0,
+      "fetch_or_bound_changed_interventions": 0,
+      "finished": {
+        "finished": 48,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        }
+      },
+      "recipient_interventions": 48,
+      "seat_coverage": {
+        "complete": 48,
+        "partial": 0,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 0,
+        "no_channel_traffic": 48,
+        "no_demonstrated_delivery": 0
+      },
+      "sent": {
+        "events": 0,
+        "message_occurrences": 0,
+        "sum_seat_unique_messages": 0
+      },
+      "trial_status": {
+        "changed": 0,
+        "no_channel_traffic": 48,
+        "no_demonstrated_delivery": 0
+      },
+      "trials": 48,
+      "trials_with_changed_availability": 0,
+      "trials_with_changed_availability_before_action": 0,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 0,
+      "trials_with_changed_fetch_before_action": 0
+    },
+    "c1/v2/talk": {
+      "action_events": 96,
+      "availability_only_changed_interventions": 3,
+      "fetch_before_action_interventions": 76,
+      "fetch_or_bound_before_action_interventions": 76,
+      "fetch_or_bound_changed_interventions": 86,
+      "finished": {
+        "finished": 48,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 76,
+          "no_known_action": 13
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 80,
+          "before_action": 163,
+          "events": 279,
+          "message_occurrences": 279,
+          "no_known_action": 36,
+          "sum_seat_unique_messages": 279
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 15,
+          "before_action": 224,
+          "events": 384,
+          "message_occurrences": 606,
+          "no_known_action": 145,
+          "sum_seat_unique_messages": 163
+        }
+      },
+      "recipient_interventions": 96,
+      "seat_coverage": {
+        "complete": 94,
+        "partial": 2,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 89,
+        "no_channel_traffic": 0,
+        "no_demonstrated_delivery": 7
+      },
+      "sent": {
+        "events": 280,
+        "message_occurrences": 280,
+        "sum_seat_unique_messages": 280
+      },
+      "trial_status": {
+        "changed": 48,
+        "no_channel_traffic": 0,
+        "no_demonstrated_delivery": 0
+      },
+      "trials": 48,
+      "trials_with_changed_availability": 48,
+      "trials_with_changed_availability_before_action": 45,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 45,
+      "trials_with_changed_fetch_before_action": 45
+    },
+    "w1/v1/silent": {
+      "action_events": 120,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 0,
+      "fetch_or_bound_before_action_interventions": 0,
+      "fetch_or_bound_changed_interventions": 0,
+      "finished": {
+        "finished": 7,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        }
+      },
+      "recipient_interventions": 14,
+      "seat_coverage": {
+        "complete": 10,
+        "partial": 4,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 0,
+        "no_channel_traffic": 10,
+        "no_demonstrated_delivery": 4
+      },
+      "sent": {
+        "events": 0,
+        "message_occurrences": 0,
+        "sum_seat_unique_messages": 0
+      },
+      "trial_status": {
+        "changed": 0,
+        "no_channel_traffic": 5,
+        "no_demonstrated_delivery": 2
+      },
+      "trials": 7,
+      "trials_with_changed_availability": 0,
+      "trials_with_changed_availability_before_action": 0,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 0,
+      "trials_with_changed_fetch_before_action": 0
+    },
+    "w1/v1/solo": {
+      "action_events": 12,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 0,
+      "fetch_or_bound_before_action_interventions": 0,
+      "fetch_or_bound_changed_interventions": 0,
+      "finished": {
+        "finished": 12,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        }
+      },
+      "recipient_interventions": 12,
+      "seat_coverage": {
+        "complete": 12,
+        "partial": 0,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 0,
+        "no_channel_traffic": 12,
+        "no_demonstrated_delivery": 0
+      },
+      "sent": {
+        "events": 0,
+        "message_occurrences": 0,
+        "sum_seat_unique_messages": 0
+      },
+      "trial_status": {
+        "changed": 0,
+        "no_channel_traffic": 12,
+        "no_demonstrated_delivery": 0
+      },
+      "trials": 12,
+      "trials_with_changed_availability": 0,
+      "trials_with_changed_availability_before_action": 0,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 0,
+      "trials_with_changed_fetch_before_action": 0
+    },
+    "w1/v1/talk": {
+      "action_events": 17,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 12,
+      "fetch_or_bound_before_action_interventions": 12,
+      "fetch_or_bound_changed_interventions": 12,
+      "finished": {
+        "finished": 7,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 12,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 10,
+          "before_action": 22,
+          "events": 32,
+          "message_occurrences": 32,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 32
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 2,
+          "before_action": 59,
+          "events": 61,
+          "message_occurrences": 75,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 21
+        }
+      },
+      "recipient_interventions": 14,
+      "seat_coverage": {
+        "complete": 12,
+        "partial": 2,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 12,
+        "no_channel_traffic": 0,
+        "no_demonstrated_delivery": 2
+      },
+      "sent": {
+        "events": 32,
+        "message_occurrences": 32,
+        "sum_seat_unique_messages": 32
+      },
+      "trial_status": {
+        "changed": 6,
+        "no_channel_traffic": 0,
+        "no_demonstrated_delivery": 1
+      },
+      "trials": 7,
+      "trials_with_changed_availability": 6,
+      "trials_with_changed_availability_before_action": 6,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 6,
+      "trials_with_changed_fetch_before_action": 6
+    },
+    "w2/v1/silent": {
+      "action_events": 1021,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 0,
+      "fetch_or_bound_before_action_interventions": 0,
+      "fetch_or_bound_changed_interventions": 0,
+      "finished": {
+        "finished": 35,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        }
+      },
+      "recipient_interventions": 70,
+      "seat_coverage": {
+        "complete": 64,
+        "partial": 6,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 0,
+        "no_channel_traffic": 64,
+        "no_demonstrated_delivery": 6
+      },
+      "sent": {
+        "events": 0,
+        "message_occurrences": 0,
+        "sum_seat_unique_messages": 0
+      },
+      "trial_status": {
+        "changed": 0,
+        "no_channel_traffic": 32,
+        "no_demonstrated_delivery": 3
+      },
+      "trials": 35,
+      "trials_with_changed_availability": 0,
+      "trials_with_changed_availability_before_action": 0,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 0,
+      "trials_with_changed_fetch_before_action": 0
+    },
+    "w2/v1/solo": {
+      "action_events": 47,
+      "availability_only_changed_interventions": 0,
+      "fetch_before_action_interventions": 0,
+      "fetch_or_bound_before_action_interventions": 0,
+      "fetch_or_bound_changed_interventions": 0,
+      "finished": {
+        "finished": 36,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        }
+      },
+      "recipient_interventions": 36,
+      "seat_coverage": {
+        "complete": 36,
+        "partial": 0,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 0,
+        "no_channel_traffic": 36,
+        "no_demonstrated_delivery": 0
+      },
+      "sent": {
+        "events": 0,
+        "message_occurrences": 0,
+        "sum_seat_unique_messages": 0
+      },
+      "trial_status": {
+        "changed": 0,
+        "no_channel_traffic": 36,
+        "no_demonstrated_delivery": 0
+      },
+      "trials": 36,
+      "trials_with_changed_availability": 0,
+      "trials_with_changed_availability_before_action": 0,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 0,
+      "trials_with_changed_fetch_before_action": 0
+    },
+    "w2/v1/talk": {
+      "action_events": 72,
+      "availability_only_changed_interventions": 4,
+      "fetch_before_action_interventions": 54,
+      "fetch_or_bound_before_action_interventions": 54,
+      "fetch_or_bound_changed_interventions": 60,
+      "finished": {
+        "finished": 35,
+        "unfinished": 0,
+        "unknown": 0
+      },
+      "first_affected": {
+        "available": {
+          "after_action": 0,
+          "before_action": 55,
+          "no_known_action": 9
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        },
+        "fetch": {
+          "after_action": 0,
+          "before_action": 0,
+          "no_known_action": 0
+        }
+      },
+      "receipts": {
+        "available": {
+          "after_action": 53,
+          "before_action": 127,
+          "events": 205,
+          "message_occurrences": 205,
+          "no_known_action": 25,
+          "sum_seat_unique_messages": 205
+        },
+        "bound": {
+          "after_action": 0,
+          "before_action": 0,
+          "events": 0,
+          "message_occurrences": 0,
+          "no_known_action": 0,
+          "sum_seat_unique_messages": 0
+        },
+        "fetch": {
+          "after_action": 28,
+          "before_action": 245,
+          "events": 311,
+          "message_occurrences": 509,
+          "no_known_action": 38,
+          "sum_seat_unique_messages": 120
+        }
+      },
+      "recipient_interventions": 70,
+      "seat_coverage": {
+        "complete": 64,
+        "partial": 6,
+        "unavailable": 0
+      },
+      "seat_status": {
+        "changed": 64,
+        "no_channel_traffic": 0,
+        "no_demonstrated_delivery": 6
+      },
+      "sent": {
+        "events": 205,
+        "message_occurrences": 205,
+        "sum_seat_unique_messages": 205
+      },
+      "trial_status": {
+        "changed": 35,
+        "no_channel_traffic": 0,
+        "no_demonstrated_delivery": 0
+      },
+      "trials": 35,
+      "trials_with_changed_availability": 35,
+      "trials_with_changed_availability_before_action": 31,
+      "trials_with_changed_bound": 0,
+      "trials_with_changed_bound_before_action": 0,
+      "trials_with_changed_fetch": 32,
+      "trials_with_changed_fetch_before_action": 30
+    }
+  },
+  "intervention": "mute incoming roster-peer messages for one receiver at a time",
+  "multi_seat_trials": 180,
+  "population": "flotilla",
+  "projection": {
+    "trials_with_changed_availability": 89,
+    "trials_with_changed_availability_before_action": 82,
+    "trials_with_changed_bound": 0,
+    "trials_with_changed_bound_before_action": 0,
+    "trials_with_changed_fetch": 83,
+    "trials_with_changed_fetch_before_action": 81
+  },
+  "schema": "seatlab.stored-visibility/v1",
+  "solo_controls": 96,
+  "source_verification": {
+    "files_read": 835,
+    "matched_before_and_after": true
+  },
+  "trials": 276
+}

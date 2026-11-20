@@ -56,3 +56,19 @@ The native input field includes the CLI input, cache creation, and cache read co
 The report checks actor identity, served model metadata, accepted role-view digests, report fidelity, delivered messages, and committed choices. The independent native verifier scores feasibility and optimality without a model judge. These checks test the recorded model actions against deterministic evidence. They do not prove that a model understood its view or will repeat its choices. With 2 seeds, 1 missing group, and no repeated generation per seat, the results do not establish a general causal effect or rank models.
 
 Sources: [machine-readable results](results/native-model-primary.json), [frozen protocol](team-protocol.md), [study driver](team_driver.py), [native model agent](native_model_agent.py), and [evidence and contrast code](team_report.py).
+
+## What the 616 stored trials can tell us about team communication
+
+We removed incoming peer messages from one receiver's recorded view at a time. This cost $0 and changed no original trial. A fetch counts only if the server returned a peer message to that receiver. “Before action” requires a later recorded action by **the same receiver**. We did not substitute another seat's action or count an unread post as a fetch.
+
+| Population | Trials | Multi-seat trials | Trials with a changed fetch | Of these, before an action | Receiver interventions before an action |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| [Flotilla](results/visibility-flotilla.json) | 276 | 180 | 83 | 81 | 142 |
+| [Muster](results/visibility-muster.json) | 210 | 120 | 30 | 30 | 83 |
+| [Crucible](results/visibility-crucible.json) | 130 | 124 | 122 | 122 | 303 |
+
+The clearest contrast is within Muster. All 30 talking teams fetched a peer message before a later action. The 180 other trials had no team channel. In Flotilla, 89 trials made a message available, but only 83 recorded a fetch. The result depends on which event the recorder captures.
+
+**None of these archives binds a peer message to an exact model request.** The counts show what the receiver fetched, not what the model used. No archived score estimates what would happen with a silent team. The [8 separate Crucible timeouts](results/visibility-crucible-timeouts.json) are outside the 616. Seven still recorded a peer fetch before an action. Dropping failed trials can drop evidence of team behavior.
+
+The [replay instructions](replication.md#replay-the-original-server-evidence) include the expected archive roots and the adapter contract for a new task. The public results contain counts, not messages, seat IDs, or private trial paths.
