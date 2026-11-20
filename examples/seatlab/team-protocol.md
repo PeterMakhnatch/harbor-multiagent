@@ -139,3 +139,69 @@ python -m "$module" decode "$packet" --expect-sha256 "$digest" --map 0 --seat 1 
 ```
 
 Use `private` to hide the other ballots or `cited` to show their submitted citations. `decode` accepts a choice and citations visible to that voter. It does not correct a wrong choice. To reproduce the exact bytes, run `export "$PRIVATE_STUDY" --spend-dir "$SEATLAB_SPEND_DIR"` with the original trial archive. The external digest binds the packet bytes. It does not independently authenticate the provider.
+
+### Does an index of distinct facts help an external voter add the evidence?
+
+This study transfers a native Harbor decision into Inspect AI. It runs new model decisions. It does not create a new Harbor team or change an original reward.
+
+Freeze the 6 source teams and 24 seats in the [published packet](results/peer-ballot-packet.json). Its SHA-256 is `c8f743895f9e2fbecdf8b58201100bdb602186672a482c5545549408c5857095`. Use only the facts that the original seat could see before its first vote. Withhold every source ballot and the task answer.
+
+Each Inspect sample requests signed option totals, then a choice and citations. `separate` uses the original totals-first prompt with a dossier and 4 submissions. `indexed` shows each distinct fact once. It preserves the option, signed points, private/shared provenance, dossier membership, and number of submitted copies. It does not add points or suggest a choice. This tests the *whole layout*, not deduplication alone.
+
+Run 2 blocks × 6 option maps × 4 seats × 2 layouts = 96 one-turn samples. Alternate which layout goes first by the parity of `block + map + seat`, with all indices starting at 0. Start with `separate` for even parity. Use one fixed direct DeepSeek model and the existing budget guard. Do not use tools, generation caches, retries, or fallback models. Stop at a provider, identity, or budget failure. Keep invalid responses and missing samples separate.
+
+Primary: compare the fraction with all 3 visible totals correct, `indexed − separate`. Pair the same seat, map, and block. Average matched pairs within each map, then give each map equal weight. Report how many maps and pairs contribute. Secondary: correct choice against the native world; agreement with a visible maximum; output field order; derived 3-of-4 majorities on complete paired groups; tokens and estimated cost. These 6 maps relabel 1 vendor problem. They are not 6 independent tasks. No result from this study establishes an improvement in native Harbor rewards.
+
+#### What the external voters did
+
+All 96 Inspect samples finished in their registered order. The public packet supplied 24 source seats. Each seat received both layouts in 2 blocks. The index did **not** improve exact arithmetic in this experiment.
+
+| Result | Separate dossier and submissions | Index of distinct facts |
+| --- | ---: | ---: |
+| Voters with all 3 totals correct | 2 / 48 | 0 / 48 |
+| Voters who chose the winning option | 45 / 48 | 42 / 48 |
+| Voters who returned totals before the choice | 48 / 48 | 48 / 48 |
+| Groups with a correct 3-of-4 majority | 11 / 12 | 11 / 12 |
+
+The paired change in exact arithmetic was −4.17 percentage points across all 6 maps. Each block had 1 exact answer with separate submissions and 0 with the index. The model often chose the right vendor without giving the right totals. The index changed the layout and duplicate presentation together. These results do not isolate either change. No Harbor team ran again.
+
+The [sample results](results/inspect-packing-results.json) bind each Inspect model event to its expected seat prompt. The [96 settled direct calls](results/inspect-packing-cost.json) cost an estimated **$0.006045000 USD**. The direct ledger matched every sample's seat, model and token counts. It does not authenticate the model's response text.
+
+#### Run the Harbor packet in Inspect AI
+
+This task lives on [Peter's fork, `experiments/seatlab-inspect-replay`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/experiments/seatlab-inspect-replay/examples/seatlab). It does not require a change to upstream Harbor.
+
+```bash
+git clone --depth 1 --single-branch --branch experiments/seatlab-inspect-replay https://github.com/PeterMakhnatch/harbor-multiagent.git
+cd harbor-multiagent
+```
+
+From the root of this fork, install Inspect in a separate Python 3.12 environment. You do not need Harbor, Eval Lab, Docker, or the private trials. The protocol library pin matters: Inspect 0.3.276 imports `acp.helpers`, which the 1.0.0 release removes.
+
+```bash
+work=$(mktemp -d)
+python3.12 -m venv "$work/venv"
+"$work/venv/bin/python" -m pip install 'inspect-ai==0.3.276' 'agent-client-protocol==0.12.1'
+task=examples/seatlab/inspect_replay.py@seatlab_facts
+"$work/venv/bin/inspect" eval "$task" --model mockllm/model --limit 1 --display none --log-dir "$work/smoke"
+```
+
+This command checks that Inspect can load and score 1 sample. It does not measure a model. To evaluate your own model, set `MODEL` to an Inspect model name. Check your provider's price before running the next command. Inspect's standard provider does not use the SeatLab spend guard.
+
+```bash
+"$work/venv/bin/inspect" eval "$task" --model "$MODEL" --epochs 1 --max-samples 1 \
+  --max-retries 0 --retry-on-error=0 --log-dir "$work/model"
+```
+
+Keep the `.eval` file private. It contains prompts and model responses. The task gives the model only the selected seat's evidence. The scorer reads the sealed packet separately. It does not send the packet or hidden answer to the model.
+
+To summarize a private log, pass its exact `.eval` path. The report checks the recorded inputs against the sealed packet. It reports missing samples separately from wrong answers.
+
+```bash
+packet=examples/seatlab/results/peer-ballot-packet.json
+digest=c8f743895f9e2fbecdf8b58201100bdb602186672a482c5545549408c5857095
+"$work/venv/bin/python" -m examples.seatlab.committee.inspect_report "$packet" "$LOG" \
+  --expect-sha256 "$digest" > "$work/receiver-results.json"
+```
+
+The registered direct run uses `python -m examples.seatlab.committee.inspect_direct --log-dir "$NEW_PRIVATE_DIR"` instead of the generic Inspect model command. It requires an initialized `SEATLAB_SPEND_DIR` and a direct `DEEPSEEK_API_KEY`. It refuses to restart this cohort after a reservation. Pass `--spend-dir "$SEATLAB_SPEND_DIR"` to the report for this run. The ledger can confirm cell identity, model, and token counts. It does not authenticate the response text.
