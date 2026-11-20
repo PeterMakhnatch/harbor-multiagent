@@ -167,3 +167,5 @@ keys run -- python -m examples.seatlab.visibility.clarify_run run-window "$packe
 python -m examples.seatlab.visibility.clarify_report "$packets" "$study"
 python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-prefix ask-
 ```
+
+After each window stops, run `python -m examples.seatlab.visibility.clarify_meter "$study" --spend-dir "$SEATLAB_SPEND_DIR"` offline. It checks both turns against the original ledger and the sealed time boundaries. A late finish differs from a late start. A missing timestamp does not establish that a call never occurred. The meter does not authenticate the provider or verify an invoice.
