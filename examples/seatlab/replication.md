@@ -163,6 +163,40 @@ Primary: the paired change in native verifier success, `peer − blind`. Average
 
 An invalid model action can count as a native zero only when the retained response fails the grammar and the stock verifier confirms that no submission succeeded. Report this case separately. An absent model response or native reward is unknown, not zero. Alongside the primary result, report accepted-decision pairs and bounds that give each unknown binary reward its full range from 0 to 1.
 
+**Try one seat with your own harness.** Use Python 3.11 or newer from the repository root. These commands need no Harbor install, Docker, provider, or private archive.
+
+```bash
+packet=examples.seatlab.visibility.calendar_packet
+protocol=examples.seatlab.visibility.calendar_protocol
+python -m "$packet" verify
+python -m "$protocol" prompt initial --world 0 --seat p1 > p1-user.txt
+python -m "$protocol" prompt initial --world 0 --seat p2 > p2-user.txt
+```
+
+Send each file to a separate model context. Save each response as `p1.json` or `p2.json`. Never give a model the combined packet. For the peer arm, use the real `p2` response below. For the blind arm, replace `@p2.json` with `'{"ready":true}'`. Keep both initial responses fixed.
+
+```bash
+python -m "$protocol" prompt recheck --world 0 --seat p1 --own @p1.json --peer @p2.json > recheck.txt
+# Send recheck.txt to the sender. Save its response as revised.json.
+python -m "$protocol" prompt final --world 0 --seat p2 --own @p2.json --sender @revised.json > decide.txt
+# Send decide.txt to the receiver. Save its response as decision.json.
+python -m "$protocol" decode slot @decision.json
+```
+
+`decode` translates the model's slot into a weekday and start time. It does not fix an invalid choice or assign a Harbor reward.
+
+**Rebuild the inputs from public source.** Use a checkout of the [fork's Flotilla generator at `71ddf40b`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3/flotilla). Keep the generated tasks private. They contain fresh service credentials.
+
+```bash
+umask 077
+private_tasks=$(mktemp -d)
+python "$GENERATOR_CHECKOUT/flotilla/build_tasks.py" --family schedule --instances 0-11 \
+  --seats 2 --difficulty easy --seed 1 --conditions talk --play-timeout 600 --out "$private_tasks"
+python -m "$packet" compare-tables "$private_tasks/schedule"
+```
+
+We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
