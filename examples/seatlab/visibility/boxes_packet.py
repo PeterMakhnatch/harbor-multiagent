@@ -8,6 +8,7 @@ import re
 import stat
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -693,9 +694,13 @@ def _screen_replies(content: str):
             yield box, room, flag, budget
 
 
-def _earlier(
-    raw: bytes, timing: tuple[float, float], own: list[_Open], anchor: _Open
-) -> bool:
+def _terminal_matches(
+    raw: bytes,
+    timing: tuple[float, float],
+    actions: Iterable[_Open],
+    *,
+    before: float | None = None,
+) -> dict[tuple[int, int, bool, int], tuple[int, float]]:
     trajectory = _decode(raw)
     steps = trajectory["steps"]
     _require(
@@ -721,14 +726,15 @@ def _earlier(
     previous = _time(initial["timestamp"])
     _require(first <= previous <= last, "invalid_timing")
     expected = {
-        (*action.observation, action.budget_left): action.time
-        for action in (*own, anchor)
+        (*action.observation, action.budget_left): action.time for action in actions
     }
     matches: dict[tuple[int, int, bool, int], tuple[int, float]] = {}
     for step_id, step in enumerate(steps[1:], 2):
         _require(_integer(step["step_id"], step_id, step_id), "invalid_observation")
         moment = _time(step["timestamp"])
         _require(previous <= moment <= last, "invalid_timing")
+        if before is not None and moment >= before:
+            break
         previous = moment
         # Only saved terminal observations count, not agent messages or tool calls.
         observation = step.get("observation")
@@ -743,6 +749,13 @@ def _earlier(
             for reply in _screen_replies(content):
                 if reply in expected and expected[reply] <= moment:
                     matches.setdefault(reply, (step_id, moment))
+    return matches
+
+
+def _earlier(
+    raw: bytes, timing: tuple[float, float], own: list[_Open], anchor: _Open
+) -> bool:
+    matches = _terminal_matches(raw, timing, (*own, anchor))
     cutoff = matches.get((*anchor.observation, anchor.budget_left))
     return cutoff is not None and all(
         (match := matches.get((*action.observation, action.budget_left))) is not None
@@ -813,9 +826,9 @@ def _selected(
     }
 
 
-def export(root: Path) -> bytes:
-    """Read only the retained team-3 job and its registered selected histories."""
-    source = _Snapshot()
+def _registered_trials(
+    source: _Snapshot, root: Path
+) -> dict[int, tuple[Path, _NativeRecord]]:
     try:
         config = _decode(source.read(root / "config.json"))
         job = _decode(source.read(root / "result.json"))
@@ -847,10 +860,18 @@ def export(root: Path) -> bytes:
         raise ValueError(
             "retained job does not match the registered team-3 roster"
         ) from None
-    cases = []
-    for instance in _INSTANCES:
-        _, name, result = selected[instance]
-        cases.append(_selected(source, root / name, result, instance))
+    return {
+        instance: (root / name, row) for instance, (_, name, row) in selected.items()
+    }
+
+
+def export(root: Path) -> bytes:
+    """Read only the retained team-3 job and its registered selected histories."""
+    source = _Snapshot()
+    selected = _registered_trials(source, root)
+    cases = [
+        _selected(source, *selected[instance], instance) for instance in _INSTANCES
+    ]
     source.check()
     raw = _encode({"schema": _SCHEMA, "cases": cases})
     _public(raw)

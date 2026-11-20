@@ -228,3 +228,25 @@ Tell each seat to select its final box at the same time as its peers. It may kee
 Use both box numberings, all 3 cyclic assignments of labels to seats, and 2 independent repetitions. Register 36 blocks: repetition, eligible world in ascending order, numbering, then label rotation. Run `masked` first when the sum of the repetition, zero-based world position, numbering, and rotation is even. Otherwise start with `shown`. Within each stage, call A, B, then C. Use the same direct model and settings. The maximum is 108 proposal calls and 216 revision calls. Do not retry. A grammar-invalid proposal prevents both revisions for that block. An invalid revision makes that team's aggregate unknown. Stop on a provider, funding, custody, or ledger failure.
 
 Primary: for the 3 final choices, count selections of historically unopened boxes, then subtract the number of **distinct** new boxes. This counts excess simultaneous claims. Three choices of the same new box count as 2, not 3. Report `shown − masked` within a complete block. Average blocks within each world, then weight the 3 worlds equally. Withhold the 3-world result if any world lacks a complete pair. Give coverage for all 36 blocks. Secondary: distinct new choices, historical repeats, changed proposals, and transitions for initially colliding versus initially noncolliding proposals. These are fixed-prefix decisions on 3 worlds, not restored native actions, full game outcomes, or a population estimate.
+
+#### Run the same decision stages with another harness
+
+The [public packet](results/muster-box-intentions-packet.json) is 2,428 bytes. Its SHA-256 is `a633e7fc6673036bca0989957396250f8db8b77f816be64b4f084dc210423e34`. These commands need neither Docker nor a provider key. Run them from this branch's root:
+
+```sh
+python -m examples.seatlab.visibility.intent_packet verify
+protocol=examples.seatlab.visibility.intent_protocol
+block=bi-i01-m0-l0-r0
+python -m "$protocol" plan
+python -m "$protocol" prompt "$block" --seat A --stage proposal
+```
+
+Start a new session for each seat. Give it only the rendered text. Decode each response on standard input with `python -m "$protocol" decode "$block"`. The decoder returns the original box number, including under reversed numbering. Seal all 3 decoded proposals before running either revision.
+
+```sh
+# Example decoded proposals in A, B, C order: 12, 18, 23.
+python -m "$protocol" prompt "$block" --seat A --stage masked --own 12
+python -m "$protocol" prompt "$block" --seat A --stage shown --proposals '[12,18,23]'
+```
+
+Repeat for B and C with the same sealed proposals. Give none of the seats another seat's final decision. Decode each revision once. An invalid response is missing, not a reason to ask again. The protocol does not open boxes or run the stock verifier.

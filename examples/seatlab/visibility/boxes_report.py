@@ -2,12 +2,13 @@
 
 import argparse
 import json
+import os
 import sqlite3
 import stat
 import sys
 from collections import Counter
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from fractions import Fraction
 from hashlib import sha256
@@ -101,9 +102,9 @@ def _claims(study: Path, registered: set[str]) -> dict[str, Path]:
     return claims
 
 
-def _ledger(
-    spend_dir: Path | None, registered: set[str]
-) -> dict[str, sqlite3.Row] | None:
+def _ledger_records(
+    spend_dir: Path | None, *, prefix: str, role: str
+) -> list[sqlite3.Row] | None:
     if spend_dir is None:
         return None
     try:
@@ -115,24 +116,33 @@ def _ledger(
         raise ValueError("spend ledger file invalid")
     with closing(sqlite3.connect(file.as_uri() + "?mode=ro", uri=True)) as db:
         db.row_factory = sqlite3.Row
-        rows: dict[str, sqlite3.Row] = {}
-        for record in db.execute(
+        records = db.execute(
             """SELECT run, role, reserved_at, started_at, finished_at, served_model,
                       hit, miss, output, cost_low, cost_high
-               FROM calls WHERE substr(run, 1, 3) = 'bx-' OR role = ?""",
-            (boxes_run.ROLE,),
+               FROM calls WHERE substr(run, 1, ?) = ? OR role = ?""",
+            (len(prefix), prefix, role),
+        ).fetchall()
+        return cast("list[sqlite3.Row]", records)
+
+
+def _ledger(
+    spend_dir: Path | None, registered: set[str]
+) -> dict[str, sqlite3.Row] | None:
+    records = _ledger_records(spend_dir, prefix="bx-", role=boxes_run.ROLE)
+    if records is None:
+        return None
+    rows: dict[str, sqlite3.Row] = {}
+    for row in records:
+        run: object = row["run"]
+        if (
+            not isinstance(run, str)
+            or run not in registered
+            or row["role"] != boxes_run.ROLE
+            or run in rows
         ):
-            row = cast("sqlite3.Row", record)  # The connection installs this factory.
-            run: object = row["run"]
-            if (
-                not isinstance(run, str)
-                or run not in registered
-                or row["role"] != boxes_run.ROLE
-                or run in rows
-            ):
-                raise ValueError("unexpected or duplicate box ledger call")
-            rows[run] = row
-        return rows
+            raise ValueError("unexpected or duplicate box ledger call")
+        rows[run] = row
+    return rows
 
 
 def _count(value: object) -> bool:
@@ -201,15 +211,21 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _receipt(path: Path) -> dict[str, Any]:
-    info = path.lstat()
+def _receipt(path: Path, *, directory: int | None = None) -> dict[str, Any]:
+    info = os.stat(path, dir_fd=directory, follow_symlinks=False)
     if (
         not stat.S_ISREG(info.st_mode)
         or info.st_nlink != 1
         or info.st_size > _MAX_RECEIPT_BYTES
     ):
         raise ValueError("box receipt file invalid")
-    with path.open("rb") as file:
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    with os.fdopen(fd, "rb") as file:
+        opened = os.fstat(file.fileno())
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise ValueError("box receipt changed during replay")
+        if directory is not None:
+            boxes_run._require_private(opened)
         raw = file.read(_MAX_RECEIPT_BYTES + 1)
     if len(raw) > _MAX_RECEIPT_BYTES:
         raise ValueError("box receipt file invalid")
@@ -248,22 +264,26 @@ def _match_usage(receipt: dict[str, Any], row: sqlite3.Row | None, state: str) -
 
 def _replay(
     receipt: dict[str, Any],
-    case: boxes_packet.Case,
-    cell: boxes_choice.Cell,
-    packet_digest: str,
+    *,
+    expected_run: str,
+    expected_role: str,
+    expected_prompt: str,
+    expected_digest: str,
+    numbering: int,
     row: sqlite3.Row | None,
     state: str,
 ) -> _Result:
+    """Replay choice grammar only after checking custody and direct usage bindings."""
     if (
         receipt["schema"] != boxes_run.RECEIPT_SCHEMA
-        or receipt["run"] != cell.id
-        or receipt["role"] != boxes_run.ROLE
+        or receipt["run"] != expected_run
+        or receipt["role"] != expected_role
         or receipt["requested_model"] != deepseek.MODEL
     ):
         raise ValueError("box receipt identity mismatch")
-    if receipt["packet_sha256"] != packet_digest:
+    if receipt["packet_sha256"] != expected_digest:
         raise ValueError("box receipt packet commitment mismatch")
-    prompt_digest = sha256(boxes_choice.prompt(case, cell).encode("utf-8")).hexdigest()
+    prompt_digest = sha256(expected_prompt.encode("utf-8")).hexdigest()
     if receipt["prompt_sha256"] != prompt_digest:
         raise ValueError("box receipt prompt commitment mismatch")
 
@@ -303,7 +323,7 @@ def _replay(
         raise ValueError("box receipt response commitment mismatch")
     _match_usage(receipt, row, state)
     try:
-        decoded = boxes_choice.decode(text, cell.numbering)
+        decoded = boxes_choice.decode(text, numbering)
     except (ValueError, RecursionError):
         decoded = None
     if status == "invalid":
@@ -313,11 +333,9 @@ def _replay(
         raise ValueError("accepted box receipt does not match replay")
     if state == "unavailable":
         return _Result("spend_unavailable", state, status)
-    if original is None:
+    if decoded is None:
         return _Result("invalid", state, status)
-    return _Result(
-        "accepted", state, status, original, boxes_choice.category(case, original)
-    )
+    return _Result("accepted", state, status, decoded)
 
 
 def _inspect(
@@ -345,7 +363,19 @@ def _inspect(
             state, "receipt_unavailable"
         )
         return _Result(status, state)
-    return _replay(_receipt(files["receipt.json"]), case, cell, digest, row, state)
+    result = _replay(
+        _receipt(files["receipt.json"]),
+        expected_run=cell.id,
+        expected_role=boxes_run.ROLE,
+        expected_prompt=boxes_choice.prompt(case, cell),
+        expected_digest=digest,
+        numbering=cell.numbering,
+        row=row,
+        state=state,
+    )
+    if result.original_box is None:
+        return result
+    return replace(result, outcome=boxes_choice.category(case, result.original_box))
 
 
 class _ArmSummary(TypedDict):
