@@ -23,6 +23,7 @@ from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
+from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import NetworkMode, merge_mcp_servers
 from harbor.models.task.task import Task
 from harbor.models.task.verifier_mode import (
@@ -34,7 +35,7 @@ from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
-from harbor.trial.hooks import TrialEvent
+from harbor.trial.hooks import LogPhase, TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
@@ -100,6 +101,9 @@ async def _seat_tasks() -> AsyncIterator[asyncio.TaskGroup]:
     except BaseExceptionGroup as errors:
         current = asyncio.current_task()
         if current is not None and current.cancelling():
+            # TaskGroup can reissue cancellation when a child fails during
+            # cancellation. Let it arrive before the trial starts recovery.
+            await asyncio.sleep(0)
             raise asyncio.CancelledError
         raise errors.exceptions[0]
 
@@ -108,6 +112,7 @@ class SeatsTrial(SingleStepTrial):
     """SingleStepTrial with one agent per seat, all in the one environment."""
 
     seats: list[Seat]
+    _warned_unsupported_seat_streaming = False
 
     def __init__(
         self,
@@ -219,15 +224,33 @@ class SeatsTrial(SingleStepTrial):
             seat.result.agent_info = seat.agent.to_agent_info()
         self.result.agent_info = self.agent.to_agent_info()
 
+    def _seat_log_context(
+        self, phase: LogPhase, seat: Seat
+    ) -> contextlib.AbstractContextManager[None]:
+        if not self._log_callbacks:
+            return contextlib.nullcontext()
+        backend = self.agent_environment.type()
+        if backend != EnvironmentType.DOCKER:
+            if not self._warned_unsupported_seat_streaming:
+                self._warned_unsupported_seat_streaming = True
+                self.logger.warning(
+                    "Live seat logs require the docker environment; "
+                    "seat output will not stream on %s.",
+                    backend.value if isinstance(backend, EnvironmentType) else backend,
+                )
+            return contextlib.nullcontext()
+        return self._log_context(phase, seat.environment, seat=seat.name)
+
     async def _setup_seat(self, seat: Seat) -> None:
         """Mirrors Trial._setup_agent for one seat, recording a failure on the
         seat as well as failing the trial."""
         setup = TimingInfo(started_at=self._now())
         seat.result.agent_setup = setup
         try:
-            await asyncio.wait_for(
-                self._install_seat(seat), timeout=seat.setup_timeout_sec
-            )
+            with self._seat_log_context("agent_setup", seat):
+                await asyncio.wait_for(
+                    self._install_seat(seat), timeout=seat.setup_timeout_sec
+                )
         except asyncio.TimeoutError as exc:
             timeout = AgentSetupTimeoutError(
                 f"Seat {seat.name!r}: agent setup timed out after "
@@ -258,8 +281,7 @@ class SeatsTrial(SingleStepTrial):
                 f"Seat {seat.name!r}: could not create {logs_dir}: {made.stdout}"
             )
         with environment.scoped_exec_env(seat.agent.extra_env):
-            with self._log_context("agent_setup", environment, seat=seat.name):
-                await seat.agent.setup(environment=environment)
+            await seat.agent.setup(environment=environment)
 
     @override
     async def _run(self) -> None:
@@ -268,6 +290,9 @@ class SeatsTrial(SingleStepTrial):
         /logs/seats/, then call Trial._run_verifier and
         _stop_agent_environment."""
         await self._emit(TrialEvent.AGENT_START)
+        for seat in self.seats:
+            seat.result.agent_execution = TimingInfo()
+        await self._emit_seat_hooks(TrialEvent.SEAT_START)
         execution = TimingInfo(started_at=self._now())
         self.result.agent_execution = execution
         try:
@@ -275,8 +300,7 @@ class SeatsTrial(SingleStepTrial):
         finally:
             execution.finished_at = self._now()
             await self._emit(TrialEvent.AGENT_END)
-        await self._collect_seats()
-        self._record_seat_errors()
+        await self._finish_seats()
         await self._collect_artifacts()
         if not self.config.verifier.disable:
             await self.agent_environment.upload_dir(
@@ -288,7 +312,7 @@ class SeatsTrial(SingleStepTrial):
 
     @override
     async def _recover_outputs(self) -> None:
-        await self._collect_seats()
+        await self._finish_seats()
         await self._collect_artifacts(stop_main_before_sidecars=False)
         await self._stop_agent_environment()
 
@@ -329,14 +353,15 @@ class SeatsTrial(SingleStepTrial):
         seat.result.agent_result = context
         seat.result.agent_execution = execution
         try:
-            await self._emit(TrialEvent.SEAT_START, seat=seat.name)
-            with seat.environment.scoped_exec_env(seat.agent.extra_env):
-                with self._log_context("agent", seat.environment, seat=seat.name):
-                    await seat.agent.run(
-                        instruction=seat.instruction,
-                        environment=seat.environment,
-                        context=context,
-                    )
+            with (
+                self._seat_log_context("agent", seat),
+                seat.environment.scoped_exec_env(seat.agent.extra_env),
+            ):
+                await seat.agent.run(
+                    instruction=seat.instruction,
+                    environment=seat.environment,
+                    context=context,
+                )
         except NonZeroAgentExitCodeError as exc:
             seat.result.exception_info = ExceptionInfo.from_exception(exc)
         except Exception as exc:
@@ -344,16 +369,25 @@ class SeatsTrial(SingleStepTrial):
             raise
         finally:
             execution.finished_at = self._now()
-            await self._emit(TrialEvent.SEAT_END, seat=seat.name)
 
-    async def _collect_seats(self) -> None:
-        """Mirrors Trial._sync_agent_output for every seat, under test or not."""
+    async def _emit_seat_hooks(self, event: TrialEvent) -> None:
+        if not self._hooks[event]:
+            return
+        async with asyncio.TaskGroup() as group:
+            for seat in self.seats:
+                if seat.result.agent_execution is not None:
+                    group.create_task(self._emit(event, seat=seat.name))
+
+    async def _finish_seats(self) -> None:
+        """Collect each seat's output and record results before notifying hooks."""
         if self._are_agent_logs_downloaded:
             return
         async with _seat_tasks() as group:
             for seat in self.seats:
                 group.create_task(self._collect_seat(seat))
         self._are_agent_logs_downloaded = True
+        self._record_seat_errors()
+        await self._emit_seat_hooks(TrialEvent.SEAT_END)
 
     async def _collect_seat(self, seat: Seat) -> None:
         """Mirrors Trial._download_role_logs into trial/seats/<seat>/agent,

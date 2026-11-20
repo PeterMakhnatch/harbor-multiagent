@@ -102,6 +102,7 @@ TrialHookCallback = Callable[[TrialHookEvent], Awaitable[None]]
 
 _MAX_VERIFIER_ENV_SESSION_ID_LEN = 63
 _UNSET_BRIDGE_USER = object()
+_SEAT_HOOK_TIMEOUT_SEC = 0.5
 
 
 def check_trial_config(
@@ -608,21 +609,82 @@ class Trial(ABC):
                 seat=seat,
             )
             for callback in callbacks:
-                await callback(entry)
+                try:
+                    await callback(entry)
+                except (Exception, asyncio.CancelledError) as exc:
+                    task = asyncio.current_task()
+                    if (
+                        isinstance(exc, asyncio.CancelledError)
+                        and task is not None
+                        and task.cancelling()
+                    ):
+                        raise
+                    self.logger.warning("Trial log callback failed", exc_info=True)
 
         return environment.scoped_output_callback(emit)
 
     async def _emit(self, event: TrialEvent, *, seat: str | None = None) -> None:
+        hooks = self._hooks[event]
+        if not hooks:
+            return
+        result = self.result if seat is None else self.result.model_copy(deep=True)
         hook_event = TrialHookEvent(
             event=event,
             task_name=self.task.name,
-            config=self.config,
-            result=self.result,
+            config=self.config if seat is None else result.config,
+            result=result,
             lock=self._trial_lock,
             seat=seat,
+            seat_result=(
+                next(
+                    record
+                    for record in result.seat_results or []
+                    if record.seat == seat
+                )
+                if seat is not None
+                else None
+            ),
         )
-        for hook in self._hooks[event]:
-            await hook(hook_event)
+        for hook in hooks:
+            if seat is None:
+                # Existing trial hooks can be control flow (e.g. a queue permit).
+                await hook(hook_event)
+            else:
+                await self._notify_seat_hook(hook, hook_event)
+
+    async def _notify_seat_hook(
+        self, hook: TrialHookCallback, event: TrialHookEvent
+    ) -> None:
+        async def notify() -> None:
+            try:
+                await hook(event)
+            except (Exception, asyncio.CancelledError) as exc:
+                task = asyncio.current_task()
+                if not isinstance(exc, asyncio.CancelledError) or (
+                    task is not None and not task.cancelling()
+                ):
+                    self.logger.warning(
+                        "%s hook failed for seat %r",
+                        event.event.value,
+                        event.seat,
+                        exc_info=True,
+                    )
+
+        # A hook can delay or ignore cancellation. Do not join it on timeout
+        # or trial cancellation. notify() handles its eventual error.
+        task = asyncio.create_task(notify())
+        try:
+            done, _ = await asyncio.wait((task,), timeout=_SEAT_HOOK_TIMEOUT_SEC)
+            if not done:
+                self.logger.warning(
+                    "%s hook timed out after %s seconds for seat %r",
+                    event.event.value,
+                    _SEAT_HOOK_TIMEOUT_SEC,
+                    event.seat,
+                )
+        finally:
+            if not task.done():
+                task.cancel()
 
     async def run(self) -> TrialResult:
         self._init_result()

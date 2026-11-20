@@ -5,11 +5,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
 
+from harbor.environments.base import OutputStream
 from harbor.models.job.lock import TrialLock
 from harbor.models.trial.config import TrialConfig
-from harbor.models.trial.result import TrialResult
-
-from harbor.environments.base import OutputStream
+from harbor.models.trial.result import SeatResult, TrialResult
 
 LogPhase = Literal["agent_setup", "agent", "verification"]
 
@@ -21,8 +20,8 @@ class TrialEvent(Enum):
     ENVIRONMENT_START = "environment-start"
     AGENT_START = "agent-start"
     AGENT_END = "agent-end"
-    SEAT_START = "seat-start"
-    SEAT_END = "seat-end"
+    SEAT_START = "seat-start"  # After setup, before agent execution.
+    SEAT_END = "seat-end"  # After seat log collection and error recording.
     VERIFICATION_START = "verification-start"
     END = "end"
     CANCEL = "cancel"
@@ -36,7 +35,9 @@ class TrialHookEvent(BaseModel):
     The `result` field is initialized before START and fully populated by END.
     `trial_name` and `trial_id` are derived from `config` and `result`, so
     callers do not pass them when constructing hook events.
-    `seat` identifies the participant for seat lifecycle events only.
+    For seat events, `seat` identifies the participant, `seat_result` is
+    its point-in-time snapshot, and `result` is also a point-in-time copy.
+    Other events keep the live trial result and leave both seat fields unset.
     """
 
     model_config = {"arbitrary_types_allowed": True}
@@ -48,6 +49,7 @@ class TrialHookEvent(BaseModel):
     lock: TrialLock
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     seat: str | None = None
+    seat_result: SeatResult | None = None
 
     @computed_field
     @property
@@ -69,6 +71,7 @@ class LogEntry(BaseModel):
     Pydantic (like its neighbor ``TrialHookEvent``) to follow the project's
     model convention; ``timestamp`` is a ``datetime`` to match it as well.
     `seat` identifies a participant's setup or execution output, if applicable.
+    Shared verifier output never has a seat, even when the verifier invokes a seat.
     """
 
     trial_id: UUID

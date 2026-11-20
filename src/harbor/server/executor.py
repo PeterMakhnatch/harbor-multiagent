@@ -60,7 +60,15 @@ class TrialExecutor:
         async def report_result(event: TrialHookEvent) -> None:
             await on_result(event.result)
 
-        for event in TrialEvent:
+        for event in (
+            TrialEvent.START,
+            TrialEvent.ENVIRONMENT_START,
+            TrialEvent.AGENT_START,
+            TrialEvent.AGENT_END,
+            TrialEvent.VERIFICATION_START,
+            TrialEvent.END,
+            TrialEvent.CANCEL,
+        ):
             trial.add_hook(event, report_result)
         try:
             return await trial.run()

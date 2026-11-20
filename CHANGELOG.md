@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Python trial hooks:** `TrialEvent` now includes `SEAT_START` and `SEAT_END`. Update exhaustive handlers or subscribe to specific trial events. Seat events carry snapshots instead of the live trial result.
+
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.
 
 - **Global Rollouts viewer:** Browse rollouts across jobs with server-side status, error, and metadata filters, backed by global rollout listing and filter APIs.

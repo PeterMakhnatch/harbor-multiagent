@@ -1,7 +1,6 @@
 """SeatsTrial end to end against a fake Compose runner and scripted agents.
 
-Order comes from events, never from sleeps; only the agent-timeout and setup
-timeout cases rely on time.
+Order comes from events, never from sleeps. Timeout tests use real deadlines.
 """
 
 import asyncio
@@ -23,6 +22,7 @@ from harbor.environments.base import BaseEnvironment, ExecResult, OutputCallback
 from harbor.environments.docker.docker import DockerEnvironment
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
+from harbor.models.environment_type import EnvironmentType
 from harbor.models.job.result import JobStats
 from harbor.models.trial.config import (
     AgentConfig,
@@ -33,6 +33,7 @@ from harbor.models.trial.config import (
 )
 from harbor.models.trial.result import TrialResult
 from harbor.models.verifier.result import VerifierResult
+from harbor.server.executor import TrialExecutor
 from harbor.trial.hooks import LogEntry, TrialEvent, TrialHookEvent
 from harbor.trial.seats import SeatsTrial
 from harbor.trial.single_step import SingleStepTrial
@@ -152,15 +153,14 @@ async def compose(
     command: list[str], *, on_output: OutputCallback | None = None, **_: Any
 ) -> ExecResult:
     note("compose", *command)
-    if on_output is not None:
-        await on_output(command[-1], "stdout")
-        await asyncio.sleep(0)
-        await on_output(command[-1], "stderr")
-    if command[0] != "exec" or "sh" not in command:
+    if command[0] != "exec":
         return ExecResult(stdout="", return_code=0)
-    if command[-1] == "exec bash -c 'id -u'":
-        return ExecResult(stdout="1000\n", return_code=0)
-    return ExecResult(stdout="", return_code=0)
+    stdout = "1000\n" if command[-1] == "exec bash -c 'id -u'" else ""
+    if on_output is not None:
+        # Docker merges stderr into stdout in its Compose subprocess.
+        await asyncio.sleep(0)
+        await on_output(stdout or command[-1], "stdout")
+    return ExecResult(stdout=stdout, return_code=0)
 
 
 def _fake_compose(trial: Trial) -> None:
@@ -179,6 +179,7 @@ async def _seats_trial(config: TrialConfig) -> SeatsTrial:
     assert isinstance(trial, SeatsTrial)
     _fake_compose(trial)
 
+    # Keep the real verifier phase and its log context, without running tests.
     async def verify(*_: Any) -> VerifierResult:
         note("verify")
         await trial.agent_environment.exec("echo verifying")
@@ -278,8 +279,6 @@ async def test_ordinary_trial_keeps_unattributed_hooks_and_logs(tmp_path: Path):
     assert result.exception_info is None
     assert [(entry.phase, entry.seat) for entry in entries] == [
         ("agent_setup", None),
-        ("agent_setup", None),
-        ("agent", None),
         ("agent", None),
     ]
     assert [(event.event, event.seat) for event in events] == [
@@ -374,6 +373,7 @@ async def test_play_ends_when_agents_under_test_end_and_the_rest_are_stopped(
             _participant("lee", hold=True),
         )
     )
+    _record_seat_hooks(trial)
 
     run = asyncio.create_task(trial.run())
     await seen("ended", "maya")
@@ -382,6 +382,7 @@ async def test_play_ends_when_agents_under_test_end_and_the_rest_are_stopped(
     result = await run
 
     assert result.exception_info is None
+    _assert_seat_hooks(trial)
     assert index("ended", "raj") < index("stopped", "lee")
     for seat in trial.seats:
         download = ("compose", "cp", f"{seat.name}:/logs/agent/.")
@@ -408,12 +409,27 @@ async def test_a_cancelled_trial_stays_cancelled_over_seat_errors(tmp_path: Path
         )
     )
 
+    async def capture(event: TrialHookEvent) -> None:
+        note(event.event.value)
+
+    _record_seat_hooks(trial)
+    for event in (TrialEvent.AGENT_END, TrialEvent.CANCEL, TrialEvent.END):
+        trial.add_hook(event, capture)
+
     run = asyncio.create_task(trial.run())
     await seen("ended", "raj")
     run.cancel()
     with pytest.raises(asyncio.CancelledError):
         await run
 
+    _assert_seat_hooks(trial)
+    for seat in trial.seats:
+        assert (
+            index("agent-end")
+            < index("cancel")
+            < index("hook", "seat-end", seat.name)
+            < index("end")
+        )
     assert ("stopped", "lee") in EVENTS
     assert trial.result.exception_info is not None
     assert trial.result.exception_info.exception_type == "CancelledError"
@@ -548,9 +564,11 @@ async def test_a_seat_crash_fails_the_trial_and_ends_play(tmp_path: Path):
             _participant("lee", fail="crash"),
         )
     )
+    _record_seat_hooks(trial)
 
     result = await trial.run()
 
+    _assert_seat_hooks(trial)
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "RuntimeError"
     assert ("stopped", "maya") in EVENTS and ("stopped", "raj") in EVENTS
@@ -591,6 +609,7 @@ async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):
             _participant("lee"),
         )
     )
+    _record_seat_hooks(trial)
 
     result = await trial.run()
 
@@ -601,6 +620,7 @@ async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):
     assert raj is not None and raj.exception_type == "AgentSetupTimeoutError"
     assert not any(e[0] == "run" for e in EVENTS)
     assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
+    assert not any(e[0] == "hook" for e in EVENTS)
 
 
 async def test_install_only_sets_up_every_seat_and_plays_none(tmp_path: Path):
@@ -613,11 +633,24 @@ async def test_install_only_sets_up_every_seat_and_plays_none(tmp_path: Path):
             install_only=True,
         )
     )
+    _record_seat_hooks(trial)
+    entries: list[LogEntry] = []
+
+    async def capture(entry: LogEntry) -> None:
+        entries.append(entry)
+
+    trial.add_log_callback(capture)
 
     await trial.run()
 
     assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
     assert not any(e[0] == "run" for e in EVENTS)
+    assert not any(e[0] == "hook" for e in EVENTS)
+    assert {(entry.phase, entry.seat) for entry in entries} == {
+        ("agent_setup", "maya"),
+        ("agent_setup", "raj"),
+        ("agent_setup", "lee"),
+    }
 
 
 SCRUBBED = {seat: f"{seat}-value-to-scrub" for seat in ("maya", "raj")}
@@ -727,18 +760,242 @@ async def test_log_streaming_attributes_concurrent_seat_output(tmp_path: Path):
     assert result.exception_info is None
     assert result.verifier_result is not None
     assert all(entry.trial_id == trial.id for entry in entries)
-    for phase in ("agent_setup", "agent"):
-        phase_entries = [entry for entry in entries if entry.phase == phase]
-        streams = [entry.stream for entry in phase_entries]
-        assert streams == ["stdout"] * 3 + ["stderr"] * 3
-        for stream in ("stdout", "stderr"):
-            assert {
-                entry.seat for entry in phase_entries if entry.stream == stream
-            } == {"maya", "raj", "lee"}
-        assert all(entry.seat and entry.seat in entry.text for entry in phase_entries)
-    assert [
-        (entry.seat, entry.stream) for entry in entries if entry.phase == "verification"
-    ] == [(None, "stdout"), (None, "stderr")]
+    assert {entry.stream for entry in entries} == {"stdout"}
+    for seat in ("maya", "raj", "lee"):
+        setup = [
+            entry.text
+            for entry in entries
+            if entry.phase == "agent_setup" and entry.seat == seat
+        ]
+        assert "1000\n" in setup
+        assert any("mkdir -p /logs/agent" in text for text in setup)
+        assert any(f"{seat} setup" in text for text in setup)
+    assert {
+        (entry.seat, entry.text) for entry in entries if entry.phase == "agent"
+    } == {
+        (seat, f"exec bash -c 'echo {seat} is working'")
+        for seat in ("maya", "raj", "lee")
+    }
+    assert [entry.seat for entry in entries if entry.phase == "verification"] == [None]
+
+
+async def test_unsupported_seat_streaming_warns_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            *(_participant(seat) for seat in ("maya", "raj", "lee")),
+        )
+    )
+    monkeypatch.setattr(trial.agent_environment, "type", lambda: EnvironmentType.MODAL)
+    capture = AsyncMock()
+    trial.add_log_callback(capture)
+
+    result = await trial.run()
+
+    assert result.exception_info is None
+    assert _verified(trial)
+    assert [entry.args[0].phase for entry in capture.await_args_list] == [
+        "verification"
+    ]
+    assert caplog.text.count("Live seat logs require the docker environment") == 1
+
+
+@pytest.mark.parametrize("observer_error", [RuntimeError, asyncio.CancelledError])
+async def test_raising_seat_observers_preserve_agent_outcome(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    observer_error: type[BaseException],
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", fail="exit"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+
+    async def disconnected(_event: TrialHookEvent | LogEntry) -> None:
+        raise observer_error("observer disconnected")
+
+    trial.add_hook(TrialEvent.SEAT_START, disconnected)
+    trial.add_hook(TrialEvent.SEAT_END, disconnected)
+    trial.add_log_callback(disconnected)
+    survivor = AsyncMock()
+    trial.add_log_callback(survivor)
+    _record_seat_hooks(trial)
+
+    result = await trial.run()
+
+    _assert_seat_hooks(trial)
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "NonZeroAgentExitCodeError"
+    assert _verified(trial)
+    seats = _seat_results(result)
+    assert seats["maya"].exception_info.exception_type == "NonZeroAgentExitCodeError"
+    assert seats["raj"].exception_info is seats["lee"].exception_info is None
+    assert any(entry.args[0].phase == "agent" for entry in survivor.await_args_list)
+    assert "seat-start hook failed" in caplog.text
+    assert "seat-end hook failed" in caplog.text
+    assert "Trial log callback failed" in caplog.text
+
+
+async def test_seat_hook_duration_is_outside_the_agent_timeout(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.2),
+            *(_participant(seat) for seat in ("maya", "raj", "lee")),
+        )
+    )
+    release = asyncio.Event()
+    pending_hooks: list[asyncio.Task[None]] = []
+
+    async def slow_start(event: TrialHookEvent) -> None:
+        await asyncio.sleep(0.25)
+        note("start-observed", str(event.seat))
+
+    async def hanging_end(_event: TrialHookEvent) -> None:
+        task = asyncio.current_task()
+        assert task is not None
+        pending_hooks.append(task)
+        try:
+            await release.wait()
+        except asyncio.CancelledError:
+            # A subscriber may take an arbitrary time to clean up.
+            await release.wait()
+
+    trial.add_hook(TrialEvent.SEAT_START, slow_start)
+    trial.add_hook(TrialEvent.SEAT_END, hanging_end)
+    _record_seat_hooks(trial)
+    try:
+        result = await asyncio.wait_for(trial.run(), timeout=3)
+
+        assert result.exception_info is None
+        assert _verified(trial)
+        _assert_seat_hooks(trial)
+        for seat in trial.seats:
+            assert index("start-observed", seat.name) < index(
+                "run", seat.name, seat.instruction
+            )
+        assert len(pending_hooks) == 3
+        assert all(not task.done() for task in pending_hooks)
+        assert caplog.text.count("seat-end hook timed out") == 3
+    finally:
+        release.set()
+        for task in pending_hooks:
+            await task
+
+
+async def test_cancelling_trial_interrupts_seat_hook_wait(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            *(_participant(seat) for seat in ("maya", "raj", "lee")),
+        )
+    )
+    entered = asyncio.Event()
+
+    async def hanging_end(_event: TrialHookEvent) -> None:
+        entered.set()
+        await asyncio.Event().wait()
+
+    trial.add_hook(TrialEvent.SEAT_END, hanging_end)
+    run = asyncio.create_task(trial.run())
+    await asyncio.wait_for(entered.wait(), timeout=3)
+    run.cancel()
+    await asyncio.sleep(0)
+    run.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(asyncio.shield(run), timeout=1)
+
+    assert trial.result.exception_info is not None
+    assert trial.result.exception_info.exception_type == "CancelledError"
+    assert ("stop",) in EVENTS
+
+
+async def test_seat_end_snapshot_includes_collected_context_and_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", fail="exit"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    maya = trial.seats[0]
+    usage_file = maya.paths.agent_dir / "usage.txt"
+    events: list[TrialHookEvent] = []
+
+    async def download(**_kwargs: Any) -> None:
+        usage_file.write_text("0.75")
+
+    def populate(context: AgentContext) -> None:
+        context.cost_usd = float(usage_file.read_text())
+
+    async def capture(event: TrialHookEvent) -> None:
+        events.append(event)
+
+    monkeypatch.setattr(maya.environment, "download_dir", download)
+    monkeypatch.setattr(maya.agent, "populate_context_post_run", populate)
+    trial.add_hook(TrialEvent.SEAT_START, capture)
+    trial.add_hook(TrialEvent.SEAT_END, capture)
+
+    result = await trial.run()
+
+    assert len(events) == 6
+    assert len({id(event.result) for event in events}) == 6
+    seats = _seat_results(result)
+    for event in events:
+        assert event.seat is not None
+        assert event.seat_result is not None
+        assert event.seat_result.seat == event.seat
+        assert event.result is not result
+        assert event.seat_result is not seats[event.seat]
+        assert event.seat_result is _seat_results(event.result)[event.seat]
+        assert event.seat_result.agent_execution is not None
+        if event.event == TrialEvent.SEAT_START:
+            assert event.seat_result.agent_execution.finished_at is None
+            assert event.seat_result.exception_info is None
+        else:
+            assert event.seat_result.agent_execution.finished_at is not None
+    end = next(
+        event
+        for event in events
+        if event.event == TrialEvent.SEAT_END and event.seat == "maya"
+    )
+    assert end.seat_result is not None
+    assert end.seat_result.agent_result is not None
+    assert end.seat_result.agent_result.cost_usd == 0.75
+    assert end.seat_result.exception_info is not None
+    assert end.seat_result.exception_info.exception_type == "NonZeroAgentExitCodeError"
+    assert end.result.exception_info is not None
+    assert end.result.exception_info.exception_message.startswith("Seat 'maya': ")
+
+
+async def test_server_reports_trial_events_not_seat_events(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            *(_participant(seat) for seat in ("maya", "raj", "lee")),
+        )
+    )
+    monkeypatch.setattr(Trial, "create", AsyncMock(return_value=trial))
+    _record_seat_hooks(trial)
+    report = AsyncMock()
+
+    result = await TrialExecutor().run(trial.id, trial.config, report)
+
+    _assert_seat_hooks(trial)
+    assert report.await_count == 7  # 6 trial-level events and the finalized result.
+    assert all(call.args[0] is result for call in report.await_args_list)
 
 
 def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
