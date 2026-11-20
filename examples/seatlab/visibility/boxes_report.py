@@ -116,13 +116,13 @@ def _ledger(
     with closing(sqlite3.connect(file.as_uri() + "?mode=ro", uri=True)) as db:
         db.row_factory = sqlite3.Row
         rows: dict[str, sqlite3.Row] = {}
-        for row in db.execute(
+        for record in db.execute(
             """SELECT run, role, reserved_at, started_at, finished_at, served_model,
                       hit, miss, output, cost_low, cost_high
                FROM calls WHERE substr(run, 1, 3) = 'bx-' OR role = ?""",
             (boxes_run.ROLE,),
         ):
-            assert isinstance(row, sqlite3.Row)  # The connection installs this factory.
+            row = cast("sqlite3.Row", record)  # The connection installs this factory.
             run: object = row["run"]
             if (
                 not isinstance(run, str)

@@ -195,3 +195,19 @@ python -m "$module" classify bx-i01-m0-r0-own < choice.json
 Use `shared` instead of `own` to add the peer list. Use `m1` instead of `m0` to reverse the numbering. The classifier accepts all legal choices, including duplicates. It does not execute the choice or tell you whether it would find a flag. No network, Harbor installation, or Docker daemon is needed.
 
 To reproduce the packet, run `python -m examples.seatlab.visibility.boxes_packet export "$MUSTER_E1RUN/team-3" > packet.json`. Its SHA-256 is `dcd8806f26c170ee317b0ad0e0113739c4a1a87465c565487342221a40c84766`. The original archive is not needed to use the published packet.
+
+#### What changed for the searcher?
+
+Sharing the box numbers removed all 20 peer-only repeats in the matched pairs. It did not just move duplicates from peers to the searcher's own boxes.
+
+| First accepted choice | Own history only | Own history and peer box numbers |
+| --- | ---: | ---: |
+| Globally unopened box | 19 / 40 | 40 / 40 |
+| Box previously opened only by a peer | 20 / 40 | 0 / 40 |
+| Box previously opened by the searcher | 1 / 40 | 0 / 40 |
+
+All 40 pairs completed across the 10 worlds. The peer-only repeat rate fell by 50 percentage points. With original numbering, it fell by 70 points. With reversed numbering, it fell by 30 points. Shared-history receivers selected an unopened box under both numberings. Eight worlds had fewer peer-only repeats; the other 2 had none under either interface.
+
+Seven source worlds had earlier terminal evidence of the searcher's own observations. Across their 28 pairs, the peer-only repeat rate fell by 46.4 points. That evidence does not show what the original model read. These choices never reached the world. We cannot infer flags found, total coverage after later moves, or an increase in native team reward.
+
+The [paired evidence](results/muster-box-receiver-results.json) includes every denominator and numbering. The [80 settled calls](results/muster-box-receiver-cost.json) used 15,992 uncached input tokens, 0 cached input tokens, and 448 output tokens. The estimated cost was **$0.002667600 USD**, not an invoice.
