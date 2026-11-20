@@ -1,15 +1,18 @@
 import asyncio
 import json
 import logging
+import posixpath
 import shutil
 import tempfile
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from pathlib import Path, PurePath, PurePosixPath
 
+from harbor.constants import MAIN_SERVICE_NAME
 from harbor.environments.base import BaseEnvironment, EnvironmentPath
 from harbor.environments.tar_transfer import copy_via_tar
 from harbor.models.task.artifacts import (
     effective_artifact_service,
+    is_absolute_container_path,
     is_convention_entry,
     artifact_is_covered_by,
     source_host_path,
@@ -21,7 +24,8 @@ from harbor.models.trial.artifact_manifest import (
     ArtifactManifestEntry,
 )
 from harbor.models.trial.config import ArtifactConfig
-from harbor.utils.path_safety import directory_move_plan
+from harbor.models.trial.paths import EnvironmentPaths
+from harbor.utils.path_safety import directory_move_plan, validate_output_path
 
 _MANIFEST_FILENAME = "manifest.json"
 
@@ -84,7 +88,7 @@ class ArtifactHandler:
         self._claimed_targets: list[tuple[Path, ArtifactConfig]] = []
 
     def begin_collection(self) -> None:
-        """Reset collision claims at the start of a collection pass.
+        """Reset collision claims for a new collection.
 
         Claims must span the main + sidecar phases of one pass, not the whole
         trial: multi-step trials vacate the shared host artifacts dir between
@@ -146,6 +150,7 @@ class ArtifactHandler:
         source_artifacts_dir: EnvironmentPath,
         artifacts: Sequence[str | ArtifactConfig] | None = None,
         services: Collection[str] | None = None,
+        pre_verifier: bool = False,
     ) -> ArtifactManifest:
         """Best-effort artifact download with a manifest of attempted sources.
 
@@ -155,7 +160,7 @@ class ArtifactHandler:
         complete manifest.
         """
         artifacts_dir.mkdir(parents=True, exist_ok=True)
-        entries: list[ArtifactManifestEntry] = []
+        manifest = self._read_manifest(artifacts_dir)
         convention_source = self._environment_path_str(source_artifacts_dir)
 
         for artifact in self._normalized_artifacts(artifacts, convention_source):
@@ -164,16 +169,117 @@ class ArtifactHandler:
                 and effective_artifact_service(artifact) not in services
             ):
                 continue
-            entries.append(
-                await self._download_artifact(
-                    source_env=source_env,
-                    artifacts_dir=artifacts_dir,
-                    artifact=artifact,
-                    convention_source=convention_source,
-                )
+            entry = await self._download_artifact(
+                source_env=source_env,
+                artifacts_dir=artifacts_dir,
+                artifact=artifact,
+                convention_source=convention_source,
+                pre_verifier=pre_verifier,
             )
+            manifest.entries.append(entry)
 
-        return self._write_manifest(artifacts_dir, entries)
+        self._write_manifest(artifacts_dir, manifest)
+        return manifest
+
+    async def retry_failed_artifacts(
+        self,
+        source_env: BaseEnvironment,
+        artifacts_dir: Path,
+        *,
+        source_artifacts_dir: EnvironmentPath,
+        warn: Callable[[str], None],
+    ) -> None:
+        """Save missed files from the shared verifier's main service only."""
+        manifest = self._read_manifest(artifacts_dir, strict=True)
+        groups: dict[str, list[tuple[int, ArtifactManifestEntry]]] = {}
+        collected: set[str] = set()
+        for index, entry in enumerate(manifest.entries):
+            if entry.status == "failed":
+                groups.setdefault(entry.destination, []).append((index, entry))
+            elif entry.status in ("ok", "empty"):
+                collected.add(entry.destination)
+
+        env_paths = EnvironmentPaths.for_os(source_env.os)
+        reserved = (
+            self._environment_path_str(source_artifacts_dir),
+            env_paths.agent_dir.as_posix(),
+            env_paths.user_agent_dir.as_posix(),
+            (env_paths.logs_dir / "seats").as_posix(),
+            env_paths.tests_dir.as_posix(),
+        )
+        for destination, failures in groups.items():
+            if destination in collected:
+                continue
+            first = failures[0][1]
+            service = first.service or MAIN_SERVICE_NAME
+            label = f"Artifact {first.source!r} from service {service!r}"
+            if service != MAIN_SERVICE_NAME:
+                warn(f"{label} failed before verification; only main can be retried.")
+                continue
+            source = posixpath.normpath(first.source.replace("\\", "/"))
+            source_path = PurePosixPath(source.casefold())
+            if (
+                first.type != "file"
+                or not is_absolute_container_path(source)
+                or any(source_path.is_relative_to(path.casefold()) for path in reserved)
+            ):
+                warn(f"{label} failed before verification; this path is not retried.")
+                continue
+            if any(
+                entry.source != first.source
+                or (entry.service or MAIN_SERVICE_NAME) != service
+                or entry.type != "file"
+                for _, entry in failures[1:]
+            ):
+                warn(f"{label} has conflicting declarations; it is not retried.")
+                continue
+
+            try:
+                target = artifacts_dir.parent / destination
+                validate_output_path(target, artifacts_dir)
+                if target.exists() or target == artifacts_dir:
+                    warn(f"{label} has an existing host path; it is not overwritten.")
+                    continue
+                user = None if source_env.os == TaskOS.WINDOWS else "root"
+                if not await source_env.is_file(first.source, user=user):
+                    warn(f"{label} is not a regular file after verification.")
+                    continue
+                with tempfile.TemporaryDirectory(
+                    prefix=".artifact-retry-",
+                    dir=artifacts_dir.parent,
+                    ignore_cleanup_errors=True,
+                ) as staging:
+                    snapshot = Path(staging) / "snapshot"
+                    await source_env.download_file(first.source, snapshot)
+                    if snapshot.is_symlink() or not snapshot.is_file():
+                        warn(f"{label} did not download as a regular file.")
+                        continue
+                    for index, entry in failures:
+                        manifest.entries[index] = entry.model_copy(
+                            update={
+                                "status": "ok",
+                                "phase": "post_verifier",
+                                "source_environment": "agent",
+                            }
+                        )
+                    manifest_file = Path(staging) / _MANIFEST_FILENAME
+                    manifest_file.write_text(
+                        json.dumps(manifest.to_json_data(), indent=2)
+                    )
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    snapshot.replace(target)
+                    try:
+                        manifest_file.replace(artifacts_dir / _MANIFEST_FILENAME)
+                    except OSError:
+                        target.unlink()
+                        raise
+            except Exception as exc:
+                for index, entry in failures:
+                    manifest.entries[index] = entry
+                warn(f"{label} still failed after verification ({type(exc).__name__}).")
+                self.logger.debug(
+                    "Post-verifier artifact transfer failed", exc_info=True
+                )
 
     async def upload_artifacts(
         self,
@@ -275,6 +381,7 @@ class ArtifactHandler:
         artifacts_dir: Path,
         artifact: ArtifactConfig,
         convention_source: str,
+        pre_verifier: bool,
     ) -> ArtifactManifestEntry:
         source = artifact.source
         service = effective_artifact_service(artifact)
@@ -370,6 +477,8 @@ class ArtifactHandler:
                 status="ok",
                 service=artifact.service,
                 exclude=list(artifact.exclude) if is_dir else [],
+                phase="pre_verifier" if pre_verifier else None,
+                source_environment="agent",
             )
         except Exception:
             self.logger.debug(
@@ -384,6 +493,7 @@ class ArtifactHandler:
                 status="failed",
                 service=artifact.service,
                 exclude=list(artifact.exclude) if is_dir else [],
+                source_environment="agent",
             )
 
     def _record_mounted_artifacts_dir(
@@ -403,6 +513,7 @@ class ArtifactHandler:
             status="ok" if has_contents else "empty",
             service=service,
             exclude=list(exclude),
+            source_environment="agent",
         )
 
     def _host_path(
@@ -435,32 +546,34 @@ class ArtifactHandler:
             return "artifacts"
         return f"artifacts/{target.relative_to(artifacts_dir).as_posix()}"
 
-    def _write_manifest(
-        self,
-        artifacts_dir: Path,
-        new_entries: list[ArtifactManifestEntry],
+    def _read_manifest(
+        self, artifacts_dir: Path, *, strict: bool = False
     ) -> ArtifactManifest:
-        """Write the manifest, appending to entries from earlier passes."""
         manifest_path = artifacts_dir / _MANIFEST_FILENAME
 
-        existing_entries: list[ArtifactManifestEntry] = []
-        if manifest_path.exists():
+        entries: list[ArtifactManifestEntry] = []
+        if strict or manifest_path.exists():
             try:
-                existing_entries = [
+                entries = [
                     ArtifactManifestEntry.model_validate(entry)
                     for entry in json.loads(manifest_path.read_text())
                 ]
             except Exception:
+                if strict:
+                    raise
                 self.logger.debug(
                     "Failed to read existing artifacts manifest", exc_info=True
                 )
 
-        manifest = ArtifactManifest(entries=[*existing_entries, *new_entries])
+        return ArtifactManifest(entries=entries)
+
+    def _write_manifest(self, artifacts_dir: Path, manifest: ArtifactManifest) -> None:
         if not manifest.entries:
-            return manifest
+            return
 
         try:
-            manifest_path.write_text(json.dumps(manifest.to_json_data(), indent=2))
+            (artifacts_dir / _MANIFEST_FILENAME).write_text(
+                json.dumps(manifest.to_json_data(), indent=2)
+            )
         except Exception:
             self.logger.debug("Failed to write artifacts manifest", exc_info=True)
-        return manifest

@@ -72,6 +72,14 @@ CONVENTION_MANIFEST_ENTRY = {
     "status": "ok",
     "service": None,
 }
+POST_VERIFIER_MANIFEST_ENTRY = {
+    "source": "/tmp/report.txt",
+    "destination": "artifacts/tmp/report.txt",
+    "type": "file",
+    "status": "ok",
+    "phase": "post_verifier",
+    "source_environment": "agent",
+}
 
 
 def _artifacts_toml_line(
@@ -1765,6 +1773,74 @@ class TestMultiStepRegradeTrial:
 
 
 class TestArtifactCoverage:
+    @pytest.mark.parametrize("requested", ["/tmp/report.txt", "/tmp"])
+    async def test_rejects_input_that_depends_on_post_verifier_bytes(
+        self, tmp_path: Path, requested: str
+    ):
+        task_dir = _separate_verifier_task(tmp_path, artifacts=[requested])
+        source = _write_source_trial(
+            tmp_path,
+            task_dir,
+            manifest_entries=[
+                CONVENTION_MANIFEST_ENTRY,
+                {
+                    "source": "/tmp",
+                    "destination": "artifacts/tmp",
+                    "type": "directory",
+                    "status": "ok",
+                },
+                POST_VERIFIER_MANIFEST_ENTRY,
+            ],
+        )
+        output = source / "artifacts/tmp/report.txt"
+        output.parent.mkdir()
+        output.write_text("verifier output")
+        verifier = _stock_mock_env()
+        fake_create, _ = _make_factory_recorder(_stock_mock_env(), verifier)
+
+        _, result = await _run_regrade_trial(
+            source, task_dir, tmp_path / "trials", fake_create
+        )
+
+        assert result.exception_info is not None
+        assert (
+            "post-verifier outputs cannot be replayed"
+            in result.exception_info.exception_message
+        )
+        verifier.start.assert_not_awaited()
+        verifier.upload_file.assert_not_awaited()
+
+    async def test_undeclared_post_verifier_output_and_alias_do_not_replay(
+        self, tmp_path: Path
+    ):
+        task_dir = _separate_verifier_task(tmp_path)
+        source = _write_source_trial(
+            tmp_path,
+            task_dir,
+            manifest_entries=[CONVENTION_MANIFEST_ENTRY, POST_VERIFIER_MANIFEST_ENTRY],
+        )
+        output = source / "artifacts/tmp/report.txt"
+        output.parent.mkdir()
+        output.write_text("verifier output")
+        link = source / "artifacts/logs/artifacts/report-link.txt"
+        link.symlink_to(output)
+        fake_create, _ = _make_factory_recorder(_stock_mock_env(), _stock_mock_env())
+
+        trial, result = await _run_regrade_trial(
+            source, task_dir, tmp_path / "trials", fake_create
+        )
+
+        assert result.exception_info is None
+        assert result.verifier_result is not None
+        assert not (trial.paths.artifacts_dir / "tmp/report.txt").exists()
+        assert not (
+            trial.paths.artifacts_dir / "logs/artifacts/report-link.txt"
+        ).exists()
+        assert (trial.paths.artifacts_dir / "logs/artifacts/output.txt").is_file()
+        assert len(json.loads(trial.paths.artifacts_manifest_path.read_text())) == 1
+        assert output.read_text() == "verifier output"
+        assert link.is_symlink()
+
     async def test_regrades_artifact_with_matching_exclusion_filters(
         self, tmp_path: Path
     ):
