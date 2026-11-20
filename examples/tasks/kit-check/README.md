@@ -23,3 +23,20 @@ For `run`, use a new directory. The runner starts 4 local Docker jobs in order: 
 - The world records the reviews, observation, and choice for every seed in `artifacts/logs/world/kit-check.json`. The replay checks both modes against the protocol, matches the native locks, and requires byte-identical world artifacts for repeated modes.
 
 This establishes a coordination and evidence control for the supplied scripts. It does not estimate model performance, a team advantage over one model, or security against adversarial participants. The world endpoints are an observation protocol for these scripts, not access control for untrusted players.
+
+## Run with real seat models
+
+Use a current Codex CLI signed in through ChatGPT. The runner refuses an API-key login. It runs one Codex turn per seat on the host. The model receives only its instructions and game observation. It has no task shell or Docker credentials. The host submits only validated kit labels to that seat's endpoint.
+
+Choose a native Codex model ID and use a new output directory for each trial:
+
+```bash
+uv run --no-sync python examples/configs/features/kit_check_subscription.py \
+  visible /tmp/kit-check-real-visible-1 --model "${CODEX_MODEL:?Set a native Codex model ID}"
+```
+
+Repeat in the order `visible`, `silent`, `silent`, `visible`. On Peter's workstation, run each command through `/tmp/crucible-docker-slot.sh`. A trial uses the same model and role instructions in both modes. Only the world reports change. The model chooses a kit when reports are absent; it does not use the scripted `K1` fallback. The 24 cases in one trial are not independent model calls.
+
+Each `receipt.json` keeps seat execution time, model turn time, token use, and reward. Seat intervals overlap. Use `play_seconds` for trial play time, not the sum of seat intervals. Codex does not report subscription cost in USD, so the receipt leaves it unknown.
+
+Use `--require-freeze` with a Harbor build that records seat freezes. This checks that all seats report a successful freeze after play and before the verifier starts. It does not certify the shared world or an isolated verifier.

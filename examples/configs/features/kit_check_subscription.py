@@ -1,0 +1,164 @@
+"""Run one real-model Kit Check trial using the local Codex subscription."""
+
+import argparse
+import asyncio
+import json
+import os
+import re
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from kit_check_codex_agent import CodexKitAgent, check_subscription
+from kit_check_controls import ARTIFACT, HERE, ROLES, TASK
+
+
+def _finished(timing: dict[str, Any] | None) -> str | None:
+    return timing.get("finished_at") if timing else None
+
+
+def _duration(timing: dict[str, Any] | None) -> float | None:
+    if not timing or not timing.get("started_at") or not timing.get("finished_at"):
+        return None
+    start = datetime.fromisoformat(timing["started_at"])
+    finish = datetime.fromisoformat(timing["finished_at"])
+    return (finish - start).total_seconds() if finish >= start else None
+
+
+def _freeze_before_verifier(
+    seats: list[dict[str, Any]], verifier: dict[str, Any]
+) -> bool | None:
+    freezes = [seat.get("freeze") for seat in seats]
+    if not any(freezes):
+        return None
+    if any(not freeze or freeze.get("exception_info") for freeze in freezes):
+        return False
+    ended = [_finished(seat.get("agent_execution")) for seat in seats]
+    stopped = [_finished(freeze) for freeze in freezes]
+    started = verifier.get("started_at")
+    if not started or not all(ended) or not all(stopped):
+        return False
+    ends = [datetime.fromisoformat(stamp) for stamp in ended if stamp is not None]
+    stops = [datetime.fromisoformat(stamp) for stamp in stopped if stamp is not None]
+    return max(ends) <= min(stops) and max(stops) <= datetime.fromisoformat(started)
+
+
+def _summarize(job_dir: Path, mode: str) -> dict[str, Any]:
+    (path,) = sorted(job_dir.glob("*/result.json"))
+    trial = json.loads(path.read_bytes())
+    lock = json.loads(path.with_name("lock.json").read_bytes())
+    seats = trial["seat_results"]
+    if (
+        len(seats) != len(ROLES)
+        or {seat["seat"]: seat["under_test"] for seat in seats} != ROLES
+    ):
+        raise ValueError("The result does not contain the expected seats")
+    world_path = path.parent / ARTIFACT
+    world = json.loads(world_path.read_bytes()) if world_path.is_file() else None
+    if world is not None and world["mode"] != mode:
+        raise ValueError("The world has a different visibility mode")
+    verifier_result = trial.get("verifier_result") or {}
+    rows = []
+    for seat in seats:
+        usage = seat.get("agent_result") or {}
+        metadata = usage.get("metadata") or {}
+        rows.append(
+            {
+                "seat": seat["seat"],
+                "under_test": seat["under_test"],
+                "model": (seat.get("agent_info") or {}).get("model_info"),
+                "setup_seconds": _duration(seat.get("agent_setup")),
+                "execution_seconds": _duration(seat.get("agent_execution")),
+                "model_turn_seconds": metadata.get("codex_turn_seconds"),
+                "auth": metadata.get("codex_auth"),
+                "input_tokens": usage.get("n_input_tokens"),
+                "cached_input_tokens": usage.get("n_cache_tokens"),
+                "output_tokens": usage.get("n_output_tokens"),
+                "cost_usd": usage.get("cost_usd"),
+                "error": (seat.get("exception_info") or {}).get("exception_type"),
+                "freeze": seat.get("freeze"),
+            }
+        )
+    return {
+        "mode": mode,
+        "trial_id": trial["id"],
+        "task_digest": lock["task"]["digest"],
+        "valid_reward": trial["reward_valid"],
+        "reward": (verifier_result.get("rewards") or {}).get("reward"),
+        "cases": len(world["cases"]) if world is not None else None,
+        "trial_error": (trial.get("exception_info") or {}).get("exception_type"),
+        "play_seconds": _duration(trial.get("agent_execution")),
+        "all_seats_frozen_before_verifier": _freeze_before_verifier(
+            seats, trial.get("verifier") or {}
+        ),
+        "seats": rows,
+    }
+
+
+async def _run(directory: Path, mode: str, model: str) -> dict[str, Any]:
+    from harbor.job import Job
+    from harbor.models.environment_type import EnvironmentType
+    from harbor.models.job.config import JobConfig, RetryConfig
+    from harbor.models.trial.config import EnvironmentConfig, Participant, TaskConfig
+
+    directory.mkdir(parents=True, exist_ok=False)
+    job = await Job.create(
+        JobConfig(
+            job_name=mode,
+            jobs_dir=directory,
+            n_attempts=1,
+            n_concurrent_trials=1,
+            quiet=True,
+            retry=RetryConfig(max_retries=0),
+            environment=EnvironmentConfig(
+                type=EnvironmentType.DOCKER,
+                delete=True,
+                extra_docker_compose=[HERE / f"kit-check-{mode}.override.yaml"],
+            ),
+            participants=[
+                Participant(
+                    seat=seat,
+                    model_name=f"openai-codex/{model}",
+                    import_path=CodexKitAgent.import_path(),
+                    kwargs={"role": seat},
+                )
+                for seat in ROLES
+            ],
+            tasks=[TaskConfig(path=TASK)],
+        )
+    )
+    await job.run()
+    return _summarize(directory / mode, mode)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("visible", "silent"))
+    parser.add_argument("directory", type=Path)
+    parser.add_argument("--model", required=True, help="Native Codex model ID")
+    parser.add_argument("--require-freeze", action="store_true")
+    args = parser.parse_args()
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", args.model):
+        parser.error("Pass a native Codex model ID without a provider prefix")
+    os.environ["HARBOR_TELEMETRY"] = "0"
+    if args.require_freeze:
+        from harbor.models.trial.result import SeatResult
+
+        if "freeze" not in SeatResult.model_fields:
+            parser.error("This Harbor checkout cannot record seat freezes")
+    directory = args.directory.resolve()
+    check_subscription()
+    receipt = asyncio.run(_run(directory, args.mode, args.model))
+    output = directory / "receipt.json"
+    output.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    print(output)
+    if not receipt["valid_reward"] or any(seat["error"] for seat in receipt["seats"]):
+        parser.exit(1, "No valid trial with all seats completed\n")
+    if args.require_freeze and receipt["all_seats_frozen_before_verifier"] is not True:
+        parser.exit(
+            1, "The result does not confirm that all seats froze before grading\n"
+        )
+
+
+if __name__ == "__main__":
+    main()
