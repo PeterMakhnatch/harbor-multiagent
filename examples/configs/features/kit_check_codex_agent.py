@@ -1,4 +1,4 @@
-"""Run a text-only Kit Check seat on the host's Codex subscription."""
+"""Run Kit Check seats with a host Codex subscription or scripted reviewers."""
 
 import asyncio
 import json
@@ -229,6 +229,22 @@ async def _observe(environment: BaseEnvironment, role: str) -> dict[str, Any]:
     if not validate(observation):
         raise RuntimeError(error)
     return observation
+
+
+async def _setup_seat(environment: BaseEnvironment) -> None:
+    await _seat_exec(
+        environment,
+        ["python3", "-I", "-c", "import urllib.request"],
+        "Kit Check requires Python 3 with urllib.request in the seat",
+    )
+
+
+async def _submit(
+    environment: BaseEnvironment, role: str, action: dict[str, Any]
+) -> None:
+    status, _ = await _world_request(environment, "POST", _ROLE_URLS[role], action)
+    if status != HTTPStatus.CREATED:
+        raise RuntimeError(f"Kit Check world POST returned HTTP {status}")
 
 
 def _prompt(instruction: str, role: str, observation: dict[str, Any]) -> str:
@@ -479,11 +495,7 @@ class CodexKitAgent(BaseAgent):
 
     @override
     async def setup(self, environment: BaseEnvironment) -> None:
-        await _seat_exec(
-            environment,
-            ["python3", "-I", "-c", "import urllib.request"],
-            "Kit Check requires Python 3 with urllib.request in the seat",
-        )
+        await _setup_seat(environment)
 
     @override
     async def run(
@@ -505,8 +517,38 @@ class CodexKitAgent(BaseAgent):
                 }
         text = _completion(return_code, stdout, stderr, context)
         action = _action(text, self._role)
-        status, _ = await _world_request(
-            environment, "POST", _ROLE_URLS[self._role], action
-        )
-        if status != HTTPStatus.CREATED:
-            raise RuntimeError(f"Kit Check world POST returned HTTP {status}")
+        await _submit(environment, self._role, action)
+
+
+class ScriptedKitReviewer(BaseAgent):
+    """Submit the validated allowed lists from one reviewer seat."""
+
+    def __init__(
+        self, logs_dir: Path, model_name: str | None = None, *, role: str, **kwargs: Any
+    ) -> None:
+        if role not in ("left", "right"):
+            raise ValueError("Scripted Kit Check reviewer role must be left or right")
+        if model_name is not None:
+            raise ValueError("Scripted Kit Check reviewers do not use a model")
+        super().__init__(logs_dir=logs_dir, **kwargs)
+        self._role = role
+
+    @staticmethod
+    @override
+    def name() -> str:
+        return "kit-check-scripted-reviewer"
+
+    @override
+    def version(self) -> str | None:
+        return "1"
+
+    @override
+    async def setup(self, environment: BaseEnvironment) -> None:
+        await _setup_seat(environment)
+
+    @override
+    async def run(
+        self, instruction: str, environment: BaseEnvironment, context: AgentContext
+    ) -> None:
+        observation = await _observe(environment, self._role)
+        await _submit(environment, self._role, observation)

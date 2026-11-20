@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from kit_check_codex_agent import CodexKitAgent, check_subscription
+from kit_check_codex_agent import CodexKitAgent, ScriptedKitReviewer, check_subscription
 from kit_check_controls import ARTIFACT, HERE, ROLES, TASK
 
 
@@ -26,11 +26,16 @@ def _duration(timing: dict[str, Any] | None) -> float | None:
 
 
 def _freeze_before_verifier(
-    seats: list[dict[str, Any]], verifier: dict[str, Any]
+    seats: list[dict[str, Any]],
+    *,
+    play: dict[str, Any] | None,
+    verifier: dict[str, Any],
 ) -> bool | None:
     freezes = [seat.get("freeze") for seat in seats]
     if not any(freezes):
         return None
+    if len(seats) != len(ROLES) or {seat.get("seat") for seat in seats} != ROLES.keys():
+        return False
     if any(not freeze or freeze.get("exception_info") for freeze in freezes):
         return False
     ended = [_finished(seat.get("agent_execution")) for seat in seats]
@@ -38,9 +43,14 @@ def _freeze_before_verifier(
     started = verifier.get("started_at")
     if not started:
         return None
+    play_finished = _finished(play)
+    if not play_finished or not all(ended) or not all(stopped):
+        return False
+    play_end = datetime.fromisoformat(play_finished)
     ends = [datetime.fromisoformat(stamp) for stamp in ended if stamp is not None]
     stops = [datetime.fromisoformat(stamp) for stamp in stopped if stamp is not None]
-    return max(ends) <= min(stops) and max(stops) <= datetime.fromisoformat(started)
+    verifier_start = datetime.fromisoformat(started)
+    return max(ends) <= play_end <= min(stops) and max(stops) <= verifier_start
 
 
 def _choice_policy(world: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -108,11 +118,13 @@ def _summarize(job_dir: Path, mode: str) -> dict[str, Any]:
     for seat in seats:
         usage = seat.get("agent_result") or {}
         metadata = usage.get("metadata") or {}
+        agent_info = seat.get("agent_info") or {}
         rows.append(
             {
                 "seat": seat["seat"],
                 "under_test": seat["under_test"],
-                "model": (seat.get("agent_info") or {}).get("model_info"),
+                "agent": agent_info.get("name"),
+                "model": agent_info.get("model_info"),
                 "setup_seconds": _duration(seat.get("agent_setup")),
                 "execution_seconds": _duration(seat.get("agent_execution")),
                 "model_turn_seconds": metadata.get(
@@ -139,19 +151,38 @@ def _summarize(job_dir: Path, mode: str) -> dict[str, Any]:
         "trial_error": (trial.get("exception_info") or {}).get("exception_type"),
         "play_seconds": _duration(trial.get("agent_execution")),
         "all_seats_frozen_before_verifier": _freeze_before_verifier(
-            seats, trial.get("verifier") or {}
+            seats,
+            play=trial.get("agent_execution"),
+            verifier=trial.get("verifier") or {},
         ),
         "seats": rows,
     }
 
 
-async def _run(directory: Path, mode: str, model: str) -> dict[str, Any]:
+async def _run(
+    directory: Path, mode: str, model: str, *, scripted_reviewers: bool
+) -> dict[str, Any]:
     from harbor.job import Job
     from harbor.models.environment_type import EnvironmentType
     from harbor.models.job.config import JobConfig, RetryConfig
     from harbor.models.trial.config import EnvironmentConfig, Participant, TaskConfig
 
     directory.mkdir(parents=True, exist_ok=False)
+    participants = [
+        Participant(
+            seat=seat,
+            import_path=ScriptedKitReviewer.import_path(),
+            kwargs={"role": seat},
+        )
+        if scripted_reviewers and not under_test
+        else Participant(
+            seat=seat,
+            model_name=f"openai-codex/{model}",
+            import_path=CodexKitAgent.import_path(),
+            kwargs={"role": seat},
+        )
+        for seat, under_test in ROLES.items()
+    ]
     job = await Job.create(
         JobConfig(
             job_name=mode,
@@ -165,15 +196,7 @@ async def _run(directory: Path, mode: str, model: str) -> dict[str, Any]:
                 delete=True,
                 extra_docker_compose=[HERE / f"kit-check-{mode}.override.yaml"],
             ),
-            participants=[
-                Participant(
-                    seat=seat,
-                    model_name=f"openai-codex/{model}",
-                    import_path=CodexKitAgent.import_path(),
-                    kwargs={"role": seat},
-                )
-                for seat in ROLES
-            ],
+            participants=participants,
             tasks=[TaskConfig(path=TASK)],
         )
     )
@@ -186,6 +209,11 @@ def main() -> None:
     parser.add_argument("mode", choices=("visible", "silent"))
     parser.add_argument("directory", type=Path)
     parser.add_argument("--model", required=True, help="Native Codex model ID")
+    parser.add_argument(
+        "--scripted-reviewers",
+        action="store_true",
+        help="Use the task's fixed policies for the reviewers, not the model",
+    )
     parser.add_argument("--require-freeze", action="store_true")
     args = parser.parse_args()
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", args.model):
@@ -198,7 +226,11 @@ def main() -> None:
             parser.error("This Harbor checkout cannot record seat freezes")
     directory = args.directory.resolve()
     check_subscription()
-    receipt = asyncio.run(_run(directory, args.mode, args.model))
+    receipt = asyncio.run(
+        _run(
+            directory, args.mode, args.model, scripted_reviewers=args.scripted_reviewers
+        )
+    )
     output = directory / "receipt.json"
     output.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(output)

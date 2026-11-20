@@ -26,7 +26,7 @@ This establishes a coordination and evidence control for the supplied scripts. I
 
 ## Run with real seat models
 
-Use a current Codex CLI signed in through ChatGPT. The runner refuses an API-key login. It runs one Codex turn per seat on the host. The model receives only its instructions and game observation. It has no task shell or Docker credentials. The host submits only validated kit labels to that seat's endpoint.
+Use a current Codex CLI signed in through ChatGPT. The runner refuses an API-key login. By default, it runs one Codex turn per seat on the host. The model receives only its instructions and game observation. It has no task shell or Docker credentials. The host submits only validated kit labels to that seat's endpoint.
 
 Choose a native Codex model ID and use a new output directory for each trial:
 
@@ -40,6 +40,12 @@ Repeat in the order `visible`, `silent`, `silent`, `visible`. On Peter's worksta
 The receipt field `builder_choices` separates those policies. A reward of `0.25` can come from always choosing `K1` or from repeating `K1K2K3K4`. Both can score 6 of 24 because the answer key is balanced. Do not read that reward as partial use of the hidden reviews.
 
 Use `--require-freeze` with a Harbor build that records seat freezes. This checks that all seats report a successful freeze after play and before the verifier starts. It does not certify the shared world or an isolated verifier.
+
+## Compare with scripted reviewers
+
+Run the same `visible` command with `--scripted-reviewers`. It runs the fixed reviewer policies in the left and right seats. Only the builder calls Codex. The task and visibility overlay stay the same.
+
+Check that the saved builder observations match before you compare play time and token use. This measures what the reviewer model turns add when the reviewers only copy lists. It does not measure general team performance or compare models with equal inference budgets.
 
 ## Compare with DeepSeek
 
