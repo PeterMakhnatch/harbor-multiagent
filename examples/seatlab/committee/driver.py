@@ -399,7 +399,15 @@ def main(argv: list[str] | None = None) -> int:
     plan = commands.add_parser(
         "plan", help="print the registered schedule without running it"
     )
-    plan.add_argument("--study", choices=("sharing", "tally"), default="sharing")
+    studies = {
+        "sharing": ("seatlab.committee-plan/v1", schedule.grid()),
+        "tally": ("seatlab.committee-tally-plan/v1", schedule.tally_grid()),
+        "recommendation": (
+            "seatlab.committee-recommendation-plan/v1",
+            schedule.recommendation_grid(),
+        ),
+    }
+    plan.add_argument("--study", choices=studies, default="sharing")
     preflight = commands.add_parser(
         "preflight", help="check stock task and installed Harbor"
     )
@@ -407,9 +415,11 @@ def main(argv: list[str] | None = None) -> int:
     for command in (preflight, run):
         command.add_argument("--harbor", type=Path, required=True)
         command.add_argument("--task", type=Path, required=True)
-    sharing = schedule.grid()
-    tally = schedule.tally_grid()
-    cells = {cell["cell_id"]: cell for cell in (*sharing, *tally)}
+    cells = {
+        cell["cell_id"]: cell
+        for _, registered in studies.values()
+        for cell in registered
+    }
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--cell", choices=cells, required=True)
     parsed = parser.parse_args(args)
@@ -419,16 +429,12 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 json.dumps(
                     {
-                        "schema": (
-                            "seatlab.committee-tally-plan/v1"
-                            if parsed.study == "tally"
-                            else "seatlab.committee-plan/v1"
-                        ),
+                        "schema": studies[parsed.study][0],
                         "task_git_tree": schedule.TASK_TREE,
                         "task_checksum": schedule.TASK_CHECKSUM,
                         "roles": schedule.ROLES,
                         "model": _MODEL,
-                        "cells": tally if parsed.study == "tally" else sharing,
+                        "cells": studies[parsed.study][1],
                     },
                     indent=2,
                 )

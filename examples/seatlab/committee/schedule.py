@@ -7,6 +7,7 @@ TASK_CHECKSUM = "adb41137272dabea3eb946c8733da5424d77520200f373b14f7ef08913da4e1
 ROLES = ("analyst_1", "analyst_2", "analyst_3", "analyst_4")
 ARMS = ("open", "novelty")
 TALLY_ARMS = ("plain", "first", "last")
+RECOMMENDATION_ARMS = ("masked", "shown")
 
 
 class Cell(TypedDict):
@@ -47,3 +48,31 @@ def tally_grid() -> list[Cell]:
                     }
                 )
     return cells
+
+
+def chair(map_index: int, repetition: int) -> str:
+    """Assign each seat 3 paired chair appointments over the 12 blocks."""
+    if type(map_index) is not int or map_index not in range(6):
+        raise ValueError("unregistered label map")
+    if type(repetition) is not int or repetition not in range(2):
+        raise ValueError("unregistered repetition")
+    return ROLES[(2 * map_index + repetition) % len(ROLES)]
+
+
+def recommendation_grid() -> list[Cell]:
+    """A fresh live team per cell, with the same chair within each pair."""
+    return [
+        {
+            "cell_id": f"rc-m{index}-r{repeat}-{arm}",
+            "map_index": index,
+            "repetition": repeat,
+            "arm": arm,
+        }
+        for index in range(6)
+        for repeat in range(2)
+        for arm in (
+            RECOMMENDATION_ARMS
+            if (index + repeat) % 2 == 0
+            else RECOMMENDATION_ARMS[::-1]
+        )
+    ]
