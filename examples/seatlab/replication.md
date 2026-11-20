@@ -18,6 +18,17 @@ Report eligible, attempted, completed and missed counts separately for each arm.
 
 Separate workers can add new worlds, actor-side context transformations, and cross-run readers. Keep world state with the task. Keep observation and analysis formats outside Harbor. Only changes to native runtime semantics belong in the framework itself.
 
+## Can live teammates choose and use a tool that reads only their own calendar?
+
+**Registered before collection.** Messages arrived in all 24 public replica teams, but none found a common start. A tool can reduce the work of reading a calendar without giving away the other seat's schedule. Test a complete team policy, not another replacement of a recorded list.
+
+- Use all 12 [public scheduling worlds](results/flotilla-calendar-packet.json), both receiver directions, and 2 repetitions. Each of the 48 blocks receives both tool policies. Run a fresh native `blind` and `peer` room under each policy. Never compare `blind` alone against `peer` alone to estimate the tool effect. This registers 192 native teams and 96 matched team comparisons.
+- Each policy starts with 2 new model-generated opening lists. Its 2 rooms share those lists, as in the original replica. Do not share model outputs or conversation memory between policies. Run `off` first when `(world // 2 + direction + repetition) % 2 == 0`; otherwise run `on` first. Keep the native room order unchanged.
+- Each seat action gets 2 model calls with the same settings and output limit. The first call chooses `local_starts` or `none`. The offer and selection prompt are identical under both policies for identical inputs. Under `on`, a valid request returns every feasible 2-hour start for **that seat only**. Under `off`, the same request returns `unavailable`. The agent receives no other calendar, joint answer, recommended slot, or room control. A request with an argument, an unknown operation, or malformed JSON returns `invalid`. Do not retry it. A `none` request returns the same result under both policies.
+- The second call receives the original role prompt and the result of the first call's request. Send its reply unchanged to the stock game. Do not sort, repair, or substitute model responses. The remote model sees no run IDs, policy names, task files, or provider credentials. Keep each model call stateless. Budget at most 1,152 direct first attempts. Compare actual usage and cost; equal call limits do not imply equal token counts.
+- Primary: native success under `on` minus `off`, matched within world, direction, repetition, and room condition. Average differences within each world and weight the 12 worlds equally. Show `blind` and `peer`, and the 9 worlds outside the earlier public cohort, separately. Show counts, unknown-outcome bounds, and the accepted-decision comparison. A malformed final reply counts as zero only when the stock game records a verified zero. An invalid opening list starts no native room and cannot count as a native loss.
+- Secondary: report requests, returned tools, exact lists produced by the agents, final slot choices, and both delivered messages. Separate native outcomes, evidence tying the tool to the seat, and model costs. A call without its receipt is not free. An observed difference estimates the entire policy, including tool failures and changed messages. It does not isolate a particular seat's reasoning.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.
