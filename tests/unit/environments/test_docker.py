@@ -465,7 +465,7 @@ class TestStreamedOutputLineLimit:
         )
         assert process.stdout is not None
         try:
-            assert await process.stdout.readline() == b"ready\n"
+            assert (await process.stdout.readline()).rstrip(b"\r\n") == b"ready"
             async with asyncio.TaskGroup() as group:
                 command = group.create_task(
                     DockerEnvironment._collect_buffered_output(
