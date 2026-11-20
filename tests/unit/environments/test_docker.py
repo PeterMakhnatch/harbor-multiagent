@@ -2231,22 +2231,6 @@ class TestValidateImageOS:
             await env._validate_image_os("missing-image:latest")  # no raise
 
 
-@pytest.fixture(scope="module")
-def docker_compose_cli():
-    try:
-        version = subprocess.run(
-            ["docker", "compose", "version"],
-            check=False,
-            capture_output=True,
-            timeout=10,
-        )
-    except FileNotFoundError:
-        pytest.skip("Docker Compose is not installed")
-    if version.returncode != 0:
-        pytest.skip("Docker Compose is not installed")
-
-
-@pytest.mark.usefixtures("docker_compose_cli")
 @pytest.mark.parametrize("prebuilt", [False, True], ids=["build", "prebuilt"])
 @pytest.mark.parametrize(
     ("use_image_command", "compose_command", "expected_command"),
@@ -2293,6 +2277,17 @@ async def test_effective_compose_main_command(
         task_env_config=TaskConfig.model_validate_toml(task_toml).environment,
     )
     env._use_prebuilt = prebuilt
+
+    # Use Harbor's subprocess environment for the probe too. The Docker CLI
+    # can report its own version when the Compose plugin is unavailable.
+    try:
+        version = await env._run_docker_compose_command(
+            ["version", "--short"], check=False, timeout_sec=10
+        )
+    except FileNotFoundError:
+        pytest.skip("Docker CLI is not installed")
+    if version.return_code:
+        pytest.skip("Docker Compose plugin is not available to Harbor")
 
     # `config` merges the same files as `up`, without a daemon or image pull.
     result = await env._run_docker_compose_command(
