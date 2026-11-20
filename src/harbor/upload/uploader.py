@@ -5,7 +5,7 @@ import hashlib
 import logging
 import tarfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -18,12 +18,39 @@ from harbor.db.types import PublicJobVisibility
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import TrialLock
 from harbor.models.job.result import JobResult
-from harbor.models.trial.result import TrialResult
+from harbor.models.trial.result import SeatResult, TrialResult
 from harbor.upload.db_client import OwnerOrgError, UploadDB
 from harbor.upload.storage import UploadStorage
 
 logger = logging.getLogger(__name__)
 _DIGEST_PREFIX = "sha256:"
+
+type _ModelKey = tuple[str, str | None]
+type _UsageTotals = tuple[int | None, int | None, int | None, float | None]
+
+
+def _add_int(total: int | None, value: int | None) -> int | None:
+    if value is None:
+        return total
+    return value if total is None else total + value
+
+
+def _add_float(total: float | None, value: float | None) -> float | None:
+    if value is None:
+        return total
+    return value if total is None else total + value
+
+
+def _trial_models(
+    trial_result: TrialResult,
+) -> Iterator[tuple[_ModelKey, SeatResult | None]]:
+    if trial_result.seat_results:
+        for seat in trial_result.seat_results:
+            model_info = seat.agent_info.model_info if seat.agent_info else None
+            if model_info is not None:
+                yield (model_info.name, model_info.provider), seat
+    elif (model_info := trial_result.agent_info.model_info) is not None:
+        yield (model_info.name, model_info.provider), None
 
 
 class TrialUploadResult(BaseModel):
@@ -532,16 +559,9 @@ class Uploader:
                 agent_cache[agent_key] = await self.db.upsert_agent(
                     tr.agent_info.name, tr.agent_info.version
                 )
-            if tr.agent_info.model_info is not None:
-                model_key = (
-                    tr.agent_info.model_info.name,
-                    tr.agent_info.model_info.provider,
-                )
+            for model_key, _ in _trial_models(tr):
                 if model_key not in model_cache:
-                    model_cache[model_key] = await self.db.upsert_model(
-                        tr.agent_info.model_info.name,
-                        tr.agent_info.model_info.provider,
-                    )
+                    model_cache[model_key] = await self.db.upsert_model(*model_key)
         return agent_cache, model_cache
 
     async def _upload_single_trial(
@@ -596,19 +616,30 @@ class Uploader:
                     )
                 agent_id = agent_cache[agent_key]
 
-            model_id: str | None = None
-            if trial_result.agent_info.model_info is not None:
-                model_key = (
-                    trial_result.agent_info.model_info.name,
-                    trial_result.agent_info.model_info.provider,
+            model_usages: dict[str, _UsageTotals] = {}
+            for model_key, seat in _trial_models(trial_result):
+                model_id = model_cache.get(model_key)
+                if model_id is None:
+                    async with self._model_cache_lock:
+                        model_id = model_cache.get(model_key)
+                        if model_id is None:
+                            model_id = await self.db.upsert_model(*model_key)
+                            model_cache[model_key] = model_id
+
+                if seat is None:
+                    model_usages[model_id] = trial_result.compute_token_cost_totals()
+                    continue
+
+                # Distinct local model keys can resolve to the same Hub model.
+                n_input, n_cache, n_output, cost = model_usages.get(
+                    model_id, (None, None, None, None)
                 )
-                async with self._model_cache_lock:
-                    if model_key not in model_cache:
-                        model_cache[model_key] = await self.db.upsert_model(
-                            trial_result.agent_info.model_info.name,
-                            trial_result.agent_info.model_info.provider,
-                        )
-                    model_id = model_cache[model_key]
+                if (context := seat.agent_result) is not None:
+                    n_input = _add_int(n_input, context.n_input_tokens)
+                    n_cache = _add_int(n_cache, context.n_cache_tokens)
+                    n_output = _add_int(n_output, context.n_output_tokens)
+                    cost = _add_float(cost, context.cost_usd)
+                model_usages[model_id] = (n_input, n_cache, n_output, cost)
 
             # Reserve the trial before writing Storage. Conflict-safe inserts
             # let an interrupted or concurrent attempt continue without
@@ -659,21 +690,14 @@ class Uploader:
                 ),
             )
 
-            if model_id is not None:
-                agent_result = trial_result.agent_result
+            for model_id, (n_input, n_cache, n_output, cost) in model_usages.items():
                 await self.db.insert_trial_model(
                     trial_id=trial_result.id,
                     model_id=model_id,
-                    n_input_tokens=(
-                        agent_result.n_input_tokens if agent_result else None
-                    ),
-                    n_cache_tokens=(
-                        agent_result.n_cache_tokens if agent_result else None
-                    ),
-                    n_output_tokens=(
-                        agent_result.n_output_tokens if agent_result else None
-                    ),
-                    cost_usd=agent_result.cost_usd if agent_result else None,
+                    n_input_tokens=n_input,
+                    n_cache_tokens=n_cache,
+                    n_output_tokens=n_output,
+                    cost_usd=cost,
                 )
 
             # Now that the row exists (authorizing the storage write), upload

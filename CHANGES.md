@@ -32,6 +32,7 @@ several Harbor agents in one environment, each in its own Compose service
 | `docs-mintlify/docs.json` | Lists `tasks/multi-agent` in the Tasks group. |
 | `src/harbor/cli/trials.py` | `harbor trial start` lists a seat trial's participants (`seat: harness model`, agents under test marked) where it prints `Agent:` for one agent. |
 | `src/harbor/trial/trial.py` | `Trial.create` routes seat tasks to `SeatsTrial`, and refuses `participants` on a task without seats and a regrade of a seat task. `_scrub_jobs_dir` takes its secrets from a new `_secrets_to_scrub`, so a seat trial scrubs once with every seat's secrets. `_secrets_to_scrub`, `_validate_agent_capabilities` and `_compute_agent_setup_timeout_sec` take an optional agent and agent config, defaulting to `self.agent` and `self.config.agent`, so a seat trial passes each seat's instead of swapping trial fields; Harbor's callers are unchanged. |
+| `src/harbor/upload/uploader.py` | Seat trials report token and cost subtotals by configured model, grouped by resolved Hub model ID. Fields with no reported values stay unknown. Multi-step trials keep their step totals. |
 
 Readers of `agent_info` are untouched: a seat trial fills it with its first
 agent under test. Readers of `exception_info` are untouched too: a seat
