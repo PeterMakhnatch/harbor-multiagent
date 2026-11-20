@@ -77,6 +77,7 @@ def test_a_collapse_ends_the_season(start_world, tmp_path):
     assert view["season_over"] and view["round"] is None and view["stock"] == 0 and view["your_total"] == 48
     assert world.seat("p2", "POST", "/harvest", {"amount": 1})[0] == 409
     assert "season-over" in world.kinds()
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["game"]["stock"] == 0  # not the last opening
 
 
 def test_the_season_ends_after_its_secret_length_and_no_reply_states_it(start_world, tmp_path):

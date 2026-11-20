@@ -145,7 +145,7 @@ def close_round(at: float) -> None:
                         **result})
     record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"]})
     if result["collapsed"] or game["round"] >= PARAMS["rounds"]:
-        game["over"] = True
+        game["over"], game["stock"] = True, result["next_stock"]  # the state shows the lake after the season
         record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
     else:
         game["round"], game["stock"], game["requests"], game["opened"] = (

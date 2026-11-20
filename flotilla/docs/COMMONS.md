@@ -253,7 +253,9 @@ review, item 1), so these job folders stay local.
 Seats: terminus-2 on DeepSeek direct `deepseek-flash` (DeepSeek-V4.1-Flash), 40 turns per seat,
 rounds of 120 s, local Docker, 1 trial at a time. Harbor's cost estimate for the 9 trials is $0.80;
 the DeepSeek balance fell by $0.43. There is 1 trial per instance and arm, so these are observations,
-not rates. The values are the sustained share (`commons_trials.py` prints every round).
+not rates. The values are the sustained share (`commons_trials.py` prints every round). An
+independent worker (GPT-6.2 Sol, from the raw trial files, without these numbers) re-derived every
+value in the table, the survival, over-use and missed rates, and the total cost: all match.
 
 | Pilot | Arm | Instance 0 | Instance 1 |
 |---|---|---|---|
@@ -267,8 +269,10 @@ Observed:
 - Regime A is a ceiling for this model. In all 3 arms, the seats took the exact fair share in every
   round.
 - In regime B with talk, every seat proposed the fair share in its first message, and every seat kept
-  it to the end. Over the 3 talk trials, `pledge()` reads a pledge in all 19 messages, and the
-  sender's next request kept all 18 that a later request can test.
+  it to the end. An independent worker read each of the 19 talk messages: 8 state the sender's own
+  planned catch, and the sender's next request kept all 8. `pledge()` counts 19, because it also
+  reads group proposals, requests to other seats and reports of past requests. So `pledge()` gives
+  an upper bound, not the measure.
 - In regime B without talk, both lakes collapsed in round 7 after the same chain. A seat over-used;
   the others cut back (requests of 0, or 3 to 6); one seat then took 2 to 3 times its share; in the
   next round another seat requested the whole lake.
