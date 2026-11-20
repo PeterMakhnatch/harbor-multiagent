@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import posixpath
+import shlex
 import shutil
 import tempfile
 from collections.abc import Callable, Collection, Sequence
@@ -12,7 +13,6 @@ from harbor.environments.base import BaseEnvironment, EnvironmentPath
 from harbor.environments.tar_transfer import copy_via_tar
 from harbor.models.task.artifacts import (
     effective_artifact_service,
-    is_absolute_container_path,
     is_convention_entry,
     artifact_is_covered_by,
     source_host_path,
@@ -216,11 +216,18 @@ class ArtifactHandler:
             if service != MAIN_SERVICE_NAME:
                 warn(f"{label} failed before verification; only main can be retried.")
                 continue
-            source = posixpath.normpath(first.source.replace("\\", "/"))
+            if source_env.os != TaskOS.LINUX:
+                warn(f"{label} was not retried; remote path validation requires Linux.")
+                continue
+            # POSIX normpath preserves exactly two leading slashes, but Linux
+            # resolves them as one. Use the same spelling for checks and copy.
+            source = posixpath.normpath(first.source)
+            if source.startswith("//"):
+                source = "/" + source.lstrip("/")
             source_path = PurePosixPath(source.casefold())
             if (
                 first.type != "file"
-                or not is_absolute_container_path(source)
+                or not source.startswith("/")
                 or any(source_path.is_relative_to(path.casefold()) for path in reserved)
             ):
                 warn(f"{label} failed before verification; this path is not retried.")
@@ -240,9 +247,18 @@ class ArtifactHandler:
                 if target.exists() or target == artifacts_dir:
                     warn(f"{label} has an existing host path; it is not overwritten.")
                     continue
-                user = None if source_env.os == TaskOS.WINDOWS else "root"
-                if not await source_env.is_file(first.source, user=user):
-                    warn(f"{label} is not a regular file after verification.")
+                original = shlex.quote(first.source)
+                canonical = shlex.quote(source)
+                # Check the full path, including parent symlinks, before asking
+                # a provider to copy it. Some providers dereference symlinks.
+                probe = await source_env.exec(
+                    f"test -f {original} && "
+                    f'test "$(readlink -f -- {original})" = {canonical}',
+                    timeout_sec=10,
+                    user="root",
+                )
+                if probe.return_code != 0:
+                    warn(f"{label} is not a verified non-symlink regular file.")
                     continue
                 with tempfile.TemporaryDirectory(
                     prefix=".artifact-retry-",
@@ -250,7 +266,7 @@ class ArtifactHandler:
                     ignore_cleanup_errors=True,
                 ) as staging:
                     snapshot = Path(staging) / "snapshot"
-                    await source_env.download_file(first.source, snapshot)
+                    await source_env.download_file(source, snapshot)
                     if snapshot.is_symlink() or not snapshot.is_file():
                         warn(f"{label} did not download as a regular file.")
                         continue

@@ -1841,6 +1841,51 @@ class TestArtifactCoverage:
         assert output.read_text() == "verifier output"
         assert link.is_symlink()
 
+    async def test_rejects_hardlinked_post_verifier_output(self, tmp_path: Path):
+        task_dir = _separate_verifier_task(tmp_path)
+        source = _write_source_trial(
+            tmp_path,
+            task_dir,
+            manifest_entries=[CONVENTION_MANIFEST_ENTRY, POST_VERIFIER_MANIFEST_ENTRY],
+        )
+        output = source / "artifacts/tmp/report.txt"
+        output.parent.mkdir()
+        output.write_text("verifier output")
+        link = source / "artifacts/logs/artifacts/report-link.txt"
+        link.hardlink_to(output)
+        verifier = _stock_mock_env()
+        fake_create, _ = _make_factory_recorder(_stock_mock_env(), verifier)
+
+        _, result = await _run_regrade_trial(
+            source, task_dir, tmp_path / "trials", fake_create
+        )
+
+        assert result.exception_info is not None
+        assert "multiple hard links" in result.exception_info.exception_message
+        verifier.start.assert_not_awaited()
+        assert output.samefile(link)
+
+    async def test_regrade_retains_legacy_live_mount_contents(self, tmp_path: Path):
+        task_dir = _separate_verifier_task(tmp_path)
+        entry = CONVENTION_MANIFEST_ENTRY | {
+            "status": "empty",
+            "phase": None,
+            "source_environment": "agent",
+        }
+        source = _write_source_trial(tmp_path, task_dir, manifest_entries=[entry])
+        relative_path = Path("logs/artifacts/output.txt")
+        (source / "artifacts" / relative_path).write_text("final mount bytes")
+        fake_create, _ = _make_factory_recorder(_stock_mock_env(), _stock_mock_env())
+
+        trial, result = await _run_regrade_trial(
+            source, task_dir, tmp_path / "trials", fake_create
+        )
+
+        assert result.exception_info is None
+        assert (trial.paths.artifacts_dir / relative_path).read_text() == (
+            "final mount bytes"
+        )
+
     async def test_regrades_artifact_with_matching_exclusion_filters(
         self, tmp_path: Path
     ):

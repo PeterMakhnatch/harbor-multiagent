@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from harbor.environments.base import ExecResult
 from harbor.models.task.config import TaskOS
 from harbor.models.trial.artifact_manifest import ArtifactManifestEntry
 from harbor.models.trial.config import ArtifactConfig
@@ -326,7 +327,7 @@ async def test_retry_downloads_duplicate_file_once_and_excludes_live_paths(
         target.write_text("report")
 
     environment.service_download_dir.side_effect = partial_download
-    environment.is_file.return_value = True
+    environment.exec.return_value = ExecResult(return_code=0)
     environment.download_file.side_effect = download
     artifacts = tmp_path / "artifacts"
     warnings: list[str] = []
@@ -360,10 +361,85 @@ async def test_retry_downloads_duplicate_file_once_and_excludes_live_paths(
     assert (artifacts / "tmp/partial/stale.txt").read_text() == "partial old snapshot"
 
 
+@pytest.mark.parametrize(
+    "source",
+    ["//tests/./new.txt", "///logs//seats/p1/new.txt", "//logs/agent/new.txt"],
+)
+async def test_retry_normalizes_reserved_paths(tmp_path: Path, source: str) -> None:
+    environment = _mock_env(mounted=True)
+    environment.service_download_file.side_effect = FileNotFoundError
+    handler = _handler([ArtifactConfig(source=source, destination="disputed.txt")])
+    artifacts = tmp_path / "artifacts"
+    await handler.download_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR
+    )
+
+    warning = MagicMock()
+    await handler.retry_failed_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR, warn=warning
+    )
+
+    environment.exec.assert_not_awaited()
+    environment.download_file.assert_not_awaited()
+    warning.assert_called_once()
+
+
+async def test_retry_uses_checked_path_for_transfer(tmp_path: Path) -> None:
+    environment = _mock_env(mounted=True)
+    environment.service_download_file.side_effect = FileNotFoundError
+    environment.exec.return_value = ExecResult(return_code=0)
+    handler = _handler(
+        [ArtifactConfig(source="//tmp/./report.txt", destination="report.txt")]
+    )
+    artifacts = tmp_path / "artifacts"
+    await handler.download_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR
+    )
+
+    async def download(source: str, target: Path) -> None:
+        assert source == "/tmp/report.txt"
+        target.write_text("report")
+
+    environment.download_file.side_effect = download
+    await handler.retry_failed_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR, warn=MagicMock()
+    )
+
+    environment.exec.assert_awaited_once()
+    assert (artifacts / "report.txt").read_text() == "report"
+
+
+async def test_retry_stops_before_a_dereferencing_provider_copies(
+    tmp_path: Path,
+) -> None:
+    environment = _mock_env(mounted=True)
+    environment.service_download_file.side_effect = FileNotFoundError
+    environment.exec.return_value = ExecResult(return_code=1)
+    handler = _handler(["/tmp/report-link.txt"])
+    artifacts = tmp_path / "artifacts"
+    await handler.download_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR
+    )
+
+    async def dereference(_source: str, target: Path) -> None:
+        target.write_text("reserved bytes")
+
+    environment.download_file.side_effect = dereference
+    warning = MagicMock()
+    await handler.retry_failed_artifacts(
+        environment, artifacts, source_artifacts_dir=ENV_ARTIFACTS_DIR, warn=warning
+    )
+
+    environment.exec.assert_awaited_once()
+    environment.download_file.assert_not_awaited()
+    warning.assert_called_once()
+    assert not (artifacts / "tmp/report-link.txt").exists()
+
+
 async def test_cancelled_retry_does_not_publish_partial_file(tmp_path: Path) -> None:
     environment = _mock_env(mounted=True)
     environment.service_download_file.side_effect = FileNotFoundError
-    environment.is_file.return_value = True
+    environment.exec.return_value = ExecResult(return_code=0)
     handler = _handler(["/tmp/report.txt"])
     artifacts = tmp_path / "artifacts"
     await handler.download_artifacts(

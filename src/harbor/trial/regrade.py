@@ -659,6 +659,16 @@ class RegradeTrial(Trial):
             if path == artifacts_dir or not path.is_relative_to(artifacts_dir):
                 raise RegradeError(f"Invalid post-verifier path: {entry.destination}")
             validate_output_path(path, artifacts_dir)
+            try:
+                link_count = path.stat().st_nlink
+            except FileNotFoundError:
+                pass
+            else:
+                if link_count > 1:
+                    raise RegradeError(
+                        f"Post-verifier artifact has multiple hard links and "
+                        f"cannot be replayed: {entry.destination}"
+                    )
             paths.add(path.resolve())
         return paths
 
