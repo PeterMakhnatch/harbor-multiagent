@@ -22,6 +22,7 @@ class LintRule(StrEnum):
     SEAT_SHARED_VOLUME = "seat-shared-volume"
     SEAT_SHARED_NAMESPACE = "seat-shared-namespace"
     SEAT_SHARED_NETWORK = "seat-shared-network"
+    SEAT_HOST_SECRET = "seat-host-secret"
     UNPINNED_IMAGE = "unpinned-image"
     UNPINNED_PYTHON_DEPENDENCY = "unpinned-python-dependency"
     VERIFIER_RUNTIME_INSTALL = "verifier-runtime-install"
@@ -45,6 +46,7 @@ DEFAULT_RULES = {
     LintRule.COMPOSE_SYMLINK_BIND_MOUNT,
     LintRule.SEAT_SHARED_VOLUME,
     LintRule.SEAT_SHARED_NAMESPACE,
+    LintRule.SEAT_HOST_SECRET,
     LintRule.UNPINNED_PYTHON_DEPENDENCY,
     LintRule.VERIFIER_RUNTIME_INSTALL,
     LintRule.VERIFIER_NETWORK_DOWNLOAD,
@@ -64,6 +66,7 @@ COMPOSE_RULES = {
     LintRule.SEAT_SHARED_VOLUME,
     LintRule.SEAT_SHARED_NAMESPACE,
     LintRule.SEAT_SHARED_NETWORK,
+    LintRule.SEAT_HOST_SECRET,
 }
 
 # Compose rules that only report on seat tasks.
@@ -71,6 +74,7 @@ SEAT_RULES = {
     LintRule.SEAT_SHARED_VOLUME,
     LintRule.SEAT_SHARED_NAMESPACE,
     LintRule.SEAT_SHARED_NETWORK,
+    LintRule.SEAT_HOST_SECRET,
 }
 
 

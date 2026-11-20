@@ -18,7 +18,13 @@ from harbor.lint.models import LintFinding, LintRule, sort_findings
 from harbor.utils.env import resolve_env_vars
 
 _RUNTIME_HOST_DIRECTORY = f"__harbor_lint_runtime_{uuid4().hex}__"
-_SEAT_NAMESPACES = {"network_mode": "network", "pid": "PID", "ipc": "IPC"}
+_SEAT_NAMESPACES = {
+    "network_mode": "network",
+    "pid": "PID",
+    "ipc": "IPC",
+    "userns_mode": "user",
+    "cgroup": "cgroup",
+}
 
 
 def lint_image(
@@ -338,21 +344,23 @@ def lint_compose(
                         name,
                         location,
                         not read_only,
-                        PurePosixPath(posixpath.normpath(f"/{subpath}")),
+                        # "/p1" and "p1" name one subpath; a leading "//" must not hide it.
+                        PurePosixPath(posixpath.normpath("/" + subpath.lstrip("/"))),
                     )
                 )
     # Seat findings name fields and services, never values: Compose
     # interpolates values such as namespace targets and volume sources.
     services = data.get("services", {})
     # Modes that join a seat's namespace, from a service that is not a seat.
-    seat_targets = {f"service:{seat}" for seat in seats} | {
-        f"container:{container}"
+    seat_targets = {f"service:{seat}".lower() for seat in seats} | {
+        f"container:{container}".lower()
         for seat in seats
         if (container := services.get(seat, {}).get("container_name"))
     }
     for name, service in services.items():
         for key, kind in _SEAT_NAMESPACES.items():
-            mode = service.get(key) or ""
+            # Compose accepts "Host" and "SERVICE:main" as written; compare case-insensitively.
+            mode = str(service.get(key) or "").lower()
             if name in seats and mode == "host":
                 sharing = f"Seat shares the host's {kind} namespace"
             elif name in seats and mode.startswith(("service:", "container:")):
@@ -384,6 +392,69 @@ def lint_compose(
                 f"Seat shares a network with seat {', '.join(peers)}; give each "
                 "seat its own network, shared only with main.",
             )
+
+    def outside_task(source: str) -> bool:
+        """Whether a host path a seat reads lies outside the task directory."""
+        windows = PureWindowsPath(source).is_absolute()
+        posix = PurePosixPath(source).is_absolute()
+        if (windows and os.name != "nt") or (posix and not windows and os.name == "nt"):
+            return True  # another platform's absolute path is never inside this task
+        local = Path(source) if posix or windows else project_dir / source
+        try:
+            return not local.resolve().is_relative_to(task_root)
+        except (OSError, RuntimeError):
+            return True
+
+    for seat in seats:
+        service = services.get(seat)
+        if not service:
+            continue
+        field = f"services.{seat}"
+        # volumes_from gives a seat every volume of another container, writable
+        # unless :ro, so it can reach main's /logs or a peer seat's files.
+        for index, _ in enumerate(service.get("volumes_from") or []):
+            emit(
+                LintRule.SEAT_SHARED_VOLUME,
+                f"{field}.volumes_from[{index}]",
+                "Seat mounts another container's volumes; mount only the seat's own named volumes.",
+            )
+        # Values a seat takes from the runner instead of the task: a support seat
+        # could read the tested seat's provider key this way.
+        for index, entry in enumerate(service.get("env_file") or []):
+            source = entry.get("path") if isinstance(entry, dict) else entry
+            if isinstance(source, str) and outside_task(source):
+                emit(
+                    LintRule.SEAT_HOST_SECRET,
+                    f"{field}.env_file[{index}]",
+                    "Seat reads an env file outside the task directory; put the values in the task or remove them.",
+                )
+        environment = service.get("environment") or {}
+        for key in sorted(k for k, value in environment.items() if value is None):
+            emit(
+                LintRule.SEAT_HOST_SECRET,
+                f"{field}.environment.{key}",
+                "Seat takes this variable from the runner's environment by name; set its value in the task or remove it.",
+            )
+        for kind in ("secrets", "configs"):
+            definitions = data.get(kind) or {}
+            for index, reference in enumerate(service.get(kind) or []):
+                source = (
+                    reference.get("source")
+                    if isinstance(reference, dict)
+                    else reference
+                )
+                definition = definitions.get(source) or {}
+                from_runner = definition.get("environment") is not None
+                host_file = isinstance(definition.get("file"), str) and outside_task(
+                    definition["file"]
+                )
+                if from_runner or host_file:
+                    emit(
+                        LintRule.SEAT_HOST_SECRET,
+                        f"{field}.{kind}[{index}]",
+                        f"Seat gets a {kind[:-1]} from the runner's environment or a file outside the "
+                        "task directory; use task-local content.",
+                    )
     for mounts in volume_mounts.values():
         for seat, location, writable, subpath in mounts:
             if seat not in seats or not writable:

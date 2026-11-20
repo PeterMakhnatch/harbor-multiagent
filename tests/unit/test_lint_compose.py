@@ -759,3 +759,129 @@ def test_missing_task_environment_is_operational_and_redacted(task, cli, monkeyp
     assert not result.stdout
     assert "DO_NOT_PRINT" not in result.stderr
     run.assert_not_called()
+
+
+def test_seat_volumes_from_is_a_shared_volume(model, path):
+    """A seat with volumes_from gets every volume of the other container (review E1)."""
+    model["services"].update(
+        {
+            "p1": {"volumes_from": ["service:main:rw"]},
+            "p2": {"volumes_from": ["service:p1:ro"]},
+            "main": {},
+        }
+    )
+    findings = lint_compose(path, seats=["p1", "p2"])
+    assert sorted(f.message for f in findings if f.rule == "seat-shared-volume") == [
+        "services.p1.volumes_from[0]: Seat mounts another container's volumes; "
+        "mount only the seat's own named volumes.",
+        "services.p2.volumes_from[0]: Seat mounts another container's volumes; "
+        "mount only the seat's own named volumes.",
+    ]
+    # main is not a seat: its volumes_from is not a seat finding
+    model["services"]["main"] = {"volumes_from": ["service:p1:ro"]}
+    model["services"]["p1"] = {}
+    model["services"]["p2"] = {}
+    assert [
+        f
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule == "seat-shared-volume"
+    ] == []
+
+
+def test_seat_host_secret(model, path):
+    """Values a seat takes from the runner, not the task (review E6)."""
+    task_dir = path.parent
+    (task_dir / "seat.env").write_text("SAFE=1\n")
+    model["services"].update(
+        {
+            "p1": {
+                "env_file": [{"path": "/etc/hosts"}, {"path": "seat.env"}],
+                "environment": {"OPENAI_API_KEY": None, "SAFE": "1"},
+                "secrets": [{"source": "hostkey"}, {"source": "local"}],
+                "configs": [{"source": "hostcfg"}],
+            },
+            "main": {"environment": {"ANTHROPIC_API_KEY": None}},
+        }
+    )
+    model["secrets"] = {
+        "hostkey": {"environment": "ANTHROPIC_API_KEY"},
+        "local": {"file": "seat.env"},
+    }
+    model["configs"] = {"hostcfg": {"file": "/etc/hosts"}}
+    findings = [
+        f.message
+        for f in lint_compose(path, seats=["p1"])
+        if f.rule == "seat-host-secret"
+    ]
+    assert [m.split(":", 1)[0] for m in findings] == [
+        "services.p1.configs[0]",
+        "services.p1.env_file[0]",
+        "services.p1.environment.OPENAI_API_KEY",
+        "services.p1.secrets[0]",
+    ]
+    # No value is printed, and main (not a seat) is not reported.
+    assert not any("/etc/hosts" in m or "ANTHROPIC_API_KEY" in m for m in findings)
+
+
+def test_seat_host_secret_is_a_default_seat_rule():
+    from harbor.lint.models import COMPOSE_RULES, SEAT_RULES
+
+    assert LintRule.SEAT_HOST_SECRET in DEFAULT_RULES
+    assert LintRule.SEAT_HOST_SECRET in SEAT_RULES
+    assert LintRule.SEAT_HOST_SECRET in COMPOSE_RULES
+
+
+@pytest.mark.parametrize(
+    "key,mode",
+    [
+        ("userns_mode", "host"),
+        ("cgroup", "host"),
+        ("network_mode", "Host"),
+        ("pid", "SERVICE:main"),
+    ],
+)
+def test_seat_namespace_modes_beyond_the_first_table(model, path, key, mode):
+    """userns and cgroup namespaces, and modes written in another case (review E5)."""
+    model["services"]["p1"] = {key: mode}
+    findings = [
+        f for f in lint_compose(path, seats=["p1"]) if f.rule == "seat-shared-namespace"
+    ]
+    assert [f.message.split(":", 1)[0] for f in findings] == [f"services.p1.{key}"]
+
+
+def test_seat_volume_subpath_with_a_leading_slash(model, path):
+    """A subpath written "/p1" is the same as "p1" (review E3)."""
+    model["volumes"] = {"shared": {}}
+    model["services"].update(
+        {
+            "p1": {
+                "volumes": [
+                    {
+                        "type": "volume",
+                        "source": "shared",
+                        "target": "/a",
+                        "volume": {"subpath": "/p1"},
+                    }
+                ]
+            },
+            "p2": {
+                "volumes": [
+                    {
+                        "type": "volume",
+                        "source": "shared",
+                        "target": "/b",
+                        "volume": {"subpath": "p1"},
+                    }
+                ]
+            },
+        }
+    )
+    findings = [
+        f
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule == "seat-shared-volume"
+    ]
+    assert {f.message.split(":", 1)[0] for f in findings} == {
+        "services.p1.volumes[0]",
+        "services.p2.volumes[0]",
+    }
