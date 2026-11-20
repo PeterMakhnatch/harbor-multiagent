@@ -152,6 +152,21 @@ Run 2 blocks × 6 option maps × 4 seats × 2 layouts = 96 one-turn samples. Alt
 
 Primary: compare the fraction with all 3 visible totals correct, `indexed − separate`. Pair the same seat, map, and block. Average matched pairs within each map, then give each map equal weight. Report how many maps and pairs contribute. Secondary: correct choice against the native world; agreement with a visible maximum; output field order; derived 3-of-4 majorities on complete paired groups; tokens and estimated cost. These 6 maps relabel 1 vendor problem. They are not 6 independent tasks. No result from this study establishes an improvement in native Harbor rewards.
 
+#### What the external voters did
+
+All 96 Inspect samples finished in their registered order. The public packet supplied 24 source seats. Each seat received both layouts in 2 blocks. The index did **not** improve exact arithmetic in this experiment.
+
+| Result | Separate dossier and submissions | Index of distinct facts |
+| --- | ---: | ---: |
+| Voters with all 3 totals correct | 2 / 48 | 0 / 48 |
+| Voters who chose the winning option | 45 / 48 | 42 / 48 |
+| Voters who returned totals before the choice | 48 / 48 | 48 / 48 |
+| Groups with a correct 3-of-4 majority | 11 / 12 | 11 / 12 |
+
+The paired change in exact arithmetic was −4.17 percentage points across all 6 maps. Each block had 1 exact answer with separate submissions and 0 with the index. The model often chose the right vendor without giving the right totals. The index changed the layout and duplicate presentation together. These results do not isolate either change. No Harbor team ran again.
+
+The [sample results](results/inspect-packing-results.json) bind each Inspect model event to its expected seat prompt. The [96 settled direct calls](results/inspect-packing-cost.json) cost an estimated **$0.006045000 USD**. The direct ledger matched every sample's seat, model and token counts. It does not authenticate the model's response text.
+
 #### Run the Harbor packet in Inspect AI
 
 This task lives on [Peter's fork, `experiments/seatlab-inspect-replay`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/experiments/seatlab-inspect-replay/examples/seatlab). It does not require a change to upstream Harbor.
