@@ -73,6 +73,8 @@ RULES: dict[str, tuple[str, str]] = {
     "token-map": ("FAIL", "seat tokens are not distinct, or main does not map each one to its seat"),
     "stale-code": ("FAIL", "the task ships a world, scorer, oracle or family file that differs from this checkout"),
     "qa-error": ("FAIL", "a task file is missing or unreadable, so the task cannot be checked"),
+    "game-secret": ("FAIL", ("a game seat's instruction or briefing states a secret parameter (the season length), "
+                             "differs from the public rules, or has a word that steers the choice")),
     "runtime-names": ("FAIL", ("the Docker names that Harbor derives from the task folder's name say the condition "
                                "or the label (a set built with --readable-names); --allow-readable-names makes it "
                                "a WARN, for local debugging only")),
@@ -232,7 +234,7 @@ def load_task(path: Path) -> Task:
     if not isinstance(task.task_json, dict):
         task.error("environment/task.json is not a JSON object")
         task.task_json = {}
-    elif task.answer_key is None:
+    elif task.answer_key is None and task.task_json.get("mode") != "rounds":  # a game has no answer key
         task.error("environment/task.json has no answer_key object")
     task.family_name = str(meta.get("family") or task.task_json.get("family") or "")
     variant = str(meta.get("variant") or "")
@@ -270,10 +272,11 @@ def load_task(path: Path) -> Task:
     except Exception as exc:  # noqa: BLE001 - any failure of the task's own module is a finding
         task.error(f"solution/family.py cannot be loaded ({type(exc).__name__})")
     else:
-        if callable(getattr(module, "score", None)) and callable(getattr(module, "oracle_answer", None)):
+        needs = ("settle", "score_game") if task.task_json.get("mode") == "rounds" else ("score", "oracle_answer")
+        if all(callable(getattr(module, name, None)) for name in needs):
             task.family = module
         else:
-            task.error("solution/family.py lacks score() or oracle_answer()")
+            task.error(f"solution/family.py lacks {' or '.join(f'{name}()' for name in needs)}")
     if not task.family_name:
         task.error("neither task.toml nor task.json names the family")
     return task
@@ -829,7 +832,10 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
     if not task.family_name:
         return
     missing, differ = [], []
+    game = task.task_json.get("mode") == "rounds"  # a game ships games/oracle.py and games/<family>.py
     for built, source in SHIPPED.items():
+        if game:
+            source = source.replace("world/oracle.py", "games/oracle.py").replace("families/", "games/")
         expected = checkout_bytes(source.format(family=task.family_name))
         if expected is None:
             yield Finding("stale-code", task.name, "*", f"this checkout has no family {task.family_name!r}")
@@ -846,6 +852,35 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
     if task.task_json and version != WORLD_VERSION:
         yield Finding("stale-code", task.name, "*",
                       f"task.json gives world version {version}; this checkout's world is version {WORLD_VERSION}")
+
+
+def check_game_secret(task: Task) -> Iterator[Finding]:
+    """A game seat reads the public rules only (docs/COMMONS.md section 6): its instruction is the builder's text
+    for every season length, has no word that steers the choice, and its briefing has no season length."""
+    game = task.task_json.get("game") if task.task_json.get("mode") == "rounds" else None
+    if not isinstance(game, dict) or task.family is None:
+        return
+    condition = str(task.task_json.get("condition", ""))
+    max_text, per_round = int(task.task_json.get("max_text", 0)), int(task.task_json.get("max_messages_per_round", 0))
+    for seat in task.seats:
+        path = task.path / "instructions" / f"{seat}.md"
+        if not path.is_file():
+            continue
+        text = path.read_text()
+        if any(BUILD.game_instruction(task.family, {**game, "rounds": rounds}, seat, condition, max_text, per_round)
+               != text for rounds in task.family.ROUNDS):
+            yield Finding("game-secret", task.name, seat,
+                          "the instruction is not the builder's text of the public rules for every season length")
+        steering = [word for word in getattr(task.family, "STEERING_WORDS", ()) if word in text.lower()]
+        if steering:
+            yield Finding("game-secret", task.name, seat, f"the instruction has words that steer the choice: {steering}")
+        environment = (task.services.get(seat) or {}).get("environment") or {}
+        try:
+            briefing = json.loads(environment.get("SEAT_BRIEFING") or "{}") if isinstance(environment, dict) else {}
+        except ValueError:
+            briefing = {}
+        if isinstance(briefing, dict) and "rounds" in briefing:
+            yield Finding("game-secret", task.name, seat, "the seat's briefing holds the season length")
 
 
 def check_solo_sufficient(task: Task) -> Iterator[Finding]:
@@ -877,7 +912,8 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
-              check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient)
+              check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
+              check_game_secret)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------

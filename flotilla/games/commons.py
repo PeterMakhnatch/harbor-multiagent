@@ -16,7 +16,7 @@ from fractions import Fraction
 from typing import Any
 
 FAMILY = "commons"
-TITLE = "Fish a shared lake"
+TITLE = "Fishing season"  # neutral: no word of STEERING_WORDS
 MODE = "rounds"
 ROUNDS = range(7, 11)  # the season length T, hidden from the seats; at 6, a 1-fish over-use can pay
 CAPACITY = range(60, 141)
@@ -74,7 +74,7 @@ def play(params: Mapping[str, Any], policies: Mapping[str, Policy], rounds: int 
 
 def fair_policy(params: Mapping[str, Any]) -> Policy:
     """Request the seat's part of H*(S) for the current stock (the oracle seat)."""
-    n_seats, growth = len(params["seats"]), growth_of(params)
+    n_seats, growth = len(params.get("players") or params["seats"]), growth_of(params)
     return lambda stock, _log: sustainable_catch(stock, growth) // n_seats
 
 
@@ -222,8 +222,9 @@ def rules_text(params: Mapping[str, Any], seat: str, arm: str) -> str:
 
 def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any]:
     """The measures of COMMONS.md section 7, from the world's round log. Never raises on a
-    well-formed log; `reward` is the efficiency."""
-    seats, growth = params["seats"], growth_of(params)
+    well-formed log; `reward` is the efficiency. `players` (the solo arm: one seat that owns every
+    boat) replaces `seats` when it is set."""
+    seats, growth = params.get("players") or params["seats"], growth_of(params)
     planned, best = params["rounds"], sustainable_catch(params["capacity"], growth)
     collapsed_in = next((record["round"] for record in log if record["collapsed"]), None)
     seat_totals = totals(log, seats)

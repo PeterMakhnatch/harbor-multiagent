@@ -102,8 +102,14 @@ CONDITION_TEXT["talk-liar-warned"] = f"{CONDITION_TEXT['talk']} {WARNING}"
 SCRIPTED_INSTRUCTION = "Scripted seat: Harbor's oracle agent runs solution/oracle.py here. No model reads this.\n"
 
 
-def load_family(name: str) -> Any:
+def family_path(name: str) -> Path:
+    """families/<name>.py (an answer family) or games/<name>.py (a game family, docs/COMMONS.md)."""
     path = ROOT / "families" / f"{name}.py"
+    return path if path.exists() else ROOT / "games" / f"{name}.py"
+
+
+def load_family(name: str) -> Any:
+    path = family_path(name)
     spec = importlib.util.spec_from_file_location(f"flotilla_family_{name}", path)
     if spec is None or spec.loader is None:
         raise SystemExit(f"no family module at {path}")
@@ -196,6 +202,46 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
     return "\n".join(lines)
 
 
+def game_instruction(game: Any, params: dict[str, Any], seat: str, condition: str, max_text: int,
+                     max_messages_per_round: int) -> str:
+    """A game seat's text: the game's rules (never a secret parameter) and the rounds API. `silent` and
+    `talk` differ only in the message lines."""
+    auth = '-H "Authorization: Bearer $SEAT_TOKEN"'
+    body = "-H 'Content-Type: application/json'"
+    talk = condition == "talk"
+    lines = [
+        f"# {game.TITLE}",
+        "",
+        game.rules_text(params, seat, condition).rstrip("\n"),
+        "",
+        "## How to act",
+        "",
+        ("All actions go through the world service at `$WORLD_URL` (http://world:8080). "
+         "Authenticate every request with your seat token, which is in the environment variable `$SEAT_TOKEN`."),
+        "",
+        "```bash",
+        f"curl -s $WORLD_URL/state {auth}",
+        f"curl -s -X POST $WORLD_URL/harvest {auth} {body} -d '{{\"amount\": <a whole number>}}'",
+        f'curl -s "$WORLD_URL/wait?round=<r>" {auth}',
+        *([f"curl -s $WORLD_URL/messages {auth}",
+           f"curl -s -X POST $WORLD_URL/messages {auth} {body} -d '{{\"to\": \"all\", \"text\": \"...\"}}'"]
+          if talk else []),
+        "```",
+        "",
+        ("`/state` shows the round, the fish in the lake, whether you have requested in this round, your total, "
+         "and every closed round with each request and catch. `/harvest` takes one request per round. `/wait` "
+         "returns when round `<r>` closes, after at most 60 seconds."),
+        *(["", (f"`/messages` shows the messages to you or to all. You can send at most {max_messages_per_round} "
+                f"messages in each round, of at most {max_text} characters each, to `all` or to one fisher.")]
+          if talk else []),
+        "",
+        ("The season starts when you first call the world." if condition == "solo"
+         else "The season starts when every fisher has called the world once.")
+        + ' Keep acting until `/state` says `"season_over": true`.',
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def quote(value: str) -> str:
     """A Compose value that arrives unchanged: a JSON string is a valid YAML double-quoted scalar, and
     `$$` stops Compose from replacing `$NAME` with a variable from the host that runs the trial."""
@@ -204,7 +250,7 @@ def quote(value: str) -> str:
 
 def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str,
             briefings: dict[str, Any], max_text: int = DEFAULT_MAX_TEXT,
-            max_messages: int = DEFAULT_MAX_MESSAGES) -> str:
+            max_messages: int = DEFAULT_MAX_MESSAGES, world_env: dict[str, str] | None = None) -> str:
     """Each seat gets its own network, shared only with `main`: seats reach the world, not each other."""
     q = quote
     lines = [
@@ -228,6 +274,7 @@ def compose(condition: str, seats: list[str], tokens: dict[str, str], admin: str
         f"      FLOTILLA_ADMIN: {q(admin)}",
         f"      FLOTILLA_MAX_TEXT: {q(str(max_text))}",
         f"      FLOTILLA_MAX_MESSAGES: {q(str(max_messages))}",
+        *(f"      {key}: {q(value)}" for key, value in (world_env or {}).items()),
         "    networks:",
         *(f"      seat-{seat}:\n        aliases: [world]" for seat in seats),
         "    healthcheck:",
@@ -355,12 +402,25 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
           conditions: tuple[str, ...], out: Path, variant: str = "", scripted: bool = False,
           play_timeout: float = PLAY_TIMEOUT_SEC, max_text: int = DEFAULT_MAX_TEXT,
           max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False,
-          readable_names: bool = False) -> list[Path]:
+          readable_names: bool = False, round_seconds: float = 120.0, start_grace: float = 300.0,
+          max_messages_per_round: int = 2) -> list[Path]:
     """Write every instance in every condition to <out>/<label>/<name>/ and add them to <out>/manifest.json. A task
     of the same instance and condition that an earlier build wrote under <out>/<label>/ is replaced (removed), so
     that a label never holds two folders of one task."""
     family = load_family(family_name)
-    family_file = ROOT / "families" / f"{family_name}.py"
+    family_file = family_path(family_name)
+    game = getattr(family, "MODE", "") == "rounds"  # a game family (games/<name>.py, docs/COMMONS.md)
+    game_env = {"FLOTILLA_GAME": "/world/family.py", "FLOTILLA_GAME_PARAMS": "/world/task.json",
+                "FLOTILLA_ROUND_SECONDS": str(round_seconds), "FLOTILLA_START_GRACE": str(start_grace),
+                "FLOTILLA_MAX_MESSAGES_PER_ROUND": str(max_messages_per_round)}
+    if game:
+        if scripted or submitter or announce:
+            raise SystemExit(f"{family_name} is a game: --scripted, --submitter and --announce do not apply")
+        if unknown := [c for c in conditions if c not in family.ARMS]:
+            raise SystemExit(f"{family_name} has the arms {family.ARMS}, not {unknown}")
+        if difficulty not in family.SETTINGS:
+            raise SystemExit(f"{family_name} has the regimes {sorted(family.SETTINGS)} (--difficulty), not {difficulty}")
+        play_timeout = max(play_timeout, max(family.ROUNDS) * round_seconds + 120)  # the longest season fits
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
     label_dir = out / label
     earlier = earlier_tasks(label_dir, family_name, variant)
@@ -371,13 +431,18 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
     built = []
     for i in instances:
         inst = family.generate_scripted(seed, i, difficulty) if scripted else family.generate(seed, i, n_seats, difficulty)
-        team_seats = sorted(inst["private"])
+        team_seats = list(inst["seats"]) if game else sorted(inst["private"])
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
-            briefings = (
-                {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
-            )
+            if game:  # the public rules only: never the season length
+                arm = inst | ({"players": ["p1"]} if condition == "solo" else {})
+                public = {key: arm[key] for key in ("capacity", "growth", "collapse_below", "seats")}
+                briefings = {s: public | {"players": seats} for s in seats}
+            else:
+                briefings = (
+                    {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
+                )
             for seat in scripted_seats:  # a scripted peer posts its part, honestly or not
                 lying = "liar" in condition
                 briefings[seat] = {
@@ -407,6 +472,9 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     "n_seats": len(seats), "team_seats": len(team_seats), "difficulty": difficulty, "seed": seed,
                     "max_text": max_text, "max_messages": max_messages}
             meta["play_timeout_sec"] = play_timeout
+            if game:
+                meta |= {"mode": "rounds", "round_seconds": round_seconds,
+                         "max_messages_per_round": max_messages_per_round}
             meta["names"] = "readable" if readable_names else "opaque"  # qa.py checks an opaque name (opaque-names)
             if submitter:
                 meta["submitter"] = submitter
@@ -421,10 +489,12 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 (task_dir / "instructions" / f"{seat}.md").write_text(
                     SCRIPTED_INSTRUCTION
                     if seat in scripted_seats
+                    else game_instruction(family, arm, seat, condition, max_text, max_messages_per_round) if game
                     else instruction(family, inst, seat, seats, condition, max_text, max_messages, submitter, announce)
                 )
             (env / "docker-compose.yaml").write_text(
-                compose(condition, seats, tokens, admin, briefings, max_text, max_messages)
+                compose(condition, seats, tokens, admin, briefings, max_text, max_messages,
+                        world_env=game_env if game else None)
             )
             (env / "Dockerfile").write_text(MAIN_DOCKERFILE)
             (env / "player" / "Dockerfile").write_text(PLAYER_DOCKERFILE)
@@ -433,8 +503,13 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             shutil.copy(family_file, env / "family.py")
             task_json = {"family": family_name, "variant": variant, "instance": i, "condition": condition,
                          "seats": seats,
-                         "difficulty": difficulty, "seed": seed, "answer_key": inst["answer_key"],
+                         "difficulty": difficulty, "seed": seed,
                          "world_version": WORLD_VERSION, "max_text": max_text, "max_messages": max_messages}
+            if game:
+                task_json |= {"mode": "rounds", "game": arm, "round_seconds": round_seconds,
+                              "max_messages_per_round": max_messages_per_round}
+            else:
+                task_json["answer_key"] = inst["answer_key"]
             if submitter:
                 task_json["submitter"] = submitter
             if announce:
@@ -445,7 +520,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
-            shutil.copy(ROOT / "world" / "oracle.py", task_dir / "solution" / "oracle.py")
+            shutil.copy(ROOT / ("games" if game else "world") / "oracle.py", task_dir / "solution" / "oracle.py")
             shutil.copy(family_file, task_dir / "solution" / "family.py")
             for script in (task_dir / "tests" / "test.sh", task_dir / "solution" / "solve.sh"):
                 script.chmod(0o755)
@@ -520,6 +595,13 @@ def main() -> None:
                         "(an acknowledgment protocol)")
     parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
                         help="messages per seat (world default %(default)s)")
+    parser.add_argument("--round-seconds", type=float, default=120.0,
+                        help="game families: seconds before a round closes without every request (%(default)s)")
+    parser.add_argument("--start-grace", type=float, default=300.0,
+                        help="game families: seconds after the first call before the season starts without "
+                        "every seat (%(default)s)")
+    parser.add_argument("--max-messages-per-round", type=positive, default=2,
+                        help="game families, talk arm: messages per seat in each round (%(default)s)")
     args = parser.parse_args()
     conditions = tuple(c for c in args.conditions.split(",") if c)
     unknown = [c for c in conditions if c not in CONDITION_TEXT]
@@ -541,7 +623,9 @@ def main() -> None:
     built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, seed,
                   conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
                   args.play_timeout, max_text=args.max_text, max_messages=args.max_messages,
-                  submitter=args.submitter, announce=args.announce, readable_names=args.readable_names)
+                  submitter=args.submitter, announce=args.announce, readable_names=args.readable_names,
+                  round_seconds=args.round_seconds, start_grace=args.start_grace,
+                  max_messages_per_round=args.max_messages_per_round)
     print(f"built {len(built)} tasks under {args.out}")
     print(f"manifest: {args.out / MANIFEST} ({'readable' if args.readable_names else 'opaque'} names)")
     print(f"seed: {said}")

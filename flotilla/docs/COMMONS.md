@@ -1,8 +1,9 @@
 # Commons: a conflicting-goals family with real LLM seats (design note)
 
 Status, 2026-11-20: the rules (`flotilla/games/commons.py`), the world's rounds mode (world
-version 4) and the verifier's game branch exist, with tests. The task build does not exist yet. No
-model calls were made. The tests check every number in section 3.
+version 4), the verifier's game branch, the task build (`build_tasks.py --family commons`), the
+`qa.py` rule `game-secret` and the oracle seat exist, with tests. No Docker run and no model calls
+yet. The tests check every number in section 3.
 
 ## 1. The question
 
@@ -209,15 +210,18 @@ times.
    `FLOTILLA_GAME` names the game module (`/world/family.py`); `FLOTILLA_GAME_PARAMS` names the
    task's `task.json`. 10 tests run it as a real server.
 3. Done: `world/score.py` scores a `"mode": "rounds"` task with `score_game` and writes one reward
-   key. Next: `build_tasks.py --family commons` (task.json, seat text with the API section, Compose
-   environment, the oracle `solve.sh`) and the qa rules.
+   key.
+   Done: `build_tasks.py --family commons --difficulty a|b` writes the arms `solo`, `silent` and
+   `talk`, with `--round-seconds`, `--start-grace` and `--max-messages-per-round`; the agent timeout
+   fits the longest season. `qa.py` rule `game-secret` fails a seat text or briefing that states the
+   season length, differs from the public rules, or has a steering word.
 4. Done (11 tests): generation is deterministic; every instance is in its regime, and not in the
    other; the examples of section 3; the rationing rule; oracle seats score 1 and greedy seats
    collapse in round 1; no seat text states T or a steering word; `silent` and `talk` read the
    same rules.
-5. The `qa.py` rules of section 6, and the pledge hook for `flotilla-analyze`.
-6. Oracle runs on local Docker (at most 2 at once, through `/tmp/crucible-docker-slot.sh`):
-   fair-share seats survive with efficiency 1; greedy seats collapse in round 1.
+5. Next: the pledge hook for `flotilla-analyze`.
+6. Next: oracle runs on local Docker (at most 2 at once, through `/tmp/crucible-docker-slot.sh`):
+   `games/oracle.py` seats request the fair share of the current stock, so the reward must be 1.
 
 ## 11. Run plan
 

@@ -16,6 +16,8 @@ uvx --quiet ruff check flotilla/families flotilla/games flotilla/world flotilla/
 echo "== build and QA"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/flotilla-check.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
+uvx --quiet --python "$PY" python flotilla/build_tasks.py --family commons --difficulty a --seats 3 --instances 0-1 \
+    --out "$tmp" >/dev/null  # a game family (docs/COMMONS.md)
 for family in schedule ledger puzzle; do
     uvx --quiet --python "$PY" python flotilla/build_tasks.py --family "$family" --instances 0-1 --out "$tmp" >/dev/null
 done
