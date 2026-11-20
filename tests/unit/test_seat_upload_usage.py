@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -108,7 +108,7 @@ async def _upload(
         verifier=VerifierLock(),
     )
     (trial_dir / "lock.json").write_text(trial_lock.model_dump_json())
-    result = await uploader._upload_single_trial(
+    result = await uploader.upload_single_trial(
         trial_result=trial_result,
         trial_dir=trial_dir,
         trial_lock=trial_lock,
@@ -119,6 +119,10 @@ async def _upload(
     assert result.error is None
 
 
+def _mock_db(uploader: Uploader) -> AsyncMock:
+    return cast(AsyncMock, uploader.db)
+
+
 def _inserted_usage(uploader: Uploader) -> dict[str, tuple[Any, ...]]:
     return {
         call.kwargs["model_id"]: (
@@ -127,7 +131,7 @@ def _inserted_usage(uploader: Uploader) -> dict[str, tuple[Any, ...]]:
             call.kwargs["n_output_tokens"],
             call.kwargs["cost_usd"],
         )
-        for call in uploader.db.insert_trial_model.await_args_list  # type: ignore[attr-defined]
+        for call in _mock_db(uploader).insert_trial_model.await_args_list
     }
 
 
@@ -144,7 +148,7 @@ async def test_seat_trial_same_model_aggregates_token_and_cost_usage(
 
     await _upload(uploader, trial_result, tmp_path)
 
-    uploader.db.insert_trial_model.assert_awaited_once()  # type: ignore[attr-defined]
+    _mock_db(uploader).insert_trial_model.assert_awaited_once()
     usage = _inserted_usage(uploader)
     assert list(usage) == ["model-claude-sonnet-5-5-anthropic"]
     assert usage["model-claude-sonnet-5-5-anthropic"] == (
@@ -153,6 +157,35 @@ async def test_seat_trial_same_model_aggregates_token_and_cost_usage(
         125,
         pytest.approx(0.035),
     )
+
+
+@pytest.mark.asyncio
+async def test_seat_trial_aggregates_distinct_labels_resolved_to_same_model(
+    tmp_path: Path, uploader: Uploader
+) -> None:
+    trial_result = _trial_result(
+        seats=[
+            _seat("chef0", ModelInfo(name=GPT.name), _context(100, None, 50, None)),
+            _seat(
+                "chef1",
+                ModelInfo(name=GPT.name, provider="unknown"),
+                _context(200, 0, 75, None),
+            ),
+        ]
+    )
+    model_id = "model-gpt-6.1-unknown"
+
+    with patch.object(
+        uploader.db, "upsert_model", return_value=model_id
+    ) as upsert_model:
+        await _upload(uploader, trial_result, tmp_path)
+
+    assert {call.args for call in upsert_model.await_args_list} == {
+        (GPT.name, None),
+        (GPT.name, "unknown"),
+    }
+    _mock_db(uploader).insert_trial_model.assert_awaited_once()
+    assert _inserted_usage(uploader) == {model_id: (300, 0, 125, None)}
 
 
 @pytest.mark.asyncio
@@ -170,14 +203,14 @@ async def test_seat_trial_mixed_models_upserts_and_inserts_each_model(
     await uploader._upsert_dimensions([trial_result])
     upserted = {
         (call.args[0], call.args[1])
-        for call in uploader.db.upsert_model.await_args_list  # type: ignore[attr-defined]
+        for call in _mock_db(uploader).upsert_model.await_args_list
     }
     assert upserted == {
         ("claude-sonnet-5-5", "anthropic"),
         ("gpt-6.1", "openai"),
     }
 
-    uploader.db.insert_trial_model.reset_mock()  # type: ignore[attr-defined]
+    _mock_db(uploader).insert_trial_model.reset_mock()
     await _upload(uploader, trial_result, tmp_path)
 
     assert _inserted_usage(uploader) == {
