@@ -83,6 +83,7 @@ try:
         Sailbox,
         Secret,
     )
+    from sail._core_client import MIN_DISK_GIB, memory_range_gib
 
     _HAS_SAIL = True
 except ImportError:
@@ -842,15 +843,23 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         cpus = self._effective_cpus
         memory_mb = self._effective_memory_mb
         storage_mb = self._effective_storage_mb
+        vcpu_count = math.ceil(cpus) if cpus else None
+        memory_range = memory_range_gib(vcpu_count or 1)
+        if memory_range is None:
+            raise ValueError(f"No Sailbox has {vcpu_count} vCPUs")
         app = await App.find.aio(self._app_name, mint_if_missing=True)
         create_task = asyncio.create_task(
             Sailbox.create.aio(
                 app=app,
                 image=image,
                 name=self.session_id,
-                vcpu_count=math.ceil(cpus) if cpus else None,
-                memory_limit_gib=math.ceil(memory_mb / 1024) if memory_mb else None,
-                disk_limit_gib=math.ceil(storage_mb / 1024) if storage_mb else None,
+                vcpu_count=vcpu_count,
+                memory_limit_gib=max(memory_range[0], math.ceil(memory_mb / 1024))
+                if memory_mb
+                else None,
+                disk_limit_gib=max(MIN_DISK_GIB, math.ceil(storage_mb / 1024))
+                if storage_mb
+                else None,
                 max_lifetime_seconds=self._max_lifetime_seconds,
                 image_build_timeout=self._build_timeout_sec,
                 egress_policy=self._to_egress_policy(self.network_policy)

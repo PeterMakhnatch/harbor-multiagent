@@ -270,7 +270,8 @@ class TestSizeSelection:
         ("cpus", "memory_mb", "storage_mb", "expected"),
         [
             (None, None, None, (None, None, None)),
-            (1, 1500, 33 * 1024, (1, 2, 33)),
+            (1, 1500, 33 * 1024, (1, 16, 33)),
+            (2, 2048, 4096, (2, 16, 8)),
             (4, 40 * 1024, None, (4, 40, None)),
             (32, 128 * 1024, 300 * 1024, (32, 128, 300)),
             (64, 256 * 1024, None, (64, 256, None)),
