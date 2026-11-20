@@ -1,0 +1,85 @@
+{
+  "packet_sha256": "481bf1356bf1b3653c098708b8194081bdf5b962ac970d752a354afb1fb5ba08",
+  "roles": "Original user-message hashes are in S1, S2, S3, S4 order. They are archive commitments, not provider signatures. The native controls made no votes and earned no reward.",
+  "schema": "seatlab.native-prefix-controls/v1",
+  "sources": [
+    {
+      "map_index": 0,
+      "native_events": 36,
+      "native_prefix_sha256": "779e58d7214d62a513096440b40af5f485286773526c1503c9d67d7c24b75a56",
+      "original_masked_prompt_sha256": [
+        "dae2361a0daa151f7b56c946111bc53ecb97b444ce5be03cf9e2d06f5411961d",
+        "3401e916d7a54287b00fcdc384e63cd639e9a0c8107d5534bc2e024028f16231",
+        "6de780637e154712b258cce6d1cdd2625c906568d02057161045c1d5585218a4",
+        "fd39d874b9e69beaa797c91878e9ecfc76857ad86df7d0061f7c33bc739cf220"
+      ],
+      "source_prefix_sha256": "779e58d7214d62a513096440b40af5f485286773526c1503c9d67d7c24b75a56",
+      "verified_seats": 4
+    },
+    {
+      "map_index": 1,
+      "native_events": 30,
+      "native_prefix_sha256": "e7682721a81cc202ea7e8d560575e6d77594106eeb001c8e3ac140c513915d1e",
+      "original_masked_prompt_sha256": [
+        "5599e85d526e25db686078905a368d7cc164a88cbad5e235a741aecde4568a7d",
+        "c9794dfdf3a81054505232b621bdc88b640e1c6ad62cb6241f17c9fbe696ac49",
+        "2b8a36abdef62d3a2a010831114d2b1a99f9ee3df4d267f235178995b4eaf051",
+        "36a3ed3a333ad0e41052cc259aa8b9d6143c98c505b7cbf63914cf960298a1ec"
+      ],
+      "source_prefix_sha256": "e7682721a81cc202ea7e8d560575e6d77594106eeb001c8e3ac140c513915d1e",
+      "verified_seats": 4
+    },
+    {
+      "map_index": 2,
+      "native_events": 29,
+      "native_prefix_sha256": "f2a252189242bd214903991f6605dee7c7e4228046610315f99675af638471ce",
+      "original_masked_prompt_sha256": [
+        "d87b4b513725f1f350b86dda55f0ca23121e5b1180ce43adf1ee14c34266ede8",
+        "c43dea4b81d3a74a98f2ecc6c59dee9cf59cc85d63c3d8a0d8e71e8679e8d364",
+        "96a0869d502350cf258de08e42b9d85dfafc19c423f0cb9cbe4cafbb511bc5c3",
+        "59bb8b3790feeec88f9fbc57a7312b60262b2bcbf94a1990d44c648a3bec3fbf"
+      ],
+      "source_prefix_sha256": "f2a252189242bd214903991f6605dee7c7e4228046610315f99675af638471ce",
+      "verified_seats": 4
+    },
+    {
+      "map_index": 3,
+      "native_events": 37,
+      "native_prefix_sha256": "a86e5b0a856e88e2dd124b603f5d0b15230f98d452be27f9d9e8320186619b4a",
+      "original_masked_prompt_sha256": [
+        "95c670c8da6b0025d858da189e2b63c4b64ab2f32bf0e0b1dbcab2edd6b2618c",
+        "e343de9eaa1c71c55426727056f806124f4c247c1628dd376469111bc63bd9d9",
+        "a944c4736a5b88bed290be147b6b698963a7df691f9a5206d3174b1886dae577",
+        "501daee87affcd37860c1cab52e31c8349bdd7a1fb3ef5c81790ed8cfae7f0f4"
+      ],
+      "source_prefix_sha256": "a86e5b0a856e88e2dd124b603f5d0b15230f98d452be27f9d9e8320186619b4a",
+      "verified_seats": 4
+    },
+    {
+      "map_index": 4,
+      "native_events": 29,
+      "native_prefix_sha256": "7feb63801729fad08fcf2eb5f3610ae720e76273cb833036f07c8c75caaa803d",
+      "original_masked_prompt_sha256": [
+        "b087b531666dca4d84ec2d06f3e0b0cf9cc00ee07bb2f4600ad6344fc74b918f",
+        "0c2f4fd94eb7503f5539b3272d61a09c4bdbf76b1a4802822355430e2832a4ab",
+        "ca9ce3e0e2dc1faa4a12f1edd40e6f3cf6678d47bbe5d93bd98f5cf39d5788d9",
+        "c1d83436944220420b1541cc38f976f80c9dcffb236aff80e3985f4e9bade48a"
+      ],
+      "source_prefix_sha256": "7feb63801729fad08fcf2eb5f3610ae720e76273cb833036f07c8c75caaa803d",
+      "verified_seats": 4
+    },
+    {
+      "map_index": 5,
+      "native_events": 35,
+      "native_prefix_sha256": "360a0c7ebb7402e87f9a4d3ca5463a74c1e31253fe930c6fec96cd694c57bd8c",
+      "original_masked_prompt_sha256": [
+        "4fb1e7c812eea74347b9f51a6e3192d8f326ac3470bc8ea98d3af10897066aef",
+        "250a401057b179adcc9d8060244068fd488d7b0142b2344bd2b39fbfc96c378d",
+        "b1683b3fd36d985592157b33a899892ab6bfe89719702a4449519679324ef375",
+        "4773456824551208eabf89c761225369c28b3fb8b90766a113ed1d3b85de19b0"
+      ],
+      "source_prefix_sha256": "360a0c7ebb7402e87f9a4d3ca5463a74c1e31253fe930c6fec96cd694c57bd8c",
+      "verified_seats": 4
+    }
+  ]
+}

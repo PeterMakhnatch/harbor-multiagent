@@ -95,6 +95,53 @@ The visible recommendations were all wrong. All 11 initially dissenting peers sw
 
 The [native results](results/committee-recommendation-results.json) include each team and paired contrast. The [312 settled calls](results/committee-recommendation-cost.json) used 43,008 cached input tokens, 71,379 uncached input tokens, and 4,872 output tokens. The price estimate is **$0.013759074 USD**. Eval Lab's read-only `load_trial` matched all 24 native rewards and all 96 seat token records. No database write was needed.
 
+#### Can we change advice visibility after the same native history?
+
+The live study changed advice, but the paired teams did not always generate the same advice. This follow-up holds each source team's actual advice fixed. We know the live results. We register this continuation before its first model call.
+
+Select repetition 0 of the `masked` source in each of the 6 maps. Do not select by recommendation, correctness, or disagreement. Admit only a source accepted by the native report and direct ledger. Cut after the ninth accepted chat post, before any vote. Keep each ordered dossier read, chat read, and chat post. Reject a prefix that cannot be reproduced in serial order. Do not replace it.
+
+Start a new stock Harbor world for each continuation. Replay the accepted prefix through the original participants' ordinary APIs, without a model call. Verify every response that the source records. For dossiers, compare the structured facts, not unrecorded original descriptions. Require the same ordered world events through the cut, except for their wall-clock timestamps. Require 9 chat messages, 0 votes, and no completed seats before any new decision. This is not a container snapshot. It does not restore provider state, private model memory, or the original clock.
+
+In both arms all 4 voters make fresh model calls and submit new votes to the native verifier. The chair receives the same source recommendation in both arms. `shown` delivers it to the other 3 voters; `masked` does not. Do not tell the model the arm, original final votes, or original outcome. Run 2 repetitions per eligible map. Start `masked` when the map index plus repetition is even. Plan at most 24 native teams and 96 direct calls. Never retry a paid sample. Stop for an incomplete continuation, a prefix mismatch, or an accounting failure. Preserve missing cells and settled charges.
+
+Primary: the mean paired change in native majority reward, `shown − masked`. Average the repetitions within each source, then give each source equal weight. Require all 6 sources to give a 6-source estimate. Secondary: non-chair voters switching to the chair among those who originally disagreed, final correct votes, and chair variation with identical input. Report the count of exact prefix matches. Never substitute a reconstructed majority for the native reward. The 6 source histories still come from 1 vendor problem.
+
+**Use the checkpoint with your own agent.** The [packet](results/committee-prefix-packet.json) contains the 6 stock world histories, not the original final votes. Do not give your agent the packet. It includes information for other seats. From the fork root, use Python 3.12 or later:
+
+```bash
+module=examples.seatlab.committee.prefix_driver
+python -m "$module" plan
+python -m "$module" prompt --map 0 --role analyst_2 --arm masked > voter.txt
+# Give only voter.txt and the system message "Answer only with JSON." to your agent.
+python -m "$module" decode --map 0 --role analyst_2 < response.json
+```
+
+These commands need no Harbor installation, model key, or Docker daemon. Compare `shown` with `masked` for the same role and map. `decode` rejects an illegal ballot. It does not correct a bad choice, open a world, or assign a reward.
+
+**Test native restoration without paying for votes.** Use the [unchanged source task](https://github.com/PeterMakhnatch/harbor-crucible/tree/25966562fc4be3fbc8a8c3b10d8460bd45c4aa55/tasks/epistemic-crucible/variants/hidden_profile_unshared) and an installed Harbor from this fork. Set `TASK` to its local task directory and `HARBOR` to the installed executable. Use a fresh private directory outside the checkout for `OUT`. The control never starts a model, voter, or verifier:
+
+```bash
+python -m examples.seatlab.committee.prefix_probe \
+  --map 0 --task "$TASK" --harbor "$HARBOR" --out "$OUT"
+```
+
+An accepted result includes 4 seats and 2 matching event digests. Only a new native trial that submits votes can produce a new verifier reward.
+
+The [6 free controls](results/committee-prefix-controls.json) matched all 196 source events across 24 seat receipts. All 24 `masked` user texts matched the original model-request commitments. `shown` preserved the 6 chair texts and changed only the recommendation line for the other 18 seats. A matching hash establishes the submitted bytes, not the model's attention.
+
+**What changed with the history fixed?** All 24 new Harbor teams reproduced their registered prefix. Each reached the cut with 9 posts, 0 votes, and 0 completed seats. All 96 voters then made a fresh model call and submitted a native vote. None of the 6 frozen chair recommendations was correct.
+
+| Native outcome | Advice masked from peers | Same advice shown to peers |
+| --- | ---: | ---: |
+| Teams with a correct majority | 0 / 12 | 0 / 12 |
+| Correct final votes | 9 / 48 | 0 / 48 |
+| Initially dissenting peers that switched to the chair | 3 / 12 | 12 / 12 |
+
+The primary change in native majority reward was 0. Correct votes fell by 18.75 percentage points. Only 4 of 6 histories had a dissenting peer. The source-weighted increase in switching was 68.75 points **within those 4 histories**; the 6-history estimate is undefined. The chair chose the same vendor in all 12 paired runs with identical chair input. Its submitted citations differed in 2 pairs. These 6 histories reuse 1 vendor problem. They do not show what happens when the chair gives good advice.
+
+The [paired results](results/committee-prefix-results.json) include every map and both repetitions. The [direct ledger](results/committee-prefix-cost.json) records 24,576 cached input tokens, 22,284 uncached input tokens, and 2,016 output tokens. The price estimate is **$0.004625928 USD**, not an invoice. No reservation remains open. Separately, the [stock Eval Lab reader](results/committee-prefix-eval-lab.json) matched all 24 native rewards and the token counts of all 96 seats. This check read trial directories. It did not write to Eval Lab or call a model.
+
 ### Voting follow-up: does computing totals before choosing help?
 
 **Registered before the first follow-up call.** The previous teams supplied all 4 private facts in 11 trials without a single winning majority. This study changes the voting interface, not the sender instruction. No tool computes the totals for the model, chooses its vote, repairs arithmetic, or changes the native verifier.
