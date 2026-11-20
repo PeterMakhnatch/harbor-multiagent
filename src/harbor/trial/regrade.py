@@ -368,10 +368,13 @@ class RegradeTrial(Trial):
         if not path.exists():
             return None
         try:
-            return TrialResult.model_validate_json(path.read_text())
+            return self._parse_source_result(path.read_text())
         except Exception as exc:
             self.logger.debug(f"Could not parse source trial result at {path}: {exc}")
             return None
+
+    def _parse_source_result(self, text: str) -> TrialResult:
+        return TrialResult.model_validate_json(text)
 
     @override
     def _init_agent(self) -> None:
@@ -946,6 +949,20 @@ class SeatsRegradeTrial(RegradeTrial):
     gives the verifier recorded files, not the original live world.
     """
 
+    _seats_with_incomplete_logs: tuple[str, ...] = ()
+
+    @override
+    def _parse_source_result(self, text: str) -> TrialResult:
+        data = json.loads(text)
+        result = TrialResult.model_validate(data)
+        # Check the raw record even when SeatResult does not yet model this field.
+        self._seats_with_incomplete_logs = tuple(
+            seat["seat"]
+            for seat in data.get("seat_results") or ()
+            if seat.get("logs_downloaded") is False
+        )
+        return result
+
     @override
     def _init_result(self) -> None:
         super()._init_result()
@@ -988,6 +1005,12 @@ class SeatsRegradeTrial(RegradeTrial):
             )
         if not source_result.seat_results:
             raise RegradeError(f"Source trial '{source_dir.name}' has no seat_results.")
+        if self._seats_with_incomplete_logs:
+            seats = ", ".join(repr(seat) for seat in self._seats_with_incomplete_logs)
+            raise RegradeError(
+                f"Source trial '{source_dir.name}': recorded seat logs are known "
+                f"incomplete for {seats}."
+            )
         seats_dir = self._source_paths.seats_dir
         if not seats_dir.is_dir() or seats_dir.is_symlink():
             raise RegradeError(

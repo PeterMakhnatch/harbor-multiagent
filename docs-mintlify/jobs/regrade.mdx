@@ -71,9 +71,10 @@ original run and grade the dump instead.
 
 The regrade task must keep the same seats and `under_test` flags. The source
 must contain matching participants, `seat_results`, and a `seats/<seat>/agent/`
-directory for every seat. Harbor checks the directory structure, but seat logs
-have no integrity manifest. The check cannot prove that every log was collected
-or detect changes to log contents.
+directory for every seat. Harbor refuses a source that records a failed log
+download for any seat. Absent or null download status makes no completeness
+claim. Seat logs have no integrity manifest. Harbor cannot prove that every
+log was collected or detect changes to log contents.
 
 Harbor warns when the task checksum or available lock digest changes.
 In `result.json`, `source_task_checksum` identifies the task that ran the agents.

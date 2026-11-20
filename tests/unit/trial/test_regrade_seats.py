@@ -500,6 +500,36 @@ async def test_seat_regrade_refuses_inconsistent_roster_or_record(
     verifier.assert_not_awaited()
 
 
+@pytest.mark.parametrize("logs_downloaded", [False, True, None])
+async def test_seat_regrade_checks_raw_log_download_status(
+    tmp_path: Path, logs_downloaded: bool | None
+):
+    task_dir = _seat_task(tmp_path)
+    source_dir = _write_seat_source(tmp_path, task_dir, include_trial_exception=True)
+    result_path = TrialPaths(source_dir).result_path
+    data = json.loads(result_path.read_text())
+    data["seat_results"][1]["logs_downloaded"] = logs_downloaded
+    result_path.write_text(json.dumps(data))
+
+    trial, result, verifier = await _regrade_with_stub_verifier(
+        _regrade_config(task_dir, source_dir)
+    )
+
+    if logs_downloaded is False:
+        assert result.exception_info is not None
+        assert result.exception_info.exception_type == "RegradeError"
+        assert (
+            "recorded seat logs are known incomplete for 'raj'"
+            in result.exception_info.exception_message
+        )
+        assert not trial.paths.seats_dir.exists()
+        assert result.verifier_result is None
+        verifier.assert_not_awaited()
+    else:
+        assert result.reward_valid
+        verifier.assert_awaited_once()
+
+
 async def test_seat_regrade_rebuilds_missing_exception_without_grading(tmp_path: Path):
     task_dir = _seat_task(tmp_path)
     source_dir = _write_seat_source(tmp_path, task_dir)
