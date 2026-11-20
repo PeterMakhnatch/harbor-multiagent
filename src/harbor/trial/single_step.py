@@ -87,9 +87,9 @@ class SingleStepTrial(Trial):
             await self._sync_agent_output(self.result)
 
     async def _run_verifier(self) -> None:
-        if self.config.verifier.disable or not all(
-            exception.policy.should_grade
-            for exception in self.result.recorded_exceptions()
+        if self.config.verifier.disable or (
+            self.result.exception_info is not None
+            and not self.result.exception_info.policy.should_grade
         ):
             return
 

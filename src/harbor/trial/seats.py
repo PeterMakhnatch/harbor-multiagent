@@ -290,7 +290,10 @@ class SeatsTrial(SingleStepTrial):
                 self.paths.trial_dir / "seats",
                 (self.agent_env_paths.logs_dir / "seats").as_posix(),
             )
-        await self._run_verifier()
+            if all(
+                error.policy.should_grade for error in self.result.recorded_exceptions()
+            ):
+                await self._run_verifier()
         await self._stop_agent_environment()
 
     @override
