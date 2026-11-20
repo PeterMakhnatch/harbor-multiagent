@@ -31,12 +31,14 @@ Schema of exported rows (per episode):
     - run_id: str               # job/run identifier
     - trial_name: Optional[str] # trial name associated with the run
     - result: Optional[str]     # reward bucket (e.g., "1.0") or exception name
+    - seat: Optional[str]       # Olam seat name (when any seat rows are exported)
+    - under_test: Optional[bool] # whether the seat is under test
     - tool_definitions: Optional[list] # tool definitions available to the agent
     - instruction: Optional[str] # task description (included when requested)
     - verifier_output: Optional[str] # concatenated verifier stdout/stderr (optional)
 
 Notes and options:
-    - Only trials that contain agent/trajectory.json are discovered.
+    - HF export reads both agent/trajectory.json and declared seat trajectories.
     - Episodes are inferred from agent steps in the trajectory.
     - Success filtering can include/exclude trials based on reward in result.json.
     - If to_sharegpt=True, a "conversations_sharegpt" column is added with the
@@ -209,6 +211,57 @@ def iter_trial_dirs(root: Path, recursive: bool = True) -> Iterator[Path]:
             yield p
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _read_local_metadata(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        return _as_dict(_read_json_cached(path))
+    except UnicodeDecodeError:
+        return {}
+
+
+def _seat_trial_result(trial_dir: Path) -> dict[str, Any]:
+    # Only the trial's own finalized result can identify its seats.
+    result = _read_local_metadata(trial_dir / "result.json")
+    config = _as_dict(result.get("config"))
+    if result.get("seat_results") is not None or config.get("participants"):
+        return result
+    return {}
+
+
+def _is_seat_trial_dir(trial_dir: Path) -> bool:
+    if not (trial_dir / "seats").is_dir():
+        return False
+    # The config also identifies an unfinished seat trial. Its seat logs must
+    # not be discovered as legacy trials that inherit a parent result.
+    return bool(
+        _seat_trial_result(trial_dir)
+        or _read_local_metadata(trial_dir / "config.json").get("participants")
+    )
+
+
+def _iter_hf_trial_dirs(root: Path, recursive: bool) -> Iterator[Path]:
+    def is_hf_trial_dir(path: Path) -> bool:
+        if not (is_trial_dir(path) or _is_seat_trial_dir(path)):
+            return False
+        return not any(
+            parent.name == "seats" and _is_seat_trial_dir(parent.parent)
+            for parent in (path, *path.parents)
+        )
+
+    if is_hf_trial_dir(root):
+        # A seat export from "." must still see its parent job result.
+        yield root.absolute() if _is_seat_trial_dir(root) else root
+    elif recursive:
+        for path in root.rglob("*"):
+            if path.is_dir() and is_hf_trial_dir(path):
+                yield path
+
+
 # --------------------
 # Extraction logic
 # --------------------
@@ -220,9 +273,6 @@ def _normalize_run_metadata(raw: dict[str, Any]) -> dict[str, Any]:
     Older Harbor runs may omit fields such as ``config`` or ``agent_info``. Rather
     than raising a KeyError, we provide sensible defaults so callers can still export.
     """
-
-    def _as_dict(value: Any) -> dict[str, Any]:
-        return value if isinstance(value, dict) else {}
 
     config = _as_dict(raw.get("config"))
 
@@ -264,6 +314,16 @@ def _normalize_run_metadata(raw: dict[str, Any]) -> dict[str, Any]:
         or "unknown-provider"
     )
 
+    return {
+        "agent_name": agent_name,
+        "model_name": model_name,
+        "model_provider": model_provider,
+        **_trial_run_metadata(raw),
+    }
+
+
+def _trial_run_metadata(raw: dict[str, Any]) -> dict[str, Any]:
+    config = _as_dict(raw.get("config"))
     run_id = (
         config.get("job_id")
         or config.get("job_name")
@@ -280,15 +340,92 @@ def _normalize_run_metadata(raw: dict[str, Any]) -> dict[str, Any]:
     trial_name = raw.get("trial_name") or config.get("trial_name") or "unknown-trial"
 
     return {
-        "agent_name": agent_name,
-        "model_name": model_name,
-        "model_provider": model_provider,
+        "raw_metadata": raw,
         "start_time": start_time,
         "run_id": run_id,
         "task_name": task_name,
         "trial_name": trial_name,
-        "raw_metadata": raw,
     }
+
+
+def _unique_seat_entries(value: Any) -> dict[str, dict[str, Any] | None]:
+    entries: dict[str, dict[str, Any] | None] = {}
+    if isinstance(value, list):
+        for raw in value:
+            entry = _as_dict(raw)
+            seat = entry.get("seat")
+            if isinstance(seat, str) and seat:
+                entries[seat] = None if seat in entries else entry
+    return entries
+
+
+def _iter_seat_trace_sources(
+    trial_dir: Path, result: dict[str, Any]
+) -> Iterator[tuple[Path, dict[str, Any]]]:
+    participants = _unique_seat_entries(
+        _as_dict(result.get("config")).get("participants")
+    )
+    seat_results = _unique_seat_entries(result.get("seat_results"))
+    trial_metadata = _trial_run_metadata(result)
+    seats_dir = trial_dir / "seats"
+    resolved_trial_dir = trial_dir.resolve()
+
+    for seat, participant in participants.items():
+        seat_result = seat_results.get(seat)
+        if (
+            not participant
+            or not seat_result
+            or Path(seat).name != seat
+            or seat == ".."
+        ):
+            continue
+        under_test = seat_result.get("under_test")
+        if not isinstance(under_test, bool):
+            continue
+
+        agent_info = _as_dict(seat_result.get("agent_info"))
+        agent_name = agent_info.get("name") or participant.get("name")
+        if not isinstance(agent_name, str) or not agent_name:
+            continue
+        model_info = _as_dict(agent_info.get("model_info"))
+        model_name = (
+            model_info.get("name") or participant.get("model_name") or "unknown-model"
+        )
+        model_provider = model_info.get("provider") or "unknown-provider"
+        if not isinstance(model_name, str) or not isinstance(model_provider, str):
+            continue
+        agent_dir = seats_dir / seat / "agent"
+        main_trajectory = agent_dir / "trajectory.json"
+        if not main_trajectory.is_file():
+            continue
+        if main_trajectory.resolve() != (
+            resolved_trial_dir / "seats" / seat / "agent" / main_trajectory.name
+        ):
+            continue
+
+        yield (
+            agent_dir,
+            {
+                **trial_metadata,
+                "agent_name": agent_name,
+                "model_name": model_name,
+                "model_provider": model_provider,
+                "seat": seat,
+                "under_test": under_test,
+                "trial_id": result.get("id"),
+            },
+        )
+
+
+def _apply_seat_metadata(row: dict[str, Any], run_meta: dict[str, Any]) -> None:
+    if "seat" in run_meta:
+        row.update(
+            seat=run_meta["seat"],
+            under_test=run_meta["under_test"],
+            trial_id=run_meta["trial_id"],
+            agent=run_meta["agent_name"],
+            model=run_meta["model_name"],
+        )
 
 
 def _find_result_json(trial_dir: Path) -> Path | None:
@@ -332,17 +469,20 @@ def _load_job_result_data(trial_dir: Path) -> dict[str, Any] | None:
     return None
 
 
-def _extract_instruction(trial_dir: Path, agent_name: str) -> Optional[str]:
+def _extract_instruction(agent_dir: Path, *, main_only: bool = False) -> Optional[str]:
     """Return the initial instruction text extracted from the main trajectory."""
-    agent_dir = trial_dir / "agent"
     if not agent_dir.exists():
         return None
 
     # Prefer the primary trajectory.json; fall back to the earliest continuation.
-    trajectory_paths = sorted(
-        path
-        for path in agent_dir.glob("trajectory*.json")
-        if ".summarization" not in path.name  # skip subagent summaries
+    trajectory_paths = (
+        [agent_dir / "trajectory.json"]
+        if main_only
+        else sorted(
+            path
+            for path in agent_dir.glob("trajectory*.json")
+            if ".summarization" not in path.name
+        )
     )
     if not trajectory_paths:
         return None
@@ -352,13 +492,19 @@ def _extract_instruction(trial_dir: Path, agent_name: str) -> Optional[str]:
     except OSError:
         return None
 
-    steps = trajectory.get("steps")
+    steps = _as_dict(trajectory).get("steps")
     if not isinstance(steps, list):
         return None
 
     for step in steps:
         if not isinstance(step, dict):
             continue
+        if main_only:
+            source = step.get("source")
+            if source == "agent":
+                break
+            if source not in ("user", "system"):
+                continue
         message = step.get("message")
         if isinstance(message, str) and message.strip():
             return message.strip()
@@ -435,26 +581,28 @@ def _extract_trial_result_value(trial_dir: Path, trial_name: str) -> Optional[st
                                         else str(result_value)
                                     )
 
-    # 2. Fallback: read per-trial result.json directly (RL training jobs)
-    trial_data = _load_result_data(trial_dir)
-    if isinstance(trial_data, dict):
-        # Check for exception first
-        exc_info = trial_data.get("exception_info")
-        if isinstance(exc_info, dict):
-            exc_type = exc_info.get("exception_type")
-            if exc_type:
-                return str(exc_type)
+    return _result_value_from_record(_load_result_data(trial_dir))
 
-        # Extract reward from verifier_result
-        vr = trial_data.get("verifier_result")
-        if isinstance(vr, dict):
-            rewards = vr.get("rewards")
-            if isinstance(rewards, dict):
-                reward = rewards.get("reward")
-                if reward is not None:
-                    return str(_coerce_reward_value(reward))
+
+def _result_value_from_record(record: dict[str, Any] | None) -> str | None:
+    if not record:
+        return None
+    exception_type = _as_dict(record.get("exception_info")).get("exception_type")
+    if exception_type:
+        return str(exception_type)
+
+    verifier = _as_dict(record.get("verifier_result"))
+    reward = _as_dict(verifier.get("rewards")).get("reward")
+    if reward is not None:
+        return str(_coerce_reward_value(reward))
 
     return None
+
+
+def _trace_result_value(trial_dir: Path, run_meta: dict[str, Any]) -> str | None:
+    if "seat" in run_meta:
+        return _result_value_from_record(run_meta["raw_metadata"])
+    return _extract_trial_result_value(trial_dir, run_meta["trial_name"])
 
 
 def load_run_metadata(trial_dir: Path) -> dict[str, Any]:
@@ -746,6 +894,43 @@ def _extract_subagent_refs_from_trajectory(
     return refs
 
 
+def _trajectory_chain(
+    agent_dir: Path, *, is_seat: bool, verbose: bool = False
+) -> list[Path]:
+    current = agent_dir / "trajectory.json"
+    if not current.exists():
+        return []
+
+    paths = [current]
+    seat_agent_dir = agent_dir.resolve() if is_seat else None
+    seen_paths = {current.resolve()} if is_seat else set()
+    while True:
+        try:
+            trajectory = json.loads(current.read_text())
+        except (json.JSONDecodeError, OSError):
+            break
+        reference = trajectory.get("continued_trajectory_ref")
+        if not reference or (is_seat and not isinstance(reference, str)):
+            break
+
+        next_path = agent_dir / reference
+        if not next_path.exists():
+            if verbose:
+                print(
+                    f"[traces] Warning: continued_trajectory_ref '{reference}' in {current.name} points to non-existent file"
+                )
+            break
+        if seat_agent_dir is not None:
+            resolved = next_path.resolve()
+            if resolved in seen_paths or not resolved.is_relative_to(seat_agent_dir):
+                break
+            seen_paths.add(resolved)
+
+        paths.append(next_path)
+        current = next_path
+    return paths
+
+
 def collect_conversations_from_trial(
     trial_dir: Path,
     run_meta: dict[str, Any],
@@ -754,6 +939,8 @@ def collect_conversations_from_trial(
     include_instruction: bool = False,
     include_verifier_output: bool = False,
     embed_tools_in_conversation: bool = True,
+    *,
+    agent_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Collect conversation traces from a trial.
 
@@ -773,15 +960,18 @@ def collect_conversations_from_trial(
         include_verifier_output: Include verifier stdout/stderr metadata when available
         embed_tools_in_conversation: Whether to embed tool definitions in the first
             system message (default: True)
+        agent_dir: Override the agent logs path without changing trial provenance.
 
     Returns:
         List of conversation dicts
     """
+    if agent_dir is None:
+        agent_dir = trial_dir / "agent"
     task_name = run_meta["task_name"]
     trial_name = run_meta["trial_name"]
-    result_value = _extract_trial_result_value(trial_dir, trial_name)
+    result_value = _trace_result_value(trial_dir, run_meta)
     instruction_text = (
-        _extract_instruction(trial_dir, run_meta["agent_name"])
+        _extract_instruction(agent_dir, main_only="seat" in run_meta)
         if include_instruction
         else None
     )
@@ -789,47 +979,13 @@ def collect_conversations_from_trial(
         _read_verifier_output(trial_dir) if include_verifier_output else None
     )
 
-    agent_dir = trial_dir / "agent"
-
-    # Build trajectory processing order
-    # Only include main trajectory and continuation trajectories
-    # Subagent trajectories should be exported separately
-    trajectory_order = []
-
-    # Start with main trajectory
-    main_traj = agent_dir / "trajectory.json"
-    if not main_traj.exists():
+    trajectory_order = _trajectory_chain(
+        agent_dir, is_seat="seat" in run_meta, verbose=verbose
+    )
+    if not trajectory_order:
         if verbose:
             print(f"[traces] Trial {trial_dir.name}: no trajectory.json found")
         return []
-
-    trajectory_order.append(main_traj)
-
-    # Follow continuation chain using continued_trajectory_ref from each trajectory
-    # (Subagent trajectories are NOT added here - they go to separate trace files)
-    current_traj_path = main_traj
-    while True:
-        try:
-            trajectory_data = json.loads(current_traj_path.read_text())
-        except (json.JSONDecodeError, OSError):
-            break
-
-        # Check if this trajectory has a continuation
-        continued_ref = trajectory_data.get("continued_trajectory_ref")
-        if not continued_ref:
-            break
-
-        # Resolve the continuation path relative to the agent directory
-        next_traj_path = agent_dir / continued_ref
-        if not next_traj_path.exists():
-            if verbose:
-                print(
-                    f"[traces] Warning: continued_trajectory_ref '{continued_ref}' in {current_traj_path.name} points to non-existent file"
-                )
-            break
-
-        trajectory_order.append(next_traj_path)
-        current_traj_path = next_traj_path
 
     # Extract conversations from all trajectory files in order
     all_conversations = []
@@ -868,6 +1024,7 @@ def collect_conversations_from_trial(
         conv["task"] = task_name
         conv["trial_name"] = trial_name
         conv["result"] = result_value
+        _apply_seat_metadata(conv, run_meta)
         if include_instruction:
             conv["instruction"] = instruction_text
         if include_verifier_output:
@@ -1018,6 +1175,8 @@ def collect_subagent_traces(
     verbose: bool = False,
     include_instruction: bool = False,
     include_verifier_output: bool = False,
+    *,
+    agent_dir: Path | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Collect traces from subagent trajectories (e.g., context summarization agents).
 
@@ -1042,15 +1201,17 @@ def collect_subagent_traces(
         verbose: Whether to print verbose output
         include_instruction: Include instruction text metadata when available
         include_verifier_output: Include verifier stdout/stderr metadata when available
+        agent_dir: Override the agent logs path without changing trial provenance.
 
     Returns:
         Dictionary mapping subagent trajectory types to lists of conversation dicts
     """
-    agent_dir = trial_dir / "agent"
+    if agent_dir is None:
+        agent_dir = trial_dir / "agent"
     subagent_traces: dict[str, list[dict[str, Any]]] = {}
-    result_value = _extract_trial_result_value(trial_dir, run_meta["trial_name"])
+    result_value = _trace_result_value(trial_dir, run_meta)
     instruction_text = (
-        _extract_instruction(trial_dir, run_meta["agent_name"])
+        _extract_instruction(agent_dir, main_only="seat" in run_meta)
         if include_instruction
         else None
     )
@@ -1058,13 +1219,23 @@ def collect_subagent_traces(
         _read_verifier_output(trial_dir) if include_verifier_output else None
     )
 
-    # Find all subagent trajectory files
-    # They follow the pattern: trajectory.*.json (but not trajectory.cont-*.json)
+    # Keep continuation files out of the independent subagent groups.
+    seat_agent_dir = agent_dir.resolve() if "seat" in run_meta else None
+    continuation_paths = (
+        {path.resolve() for path in _trajectory_chain(agent_dir, is_seat=True)}
+        if seat_agent_dir is not None
+        else set()
+    )
     subagent_files = []
     for traj_file in sorted(agent_dir.glob("trajectory.*.json")):
-        # Skip continuation files
         if ".cont-" in traj_file.name:
             continue
+        if seat_agent_dir is not None:
+            resolved = traj_file.resolve()
+            if resolved in continuation_paths or not resolved.is_relative_to(
+                seat_agent_dir
+            ):
+                continue
         subagent_files.append(traj_file)
 
     if not subagent_files:
@@ -1093,6 +1264,7 @@ def collect_subagent_traces(
         conv["task"] = run_meta["task_name"]
         conv["trial_name"] = run_meta["trial_name"]
         conv["result"] = result_value
+        _apply_seat_metadata(conv, run_meta)
         if include_instruction:
             conv["instruction"] = instruction_text
         if include_verifier_output:
@@ -1131,6 +1303,18 @@ def rows_to_dataset(rows: list[dict[str, Any]]) -> "Dataset":
     return Dataset.from_list(rows)
 
 
+def _trace_rows_to_dataset(rows: list[dict[str, Any]], to_sharegpt: bool) -> "Dataset":
+    # Dataset.from_list takes its keys from the first row of each chunk.
+    if rows and "seat" not in rows[0] and any("seat" in row for row in rows):
+        rows[0].update(seat=None, under_test=None, trial_id=None)
+    dataset = rows_to_dataset(rows)
+    if to_sharegpt:
+        return convert_openai_to_sharegpt(
+            dataset, "conversations", "conversations_sharegpt"
+        )
+    return dataset
+
+
 def push_dataset(dataset: "Dataset", repo_id: str, token: Optional[str] = None) -> None:
     token = token or os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
     if not token:
@@ -1141,6 +1325,40 @@ def push_dataset(dataset: "Dataset", repo_id: str, token: Optional[str] = None) 
 # --------------------
 # High-level entry
 # --------------------
+
+
+def _iter_hf_trace_sources(
+    trial_dir: Path, verbose: bool
+) -> Iterator[tuple[Path, dict[str, Any]]]:
+    result = _seat_trial_result(trial_dir)
+    if result:
+        if "finished_at" in result and not result["finished_at"]:
+            return
+        yield from _iter_seat_trace_sources(trial_dir, result)
+        return
+    if _is_seat_trial_dir(trial_dir):
+        return
+
+    try:
+        run_meta = load_run_metadata(trial_dir)
+    except (ValueError, FileNotFoundError) as exc:
+        if verbose:
+            print(f"[traces] Skipping {trial_dir.name}: {exc}")
+        return
+    agent_name = run_meta["agent_name"]
+
+    # Legacy trials require a registered ATIF-capable agent. Seat trials use
+    # each matched seat's own trajectory, if present.
+    agent_enum = AgentName(agent_name)
+    try:
+        agent_class = AgentFactory.get_agent_class(agent_enum)
+    except ValueError:
+        agent_class = None
+    if agent_class is None or not agent_class.capabilities.atif:
+        raise NotImplementedError(
+            f"{agent_name} does not support Harbor's trajectory format (ATIF), cannot export traces"
+        )
+    yield trial_dir / "agent", run_meta
 
 
 def export_traces(
@@ -1198,7 +1416,7 @@ def export_traces(
     main_chunks: list["Dataset"] = []
     subagent_chunks: dict[str, list["Dataset"]] = {}
 
-    trial_dirs = list(iter_trial_dirs(root, recursive=recursive))
+    trial_dirs = list(_iter_hf_trial_dirs(root, recursive=recursive))
     print(f"[traces] Found {len(trial_dirs)} trial directories under {root}")
 
     progress = None
@@ -1229,28 +1447,16 @@ def export_traces(
 
     try:
         for trial_dir in trial_dirs:
-            try:
-                run_meta = load_run_metadata(trial_dir)
-            except (ValueError, FileNotFoundError) as exc:
-                if verbose:
-                    print(f"[traces] Skipping {trial_dir.name}: {exc}")
+            sources = list(_iter_hf_trace_sources(trial_dir, verbose))
+            if not sources:
                 continue
-            agent_name = run_meta["agent_name"]
-
-            # Check if agent supports ATIF trajectory format
-            agent_enum = AgentName(agent_name)
-            try:
-                agent_class = AgentFactory.get_agent_class(agent_enum)
-            except ValueError:
-                agent_class = None
-            if agent_class is None or not agent_class.capabilities.atif:
-                raise NotImplementedError(
-                    f"{agent_name} does not support Harbor's trajectory format (ATIF), cannot export traces"
-                )
 
             # Optional trial-level success/failure filter based on result.json
             if success_filter in ("success", "failure"):
-                succ = _trial_is_success(trial_dir)
+                first_run_meta = sources[0][1]
+                succ = _trial_is_success(
+                    trial_dir, first_run_meta if "seat" in first_run_meta else None
+                )
                 if succ is None:
                     if verbose:
                         print(
@@ -1262,40 +1468,32 @@ def export_traces(
                 if success_filter == "failure" and succ:
                     continue
 
-            # Collect main agent traces
-            try:
-                rows.extend(
-                    collect_conversations_from_trial(
-                        trial_dir,
-                        run_meta=run_meta,
-                        episodes=episodes,
-                        verbose=verbose,
-                        include_instruction=include_instruction,
-                        include_verifier_output=include_verifier_output,
-                        embed_tools_in_conversation=embed_tools_in_conversation,
+            for agent_dir, run_meta in sources:
+                try:
+                    rows.extend(
+                        collect_conversations_from_trial(
+                            trial_dir,
+                            run_meta=run_meta,
+                            episodes=episodes,
+                            verbose=verbose,
+                            include_instruction=include_instruction,
+                            include_verifier_output=include_verifier_output,
+                            embed_tools_in_conversation=embed_tools_in_conversation,
+                            agent_dir=agent_dir,
+                        )
                     )
-                )
-            except (UnicodeDecodeError, ValueError, OSError) as e:
-                if verbose:
-                    print(
-                        f"[traces] Trial {trial_dir.name}: skipping due to decode/read error: {e}"
-                    )
-                continue
-            if chunk_size and len(rows) >= chunk_size:
-                chunk_ds = rows_to_dataset(rows)
-                if to_sharegpt:
-                    chunk_ds = convert_openai_to_sharegpt(
-                        chunk_ds, "conversations", "conversations_sharegpt"
-                    )
-                main_chunks.append(chunk_ds)
-                rows = []
+                except (ValueError, OSError) as exc:
+                    if verbose:
+                        print(
+                            f"[traces] Trial {trial_dir.name}: skipping due to decode/read error: {exc}"
+                        )
+                    continue
+                if chunk_size and len(rows) >= chunk_size:
+                    main_chunks.append(_trace_rows_to_dataset(rows, to_sharegpt))
+                    rows = []
 
-            # Collect subagent traces if requested.
-            # Wrap in the same decode/read error handler as the main agent
-            # collection — UnicodeDecodeError from non-UTF-8 subagent
-            # trajectories inherits from ValueError, not OSError, and would
-            # otherwise propagate and crash the whole export.
-            if export_subagents:
+                if not export_subagents:
+                    continue
                 try:
                     trial_subagent_traces = collect_subagent_traces(
                         trial_dir,
@@ -1304,25 +1502,20 @@ def export_traces(
                         verbose=verbose,
                         include_instruction=include_instruction,
                         include_verifier_output=include_verifier_output,
+                        agent_dir=agent_dir,
                     )
-                except (UnicodeDecodeError, ValueError, OSError) as e:
+                except (ValueError, OSError) as exc:
                     if verbose:
                         print(
-                            f"[traces] Trial {trial_dir.name}: skipping subagent traces due to decode/read error: {e}"
+                            f"[traces] Trial {trial_dir.name}: skipping subagent traces due to decode/read error: {exc}"
                         )
-                    trial_subagent_traces = {}
+                    continue
 
-                # Merge subagent traces from this trial with accumulated subagent traces
                 for subagent_name, subagent_convs in trial_subagent_traces.items():
-                    if subagent_name not in subagent_rows:
-                        subagent_rows[subagent_name] = []
-                    subagent_rows[subagent_name].extend(subagent_convs)
-                    if chunk_size and len(subagent_rows[subagent_name]) >= chunk_size:
-                        sub_chunk = rows_to_dataset(subagent_rows[subagent_name])
-                        if to_sharegpt:
-                            sub_chunk = convert_openai_to_sharegpt(
-                                sub_chunk, "conversations", "conversations_sharegpt"
-                            )
+                    pending = subagent_rows.setdefault(subagent_name, [])
+                    pending.extend(subagent_convs)
+                    if chunk_size and len(pending) >= chunk_size:
+                        sub_chunk = _trace_rows_to_dataset(pending, to_sharegpt)
                         subagent_chunks.setdefault(subagent_name, []).append(sub_chunk)
                         subagent_rows[subagent_name] = []
 
@@ -1334,12 +1527,7 @@ def export_traces(
 
     # Create main dataset
     if rows:
-        chunk_ds = rows_to_dataset(rows)
-        if to_sharegpt:
-            chunk_ds = convert_openai_to_sharegpt(
-                chunk_ds, "conversations", "conversations_sharegpt"
-            )
-        main_chunks.append(chunk_ds)
+        main_chunks.append(_trace_rows_to_dataset(rows, to_sharegpt))
     if len(main_chunks) == 1:
         main_ds = main_chunks[0]
     elif len(main_chunks) > 1:
@@ -1363,11 +1551,7 @@ def export_traces(
     subagent_datasets: dict[str, "Dataset"] = {}
     for subagent_type, subagent_trace_list in subagent_rows.items():
         if subagent_trace_list:
-            sub_chunk = rows_to_dataset(subagent_trace_list)
-            if to_sharegpt:
-                sub_chunk = convert_openai_to_sharegpt(
-                    sub_chunk, "conversations", "conversations_sharegpt"
-                )
+            sub_chunk = _trace_rows_to_dataset(subagent_trace_list, to_sharegpt)
             subagent_chunks.setdefault(subagent_type, []).append(sub_chunk)
     for subagent_type, chunks in subagent_chunks.items():
         if not chunks:
@@ -1426,14 +1610,19 @@ def export_traces(
 def _trial_is_success(
     trial_dir: Path, run_meta: dict[str, Any] | None = None
 ) -> Optional[bool]:
-    """Determine success using job-level reward stats when available."""
-    trial_name = run_meta["trial_name"] if run_meta else trial_dir.name
-    result_value = _extract_trial_result_value(trial_dir, trial_name)
+    """Use the native seat trial result, or legacy reward stats when applicable."""
+    result_value = (
+        _trace_result_value(trial_dir, run_meta)
+        if run_meta
+        else _extract_trial_result_value(trial_dir, trial_dir.name)
+    )
     if result_value is not None:
         try:
             return float(result_value) > 0.0
         except (ValueError, TypeError):
             return False
+    if run_meta and "seat" in run_meta:
+        return None
 
     data = _load_result_data(trial_dir)
     if not isinstance(data, dict):
