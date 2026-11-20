@@ -300,6 +300,57 @@ The receiver's final input differed in all 12 pairs. Its chosen slot differed in
 
 The [paired outcomes](results/flotilla-calendar-external-results.json) identify the 24 distinct native trials by digest. Eval Lab independently read the same 24 scores and 48 seat records. All native token counts remained unknown. The [external meter](results/flotilla-calendar-external-meter.json) matched all 72 observed turns to settled direct calls, with no missing record or hold. The [estimated cost](results/flotilla-calendar-external-cost.json) was **$0.003356052 USD**: 24,184 cached input tokens, 15,486 uncached input tokens, and 1,601 output tokens. These are local list-price estimates, not an invoice.
 
+##### Is the failure in the lists or the final decision?
+
+**Registered before any new receiver generation.** In the 24 native games above, the common start was missing from at least one final list in 20 games. In the other 4, both lists contained the correct start. All 4 receivers chose a different start that neither calendar allowed. This observation motivates a *conditional replay* of the final decision. It does not change a historical Harbor score.
+
+Use all 24 published final inputs: worlds 0, 4, and 8; both receiver directions; both original repetitions; and both original message conditions. Preserve the receiver's calendar and the full original final instruction. Independently keep or replace each of the 2 lists. A replacement contains the exact feasible starts for **only that seat**, computed from its own calendar. Never give the receiver the other seat's calendar, the intersection, a recommended slot, or the original decision. Reconstruct the unchanged prompt byte for byte against the published hash. A replaced list is a counterfactual input, not a claim about what the original agent said.
+
+| Condition | Receiver list | Sender list |
+| --- | --- | --- |
+| `rr` | As reported | As reported |
+| `er` | Exact local starts | As reported |
+| `re` | As reported | Exact local starts |
+| `ee` | Exact local starts | Exact local starts |
+
+Take 2 fresh draws per input and condition with the same direct model. That gives 48 matched sets of 4 decisions and at most 192 first attempts. Do not retry, filter by original failure reason, or stop when a model wins. Use `rr er ee re`, `er re rr ee`, `re ee er rr`, and `ee rr re er` as the 4 condition orders. Select order `(case_index + draw) mod 4`. Sort cases by world, direction, original repetition, and original condition (`blind` before `peer`). Reverse case iteration in the second draw. Keep the original index for choosing the order.
+
+Primary: compare `ee − rr` within a case and draw. Measure whether the model's actual slot fits both seats. Average matched differences within each world, then weight the 3 worlds equally. Report the 2 one-list effects, the complete-set interaction, and disagreement across identical-prompt draws. Count an observed invalid reply as protocol failure, separately from a missing reply. Show accepted-only results and bounds for missing replies. Report the 3 worlds separately. The 192 scheduled calls are not 192 independent worlds.
+
+This isolates the final receiver. No sender reacts to a replacement. The offline score checks the same two-hour constraint as the native game, but it is **not** a new native trial or verifier reward.
+
+**Try the replay without Harbor, Docker, or a provider.** Run these commands from the repository root with Python 3.11 or newer:
+
+```bash
+python -m examples.seatlab.visibility.calendar_list_packet verify
+python -m examples.seatlab.visibility.calendar_list_protocol prompt rx-w00-d0-r0-blind er
+python -m examples.seatlab.visibility.calendar_list_protocol score rx-w00-d0-r0-blind '{"slot":11}'
+```
+
+The [public packet](results/flotilla-calendar-list-packet.json) binds the 24 recorded inputs to the original native trials. Its SHA-256 is `06ec8c6bceb14db004bc874c18709a7e2ce92837b653b1ba6ce45da23207d322`. The first command reconstructs all 24 prompts. The second prints exactly one role view. The third checks the reply, not the input list.
+
+To compare your own model, pass a function of one prompt to `calendar_list_run.collect(study, run, respond)`. The callback returns one raw string. Use `calendar_list_protocol plan` to list the registered run IDs. Give each worker different IDs and the same private study directory. A failed attempt remains claimed; another worker cannot accidentally buy a second reply. This protects the experiment from duplicate work. It is not a sandbox for an untrusted callback.
+
+```bash
+study="$(mktemp -d "$(realpath "${TMPDIR:-/tmp}")/calendar-list.XXXXXX")"
+# Free transport check. Use a different, empty study directory for real replies.
+python -m examples.seatlab.visibility.calendar_list_run demo "$study" --draw 0
+python -m examples.seatlab.visibility.calendar_list_report "$study"
+```
+
+**Result.** With the recorded lists, the receiver found the common start in **0/48** fresh decisions. With both exact local lists, it found it in **31/48**. The matched equal-world difference was **+64.58 percentage points**. All 192 model replies were valid and all 48 matched sets were complete.
+
+| Lists shown to receiver | Correct / 48 | World 0 / 16 | World 4 / 16 | World 8 / 16 |
+| --- | ---: | ---: | ---: | ---: |
+| Both recorded | 0 | 0 | 0 | 0 |
+| Receiver exact, sender recorded | 9 | 6 | 1 | 2 |
+| Receiver recorded, sender exact | 10 | 7 | 2 | 1 |
+| Both exact | 31 | 16 | 6 | 9 |
+
+Replacing only the receiver's list added 18.75 points. Replacing only the sender's list added 20.83 points. The joint increase exceeded the sum of these increases by 25 points. Even with both exact lists, the receiver missed the common start 17 times. It chose different slots on 11/24 identical-prompt draw pairs in that condition. These are observations from 3 fixed worlds, not 192 independent scheduling tasks.
+
+The unchanged stock `family.score` matched the replay for [all 105 world/slot combinations](results/flotilla-calendar-list-stock-check.json) and every new choice. No new native room ran. The [paired outcomes](results/flotilla-calendar-list-results.json) bind all 192 replies to [192 settled direct calls](results/flotilla-calendar-list-cost.json), at an estimated **$0.006340788**. There were no held or unmatched charges.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
