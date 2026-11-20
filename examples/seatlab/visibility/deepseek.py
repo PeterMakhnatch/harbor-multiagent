@@ -42,10 +42,13 @@ class SeatUnavailable(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class SeatTurn:
-    """Text and the served model from the same completed provider response."""
+    """Provider response and verified token counts. Input includes cached tokens."""
 
     text: str
     served_model: str
+    input_tokens: int
+    cache_tokens: int
+    output_tokens: int
 
 
 def bind_host_key() -> None:
@@ -227,7 +230,7 @@ def turn(prompt: str, *, run_id: str, role: str) -> SeatTurn:
         started_at=started,
         finished_at=finished,
     )
-    return SeatTurn(_text(document), served)
+    return SeatTurn(_text(document), served, hit + miss, hit, output)
 
 
 def ask(prompt: str, *, run_id: str, role: str) -> str:

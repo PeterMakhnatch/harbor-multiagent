@@ -142,7 +142,7 @@ def test_bound_key_leaves_environment_and_uses_direct_route(
     assert "DEEPSEEK_API_KEY" not in __import__("os").environ
     settled = _install(monkeypatch)
     result = deepseek.turn("seat", run_id="run-1", role="receiver")
-    assert result == deepseek.SeatTurn('{"ok":true}', "deepseek-v4.1-flash-1017")
+    assert result == deepseek.SeatTurn('{"ok":true}', "deepseek-v4.1-flash-1017", 12, 2, 4)
     assert deepseek.ask("seat", run_id="run-1", role="receiver") == '{"ok":true}'
     assert [(method, path) for method, path, _ in _Connection.calls] == [
         ("GET", "/user/balance"),

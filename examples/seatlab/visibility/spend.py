@@ -15,7 +15,8 @@ _UNIT = 1_000_000_000  # integer nanodollars; the smallest list-price rate is 3 
 _HOLD = 10_000_000  # $0.01 for <=8192 request bytes, <=512 output tokens, no tools
 _FLOOR = 1_500_000_000
 _SHARED_CAP = 10 * _UNIT
-_ROLES = {"inventory", "dispatch", "decision_maker"}
+_ROLES = {"inventory", "dispatch", "decision_maker", "analyst_1", "analyst_2", "analyst_3", "analyst_4"}
+_HOST_LEDGER: Path | None = None
 
 
 class SpendRefused(ValueError):
@@ -37,6 +38,17 @@ def _location(root: Path) -> Path:
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
         raise SpendRefused("private_spend_directory_required")
     return root / "direct-flash.sqlite3"
+
+
+def bind_host_spend_dir() -> None:
+    """Keep the ledger location in the host; do not export it to native children."""
+    global _HOST_LEDGER
+    value = os.environ.pop("SEATLAB_SPEND_DIR", None)
+    if _HOST_LEDGER is not None or not value or not Path(value).is_absolute():
+        raise SpendRefused("host_spend_binding_invalid")
+    root = Path(value)
+    _location(root)
+    _HOST_LEDGER = root
 
 
 def initialize(root: Path, opening_balance_usd: Decimal, lane_cap_usd: Decimal) -> None:
@@ -61,6 +73,8 @@ def initialize(root: Path, opening_balance_usd: Decimal, lane_cap_usd: Decimal) 
 
 @contextmanager
 def _connect(root: Path | None = None):
+    if root is None:
+        root = _HOST_LEDGER
     if root is None:
         value = os.environ.get("SEATLAB_SPEND_DIR")
         if not value:

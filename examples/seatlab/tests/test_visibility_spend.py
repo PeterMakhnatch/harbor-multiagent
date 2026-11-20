@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from multiprocessing import get_context
@@ -24,6 +25,19 @@ def ledger(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root.mkdir(mode=0o700)
     monkeypatch.setenv("SEATLAB_SPEND_DIR", str(root))
     return root
+
+
+def test_bound_native_host_keeps_one_ledger_without_exporting_it(
+    ledger: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(spend, "_HOST_LEDGER", None)
+    spend.initialize(ledger, _BALANCE, Decimal("1.00"))
+    spend.bind_host_spend_dir()
+    assert "SEATLAB_SPEND_DIR" not in os.environ
+    spend.reserve("hp-m0-r0-open-share", "analyst_1", balance_usd=_BALANCE)
+    assert spend.report(ledger)["unsettled_calls"] == 1
+    with pytest.raises(spend.SpendRefused, match="host_spend_binding_invalid"):
+        spend.bind_host_spend_dir()
 
 
 def _settle(run: str, *, started_at: datetime = _OFFPEAK) -> None:
