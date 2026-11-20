@@ -3,7 +3,12 @@ from typing import Any
 
 import pytest
 
-from examples.seatlab.visibility.clarify_schedule import PACKETS, SEEDS, Cell, packet_path
+from examples.seatlab.visibility.clarify_schedule import (
+    PACKETS,
+    SEEDS,
+    Cell,
+    packet_path,
+)
 from examples.seatlab.visibility.clarify_views import (
     build_final,
     build_initial,
@@ -123,7 +128,9 @@ def test_joint_sender_and_dispatch_changes_score_against_original_truth(
         ("D", False, True),
         ("C", False, False),
     ):
-        rows = [{"id": i, "bay": choice} for i, choice in enumerate(("A", bay, "C", "C"))]
+        rows = [
+            {"id": i, "bay": choice} for i, choice in enumerate(("A", bay, "C", "C"))
+        ]
         actions = validate_actions(packet, active, json.dumps({"rows": rows[::-1]}))
         assert actions == {"rows": rows}
         expected = {
@@ -192,7 +199,9 @@ def test_dispatch_requires_the_exact_roster_and_bays(
         validate_actions(packet, Cell(0, 3101, 0, "active"), f'{{"rows":[{rows}]}}')
 
 
-def test_dispatch_rejects_extra_or_duplicate_top_level_keys(packet: dict[str, Any]) -> None:
+def test_dispatch_rejects_extra_or_duplicate_top_level_keys(
+    packet: dict[str, Any],
+) -> None:
     rows = json.dumps(packet["arms"]["fresh"]["dispatch"]["rows"])
     cell = Cell(0, 3101, 0, "active")
     for field in ('"extra":0', f'"rows":{rows}'):

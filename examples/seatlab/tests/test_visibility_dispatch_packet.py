@@ -28,13 +28,20 @@ def _write_pair(root: Path, seed: int, repetition: int) -> None:
             continue
         arm = cell["condition"]
         world = dispatch_packet._world_type()(
-            {"schema": "seatlab.scenario/v1", "seed": seed, "episodes": 4, "condition": arm}
+            {
+                "schema": "seatlab.scenario/v1",
+                "seed": seed,
+                "episodes": 4,
+                "condition": arm,
+            }
         )
         inventory = world.view("inventory")["cases"]
         if seed != 3101:
             # Report something different from truth. It must reach the new prompt.
             report = inventory[0]["reports"][1]
-            report["available"] = ["A", "B"] if report["available"] != ["A", "B"] else ["C", "D"]
+            report["available"] = (
+                ["A", "B"] if report["available"] != ["A", "B"] else ["C", "D"]
+            )
         world.submit("inventory", {"rows": inventory})
         decisions = [{"id": i, "bay": bay} for i, bay in enumerate(_CHOICES[arm])]
         world.submit("dispatch", {"rows": decisions})
@@ -63,7 +70,9 @@ def _write_pair(root: Path, seed: int, repetition: int) -> None:
                             "served_model": "deepseek-flash",
                             "run_id": cell["cell_id"],
                             "view_sha256": digest,
-                            "prompt_sha256": native._prompt_hash(native._prompt(role, view["cases"])),
+                            "prompt_sha256": native._prompt_hash(
+                                native._prompt(role, view["cases"])
+                            ),
                             "decision_sha256": native._decision_hash(role, choices),
                         }
                     },
@@ -73,7 +82,10 @@ def _write_pair(root: Path, seed: int, repetition: int) -> None:
         trial = native.team_driver._trial_dir(root, cell)
         artifact = trial / "artifacts/logs/world/handoff.json"
         artifact.parent.mkdir(parents=True)
-        _write(artifact, {**dossier, "observation_receipts": acknowledgments, "note": _PRIVATE})
+        _write(
+            artifact,
+            {**dossier, "observation_receipts": acknowledgments, "note": _PRIVATE},
+        )
         score = native.evidence._score(dossier)
         _write(
             trial / "result.json",
@@ -153,10 +165,14 @@ def test_export_and_prompt_use_only_the_original_blind_request(
         assert not user.endswith(b"\n")
         view = json.loads(user.split(b"\n", 1)[1])
         assert view.keys() == {"role", "cases"}
-        for case, original in zip(view["cases"], details["inventory"]["rows"], strict=True):
+        for case, original in zip(
+            view["cases"], details["inventory"]["rows"], strict=True
+        ):
             assert case.keys() == {"id", "utilities", "messages", "pooled_available"}
             assert case["pooled_available"] is None
-            assert case["messages"] == ([original["reports"][1]] if arm == "fresh" else [])
+            assert case["messages"] == (
+                [original["reports"][1]] if arm == "fresh" else []
+            )
 
 
 @pytest.mark.parametrize("missing_result", [False, True])
@@ -179,7 +195,9 @@ def test_export_fails_closed_without_matching_native_evidence(
 @pytest.mark.parametrize(
     "change", ["request", "system", "inventory", "choice", "world", "score", "extra"]
 )
-def test_verifier_rejects_a_consistent_looking_replacement(study: Path, change: str) -> None:
+def test_verifier_rejects_a_consistent_looking_replacement(
+    study: Path, change: str
+) -> None:
     packet = dispatch_packet.export_packet(study)
     silent = packet["arms"]["silent"]
     if change == "request":

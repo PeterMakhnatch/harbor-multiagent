@@ -30,7 +30,9 @@ _MAX_PACKET_BYTES = 16_384
 _MAX_CHOICES_CHARS = 8192  # The original native seat's response limit.
 
 # Fixed source commitments for the blind instructions, not native records.
-_INSTRUCTIONS_SHA256 = "3ecd1760a8d19ecf5357ae8905ad17fc2e8ee2ca31ec3346538e77b51d4eaa1f"
+_INSTRUCTIONS_SHA256 = (
+    "3ecd1760a8d19ecf5357ae8905ad17fc2e8ee2ca31ec3346538e77b51d4eaa1f"
+)
 # The system message is source-defined, not part of the native prompt hash.
 _SYSTEM_SHA256 = "bf536051049f6a4272229d090710ff82497da3b3b1a3a02405b35e60508ba8b5"
 
@@ -135,7 +137,9 @@ def verify_packet(value: object) -> dict[str, Any]:
         )
         digest = _text_digest(data["request"])
         if digest != data["request_sha256"]:
-            raise _InvalidPacket(f"{arm}: request does not match the recorded prompt hash")
+            raise _InvalidPacket(
+                f"{arm}: request does not match the recorded prompt hash"
+            )
         world = _replay(seed, arm, data["inventory"], data["dispatch"])
         decisions = _decisions(world)
         for role in ("inventory", "dispatch"):
@@ -150,7 +154,9 @@ def verify_packet(value: object) -> dict[str, Any]:
         if _text_digest(instructions + separator) != _INSTRUCTIONS_SHA256:
             raise _InvalidPacket(f"{arm}: request instructions are not allowlisted")
         if body != blind_view:
-            raise _InvalidPacket(f"{arm}: request does not match the committed delivery")
+            raise _InvalidPacket(
+                f"{arm}: request does not match the committed delivery"
+            )
         if encode_view(data["score"]) != encode_view(_grade(world)):
             raise _InvalidPacket(f"{arm}: score does not match the stock scorer")
     return packet
@@ -219,7 +225,9 @@ def export_packet(
                 trial / "artifacts/logs/world/handoff.json"
             )
             grade = _grade(world)
-            footprint = [{key: case[key] for key in latent[0]} for case in world["cases"]]
+            footprint = [
+                {key: case[key] for key in latent[0]} for case in world["cases"]
+            ]
             if (
                 world["settings"]["seed"] != seed
                 or world["settings"]["condition"] != arm
@@ -236,7 +244,9 @@ def export_packet(
             arms[arm] = {
                 "request": request,
                 "request_sha256": digest,
-                "inventory_sha256": found.evidence.hashes["inventory"]["decision_sha256"],
+                "inventory_sha256": found.evidence.hashes["inventory"][
+                    "decision_sha256"
+                ],
                 "dispatch_sha256": found.evidence.hashes["dispatch"]["decision_sha256"],
                 **_decisions(world),
                 "score": grade,
@@ -283,7 +293,9 @@ def main(argv: list[str] | None = None) -> int:
             help="require the exact packet file SHA-256 from a trusted source",
         )
     verify.add_argument("packet", type=Path)
-    score.add_argument("choices_json", metavar="CHOICES_JSON", help="inline JSON object")
+    score.add_argument(
+        "choices_json", metavar="CHOICES_JSON", help="inline JSON object"
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
@@ -297,10 +309,14 @@ def main(argv: list[str] | None = None) -> int:
                 raise _InvalidPacket("packet exceeds the size limit")
             digest = sha256(raw).hexdigest()
             if args.expect_sha256 is not None and args.expect_sha256 != digest:
-                raise _InvalidPacket("packet SHA-256 does not match the external digest")
+                raise _InvalidPacket(
+                    "packet SHA-256 does not match the external digest"
+                )
             packet = verify_packet(_load_json(raw))
             if args.command == "prompt":
-                sys.stdout.buffer.write(packet["arms"][args.arm]["request"].encode("ascii"))
+                sys.stdout.buffer.write(
+                    packet["arms"][args.arm]["request"].encode("ascii")
+                )
                 return 0
             if args.command == "score":
                 if len(args.choices_json) > _MAX_CHOICES_CHARS:
