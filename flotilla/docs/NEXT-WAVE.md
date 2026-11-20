@@ -45,6 +45,9 @@ they need 48 to more than 256 instances (see RESULTS.md, "How many instances the
 ## Lessons to keep
 
 - Every byte a seat can see is evidence to it: names, headers, counters, formats, examples, networks.
+  Harbor bind-mounts the job directory into the environment, so a seat can read the job name in
+  `/proc/self/mountinfo`: give jobs neutral names (no condition, role or model words), and never set
+  `container_name`, `hostname` or `name` in a seat task (`qa.py` fails on `container_name`).
   Seats read a condition label, used a counter as a channel, scanned the network, and tried to install
   the world's software by the name in its `Server` header.
 - The commit protocol decides more results than the message channel: a later wrong write lost 7 of
