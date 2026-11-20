@@ -1,0 +1,11 @@
+n_attempts: 1
+n_concurrent_trials: 1
+environment:
+  type: docker
+participants:
+  - seat: chef0
+    name: oracle
+  - seat: chef1
+    name: oracle
+tasks:
+  - path: examples/tasks/cramped-room-parity
