@@ -197,6 +197,14 @@ python -m "$packet" compare-tables "$private_tasks/schedule"
 
 We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
 
+#### Native replication with an external harness
+
+The archived task hashes above cannot be recreated: each build makes fresh service credentials. This independent replication uses the public Flotilla generator and freshly built tasks. It does not add replacements to the original panel.
+
+Before any new model turn, fix worlds 00, 04, and 08, both role assignments, and 2 repetitions. Use 12 paired blocks, up to 24 fresh native teams and 72 first-party model calls. Run repetition, world, then direction. Within a block, use the original arm order and the same actual initial lists. Pass only the current seat's prompt to the external model. Do not pass the task, other seat's table, identifiers, arm label, verifier, or previous chat. No retries or corrected responses. Stop on an infrastructure failure. Keep an invalid model action distinct from a missing reward.
+
+The primary measurement is the native success difference, peer-informed minus blind, within each complete block. Average within world first. Withhold the 3-world estimate if any enrolled world has no pair. Report coverage, stock verifier scores, message delivery, prompt equality, and metered calls separately. This checks whether a third-party harness can run the same intervention on newly generated tasks. These 3 worlds are not held-out tasks, and this is not an independent model comparison.
+
 ### Can a receiver choose which missing update to request?
 
 **Registered before the first new request.** A complete message channel tests delivery. A bounded message channel also tests whether the receiver can decide what to ask. Keep the real sender's submissions fixed. Compare model-selected delivery with a simple rule that serves an unread update. The comparison uses the same number of generations and deliveries. Like [Project EVE's historical market replay](https://www.anthropic.com/research/project-eve-claude-plays-mmorpgs), this cannot measure how the original sender would respond to the new receiver.
