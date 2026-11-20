@@ -1,11 +1,17 @@
-"""Model p1 (under test, must reply to p2) vs scripted delayed p2, fixed task."""
+"""Model p1 (under test, must reply to p2) vs scripted delayed p2, fixed task.
+
+SEAT_TASK must name the token-auth hello-seats task (e.g. the flotilla
+hello-seats-identity branch's examples/tasks/hello-seats); the stock
+example has no reply requirement. SEAT_DELAY_SEC sets the scout delay.
+"""
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, "/tmp/seat_exp")
+sys.path.insert(0, str(Path(__file__).parent))
 
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.trial.config import (
@@ -16,8 +22,12 @@ from harbor.models.trial.config import (
 )
 from harbor.trial.trial import Trial
 
-import os
-TASK = Path(os.environ.get("SEAT_TASK", "/tmp/flotilla-task/examples/tasks/hello-seats"))
+TASK = Path(
+    os.environ.get(
+        "SEAT_TASK",
+        str(Path(__file__).resolve().parents[2] / "examples/tasks/hello-seats"),
+    )
+)
 ROOT = Path("/tmp/seat-delay-trials")
 
 
