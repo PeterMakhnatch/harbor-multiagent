@@ -201,6 +201,26 @@ def _resolve_trial_dirs(
     return dirs
 
 
+def _discover_seat_names(trial_dir: Path) -> list[str]:
+    names: set[str] = set()
+    seats_dir = trial_dir / "seats"
+    if seats_dir.is_dir():
+        for child in seats_dir.iterdir():
+            if child.is_dir():
+                names.add(child.name)
+    result_path = trial_dir / "result.json"
+    if result_path.is_file():
+        try:
+            data = json.loads(result_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("seat_results"), list):
+            for entry in data["seat_results"]:
+                if isinstance(entry, dict) and isinstance(entry.get("seat"), str):
+                    names.add(entry["seat"])
+    return sorted(names)
+
+
 def assemble_analyze_task(
     trial_dir: Path,
     task_dir: Path | None,
@@ -249,12 +269,24 @@ def assemble_analyze_task(
         or "/"
     )
     trial_path = str(PurePosixPath(workdir) / "trial")
+    seat_names = _discover_seat_names(trial_dir)
     if task_dir is not None:
         task_path = str(PurePosixPath(workdir) / "task")
+        if (
+            not (task_dir / "instruction.md").is_file()
+            and (task_dir / "instructions").is_dir()
+        ):
+            instruction_line = (
+                f"- {task_path}/instructions/ — per-seat task instructions"
+            )
+        else:
+            instruction_line = (
+                f"- {task_path}/instruction.md — what the agent was asked to do"
+            )
         task_section = (
             f"The task being attempted is at {task_path}. Read its files first to "
             f"understand the requirements:\n"
-            f"- {task_path}/instruction.md — what the agent was asked to do\n"
+            f"{instruction_line}\n"
             f"- {task_path}/task.toml — task configuration\n"
             f"- {task_path}/tests/ — tests the agent's work was verified against\n"
             f"- {task_path}/solution/ — reference solution (if present)"
@@ -273,6 +305,17 @@ def assemble_analyze_task(
             criteria_guidance=build_criteria_guidance(rubric),
         )
     )
+    if seat_names:
+        seat_lines = "\n".join(
+            f"- {trial_path}/seats/{seat}/agent/trajectory.json — seat '{seat}' trajectory"
+            for seat in seat_names
+        )
+        rendered = (
+            f"{rendered.rstrip()}\n\n"
+            "Multi-agent seat trial files (inspect `seat_results` in "
+            f"{trial_path}/result.json and each seat trajectory):\n"
+            f"{seat_lines}"
+        )
     output_section = (
         (PROMPTS_DIR / "analyze-output.txt")
         .read_text()
