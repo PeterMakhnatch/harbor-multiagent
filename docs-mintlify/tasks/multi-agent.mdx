@@ -257,6 +257,34 @@ The job summary reports each key.
   - Token and cost totals sum every agent.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
 
+### Live logs and Python hooks
+
+On the local `docker` and `podman` environments, register `Trial.add_log_callback` before running the trial.
+Each setup or execution chunk from a seat command has a `seat` name.
+Both environments combine stdout and stderr and send both as `stdout`.
+Shared verifier output has no seat, even when the verifier calls another service.
+Other environments do not send live seat logs. Harbor logs one warning per trial when you subscribe.
+The log callback reports command output, not log downloads, artifact transfers, or output uploads.
+Callbacks run outside the agent timeout. A callback that raises does not fail the command or the trial.
+Use asynchronous I/O in callbacks. Synchronous blocking code can still stop the event loop.
+Each callback has a separate buffer. It can lose chunks if its buffer fills or the trial finishes before delivery.
+Harbor logs dropped chunks at the first overflow. It disables a callback that takes more than 0.5 seconds per chunk.
+When the trial finishes, Harbor waits at most 0.5 seconds for pending callbacks. On cancellation, it does not wait.
+The `Job` and `TrialQueue` APIs do not forward live log callbacks.
+
+Use `add_hook` to subscribe to `TrialEvent.SEAT_START` or `TrialEvent.SEAT_END`.
+`SEAT_START` follows setup and precedes agent execution. Setup-only and failed setup trials have no seat events.
+Execution timing is unset in the start snapshot because the agent has not started.
+`SEAT_END` follows agent execution, seat log collection, post-run context population, and error recording.
+It does not wait for task-wide artifact transfers or verification.
+On trial cancellation during play, the trial's `CANCEL` event precedes recovery and `SEAT_END`.
+Use `event.seat_result` for the seat's snapshot and `event.result` for the trial's snapshot at that event.
+A seat hook that raises or exceeds 0.5 seconds is logged and does not affect the trial outcome.
+If the hook is still pending when its 0.5-second wait expires, Harbor requests cancellation without waiting for it to finish.
+Harbor does the same if the trial is canceled while Harbor waits for the hook.
+A seat hook can delay or ignore cancellation. Do not rely on it to finish cleanup before verification.
+Seat hooks run outside the shared agent timeout. They are observers, not concurrency controls.
+
 ## Limitations
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.
