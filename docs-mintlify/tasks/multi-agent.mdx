@@ -73,6 +73,14 @@ At least one agent must be under test. In the example, p1 is under test and p2 s
 
 The order of the tables is the agents' order. `agent_info` in `result.json` is the first agent under test, and the trial's error is the first agent error in this order.
 
+### Timeouts and scoring
+
+If the shared timeout expires while an agent under test is still running, Harbor cancels every unfinished seat run. It records `AgentTimeoutError` on those seats (`src/harbor/trial/seats.py`). The default error policy still allows verification and a valid reward (`src/harbor/models/trial/error_policy.py`). A reward does not mean the trial ran to completion.
+
+Slower models can need a larger multiplier on the same task. Run a short pilot on the task to choose the multiplier for each model.
+
+For each condition, report the number of timed-out trials out of the total alongside the completion rate. Check `seat_results` in `result.json` for `AgentTimeoutError`: the trial's top-level error can be a different seat's error. Analyze complete runs separately so the overall metrics do not hide the effect of truncation.
+
 ## Instructions
 
 A multi-agent task has no `instruction.md`. Every agent needs `instructions/<service>.md`. Extra instructions from the trial or job config are appended to each one.
