@@ -42,6 +42,8 @@
 
 - **Breaking (regrade):** Replay materializes symlinks only to recorded agent/artifact directories in the same trial step. Links outside those directories, dangling links, and cycles now fail regrade. Collect referenced files into the recorded outputs instead of relying on host paths.
 
+- **Multi-agent regrade:** Grade recorded seat logs and artifacts with an explicit opt-in to a fresh separate verifier. Harbor checks the seat roster and records the original task checksum.
+
 - **Breaking (agent reasoning effort):** `reasoning_effort` is a shared agent option. Custom agents accepting it must declare `AgentCapabilities(reasoning_effort=True)`; explicit values fail validation otherwise. Pi, OpenClaw, and Vibe now expose `options.reasoning_effort` instead of `options.thinking`; `thinking` remains accepted as an input alias. Persisted configuration stays in agent `kwargs`.
 
 - **Breaking (local sandbox outputs):** Automatic host mounts for local sandbox logs and artifacts are now disabled by default. Outputs are collected after execution, matching cloud sandboxes. Use `--ek auto_mounting=true` to restore the previous live-mount behavior (`false` by default). `capabilities.mounted` continues to report provider support; `auto_mounting` controls whether the user enables these mounts. Explicit user mounts are unchanged.

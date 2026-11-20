@@ -586,7 +586,7 @@ class Job:
                         "Skipping trial directory %s because result.json could "
                         "not be parsed: %s",
                         trial_dir,
-                        e,
+                        type(e).__name__,
                     )
                     continue
 
@@ -596,28 +596,31 @@ class Job:
                     continue
                 matched_task_names.add(trial_result.task_name)
 
-                # A regrade is a fork of the source trial: carry its agent
-                # config and extra artifact entries verbatim so config/lock
-                # keep describing the trial's real inputs (the agent is never
-                # re-run; RegradeTrial always substitutes a nop agent at
-                # runtime).
+                # A regrade is a fork of the source trial: carry its agent,
+                # participants, and extra artifact entries verbatim so
+                # config/lock keep describing the trial's real inputs (the
+                # agent is never re-run; RegradeTrial always substitutes a nop
+                # agent at runtime).
                 # The validated result embeds the original run config even
                 # when its separate config.json is unreadable.
                 source_agent = trial_result.config.agent
+                source_participants = trial_result.config.participants
                 source_artifacts = trial_result.config.artifacts
                 try:
                     source_trial_config = TrialConfig.model_validate_json(
                         trial_paths.config_path.read_text()
                     )
                     source_agent = source_trial_config.agent
+                    if "participants" in source_trial_config.model_fields_set:
+                        source_participants = source_trial_config.participants
                     source_artifacts = source_trial_config.artifacts
-                except (OSError, UnicodeError, ValidationError) as e:
+                except (OSError, UnicodeError, ValidationError):
+                    # A validation error can include agent settings or credentials.
                     logger.warning(
-                        "Could not parse source trial config at %s (%s); "
-                        "using the agent config and artifacts recorded in "
-                        "result.json.",
+                        "Could not parse source trial config at %s; "
+                        "using the agent config, participants, and artifacts "
+                        "recorded in result.json.",
                         trial_dir,
-                        e,
                     )
 
                 trial_configs.append(
@@ -634,9 +637,13 @@ class Job:
                             self.config.environment_build_timeout_multiplier
                         ),
                         agent=source_agent,
+                        participants=source_participants,
                         environment=self.config.environment,
                         verifier=self.config.verifier,
-                        override_error_policy=self.config.override_error_policy,
+                        override_error_policy=(
+                            trial_result.config.override_error_policy
+                            | self.config.override_error_policy
+                        ),
                         artifacts=source_artifacts,
                         job_id=self._id,
                         # Trials from a hub job are hub trials: record only

@@ -214,6 +214,11 @@ class TrialPaths:
         return self.trial_dir / "user-agent"
 
     @property
+    def seats_dir(self) -> Path:
+        """Recorded logs for every seat, uploaded to /logs/seats on regrade."""
+        return self.trial_dir / "seats"
+
+    @property
     def artifacts_dir(self) -> Path:
         """
         A directory for collected artifacts from the environment.
