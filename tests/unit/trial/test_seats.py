@@ -614,6 +614,24 @@ async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):
     assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
 
 
+async def test_seats_are_set_up_once_compose_reports_them_ready(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+
+    await trial.run()
+
+    wait = next(e for e in EVENTS if e[:3] == ("compose", "up", "--detach"))
+    assert wait[-3:] == ("maya", "raj", "lee") and "--wait" in wait
+    assert all(index(*wait) < index("setup", seat) for seat in ("maya", "raj", "lee"))
+
+
 async def test_install_only_sets_up_every_seat_and_plays_none(tmp_path: Path):
     trial = await _seats_trial(
         _config(

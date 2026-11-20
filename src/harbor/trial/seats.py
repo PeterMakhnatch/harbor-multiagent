@@ -216,6 +216,9 @@ class SeatsTrial(SingleStepTrial):
         self.result.agent_setup = setup
         try:
             await self.agent_environment.run_healthcheck()
+            await self.agent_environment.wait_for_services(
+                [seat.name for seat in self.seats]
+            )
             async with _seat_tasks() as group:
                 for seat in self.seats:
                     group.create_task(self._setup_seat(seat))
