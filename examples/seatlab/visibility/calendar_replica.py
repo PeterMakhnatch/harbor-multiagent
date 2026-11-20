@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import fcntl
 import json
 import os
 import shutil
@@ -30,8 +31,9 @@ if TYPE_CHECKING:
 _SCHEMA = "seatlab.calendar-replica/v1"
 _IMPORT = "examples.seatlab.visibility.calendar_replica_seat:RelayCalendarSeat"
 _SEATS = ("p1", "p2")
-_WORLDS = (0, 4, 8)
+_WORLDS = range(calendar_protocol._WORLD_COUNT)
 _FILE = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+_LOCKS = Path("/tmp") / f"seatlab-calendar-locks-{os.geteuid()}"
 _Status = Literal["complete", "invalid_seed"]
 _Seeds = tuple[tuple[int, ...], tuple[int, ...]]
 
@@ -81,6 +83,44 @@ def _private_directory(details: os.stat_result) -> bool:
         and stat.S_IMODE(details.st_mode) == 0o700
         and details.st_uid == os.geteuid()
     )
+
+
+@contextmanager
+def _coordinate_lease(block: calendar_protocol.Block) -> Generator[None]:
+    """Two studies on one Docker daemon must not share a Compose project."""
+    try:
+        _LOCKS.mkdir(mode=0o700, exist_ok=True)
+        directory = os.open(_LOCKS, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            if not _private_directory(os.fstat(directory)):
+                raise _Failed("private_lock_required")
+            fd = os.open(
+                _run_id(block),
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                0o600,
+                dir_fd=directory,
+            )
+        finally:
+            os.close(directory)
+    except OSError:
+        raise _Failed("private_lock_required") from None
+    try:
+        info = os.fstat(fd)
+        if not (
+            stat.S_ISREG(info.st_mode)
+            and stat.S_IMODE(info.st_mode) == 0o600
+            and info.st_uid == os.geteuid()
+            and info.st_nlink == 1
+        ):
+            raise _Failed("private_lock_required")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise _Failed("coordinate_busy") from None
+        yield
+    finally:
+        # Keep the inode: deleting it could let a second process lock a different file.
+        os.close(fd)
 
 
 def _source(tasks: Path, block: calendar_protocol.Block) -> Path:
@@ -386,7 +426,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             args = _parse(argv)
             block = calendar_protocol.Block(args.world, args.direction, args.repetition)
-            status = _play(args.tasks, args.out, block, sys.stdin.buffer, output)
+            with _coordinate_lease(block):
+                status = _play(args.tasks, args.out, block, sys.stdin.buffer, output)
             end = {"type": "end", "status": status}
         except _Failed as exc:
             end = {"type": "end", "status": "failed", "error": str(exc)}

@@ -30,6 +30,8 @@ _ROLES = {
     "cal_initial_p2",
     "cal_recheck",
     "cal_decide",
+    "cal_tool_pick",
+    "cal_tool_reply",
 }
 _HOST_LEDGER: Path | None = None
 

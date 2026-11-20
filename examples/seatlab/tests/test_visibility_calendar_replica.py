@@ -335,7 +335,7 @@ def test_rejects_nonregistered_coordinates(capfd: pytest.CaptureFixture[str]) ->
         "--out",
         "/private/block",
         "--world",
-        "1",
+        "12",
         "--direction",
         "0",
         "--repetition",

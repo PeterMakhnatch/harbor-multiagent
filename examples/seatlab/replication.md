@@ -29,6 +29,21 @@ Separate workers can add new worlds, actor-side context transformations, and cro
 - Primary: native success under `on` minus `off`, matched within world, direction, repetition, and room condition. Average differences within each world and weight the 12 worlds equally. Show `blind` and `peer`, and the 9 worlds outside the earlier public cohort, separately. Show counts, unknown-outcome bounds, and the accepted-decision comparison. A malformed final reply counts as zero only when the stock game records a verified zero. An invalid opening list starts no native room and cannot count as a native loss.
 - Secondary: report requests, returned tools, exact lists produced by the agents, final slot choices, and both delivered messages. Separate native outcomes, evidence tying the tool to the seat, and model costs. A call without its receipt is not free. An observed difference estimates the entire policy, including tool failures and changed messages. It does not isolate a particular seat's reasoning.
 
+### Run your own live team
+
+Use this branch, Python 3.12 or later, and local Docker with Compose. Follow the [native setup](#try-a-native-team-without-an-api-key) through the `calendar_replica_source` check. Keep the resulting `$python`, `$tasks`, `$module`, and `$private` shell variables. The original 3-world replication remains a separate cohort. The single-block transport accepts all 12 pinned public worlds.
+
+```bash
+mkdir -m 700 "$private/tool-demo"
+"$python" -m "$module.calendar_tools_run" demo --tasks "$tasks" --study "$private/tool-demo" \
+  --world 5 --direction 0 --repetition 1
+"$python" -m "$module.calendar_tools_report" "$private/tool-demo" > "$private/report.json"
+```
+
+This no-key demo selects the tool, sends empty lists, and picks slot 0. It starts 4 real Harbor teams. It tests the transport and verifier, not a model. For real model seats, use `calendar_tools_run.play_pair(tasks, study, block, respond)`. `tasks` and `study` are physical absolute `Path` objects. Create the private study directory first. `block` is a `calendar_protocol.Block(world, direction, repetition)`. `respond(prompt: str) -> str` gets only the current prompt. Start a new conversation for every call. Return the model's first text without repair. No provider SDK is required by the callback interface.
+
+Assign different blocks to parallel workers. Each block claims its first attempt on disk. A second study cannot start the same native Compose project while it is active. Do not copy, resume, or replace a failed first attempt. The report keeps missing rooms unknown. To check costs from the first-party `direct` mode, pass `--spend-dir` to the report. External callbacks get native verification without a DeepSeek billing claim.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.

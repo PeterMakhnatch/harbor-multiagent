@@ -407,7 +407,7 @@ def _analyze(out: Path, report: _Row, turns: dict[str, _Row]) -> None:
     )
     _check(
         all(type(value) is int for value in (world, direction, repetition))
-        and world in (0, 4, 8)
+        and world in range(protocol._WORLD_COUNT)
         and direction in (0, 1)
         and repetition in (0, 1),
         "unregistered_block",

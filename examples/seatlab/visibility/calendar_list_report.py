@@ -11,36 +11,19 @@ from pathlib import Path
 from typing import Any
 
 from . import (
-    calendar_client,
+    calendar_direct_match,
     calendar_list_packet,
     calendar_list_protocol,
     calendar_list_run,
     calendar_list_summary,
     calendar_protocol,
     calendar_turns,
-    deepseek,
     spend,
 )
 from .replica_io import MAX_TEXT_BYTES
 
 _SCHEMA = "seatlab.calendar-list-report/v1"
 _RESPONSE_KEYS = {"schema", "run", "prompt_sha256", "response_sha256", "text"}
-_METER_RESULT = (
-    "response_sha256",
-    "served_model",
-    "input_tokens",
-    "cache_tokens",
-    "output_tokens",
-)
-_METER_KEYS = {
-    "schema",
-    "attempt",
-    "status",
-    "run",
-    "role",
-    "prompt_sha256",
-    *_METER_RESULT,
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,40 +91,23 @@ def _meter(
     except (OSError, ValueError):
         return "meter_invalid"
 
-    if (
-        receipt.keys() != _METER_KEYS
-        or receipt["schema"] != calendar_client._METER_SCHEMA
-        or type(receipt["attempt"]) is not int
-        or receipt["attempt"] != 1
-        or (receipt["run"], receipt["role"]) != (run, role)
-    ):
-        return "meter_invalid"
-    if receipt["prompt_sha256"] != prompt_digest:
-        return "prompt_mismatch"
-    if receipt["status"] == "failed":
-        return (
-            "meter_failed"
-            if all(receipt[key] is None for key in _METER_RESULT)
-            else "meter_invalid"
-        )
-    if receipt["status"] != "success":
-        return "meter_invalid"
-    if response_digest is None:
-        return "response_unverified"
-    if receipt["response_sha256"] != response_digest:
-        return "response_mismatch"
-    try:
-        deepseek._served_model(receipt["served_model"])
-    except deepseek.SeatUnavailable:
-        return "meter_invalid"
     try:
         row = None if ledger is None else calendar_turns._ledger_row(ledger, run, role)
-        calendar_turns._join_usage(receipt, row, require_model=True)
     except calendar_turns.TurnError as exc:
-        if ledger is None and exc.category == "ledger_missing":
-            return "ledger_unavailable"
-        return "meter_invalid" if exc.category == "receipt_invalid" else exc.category
-    return "matched"
+        return exc.category
+    status = calendar_direct_match.match(
+        receipt,
+        row,
+        run=run,
+        role=role,
+        prompt_digest=prompt_digest,
+        response_digest=response_digest,
+    )
+    return (
+        "ledger_unavailable"
+        if ledger is None and status == "ledger_missing"
+        else status
+    )
 
 
 def _inspect(
