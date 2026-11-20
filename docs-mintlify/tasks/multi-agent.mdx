@@ -239,13 +239,13 @@ Path("/logs/verifier/reward.txt").write_text(f"{reward}\n")
 
 `p1_posted()` reads `/logs/world/notes.jsonl` in `main`. `has_trajectory(seat)` checks that `/logs/seats/<seat>/agent/trajectory.json` is non-empty JSON.
 
-The verifier writes whatever rewards it likes, whether or not an agent is under test. To score agents separately, write one key per agent to `/logs/verifier/reward.json`:
+The verifier can write rewards for any agent. To score agents separately, write one key per seat to `/logs/verifier/reward.json`:
 
 ```json
 {"p1": 1, "p2": 0.5}
 ```
 
-The job summary reports each key.
+The existing job evaluation summary retains all valid reward keys. The Seats table credits a valid reward only when its key exactly matches a seat. This includes supporting seats if the verifier explicitly names them. Use different names for team or generic metrics. The Seats table treats a matching key as a seat reward even if the verifier intended it as a team metric.
 
 ## Logs and results
 
@@ -256,6 +256,18 @@ The job summary reports each key.
   - `agent_setup` and `agent_execution` span all agents.
   - Token and cost totals sum every agent.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
+
+### Job seat statistics
+
+The job's `result.json` includes `stats.seat_stats`. The Seats table uses the same groups: seat name, source, agent, model provider and name, and `under_test`. A group records every seat result in `n_participations`, including setup failures and supporting seats. Its `n_trials` counts only valid rewards attributed to that seat. Do not add either count to get the number of completed job trials.
+
+Each token field and cost have a separate report count in `usage_report_counts`. A total is complete only when its report count equals `n_participations`. The table shows `unknown` for each incomplete field, without hiding other fields. A known zero is not missing. The `cost_usd_sum` field preserves the exact accumulated cost for retries; use `cost_usd` for display.
+
+Seat usage comes from seat contexts, including any subagent usage reported in those contexts. It is not a model-by-model cost breakdown. Job totals also cover non-seat trials and step contexts. If a trial carries both a top-level agent context and seat contexts, the top-level context takes precedence in job totals but not in seat statistics.
+
+`n_errors` counts seat results with an exception, including cancellation if recorded. It does not assign a trial-level exception to a seat. Several seats can fail in 1 trial, so the seat count does not reconcile with the job count.
+
+If `seat_stats` is absent, the producer did not aggregate seats. An empty mapping means the aggregate had no seat results. Reading an older result does not backfill seat statistics. Resuming a job rebuilds the aggregate from its stored trial results.
 
 ## Limitations
 

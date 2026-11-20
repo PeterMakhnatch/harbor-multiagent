@@ -49,6 +49,14 @@ changing their default to a newer version would not implement that dispatch.
 Changing persisted layouts or cross-document meaning also requires a deliberate
 compatibility decision even when individual field schemas are unchanged.
 
+### Optional seat statistics in job results
+
+`JobResult` remains at version 1. `stats.seat_stats` is additive and does not
+change the meaning of existing fields. A missing field means seat statistics
+were not produced, as in historical v1 results. An explicit empty mapping means
+the producer aggregated the available trial results and found no seat results.
+Do not infer an empty aggregate from a missing field or backfill one on load.
+
 ## Config output
 
 `job init` and `trial init` write sparse editable templates, omitting unset fields

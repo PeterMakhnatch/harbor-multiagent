@@ -1,15 +1,41 @@
+import json
 from collections import defaultdict
 from datetime import datetime
+from fractions import Fraction
+from math import isfinite
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
+from harbor.models.agent.context import AgentContext
 from harbor.models.trial.result import TrialResult
 
 Rewards = dict[str, float | int]
 TrialRewardsMap = dict[str, Rewards | None]
 EvalsRewardsMap = dict[str, TrialRewardsMap]
+
+SeatUsageField = Literal[
+    "n_input_tokens", "n_cache_tokens", "n_output_tokens", "cost_usd"
+]
+_SEAT_USAGE_FIELDS: tuple[SeatUsageField, ...] = (
+    "n_input_tokens",
+    "n_cache_tokens",
+    "n_output_tokens",
+    "cost_usd",
+)
+
+
+def _update_trial_names[K](
+    buckets: dict[K, list[str]], key: K, trial_name: str, direction: Literal[1, -1]
+) -> None:
+    if direction == 1:
+        buckets.setdefault(key, []).append(trial_name)
+    else:
+        names = buckets[key]
+        names.remove(trial_name)
+        if not names:
+            del buckets[key]
 
 
 class AgentDatasetStats(BaseModel):
@@ -26,16 +52,16 @@ class AgentDatasetStats(BaseModel):
 
 
 class SeatDatasetStats(BaseModel):
-    """One seat's contribution across a job.
-
-    Keyed by seat name in ``JobStats.seat_stats``, not by model: one seat is
-    one role, and the same model can fill more than one seat.
-    """
+    """Contributions from one (seat, source, agent, model, role) group."""
 
     seat: str
+    source: str | None = None
     under_test: bool
     agent_name: str | None = None
     model_name: str | None = None
+    model_provider: str | None = None
+    n_participations: int = 0
+    # Only trials with a valid reward attributed to this seat.
     n_trials: int = 0
     n_errors: int = 0
     reward_stats: dict[str, dict[float | int, list[str]]] = Field(  # ty: ignore[invalid-assignment]
@@ -47,8 +73,48 @@ class SeatDatasetStats(BaseModel):
     n_input_tokens: int | None = None
     n_cache_tokens: int | None = None
     n_output_tokens: int | None = None
-    cost_usd: float | None = None
-    usage_complete: bool = True
+    usage_report_counts: dict[SeatUsageField, int] = Field(default_factory=dict)
+    # Keep the exact sum through retries and JSON round trips. Floating-point
+    # subtraction can lose a surviving trial's cost when amounts differ widely.
+    cost_usd_sum: Fraction | None = None
+
+    @computed_field
+    @property
+    def cost_usd(self) -> float | None:
+        return float(self.cost_usd_sum) if self.cost_usd_sum is not None else None
+
+    def complete_usage(self, field: SeatUsageField) -> int | float | None:
+        """Return this field's total only if every participation reports it."""
+        if self.usage_report_counts.get(field) != self.n_participations:
+            return None
+        return getattr(self, field)
+
+    def _update_usage(
+        self, context: AgentContext | None, direction: Literal[1, -1]
+    ) -> None:
+        if context is None:
+            return
+        for field in _SEAT_USAGE_FIELDS:
+            value = getattr(context, field)
+            if value is None or (field == "cost_usd" and not isfinite(value)):
+                continue
+            count = self.usage_report_counts.get(field, 0) + direction
+            if count:
+                self.usage_report_counts[field] = count
+            else:
+                del self.usage_report_counts[field]
+            if field == "cost_usd":
+                self.cost_usd_sum = (
+                    (self.cost_usd_sum or Fraction()) + direction * Fraction(str(value))
+                    if count
+                    else None
+                )
+            else:
+                setattr(
+                    self,
+                    field,
+                    (getattr(self, field) or 0) + direction * value if count else None,
+                )
 
 
 class JobStats(BaseModel):
@@ -61,9 +127,11 @@ class JobStats(BaseModel):
     evals: dict[str, AgentDatasetStats] = Field(
         default_factory=lambda: defaultdict(AgentDatasetStats)
     )
-    # Keyed by seat name, not by model: one seat is one role. Empty for a
-    # single-agent job, so existing eval summaries stay unchanged.
-    seat_stats: dict[str, SeatDatasetStats] = Field(default_factory=dict)
+    # Absent means the producer did not aggregate seats (including legacy v1
+    # documents). An empty mapping means no seat results were recorded.
+    seat_stats: dict[str, SeatDatasetStats] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     n_input_tokens: int | None = None
     n_cache_tokens: int | None = None
     n_output_tokens: int | None = None
@@ -103,7 +171,7 @@ class JobStats(BaseModel):
         n_running_trials: int = 0,
         n_retries: int = 0,
     ) -> "JobStats":
-        result = cls()
+        result = cls(seat_stats={})
 
         for trial_result in trial_results:
             result.increment(trial_result)
@@ -156,6 +224,8 @@ class JobStats(BaseModel):
         self.n_retries = n_retries
 
     def increment(self, trial_result: TrialResult) -> None:
+        if self.n_completed_trials == 0 and self.seat_stats is None:
+            self.seat_stats = {}
         self.n_completed_trials += 1
 
         agent_name = trial_result.agent_info.name
@@ -202,66 +272,72 @@ class JobStats(BaseModel):
         if cost is not None:
             self.cost_usd = (self.cost_usd or 0.0) + cost
 
-        self._increment_seat_stats(trial_result)
+        self._update_seat_stats(trial_result, 1)
 
-    def _increment_seat_stats(self, trial_result: TrialResult) -> None:
-        if not trial_result.seat_results:
+    def _update_seat_stats(
+        self, trial_result: TrialResult, direction: Literal[1, -1]
+    ) -> None:
+        groups = self.seat_stats
+        if groups is None or not trial_result.seat_results:
             return
-        reward_valid = trial_result.reward_valid
         rewards = (
             trial_result.verifier_result.rewards
-            if trial_result.verifier_result is not None
+            if trial_result.reward_valid and trial_result.verifier_result is not None
             else None
         )
-        for seat_result in trial_result.seat_results:
-            seat_stats = self.seat_stats.setdefault(
-                seat_result.seat,
-                SeatDatasetStats(
-                    seat=seat_result.seat, under_test=seat_result.under_test
+        source = trial_result.source
+        trial_name = trial_result.trial_name
+        for result in trial_result.seat_results:
+            agent = result.agent_info
+            model = agent.model_info if agent is not None else None
+            agent_name = agent.name if agent is not None else None
+            model_name = model.name if model is not None else None
+            model_provider = model.provider if model is not None else None
+            # Encode the tuple without delimiter collisions or conflating None
+            # with a literal source, provider, agent, or model name.
+            key = json.dumps(
+                (
+                    result.seat,
+                    source,
+                    agent_name,
+                    model_provider,
+                    model_name,
+                    result.under_test,
                 ),
+                separators=(",", ":"),
             )
-            if seat_result.agent_info is not None:
-                seat_stats.agent_name = seat_result.agent_info.name
-                if seat_result.agent_info.model_info is not None:
-                    seat_stats.model_name = seat_result.agent_info.model_info.name
-            if reward_valid:
-                seat_stats.n_trials += 1
-                if rewards is not None and seat_result.seat in rewards:
-                    value = rewards[seat_result.seat]
-                    reward_bucket = seat_stats.reward_stats.setdefault(
-                        seat_result.seat, {}
-                    )
-                    reward_bucket.setdefault(value, []).append(trial_result.trial_name)
-            exception_types = (
-                {seat_result.exception_info.exception_type}
-                if seat_result.exception_info is not None
-                else set()
-            )
-            for exception_type in sorted(exception_types):
-                seat_stats.exception_stats.setdefault(exception_type, []).append(
-                    trial_result.trial_name
+            stats = groups.get(key)
+            if stats is None:
+                if direction == -1:
+                    raise ValueError(f"Cannot remove unrecorded seat group {key}")
+                stats = groups[key] = SeatDatasetStats(
+                    seat=result.seat,
+                    source=source,
+                    agent_name=agent_name,
+                    model_name=model_name,
+                    model_provider=model_provider,
+                    under_test=result.under_test,
                 )
-            if exception_types:
-                seat_stats.n_errors += 1
-            context = seat_result.agent_result
-            if context is None or context.cost_usd is None:
-                seat_stats.usage_complete = False
-            if context is None:
-                continue
-            if context.n_input_tokens is not None:
-                seat_stats.n_input_tokens = (
-                    seat_stats.n_input_tokens or 0
-                ) + context.n_input_tokens
-            if context.n_cache_tokens is not None:
-                seat_stats.n_cache_tokens = (
-                    seat_stats.n_cache_tokens or 0
-                ) + context.n_cache_tokens
-            if context.n_output_tokens is not None:
-                seat_stats.n_output_tokens = (
-                    seat_stats.n_output_tokens or 0
-                ) + context.n_output_tokens
-            if context.cost_usd is not None:
-                seat_stats.cost_usd = (seat_stats.cost_usd or 0.0) + context.cost_usd
+            stats.n_participations += direction
+            if rewards is not None and result.seat in rewards:
+                stats.n_trials += direction
+                values = stats.reward_stats.setdefault(result.seat, {})
+                _update_trial_names(values, rewards[result.seat], trial_name, direction)
+                if not values:
+                    del stats.reward_stats[result.seat]
+            if result.exception_info is not None:
+                stats.n_errors += direction
+                _update_trial_names(
+                    stats.exception_stats,
+                    result.exception_info.exception_type,
+                    trial_name,
+                    direction,
+                )
+            # Usage applies even when verification did not run or was invalid.
+            stats._update_usage(result.agent_result, direction)
+            # All other counters count subsets of these participations.
+            if stats.n_participations == 0:
+                del groups[key]
 
     def remove_trial(self, trial_result: TrialResult) -> None:
         """Remove a trial's contributions from stats."""
@@ -310,75 +386,7 @@ class JobStats(BaseModel):
             self.n_output_tokens = max(0, self.n_output_tokens - n_output)
         if cost is not None and self.cost_usd is not None:
             self.cost_usd = max(0.0, self.cost_usd - cost)
-        self._remove_seat_stats(trial_result)
-
-    def _remove_seat_stats(self, trial_result: TrialResult) -> None:
-        if not trial_result.seat_results:
-            return
-        reward_valid = trial_result.reward_valid
-        rewards = (
-            trial_result.verifier_result.rewards
-            if trial_result.verifier_result is not None
-            else None
-        )
-        for seat_result in trial_result.seat_results:
-            seat_stats = self.seat_stats.get(seat_result.seat)
-            if seat_stats is None:
-                continue
-            if reward_valid:
-                seat_stats.n_trials -= 1
-                if rewards is not None and seat_result.seat in rewards:
-                    value = rewards[seat_result.seat]
-                    values = seat_stats.reward_stats.get(seat_result.seat, {})
-                    trial_list = values.get(value, [])
-                    if trial_result.trial_name in trial_list:
-                        trial_list.remove(trial_result.trial_name)
-                    if not trial_list:
-                        values.pop(value, None)
-                    if not values:
-                        seat_stats.reward_stats.pop(seat_result.seat, None)
-            exception_types = (
-                {seat_result.exception_info.exception_type}
-                if seat_result.exception_info is not None
-                else set()
-            )
-            for exception_type in exception_types:
-                trial_list = seat_stats.exception_stats.get(exception_type, [])
-                if trial_result.trial_name in trial_list:
-                    trial_list.remove(trial_result.trial_name)
-                if not trial_list:
-                    seat_stats.exception_stats.pop(exception_type, None)
-            if exception_types:
-                seat_stats.n_errors -= 1
-            context = seat_result.agent_result
-            if context is not None:
-                if (
-                    context.n_input_tokens is not None
-                    and seat_stats.n_input_tokens is not None
-                ):
-                    seat_stats.n_input_tokens = max(
-                        0, seat_stats.n_input_tokens - context.n_input_tokens
-                    )
-                if (
-                    context.n_cache_tokens is not None
-                    and seat_stats.n_cache_tokens is not None
-                ):
-                    seat_stats.n_cache_tokens = max(
-                        0, seat_stats.n_cache_tokens - context.n_cache_tokens
-                    )
-                if (
-                    context.n_output_tokens is not None
-                    and seat_stats.n_output_tokens is not None
-                ):
-                    seat_stats.n_output_tokens = max(
-                        0, seat_stats.n_output_tokens - context.n_output_tokens
-                    )
-                if context.cost_usd is not None and seat_stats.cost_usd is not None:
-                    seat_stats.cost_usd = max(
-                        0.0, seat_stats.cost_usd - context.cost_usd
-                    )
-            if seat_stats.n_trials == 0 and seat_stats.n_errors == 0:
-                self.seat_stats.pop(seat_result.seat, None)
+        self._update_seat_stats(trial_result, -1)
 
     def update_trial(
         self,

@@ -42,7 +42,7 @@ from harbor.models.job.config import (
     JobConfig,
     migrate_legacy_job_config,
 )
-from harbor.models.job.result import JobStats
+from harbor.models.job.result import JobResult, JobStats
 from harbor.models.model_api_format import ModelApiFormat
 from harbor.models.task.task import Task
 from harbor.models.trial.config import (
@@ -409,41 +409,51 @@ def print_job_results_tables(job_result) -> None:
     _print_seat_stats_table(job_result)
 
 
-def _format_usage(value: float | None, usage_complete: bool) -> str:
-    if not usage_complete or value is None:
+def _format_usage(value: float | None) -> str:
+    if value is None:
         return "unknown"
     if isinstance(value, float):
         return f"{value:.4f}"
     return str(value)
 
 
-def _print_seat_stats_table(job_result) -> None:
+def _print_seat_stats_table(job_result: JobResult) -> None:
     seat_stats = job_result.stats.seat_stats
     if not seat_stats:
         return
-    table = Table(title="Seats", show_header=True)
+    table = Table(
+        title="Seats",
+        caption="Usage and errors cover recorded seat results only, not job totals.",
+        show_header=True,
+    )
     table.add_column("Seat")
+    table.add_column("Source")
     table.add_column("Under test")
     table.add_column("Agent")
+    table.add_column("Provider")
     table.add_column("Model")
-    table.add_column("Trials", justify="right")
-    table.add_column("Errors", justify="right")
+    table.add_column("Recorded", justify="right")
+    table.add_column("Scored", justify="right")
+    table.add_column("Seat errors", justify="right")
     table.add_column("Cost USD", justify="right")
     table.add_column("Input tokens", justify="right")
     table.add_column("Cache tokens", justify="right")
     table.add_column("Output tokens", justify="right")
-    for seat_name, stats in seat_stats.items():
+    for _, stats in sorted(seat_stats.items()):
         table.add_row(
-            seat_name,
+            stats.seat,
+            stats.source if stats.source is not None else "(ad hoc)",
             "yes" if stats.under_test else "no",
             stats.agent_name or "",
+            stats.model_provider or "",
             stats.model_name or "",
+            str(stats.n_participations),
             str(stats.n_trials),
             str(stats.n_errors),
-            _format_usage(stats.cost_usd, stats.usage_complete),
-            _format_usage(stats.n_input_tokens, stats.usage_complete),
-            _format_usage(stats.n_cache_tokens, stats.usage_complete),
-            _format_usage(stats.n_output_tokens, stats.usage_complete),
+            _format_usage(stats.complete_usage("cost_usd")),
+            _format_usage(stats.complete_usage("n_input_tokens")),
+            _format_usage(stats.complete_usage("n_cache_tokens")),
+            _format_usage(stats.complete_usage("n_output_tokens")),
         )
     console.print(table)
     console.print()
