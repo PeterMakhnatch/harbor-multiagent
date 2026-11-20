@@ -118,6 +118,20 @@ networks:
 
 Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`.
 
+### The main container
+
+Keep `main` running for the full trial. Harbor runs the verifier in `main` after the agents stop.
+On Docker and Podman, Harbor runs a keepalive in `main` unless you specify a Compose `command:`.
+If the image's `CMD` starts the world, set `use_image_command = true` in `[environment]` in `task.toml`:
+
+```toml title="task.toml"
+[environment]
+use_image_command = true
+```
+
+This works with a Dockerfile or a prebuilt image. If you also set `command:` in Compose, that command takes precedence.
+On other providers, specify the world command in Compose.
+
 ### An agent's container
 
 - It keeps running: Harbor runs the agent inside it with `docker compose exec`. Use `command: ["sleep", "infinity"]` or a long-running process of its own.

@@ -18,7 +18,12 @@ from harbor.environments.docker import (
     write_resources_compose_file,
 )
 from harbor.environments.docker.docker import DockerEnvironment
-from harbor.models.task.config import EnvironmentConfig, NetworkMode, NetworkPolicy
+from harbor.models.task.config import (
+    EnvironmentConfig,
+    NetworkMode,
+    NetworkPolicy,
+    TaskConfig,
+)
 from harbor.models.trial.config import ResourceMode
 from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 
@@ -2224,6 +2229,82 @@ class TestValidateImageOS:
             side_effect=fake_exec,
         ):
             await env._validate_image_os("missing-image:latest")  # no raise
+
+
+@pytest.fixture(scope="module")
+def docker_compose_cli():
+    try:
+        version = subprocess.run(
+            ["docker", "compose", "version"],
+            check=False,
+            capture_output=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        pytest.skip("Docker Compose is not installed")
+    if version.returncode != 0:
+        pytest.skip("Docker Compose is not installed")
+
+
+@pytest.mark.usefixtures("docker_compose_cli")
+@pytest.mark.parametrize("prebuilt", [False, True], ids=["build", "prebuilt"])
+@pytest.mark.parametrize(
+    ("use_image_command", "compose_command", "expected_command"),
+    [
+        pytest.param(True, None, None, id="image-command"),
+        pytest.param(False, None, ["sh", "-c", "sleep infinity"], id="keepalive"),
+        pytest.param(
+            True,
+            '["python3", "/world.py"]',
+            ["python3", "/world.py"],
+            id="explicit-compose-command",
+        ),
+    ],
+)
+async def test_effective_compose_main_command(
+    tmp_path: Path,
+    prebuilt: bool,
+    use_image_command: bool,
+    compose_command: str | None,
+    expected_command: list[str] | None,
+):
+    env_dir = tmp_path / "environment"
+    env_dir.mkdir()
+    task_toml = "[environment]\n"
+    if prebuilt:
+        task_toml += 'docker_image = "world:latest"\n'
+    else:
+        (env_dir / "Dockerfile").write_text(
+            'FROM python:3.12-slim\nCMD ["python3", "-m", "http.server"]\n'
+        )
+    task_compose = "services:\n  main:\n    init: true\n"
+    if use_image_command:
+        task_toml += "use_image_command = true\n[agents.player]\n"
+        if compose_command is not None:
+            task_compose += f"    command: {compose_command}\n"
+        task_compose += "  player:\n    image: ubuntu:22.04\n"
+    (env_dir / "docker-compose.yaml").write_text(task_compose)
+
+    env = DockerEnvironment(
+        environment_dir=env_dir,
+        environment_name="test-task",
+        session_id="test-task__abc123",
+        trial_paths=TrialPaths(trial_dir=tmp_path / "trial"),
+        task_env_config=TaskConfig.model_validate_toml(task_toml).environment,
+    )
+    env._use_prebuilt = prebuilt
+
+    # `config` merges the same files as `up`, without a daemon or image pull.
+    result = await env._run_docker_compose_command(
+        ["config", "--format", "json"], timeout_sec=10
+    )
+    assert result.stdout is not None
+    main = json.loads(result.stdout)["services"]["main"]
+    if prebuilt:
+        assert main["image"] == "world:latest"
+    else:
+        assert Path(main["build"]["context"]) == env_dir.resolve()
+    assert main.get("command") == expected_command
 
 
 class TestDockerComposePaths:
