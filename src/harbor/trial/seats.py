@@ -13,6 +13,7 @@ container still up.
 import asyncio
 import contextlib
 import logging
+from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, override
@@ -35,10 +36,29 @@ from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
-from harbor.trial.hooks import LogPhase, TrialEvent
+from harbor.trial.hooks import LogCallback, LogEntry, LogPhase, TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
+
+_LOG_BUFFER_SIZE = 256
+_LOG_CALLBACK_TIMEOUT_SEC = 0.5
+_LOG_DRAIN_TIMEOUT_SEC = 0.5
+
+
+@dataclass
+class _LogSubscriber:
+    callback: LogCallback
+    pending: deque[LogEntry] = field(default_factory=deque)
+    worker: asyncio.Task[None] | None = None
+    closed: bool = False
+    warned_overflow: bool = False
+
+    def close(self) -> None:
+        self.closed = True
+        self.pending.clear()
+        if self.worker is not None and not self.worker.done():
+            self.worker.cancel()
 
 
 @dataclass
@@ -126,6 +146,8 @@ class SeatsTrial(SingleStepTrial):
         super().__init__(
             config, _task=_task, _task_download_result=_task_download_result
         )
+        self._log_subscribers: list[_LogSubscriber] = []
+        self._log_dispatch_closed = False
 
     @override
     def _init_agent(self) -> None:
@@ -230,16 +252,78 @@ class SeatsTrial(SingleStepTrial):
         if not self._log_callbacks:
             return contextlib.nullcontext()
         backend = self.agent_environment.type()
-        if backend != EnvironmentType.DOCKER:
+        if backend not in (EnvironmentType.DOCKER, EnvironmentType.PODMAN):
             if not self._warned_unsupported_seat_streaming:
                 self._warned_unsupported_seat_streaming = True
                 self.logger.warning(
-                    "Live seat logs require the docker environment; "
+                    "Live seat logs require the docker or podman environment; "
                     "seat output will not stream on %s.",
                     backend.value if isinstance(backend, EnvironmentType) else backend,
                 )
             return contextlib.nullcontext()
         return self._log_context(phase, seat.environment, seat=seat.name)
+
+    @override
+    async def _deliver_log(self, entry: LogEntry, callbacks: list[LogCallback]) -> None:
+        if self._log_dispatch_closed:
+            return
+        # Registration only appends, so each entry's callback list is a prefix.
+        for i, callback in enumerate(callbacks):
+            if i == len(self._log_subscribers):
+                self._log_subscribers.append(_LogSubscriber(callback))
+            subscriber = self._log_subscribers[i]
+            if subscriber.closed:
+                continue
+            if len(subscriber.pending) == _LOG_BUFFER_SIZE:
+                if not subscriber.warned_overflow:
+                    subscriber.warned_overflow = True
+                    self.logger.warning(
+                        "Trial log callback buffer is full; dropping chunks"
+                    )
+                continue
+            subscriber.pending.append(entry)
+            if subscriber.worker is None or subscriber.worker.done():
+                subscriber.worker = asyncio.create_task(self._drain_logs(subscriber))
+
+    async def _drain_logs(self, subscriber: _LogSubscriber) -> None:
+        def expire() -> None:
+            self.logger.warning(
+                "Trial log callback timed out after %s seconds; disabling subscription",
+                _LOG_CALLBACK_TIMEOUT_SEC,
+            )
+            subscriber.close()
+
+        loop = asyncio.get_running_loop()
+        while subscriber.pending:
+            entry = subscriber.pending.popleft()
+            deadline = loop.call_later(_LOG_CALLBACK_TIMEOUT_SEC, expire)
+            try:
+                await self._notify_log_callback(subscriber.callback, entry)
+            finally:
+                deadline.cancel()
+
+    @override
+    async def _finalize(self) -> None:
+        self._log_dispatch_closed = True
+        try:
+            workers = [
+                subscriber.worker
+                for subscriber in self._log_subscribers
+                if subscriber.worker is not None and not subscriber.worker.done()
+            ]
+            task = asyncio.current_task()
+            if workers and (task is None or not task.cancelling()):
+                _, pending = await asyncio.wait(workers, timeout=_LOG_DRAIN_TIMEOUT_SEC)
+                if pending:
+                    self.logger.warning(
+                        "Trial log callback drain timed out; dropping chunks"
+                    )
+        finally:
+            # A callback can ignore cancellation. Never join its worker here.
+            for subscriber in self._log_subscribers:
+                if not subscriber.closed:
+                    subscriber.close()
+            await super()._finalize()
 
     async def _setup_seat(self, seat: Seat) -> None:
         """Mirrors Trial._setup_agent for one seat, recording a failure on the

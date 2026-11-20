@@ -20,12 +20,15 @@ from harbor.agents.installed.base import (
 from harbor.agents.installed.codex import Codex
 from harbor.environments.base import BaseEnvironment, ExecResult, OutputCallback
 from harbor.environments.docker.docker import DockerEnvironment
+from harbor.environments.docker.runtime import ContainerRuntime
+from harbor.environments.podman import PodmanEnvironment
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.job.result import JobStats
 from harbor.models.trial.config import (
     AgentConfig,
+    EnvironmentConfig,
     SourceTrialConfig,
     TaskConfig,
     TrialConfig,
@@ -739,15 +742,31 @@ async def test_each_seat_logs_under_its_own_name(tmp_path: Path):
         )
 
 
-async def test_log_streaming_attributes_concurrent_seat_output(tmp_path: Path):
+@pytest.mark.parametrize("backend", [EnvironmentType.DOCKER, EnvironmentType.PODMAN])
+async def test_log_streaming_attributes_concurrent_seat_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, backend: EnvironmentType
+):
+    if backend == EnvironmentType.PODMAN:
+        runtime = ContainerRuntime(
+            engine=("podman",),
+            compose=("podman", "compose"),
+            supports_compose_wait=False,
+        )
+        monkeypatch.setattr(
+            PodmanEnvironment, "runtime", classmethod(lambda cls: runtime)
+        )
     trial = await _seats_trial(
         _config(
             _task_dir(tmp_path),
             _participant("maya"),
             _participant("raj"),
             _participant("lee"),
+            environment=EnvironmentConfig(type=backend),
         )
     )
+    assert trial.agent_environment.type() == backend
+    if backend == EnvironmentType.PODMAN:
+        assert isinstance(trial.agent_environment, PodmanEnvironment)
     entries: list[LogEntry] = []
 
     async def capture(entry: LogEntry) -> None:
@@ -799,7 +818,7 @@ async def test_unsupported_seat_streaming_warns_once(
     assert [entry.args[0].phase for entry in capture.await_args_list] == [
         "verification"
     ]
-    assert caplog.text.count("Live seat logs require the docker environment") == 1
+    assert caplog.text.count("Live seat logs require the docker or podman") == 1
 
 
 @pytest.mark.parametrize("observer_error", [RuntimeError, asyncio.CancelledError])
@@ -840,6 +859,57 @@ async def test_raising_seat_observers_preserve_agent_outcome(
     assert "seat-start hook failed" in caplog.text
     assert "seat-end hook failed" in caplog.text
     assert "Trial log callback failed" in caplog.text
+
+
+async def test_log_callbacks_do_not_delay_agents_or_block_trial_finalization(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.2),
+            *(_participant(seat) for seat in ("maya", "raj", "lee")),
+        )
+    )
+    release = asyncio.Event()
+    cancelled = asyncio.Event()
+    workers: list[asyncio.Task[None]] = []
+
+    async def hanging_callback(entry: LogEntry) -> None:
+        if entry.phase != "agent":
+            return
+        task = asyncio.current_task()
+        assert task is not None
+        workers.append(task)
+        try:
+            await release.wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            await release.wait()  # Do not let cancellation complete during the trial.
+
+    capture = AsyncMock()
+    trial.add_log_callback(hanging_callback)
+    trial.add_log_callback(capture)
+
+    try:
+        result = await asyncio.wait_for(trial.run(), timeout=3)
+
+        assert result.exception_info is None
+        assert all(
+            seat.exception_info is None for seat in _seat_results(result).values()
+        )
+        assert _verified(trial)
+        assert cancelled.is_set()
+        assert len(workers) == 1 and not workers[0].done()
+        assert {
+            call.args[0].seat
+            for call in capture.await_args_list
+            if call.args[0].phase == "agent"
+        } == {"maya", "raj", "lee"}
+        assert "timed out" in caplog.text
+    finally:
+        release.set()
+        for worker in workers:
+            await worker
 
 
 async def test_seat_hook_duration_is_outside_the_agent_timeout(

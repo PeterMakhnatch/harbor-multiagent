@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Python trial hooks:** `TrialEvent` now includes `SEAT_START` and `SEAT_END`. Update exhaustive handlers or subscribe to specific trial events. Seat events carry snapshots instead of the live trial result.
+- **Live seat logs:** `Trial.add_log_callback()` reports attributed seat command output on local Docker and Podman only. Other backends warn once per subscribed trial. Callbacks do not use the agent timeout.
 
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.
 

@@ -608,20 +608,26 @@ class Trial(ABC):
                 step_name=step_name,
                 seat=seat,
             )
-            for callback in callbacks:
-                try:
-                    await callback(entry)
-                except (Exception, asyncio.CancelledError) as exc:
-                    task = asyncio.current_task()
-                    if (
-                        isinstance(exc, asyncio.CancelledError)
-                        and task is not None
-                        and task.cancelling()
-                    ):
-                        raise
-                    self.logger.warning("Trial log callback failed", exc_info=True)
+            await self._deliver_log(entry, callbacks)
 
         return environment.scoped_output_callback(emit)
+
+    async def _deliver_log(self, entry: LogEntry, callbacks: list[LogCallback]) -> None:
+        for callback in callbacks:
+            await self._notify_log_callback(callback, entry)
+
+    async def _notify_log_callback(
+        self, callback: LogCallback, entry: LogEntry
+    ) -> None:
+        try:
+            await callback(entry)
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                raise
+            self.logger.warning("Trial log callback failed", exc_info=True)
+        except Exception:
+            self.logger.warning("Trial log callback failed", exc_info=True)
 
     async def _emit(self, event: TrialEvent, *, seat: str | None = None) -> None:
         hooks = self._hooks[event]
