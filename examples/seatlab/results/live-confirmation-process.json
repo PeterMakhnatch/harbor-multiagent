@@ -1,0 +1,160 @@
+{
+  "calendar_answers": {
+    "visible": {
+      "answer_bits": 16,
+      "asked_minus_not_asked_win_rate": null,
+      "asked_overlap": {
+        "teams": 0,
+        "win_rate": null,
+        "wins": 0,
+        "wins_with_true_overlap_revealed_positive": 0
+      },
+      "coverage": {
+        "missing_by_reason": {},
+        "observed_teams": 8,
+        "protocol_complete_teams": 8,
+        "registered_teams": 8,
+        "status": "complete"
+      },
+      "did_not_ask_overlap": {
+        "teams": 8,
+        "win_rate": 0.125,
+        "wins": 1,
+        "wins_with_true_overlap_revealed_positive": 0
+      },
+      "peer_truth_correct_bits": 15,
+      "peer_truth_correct_first_bits": 8,
+      "peer_truth_correct_second_bits": 7,
+      "teams_with_revealed_bits": 8,
+      "teams_with_true_overlap_revealed_positive": 0,
+      "teams_with_true_overlap_uniquely_identified": 0,
+      "win_rate_comparison": "not_comparable"
+    },
+    "withheld": {
+      "answer_bits": 16,
+      "asked_minus_not_asked_win_rate": null,
+      "asked_overlap": {
+        "teams": 0,
+        "win_rate": null,
+        "wins": 0,
+        "wins_with_true_overlap_revealed_positive": 0
+      },
+      "coverage": {
+        "missing_by_reason": {},
+        "observed_teams": 8,
+        "protocol_complete_teams": 8,
+        "registered_teams": 8,
+        "status": "complete"
+      },
+      "did_not_ask_overlap": {
+        "teams": 8,
+        "win_rate": 0.0,
+        "wins": 0,
+        "wins_with_true_overlap_revealed_positive": 0
+      },
+      "peer_truth_correct_bits": 10,
+      "peer_truth_correct_first_bits": 5,
+      "peer_truth_correct_second_bits": 5,
+      "teams_with_revealed_bits": 0,
+      "teams_with_true_overlap_revealed_positive": 0,
+      "teams_with_true_overlap_uniquely_identified": 0,
+      "win_rate_comparison": "not_comparable"
+    }
+  },
+  "dispatch_answers": {
+    "visible": {
+      "answer_bits": 16,
+      "coverage": {
+        "missing_by_reason": {},
+        "observed_teams": 8,
+        "protocol_complete_teams": 8,
+        "registered_teams": 8,
+        "status": "complete"
+      },
+      "no_bits": 11,
+      "own_revision_2_correct_bits": 16,
+      "own_revision_2_correctness_by_native_team_reward": {
+        "at_least_one_wrong_bit": {
+          "less_than_perfect_reward": 0,
+          "perfect_reward": 0
+        },
+        "both_bits_correct": {
+          "less_than_perfect_reward": 8,
+          "perfect_reward": 0
+        }
+      },
+      "own_revision_2_vs_stock_truth_disagreement_bits": 0,
+      "post_hoc_question_use": {
+        "queried_bay_chosen_on_generated_no": 7,
+        "queried_bay_chosen_on_generated_yes": 3,
+        "queried_eligibility_changed": 7
+      },
+      "stock_truth_correct_bits": 16,
+      "yes_bits": 5
+    },
+    "withheld": {
+      "answer_bits": 16,
+      "coverage": {
+        "missing_by_reason": {},
+        "observed_teams": 8,
+        "protocol_complete_teams": 8,
+        "registered_teams": 8,
+        "status": "complete"
+      },
+      "no_bits": 10,
+      "own_revision_2_correct_bits": 15,
+      "own_revision_2_correctness_by_native_team_reward": {
+        "at_least_one_wrong_bit": {
+          "less_than_perfect_reward": 1,
+          "perfect_reward": 0
+        },
+        "both_bits_correct": {
+          "less_than_perfect_reward": 7,
+          "perfect_reward": 0
+        }
+      },
+      "own_revision_2_vs_stock_truth_disagreement_bits": 0,
+      "post_hoc_question_use": {
+        "queried_bay_chosen_on_generated_no": 1,
+        "queried_bay_chosen_on_generated_yes": 3,
+        "queried_eligibility_changed": 5
+      },
+      "stock_truth_correct_bits": 15,
+      "yes_bits": 6
+    }
+  },
+  "notices": {
+    "count": {
+      "coverage": {
+        "missing_by_reason": {},
+        "observed_teams": 8,
+        "protocol_complete_teams": 8,
+        "registered_teams": 8,
+        "status": "complete"
+      },
+      "opened_report_changes": 6,
+      "opened_sensitive": 3,
+      "opened_slots": 16,
+      "share_of_changed_reports_opened": 0.25,
+      "share_of_opens_on_changed_reports": 0.375,
+      "total_report_changes": 24
+    },
+    "named": {
+      "coverage": {
+        "missing_by_reason": {},
+        "observed_teams": 8,
+        "protocol_complete_teams": 8,
+        "registered_teams": 8,
+        "status": "complete"
+      },
+      "opened_report_changes": 16,
+      "opened_sensitive": 11,
+      "opened_slots": 16,
+      "share_of_changed_reports_opened": 0.6666666666666666,
+      "share_of_opens_on_changed_reports": 1.0,
+      "total_report_changes": 24
+    }
+  },
+  "schema": "seatlab.confirmation-process/v1",
+  "scope": "Descriptive only. No mediation or detection claims. Missing evidence is not a wrong answer."
+}
