@@ -144,7 +144,7 @@ def _message_proof(
             "wire_sha256": p.digest(canonical),
         }
         actual[phase] = value
-    if cell.arm in p.REPAIR_ARMS:
+    if cell.arm in p.REPAIR_ARMS or cell.arm in p.QUESTION_ARMS:
         allowed = [[], *([proof["message"]["id"]] for proof in out.values())]
         require(
             all(
@@ -290,7 +290,7 @@ def _prompts(
     tables: dict[str, Any], transport: dict[str, Any], cell: p.Cell
 ) -> dict[str, str]:
     table = tables[cell.receiver]
-    prompts = {"question": p.question_prompt(table)}
+    prompts = {"question": cell.question_prompt(table)}
     question = transport.get("question")
     answer = transport.get("answer")
     if question and question["receive"]:
@@ -302,6 +302,35 @@ def _prompts(
                 table, q, bits if cell.shows_answer else None
             )
     return prompts
+
+
+def _question_control_proof(
+    phase: str,
+    receipt: dict[str, Any],
+    tables: dict[str, calendar_packet.Table],
+    actual: dict[str, Any],
+    cell: p.Cell,
+    sender_bits: list[bool] | None,
+) -> None:
+    if phase == "answer":
+        require(sender_bits is not None, "control_draft_binding")
+        expected = p.answer_wire([not bit for bit in sender_bits])
+    elif phase == "question":
+        table = tables[cell.receiver]
+        if cell.arm == "local-question":
+            starts = calendar_packet.starts(table)
+            require(len(starts) >= 2, "control_local_start_count")
+            expected = p.question_wire(list(starts[:2]))
+        else:
+            expected = p.control_reply(phase, table, None, None)
+    else:
+        expected = p.control_reply(
+            phase, tables[cell.receiver], actual["question"], actual["answer"]
+        )
+    require(
+        receipt["status"] == "accepted" and receipt["response_text"] == expected,
+        "question_control_binding",
+    )
 
 
 def _turns(directory, identifier, tables, transport, actual, ledger, cell, sender_bits):
@@ -321,7 +350,9 @@ def _turns(directory, identifier, tables, transport, actual, ledger, cell, sende
             receipt, phase, prompts[phase], identifier, cell, role_calls.get(role)
         )
         value = receipt["value"]
-        if (
+        if cell.control and cell.arm in p.QUESTION_ARMS:
+            _question_control_proof(phase, receipt, tables, actual, cell, sender_bits)
+        elif (
             phase == "answer"
             and value is not None
             and cell.control
@@ -331,7 +362,8 @@ def _turns(directory, identifier, tables, transport, actual, ledger, cell, sende
         if phase in actual:
             expected = (
                 sender_bits
-                if phase == "answer" and cell.arm == "local-report"
+                if phase == "answer"
+                and (cell.arm == "local-report" or cell.arm in p.QUESTION_ARMS)
                 else value
             )
             require(
@@ -492,8 +524,9 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
     if type(result_reward) in (int, float) and result_reward in (0, 1):
         row["native_reward"] = result_reward
     row["native_reward_valid"] = result["reward_valid"] is True
-    repair = cell.arm in p.REPAIR_ARMS
-    if repair:
+    question_study = cell.arm in p.QUESTION_ARMS
+    verified_study = cell.arm in p.REPAIR_ARMS or question_study
+    if verified_study:
         task = Path(config["task"]["path"])
         source = calendar_replica_source.verify(task, cell.index)
         require(source.native_sha256 == checksum, "stock_source_binding")
@@ -509,10 +542,10 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
             phase: proof | {"message": proof["message"] | {"text": None}}
             for phase, proof in transport.items()
         }
-        if repair
+        if verified_study
         else transport
     )
-    if not repair and "question" in actual:
+    if not verified_study and "question" in actual:
         row["question"] = [
             {"slot": slot, **calendar_protocol.answer(slot)}
             for slot in actual["question"]
@@ -523,10 +556,10 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
     states, contexts = _seat_proof(result["seat_results"], transport, tables, cell)
     row["seats"] = states
     sender_bits = None
-    if repair and "question" in actual:
+    if verified_study and "question" in actual:
         sender_starts = calendar_packet.starts(tables[cell.peer])
         sender_bits = [slot in sender_starts for slot in actual["question"]]
-    target = calendar_packet._shared(world.tables) if repair else None
+    target = calendar_packet._shared(world.tables) if verified_study else None
     turns = _turns(
         trial, identifier, tables, transport, actual, ledger, cell, sender_bits
     )
@@ -535,14 +568,14 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
             phase: turn if phase == "answer" else turn | {"value": None}
             for phase, turn in turns.items()
         }
-        if repair
+        if verified_study
         else turns
     )
     _context_usage(turns, contexts)
     for phase in transport:
         require(phase in turns, "world_message_without_turn")
     choice = turns.get("choice", {}).get("value")
-    if choice is not None and not repair:
+    if choice is not None and not verified_study:
         row["choice"] = {"slot": choice, **calendar_protocol.answer(choice)}
     rendered = "choice" in turns
     row["answer_at_final_prompt"] = (
@@ -551,15 +584,28 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
     row["final_prompt_answers"] = (
         actual["answer"] if rendered and cell.shows_answer else None
     )
-    if repair:
+    if verified_study:
         _repair_metrics(row, turns, actual, sender_bits, target)
+    if question_study:
+        for turn in turns.values():
+            require(
+                states.get(turn["seat"], {}).get("calendar_sha256") is not None,
+                "turn_calendar_binding",
+            )
+        question = turns.get("question", {}).get("value")
+        receiver_starts = calendar_packet.starts(tables[cell.receiver])
+        row["question_both_locally_valid"] = (
+            all(slot in receiver_starts for slot in question)
+            if question is not None
+            else None
+        )
     score = _score(trial, result, cell, messages, events, transport, choice, target)
     _artifact_hashes(trial, row["artifact_sha256"])
     row["submitted"] = (
-        score.get("submitted") if score is not None and not repair else None
+        score.get("submitted") if score is not None and not verified_study else None
     )
     submit = score["submit"] if score is not None else None
-    if repair and submit is not None:
+    if verified_study and submit is not None:
         submit = submit | {"data": {"n": submit["data"]["n"]}}
     row["submit_event"] = submit
     row["protocol_bound"] = True

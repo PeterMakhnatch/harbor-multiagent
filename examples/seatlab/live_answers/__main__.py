@@ -17,11 +17,18 @@ from . import protocol as p
 MODULE = "examples.seatlab.live_answers"
 SCHEMA = "seatlab.native-calendar-answers/v1"
 REPAIR_SCHEMA = "seatlab.native-calendar-answer-repair/v1"
+QUESTION_SCHEMA = "seatlab.native-calendar-answer-questions/v1"
 REPAIR_POLICY = "directed-flotilla-messages; sender-report-treatment; same-final-prompt"
+QUESTION_POLICY = (
+    "directed-flotilla-messages; receiver-question-treatment; "
+    "sender-local-facts; same-final-prompt"
+)
 BINDINGS = ("DEEPSEEK_API_KEY", "SEATLAB_SPEND_DIR")
 
 
 def _schema(cell: p.Cell) -> str:
+    if cell.arm in p.QUESTION_ARMS:
+        return QUESTION_SCHEMA
     return REPAIR_SCHEMA if cell.arm in p.REPAIR_ARMS else SCHEMA
 
 
@@ -283,6 +290,11 @@ def _empty(
     cell: p.Cell, attempted: bool, ledger: list[dict[str, Any]]
 ) -> dict[str, Any]:
     schema = _schema(cell)
+    policy = p.POLICY
+    if schema == QUESTION_SCHEMA:
+        policy = QUESTION_POLICY
+    elif schema == REPAIR_SCHEMA:
+        policy = REPAIR_POLICY
     return {
         "schema": schema,
         "world": cell.world,
@@ -292,7 +304,7 @@ def _empty(
         "peer": cell.peer,
         "first_arm": cell.first,
         "run": cell.run,
-        "message_policy": REPAIR_POLICY if schema == REPAIR_SCHEMA else p.POLICY,
+        "message_policy": policy,
         "attempted": attempted,
         "status": "incomplete_attempt" if attempted else "not_attempted",
         "launch": None,
@@ -321,7 +333,7 @@ def _empty(
             dict.fromkeys(
                 ("draft_matches_sender", "delivered_matches_sender", "target_nominated")
             )
-            if schema == REPAIR_SCHEMA
+            if schema in (REPAIR_SCHEMA, QUESTION_SCHEMA)
             else {}
         ),
     }
@@ -438,12 +450,22 @@ def _repair_pair_eligible(row: dict[str, Any]) -> bool:
 def _paired_repair(
     worlds_enrolled: int, differences: list[int], *, control: bool
 ) -> dict[str, Any]:
+    return _paired_summary(
+        worlds_enrolled, differences, control=control, baseline_key="model_wins"
+    )
+
+
+def _paired_summary(
+    worlds_enrolled: int, differences: list[int], *, control: bool, baseline_key: str
+) -> dict[str, Any]:
     local_wins = differences.count(1)
-    model_wins = differences.count(-1)
+    baseline_wins = differences.count(-1)
     probability = None
     if len(differences) == worlds_enrolled == len(p.WORLDS):
-        discordant = local_wins + model_wins
-        tail = sum(comb(discordant, k) for k in range(min(local_wins, model_wins) + 1))
+        discordant = local_wins + baseline_wins
+        tail = sum(
+            comb(discordant, k) for k in range(min(local_wins, baseline_wins) + 1)
+        )
         exact = min(Fraction(1), Fraction(2 * tail, 2**discordant))
         probability = {"numerator": exact.numerator, "denominator": exact.denominator}
     return {
@@ -451,7 +473,7 @@ def _paired_repair(
         "worlds_enrolled": worlds_enrolled,
         "matched": len(differences),
         "local_wins": local_wins,
-        "model_wins": model_wins,
+        baseline_key: baseline_wins,
         "ties": differences.count(0),
         "two_sided_sign_p": probability,
     }
@@ -464,17 +486,21 @@ def _report(
     uuids = [row["trial_uuid"] for row in rows if row["trial_uuid"] is not None]
     audit.require(len(uuids) == len(set(uuids)), "duplicate_native_trial_uuid")
     schema = rows[0]["schema"]
-    repair = schema == REPAIR_SCHEMA
-    if repair:
+    verified_pair = schema in (REPAIR_SCHEMA, QUESTION_SCHEMA)
+    if verified_pair:
         audit.require(
             all(row["control"] == rows[0]["control"] for row in rows),
-            "mixed_repair_controls",
+            "mixed_repair_controls"
+            if schema == REPAIR_SCHEMA
+            else "mixed_question_controls",
         )
-    arms = p.REPAIR_ARMS if repair else p.ARMS
+    arms = p.REPAIR_ARMS if schema == REPAIR_SCHEMA else p.ARMS
+    if schema == QUESTION_SCHEMA:
+        arms = p.QUESTION_ARMS
     results = {}
     for arm in arms:
         selected = [row for row in rows if row["arm"] == arm]
-        if repair:
+        if verified_pair:
             results[arm] = _repair_counts(selected)
             continue
         attempted = sum(row["attempted"] for row in selected)
@@ -498,7 +524,7 @@ def _report(
             and left["source"] == right["source"],
             "both_attempted": left["attempted"] and right["attempted"],
         }
-        if repair:
+        if verified_pair:
             matched["arms"] = {
                 arm: {
                     field: row[field]
@@ -506,13 +532,12 @@ def _report(
                 }
                 for arm, row in pair.items()
             }
-            model, local = pair["model-report"], pair["local-report"]
             if (
                 matched["matched_source"]
-                and _repair_pair_eligible(model)
-                and _repair_pair_eligible(local)
+                and _repair_pair_eligible(left)
+                and _repair_pair_eligible(right)
             ):
-                difference = local["native_reward"] - model["native_reward"]
+                difference = right["native_reward"] - left["native_reward"]
                 differences.append(int(difference))
         else:
             matched["visible_success"] = left["success"]
@@ -524,9 +549,16 @@ def _report(
         "worlds": worlds,
         "cells": rows,
     }
-    if repair:
+    if schema == REPAIR_SCHEMA:
         report["paired"] = _paired_repair(
             len(worlds), differences, control=rows[0]["control"]
+        )
+    elif schema == QUESTION_SCHEMA:
+        report["paired"] = _paired_summary(
+            len(worlds),
+            differences,
+            control=rows[0]["control"],
+            baseline_key="raw_wins",
         )
     return report
 
@@ -543,17 +575,21 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         "run-repair",
         "control-repair",
         "collect-repair",
+        "run-questions",
+        "control-questions",
+        "collect-questions",
     ):
-        collect = mode in ("read", "collect-repair")
-        control = mode in ("control", "control-repair")
+        collect = mode == "read" or mode.startswith("collect-")
+        control = mode.startswith("control")
         repair = mode.endswith("-repair")
+        arms = p.REPAIR_ARMS if repair else p.ARMS
+        if mode.endswith("-questions"):
+            arms = p.QUESTION_ARMS
         cmd = sub.add_parser(mode)
         cmd.set_defaults(collect=collect, controls=control, repair=repair)
         cmd.add_argument("--job", type=Path, required=True)
         cmd.add_argument("--world", choices=p.WORLDS, required=not collect)
-        cmd.add_argument(
-            "--arm", choices=p.REPAIR_ARMS if repair else p.ARMS, required=not collect
-        )
+        cmd.add_argument("--arm", choices=arms, required=not collect)
         if not control:
             cmd.add_argument("--spend-dir", type=Path)
         if not collect:
@@ -578,9 +614,14 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return _host_trial(Path(argv[1]), Path(argv[2]))
     args = _arguments(argv)
+    if args.mode.endswith("-questions"):
+        grids, prefix, command = p.question_grids, "naquestion-", "collect-questions"
+    elif args.repair:
+        grids, prefix, command = p.repair_grids, "narepair-", "collect-repair"
+    else:
+        grids, prefix, command = p.grids, "nanswer-", "read"
     try:
         job = _private_dir(args.job)
-        grids = p.repair_grids if args.repair else p.grids
         cells = (
             (p.Cell(args.world, args.arm, args.controls),)
             if args.world
@@ -591,7 +632,6 @@ def main(argv: list[str] | None = None) -> int:
             _run(job, args.tasks, args.harbor, cells[0], spend_dir)
         ledger = []
         if spend_dir is not None:
-            prefix = "narepair-" if args.repair else "nanswer-"
             runs = {cell.run for cell in cells}
             if len(cells) == 1:
                 prefix = cells[0].run
@@ -604,7 +644,6 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, sort_keys=True))
         return int(not args.collect and not report["cells"][0]["protocol_complete"])
     except (ValueError, OSError, KeyError, TypeError, IndexError):
-        command = "collect-repair" if args.repair else "read"
         print(
             "Native answer command rejected. "
             f"Preserve the first attempt and use {command}.",

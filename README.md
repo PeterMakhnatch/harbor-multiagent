@@ -38,7 +38,9 @@ If 2 agents propose different answers, [test a third agent as the selector](exam
 
 In the [Dispatch replay](examples/seatlab/live-confirmation.md#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher), actual bay IDs increased optimal choices from 52/96 to 68/96. The [receipt](examples/seatlab/results/dispatch-peer-payload-replay.json) records every receiver call and its token-priced cost.
 
-For an end-to-end result, [run both seats in native Harbor](examples/seatlab/replication.md#check-a-receivers-own-availability-against-delivered-reports). On [24 fresh scheduling worlds](examples/seatlab/calendar-notice-result.md#does-checking-the-received-reports-help-a-live-team), teams booked 20/24 meetings with a check against their own calendar, versus 10/24 without it. These are native team rewards, not replay scores.
+For an end-to-end test, [run both seats in native Harbor](examples/seatlab/replication.md#check-a-receivers-own-availability-against-delivered-reports). On the [first 24 scheduling worlds](examples/seatlab/calendar-notice-result.md#does-checking-the-received-reports-help-a-live-team), a local calendar check raised bookings from 10 to 20. On [24 different worlds](examples/seatlab/calendar-notice-result.md), bookings rose from 15 to 18. The second test did not establish a team gain.
+
+To diagnose a failed booking, [replay a receiver's question, the sender's answer, and the final choice separately](examples/seatlab/calendar-notice-result.md#does-the-local-sender-check-help-a-whole-team). On 25 recorded states, [letting the receiver ask once more](examples/seatlab/calendar-notice-result.md#should-the-receiver-stop-after-a-verified-rejection) raised correct choices from 9 to 22. This used more communication; these were not new team rewards.
 
 Other starting points: [36 teams exchanging meeting proposals](examples/seatlab/native-model-results.md#does-sending-a-short-proposal-change-the-native-team-reward) and [import a role observation from an Inspect log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/71).
 

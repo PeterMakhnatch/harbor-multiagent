@@ -190,6 +190,21 @@ These were new teams, not replays of the same questions. Unlike the fixed-input 
 
 All 16 teams made stock submissions. We checked 32 delivered messages and 48 first model replies against the native artifacts and direct bill. They cost **$0.001895529**. [Native outcomes](results/calendar-native-sender-repair.json) · [48 charges](results/calendar-native-sender-repair-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063977930) · [Individual cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064118509) · [Run a native comparison](replication.md#compare-a-model-sender-reply-with-a-local-check).
 
+### Does showing the questioner its own feasible starts help a whole team?
+
+**The local list changed what the receiver asked. The team reward gain did not pass the registered test.** On the same 8 worlds, 16 new teams used a sender that checked every answer locally. The receiver saw either its own raw busy-hour table or an equivalent list of its own feasible starts. Neither format revealed what worked for the sender.
+
+| Outcome on 8 matched worlds | Own busy-hour table | Own feasible starts |
+|---|---:|---:|
+| Both proposed starts fit the receiver's calendar | 0/8 | 8/8 |
+| The proposed pair contained the joint meeting | 0/8 | 4/8 |
+| The sender delivered a factually correct reply | 8/8 | 8/8 |
+| Team booked the meeting (stock Harbor reward) | 0/8 | 4/8 |
+
+All 4 successful teams booked a start they had asked about. The list won on 4 worlds, lost on none, and tied on 4. The exact two-sided sign test gave **p = 1/8**; the registered cutoff was 1/20. These worlds were not unseen. This is evidence about how to form questions, not a confirmed gain on new teams.
+
+All 16 first attempts received stock grades. The 48 real model calls cost **$0.002011779**. [Native observations](results/calendar-native-question-policy.json) · [Token and cost receipts](results/calendar-native-question-policy-cost.json) · [Individual cost log and registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064417166) · [Run the same study](replication.md#change-only-the-receivers-first-question).
+
 ### Should the receiver stop after a verified rejection?
 
 **On these 25 recorded receiver states, asking once more raised correct bookings from 9 to 22.** Both policies started with the same real receiver's first 2 nominations. The sender checked those starts against its own calendar. If either fit, both policies used the same final reply. Otherwise, the longer policy could ask about 2 different starts before booking.
@@ -207,6 +222,10 @@ The extra question changed the communication budget. The receiver had 2 to 8 unt
 The 17 second questions and 42 physical final calls cost **$0.002236236**. On these draws, the longer policy alone cost **$0.000798300 more** than stopping. Both amounts exclude the original shared history.
 
 [Run the second question on your own case](replication.md#ask-again-only-when-the-first-pair-is-rejected) · [25 source pairs](results/calendar-second-question.json) · [59 charges](results/calendar-second-question-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064104027) · [Individual cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064210654).
+
+**When can you skip the second nomination call?** Only 3 of the 17 second questions had no choice: every untested local start fit within the 2-start limit. In each case, the free `route` command produced the same ordered starts as the model. Across all 25 states, it stopped on 8, supplied the only possible question on 3, and deferred to the model on 14.
+
+Replacing the model *every time* with the first 2 untested starts did not pass. The model nominated the true start on 13/17 questions. The fixed rule found it on 11/17 and missed 2 that the model found. The 3 unnecessary historical question calls cost $0.000157302; this check made no new calls. These are nominations, not final bookings. [Route observations](results/calendar-second-question-route.json) · [Registered comparison and result](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064377742).
 
 ### Should the receiver wait for the first report before requesting a second one?
 

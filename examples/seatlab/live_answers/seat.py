@@ -179,9 +179,9 @@ class AnswerSeat(BaseAgent):
         metadata["stage"] = "question_turn"
         slots = await self._measure(
             "question",
-            p.question_prompt(table),
+            self._cell.question_prompt(table),
             context,
-            control_text=p.control_reply("question", table, None, None)
+            control_text=self._cell.control_question(table)
             if self._cell.control
             else None,
         )

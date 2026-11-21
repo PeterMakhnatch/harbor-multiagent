@@ -2,11 +2,17 @@ import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, TypedDict
 
 from .. import calendar_case
 from ..visibility import calendar_packet, calendar_protocol
 from . import clarify, team_views
 from . import protocol as p
+
+
+class _Route(TypedDict):
+    route: Literal["stop", "exhaustive", "model"]
+    proposals: list[int] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +36,22 @@ def opportunity(
     checked: bytes, prior: tuple[int, int], verified: tuple[int, ...]
 ) -> int:
     return _first(checked, prior, verified).count
+
+
+def _route(first: _First) -> _Route:
+    count = first.count
+    if count == 0:
+        return {"route": "stop", "proposals": []}
+    if len(first.receiver.own) - len(first.prior) > count:
+        return {"route": "model", "proposals": None}
+    return {
+        "route": "exhaustive",
+        "proposals": [slot for slot in first.receiver.own if slot not in first.prior],
+    }
+
+
+def route(checked: bytes, prior: tuple[int, int], verified: tuple[int, ...]) -> _Route:
+    return _route(_first(checked, prior, verified))
 
 
 def _require_open(first: _First) -> int:
@@ -156,6 +178,8 @@ def _receiver_result(args: argparse.Namespace) -> object:
     first = _First(clarify._receiver(checked), prior, verified)
     if args.phase == "opportunity":
         return {"count": first.count}
+    if args.phase == "route":
+        return _route(first)
     if args.phase == "ask":
         return calendar_case._request(
             f"{first.receiver.trial_uuid}/receiver-second-question", _question(first)
@@ -181,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_abbrev=False, description="Prepare or verify one bounded second question."
     )
     phases = parser.add_subparsers(dest="phase", required=True)
-    for phase in ("opportunity", "ask", "admit", "book"):
+    for phase in ("opportunity", "route", "ask", "admit", "book"):
         receiver = phases.add_parser(phase, allow_abbrev=False)
         receiver.add_argument("--checked", type=Path, required=True)
         receiver.add_argument("--prior", type=Path, required=True)

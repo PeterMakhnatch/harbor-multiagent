@@ -1,0 +1,274 @@
+{
+  "schema": "seatlab.native-question-policy-observations/v1",
+  "registration": "https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064221371",
+  "complete": true,
+  "teams": [
+    {
+      "run": "naquestion-w00-local-question",
+      "uuid": "e1aef9e6-ea98-4e70-a1d0-5b7fbb583ff2",
+      "world": "w00",
+      "arm": "local-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": true,
+      "result_sha256": "dce40c6672e9cc85cce88442780bb988112d3f5320b3403897e493060aae940e"
+    },
+    {
+      "run": "naquestion-w00-raw-question",
+      "uuid": "ece2c9ca-bf50-47de-a8d3-0e46e0dbe0db",
+      "world": "w00",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "dd6a746daa746a4e8295628b46e3252a7c3674e94f21eb2e8a8a978f0b5b67c4"
+    },
+    {
+      "run": "naquestion-w01-local-question",
+      "uuid": "84fbf01b-a987-4c63-8afe-9123da71f6db",
+      "world": "w01",
+      "arm": "local-question",
+      "reward": 1,
+      "successful_nominated": true,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": true,
+      "question_both_locally_valid": true,
+      "result_sha256": "4e44a8c6fc85d109eedaf7304c4e5d50483adecd07da6fffb2ff62ab337b57c0"
+    },
+    {
+      "run": "naquestion-w01-raw-question",
+      "uuid": "cfeeb5db-85b4-46c0-a53a-cdc23bf79f22",
+      "world": "w01",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "2454a02fb3c95cfd060f7704e86fa846a5b2717401d54a77bdff0053358cfa6f"
+    },
+    {
+      "run": "naquestion-w02-raw-question",
+      "uuid": "e65a2055-d0a4-4d7d-8e3a-761dc9709341",
+      "world": "w02",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "62858d6437fd407c43a24a23437f89bbaec585f3146fb77dfe588e79e6cad27a"
+    },
+    {
+      "run": "naquestion-w02-local-question",
+      "uuid": "8c0e5277-5720-48b9-ac79-115b50981910",
+      "world": "w02",
+      "arm": "local-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": true,
+      "result_sha256": "6aab5fdb272bcbb653637af0fe83586d6ed70524786c8839ee2a9295fc7b322a"
+    },
+    {
+      "run": "naquestion-w03-raw-question",
+      "uuid": "ab4b521f-d42d-43a3-b57f-75610069d59c",
+      "world": "w03",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "2f09940ff7b037b569b9caf9db1e9eb8704dbedece1e4777cfc1d1dc7341f184"
+    },
+    {
+      "run": "naquestion-w03-local-question",
+      "uuid": "4e99310d-8a64-40ce-a001-0508e7a9efbb",
+      "world": "w03",
+      "arm": "local-question",
+      "reward": 1,
+      "successful_nominated": true,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": true,
+      "question_both_locally_valid": true,
+      "result_sha256": "a0a8f4860649e2a2acc421d4cb8a556eee50b6cdafdc332b98bc8750b373fd1a"
+    },
+    {
+      "run": "naquestion-w04-raw-question",
+      "uuid": "5975cbbd-1ce0-40d4-b2d6-edcca8799771",
+      "world": "w04",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "f1ccaa3a8f5e0bbcec4c0fc79068d25b381df2922f3bf09c9e3f4bf086fb18ce"
+    },
+    {
+      "run": "naquestion-w04-local-question",
+      "uuid": "bae3bcb0-228c-43f9-86ca-ef1c094f45a0",
+      "world": "w04",
+      "arm": "local-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": true,
+      "result_sha256": "8004d3df94b2d581639b09960d55f59beb0ab516e4172c806e838005526405fd"
+    },
+    {
+      "run": "naquestion-w05-raw-question",
+      "uuid": "e599dbed-68da-474a-94a5-eb3fb2bac394",
+      "world": "w05",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "783ba13acc4758e7a35a7e45a8f6ef4a9af0bdb1eaae99603f5bf19ba6ecb93e"
+    },
+    {
+      "run": "naquestion-w05-local-question",
+      "uuid": "487c7957-b6f5-4c8e-973e-41ea70d40b48",
+      "world": "w05",
+      "arm": "local-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": true,
+      "result_sha256": "629f460af50104ea161ac82753393bf070bcac302a9af186dfc845bdc582aca0"
+    },
+    {
+      "run": "naquestion-w06-local-question",
+      "uuid": "7f8f0aae-54a3-4e40-95cb-0a645bb1ba89",
+      "world": "w06",
+      "arm": "local-question",
+      "reward": 1,
+      "successful_nominated": true,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": true,
+      "question_both_locally_valid": true,
+      "result_sha256": "cde2431344054946f40d58f54b8f71cc0dc0437dff399b03e09dc9cd181b4bf2"
+    },
+    {
+      "run": "naquestion-w06-raw-question",
+      "uuid": "731a164c-d17b-4330-85e7-b62412694854",
+      "world": "w06",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "c136e0cb8b4f4c69002be7370f727de08a6d875abab9f5df8cc979c479c4a6c4"
+    },
+    {
+      "run": "naquestion-w07-local-question",
+      "uuid": "6eed3493-9c4e-442d-9538-ae7160302975",
+      "world": "w07",
+      "arm": "local-question",
+      "reward": 1,
+      "successful_nominated": true,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": true,
+      "question_both_locally_valid": true,
+      "result_sha256": "0579875107718e76778e7a98504b8ff7ea089d7254bddce107372e25f08f2cdf"
+    },
+    {
+      "run": "naquestion-w07-raw-question",
+      "uuid": "a3d18394-6e7f-4dad-8bfd-5a8dd44f9706",
+      "world": "w07",
+      "arm": "raw-question",
+      "reward": 0,
+      "successful_nominated": false,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "d46068edcc18c48e99a4f2ad1893a15113d22720db022f116bcb48cc19561479"
+    }
+  ],
+  "stock": {
+    "local-question": {
+      "attempted": 8,
+      "enrolled": 8,
+      "missing_or_unverified_reward": 0,
+      "protocol_complete": 8,
+      "unattempted": 0,
+      "verified_stock_losses": 4,
+      "verified_stock_wins": 4
+    },
+    "raw-question": {
+      "attempted": 8,
+      "enrolled": 8,
+      "missing_or_unverified_reward": 0,
+      "protocol_complete": 8,
+      "unattempted": 0,
+      "verified_stock_losses": 8,
+      "verified_stock_wins": 0
+    }
+  },
+  "paired": {
+    "control": false,
+    "local_wins": 4,
+    "matched": 8,
+    "raw_wins": 0,
+    "ties": 4,
+    "two_sided_sign_p": {
+      "denominator": 8,
+      "numerator": 1
+    },
+    "worlds_enrolled": 8
+  },
+  "behavior": {
+    "raw-question": {
+      "draft_exact": 6,
+      "delivered_exact": 8,
+      "target_nominated": 0,
+      "reward": 0,
+      "question_both_locally_valid": 0,
+      "successful_nominated": 0
+    },
+    "local-question": {
+      "draft_exact": 3,
+      "delivered_exact": 8,
+      "target_nominated": 4,
+      "reward": 4,
+      "question_both_locally_valid": 8,
+      "successful_nominated": 4
+    }
+  },
+  "verified_deliveries": 32,
+  "verified_turns": 48,
+  "verdict": "did_not_pass",
+  "minimum_net_gain": 2,
+  "maximum_two_sided_p": {
+    "numerator": 1,
+    "denominator": 20
+  },
+  "source_scope": "W00\u201307; real whole teams; receiver question representation only; both arms certify sender facts; unchanged final template"
+}

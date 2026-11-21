@@ -374,6 +374,37 @@ The controls intentionally draft false sender facts. Expect `delivered_matches_s
 
 Use `collect-repair --job "$job" --spend-dir "$SEATLAB_SPEND_DIR"` for the private audit. It checks the original sender draft, the actual message delivered to the other seat, and the stock grade separately. It reports a paired probability only after all 8 matched worlds have complete evidence. [Observed native result](calendar-notice-result.md#does-the-local-sender-check-help-a-whole-team).
 
+##### Change only the receiver's first question
+
+Use this test to separate a bad question from a wrong answer. In both arms, the sender drafts an answer and checks it against its own calendar before sending. The final receiver sees the same format in both arms. Only the first receiver input changes: `raw-question` gives its own busy-hour table; `local-question` gives the exact starts that fit the same table. Neither input gives the sender's availability.
+
+Using the same variables as above, create a new private job. For W00, the registered order is **local first**:
+
+```sh
+job=$(realpath "$(mktemp -d)")
+for arm in local-question raw-question; do
+  /tmp/crucible-docker-slot.sh "$python" -m "$module" control-questions \
+    --world w00 --arm "$arm" --job "$job" \
+    --tasks "$private/tasks/schedule" --harbor "$harbor" || exit 1
+done
+"$python" -m "$module" collect-questions --job "$job" --controls
+```
+
+The controls intentionally draft wrong sender answers. Both actual deliveries must match the sender's calendar. `question_both_locally_valid` checks the receiver's proposed pair, not the final team reward.
+
+For a paid run, create another new job. Use `run-questions` and `--spend-dir "$SEATLAB_SPEND_DIR"` only after you set a budget. Start `local-question` first on W00, W01, W06, and W07. Start `raw-question` first on W02 through W05. Split whole worlds between workers. Read `collect-questions --job "$job" --spend-dir "$SEATLAB_SPEND_DIR"`. Incomplete pairs do not count as losses.
+
+To check the **published** team scores and the bill without running Harbor, use Python 3.12 or later:
+
+```sh
+results=examples/seatlab/results
+python3.12 -BS -m examples.seatlab.live_answers.public_result \
+  "$results/calendar-native-question-policy.json" \
+  "$results/calendar-native-question-policy-cost.json"
+```
+
+The command checks all 16 team rows, the paired test, and the 48 settled calls. It verifies public arithmetic, not that a private native job actually took place. For the earlier sender comparison, use `calendar-native-sender-repair` in both filenames.
+
 ##### Read the same native teams with stock Eval Lab
 
 Eval Lab stays a consumer. Use a Python environment with Eval Lab installed. Point `$study` at your **private native run directory**, not the public result files. Use the archive exported from that directory. This reads every scored arm through `evallab.results.load_trial`. It checks the trial UUID and team reward against the archive. Unknown scores stay unknown. No API call, ingestion, catalog, or Eval Lab write is needed.
@@ -883,6 +914,14 @@ python3.12 -BS -m "$ns.second_question_case" "$private/case" "${score[@]}"
 ```
 
 Run `verify-local` on the sender host and the last command on the owner host. When `count` is zero, the scorer shares the single `stop.reply` between both policies. When a second nomination is invalid, the scorer still grades `stop.reply`. It does not invent a final answer for the longer policy. Give different native cases to different workers. [Observed results and token costs](calendar-notice-result.md#should-the-receiver-stop-after-a-verified-rejection).
+
+For production use, check whether the second nomination needs a model at all. On the receiver host, reuse the same `first` arguments:
+
+```bash
+python3.12 -BS -m "$second" route "${first[@]}"
+```
+
+`stop` means no second question. `exhaustive` supplies every remaining local start as `proposals` because they all fit the allowed question size. Send those starts to `verify-local` without a nomination call. `model` means the question has a real choice; use `ask` as above. The route reads no sender data. Do not report a supplied question as a model reply.
 
 #### Let a receiver choose which report to read next
 
