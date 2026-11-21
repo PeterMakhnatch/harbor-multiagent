@@ -31,19 +31,31 @@ def _digest(text: str) -> str:
 
 
 def _read_native(
-    trial: Path, config: dict[str, Any], cell_id: str, transport: str
+    trial: Path,
+    config: dict[str, Any],
+    cell_id: str,
+    transport: str,
+    *,
+    agent_import: str = _AGENT_IMPORT,
+    channel_id: str | None = None,
 ) -> dict[str, Any]:
     declared = native_pairs.DECLARED_MODEL if transport == "direct" else None
+    allowed = {"cell_id", "transport", "command_config"}
+    if channel_id is not None:
+        if channel_id != trial.name:
+            raise ValueError("declared channel differs from this trial")
+        allowed.add("channel_id")
     for participant in evidence._by_role(
         config.get("participants"), "participants"
     ).values():
         kwargs = participant.get("kwargs")
         if (
             participant.get("name") is not None
-            or participant.get("import_path") != _AGENT_IMPORT
+            or participant.get("import_path") != agent_import
             or participant.get("model_name") != declared
             or not isinstance(kwargs, dict)
-            or not kwargs.keys() <= {"cell_id", "transport", "command_config"}
+            or not kwargs.keys() <= allowed
+            or kwargs.get("channel_id") != channel_id
             or kwargs.get("cell_id") != cell_id
             or kwargs.get("transport") != transport
         ):
@@ -122,10 +134,13 @@ def _seat_metadata(
     cell_id: str,
     rows: list[dict[str, Any]],
     transport: str,
+    *,
+    agent_name: str = "seatlab-revision-attention",
+    seat_schema: str = _SEAT_SCHEMA,
 ) -> dict[str, Any]:
     model = {"name": "deepseek-flash", "provider": "deepseek"}
     if record.get("agent_info") != {
-        "name": "seatlab-revision-attention",
+        "name": agent_name,
         "version": "1.0.0",
         "model_info": model if transport == "direct" else None,
     }:
@@ -134,7 +149,7 @@ def _seat_metadata(
     if capsule["basis"] != "bound" or not run_panel._config_matches(
         metadata,
         {
-            "schema": _SEAT_SCHEMA,
+            "schema": seat_schema,
             "cell_id": cell_id,
             "role": role,
             "stage": "complete",
@@ -350,6 +365,8 @@ def _index(
 
 def _score_index(
     rows: dict[str, dict[str, Any]],
+    *,
+    stages: tuple[str, ...] = ("inventory", "select", "decide"),
 ) -> dict[tuple[int, int, str], float | None]:
     scores: dict[tuple[int, int, str], float | None] = {}
     fingerprints: dict[int, str] = {}
@@ -368,7 +385,7 @@ def _score_index(
                 or trial_id in trial_ids
                 or fingerprints.setdefault(seed, fingerprint) != fingerprint
                 or [turn["run"] for turn in outcome["turns"]]
-                != [f"{cell_id}-{stage}" for stage in ("inventory", "select", "decide")]
+                != [f"{cell_id}-{stage}" for stage in stages]
             ):
                 raise ValueError(
                     "outcome does not identify an independent registered trial"
@@ -378,21 +395,25 @@ def _score_index(
     return scores
 
 
-def _primary(scores: dict[tuple[int, int, str], float | None]) -> dict[str, Any]:
+def _primary(
+    scores: dict[tuple[int, int, str], float | None], *, arms: tuple[str, str] = _ARMS
+) -> dict[str, Any]:
     seeds = sorted({seed for seed, _, _ in scores})
     seed_blocks = []
     lower, upper = [], []
     for seed in seeds:
         deltas = []
         for rep in (0, 1):
-            named, count = (scores[seed, rep, arm] for arm in _ARMS)
-            if named is not None and count is not None:
-                deltas.append(named - count)
+            treatment, control = (scores[seed, rep, arm] for arm in arms)
+            if treatment is not None and control is not None:
+                deltas.append(treatment - control)
             lower.append(
-                (0.0 if named is None else named) - (1.0 if count is None else count)
+                (0.0 if treatment is None else treatment)
+                - (1.0 if control is None else control)
             )
             upper.append(
-                (1.0 if named is None else named) - (0.0 if count is None else count)
+                (1.0 if treatment is None else treatment)
+                - (0.0 if control is None else control)
             )
         seed_blocks.append(
             {
@@ -404,7 +425,7 @@ def _primary(scores: dict[tuple[int, int, str], float | None]) -> dict[str, Any]
     means = [block["mean"] for block in seed_blocks if block["mean"] is not None]
     pair_count = len(lower)
     return {
-        "contrast": "named_minus_count_native_score",
+        "contrast": f"{arms[0]}_minus_{arms[1]}_native_score",
         "estimate": fsum(means) / len(seeds) if len(means) == len(seeds) else None,
         "matched_pairs": sum(block["matched_pairs"] for block in seed_blocks),
         "registered_pairs": pair_count,

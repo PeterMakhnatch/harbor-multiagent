@@ -34,6 +34,8 @@ def _record_usage(context: AgentContext, turns: list[dict[str, Any]]) -> None:
 
 
 class AttentionSeat(BaseAgent):
+    _registered = _CELLS
+
     def __init__(
         self,
         logs_dir: Path,
@@ -46,7 +48,7 @@ class AttentionSeat(BaseAgent):
         extra_env: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> None:
-        if not isinstance(cell_id, str) or cell_id not in _CELLS:
+        if not isinstance(cell_id, str) or cell_id not in self._registered:
             raise ValueError("Attention seat requires a registered cell id")
         if extra_env or kwargs:
             raise ValueError("Attention seat does not accept agent overrides")
@@ -69,7 +71,7 @@ class AttentionSeat(BaseAgent):
         else:
             raise ValueError("Unknown attention transport")
         super().__init__(logs_dir=logs_dir, model_name=declared, logger=logger)
-        self._cell = _CELLS[cell_id]
+        self._cell = self._registered[cell_id]
         self._command_config = config_path
         self._command: Callable[[str], str] | None = None
         self._started = False
