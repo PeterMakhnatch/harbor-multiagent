@@ -42,6 +42,20 @@ through OpenRouter, from the observed cost per trial; Modal adds about $0.01 per
 Do not spend on the warning effect or the "only p1 submits" score effect in their current design:
 they need 48 to more than 256 instances (see RESULTS.md, "How many instances the next wave needs").
 
+## Conflicting-goals experiments (commons, split), in order of value per dollar
+
+Costs are DeepSeek direct, off-peak, local Docker, from the real token cost per trial measured on 2026-11-21:
+commons solo $0.027, talk $0.042, silent $0.068 (3 seats); split talk $0.025, open $0.051, silent $0.067 (2 seats).
+Pre-register each one in COMMONS.md or SPLIT.md before the first paid trial.
+
+| # | Question | Arms | Size | Cost |
+|---|---|---|---|---|
+| 1 | Is one proposal enough? Talk worked in split, and public facts alone did not (SPLIT.md section 12). | split regime b, talk with 1 message per seat in each round (`--max-messages-per-round 1`), against sp3 talk on the same instances | 6 instances | about $0.15 |
+| 2 | Does an institution replace talk? | split regime b, a world action that posts a binding split which the other seat accepts or rejects (needs a game hook), no messages | 6 instances, against sp3 silent and talk | about $0.30, plus the hook |
+| 3 | Does talk still save the lake with 1 defector? | commons regime B, talk, with 1 scripted seat that over-uses (the liar-seat pattern of `schedule.liar`) | 16 instances, paired with wave 1 talk | about $0.70 |
+| 4 | Does the split result hold with 3 seats? | split regime b, 3 seats (1 strong), silent and talk | 6 instances | about $0.50 |
+| 5 | Does the commons result hold on the stronger DeepSeek model? | commons regime B, silent and talk, DeepSeek Pro | 8 instances | check the price first; more than Flash |
+
 ## Lessons to keep
 
 - Every byte a seat can see is evidence to it: names, headers, counters, formats, examples, networks.
