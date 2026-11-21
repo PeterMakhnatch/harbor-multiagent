@@ -24,6 +24,10 @@ An offline inspection also identified why the original final answers were incomp
 
 The [saved-trial replication](replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials) uses the accepted sender messages from 3 actual native teams. All 6 source seats acknowledged their input. Both replacement policies in the first block chose the same record and shared a complete new decision. All 4 direct calls matched at **$0.000276468 USD**. The saved Harbor scores did not change.
 
+On the [42 recorded-source handoffs](results/handoff-recorded-live.json), naming the record selected the revised record **19/19** times, versus **4/19** without names. Only 8 of 36 changed blocks had two complete final decisions. The named policy improved 2, worsened 0, and tied 6. The equal-world difference was **+19.44 points** among complete pairs. The full missing-data bounds span **−47.22 to +75.00 points**. No stable control yielded two valid final decisions. This supports the lookup observation, not a general dispatch-score gain.
+
+Half the new writers returned an invalid note: 21 of 42. The [native stock check](results/handoff-recorded-stock.json) confirmed 132 observed choices in 22 distinct final decisions. They came from all 3 eligible source worlds. The [host ledger](results/handoff-recorded-cost.json) matched all 120 calls at **$0.007863198 USD**, including the first block. No hold remains.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.
