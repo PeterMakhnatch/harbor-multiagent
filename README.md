@@ -78,6 +78,16 @@ A queue retry replaces the previous attempt and deletes its directory.
 Retained seat records therefore omit discarded attempts and unreported calls.
 Job wall time includes discarded work and backoff but cannot assign them to seats.
 
+Before a selected queue retry deletes that directory, Harbor saves its final
+scrubbed `result.json` as `retry-attempt-<UUID>.json` in the Job root.
+The UUID identifies the discarded attempt even when the Trial name is reused.
+An existing destination or a copy failure stops the retry before deletion.
+
+These files do not change retained scoring, usage totals, or retry policy.
+They preserve only result bytes, not old logs or trajectories.
+The saved `trial_uri` still points to the reused directory.
+Batch Hub uploads and Job archives do not include these local sidecars.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a

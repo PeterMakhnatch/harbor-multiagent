@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Discarded retry outcomes:** Selected queue retries save the final scrubbed result as `retry-attempt-<UUID>.json` in the Job root before deleting the Trial directory. Existing destinations and copy errors stop the retry before deletion. Retained scores and usage totals stay unchanged. These local sidecars exclude old logs and are not included in batch Hub uploads or Job archives.
+
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.
 
 - **Global Rollouts viewer:** Browse rollouts across jobs with server-side status, error, and metadata filters, backed by global rollout listing and filter APIs.

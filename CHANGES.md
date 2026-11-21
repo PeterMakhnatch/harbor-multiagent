@@ -18,6 +18,8 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/models/job/config.py` | `JobConfig.participants`. |
 | `src/harbor/job.py` | Rebuilds live token and cost totals from retained results when a retry removes an attempt. Unknown fields remain null; reported zeros remain zero. Reward statistics and retry policy stay unchanged. |
 | `tests/unit/test_job_status.py` | Checks persisted retry snapshots for unknown usage and an explicit zero in each of the 4 usage fields. |
+| `src/harbor/trial/queue.py` | Preserves the final scrubbed native result before an eligible retry deletes its directory. UUID-named Job-root files do not enter retained scoring or usage. Archive failures stop deletion and replacement. |
+| `tests/unit/test_trial_queue.py` | Checks exact bytes after deletion, fresh attempt IDs under a reused Trial name, retry eligibility, destination conflicts, and partial-write cleanup. |
 | `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. |
 | `src/harbor/models/job/lock.py` | Records participants in `lock.json` and its equality, so a changed roster is a changed run. |
 | `src/harbor/models/trial/result.py` | `SeatResult` and `TrialResult.seat_results`; seat errors count as recorded errors and seat usage counts in the token and cost totals. |
