@@ -386,6 +386,8 @@ Generate and verify the tasks above. Use the Python executable from your install
 
 ```bash
 umask 077
+python="$PWD/.venv/bin/python"
+harbor="$PWD/.venv/bin/harbor"
 module=examples.seatlab.calendar_notices
 mkdir -m 700 "$private/teams"
 "$python" -m "$module" views-control --job "$private/teams" \
@@ -397,6 +399,19 @@ The positive control must earn 1. The `wrong` control must earn 0. These are scr
 For a paid replication, use `views-run` instead of `views-control`. Remove `--policy` and pass `--spend-dir` with the existing private spend database. Supply only the direct DeepSeek credential through `keys run --`. Make the first attempt once per registered arm. Use `raw` first on worlds 12, 15, 16, 19, 20, and 23. Use `exact` first on the other 6. Start the second arm only after the first ends. Give parallel workers different worlds.
 
 Audit a private job offline with `"$python" -m "$module.audit" "$private/teams" --private-views --spend-dir "$SEATLAB_SPEND_DIR"`. Add `--controls` to audit controls instead. Missing native rewards stay unknown. The public summary reader needs only Python; it does not run Docker or contact a model.
+
+#### Could a different report request have helped?
+
+Use the native job you already ran. This diagnostic makes no model calls and starts no containers:
+
+```bash
+"$python" -m examples.seatlab.calendar_notices.offer_replay "$private/teams" \
+  --private-views --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+Remove `--private-views` for the original count-versus-names study. Each complete row contains 10 possible pairs of weekday reads, summarized as counts. `visible_pairs` counts pairs that would leave the true meeting among the receiver’s legal options. `unique_correct_pairs` counts pairs that would leave **only** that meeting. `actual_visible` checks the 2 reports the receiver really selected. A zero does not mean the team could not guess the answer. The diagnostic holds the recorded sender fixed; it does not measure a new native reward.
+
+The optional comparison sorts days by the number of provisional, locally valid starts. It requests the first 2 days and picks the earliest remaining start. Ties use weekday order. This rule never sees the target or unopened responses. The diagnostic keeps a missing or inconsistent transcript as a missing row, not a loss. The output contains no calendars, messages, or answer IDs.
 
 #### Native replication with an external harness
 

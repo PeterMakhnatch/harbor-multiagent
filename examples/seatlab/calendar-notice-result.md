@@ -25,6 +25,8 @@ No sender reported its full week correctly. Across 24 revisions, 43 of 146 repor
 
 The true meeting remained in the visible candidates for only 4/24 teams. Only 1/24 final choices fit the receiver’s own calendar. [Checking for a consistent 1-hour or 1-day shift](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059641483) raised that count to at most 4/24. This does not support a simple coordinate mismatch.
 
+Could better report requests alone fix this? We checked all 10 legal pairs of weekday reads against each sender’s recorded reports. In **15/24 teams**, no pair would show the correct meeting among the receiver’s options. The actual reads showed it in 4 teams; alternative reads could show it in 5 more. This [offline diagnostic](replication.md#could-a-different-report-request-have-helped) does not rule out a correct guess.
+
 ## What helped the receiver?
 
 We replayed each of the 24 final decisions with 2 fresh DeepSeek calls. One saw the original busy-hour calendar. The other saw the exact 2-hour starts for its **own** attendees instead. The peer reports, 2 reads, time grid, and final question stayed the same. Neither receiver saw the peer’s calendar.
