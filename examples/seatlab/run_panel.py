@@ -15,7 +15,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
-from evidence import TrialEvidence, read_trial
+if __package__:
+    from .evidence import TrialEvidence, read_trial
+else:
+    from evidence import TrialEvidence, read_trial
 
 PANEL_DIR = Path(__file__).resolve().parent
 EXAMPLES_DIR = PANEL_DIR.parent

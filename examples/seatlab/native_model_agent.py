@@ -48,6 +48,16 @@ def _fail(metadata: dict[str, Any], stage: str) -> Never:
     raise seat_agent._Unmeasured(f"Native model seat: {stage}") from None
 
 
+async def _verify_route(trial_id: UUID | None, metadata: dict[str, Any]) -> None:
+    metadata["stage"] = "route_unverified"
+    try:
+        route = await asyncio.to_thread(_preflight, trial_id)
+    except Exception:
+        _fail(metadata, "route_unverified")
+    if route != "verified":
+        _fail(metadata, "route_unverified")
+
+
 def _record_usage(
     context: AgentContext, telemetry: dict[str, int | float | None], attested: bool
 ) -> None:
@@ -83,28 +93,24 @@ def _record_usage(
         }
 
 
-def _generate(
-    role: str,
-    view_bytes: bytes,
-    episodes: int,
+def _generate_text(
+    system: str,
+    user: bytes,
     context: AgentContext,
     metadata: dict[str, Any],
-) -> dict[str, Any]:
-    system = seat_agent._RULES[role] + (
-        " Output only a JSON object. Do not include explanations."
-    )
+) -> str:
     session = str(uuid4())
     args = claude_replay._args(system, session)
     # Set this in the worker, not while the command is still queued.
     metadata["model_turns"] = 1
     try:
-        process = claude_replay._invoke(
-            args, view_bytes, claude_replay._GENERATION_TIMEOUT
-        )
+        process = claude_replay._invoke(args, user, claude_replay._GENERATION_TIMEOUT)
     except subprocess.TimeoutExpired:
         _fail(metadata, "generation_timeout")
     except OSError:
         _fail(metadata, "cli_launch_failed")
+    except Exception:
+        _fail(metadata, "generation_failed")
     try:
         response = claude_replay._json_object(process.stdout)
     except (ValueError, RecursionError):
@@ -143,6 +149,20 @@ def _generate(
     text = response.get("result")
     if not isinstance(text, str) or len(text) > 8192:
         _fail(metadata, "invalid_or_refused_decisions")
+    return text
+
+
+def _generate(
+    role: str,
+    view_bytes: bytes,
+    episodes: int,
+    context: AgentContext,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    system = seat_agent._RULES[role] + (
+        " Output only a JSON object. Do not include explanations."
+    )
+    text = _generate_text(system, view_bytes, context, metadata)
     try:
         submission = claude_replay._json_object(text)
         seat_agent._checked_submission(submission, role, episodes)
@@ -213,13 +233,7 @@ class NativeModelAgent(BaseAgent):
             _fail(metadata, "invalid_view")
         view_sha256 = sha256(body).hexdigest()
 
-        metadata["stage"] = "route_unverified"
-        try:
-            route = await asyncio.to_thread(_preflight, self.context_id)
-        except Exception:
-            _fail(metadata, "route_unverified")
-        if route != "verified":
-            _fail(metadata, "route_unverified")
+        await _verify_route(self.context_id, metadata)
 
         metadata["stage"] = "generation"
         submission = await asyncio.to_thread(

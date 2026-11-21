@@ -27,6 +27,22 @@ Separate workers can add new worlds, actor-side context transformations, and cro
 - **Primary:** the native reward under `dc` minus `cd` for `reordered`, paired by seed and repetition. Average within seed, then equally across seeds. Secondary: the same comparison under `fresh`, their difference on complete four-cell blocks, the inventory's exact reporting of both revisions, and optimal choices on changed versus stable shipments. A failed attestation does not prove a zero score. Show incomplete-block bounds and repeat disagreement. These are 4 fixed worlds; 192 shipments across 32 trials are not 192 independent samples.
 - Reconstruct each delivered role view and submitted decision from the native world. Check both native identities and link the direct receipt to its host ledger. Keep the CLI's subscription estimate separate from direct API cost. Do not use another paid API key, fallback route, or command that changes the subscription. Stop on confirmed route exhaustion. A different model needs a new registration.
 
+Run from the fork root with the native Harbor interpreter and local Docker. `plan` and both readers make no model calls. Use a new, physical, owner-only study directory. The host needs a verified Claude Max subscription and the existing direct DeepSeek spend ledger.
+
+```sh
+module=examples.seatlab.visibility.dispatch_mix_run
+python -m "$module" plan
+study=$(python -c 'from pathlib import Path; import tempfile; print(Path(tempfile.mkdtemp()).resolve())')
+# PAID: run one registered index after approving your direct budget.
+# When workers share Docker, wrap the run in their shared slot limiter.
+keys run -- python -m "$module" run --root "$study" --harbor "$HARBOR_BIN" --index 0
+python -m "$module" report --root "$study" --spend-dir "$SEATLAB_SPEND_DIR" > "$study/public-report.json"
+# Optional: use the Python interpreter that provides evallab.results.
+"$EVAL_LAB_PYTHON" -m examples.seatlab.visibility.dispatch_mix_stock "$study" "$study/public-report.json"
+```
+
+Set `HARBOR_BIN` to the fork's absolute Harbor executable. Keep `SEATLAB_SPEND_DIR` separate from the study. Do not repeat an index after a failure. A stopped trial can still have measured charges. A missing native token count is not a zero. The stock reader does not contact Eval Lab services.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.

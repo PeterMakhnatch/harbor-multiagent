@@ -2,7 +2,7 @@
 
 From the fork root:
 
-PYTHONPATH=examples/seatlab:examples:. python -m examples.seatlab.visibility.native_pairs plan
+python -m examples.seatlab.visibility.native_pairs plan
 
 The grid is fixed. An external scheduler owns cell order and Docker slots.
 A stopped Codex subscription plan is historical only. It is not a fallback.
@@ -18,15 +18,17 @@ import sys
 from pathlib import Path
 from typing import Any, cast, override
 
-import evidence
-import native_model_agent
-import run_panel
-import seat_agent
-import team_driver
-import team_report
-from capsule import encode_view, view_hash
+from examples.seatlab import (
+    evidence,
+    native_model_agent,
+    run_panel,
+    seat_agent,
+    team_driver,
+    team_report,
+)
+from examples.seatlab.capsule import encode_view, view_hash
+from examples.seatlab.export_capsules import reconstructed_capsules
 from examples.seatlab.visibility import deepseek, spend
-from export_capsules import reconstructed_capsules
 
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
@@ -132,6 +134,59 @@ async def _ask_once(
     return turn.text
 
 
+async def _prepare_view(
+    environment: SeatEnvironment,
+    role: str,
+    episodes: int,
+    conditions: tuple[str, ...],
+    metadata: dict[str, Any],
+) -> tuple[str, str]:
+    try:
+        view = await seat_agent._view(environment)
+        cases = seat_agent._checked_view(view, role)
+        if len(cases) != episodes or view["condition"] not in conditions:
+            raise ValueError("Unregistered native scenario")
+        digest = view_hash(view)
+        prompt = _prompt(role, cases)
+    except Exception:
+        native_model_agent._fail(metadata, "invalid_view")
+    metadata["prompt_sha256"] = _prompt_hash(prompt)
+    return digest, prompt
+
+
+async def _submit_response(
+    environment: SeatEnvironment,
+    role: str,
+    episodes: int,
+    digest: str,
+    response: str,
+    metadata: dict[str, Any],
+) -> None:
+    try:
+        if not isinstance(response, str) or len(response) > 8192:
+            raise ValueError("Invalid model response")
+        submission = seat_agent._json_object(response, "subscription response")
+        seat_agent._checked_submission(submission, role, episodes)
+        metadata["decision_sha256"] = _decision_hash(role, submission["rows"])
+    except (ValueError, RecursionError, seat_agent._Unmeasured):
+        native_model_agent._fail(metadata, "invalid_model_decisions")
+    metadata["stage"] = "submission_unacknowledged"
+    try:
+        status, body = await seat_agent._world_request(
+            environment, "/submit", submission, view_sha256=digest
+        )
+        accepted = seat_agent._json_object(body, "world submission")
+    except Exception:
+        native_model_agent._fail(metadata, "submission_unacknowledged")
+    if (
+        status != 200
+        or accepted.keys() != {"accepted"}
+        or accepted["accepted"] is not True
+    ):
+        native_model_agent._fail(metadata, "submission_unacknowledged")
+    metadata.update(stage="complete", view_sha256=digest)
+
+
 class DirectFlashSeat(BaseAgent):
     """Commit one attested direct response through a real scoped seat."""
 
@@ -200,40 +255,11 @@ class DirectFlashSeat(BaseAgent):
         role = environment.service
         metadata["role"] = role
         metadata["run_id"] = self._run_id
-        try:
-            view = await seat_agent._view(environment)
-            cases = seat_agent._checked_view(view, role)
-            if len(cases) != EPISODES or view["condition"] not in _CONDITIONS:
-                raise ValueError("Unregistered native scenario")
-            digest = view_hash(view)
-            prompt = _prompt(role, cases)
-        except (OSError, ValueError, RecursionError, TypeError, seat_agent._Unmeasured):
-            native_model_agent._fail(metadata, "invalid_view")
-        metadata["prompt_sha256"] = _prompt_hash(prompt)
+        digest, prompt = await _prepare_view(
+            environment, role, EPISODES, _CONDITIONS, metadata
+        )
         response = await _ask_once(prompt, role, metadata, context)
-        try:
-            if not isinstance(response, str) or len(response) > 8192:
-                raise ValueError("Invalid model response")
-            submission = seat_agent._json_object(response, "subscription response")
-            seat_agent._checked_submission(submission, role, EPISODES)
-            metadata["decision_sha256"] = _decision_hash(role, submission["rows"])
-        except (ValueError, RecursionError, seat_agent._Unmeasured):
-            native_model_agent._fail(metadata, "invalid_model_decisions")
-        metadata["stage"] = "submission_unacknowledged"
-        try:
-            status, body = await seat_agent._world_request(
-                environment, "/submit", submission, view_sha256=digest
-            )
-            accepted = seat_agent._json_object(body, "world submission")
-        except Exception:
-            native_model_agent._fail(metadata, "submission_unacknowledged")
-        if (
-            status != 200
-            or accepted.keys() != {"accepted"}
-            or accepted["accepted"] is not True
-        ):
-            native_model_agent._fail(metadata, "submission_unacknowledged")
-        metadata.update(stage="complete", view_sha256=digest)
+        await _submit_response(environment, role, EPISODES, digest, response, metadata)
 
 
 def _trial_config(root: Path, cell: Cell) -> dict[str, Any]:

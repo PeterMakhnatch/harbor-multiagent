@@ -6,9 +6,9 @@ import stat
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-if __package__:
+if TYPE_CHECKING or __package__:
     from . import claude_replay, run_panel, team_report
 else:
     import claude_replay
