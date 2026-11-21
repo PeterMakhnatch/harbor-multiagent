@@ -58,6 +58,26 @@ python3.12 -BS -m examples.seatlab.attention.peer_order_result examples/seatlab/
 
 [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063103003) · [Source admission](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063182403) · [Use your own receiver](replication.md#compare-receivers-on-one-real-dispatch-decision) · [Scored first attempts](results/dispatch-peer-order.json) · [64 physical calls: $0.003034752, no holds](results/dispatch-peer-order-cost.json).
 
+### Is a second receiver worth calling when a choice contradicts its report?
+
+**Not on these proposals.** Four of 32 proposals contained a disputed choice. We sent only those shipments to a second DeepSeek receiver. It returned valid corrections but retained all six disputed choices. The other 28 proposals needed no call.
+
+| Stock outcome on the same 192 shipments | Keep original | Free repair | Ask a receiver |
+|---|---:|---:|---:|
+| Optimal choices | 150 | 155 | 150 |
+| Feasible choices | 167 | 172 | 167 |
+| Additional model calls | 0 | 0 | 4 |
+
+The free rule replaced each disputed choice with the highest-utility bay in its latest visible report. The paid receiver scored 5 fewer optimal choices than that rule. Three worlds favored the rule and 13 tied. The exact two-sided world test gave p = 0.25. This small comparison does not establish a general advantage for the rule.
+
+All six disputed choices used an older report; none used an opened update. Before calling the receiver, we reported that only six choices could change. The registered target of eight additional optimal choices was therefore unreachable. A harness can check this limit without another generation. Do not mistake an old report for current stock.
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.peer_correction_result examples/seatlab/results/dispatch-peer-correction.json
+```
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063233677) · [Trigger count before spending](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063284404) · [Try the correction workflow](replication.md#ask-a-second-receiver-only-about-disputed-shipments) · [First observations](results/dispatch-peer-correction.json) · [4 additional calls: $0.000137700](results/dispatch-peer-correction-cost.json). The original proposals came from the report-order arm above. These results are not new team rewards.
+
 ## Does a revised record help a replacement agent find the right context?
 
 The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.

@@ -512,3 +512,21 @@ done
 ```
 
 Use `dispatch_peer_case score --world 6801` in the source checkout to score a worker's first reply from stdin. All eight earlier sources accept both formats. These are different sources from the 16-world [published order comparison](native-model-results.md#does-changing-only-the-list-order-change-the-receivers-choice). These offline commands need no model, Docker or Harbor installation.
+
+### Ask a second receiver only about disputed shipments
+
+Keep the **plain** `shown.txt` from the previous example and the first receiver's six-choice JSON in `original.json`. The commands below use only local Python. The free rule changes only bays absent from the most recent displayed report. The optional receiver sees only the disputed shipments.
+
+```sh
+module=examples.seatlab.attention.peer_correction
+python3.12 -BS -m "$module" free "$out/shown.txt" "$out/original.json" > "$out/free.json" || exit 1
+python3.12 -BS -m "$module" request "$out/shown.txt" "$out/original.json" > "$out/request.txt" || exit 1
+```
+
+If `request.txt` is empty, keep the original. Do not call another receiver. Otherwise send only its contents, with the system instruction `Answer only with JSON.` Save the first raw return as `patch.json`. Merge it before stock scoring:
+
+```sh
+python3.12 -BS -m "$module" merge "$out/shown.txt" "$out/original.json" "$out/patch.json" > "$out/revised.json"
+```
+
+A valid patch must name every disputed shipment and no others. Exit code `2` means unusable input. If the receiver returned an invalid patch, record that observation and keep the original. If no reply arrived, record it as missing. Never report missing work as a correct or incorrect decision. Score all three policies against the same stock source. This is a local input boundary, not a sandbox for an untrusted worker.
