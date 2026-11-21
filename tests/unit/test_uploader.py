@@ -1,6 +1,9 @@
-import json
-import tarfile
 import asyncio
+import errno
+import hashlib
+import json
+import os
+import tarfile
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -200,6 +203,12 @@ def _job_archive_names(job_dir: Path, tmp_path: Path) -> set[str]:
         return set(tar.getnames())
 
 
+def _seed_archive_cache(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    path.with_suffix(".gz.tus-url").write_text("https://uploads.example/upload-id")
+
+
 class TestCreateTrialArchive:
     def test_includes_full_trial_dir(self, tmp_path: Path) -> None:
         trial_result = _make_trial_result()
@@ -379,6 +388,99 @@ class TestCreateJobArchive:
         assert f"{root}/t1/steps/scaffold/workdir/setup.sh" not in names
         assert f"{root}/t1/steps/scaffold/scratch.txt" not in names
 
+    def test_includes_only_canonical_regular_retry_sidecars(
+        self, tmp_path: Path
+    ) -> None:
+        job_dir, _, _ = _write_job_dir(tmp_path, [])
+        root = job_dir.name
+        legacy_names = {
+            f"{root}/{name}"
+            for name in ("config.json", "lock.json", "result.json", "job.log")
+        }
+        assert _job_archive_names(job_dir, tmp_path) == legacy_names
+
+        retry_attempts = {
+            f"retry-attempt-{UUID(int=2)}.json": b'{ "cost_usd": null }\r\n',
+            f"retry-attempt-{UUID(int=1)}.json": b'{"unknown":123}\n',
+        }
+        for name, data in retry_attempts.items():
+            (job_dir / name).write_bytes(data)
+
+        for name in (
+            "retry-attempt-AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA.json",
+            f"retry-attempt-{UUID(int=3).hex}.json",
+            "retry-attempt-not-a-uuid.json",
+            f".retry-attempt-{UUID(int=4)}.json",
+            f"retry-attempt-{UUID(int=5)}.json.tmp",
+        ):
+            (job_dir / name).write_bytes(b"not an archive member")
+
+        outside = tmp_path / "outside.json"
+        outside.write_bytes(b"external file")
+        (job_dir / f"retry-attempt-{UUID(int=6)}.json").symlink_to(outside)
+        (job_dir / f"retry-attempt-{UUID(int=7)}.json").mkdir()
+        os.mkfifo(job_dir / f"retry-attempt-{UUID(int=8)}.json")
+
+        archive_path = tmp_path / "job.tar.gz"
+        _create_job_archive_file(job_dir, archive_path)
+        expected = {f"{root}/{name}": data for name, data in retry_attempts.items()}
+        with tarfile.open(archive_path, mode="r:gz") as tar:
+            assert set(tar.getnames()) == legacy_names | set(expected)
+            actual_order = [name for name in tar.getnames() if name in expected]
+            assert actual_order == sorted(expected)
+            for name, data in expected.items():
+                assert tar.getmember(name).isreg()
+                member = tar.extractfile(name)
+                assert member is not None
+                assert member.read() == data
+
+    @pytest.mark.parametrize("replacement", ["symlink", "fifo"])
+    def test_excludes_retry_sidecar_swapped_before_open(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replacement: str
+    ) -> None:
+        job_dir, _, _ = _write_job_dir(tmp_path, [])
+        sidecar = job_dir / f"retry-attempt-{UUID(int=1)}.json"
+        sidecar.write_bytes(b"original retry")
+        outside = tmp_path / "outside.json"
+        outside.write_bytes(b"external file")
+        open_file = os.open
+
+        def swap_before_open(path, flags, *args, **kwargs):
+            if path in (sidecar.name, sidecar):
+                assert flags & os.O_NOFOLLOW
+                assert flags & os.O_NONBLOCK
+                sidecar.unlink()
+                if replacement == "symlink":
+                    sidecar.symlink_to(outside)
+                else:
+                    os.mkfifo(sidecar)
+            return open_file(path, flags, *args, **kwargs)
+
+        monkeypatch.setattr(os, "open", swap_before_open)
+
+        assert f"{job_dir.name}/{sidecar.name}" not in _job_archive_names(
+            job_dir, tmp_path
+        )
+        assert sidecar.is_symlink() or sidecar.is_fifo()
+
+    def test_propagates_regular_retry_sidecar_io_errors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        job_dir, _, _ = _write_job_dir(tmp_path, [])
+        sidecar = job_dir / f"retry-attempt-{UUID(int=1)}.json"
+        sidecar.write_bytes(b"readable retry")
+        open_file = os.open
+
+        def fail_retry_open(path, flags, *args, **kwargs):
+            if path in (sidecar.name, sidecar):
+                raise OSError(errno.EIO, "retry sidecar I/O failed")
+            return open_file(path, flags, *args, **kwargs)
+
+        monkeypatch.setattr(os, "open", fail_retry_open)
+
+        with pytest.raises(OSError, match="retry sidecar I/O failed"):
+            _create_job_archive_file(job_dir, tmp_path / "job.tar.gz")
+
 
 class TestExtractPrimaryReward:
     def test_prefers_reward_key(self) -> None:
@@ -483,6 +585,22 @@ def mock_uploader() -> Uploader:
 
         uploader = Uploader()
     return uploader
+
+
+@pytest.fixture
+def job_archive_uploads(mock_uploader: Uploader) -> dict[str, tuple[bytes, str | None]]:
+    uploads: dict[str, tuple[bytes, str | None]] = {}
+
+    async def upload_archive(path: Path, key: str) -> None:
+        if key.startswith("jobs/"):
+            assert path.parent.name == ".harbor-upload"
+            assert path.name == Path(key).name
+            upload_url = path.with_suffix(".gz.tus-url")
+            url = upload_url.read_text() if upload_url.exists() else None
+            uploads[key] = (path.read_bytes(), url)
+
+    mock_uploader.storage.upload_resumable_file.side_effect = upload_archive
+    return uploads
 
 
 class TestUploadJob:
@@ -980,14 +1098,15 @@ class TestUploadJob:
         mock_uploader.db.list_trials_for_job.return_value = [
             {"id": str(trial_result.id), "archive_path": "trials/existing/trial.tar.gz"}
         ]
-        job_dir, _, _ = _write_job_dir(tmp_path, [trial_result])
+        job_dir, job_result, _ = _write_job_dir(tmp_path, [trial_result])
 
         await mock_uploader.upload_job(job_dir)
-        mock_uploader.db.get_job.return_value = {
-            "archive_path": mock_uploader.db.finalize_job.await_args.kwargs[
-                "archive_path"
-            ]
-        }
+        revision = hashlib.sha256(str(trial_result.id).encode()).hexdigest()
+        archive_path = f"jobs/{job_result.id}/job-{revision}.tar.gz"
+        assert mock_uploader.db.finalize_job.await_args.kwargs["archive_path"] == (
+            archive_path
+        )
+        mock_uploader.db.get_job.return_value = {"archive_path": archive_path}
         mock_uploader.db.finalize_job.reset_mock()
 
         result = await mock_uploader.upload_job(job_dir)
@@ -998,6 +1117,135 @@ class TestUploadJob:
         mock_uploader.storage.upload_bytes.assert_not_awaited()
         assert result.n_trials_skipped == 1
         assert result.n_trials_uploaded == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", ["batch", "direct", "explicit"])
+    async def test_retry_sidecar_refreshes_finalized_and_cached_archive(
+        self, tmp_path, mock_uploader, job_archive_uploads, mode
+    ) -> None:
+        trial = _make_trial_result(rewards={"reward": 1.0})
+        job_dir, job_result, job_config = _write_job_dir(tmp_path, [trial])
+        mock_uploader.db.get_job_visibility.return_value = "private"
+        mock_uploader.db.list_trials_for_job.return_value = [
+            {"id": str(trial.id), "archive_path": "retained-trial.tar.gz"}
+        ]
+        revision = "caller-revision" if mode == "explicit" else None
+        legacy_revision = (
+            hashlib.sha256(str(trial.id).encode()).hexdigest()
+            if mode == "batch"
+            else revision
+        )
+        legacy_name = (
+            f"job-{legacy_revision}.tar.gz" if legacy_revision else "job.tar.gz"
+        )
+        cache_dir = job_dir / ".harbor-upload"
+        legacy_archive = cache_dir / legacy_name
+        _create_job_archive_file(job_dir, legacy_archive)
+        with tarfile.open(legacy_archive, mode="r:gz") as tar:
+            legacy_members = set(tar.getnames())
+        result_paths = (Path("result.json"), Path(trial.trial_name) / "result.json")
+        metadata = {
+            f"{job_dir.name}/{path}": (job_dir / path).read_bytes()
+            for path in result_paths
+        }
+
+        async def upload() -> None:
+            if mode == "batch":
+                result = await mock_uploader.upload_job(job_dir)
+                assert (result.n_trials_uploaded, result.n_trials_skipped) == (0, 1)
+                assert result.n_trials_failed == 0
+            else:
+                await mock_uploader.finalize_job(
+                    job_dir,
+                    job_result=job_result,
+                    job_config=job_config,
+                    revision=revision,
+                )
+
+        key = f"jobs/{job_result.id}/{legacy_name}"
+        data = legacy_archive.read_bytes()
+        seen_keys = {key}
+        first = job_dir / f"retry-attempt-{UUID(int=1)}.json"
+        second = job_dir / f"retry-attempt-{UUID(int=2)}.json"
+        for sidecar, outcome in (
+            (first, b'{"cost_usd":null}\r\n'),
+            (first, b'{ "cost_usd":null}\n'),
+            (second, b'{ "cost_usd":null}\n'),
+        ):
+            stale_path = cache_dir / Path(key).name
+            _seed_archive_cache(stale_path, data)
+            mock_uploader.db.get_job.return_value = {"archive_path": key}
+            if sidecar == second:
+                first.unlink()
+            sidecar.write_bytes(outcome)
+
+            await upload()
+
+            key = mock_uploader.db.finalize_job.await_args.kwargs["archive_path"]
+            assert key not in seen_keys
+            seen_keys.add(key)
+            assert stale_path.read_bytes() == data
+            data, upload_url = job_archive_uploads[key]
+            assert upload_url is None
+            member_name = f"{job_dir.name}/{sidecar.name}"
+            with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
+                assert set(tar.getnames()) == legacy_members | {member_name}
+                for name, contents in {**metadata, member_name: outcome}.items():
+                    member = tar.extractfile(name)
+                    assert member is not None
+                    assert member.read() == contents
+
+        assert mock_uploader.db.finalize_job.await_count == 3
+        mock_uploader.db.insert_trial.assert_not_awaited()
+        mock_uploader.db.insert_trial_model.assert_not_awaited()
+        mock_uploader.db.finalize_trial_artifacts.assert_not_awaited()
+        if mode == "batch":
+            mock_uploader.db.get_job.return_value = {"archive_path": key}
+            await upload()
+            assert mock_uploader.db.finalize_job.await_count == 3
+
+        cached_path = cache_dir / Path(key).name
+        _seed_archive_cache(cached_path, data)
+        mock_uploader.db.get_job.return_value = {"archive_path": None}
+        await upload()
+        assert mock_uploader.db.finalize_job.await_count == 4
+        assert mock_uploader.db.finalize_job.await_args.kwargs["archive_path"] == key
+        assert job_archive_uploads[key] == (data, "https://uploads.example/upload-id")
+        assert not cached_path.exists()
+        assert not cached_path.with_suffix(".gz.tus-url").exists()
+
+    @pytest.mark.asyncio
+    async def test_job_revision_and_archive_share_snapshot_across_log_upload(
+        self, tmp_path, mock_uploader, job_archive_uploads
+    ) -> None:
+        job_dir, _, _ = _write_job_dir(tmp_path, [])
+        first = job_dir / f"retry-attempt-{UUID(int=1)}.json"
+        second = job_dir / f"retry-attempt-{UUID(int=2)}.json"
+        first.write_bytes(b'{"old": null}\n')
+
+        async def replace_sidecar(*args, **kwargs):
+            first.unlink()
+            second.write_bytes(b'{"new": null}\n')
+
+        mock_uploader.storage.upload_large_file.side_effect = replace_sidecar
+        await mock_uploader.upload_job(job_dir)
+        mock_uploader.storage.upload_large_file.side_effect = None
+        first_key = mock_uploader.db.finalize_job.await_args.kwargs["archive_path"]
+        mock_uploader.db.get_job.return_value = {"archive_path": first_key}
+        await mock_uploader.upload_job(job_dir)
+        second_key = mock_uploader.db.finalize_job.await_args.kwargs["archive_path"]
+        assert first_key != second_key
+
+        for key, included, excluded, outcome in (
+            (first_key, first, second, b'{"old": null}\n'),
+            (second_key, second, first, b'{"new": null}\n'),
+        ):
+            data, _ = job_archive_uploads[key]
+            with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
+                assert f"{job_dir.name}/{excluded.name}" not in tar.getnames()
+                member = tar.extractfile(f"{job_dir.name}/{included.name}")
+                assert member is not None
+                assert member.read() == outcome
 
     @pytest.mark.asyncio
     async def test_skips_existing_trial(
@@ -1032,30 +1280,30 @@ class TestUploadJob:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("revision", [None, "caller-revision"])
     async def test_finalize_resumes_existing_job_archive_upload(
-        self, tmp_path: Path, mock_uploader: Uploader
+        self, tmp_path: Path, mock_uploader: Uploader, revision: str | None
     ) -> None:
         trial_results = [_make_trial_result(rewards={"reward": 1.0})]
         job_dir, job_result, job_config = _write_job_dir(tmp_path, trial_results)
-        archive_path = job_dir / ".harbor-upload" / "job.tar.gz"
-        archive_path.parent.mkdir()
-        archive_path.write_bytes(b"partial gzip bytes")
-        archive_path.with_suffix(archive_path.suffix + ".tus-url").write_text(
-            "https://uploads.example/upload-id"
-        )
+        archive_name = f"job-{revision}.tar.gz" if revision else "job.tar.gz"
+        archive_path = job_dir / ".harbor-upload" / archive_name
+        _create_job_archive_file(job_dir, archive_path)
+        _seed_archive_cache(archive_path, archive_path.read_bytes())
 
         with patch("harbor.upload.uploader._create_job_archive_file") as create_archive:
             await mock_uploader.finalize_job(
                 job_dir,
                 job_result=job_result,
                 job_config=job_config,
+                revision=revision,
             )
 
         create_archive.assert_not_called()
         mock_uploader.storage.upload_large_file.assert_awaited_once()
         mock_uploader.storage.upload_resumable_file.assert_awaited_once_with(
             archive_path,
-            f"jobs/{job_result.id}/job.tar.gz",
+            f"jobs/{job_result.id}/{archive_name}",
         )
         assert not archive_path.exists()
         assert not archive_path.with_suffix(archive_path.suffix + ".tus-url").exists()
@@ -1252,26 +1500,20 @@ class TestUploadJob:
                     "https://uploads.example/upload-id"
                 )
                 raise RuntimeError("trajectory upload blocked")
-            return None
-
-        def _capture_job_archive(source_dir: Path, archive_path: Path) -> None:
-            _create_job_archive_file(source_dir, archive_path)
-            with tarfile.open(archive_path, mode="r:gz") as tar:
-                job_archive_names.update(tar.getnames())
+            if remote_path.startswith("jobs/"):
+                with tarfile.open(file_path, mode="r:gz") as tar:
+                    job_archive_names.update(tar.getnames())
 
         mock_uploader.storage.upload_resumable_file.side_effect = _fail_trajectory
 
-        with patch(
-            "harbor.upload.uploader._create_job_archive_file",
-            side_effect=_capture_job_archive,
-        ):
-            result = await mock_uploader.upload_job(job_dir)
+        result = await mock_uploader.upload_job(job_dir)
 
         assert result.n_trials_uploaded == 1
         assert result.n_trials_failed == 0
         # Direct trajectory upload failed → finalize publishes a null
         # trajectory_path (the archive is still committed).
         assert not sidecar_path.exists()
+        assert job_archive_names
         assert not any(name.endswith(".tus-url") for name in job_archive_names)
         insert_kwargs = mock_uploader.db.insert_trial.await_args.kwargs
         assert "trajectory_path" not in insert_kwargs

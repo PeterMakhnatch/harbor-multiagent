@@ -1,8 +1,11 @@
 """Core orchestrator for uploading job results to Supabase."""
 
 import asyncio
+import errno
 import hashlib
 import logging
+import os
+import stat
 import tarfile
 import time
 from collections.abc import Callable
@@ -116,6 +119,10 @@ _JOB_ARCHIVE_INCLUDES: tuple[str, ...] = (
     "analysis.md",
     "job.log",
 )
+_RETRY_ATTEMPT_PREFIX = "retry-attempt-"
+_RETRY_ATTEMPT_SUFFIX = ".json"
+
+type _RetryAttemptSnapshot = tuple[tuple[str, bytes], ...]
 
 
 class Uploader:
@@ -321,6 +328,22 @@ class Uploader:
         calls this for incomplete jobs or when new attempts were uploaded.
         A revision preserves immutable storage objects on re-upload.
         """
+        retry_attempts = _snapshot_retry_attempts(job_dir)
+        await self._finalize_job_archive(
+            job_dir,
+            job_result=job_result,
+            archive_name=_job_archive_name(revision, retry_attempts),
+            retry_attempts=retry_attempts,
+        )
+
+    async def _finalize_job_archive(
+        self,
+        job_dir: Path,
+        *,
+        job_result: JobResult,
+        archive_name: str,
+        retry_attempts: _RetryAttemptSnapshot,
+    ) -> None:
         log_path: str | None = None
         job_log = job_dir / "job.log"
         if job_log.exists():
@@ -331,7 +354,6 @@ class Uploader:
                 content_type="text/plain",
             )
 
-        archive_name = f"job-{revision}.tar.gz" if revision else "job.tar.gz"
         archive_path = f"jobs/{job_result.id}/{archive_name}"
         local_archive_path = job_dir / ".harbor-upload" / archive_name
         upload_url_path = local_archive_path.with_suffix(
@@ -339,7 +361,9 @@ class Uploader:
         )
         if not (local_archive_path.exists() and upload_url_path.exists()):
             upload_url_path.unlink(missing_ok=True)
-            _create_job_archive_file(job_dir, local_archive_path)
+            _create_job_archive_file(
+                job_dir, local_archive_path, retry_attempts=retry_attempts
+            )
         await self.storage.upload_resumable_file(local_archive_path, archive_path)
 
         await self.db.finalize_job(
@@ -475,24 +499,22 @@ class Uploader:
 
         trial_upload_results = [t.result() for t in tasks]
 
-        # Refresh the archive when new attempts were uploaded, including retries
-        # added after an earlier upload. Never finalize an incomplete sweep.
-        revision = hashlib.sha256(
-            ",".join(sorted(str(tr.id) for tr in trial_results)).encode()
-        ).hexdigest()
         remote = await self.db.get_job(start.job_id)
-        if (
-            remote is not None
-            and remote.get("archive_path")
-            != f"jobs/{start.job_id}/job-{revision}.tar.gz"
-            and not any(r.error is not None for r in trial_upload_results)
+        if remote is not None and not any(
+            r.error is not None for r in trial_upload_results
         ):
-            await self.finalize_job(
-                job_dir,
-                job_result=job_result,
-                job_config=job_config,
-                revision=revision,
-            )
+            retry_attempts = _snapshot_retry_attempts(job_dir)
+            revision = hashlib.sha256(
+                ",".join(sorted(str(tr.id) for tr in trial_results)).encode()
+            ).hexdigest()
+            archive_name = _job_archive_name(revision, retry_attempts)
+            if remote.get("archive_path") != f"jobs/{start.job_id}/{archive_name}":
+                await self._finalize_job_archive(
+                    job_dir,
+                    job_result=job_result,
+                    archive_name=archive_name,
+                    retry_attempts=retry_attempts,
+                )
 
         elapsed = time.monotonic() - t0
         return JobUploadResult(
@@ -863,14 +885,89 @@ def _add_trial_archive_entries(
                 )
 
 
-def _create_job_archive_file(job_dir: Path, archive_path: Path) -> None:
+def _is_retry_attempt_name(name: str) -> bool:
+    if not (
+        name.startswith(_RETRY_ATTEMPT_PREFIX) and name.endswith(_RETRY_ATTEMPT_SUFFIX)
+    ):
+        return False
+    trial_id = name[len(_RETRY_ATTEMPT_PREFIX) : -len(_RETRY_ATTEMPT_SUFFIX)]
+    try:
+        return str(UUID(trial_id)) == trial_id
+    except ValueError:
+        return False
+
+
+def _read_retry_attempt(job_fd: int, name: str) -> bytes | None:
+    try:
+        mode = os.stat(name, dir_fd=job_fd, follow_symlinks=False).st_mode
+        if not stat.S_ISREG(mode):
+            return None
+        fd = os.open(
+            name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOCTTY,
+            dir_fd=job_fd,
+        )
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        if exc.errno in (errno.ELOOP, errno.EMLINK):
+            return None
+        raise
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as source:
+            return source.read()
+    finally:
+        os.close(fd)
+
+
+def _snapshot_retry_attempts(job_dir: Path) -> _RetryAttemptSnapshot:
+    job_fd = os.open(job_dir, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        with os.scandir(job_fd) as entries:
+            names = sorted(
+                entry.name for entry in entries if _is_retry_attempt_name(entry.name)
+            )
+        return tuple(
+            (name, data)
+            for name in names
+            if (data := _read_retry_attempt(job_fd, name)) is not None
+        )
+    finally:
+        os.close(job_fd)
+
+
+def _job_archive_name(
+    revision: str | None, retry_attempts: _RetryAttemptSnapshot
+) -> str:
+    if retry_attempts:
+        revision_digest = hashlib.sha256((revision or "").encode()).digest()
+        digest = hashlib.sha256(b"harbor-job-retry-attempts-v1\0" + revision_digest)
+        for name, data in retry_attempts:
+            digest.update(name.encode("ascii"))
+            digest.update(hashlib.sha256(data).digest())
+        revision = digest.hexdigest()
+    return f"job-{revision}.tar.gz" if revision else "job.tar.gz"
+
+
+def _create_job_archive_file(
+    job_dir: Path,
+    archive_path: Path,
+    *,
+    retry_attempts: _RetryAttemptSnapshot | None = None,
+) -> None:
     """Create the job archive on disk to avoid holding large jobs in memory."""
+    if retry_attempts is None:
+        retry_attempts = _snapshot_retry_attempts(job_dir)
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_job_archive_entries(tar, job_dir)
+        _add_job_archive_entries(tar, job_dir, retry_attempts)
 
 
-def _add_job_archive_entries(tar: tarfile.TarFile, job_dir: Path) -> None:
+def _add_job_archive_entries(
+    tar: tarfile.TarFile, job_dir: Path, retry_attempts: _RetryAttemptSnapshot
+) -> None:
     root = job_dir.name
     for name in _JOB_ARCHIVE_INCLUDES:
         path = job_dir / name
@@ -884,3 +981,8 @@ def _add_job_archive_entries(tar: tarfile.TarFile, job_dir: Path) -> None:
             child,
             arcname_prefix=f"{root}/{child.name}/",
         )
+    for name, data in retry_attempts:
+        member = tarfile.TarInfo(f"{root}/{name}")
+        member.mode = 0o600
+        member.size = len(data)
+        tar.addfile(member, BytesIO(data))
