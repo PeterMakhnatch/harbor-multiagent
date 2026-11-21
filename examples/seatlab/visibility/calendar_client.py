@@ -34,10 +34,12 @@ _EXIT_TIMEOUT = 10
 _METER_SCHEMA = "seatlab.calendar-direct-meter/v1"
 _ACTIONABLE_NATIVE_ERRORS = frozenset(
     {
+        "coordinate_busy",
         "invalid_arguments",
         "local_docker_required",
         "output_exists",
         "output_overlaps_source",
+        "private_lock_required",
         "private_output_parent_required",
         "private_physical_path_required",
         "private_source_required",
