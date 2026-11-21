@@ -19,6 +19,7 @@ LEVEL = 0.95
 EXACT_MAX_NONZERO = 16  # the sign-flip test enumerates all 2**k sign patterns up to this k
 DRAWS = 20_000
 RESAMPLES = 10_000
+RECOVERY_MIN_GAP = 0.05  # reward points on the [0, 1] scale
 
 
 def mean(values: Sequence[float]) -> float:
@@ -198,11 +199,9 @@ def bootstrap_recovery(
     """Recovery = mean(gain) / mean(gap) with a 95% percentile bootstrap interval over instances.
 
     ``gain[i]`` is talk - silent and ``gap[i]`` is solo - silent for paired instance i. Recovery is
-    defined only when the mean gap is positive (there is an information gap to close). A resample
-    whose mean gap is <= 0 is undefined. If more than 2.5% of the resamples are undefined, the data
-    cannot rule out that there is no gap at all, and the interval is reported as undefined (like
-    Fieller's unbounded confidence set for a ratio). Otherwise the interval is the 2.5th and 97.5th
-    percentiles of the defined resamples; the number left out is reported.
+    defined only when the mean gap is at least RECOVERY_MIN_GAP. The same minimum applies to each
+    resample. The interval is undefined if more than 2.5% of the resamples are undefined; otherwise
+    it is the 2.5th and 97.5th percentiles of the defined resamples.
     """
     n = len(gain)
     if n != len(gap):
@@ -212,6 +211,11 @@ def bootstrap_recovery(
     gap_total = math.fsum(gap)
     if gap_total <= 0.0:
         return Recovery(None, None, None, n, 0, 0, "undefined: solo - silent <= 0, no information gap")
+    min_total = RECOVERY_MIN_GAP * n
+    if gap_total < min_total:
+        return Recovery(
+            None, None, None, n, 0, 0, f"undefined: solo - silent is below {RECOVERY_MIN_GAP:g} reward points"
+        )
     value = math.fsum(gain) / gap_total
     if n < 2:
         return Recovery(value, None, None, n, 0, 0, "one instance: no interval")
@@ -220,13 +224,13 @@ def bootstrap_recovery(
     for _ in range(resamples):
         picks = [rng.randrange(n) for _ in range(n)]
         denominator = math.fsum(gap[i] for i in picks)
-        if denominator <= 0.0:
+        if denominator < min_total:
             undefined += 1
             continue
         defined.append(math.fsum(gain[i] for i in picks) / denominator)
     tail = (1.0 - LEVEL) / 2.0
     if undefined > tail * resamples:
-        note = f"interval undefined: solo - silent <= 0 in {undefined} of {resamples} resamples"
+        note = f"interval undefined: gap below {RECOVERY_MIN_GAP:g} in {undefined} of {resamples} resamples"
         return Recovery(value, None, None, n, resamples, undefined, note)
     defined.sort()
     note = f"{undefined} of {resamples} resamples undefined and left out" if undefined else ""

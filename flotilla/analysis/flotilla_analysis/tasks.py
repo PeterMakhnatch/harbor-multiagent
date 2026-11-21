@@ -18,13 +18,19 @@ import hashlib
 import importlib.util
 import json
 import re
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from flotilla_analysis.load import Evidence, Trajectory, Trial, read_json
-from flotilla_analysis.names import MANIFEST, Identity, from_name, read_manifest, rebuilt_folders
+from flotilla_analysis.names import (
+    MANIFEST,
+    Identity,
+    from_name,
+    read_manifest,
+    read_task_toml,
+    rebuilt_folders,
+)
 
 TOLERANCE = 1e-9
 _SEAT = re.compile(r'^\s+SEAT:\s*(".*")\s*$')
@@ -144,21 +150,13 @@ def build_parameters(record: dict[str, Any] | None) -> dict[str, Any]:
     return found
 
 
-def _task_toml(folder: Path) -> dict[str, Any]:
-    try:
-        config = tomllib.loads((folder / "task.toml").read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return {}
-    return config if isinstance(config, dict) else {}
-
-
 def _holds(folder: Path, task_name: str) -> bool:
-    task = _task_toml(folder).get("task")
+    task = read_task_toml(folder).get("task")
     return isinstance(task, dict) and task.get("name") == task_name
 
 
 def folder_build(folder: Path) -> Build:
-    meta = _task_toml(folder).get("metadata")
+    meta = read_task_toml(folder).get("metadata")
     digests = {
         path.stem: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted((folder / "instructions").glob("*.md"))
@@ -302,17 +300,13 @@ def final_answer(evidence: Evidence | None) -> tuple[bool, Any]:
     if evidence is None:
         return False, None
     if evidence.submissions is not None:
-        return True, evidence.submissions[-1].get("answer") if evidence.submissions else None
+        if not evidence.submissions:
+            return True, None
+        last = evidence.submissions[-1]
+        return "answer" in last, last.get("answer")
     if evidence.score is not None and "answer" in evidence.score:
         return True, evidence.score.get("answer")
     return False, None
-
-
-def recorded_score(trial: Trial, evidence: Evidence | None) -> float | None:
-    score = (evidence.score or {}).get("score") if evidence is not None else None
-    if isinstance(score, (int, float)) and not isinstance(score, bool):
-        return float(score)
-    return trial.reward
 
 
 def hook_module(family_name: str, family: Any, hook_dirs: list[Path]) -> tuple[Any | None, str]:
@@ -386,7 +380,7 @@ def task_info(
         hooks_source=hooks_source,
     )
     known, answer = final_answer(evidence)
-    score = recorded_score(trial, evidence)
+    score = trial.reward
     if not known or score is None:
         info.problem = "cannot check the task directory: no recorded final answer and score"
         return info
@@ -394,6 +388,9 @@ def task_info(
         check = float(family.score(answer, task["answer_key"])["score"])
     except Exception as exc:  # noqa: BLE001
         info.problem = f"family score() failed ({type(exc).__name__})"
+        return info
+    if not 0.0 <= check <= 1.0:
+        info.problem = "family score() did not return a finite score in [0, 1]"
         return info
     if abs(check - score) > TOLERANCE:
         info.problem = (

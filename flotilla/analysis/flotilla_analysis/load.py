@@ -20,7 +20,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from flotilla_analysis.names import CONDITIONS, TASK_NAME, Names  # noqa: F401 - report.py and tests import them here
+from flotilla_analysis.names import BUILD_LIMITS, MANIFEST, Names, build_fields
+from flotilla_analysis.names import CONDITIONS as CONDITIONS
+from flotilla_analysis.names import TASK_NAME as TASK_NAME
 
 SKIP_DIRS = frozenset({".git", ".hg", ".svn", ".venv", "__pycache__", "node_modules"})
 
@@ -83,6 +85,7 @@ class Trial:
     environment_started: datetime | None
     evidence: Evidence | None = None
     trajectories: dict[str, Trajectory] = field(default_factory=dict)
+    build: dict[str, Any] | None = None
 
     @property
     def under_test(self) -> list[Seat]:
@@ -107,6 +110,8 @@ class Evidence:
     score: dict[str, Any] | None
     sources: list[str]
     problems: list[str]
+    score_problem: str | None = None
+    world_settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -127,14 +132,22 @@ class Trajectory:
 
 
 def load(
-    paths: list[str | Path], manifests: list[str | Path] | None = None
+    paths: list[str | Path],
+    manifests: list[str | Path] | None = None,
+    *,
+    task_roots: list[Path] | None = None,
 ) -> tuple[list[Trial], list[Job], list[Problem]]:
     """Trials, jobs and problems under the paths. ``manifests`` are build manifests that say what an opaque
     task name stands for when the trial's task folder is gone (see ``names.py``)."""
     trials: dict[str, Trial] = {}
     identities: dict[tuple[str, str, str], str] = {}
     jobs: dict[str, Job] = {}
-    names = Names(manifests)
+    manifests = list(manifests or [])
+    for root in task_roots or []:
+        manifest = root / MANIFEST
+        if manifest.is_file() and manifest not in manifests:
+            manifests.append(manifest)
+    names = Names(manifests, task_roots)
     problems: list[Problem] = [Problem(path, reason) for path, reason in names.problems]
     for raw in paths:
         root = Path(raw)
@@ -330,6 +343,23 @@ def _seat(data: dict[str, Any], seat: str, under_test: bool) -> Seat:
     )
 
 
+def _finite_number(value: Any) -> bool:
+    return type(value) is int or (isinstance(value, float) and math.isfinite(value))
+
+
+def _score_problem(score: dict[str, Any] | None, reward: float | None) -> str | None:
+    if score is None or "score" not in score:
+        return None
+    value = score["score"]
+    if not _finite_number(value):
+        return "score.json score is not a finite number; treated as missing"
+    if not 0.0 <= value <= 1.0:
+        return "score.json score is outside [0, 1]; treated as missing"
+    if reward is not None and value != reward:
+        return f"score.json score {value:g} differs from checked reward {reward:g}; using the checked reward"
+    return None
+
+
 def _reward(data: dict[str, Any]) -> tuple[float | None, str | None]:
     """The trial reward and None, or None and the reason it cannot be used."""
     if data.get("finished_at") is None:
@@ -341,9 +371,9 @@ def _reward(data: dict[str, Any]) -> tuple[float | None, str | None]:
     if not isinstance(rewards, dict) or "reward" not in rewards:
         return None, "no reward" + because
     value = rewards["reward"]
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+    if not _finite_number(value):
         return None, f"reward is not a finite number: {value!r}"
-    if not 0.0 <= float(value) <= 1.0:
+    if not 0.0 <= value <= 1.0:
         return None, f"reward outside [0, 1]: {value!r}"
     if data.get("reward_valid") is False:
         return None, "reward_valid is false" + because
@@ -360,7 +390,8 @@ def parse_trial(
         raise ValueError("trial_name and task_name must be strings")
     task_path = _block(data, "task_id").get("path")
     task_path = task_path if isinstance(task_path, str) and task_path else None
-    known = (names or Names()).identity(task_name, task_path)
+    names = names or Names()
+    known = names.identity(task_name, task_path)
     if known is None:
         return None
     label = known.label
@@ -397,7 +428,38 @@ def parse_trial(
         team=team,
         task_path=task_path,
         environment_started=parse_time(_block(data, "environment_setup").get("started_at")),
+        build=names.build(task_name, task_path, known),
     )
+
+
+def _world_settings(
+    events: list[dict[str, Any]] | None, state: dict[str, Any] | None, score: dict[str, Any] | None
+) -> dict[str, Any]:
+    start = next((_block(e, "data") for e in events or [] if e.get("kind") == "start"), None)
+    event = start or {}
+    limits = _block(state, "limits") | _block(event, "limits")
+    metadata = (score or {}) | (state or {}) | event
+    if "world_version" not in metadata:
+        if any(e.get("kind") == "probe" for e in events or []):
+            metadata["world_version"] = 2
+        elif start is not None:
+            metadata["world_version"] = 1
+    return build_fields({key: metadata.get(key, limits.get(key)) for key in ("world_version", *BUILD_LIMITS)})
+
+
+def _event_submissions(events: list[dict[str, Any]], problems: list[str]) -> list[dict[str, Any]]:
+    submissions = []
+    for event in events:
+        if event.get("kind") != "submit":
+            continue
+        data = _block(event, "data")
+        row = {"n": data.get("n"), "seat": event.get("seat"), "t": event.get("t")}
+        if "answer" in data:
+            row["answer"] = data["answer"]
+        elif "answer_sha256" in data:
+            problems.append(f"events.jsonl: answer for submission {row['n']} was truncated in the event log")
+        submissions.append(row)
+    return submissions
 
 
 def load_evidence(trial: Trial) -> Evidence:
@@ -420,6 +482,9 @@ def load_evidence(trial: Trial) -> Evidence:
         sources.append("score.json")
     else:
         score = None
+    score_problem = _score_problem(score, trial.reward)
+    if score_problem is not None:
+        problems.append(score_problem)
 
     messages: dict[str, dict[str, Any]] = {}
     for source in ((state or {}).get("messages"), logged):
@@ -439,21 +504,12 @@ def load_evidence(trial: Trial) -> Evidence:
     if state is not None and isinstance(state.get("submissions"), list):
         submissions = [s for s in state["submissions"] if isinstance(s, dict)]
     elif events is not None:
-        submissions = [
-            {
-                "n": e.get("data", {}).get("n"),
-                "seat": e.get("seat"),
-                "answer": e.get("data", {}).get("answer"),
-                "t": e.get("t"),
-            }
-            for e in events
-            if e.get("kind") == "submit"
-        ]
+        submissions = _event_submissions(events, problems)
     else:
         submissions = None
     if submissions is not None:
         submissions.sort(key=lambda s: s.get("n") if isinstance(s.get("n"), int) else 0)
-        if events is not None and state is not None:
+        if events is not None and state is not None and isinstance(state.get("submissions"), list):
             logged_submits = sum(1 for e in events if e.get("kind") == "submit")
             if logged_submits != len(submissions):
                 problems.append(
@@ -472,7 +528,17 @@ def load_evidence(trial: Trial) -> Evidence:
             seats = sorted(str(s) for s in candidate)
     if seats is None:
         seats = sorted(s.seat for s in trial.seats)
-    return Evidence(events, message_list, submissions, seats, score, sources, problems)
+    return Evidence(
+        events,
+        message_list,
+        submissions,
+        seats,
+        score,
+        sources,
+        problems,
+        score_problem,
+        _world_settings(events, state, score),
+    )
 
 
 def _id_order(message_id: str) -> tuple[int, str]:

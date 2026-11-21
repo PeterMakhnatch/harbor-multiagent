@@ -16,10 +16,50 @@ from typing import Any
 
 from flotilla_analysis import __version__, stats
 from flotilla_analysis.load import CONDITIONS, Job, Problem, Trial, load, load_evidence, load_trajectories
+from flotilla_analysis.names import BUILD_FIELDS
 from flotilla_analysis.play import ANNOUNCE_BEFORE, FULL, WINDOW, Play, analyze
 from flotilla_analysis.tasks import TaskInfo, own_briefing_score, task_info
 
 GroupKey = tuple[str, str]  # (label, team)
+
+
+class MixedBuildsError(ValueError):
+    """The requested report would pool trials with different build settings."""
+
+
+def _different_fields(records: list[dict[str, Any]], fields: Iterable[str]) -> set[str]:
+    different = set()
+    for field in fields:
+        values = [record[field] for record in records if field in record]
+        if values and any(value != values[0] for value in values[1:]):
+            different.add(field)
+    return different
+
+
+def _build_checks(
+    groups: dict[GroupKey, list[Trial]], world_settings: dict[Path, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    checks = []
+    for (label, team), trials in groups.items():
+        unknown = sum(t.build is None for t in trials)
+        recorded = [t.build or {} for t in trials]
+        effective = [r | world_settings.get(t.directory, {}) for t, r in zip(trials, recorded, strict=True)]
+        shared = [f for f in BUILD_FIELDS if f != "n_seats"]
+        fields = _different_fields(recorded, shared) | _different_fields(effective, shared)
+        for solo in (True, False):
+            arm = [r for t, r in zip(trials, recorded, strict=True) if (t.condition == "solo") == solo]
+            fields |= _different_fields(arm, ("n_seats",))
+        if 0 < unknown < len(trials):
+            fields.add("build record (known vs unknown)")
+        checks.append(
+            {
+                "label": label,
+                "team": team,
+                "unknown_build_trials": unknown,
+                "differing_fields": sorted(fields),
+            }
+        )
+    return checks
 
 
 def _mean(values: Iterable[float | int | None]) -> float | None:
@@ -182,7 +222,7 @@ def liar_rows(
             if outcome is None or outcome == "unknown":
                 # Every scored trial stays in the denominator: a failed trial whose final answer cannot be
                 # compared with the decoy is "unknown", not dropped (dropping it would raise "correct").
-                outcome = "correct" if trial.reward >= 1.0 else "unknown"
+                outcome = "correct" if trial.reward >= FULL else "unknown"
             for key in LIAR_OUTCOMES:
                 per[trial.condition][key][trial.instance].append(1.0 if outcome == key else 0.0)
             if "liar" in trial.condition:
@@ -322,12 +362,14 @@ def _play_trial_row(trial: Trial, play: Play) -> dict[str, Any]:
         "instance": trial.instance,
         "reward": trial.reward,
         "unscored": trial.unscored,
+        "build_known": trial.build is not None,
         "exceptions": trial.exceptions,
         "world_version": play.world_version,
         "world_version_source": play.world_version_source,
         "messages": play.messages,
         "pairs": len(play.pairs),
         "delivered": play.delivered,
+        "delivered_unknown": play.delivered_unknown,
         "seen": play.seen,
         "seen_unknown": play.seen_unknown,
         "first_message_t": play.first_message_t,
@@ -342,6 +384,7 @@ def _play_trial_row(trial: Trial, play: Play) -> dict[str, Any]:
         "last_submitter": churn.last_submitter,
         "submissions_by_seat": churn.by_seat,
         "final_score": play.final_score,
+        "score_json_issue": play.score_problem,
         "acted_on": play.proxy,
         "acted_on_note": play.proxy_note,
         "example_leak": play.example_leak,
@@ -371,6 +414,9 @@ def play_section(groups: dict[GroupKey, list[Trial]], plays: dict[str, Play]) ->
             def known(key: str, rows: list[dict[str, Any]] = rows) -> list[Any]:
                 return [r[key] for r in rows if r[key] is not None]
 
+            pairs = sum(r["pairs"] for r in rows)
+            delivered_unknown = sum(r["delivered_unknown"] for r in rows)
+            seen_unknown = sum(r["seen_unknown"] for r in rows)
             condition_rows.append(
                 {
                     "label": label,
@@ -379,10 +425,12 @@ def play_section(groups: dict[GroupKey, list[Trial]], plays: dict[str, Play]) ->
                     "trials": len(rows),
                     "world_versions": dict(sorted(Counter(r["world_version"] for r in rows).items())),
                     "messages": _sum(r["messages"] for r in rows),
-                    "pairs": sum(r["pairs"] for r in rows),
-                    "delivered": sum(r["delivered"] for r in rows),
-                    "seen": sum(r["seen"] for r in rows),
-                    "seen_unknown": sum(r["seen_unknown"] for r in rows),
+                    "pairs": pairs,
+                    "delivered": None if pairs and delivered_unknown == pairs else _sum(known("delivered")),
+                    "delivered_unknown": delivered_unknown,
+                    "seen": None if pairs and seen_unknown == pairs else _sum(known("seen")),
+                    "seen_unknown": seen_unknown,
+                    "score_json_issues": len(known("score_json_issue")),
                     "mean_first_message_t": _mean(r["first_message_t"] for r in rows),
                     "denied": _sum(r["denied"] for r in rows),
                     "mean_submissions": _mean(r["submissions"] for r in rows),
@@ -466,6 +514,7 @@ def found_lost_section(groups: dict[GroupKey, list[Trial]], plays: dict[str, Pla
                     "found_known": sum(1 for r in rows if r["found"] is not None),
                     "found": len(found),
                     "final_right": sum(1 for r in rows if r["final_right"] is True),
+                    "final_right_unknown": sum(1 for r in rows if r["final_right"] is None),
                     "won": len(won),
                     "lost": len(lost),
                     "teammate_overwrite": {
@@ -586,8 +635,9 @@ def build(
     keep_leaks: bool = False,
     manifests: list[Path] | None = None,
     hook_dirs: list[Path] | None = None,
+    allow_mixed_builds: bool = False,
 ) -> dict[str, Any]:
-    trials, jobs, problems = load(list(paths), manifests=manifests)
+    trials, jobs, problems = load(list(paths), manifests=manifests, task_roots=task_roots)
     roots = task_roots or []
     groups: dict[GroupKey, list[Trial]] = defaultdict(list)
     for trial in trials:
@@ -595,6 +645,7 @@ def build(
     groups = dict(sorted(groups.items()))
     plays: dict[str, Play] = {}
     infos: dict[str, TaskInfo] = {}
+    world_settings: dict[Path, dict[str, Any]] = {}
     for trial in trials:
         if not trial.finished:
             continue
@@ -602,11 +653,25 @@ def build(
         if not evidence.sources:
             problems.append(Problem(trial.path, "no world evidence (events, messages, score or world state)"))
             continue
+        world_settings[trial.directory] = evidence.world_settings
+        problems.extend(Problem(trial.path, reason) for reason in evidence.problems)
         trajectories = load_trajectories(trial)
         infos[trial.path] = task_info(trial, evidence, roots, hook_dirs, trajectories)
         if infos[trial.path].detail:
             problems.append(Problem(trial.path, f"{infos[trial.path].problem}: {infos[trial.path].detail}"))
         plays[trial.path] = analyze(trial, evidence, trajectories, infos[trial.path])
+    checks = _build_checks(groups, world_settings)
+    mixed = [
+        f"{check['label']} | {check['team']}: {', '.join(check['differing_fields'])}"
+        for check in checks
+        if check["differing_fields"]
+    ]
+    if mixed and not allow_mixed_builds:
+        raise MixedBuildsError(
+            "refusing to pool trials with different build settings:\n  "
+            + "\n  ".join(mixed)
+            + "\nAnalyze compatible runs separately or pass --allow-mixed-builds."
+        )
     leaks = {path: play.example_leak for path, play in plays.items()}
     return {
         "tool": {"name": "flotilla-analyze", "version": __version__},
@@ -619,9 +684,12 @@ def build(
             "seen_window_chars": WINDOW,
             "keep_example_leaks": keep_leaks,
             "announce_before_s": ANNOUNCE_BEFORE,
+            "recovery_min_gap": stats.RECOVERY_MIN_GAP,
+            "allow_mixed_builds": allow_mixed_builds,
         },
         "inputs": list(paths),
         "jobs": _jobs(jobs, trials),
+        "build_checks": checks,
         "problems": [asdict(p) for p in sorted(problems, key=lambda p: (p.path, p.reason))],
         "scores": score_rows(groups, leaks),
         "decomposition": decomposition_rows(groups, seed, resamples, draws, leaks, keep_leaks),

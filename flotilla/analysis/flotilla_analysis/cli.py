@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flotilla_analysis import __version__, stats
 from flotilla_analysis.render import render
-from flotilla_analysis.report import build
+from flotilla_analysis.report import MixedBuildsError, build
 
 
 def parser() -> argparse.ArgumentParser:
@@ -70,6 +70,11 @@ def parser() -> argparse.ArgumentParser:
         help="keep trials flagged example_leak (the answer key is an answer example in an instruction) in "
         "the decomposition; by default they are left out",
     )
+    p.add_argument(
+        "--allow-mixed-builds",
+        action="store_true",
+        help="pool trials despite differences in build settings (including unknown vs known builds)",
+    )
     p.add_argument("--output", type=Path, help="write the report to this file instead of standard output")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
@@ -80,17 +85,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.resamples < 1 or args.draws < 1:
         print("flotilla-analyze: --resamples and --draws must be positive", file=sys.stderr)
         return 2
-    in_roots = [root / "manifest.json" for root in args.tasks if (root / "manifest.json").is_file()]
-    report = build(
-        args.paths,
-        seed=args.seed,
-        resamples=args.resamples,
-        draws=args.draws,
-        task_roots=[*args.tasks, *(manifest.parent for manifest in args.manifest)],
-        keep_leaks=args.keep_leaks,
-        manifests=[*args.manifest, *in_roots],
-        hook_dirs=args.family_hooks,
-    )
+    try:
+        report = build(
+            args.paths,
+            seed=args.seed,
+            resamples=args.resamples,
+            draws=args.draws,
+            task_roots=[*args.tasks, *(manifest.parent for manifest in args.manifest)],
+            keep_leaks=args.keep_leaks,
+            manifests=args.manifest,
+            hook_dirs=args.family_hooks,
+            allow_mixed_builds=args.allow_mixed_builds,
+        )
+    except MixedBuildsError as exc:
+        print(f"flotilla-analyze: {exc}", file=sys.stderr)
+        return 2
+    if any(check["differing_fields"] for check in report["build_checks"]):
+        print("flotilla-analyze: WARNING: pooling different build settings; see the report", file=sys.stderr)
     text = render(report, args.format)
     if args.output:
         args.output.write_text(text, encoding="utf-8")

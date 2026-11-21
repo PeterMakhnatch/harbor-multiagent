@@ -19,6 +19,9 @@ first folder whose `result.json` has `trial_name` (as Sextant does) and never fo
 `--manifest FILE` names a build manifest (`manifest.json` at the root of a `build_tasks.py` output) for
 opaque task names whose task folder is gone.
 
+Analyze one compatible run set at a time. `--allow-mixed-builds` permits pooling when the build
+checks report a difference. The report keeps a warning that names the differing fields.
+
 `--family-hooks DIR` (for example `flotilla/families`) supplies the family modules whose analysis hooks
 read message texts (see "Found and lost answers"); task folders built before a hook existed lack it.
 
@@ -77,11 +80,25 @@ manifest entry's `build` record.
 
 Missing is not zero: a value a file does not record is `n/a` (JSON `null`) and is left out of means.
 
+**Build checks** per label and team: build settings come from the manifest entry or the trial's
+`task.toml` and `environment/task.json`. The check also compares the world version and limits
+recorded during the trial. The analysis refuses to pool differing recorded settings,
+including seeds, difficulty, world version, limits and scripted roles. Only the actual seat count
+is checked separately for solo and team trials. The report lists counts of trials with an unknown
+build. A group of only unknown builds is accepted unless its known world settings differ. A group
+with known and unknown builds requires `--allow-mixed-builds`. No report prints build seeds.
+A readable task name can be reused. Its original path must still hold the task files from the run;
+an archive that lacks those files cannot verify the build settings.
+
 **Scores** per label, team and condition: instances, scored trials, unscored trials (not finished, no
-reward, reward outside [0, 1], or `reward_valid` false) with reasons, and the mean of per-instance
-mean rewards with a 95% Student t interval over instances (df = instances − 1), clipped to [0, 1].
+reward, non-finite or out-of-range reward, or `reward_valid` false) with reasons. The mean is over
+per-instance mean rewards, with a 95% Student t interval over instances (df = instances − 1),
+clipped to [0, 1].
 An interval of zero width (every instance equal) is flagged: it understates the uncertainty.
 The same mean is also given without trials flagged `example_leak` (below).
+The checked reward also determines final correctness for the acted-on proxy, scripted-peer outcomes
+and found/lost outcomes. Non-finite or out-of-range `score.json` scores are counted as missing.
+Invalid scores and conflicts with a checked reward are reported per trial.
 
 **Validity flag `example_leak`** per trial: true when the answer key is one of the answer examples
 shown to the seats: each JSON code span in the "Answer format" section of the instruction a seat saw
@@ -95,11 +112,12 @@ decomposition unless `--keep-leaks` is given; the output says how many were left
 ceiling = solo, floor = silent, team = talk, gap = solo − silent, gain = talk − silent (paired t
 intervals), a two-sided paired sign-flip p for the gain (exact enumeration up to 16 nonzero
 differences, else 20,000 draws, p = (1 + extreme) / (1 + draws)), and recovery = mean(gain) / mean(gap)
-with a 10,000-resample percentile bootstrap over instances. Recovery rule: undefined when the mean gap
-is ≤ 0; a resample whose gap is ≤ 0 is undefined; if more than 2.5% of resamples are undefined the
-interval is reported as undefined (the data cannot exclude "no gap", as with Fieller's unbounded set);
-otherwise the 2.5th and 97.5th percentiles of the defined resamples (Hyndman–Fan type 7), with the
-number left out. Draws come from `random.Random("<seed>/<label>/<team>/<purpose>")`.
+with a 10,000-resample percentile bootstrap over instances. Recovery is undefined when the mean gap
+is below 0.05 reward points on the [0, 1] scale, including any nonpositive gap. The report shows
+the gap and its paired 95% t interval next to recovery. The bootstrap interval is undefined if
+more than 2.5% of resamples have a gap below 0.05; otherwise the interval uses the 2.5th and 97.5th
+percentiles of the defined resamples (Hyndman–Fan type 7) and reports the number left out. Draws
+come from `random.Random("<seed>/<label>/<team>/<purpose>")`.
 
 **Cost** per condition: input tokens (cache included, Harbor's convention), cached and output tokens
 and USD per trial, summed over the seats under test (a scripted seat is not part of the team). A trial
@@ -110,7 +128,11 @@ silent/solo are ratios of mean per-instance values over instances complete in bo
 other seats under test for a message to `all`, else the named seat. *Delivered*: the message id is in
 `data.ids` of a `deliver` event of the recipient. *Seen*: delivered, and a distinctive probe of the
 message appears in the observation of a recipient step that did not end before the delivery could
-have happened:
+have happened.
+
+If `events.jsonl` is missing, delivery and sight are both `unknown`, not `no`.
+
+To check sight:
 
 - probes are all 24-character windows of the text with whitespace removed, in three forms: raw,
   JSON-escaped with ASCII escapes (the world's reply) and without (jq); removing whitespace makes
@@ -126,8 +148,9 @@ have happened:
 *Acted on* (generic proxy, two or more seats): `yes` when the final answer is correct and the seat that
 submitted it could not answer alone (`oracle_answer([own briefing])` does not score 1); `no` when the
 final answer is wrong or missing; `n.a.` when the submitter's own briefing already gives the answer;
-`unknown` without a usable task folder. In `silent` the same count measures lucky answers: it is the
-baseline for `talk`. For `schedule`, `oracle_answer` takes the first window that fits, so a briefing
+`unknown` when the checked reward or submission record is missing, or when the proxy needs a task
+folder and none is usable. In `silent` the same count measures lucky answers: it is the baseline
+for `talk`. For `schedule`, `oracle_answer` takes the first window that fits, so a briefing
 can "give the answer" by luck; the report counts such briefings ("Own-briefing check").
 
 **Scripted-peer tasks** (a `decoy` in `task.json`, e.g. label `schedule.liar` with an honest scripted
@@ -142,12 +165,15 @@ the answer key, and for `schedule` its (day, start) must be one of `windows()`),
 answer was ever submitted, clobbers (a correct standing answer replaced by a wrong one), the last
 submitter, and the time of the first message (world seconds).
 
+When the frozen state lacks submissions and the event log only records an answer prefix, the
+report marks that answer unknown. The submission still counts.
+
 **Found and lost answers** per talk trial (conditions `talk*`), and counted per label, team and
 condition (won = found and final answer right):
 
-- *found*: some submission scores full with the family scorer; *final_right*: the recorded final score is
-  full; *lost*: found and the final answer wrong. The *solver* is the seat of the first right submission
-  (world submission order).
+- *found*: some submission scores full with the family scorer; *final_right*: the checked reward is
+  full; *lost*: found and the checked reward is below full. The *solver* is the seat of the first
+  right submission (world submission order).
 - *teammate_overwrite*: after the first right submission, another seat submitted a wrong answer (the
   first such seat is the *overwriter*). *later_by_solver* and *later_by_others* count every submission
   after the first right one.

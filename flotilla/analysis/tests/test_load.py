@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 
 from flotilla_analysis.load import TASK_NAME, load, load_evidence
+from flotilla_analysis.report import build
+from flotilla_analysis.tasks import final_answer
 from tests import fixtures as fx
 
 
@@ -118,3 +120,25 @@ class Walk(unittest.TestCase):
         self.assertEqual(len(evidence.submissions or []), 2)
         self.assertTrue(any("messages.jsonl lacks m2" in p for p in evidence.problems))
         self.assertTrue(any("events.jsonl has 1 submissions" in p for p in evidence.problems))
+
+    def test_truncated_event_answer_does_not_count_as_null(self):
+        job = self.root / "job"
+        events = [
+            {"kind": "submit", "seat": "p1", "data": {"n": 1, "answer": None}},
+            {
+                "kind": "submit",
+                "seat": "p2",
+                "data": {"n": 2, "answer_sha256": "a" * 64, "answer_bytes": 2048, "answer_prefix": '{"x":'},
+            },
+        ]
+        fx.trial(job, "toy-000-talk__truncated", reward=0.0, events=events, world_state=False)
+        evidence = load_evidence(load([job])[0][0])
+        self.assertIsNone(evidence.submissions[0]["answer"])
+        self.assertNotIn("answer", evidence.submissions[1])
+        self.assertEqual(final_answer(evidence), (False, None))
+        report = build([str(job)])
+        (row,) = report["play"]["trials"]
+        self.assertEqual(
+            (row["submissions"], row["distinct_answers"], row["answer_changes"]), (2, None, None)
+        )
+        self.assertIn("answer for submission 2 was truncated", report["problems"][0]["reason"])

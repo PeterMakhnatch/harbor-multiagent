@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -32,7 +33,6 @@ from flotilla_analysis.tasks import (
     carries_own_data,
     final_answer,
     own_briefing_score,
-    recorded_score,
     score_against,
 )
 
@@ -75,7 +75,7 @@ class Pair:
     message: str
     sender: str
     recipient: str
-    delivered: bool
+    delivered: bool | None
     delivered_t: float | None  # world time of the first delivery; None when not delivered or unrecorded
     seen: bool | None  # None: cannot be checked (see note)
     seen_step: int | None  # ATIF step_id of the first observation that showed the message
@@ -161,18 +161,23 @@ class Play:
     example_source: str = ""  # "trajectory" (what the seat saw) or "instructions" (the task folder)
     liar: str | None = None  # correct, deceived, corrupted or unknown; None when the task has no decoy
     found_lost: FoundLost | None = None  # talk conditions only
+    score_problem: str | None = None
 
     @property
-    def delivered(self) -> int:
-        return sum(1 for p in self.pairs if p.delivered)
+    def delivered(self) -> int | None:
+        return _yes_count(p.delivered for p in self.pairs) if self.pairs else 0
 
     @property
-    def seen(self) -> int:
-        return sum(1 for p in self.pairs if p.seen)
+    def delivered_unknown(self) -> int:
+        return sum(1 for p in self.pairs if p.delivered is None)
+
+    @property
+    def seen(self) -> int | None:
+        return _yes_count(p.seen for p in self.pairs) if self.pairs else 0
 
     @property
     def seen_unknown(self) -> int:
-        return sum(1 for p in self.pairs if p.delivered and p.seen is None)
+        return sum(1 for p in self.pairs if p.seen is None)
 
     @property
     def explored(self) -> int | None:
@@ -186,6 +191,15 @@ class Play:
     def recon(self) -> int | None:
         counts = [s.recon_total for s in self.seats if s.recon_total is not None]
         return sum(counts) if counts else None
+
+
+def _yes_count(values: Iterable[bool | None]) -> int | None:
+    yes = known = 0
+    for value in values:
+        if value is not None:
+            known += 1
+            yes += value
+    return yes if known else None
 
 
 def _number(value: Any) -> float | None:
@@ -272,6 +286,9 @@ def seen_pairs(
             recipients = [to] if isinstance(to, str) and to in seats and to != sender else []
         for recipient in recipients:
             key = (mid, recipient)
+            if events is None:
+                pairs.append(Pair(mid, sender, recipient, None, None, None, None, "no events.jsonl"))
+                continue
             if key not in first_delivery:
                 pairs.append(Pair(mid, sender, recipient, False, None, False, None, "not delivered"))
                 continue
@@ -349,6 +366,11 @@ def churn(evidence: Evidence, task: TaskInfo) -> Churn:
     submissions = evidence.submissions
     if submissions is None:
         return Churn(None, None, None, None, None, None, None, None)
+    if any("answer" not in s for s in submissions):
+        seats = [str(s.get("seat")) for s in submissions]
+        return Churn(
+            len(seats), None, None, None, None, None, None, seats[-1], dict(sorted(Counter(seats).items()))
+        )
     answers = [canonical(s.get("answer")) for s in submissions]
     seats = [str(s.get("seat")) for s in submissions]
     n = len(submissions)
@@ -392,8 +414,10 @@ def acted_on(seats: list[str], evidence: Evidence, task: TaskInfo, final: float 
     if final is None:
         return "unknown", "no recorded score"
     submissions = evidence.submissions
+    if submissions is None:
+        return "unknown", "submissions not recorded"
     if not submissions:
-        return "no", "nothing submitted" if submissions is not None else "submissions not recorded"
+        return "no", "nothing submitted"
     if final < FULL:
         return "no", "final answer not correct"
     submitter = str(submissions[-1].get("seat"))
@@ -532,6 +556,8 @@ def found_lost(trial: Trial, evidence: Evidence, task: TaskInfo, final: float | 
     submissions = evidence.submissions
     if submissions is None:
         return FoundLost(None, final_right, None, notes=["submissions not recorded"])
+    if any("answer" not in s for s in submissions):
+        return FoundLost(None, final_right, None, notes=["a submission answer is unknown"])
     scores = [answer_score(task, s.get("answer")) for s in submissions]
     if not task.usable or any(score is None for score in scores):
         return FoundLost(None, final_right, None, notes=[task.problem or "the family scorer failed"])
@@ -660,7 +686,7 @@ def analyze(trial: Trial, evidence: Evidence, trajectories: dict[str, Trajectory
         denied = sum(1 for e in evidence.events if e.get("kind") == "denied")
     probes_logged = version not in ("1", "unknown") and evidence.events is not None
     probe_count = sum(1 for e in evidence.events or [] if e.get("kind") == "probe") if probes_logged else None
-    final = recorded_score(trial, evidence)
+    final = trial.reward
     proxy, proxy_note = acted_on(seats, evidence, task, final)
     if not task.usable:
         notes.append(f"task directory: {task.problem}")
@@ -683,4 +709,5 @@ def analyze(trial: Trial, evidence: Evidence, trajectories: dict[str, Trajectory
         example_source=leak_source,
         liar=liar_outcome(evidence, task, final),
         found_lost=found_lost(trial, evidence, task, final),
+        score_problem=evidence.score_problem,
     )

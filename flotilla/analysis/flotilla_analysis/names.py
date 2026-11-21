@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import json
+import math
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -31,6 +32,26 @@ TASK_NAME = re.compile(
 )
 LABEL = re.compile(r"^[a-z0-9_]+(?:\.[a-z0-9_-]+)?$")
 MANIFEST = "manifest.json"
+BUILD_LIMITS = (
+    "max_text",
+    "max_messages",
+    "max_messages_per_round",
+    "round_seconds",
+    "play_timeout_sec",
+)
+BUILD_FIELDS = (
+    "seed",
+    "difficulty",
+    "team_seats",
+    "world_version",
+    "mode",
+    "n_seats",
+    "scripted_seats",
+    "submitter",
+    "announce",
+    *BUILD_LIMITS,
+)
+_ROLE_DEFAULTS = {"scripted_seats": [], "submitter": "", "announce": False}
 
 
 @dataclass(frozen=True)
@@ -55,18 +76,59 @@ def from_name(task_name: str) -> Identity | None:
     return Identity(match["label"], int(match["instance"]), match["condition"]) if match else None
 
 
+def read_task_toml(folder: Path) -> dict[str, Any]:
+    try:
+        return tomllib.loads((folder / "task.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def _object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _metadata_identity(meta: dict[str, Any]) -> Identity | None:
+    family, variant = meta.get("family"), meta.get("variant") or ""
+    if not isinstance(family, str) or not isinstance(variant, str):
+        return None
+    return identity(f"{family}.{variant}" if variant else family, meta.get("instance"), meta.get("condition"))
+
+
 def from_task_folder(folder: Path, task_name: str) -> Identity | None:
     """The identity in ``task.toml`` ``[metadata]``, if the folder holds the task of this name."""
-    try:
-        config = tomllib.loads((folder / "task.toml").read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+    config = read_task_toml(folder)
+    if _object(config.get("task")).get("name") != task_name:
         return None
-    task = config.get("task") if isinstance(config.get("task"), dict) else {}
-    meta = config.get("metadata") if isinstance(config.get("metadata"), dict) else {}
-    family, variant = meta.get("family"), meta.get("variant") or ""
-    if task.get("name") != task_name or not isinstance(family, str) or not isinstance(variant, str):
-        return None  # another task (a later build at this path) or not a Flotilla task folder
-    return identity(f"{family}.{variant}" if variant else family, meta.get("instance"), meta.get("condition"))
+    return _metadata_identity(_object(config.get("metadata")))
+
+
+def build_fields(record: dict[str, Any]) -> dict[str, Any]:
+    """Recognized, comparable settings only; do not retain keys, tokens or arbitrary task data."""
+    fields: dict[str, Any] = {}
+    for key in BUILD_FIELDS:
+        value = record.get(key)
+        if key == "scripted_seats" and isinstance(value, list) and all(isinstance(s, str) for s in value):
+            fields[key] = sorted(value)
+        elif key == "world_version" and isinstance(value, (str, int)) and not isinstance(value, bool):
+            fields[key] = str(value)
+        elif isinstance(value, (str, int)) or (isinstance(value, float) and math.isfinite(value)):
+            fields[key] = value
+    return fields
+
+
+def _folder_settings(folder: Path, task_name: str, known: Identity, *, readable: bool) -> dict[str, Any]:
+    config = read_task_toml(folder)
+    name = _object(config.get("task")).get("name")
+    if name != task_name and (not readable or name is not None):
+        return {}
+    try:
+        task = _object(json.loads((folder / "environment" / "task.json").read_bytes()))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        task = {}
+    meta = _object(config.get("metadata"))
+    task_fields = build_fields(task) if _metadata_identity(task) == known else {}
+    meta_fields = build_fields(meta) if _metadata_identity(meta) == known or name == task_name else {}
+    return task_fields | meta_fields
 
 
 @dataclass(frozen=True)
@@ -130,14 +192,19 @@ class Names:
     """Resolves task names to identities for one analysis; ``problems`` holds (path, reason) for each given
     manifest that cannot be used."""
 
-    def __init__(self, manifests: list[str | Path] | None = None) -> None:
+    def __init__(
+        self, manifests: list[str | Path] | None = None, task_roots: list[Path] | None = None
+    ) -> None:
         self.given: dict[str, Identity] = {}
+        self.entries: dict[str, dict[str, Any]] = {}
+        self.task_roots = [*(task_roots or []), *(Path(raw).parent for raw in manifests or [])]
         self.problems: list[tuple[str, str]] = []
         for raw in manifests or []:
             manifest = read_manifest(Path(raw))
             if manifest.problem:
                 self.problems.append((str(raw), manifest.problem))
             self.given.update(manifest.names)
+            self.entries.update(manifest.entries)
 
     def identity(self, task_name: str, task_path: str | None) -> Identity | None:
         readable = from_name(task_name)
@@ -152,3 +219,26 @@ class Names:
             if (found := read_manifest(root / MANIFEST).names.get(task_name)) is not None:
                 return found
         return None
+
+    def build(self, task_name: str, task_path: str | None, known: Identity) -> dict[str, Any] | None:
+        """Build settings from the named run, not from a different opaque task that replaced it."""
+        readable = from_name(task_name) is not None
+        folder = Path(task_path) if task_path else None
+        own = _folder_settings(folder, task_name, known, readable=readable) if folder is not None else {}
+        fields: dict[str, Any] = {}
+        if not readable:  # a readable name can have been reused by a different build
+            entry = self.entries.get(task_name)
+            if entry is None and folder is not None:
+                for root in (folder.parent, folder.parent.parent):
+                    entry = read_manifest(root / MANIFEST).entries.get(task_name)
+                    if entry is not None:
+                        break
+            fields = build_fields(_object((entry or {}).get("build")))
+            name = task_name.split("/", 1)[1]
+            if not own:
+                for root in self.task_roots:
+                    for candidate in (root / known.label / name, root / name):
+                        if settings := _folder_settings(candidate, task_name, known, readable=False):
+                            return _ROLE_DEFAULTS | fields | settings
+        fields |= own
+        return _ROLE_DEFAULTS | fields if fields else None

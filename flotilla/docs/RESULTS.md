@@ -39,9 +39,12 @@ listed in FINDINGS.md ("Corrections after the independent review").
 
 Conditions: `solo` (one agent holds all calendars), `silent` (2 seats, each with half, messaging
 off), `talk` (2 seats, messaging on). Ceiling = solo, floor = silent, team = talk,
-gain = talk − silent, recovery = gain / (solo − silent). Intervals are 95% t intervals over
-instance means; p values are exact sign-flip tests on paired instances. With binary outcomes and 5
-to 12 instances, the two can disagree. "Resolved" below means exact p < 0.05.
+gain = talk − silent, gap = solo − silent, recovery = gain / gap. The analysis reports recovery
+only for a gap of at least 0.05 reward points on the [0, 1] scale. It shows the gap and its
+95% t interval next to recovery. Score and gain intervals are 95% t intervals over instance means.
+Recovery intervals use a percentile bootstrap. The p values are exact sign-flip tests on paired
+instances. With binary outcomes and 5 to 12 instances, the two can disagree.
+"Resolved" below means exact p < 0.05.
 
 ## R1. Talking adds a resolved gain for DeepSeek; for 3 models the gain is positive but not resolved
 

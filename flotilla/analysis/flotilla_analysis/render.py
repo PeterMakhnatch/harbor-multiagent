@@ -10,16 +10,19 @@ NOTES = [
     "Scores: mean reward over instance means; 95% Student t interval over instances (df = instances - 1),"
     " clipped to [0, 1]. Unscored trials (not finished, no reward, reward_valid false) are left out and"
     " counted.",
+    "Final correctness uses the checked reward. Invalid or conflicting scores in score.json are reported.",
     "Decomposition: instances scored in solo, silent and talk. gain = talk - silent with a paired t interval"
     " and a two-sided sign-flip p (exact up to 16 nonzero differences, else 20,000 seeded draws). recovery = "
     "mean(talk - silent) / mean(solo - silent) with a 10,000-resample percentile bootstrap over instances; "
-    "undefined when solo - silent <= 0, and its interval undefined when over 2.5% of resamples have no gap.",
+    "undefined when the mean gap is below {min_gap:g} reward points; the interval is undefined when more "
+    "than 2.5% of resamples are below that minimum.",
     "Cost: per trial, summed over the seats under test; a trial with any seat's value missing is incomplete "
     "and left out of the means. Ratios use instances complete in both conditions.",
     "Delivered: the message id is in a deliver event of the recipient. Seen: a distinctive 24-character "
     "window of the message (whitespace removed; raw or JSON-escaped) appears in the recipient's terminal "
     "output after the delivery could have happened; windows also found in other messages, the recipient's "
     "instruction, briefing, own keystrokes or pre-delivery output do not count.",
+    "Delivery and sight are unknown when events.jsonl is missing.",
     "Acted on (proxy): the final answer is correct and its submitter's own briefing alone does not give it "
     "(family oracle_answer). In silent the same count measures lucky answers.",
     "Churn: overwrites are answer changes by a different seat; invalid answers are not well formed (for "
@@ -78,6 +81,25 @@ def _p(value: Any) -> str:
     return f"{value:.4f}" if value >= 1e-4 else f"{value:.1e}"
 
 
+def _unknown_pairs(count: int) -> str:
+    return f"unknown ({count} {'pair' if count == 1 else 'pairs'})"
+
+
+def _delivered(row: dict[str, Any]) -> str:
+    unknown = row["delivered_unknown"]
+    if row["delivered"] is None:
+        return _unknown_pairs(unknown)
+    known = row["pairs"] - unknown
+    return f"{row['delivered']}/{known}" + (f" (+{unknown} unknown)" if unknown else "")
+
+
+def _seen(row: dict[str, Any]) -> str:
+    unknown = row["seen_unknown"]
+    if row["seen"] is None:
+        return _unknown_pairs(unknown)
+    return str(row["seen"]) + (f" (+{unknown} unknown)" if unknown else "")
+
+
 def _table(headers: list[str], rows: list[list[str]], markdown: bool) -> list[str]:
     if markdown:
         lines = ["| " + " | ".join(headers) + " |", "|" + "|".join("---" for _ in headers) + "|"]
@@ -130,6 +152,17 @@ def render(report: dict[str, Any], fmt: str) -> str:
         ]
     if report.get("family_hooks"):
         out += ["", "Family hooks: " + "; ".join(f"{k}: {v}" for k, v in report["family_hooks"].items())]
+    checks = [c for c in report["build_checks"] if c["differing_fields"] or c["unknown_build_trials"]]
+    if checks:
+        out += _heading("Build checks", 2, md)
+        for check in checks:
+            label_team = f"{check['label']} | {check['team']}"
+            if check["differing_fields"]:
+                fields = ", ".join(check["differing_fields"])
+                out.append(f"WARNING: {label_team}: pooled different build settings ({fields})")
+            if unknown := check["unknown_build_trials"]:
+                noun = "trial" if unknown == 1 else "trials"
+                out.append(f"{label_team}: {unknown} {noun} with unknown build")
 
     groups = sorted({(r["label"], r["team"]) for r in report["scores"]})
     for label, team in groups:
@@ -153,7 +186,10 @@ def render(report: dict[str, Any], fmt: str) -> str:
         )
     out += _heading("Method", 2, md)
     announce = settings.get("announce_before_s", 0.0)
-    out += [("- " if md else "  - ") + note.replace("{announce:g}", f"{announce:g}") for note in NOTES]
+    min_gap = settings["recovery_min_gap"]
+    for note in NOTES:
+        text = note.replace("{announce:g}", f"{announce:g}").replace("{min_gap:g}", f"{min_gap:g}")
+        out.append(("- " if md else "  ") + text)
     problems = report["problems"]
     if problems:
         out += _heading(f"Problems ({len(problems)})", 2, md)
@@ -244,20 +280,20 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
                 ],
                 ["team = talk", _f(d["team_talk"]["value"]), _ci(d["team_talk"]), d["team_talk"]["note"]],
                 [
-                    "gap = solo - silent",
-                    _f(d["gap_solo_minus_silent"]["value"]),
-                    _ci(d["gap_solo_minus_silent"]),
-                    d["gap_solo_minus_silent"]["note"],
-                ],
-                [
                     "gain = talk - silent",
                     _f(d["gain_talk_minus_silent"]["value"]),
                     _ci(d["gain_talk_minus_silent"]),
                     test_text,
                 ],
                 [
+                    "gap = solo - silent",
+                    _f(d["gap_solo_minus_silent"]["value"]),
+                    _ci(d["gap_solo_minus_silent"]),
+                    d["gap_solo_minus_silent"]["note"],
+                ],
+                [
                     "recovery = gain / gap",
-                    _f(recovery["value"]),
+                    "undefined" if recovery["value"] is None else _f(recovery["value"]),
                     recovery_ci,
                     recovery["note"] or f"bootstrap, {recovery['resamples']} resamples",
                 ],
@@ -312,7 +348,7 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
                 "trials",
                 "world",
                 "messages",
-                "delivered/pairs",
+                "delivered/known pairs",
                 "seen (unknown)",
                 "denied",
                 "submissions/trial",
@@ -331,8 +367,8 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
                     str(r["trials"]),
                     ",".join(f"v{k}:{v}" for k, v in r["world_versions"].items()),
                     _i(r["messages"]),
-                    f"{r['delivered']}/{r['pairs']}",
-                    f"{r['seen']} ({r['seen_unknown']})",
+                    _delivered(r),
+                    _seen(r),
                     _i(r["denied"]),
                     _f(r["mean_submissions"], 1),
                     _f(r["mean_distinct_answers"], 1),
@@ -348,6 +384,11 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
             ],
             md,
         )
+        bad_scores = [
+            f"{r['condition']}: {r['score_json_issues']}" for r in play_rows if r["score_json_issues"]
+        ]
+        if bad_scores:
+            out += ["", "Trials with invalid or conflicting score.json scores: " + "; ".join(bad_scores)]
 
     seat_rows = mine(report["seats"]["groups"])
     if seat_rows:
@@ -485,8 +526,8 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
                     r["trial"],
                     _f(r["reward"], 2) if r["reward"] is not None else f"unscored ({r['unscored']})",
                     _i(r["messages"]),
-                    f"{r['delivered']}/{r['pairs']}",
-                    f"{r['seen']}" + (f" (+{r['seen_unknown']} unknown)" if r["seen_unknown"] else ""),
+                    _delivered(r),
+                    _seen(r),
                     _f(r["first_message_t"], 1),
                     _i(r["submissions"]),
                     _i(r["distinct_answers"]),
@@ -535,7 +576,8 @@ def _found_lost(rows: list[dict[str, Any]], md: bool) -> list[str]:
                 str(r["trials"]),
                 str(r["found"])
                 + (f" (+{r['trials'] - r['found_known']} unknown)" if r["found_known"] < r["trials"] else ""),
-                str(r["final_right"]),
+                str(r["final_right"])
+                + (f" (+{r['final_right_unknown']} unknown)" if r["final_right_unknown"] else ""),
                 str(r["lost"]),
                 f"{r['teammate_overwrite']['lost']} / {r['teammate_overwrite']['won']}",
                 _of(r["solver_had_teammate_data"]),

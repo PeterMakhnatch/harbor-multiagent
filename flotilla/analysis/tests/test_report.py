@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from flotilla_analysis.load import load
 from flotilla_analysis.render import render
-from flotilla_analysis.report import build
+from flotilla_analysis.report import MixedBuildsError, build
 from tests import fixtures as fx
 
 PACKAGE = Path(__file__).resolve().parents[1]
@@ -149,6 +150,183 @@ class Report(unittest.TestCase):
         )
         self.assertEqual(run.returncode, 1)
         self.assertIn(b"no Flotilla trials found", run.stderr)
+
+
+class BuildChecks(unittest.TestCase):
+    def test_different_builds_are_refused_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job = root / "job"
+            seed = 4_402_366_163_412_422
+            folder = fx.task_dir(
+                root / "tasks",
+                briefings={"p1": {"value": 1}, "p2": {"value": 2}},
+                answer_key={"x": 3},
+                extra={"seed": seed, "max_messages": 10, "max_text": 60, "world_version": 5},
+            )
+            (folder / "task.toml").write_text(
+                "[task]\nname = 'flotilla/toy-000-talk'\n[metadata]\n"
+                "difficulty = 'easy'\nmax_messages_per_round = 2\nround_seconds = 10.0\n"
+            )
+            fx.trial(job, "toy-000-talk__own", task_path=str(folder), events=[], reward=0.0)
+            opaque = "flotilla/t-111111111111"
+            other = fx.trial(job, "toy-001-talk__archived", instance=1, events=[], reward=0.0)
+            result = json.loads((other / "result.json").read_text())
+            fx.write_json(other / "result.json", result | {"task_name": opaque})
+            manifest = root / "archived.json"
+            expected = {
+                "seed": seed + 1,
+                "max_text": 30,
+                "max_messages": 5,
+                "max_messages_per_round": 1,
+                "round_seconds": 5.0,
+                "difficulty": "hard",
+                "world_version": 6,
+                "scripted_seats": ["p2"],
+                "submitter": "p1",
+                "announce": True,
+            }
+            fx.write_json(
+                manifest,
+                {"tasks": {opaque: {"label": "toy", "condition": "talk", "instance": 1, "build": expected}}},
+            )
+            (own, archived), _, _ = load([job], manifests=[manifest])
+            self.assertEqual(own.build["seed"], seed)
+            self.assertEqual(own.build["round_seconds"], 10)
+            self.assertEqual(archived.build["seed"], seed + 1)
+            cmd = [sys.executable, "-m", "flotilla_analysis", str(job), "--manifest", str(manifest)]
+            env = {**os.environ, "PYTHONPATH": str(PACKAGE)}
+            run = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            self.assertEqual(run.returncode, 2, run.stderr)
+            self.assertIn("refusing to pool", run.stderr)
+            self.assertNotIn(str(seed), run.stderr)
+            for field in expected:
+                self.assertIn(field, run.stderr)
+            run = subprocess.run(
+                [*cmd, "--allow-mixed-builds", "--format", "json"], capture_output=True, text=True, env=env
+            )
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertIn("WARNING", run.stderr)
+            self.assertNotIn(str(seed), run.stdout)
+            (check,) = json.loads(run.stdout)["build_checks"]
+            self.assertEqual(check["differing_fields"], sorted(expected))
+
+    def test_unknown_build_does_not_pool_with_known_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            legacy = fx.trial(root / "job", "toy-000-solo__old", condition="solo", events=[])
+            report = build([str(legacy)])
+            self.assertFalse(report["play"]["trials"][0]["build_known"])
+            self.assertIn("1 trial with unknown build", render(report, "text"))
+            folder = fx.task_dir(
+                root / "tasks", briefings={"p1": {}, "p2": {}}, answer_key={"x": 1}, extra={"seed": 123}
+            )
+            fx.trial(root / "job", "toy-000-talk__new", events=[], task_path=str(folder))
+            with self.assertRaisesRegex(MixedBuildsError, "known vs unknown"):
+                build([str(root / "job")])
+
+    def test_world_evidence_detects_different_legacy_worlds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            job = Path(tmp) / "job"
+            fx.trial(job, "toy-000-talk__v1")
+            fx.trial(
+                job,
+                "toy-000-talk__v2",
+                events=[{"kind": "start", "data": {"world_version": 2}}],
+            )
+            with self.assertRaisesRegex(MixedBuildsError, "world_version"):
+                build([str(job)])
+
+
+class EvidenceReports(unittest.TestCase):
+    def test_checked_reward_controls_correctness_and_nonfinite_scores_are_counted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job = root / "job"
+            folder = fx.task_dir(
+                root / "tasks",
+                label="toy.liar",
+                condition="talk-liar",
+                briefings={"p1": {"value": 1}, "p2": {"value": 2}},
+                answer_key={"x": 3},
+                extra={"decoy": {"x": 7}},
+            )
+            for name, reward, score, answer in (
+                ("disagrees", 0.0, 1.0, 7),
+                ("bad-reward", float("nan"), 1.0, 3),
+                ("bad-score", 1.0, float("nan"), 3),
+            ):
+                fx.trial(
+                    job,
+                    name,
+                    label="toy.liar",
+                    condition="talk-liar",
+                    reward=reward,
+                    score={"score": score},
+                    task_path=str(folder),
+                    submissions=[{"n": 1, "seat": "p1", "answer": {"x": answer}, "t": 1}],
+                )
+            report = json.loads(render(build([str(job)]), "json"))
+        (scores,) = report["scores"]
+        self.assertEqual((scores["trials"], scores["unscored"], scores["mean"]["value"]), (2, 1, 0.5))
+        trials = {row["trial"]: row for row in report["play"]["trials"]}
+        self.assertEqual(
+            (trials["disagrees"]["final_score"], trials["disagrees"]["liar_outcome"]), (0, "deceived")
+        )
+        self.assertIn("differs from checked reward", trials["disagrees"]["score_json_issue"])
+        self.assertIsNone(trials["bad-reward"]["final_score"])
+        self.assertEqual(trials["bad-reward"]["acted_on"], "unknown")
+        self.assertEqual(
+            (trials["bad-score"]["final_score"], trials["bad-score"]["liar_outcome"]), (1, "correct")
+        )
+        self.assertIn("treated as missing", trials["bad-score"]["score_json_issue"])
+        (condition,) = report["play"]["conditions"]
+        self.assertEqual(condition["score_json_issues"], 2)
+        found = {row["trial"]: row["final_right"] for row in report["found_lost"]["trials"]}
+        self.assertEqual(found, {"disagrees": False, "bad-reward": None, "bad-score": True})
+
+    def test_missing_event_log_leaves_delivery_and_sight_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            job = Path(tmp) / "job"
+            message = {
+                "id": "m1",
+                "from": "p1",
+                "to": "p2",
+                "text": "The complete answer is in this message.",
+            }
+            trial = fx.trial(job, "toy-000-talk__missing", messages=[message])
+            (trial / "artifacts" / "logs" / "world" / "events.jsonl").unlink()
+            report = build([str(job)])
+        (row,) = report["play"]["trials"]
+        (pair,) = row["message_pairs"]
+        self.assertEqual((pair["delivered"], pair["seen"], pair["note"]), (None, None, "no events.jsonl"))
+        (condition,) = report["play"]["conditions"]
+        for entry in (row, condition):
+            self.assertIsNone(entry["delivered"])
+            self.assertIsNone(entry["seen"])
+            self.assertEqual((entry["delivered_unknown"], entry["seen_unknown"]), (1, 1))
+        self.assertIn("| unknown (1 pair) | unknown (1 pair) |", render(report, "markdown"))
+
+    def test_recovery_needs_a_minimum_gap_and_shows_its_interval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            job = Path(tmp) / "job"
+            for instance in range(2):
+                for condition, reward in (("solo", 0.01), ("silent", 0.0), ("talk", 0.5)):
+                    fx.trial(
+                        job, f"{instance}-{condition}", instance=instance, condition=condition, reward=reward
+                    )
+            report = build([str(job)])
+        (row,) = report["decomposition"]
+        self.assertIsNone(row["recovery"]["value"])
+        self.assertIn("below 0.05 reward points", row["recovery"]["note"])
+        self.assertEqual(row["gap_solo_minus_silent"]["low"], 0.01)
+        self.assertEqual(row["gap_solo_minus_silent"]["high"], 0.01)
+        self.assertIn(
+            "| gap = solo - silent | 0.010 | [0.010, 0.010] | "
+            "all instance values equal: zero-width interval |\n"
+            "| recovery = gain / gap | undefined |",
+            render(report, "markdown"),
+        )
 
 
 class ExampleLeaks(unittest.TestCase):
