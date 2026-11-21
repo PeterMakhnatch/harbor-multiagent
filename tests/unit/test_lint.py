@@ -193,7 +193,9 @@ def test_invalid_harborignore_preserves_other_checks(task: Path, monkeypatch):
         for finding in findings
         if finding.rule == LintRule.INVALID_TASK_FILES
     } == {str(ignore), str(task / "instruction.md")}
-    check_compose.assert_called_once_with(compose, task_root=task, task_env={})
+    check_compose.assert_called_once_with(
+        compose, task_root=task, task_env={}, seats=[]
+    )
 
 
 @pytest.mark.parametrize("step", [False, True])
@@ -272,7 +274,10 @@ def test_invalid_ignore_preserves_verifier_compose_environment(
         (LintRule.INVALID_TASK_FILES, str(ignore))
     }
     check_compose.assert_called_once_with(
-        compose, task_root=task, task_env={"FLAG": "step" if step else "task"}
+        compose,
+        task_root=task,
+        task_env={"FLAG": "step" if step else "task"},
+        seats=[],
     )
 
 
@@ -390,7 +395,9 @@ def test_ignored_compose_build_definition_is_still_linted(
     monkeypatch.setattr("harbor.lint.task.lint_compose", check_compose)
 
     assert lint_task(task) == [finding]
-    check_compose.assert_called_once_with(compose, task_root=task, task_env={})
+    check_compose.assert_called_once_with(
+        compose, task_root=task, task_env={}, seats=[]
+    )
 
 
 @pytest.mark.parametrize("step", [False, True])
@@ -1258,6 +1265,175 @@ def test_missing_required_inputs(task: Path, missing: str):
     assert len(findings) == 1
     assert findings[0].rule == "invalid-task-files"
     assert findings[0].path == str(path)
+
+
+@pytest.fixture
+def seat_task(task: Path) -> Path:
+    configure(
+        task,
+        agent={},
+        agents={"p1": {"under_test": True}, "p2": {"under_test": False}},
+    )
+    (task / "instructions").mkdir()
+    (task / "instructions/p1.md").write_text("Complete the task.\n")
+    return task
+
+
+def test_seat_instructions_do_not_require_root_instruction(seat_task: Path):
+    (seat_task / "instruction.md").unlink()
+    (seat_task / "instructions/p2.md").write_text("Support the other agent.\n")
+
+    assert lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES}) == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [None, " \n\t", "# canary: secret\n\n"],
+    ids=["missing", "whitespace", "canary-only"],
+)
+def test_support_seat_requires_nonempty_instruction(
+    seat_task: Path, content: str | None
+):
+    if content is not None:
+        (seat_task / "instructions/p2.md").write_text(content)
+
+    findings = lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES})
+    assert [
+        (Path(f.path).relative_to(seat_task).as_posix(), f.rule) for f in findings
+    ] == [("instructions/p2.md", LintRule.INVALID_TASK_FILES)]
+
+
+@pytest.mark.parametrize("unsafe", ["instructions/p2.md", "instructions"])
+def test_rejected_seat_instruction_is_reported_once(
+    seat_task: Path, tmp_path_factory: pytest.TempPathFactory, unsafe: str
+):
+    # A seat task needs no instruction.md, which the single-agent check requires.
+    (seat_task / "instruction.md").unlink()
+    (seat_task / "tests/test.sh").unlink()
+    if unsafe == "instructions":
+        outside = tmp_path_factory.mktemp("outside-instructions")
+        for seat in ("p1", "p2"):
+            (outside / f"{seat}.md").write_text("Play your part.\n")
+        shutil.rmtree(seat_task / "instructions")
+        (seat_task / "instructions").symlink_to(outside, target_is_directory=True)
+    else:
+        (seat_task / unsafe).symlink_to("p2.md")
+
+    findings = lint_task(seat_task, selected_rules={LintRule.INVALID_TASK_FILES})
+    assert [
+        (Path(f.path).relative_to(seat_task).as_posix(), f.message) for f in findings
+    ] == [
+        (
+            unsafe,
+            "Use a regular input file or directory within the task, without symlink cycles.",
+        ),
+        (
+            "tests/test.sh",
+            "Missing OS-compatible verifier script; add a test script or bundle tests in the verifier image.",
+        ),
+    ]
+
+
+def leaky_image(directory: Path) -> None:
+    directory.mkdir()
+    (directory / "Dockerfile").write_text(
+        f"FROM {IMAGE}\nCOPY tests/test.sh /grader/\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        "./player",
+        {"context": "player"},
+        {"context": ".", "dockerfile": "player/Dockerfile"},
+        {"context": "..", "dockerfile": "environment/player/Dockerfile"},
+    ],
+)
+def test_seat_images_are_agent_images(seat_task: Path, build):
+    (seat_task / "instructions/p2.md").write_text("Support the other agent.\n")
+    leaky_image(seat_task / "environment/player")
+    leaky_image(seat_task / "environment/db")  # A sidecar is not an agent image.
+    (seat_task / "environment/docker-compose.yaml").write_text(f"""
+x-player: &player
+  build: {json.dumps(build)}
+services:
+  db: {{build: ./db}}
+  p1: *player
+  p2:
+    <<: *player
+""")
+
+    findings = lint_task(seat_task, selected_rules={LintRule.AGENT_IMAGE_TEST_LEAK})
+    assert [(Path(f.path).relative_to(seat_task), f.line) for f in findings] == [
+        (Path("environment/player/Dockerfile"), 2)
+    ]
+
+
+@pytest.mark.parametrize(
+    "compose",
+    [
+        "services: {p1: {build: '${CONTEXT}'}}",
+        "services: {p1: {build: 'https://example.com/player.git'}}",
+        "services: {p1: {build: {context: player, dockerfile_inline: 'FROM x'}}}",
+        "services: {p1: {image: player}, p2: {build: ../../outside}}",
+        "services: [",
+        "[]",
+    ],
+    ids=["interpolated", "remote", "inline", "external", "malformed", "not-a-map"],
+)
+def test_unresolved_seat_images_are_not_read(seat_task: Path, compose: str):
+    (seat_task / "instructions/p2.md").write_text("Support the other agent.\n")
+    leaky_image(seat_task / "environment/player")
+    (seat_task / "environment/docker-compose.yaml").write_text(compose)
+
+    assert lint_task(seat_task, selected_rules={LintRule.AGENT_IMAGE_TEST_LEAK}) == []
+
+
+@pytest.mark.parametrize("main", [False, True])
+def test_seat_tasks_report_main_seat_instead_of_shared_verifier(
+    seat_task: Path, main: bool
+):
+    agents = {"p1": {}, "p2": {"under_test": False}}
+    if main:
+        agents["main"] = {"under_test": False}
+    configure(seat_task, agent={}, verifier={}, agents=agents)
+
+    findings = lint_task(
+        seat_task, selected_rules={LintRule.SHARED_VERIFIER, LintRule.MAIN_SEAT}
+    )
+    assert [(f.rule, f.path, f.message.split(":")[0]) for f in findings] == (
+        [(LintRule.MAIN_SEAT, str(seat_task / "task.toml"), "agents.main")]
+        if main
+        else []
+    )
+
+
+@pytest.mark.parametrize("seat_rules_only", [False, True])
+def test_seats_are_checked_in_the_environment_compose_file(
+    seat_task: Path, monkeypatch, seat_rules_only: bool
+):
+    configure(
+        seat_task, agent={}, verifier={}, agents={"p1": {}, "p2": {"under_test": False}}
+    )
+    compose = seat_task / "environment/docker-compose.yaml"
+    verifier_compose = seat_task / "tests/docker-compose.yaml"
+    for path in (compose, verifier_compose):
+        path.write_text("services: {}\n")
+    check_compose = Mock(return_value=[])
+    monkeypatch.setattr("harbor.lint.task.lint_compose", check_compose)
+
+    lint_task(
+        seat_task,
+        selected_rules={LintRule.SEAT_SHARED_VOLUME} if seat_rules_only else None,
+    )
+    # Seat rules alone skip a Compose file without seats.
+    expected = {compose: ["p1", "p2"]}
+    if not seat_rules_only:
+        expected[verifier_compose] = []
+    assert {
+        call.args[0]: call.kwargs["seats"] for call in check_compose.call_args_list
+    } == expected
 
 
 @pytest.mark.parametrize("content", ["", " \n\t", "# canary: secret\n\n"])

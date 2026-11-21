@@ -15,7 +15,7 @@ harbor lint --extend-select root-agent --extend-select unpinned-image ./task-one
 harbor lint --extend-select ALL ./task-one
 ```
 
-All rules except `root-agent` and `unpinned-image` run by default.
+All rules except `root-agent`, `unpinned-image`, and `seat-shared-network` run by default.
 
 Without file configuration:
 
@@ -47,7 +47,8 @@ Precedence: **CLI flags > task.toml > dataset.toml > defaults**.
 | `invalid-task-files` | ✓ | Missing or excluded required files, empty instructions, unsafe input paths, or invalid active `.harborignore` files. |
 | `unused-harborignore` | ✓ | `.harborignore` files outside `tests/` or `solution/`, including their step equivalents. |
 | `root-agent` | — | An omitted or root agent user, including step overrides. |
-| `shared-verifier` | ✓ | A verifier sharing the agent sandbox. |
+| `shared-verifier` | ✓ | A verifier sharing the agent sandbox. Multi-agent tasks always verify in `main` and use `main-seat` instead. |
+| `main-seat` | ✓ | A multi-agent task with an agent in `main`, the service where the verifier runs. |
 | `overlapping-artifacts` | ✓ | Artifact output collisions that can skip requested content, including across services and within steps. |
 | `artifact-log-overlap` | ✓ | Artifacts overlapping a separate verifier's protected agent or verifier log paths. |
 | `unpinned-image` | — | External images without a SHA-256 digest in task configuration, Dockerfile `FROM` instructions, or Compose. |
@@ -56,9 +57,11 @@ Precedence: **CLI flags > task.toml > dataset.toml > defaults**.
 | `verifier-network-download` | ✓ | Separate verifiers cloning external repositories, saving external downloads, or piping downloads into a shell. |
 | `agent-image-test-leak` | ✓ | Explicit `COPY`/`ADD` references to `tests/test.sh`, `tests/test_*.py`, or `solution/solve.sh` in agent Dockerfiles. |
 
+In a multi-agent task, the Dockerfile checks also read each Dockerfile that a seat's `build` names in `environment/docker-compose.yaml`, as an agent image. They do not follow `extends`, `include`, or interpolated paths.
+
 ## Compose checks
 
-Requires the **Docker CLI**. Tasks without Compose files do not run these checks.
+Requires the **Docker CLI**. Tasks without Compose files do not run these checks. The `seat-` rules read only the `environment/docker-compose.yaml` of a multi-agent task, so selecting only them needs no Docker for other tasks.
 
 Harbor runtime variables use placeholder values; runtime host mounts are flagged as potentially external.
 Compose interpolation uses the applicable agent or verifier environment configuration; task values override shell values.
@@ -70,6 +73,46 @@ Compose interpolation uses the applicable agent or verifier environment configur
 | `compose-writable-bind-mount` | ✓ | Host bind mounts with write access. |
 | `compose-external-bind-mount` | ✓ | Bind sources that resolve outside the task directory. |
 | `compose-symlink-bind-mount` | ✓ | Bind sources that traverse a symlink and resolve outside the task directory. |
+| `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. Named volumes are compared by Docker name. The rule also reports mounts in two seats with the same or nested host paths if at least one seat can write. This includes direct binds and local bind-backed volumes. Two seats can share read-only inputs, even if another service writes them. A seat with `volumes_from` is reported too. |
+| `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, IPC, user or cgroup namespace (modes compared case-insensitively), and other services that join a seat's namespace with `service:<seat>` or the seat's `container_name`. |
+| `seat-shared-network` | — | Seats that can reach each other directly because they share a Compose network. Seats without `networks` all share the project's default network. |
+| `seat-host-secret` | ✓ | Seats that take values from the runner instead of the task: an `env_file` outside the task directory, an `environment` variable passed through by name with no value, or a `secrets` or `configs` entry whose source is the runner's environment or a file outside the task directory. A support seat could read the tested seat's provider key this way. |
+
+### Seat checks
+
+Seats are the services that run the agents of a [multi-agent task](/tasks/multi-agent). The `seat-` rules check the Compose file that the task author wrote, as `docker compose config` resolves it. They do not read the Compose files that Harbor adds at run time, inspect running containers, or test the isolation of the environment provider. A clean result means that the task's Compose file declares none of these kinds of sharing. It does not prove that the agents are isolated.
+
+The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
+
+`seat-shared-volume` resolves host paths where possible. It shows paths relative to the task directory for task-local mounts and omits external host paths. It compares volume subpaths as text, so it does not resolve symlinks inside a volume. `compose-writable-bind-mount` still reports each writable bind mount.
+
+Ignore a seat rule only when the task shares the resource on purpose, for example a workspace that all agents must edit, or host networking that the environment needs. Put the ignore in `task.toml` with a comment that gives the reason, so that a reviewer can tell intended sharing from a mistake:
+
+```toml title="task.toml"
+[metadata.harbor.lint]
+# p1 and p2 edit one shared repository; that is the task.
+ignore = ["seat-shared-volume"]
+```
+
+An ignore applies to the whole task, so it also hides sharing of the same kind that you did not intend.
+
+Enable `seat-shared-network` when the channel between agents is what the task measures, for example a task that disables messaging between seats. Agents that share a network can find each other by service name or by scanning the subnet. To keep them apart, give each seat its own network and attach `main` to all of them:
+
+```yaml title="environment/docker-compose.yaml"
+services:
+  main:
+    networks: [p1-net, p2-net]
+  p1:
+    networks: [p1-net]
+  p2:
+    networks: [p2-net]
+
+networks:
+  p1-net: {}
+  p2-net: {}
+```
+
+Many multi-agent tasks share a network on purpose, so the rule is off by default. `hello-seats` puts both agents on one network, and the rule reports it.
 
 Linting is optional. Use `--ignore` for rules that do not fit your task.
 

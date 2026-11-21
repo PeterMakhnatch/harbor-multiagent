@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from harbor.lint import lint_compose, lint_task
+from harbor.lint.models import DEFAULT_RULES, LintRule
 from harbor.models.task.task import Task
 from tests.unit.test_lint import IMAGE, cli as cli, configure, rules, task as task
 
@@ -1064,3 +1065,183 @@ def test_compose_named_bind_reports_only_writable_consumers(tmp_path: Path):
     findings = lint_compose(path)
     assert [f.rule for f in findings] == ["compose-writable-bind-mount"]
     assert findings[0].message.startswith("services.writer.volumes[0]:")
+
+
+def test_seat_rules_read_real_compose_files(task):
+    configure(
+        task, agent={}, verifier={}, agents={"p1": {}, "p2": {"under_test": False}}
+    )
+    (task / "instructions").mkdir()
+    for seat in ("p1", "p2"):
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+    (task / "environment/docker-compose.yaml").write_text(f"""
+x-player: &player
+  image: {IMAGE}
+  user: player
+services:
+  main:
+    network_mode: host
+    volumes: ["p1-home:/agents/p1/home:ro", "world:/world"]
+  p1:
+    <<: *player
+    volumes:
+      - p1-home:/home/player
+      - world:/world:ro
+      - {{type: volume, source: world, target: /scratch, volume: {{subpath: p1}}}}
+  p2:
+    <<: *player
+    pid: "service:main"
+    volumes: ["p1-home:/peek:ro"]
+  monitor:
+    image: {IMAGE}
+    ipc: "service:p1"
+volumes:
+  p1-home: {{}}
+  world: {{}}
+""")
+    findings = lint_task(task, selected_rules=DEFAULT_RULES)
+    assert [(f.rule, f.message.split(";")[0]) for f in findings] == [
+        (
+            "seat-shared-namespace",
+            "services.monitor.ipc: Service shares a seat's IPC namespace",
+        ),
+        (
+            "seat-shared-namespace",
+            "services.p2.pid: Seat shares another container's PID namespace",
+        ),
+        (
+            "seat-shared-volume",
+            "services.p1.volumes[0]: Seat can write a volume also mounted by seat p2",
+        ),
+        (
+            "seat-shared-volume",
+            "services.p1.volumes[2]: Seat can write a volume also written by main",
+        ),
+    ]
+
+
+@pytest.mark.parametrize("output", ["text", "json"])
+def test_seat_findings_never_print_interpolated_values(task, cli, monkeypatch, output):
+    # A host value that reaches Compose through the task's environment.
+    secret = "do-not-print-seat-target"
+    monkeypatch.setenv("HOST_SEAT_TARGET", secret)
+    configure(
+        task,
+        agent={},
+        verifier={},
+        environment={"env": {"SEAT_TARGET": "${HOST_SEAT_TARGET}"}},
+        agents={"p1": {}, "p2": {"under_test": False}},
+    )
+    (task / "instructions").mkdir()
+    for seat in ("p1", "p2"):
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+    (task / "environment/docker-compose.yaml").write_text(f"""
+services:
+  p1:
+    image: {IMAGE}
+    network_mode: "container:${{SEAT_TARGET}}"
+    volumes: ["${{SEAT_TARGET}}:/data"]
+  p2:
+    image: {IMAGE}
+    ipc: "service:${{SEAT_TARGET}}"
+    volumes: ["${{SEAT_TARGET}}:/peek:ro"]
+""")
+    result = CliRunner().invoke(
+        cli, [str(task), *(["--json"] if output == "json" else [])]
+    )
+    assert result.exit_code == 1
+    assert secret not in result.stdout
+    if output == "json":
+        assert [
+            (f["rule"], f["message"].split(":")[0]) for f in json.loads(result.stdout)
+        ] == [
+            ("seat-shared-namespace", "services.p1.network_mode"),
+            ("seat-shared-namespace", "services.p2.ipc"),
+            ("seat-shared-volume", "services.p1.volumes[0]"),
+        ]
+
+
+def test_seat_shared_volume_compares_docker_volume_names(tmp_path: Path):
+    path = tmp_path / "docker-compose.yaml"
+    # main's read-only mount is the docs' pattern for sharing files with tests.
+    path.write_text(f"""
+x-player: &player
+  image: {IMAGE}
+services:
+  main:
+    volumes: ["p1-home:/agents/p1/home:ro"]
+  p1:
+    <<: *player
+    volumes: ["p1-home:/home/player", "cache-one:/cache", "notes-one:/notes"]
+  p2:
+    <<: *player
+    volumes: ["cache-two:/cache:ro", "notes-two:/notes:ro", "p2-home:/home/player"]
+volumes:
+  p1-home: {{}}
+  p2-home: {{}}
+  cache-one: {{external: true, name: shared-cache}}
+  cache-two: {{external: true, name: shared-cache}}
+  notes-one: {{name: shared-notes}}
+  notes-two: {{name: shared-notes}}
+""")
+    assert [
+        f.message.split(";")[0]
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule == "seat-shared-volume"
+    ] == [
+        "services.p1.volumes[1]: Seat can write a volume also mounted by seat p2",
+        "services.p1.volumes[2]: Seat can write a volume also mounted by seat p2",
+    ]
+
+
+@pytest.mark.parametrize("separate", [False, True])
+def test_seat_shared_network_reads_real_compose_files(tmp_path: Path, separate):
+    path = tmp_path / "docker-compose.yaml"
+    # Separate networks shared only with main are the fix; otherwise p1 and p2
+    # are both on the default network, and p3 shares a named one with p2.
+    path.write_text(f"""
+services:
+  main:
+    image: {IMAGE}
+    networks: {"[p1-net, p2-net, p3-net]" if separate else "[default, p2-p3]"}
+  p1:
+    image: {IMAGE}
+    {"networks: [p1-net]" if separate else ""}
+  p2:
+    image: {IMAGE}
+    networks: {"[p2-net]" if separate else "[default, p2-p3]"}
+  p3:
+    image: {IMAGE}
+    networks: {"[p3-net]" if separate else "[p2-p3]"}
+  lone:
+    image: {IMAGE}
+    network_mode: none
+networks:
+  p1-net: {{}}
+  p2-net: {{}}
+  p3-net: {{}}
+  p2-p3: {{}}
+""")
+    findings = lint_compose(path, seats=["p1", "p2", "p3", "lone"])
+    assert [
+        f.message.split(";")[0] for f in findings if f.rule == "seat-shared-network"
+    ] == (
+        []
+        if separate
+        else [
+            "services.p1.networks: Seat shares a network with seat p2",
+            "services.p2.networks: Seat shares a network with seat p1, p3",
+            "services.p3.networks: Seat shares a network with seat p2",
+        ]
+    )
+
+
+def test_hello_seats_example_is_clean():
+    example = Path(__file__).parents[2] / "examples/tasks/hello-seats"
+    assert lint_task(example, selected_rules=DEFAULT_RULES) == []
+    # Its seats share one network on purpose, which the opt-in rule reports.
+    shared = lint_task(example, selected_rules={LintRule.SEAT_SHARED_NETWORK})
+    assert [f.message.split(";")[0] for f in shared] == [
+        "services.p1.networks: Seat shares a network with seat p2",
+        "services.p2.networks: Seat shares a network with seat p1",
+    ]
