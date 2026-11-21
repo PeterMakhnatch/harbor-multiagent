@@ -19,11 +19,13 @@ The native binary reward requires the unique joint 2-hour meeting start. The pai
 
 On [Dispatch](live-confirmation.md), naming reports moved changed reads from 6/16 to 16/16. Its team reward did not pass the paired test. The earlier 2/24 versus 17/24 result concerned showing actual answers in a receiver replay. It did not measure names or native team reward. Do not pool these tasks.
 
-In this scheduling cohort, the complete revised report matched the sender’s true calendar in 0/24 teams. The final visible information had exactly 1 candidate in 8/24. That candidate was correct in 3/8.
+No sender reported its full week correctly. Across 24 revisions, 43 of 146 reported starts were valid. Senders missed 101 of 144 valid starts. The median report had 7 extra or missing starts. The receiver saw exactly 1 candidate in 8/24 teams. That candidate was correct in 3/8.
 
 [Offline decision check](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059540059): taking the sole visible candidate, when present, changed 3 failures to successes and 0 successes to failures. This reuses the same reports and decisions. It is not another live trial.
 
-The true meeting remained in the visible candidates for only 4/24 teams. Only 1/24 final choices fit the receiver’s own calendar. The next useful comparison is a private-calendar lookup tool versus raw calendars. Both arms should use the same notice. The tool must not reveal the other seat’s calendar.
+The true meeting remained in the visible candidates for only 4/24 teams. Only 1/24 final choices fit the receiver’s own calendar. [Checking for a consistent 1-hour or 1-day shift](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059641483) raised that count to at most 4/24. This does not support a simple coordinate mismatch.
+
+Test a private-calendar lookup tool against raw calendars next. Keep the notice and the 2-read limit the same. The tool must not reveal the other seat’s calendar.
 
 These are fixed, previously studied worlds and one model. With truthful reports, 7/12 worlds already have one candidate before either read. The result does not estimate performance on unseen calendars.
 

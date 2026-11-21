@@ -1,4 +1,25 @@
 {
+  "calendar_fidelity": {
+    "registration": "https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059641483",
+    "sender_fields": ["true_starts", "reported_starts", "correctly_reported_starts"],
+    "sender_by_world": {
+      "w00": {"count": [4, 0, 0], "named": [4, 0, 0]},
+      "w01": {"count": [4, 1, 0], "named": [4, 0, 0]},
+      "w02": {"count": [4, 7, 3], "named": [4, 13, 0]},
+      "w03": {"count": [4, 0, 0], "named": [4, 10, 2]},
+      "w04": {"count": [6, 18, 6], "named": [6, 5, 3]},
+      "w05": {"count": [6, 5, 2], "named": [6, 0, 0]},
+      "w06": {"count": [5, 14, 4], "named": [5, 0, 0]},
+      "w07": {"count": [8, 4, 2], "named": [8, 9, 3]},
+      "w08": {"count": [11, 6, 2], "named": [11, 9, 6]},
+      "w09": {"count": [9, 2, 1], "named": [9, 6, 2]},
+      "w10": {"count": [5, 27, 3], "named": [5, 1, 0]},
+      "w11": {"count": [6, 9, 4], "named": [6, 0, 0]}
+    },
+    "receiver_locally_valid_out_of_24": {
+      "native": 1, "hour_earlier": 2, "hour_later": 3, "weekday_earlier": 1, "weekday_later": 4
+    }
+  },
   "cells": [
     {
       "arm": "count",
