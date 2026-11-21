@@ -38,6 +38,24 @@ Equal inputs did not guarantee equal decisions. Across 2 replies, the selected s
 
 [Source and first-reply evidence](results/calendar-visible-fixed-replay.json) · [96 direct charges: $0.003303618](results/calendar-visible-fixed-replay-cost.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061830775).
 
+### Should the receiver wait for the first report before requesting a second one?
+
+**Waiting did not improve bookings on these senders.** We reused all 48 native senders from the 24-world test above. Each pair of fresh receiver branches shared its first requested day. The `immediate` receiver saw that report before choosing its second day. The `delayed` receiver did not. Both could read exactly 2 reports and used the same final booking format.
+
+| Outcome on 48 fixed senders | Wait for the first report (`immediate`) | Request both before delivery (`delayed`) |
+|---|---:|---:|
+| Correct bookings | 28/48 | 30/48 |
+| Final reports included the true meeting | 28/48 | 30/48 |
+| Final reports identified the true meeting alone | 25/48 | 28/48 |
+
+The two receivers chose different second days on 12/48 sources. Their sets of reported, locally feasible starts differed on only 3/48. Given the first day, **any** legal second request could change that set on only 23/48 sources. It could change whether the true meeting appeared on 19/48.
+
+Across the 24 worlds, `immediate` won 0, tied 22, and lost 2. The difference was −4.2 percentage points. The exact two-sided world-level test gave **p = 0.50**. This did not pass the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061879200). It is not evidence that delayed reports work better. We measured no latency.
+
+Of 288 logical turns, only 204 needed a model call. The 48 first requests and 36 identical bookings each used one physical reply across both branches. We counted no shared reply as independent evidence. No reply was invalid or missing. These are receiver paths against recorded senders, **not** 96 new native teams.
+
+[Try it on your own native trial](replication.md#let-a-receiver-choose-which-report-to-read-next) · [48 paired receipts](results/calendar-staged-report-study.json) · [Source commitments and read opportunities](results/calendar-staged-report-sources.json) · [204 individual charges: $0.007254603](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062069160).
+
 ## Held-out test: change both private calendar views
 
 We ran 2 fresh teams on each world. Both teams got the same game, the same weekday notices, and the same 2-report limit. Only the calendar view changed. The first sender turn saw 2 attendees. Its revision and the receiver saw all 3 attendees at their own seat.

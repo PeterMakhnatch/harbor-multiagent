@@ -599,6 +599,15 @@ Stop when `next` returns `status`. This record is for the scorer only. An invali
 
 To compare both timings programmatically, use `calendar_inquiry_pair.play_pair(source, first_timing=..., respond=...)`. The callback receives a call label and a worker request. Return the worker's reply envelope, or `None` if it is missing. The runner calls each second decision separately. If both bookings have identical inputs, it calls the worker only once. Never send the returned trace to a worker. This compares receivers against one recorded sender; it does not rerun the full team.
 
+For the W24–W47 study, `calendar_inquiry_receipt.public_source(source, trace, first_timing=...)` regenerates both branches and exports only their grades and commitments. It rejects a missing turn record. An explicit missing worker reply remains missing. To reproduce the published result without any native data or model calls:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.inquiry_summary \
+  examples/seatlab/results/calendar-staged-report-study.json
+```
+
+The [result page](calendar-notice-result.md#should-the-receiver-wait-for-the-first-report-before-requesting-a-second-one) separates native team rewards from this fixed-sender comparison.
+
 #### Could a different report request have helped?
 
 Use the native job you already ran. This diagnostic makes no model calls and starts no containers:
