@@ -67,6 +67,19 @@ Use only trusted executables. The runner starts each in an empty working directo
 - Primary: correct final decisions under `bound` minus `anonymous`, matched within each block. Average within source, then weight the 3 sources equally. Report complete pairs and best/worst differences over all 144. Secondary: choice of the historically more accurate candidate when the counts differ; choice of a currently exact report; how often choices and final branches differ; and repeat disagreement. Report distinct paid turns and unknown charges separately. Do not count a shared final as 2 independent observations.
 - Use the same direct Flash settings as above, with at most 864 calls under the existing ledger. This compares 2 real delegation policies with a limited review budget. It is not a test of closed-loop learning by the archived agents. The prior audits are new information that the study supplies.
 
+Use `--workflow delegate` on the same runnable commands. The 2 trusted programs use the stdin/stdout contract above. The decision program handles selection (`{"ask":"X"}` or `{"ask":"Y"}`) as well as the final choice. The reviewer program receives no request if neither selector chose it. The commands below make no built-in provider calls:
+
+```sh
+python -m examples.seatlab.visibility.route_cli plan --workflow delegate
+umask 077
+private=$(mktemp -d)
+python -m examples.seatlab.visibility.route_cli commands --workflow delegate \
+  --config seats.json --study "$private" --start 0 --stop 1
+python -m examples.seatlab.visibility.route_cli report --workflow delegate --study "$private"
+```
+
+Use `demo` instead of `commands` and omit `--config` for a no-model transport check. Use a new private directory for a new run. A registered block has one claim, even if a process fails. The report distinguishes unclaimed blocks, known unselected branches, missing replies, and identical selections that share one actual final response.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.

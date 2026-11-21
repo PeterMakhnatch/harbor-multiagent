@@ -9,7 +9,13 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from . import route_audit, route_packet, route_protocol as protocol, route_run
+from . import (
+    route_audit,
+    route_memory,
+    route_packet,
+    route_protocol as protocol,
+    route_run,
+)
 
 _RESULTS = Path(__file__).resolve().parent.parent / "results"
 _PUBLIC = _RESULTS / "crucible-routed-packet.json"
@@ -67,15 +73,46 @@ def _identity(args: argparse.Namespace) -> tuple[Path, str]:
 
 def _execute(args: argparse.Namespace) -> int:
     packet, digest = _identity(args)
+    delegated = args.workflow == "delegate"
+    if delegated:
+        from . import route_memory_audit, route_memory_run
+
+        collect = route_memory_audit.collect
+        play_external = route_memory_run.play_block
+        play_direct = route_memory_run._play
+        blocks = route_memory.blocks()
+    else:
+        collect = route_audit.collect
+        play_external = route_run.play_block
+        play_direct = route_run._play
+        blocks = protocol.blocks()
     if args.mode == "report":
-        _print(
-            route_audit.collect(packet, digest, args.study, spend_dir=args.spend_dir)
-        )
+        _print(collect(packet, digest, args.study, spend_dir=args.spend_dir))
         return 0
-    blocks = protocol.blocks()
     # The run path validates the packet inside each first-attempt claim.
     if args.mode == "plan":
         cases = route_packet.load(packet, digest)
+        if delegated:
+            _print(
+                {
+                    "packet_sha256": digest,
+                    "source_rounds": len(cases),
+                    "target_rounds": len({(b.policy, b.round) for b in blocks}),
+                    "eligible_blocks": sum(
+                        route_memory.menu(cases, b) is not None for b in blocks
+                    ),
+                    "blocks": [
+                        {
+                            "index": i,
+                            "block": route_memory.key(b),
+                            "selectors": route_memory.arm_order(b),
+                        }
+                        for i, b in enumerate(blocks)
+                    ],
+                    "max_calls": 6 * len(blocks),
+                }
+            )
+            return 0
         _print(
             {
                 "packet_sha256": digest,
@@ -100,7 +137,9 @@ def _execute(args: argparse.Namespace) -> int:
         def reviewer(_: str) -> str:
             return '{"vote":"B","a":[0,0],"b":[0,0]}'
 
-        def decider(_: str) -> str:
+        def decider(prompt: str) -> str:
+            if delegated and '"ask"' in prompt:
+                return '{"ask":"X"}'
             return '{"choice":"A"}'
 
         seats = (reviewer, decider)
@@ -115,12 +154,13 @@ def _execute(args: argparse.Namespace) -> int:
     for i in range(args.start, stop):
         block = blocks[i]
         if seats is not None:
-            status = route_run.play_block(
+            status = play_external(
                 packet, digest, args.study, block, reviewer=seats[0], decider=seats[1]
             )
         else:
-            status = route_run._play(packet, digest, args.study, block, _direct)
-        _print({"index": i, "block": block.id, "mode": args.mode, "status": status})
+            status = play_direct(packet, digest, args.study, block, _direct)
+        key = route_memory.key(block) if delegated else block.id
+        _print({"index": i, "block": key, "mode": args.mode, "status": status})
     return 0
 
 
@@ -130,6 +170,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     for mode in ("plan", "report", "demo", "commands", "direct"):
         sub = modes.add_parser(mode, allow_abbrev=False)
         _scope(sub)
+        sub.add_argument(
+            "--workflow",
+            choices=("review", "delegate"),
+            default="review",
+            help="Compare two context views, or let the coordinator choose a reviewer.",
+        )
         if mode != "plan":
             sub.add_argument(
                 "--study",
