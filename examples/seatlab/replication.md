@@ -253,6 +253,17 @@ Give the exact block indices for your run. The auditor rejects missing or surplu
 
 Primary: difference between the 2 policies in how often they open the revised record, paired within a valid writer note. Give each of the 3 original worlds equal weight. Report coverage and bounds for missing selections. Secondary: how often the resulting decision gets that record right when the revision changes the best bay. Identify these cases from the frozen scoring packet, not from either agent's choice. Report each policy's first-record selections and the number of shared final draws. The anonymous reader does not have the record identity. A first-record choice alone is not proof that it ignored available evidence.
 
+To reproduce the held-out estimate without a model, use these released files from the fork root. The index list covers all 30 selected blocks and excludes all 12 earlier ones:
+
+```sh
+files=examples/seatlab/results
+python -m examples.seatlab.handoff.lookup_cohort \
+  --packet "$files/handoff-recorded-packet.json" \
+  --sha256 77e1af8cec3b3a18142cfc2085332c69c447a9bc89c04b34f036920378f8eb57 \
+  --report "$files/handoff-nonfirst-live.json" \
+  --indices 2 3 4 5 6 7 8 9 10 11 16 17 18 19 20 21 22 23 24 25 30 31 32 33 34 35 36 37 38 39
+```
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
