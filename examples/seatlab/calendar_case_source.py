@@ -42,6 +42,7 @@ class SourceCase:
     prompts: dict[str, str]
     inquiry: dict[str, object]
     turns: tuple[_SourceTurn, ...] = field(default=(), repr=False)
+    _sender_table: calendar_packet.Table | None = field(default=None, repr=False)
 
 
 _CELL_TYPES = {
@@ -245,6 +246,7 @@ def _read_case(
     calls: list[audit.Row],
     *,
     include_turns: bool,
+    include_sender_table: bool,
 ) -> SourceCase:
     result_data = audit.raw(trial / "result.json")
     result = audit._object(result_data)
@@ -364,11 +366,21 @@ def _read_case(
             "target": target,
         },
         turns=turns,
+        _sender_table=(
+            tables[p.SEATS.index(cell.sender)]
+            if include_sender_table and not any(visible.values())
+            else None
+        ),
     )
 
 
 def _load(
-    trial: Path, spend_dir: Path, *, include_turns: bool, cohort_sha256: str | None
+    trial: Path,
+    spend_dir: Path,
+    *,
+    include_turns: bool,
+    include_sender_table: bool,
+    cohort_sha256: str | None,
 ) -> SourceCase:
     trial = trial.expanduser().absolute()
     spend_dir = spend_dir.expanduser().absolute()
@@ -403,7 +415,16 @@ def _load(
         and row["held_calls"] == 0,
         "incomplete_or_invalid_native_source",
     )
-    source = _read_case(job, trial, task, cell, row, calls, include_turns=include_turns)
+    source = _read_case(
+        job,
+        trial,
+        task,
+        cell,
+        row,
+        calls,
+        include_turns=include_turns,
+        include_sender_table=include_sender_table,
+    )
     audit.require(
         _ledger(spend_dir) == ledger_before
         and _calls(ledger_before[0], cell) == calls
@@ -420,11 +441,16 @@ def load(
     spend_dir: Path,
     *,
     include_turns: bool = False,
+    include_sender_table: bool = False,
     cohort_sha256: str | None = None,
 ) -> SourceCase:
     try:
         return _load(
-            trial, spend_dir, include_turns=include_turns, cohort_sha256=cohort_sha256
+            trial,
+            spend_dir,
+            include_turns=include_turns,
+            include_sender_table=include_sender_table,
+            cohort_sha256=cohort_sha256,
         )
     except audit.BindingError:
         raise
