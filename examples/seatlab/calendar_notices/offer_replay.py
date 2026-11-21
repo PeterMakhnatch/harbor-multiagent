@@ -111,26 +111,51 @@ def _measure(
     return metrics
 
 
-def report(job: Path, spend_dir: Path, *, private_views: bool = False) -> audit.Row:
-    study = team_views if private_views else p
+def report(
+    job: Path,
+    spend_dir: Path,
+    *,
+    private_views: bool = False,
+    role_views: bool = False,
+) -> audit.Row:
+    if private_views and role_views:
+        raise ValueError("conflicting_view_modes")
+    if role_views:
+        cell_type, world_ids, arms = (
+            team_views.RoleCell,
+            team_views.WORLDS,
+            team_views.ROLE_ARMS,
+        )
+    elif private_views:
+        cell_type, world_ids, arms = team_views.Cell, team_views.WORLDS, team_views.ARMS
+    else:
+        cell_type, world_ids, arms = p.Cell, p.WORLDS, p.ARMS
     job = job.expanduser().absolute()
     receipts = {}
-    for world in study.WORLDS:
-        for arm in study.ARMS:
-            cell = study.Cell(world, arm)
+    for world in world_ids:
+        for arm in arms:
+            cell = cell_type(world, arm)
             directory = job / "cells" / cell.run
             paths = _phase_paths(directory, cell)
             receipts[cell.run] = (cell, directory, paths, _snapshot(directory, paths))
-    native = audit.report(job, spend_dir, controls=False, private_views=private_views)
+    native = audit.report(
+        job,
+        spend_dir,
+        controls=False,
+        private_views=private_views,
+        role_views=role_views,
+    )
     worlds = ()
-    if not private_views and any(row["complete"] for row in native["cells"]):
+    if not (private_views or role_views) and any(
+        row["complete"] for row in native["cells"]
+    ):
         try:
             worlds = calendar_packet.load(
                 calendar_packet.PACKET, calendar_packet.PACKET_SHA256
             )
         except _INVALID_EVIDENCE:
             worlds = ()
-    cells, eligible = [], {arm: [] for arm in study.ARMS}
+    cells, eligible = [], {arm: [] for arm in arms}
     for row in native["cells"]:
         public = {key: row[key] for key in _FIELDS}
         public["metrics"] = None
@@ -167,10 +192,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("job", type=Path)
     parser.add_argument("--spend-dir", type=Path, required=True)
-    parser.add_argument("--private-views", action="store_true")
+    views = parser.add_mutually_exclusive_group()
+    views.add_argument("--private-views", action="store_true")
+    views.add_argument("--role-views", action="store_true")
     args = parser.parse_args(argv)
     try:
-        evidence = report(args.job, args.spend_dir, private_views=args.private_views)
+        evidence = report(
+            args.job,
+            args.spend_dir,
+            private_views=args.private_views,
+            role_views=args.role_views,
+        )
     except _INVALID_EVIDENCE:
         parser.exit(1, "offer replay: native audit unavailable\n")
     print(json.dumps(evidence, indent=2))

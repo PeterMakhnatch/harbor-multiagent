@@ -21,6 +21,26 @@ The stock Eval Lab reader matched all 24 native scores. The 23 full conversation
 
 [Native evidence](results/calendar-private-views-live.json) · [Per-team costs](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060350368) · [Run the experiment](replication.md#test-private-calendar-views-with-2-live-seats) · [What other reads could reveal](results/calendar-read-opportunities.json).
 
+## If only one seat gets the calendar helper, which one should it be?
+
+**We did not establish a better role for the team.** We ran 24 new DeepSeek teams on the same 12 worlds. One seat saw its exact local starts. The other saw its original busy hours. Each team still had to agree on the one time that fit both calendars.
+
+| Outcome | Sender alone got exact starts | Receiver alone got exact starts |
+|---|---:|---:|
+| Teams that booked the joint meeting | 0/12 | 3/12 |
+| Sender gave an exact final list | 10/12 | 0/12 |
+| Receiver chose a start that fit its own calendar | 2/12 | 12/12 |
+| Actual reports left the sole correct option | 5/12 | 0/12 |
+| Some legal choice of 2 reports could reveal the joint meeting | 10/12 | 1/12 |
+
+Receiver-only help won 3 paired worlds, tied 9, and lost none. The two-sided sign test gave **p = 1/4**, above the [registered threshold](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061145932). These were new teams, not unseen worlds.
+
+The failure mode changed. With sender-only help, all 5 receivers missed the sole correct option when the reports identified it. With receiver-only help, all 3 successful teams chose a time their received reports did not identify. Changing which 2 reports to read could not fix 11 of the 12 receiver-only teams' missing evidence. A correct booking alone does not show that the receiver used a peer message.
+
+The stock Eval Lab reader matched all 24 rewards. Independent checks matched 96 model turns, 72 message deliveries, and all 240 legal read pairs. The read pairs are alternatives within teams, not extra trials. The 96 direct calls cost **$0.004031520**. No hold remains.
+
+[Native grades and all direct charges](results/calendar-role-views-live.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061329479) · [Reproduce the role experiment](replication.md#give-just-one-scheduling-seat-the-calendar-helper).
+
 ## Did the receiver use the peer’s actual start IDs?
 
 **Yes, in a controlled receiver replay.** We froze the exact-view sender and the 2 reports its receiver opened in each of the 12 worlds. Fresh receivers saw either the real peer start IDs or `?` in their place. Both arms saw the same local starts, weekdays, entry counts, and instructions.
@@ -89,6 +109,7 @@ The reported experiment used 1 model and the 12 previously studied worlds. With 
 ```sh
 python3 examples/seatlab/calendar_notices/summary.py
 python3 examples/seatlab/calendar_notices/summary.py examples/seatlab/results/calendar-private-views-live.json
+python3.12 -BS -m examples.seatlab.calendar_notices.role_summary
 python3 examples/seatlab/calendar_notices/peer_payload_score.py --receipt examples/seatlab/results/calendar-peer-payload-replay.json
 ```
 
