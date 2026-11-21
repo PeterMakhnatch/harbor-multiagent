@@ -98,12 +98,23 @@ def _rates(started: datetime) -> tuple[int, int, int]:
     return PEAK_NANODOLLARS if peak else OFF_PEAK_NANODOLLARS
 
 
+def _cost_nanodollars(
+    miss_tokens: int, cache_tokens: int, output_tokens: int, rates: tuple[int, int, int]
+) -> int:
+    uncached_rate, cached_rate, output_rate = rates
+    return (
+        miss_tokens * uncached_rate
+        + cache_tokens * cached_rate
+        + output_tokens * output_rate
+    )
+
+
 @dataclass
 class _Admission:
     budget_nanodollars: int | None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     started_calls: int = 0
-    observed_cost_nanodollars: int = 0
+    budgeted_cost_nanodollars: int = 0
     outstanding_reserve_nanodollars: int = 0
     stopped: str | None = None
 
@@ -142,6 +153,7 @@ class _Usage:
     cache_tokens: int
     output_tokens: int
     cost_nanodollars: int
+    budgeted_cost_nanodollars: int
 
     @classmethod
     def from_response(
@@ -160,14 +172,16 @@ class _Usage:
             raise ValueError(
                 "DeepSeek usage exceeds the admitted bounds or is inconsistent"
             )
-        uncached_rate, cached_rate, output_rate = _rates(started)
         return cls(
             input_tokens,
             cache_tokens,
             output_tokens,
-            miss_tokens * uncached_rate
-            + cache_tokens * cached_rate
-            + output_tokens * output_rate,
+            _cost_nanodollars(
+                miss_tokens, cache_tokens, output_tokens, _rates(started)
+            ),
+            _cost_nanodollars(
+                miss_tokens, cache_tokens, output_tokens, PEAK_NANODOLLARS
+            ),
         )
 
 
@@ -179,6 +193,7 @@ class _Account:
     cache_tokens: int = 0
     output_tokens: int = 0
     cost_nanodollars: int = 0
+    budgeted_cost_nanodollars: int = 0
     outstanding_reserve_nanodollars: int = 0
 
     def add(self, usage: _Usage, reserve_nanodollars: int) -> None:
@@ -188,6 +203,7 @@ class _Account:
         self.cache_tokens += usage.cache_tokens
         self.output_tokens += usage.output_tokens
         self.cost_nanodollars += usage.cost_nanodollars
+        self.budgeted_cost_nanodollars += usage.budgeted_cost_nanodollars
 
     def publish(self, context: AgentContext) -> None:
         if self.observed:
@@ -208,6 +224,7 @@ class _Account:
             "observed_usage_calls": self.observed,
             "unknown_usage_calls": self.started - self.observed,
             "observed_model_cost_nanodollars": self.cost_nanodollars,
+            "budgeted_model_cost_nanodollars": self.budgeted_cost_nanodollars,
             "unknown_usage_reserve_nanodollars": self.outstanding_reserve_nanodollars,
             "unknown_usage_reserve_usd": _usd(self.outstanding_reserve_nanodollars),
         }
@@ -308,7 +325,7 @@ class _SeatModel:
             usage = _Usage.from_response(response, started, self.max_output_tokens)
             self.account.add(usage, reserve)
             self.admission.outstanding_reserve_nanodollars -= reserve
-            self.admission.observed_cost_nanodollars += usage.cost_nanodollars
+            self.admission.budgeted_cost_nanodollars += usage.budgeted_cost_nanodollars
             return _completion(response)
         except asyncio.CancelledError:
             failure = "CancelledError"
@@ -342,6 +359,9 @@ class _SeatModel:
                 response_model=response.get("model") if response else None,
                 usage=response.get("usage") if response else None,
                 cost_usd=_usd(usage.cost_nanodollars) if usage else None,
+                budgeted_model_cost_nanodollars=(
+                    usage.budgeted_cost_nanodollars if usage else None
+                ),
                 unknown_usage_reserve_usd=0 if usage else _usd(reserve),
                 error=failure,
             )
@@ -394,7 +414,7 @@ class _SeatModel:
                 )
             budget = self.admission.budget_nanodollars
             if budget is not None and (
-                self.admission.observed_cost_nanodollars
+                self.admission.budgeted_cost_nanodollars
                 + self.admission.outstanding_reserve_nanodollars
                 + reserve
                 > budget

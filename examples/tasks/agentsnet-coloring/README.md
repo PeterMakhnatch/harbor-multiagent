@@ -108,7 +108,7 @@ The adapter uses `https://api.deepseek.com/chat/completions` directly. It reques
 
 Each role has 5 scheduled model calls. The source's single format retry permits at most 10 calls per role, or 40 total. The default output cap is 512 tokens. `--max-output-tokens` accepts 512 through 1024.
 
-The serialized message guard is 30,720 UTF-8 bytes. The planning reserve allows 32,768 input tokens per call, including framing.
+The serialized message guard is 30,720 UTF-8 bytes. Each POST reserves 32,768 input tokens at the peak uncached rate and the configured output cap at the peak output rate.
 
 | Output cap | Peak reserve per POST (USD) | Peak reserve for 40 calls (USD) |
 |---|---:|---:|
@@ -119,15 +119,17 @@ These reserves are bounds, not actual spend.
 
 Before each paid request, the adapter checks the direct account balance. It stops new admission below USD 1.50 or after unknown usage. Balance and generation use a trial-scoped lock. Provider calls are serial; the round barriers remain synchronous. Do not interpret the baseline as a parallel-provider latency measurement.
 
-The adapter records every response, format retry, token count, cache subset, price window, and cost. A failed started call without usage remains unknown. It does not become a zero-cost call.
+The adapter records every response, format retry, token count, cache subset, estimated price window, and cost. A failed started call without usage remains unknown. It does not become a zero-cost call.
 
-The response model alias is not proof of a fixed provider build. Cost means the token-priced amount, not a wallet difference or invoice amount.
+Reported cost uses the published rate schedule at the client start time. The estimate does not apply the Chinese public holiday exception. It does not establish the provider's billing clock, wallet debit, or invoice amount. The response model alias does not attest to a fixed provider build.
 
-`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. Before each POST, known cost plus unresolved reserves plus the next peak reserve must fit the limit. A refused request has no charge.
+`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. The budget check runs before the balance GET and the completion POST. Prior peak-priced charges, unresolved reserves, and the next peak reserve must fit the limit. A refused request has no charge.
 
-Valid usage replaces its reserve with actual token cost. Unknown usage keeps its reserve and stops new admission. A reserve is not a bill.
+For budget admission only, valid usage replaces its reserve with the published peak prices for the actual uncached input, cached input, and output tokens. This upper bound does not depend on which price window the provider uses. Unknown usage keeps the full reserve and stops new admission. A reserve is not a bill.
 
-`summary.json` records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
+Each seat records the exact integer `budgeted_model_cost_nanodollars` for valid usage. In `call_finished`, that field is the call's budget charge, while `cost_usd` is its reported cost estimate. Unknown usage leaves both fields null and records the reserve separately.
+
+`summary.json` still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
 
 ## Retained artifacts
 
@@ -135,7 +137,7 @@ Each run records its imported SDK and source root in `runtime.json`. Native resu
 
 Real-model records remain in each seat's `agent/deepseek.jsonl`. The world exports `/logs/world/agentsnet.json` for the verifier and task artifacts.
 
-Keep raw role traces private. A public result should contain the source pins, complete trial count, both scores, elapsed time, token counts, actual cost, and any unknown usage.
+Keep raw role traces private. A public result should contain the source pins, complete trial count, both scores, elapsed time, token counts, reported cost estimate, and any unknown usage.
 
 ## Observed real-model baseline
 
@@ -168,7 +170,7 @@ Every paid call has a complete provider usage record. Native token totals and co
 
 Native usage lives in `seat_results`. The trial-level `agent_result` is null for native seats; it does not mean zero usage.
 
-All calls start on Saturday. The token price uses the verified off-peak rates:
+All calls start on Saturday. The stored cost estimate uses the published off-peak rates:
 
 | Token category | USD per 1 million tokens |
 |---|---:|
@@ -179,3 +181,48 @@ All calls start on Saturday. The token price uses the verified off-peak rates:
 The source-parity proof compares the pinned prompts, parser, histories, routing, and both scores without a provider call. All 3 native controls also pass.
 
 This is 1 successful episode, not an estimated success rate. Provider calls remain serial. The trial does not establish communication necessity or model superiority.
+
+## Repeated output-cap study
+
+The registered question compares 512 and 1024 output tokens. Adoption requires fewer format retries without fewer proper colorings or excessive median cost and play time.
+
+The study runs 6 fresh trials per cap. Pair order alternates, with 3 pairs in each order. The pilot above remains separate.
+
+All 12 trials execute [`e56c801fcd72f5f453cf9996ba93aaf0d1e425c5`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/e56c801fcd72f5f453cf9996ba93aaf0d1e425c5), with 4 under-test seats and serial provider calls. They do not execute the later peak-budget settlement described above.
+
+| Cohort measure | 512 tokens | 1024 tokens |
+|---|---:|---:|
+| Complete trials | 6 | 6 |
+| Proper colorings | 6 | 4 |
+| Format retries | 47 | 8 |
+| Length-limited responses | 49 | 8 |
+| Invalid parses | 48 | 8 |
+| Empty-message fallbacks | 1 | 0 |
+| Final-answer fallbacks | 0 | 0 |
+| Paid model calls | 167 | 128 |
+| Total token-priced USD | 0.044996082 | 0.048567672 |
+| Median token-priced USD per trial | 0.007271712 | 0.007779408 |
+| Median native play time (s) | 85.6158775 | 83.7022665 |
+
+**Keep the default at 512.** The larger cap meets the retry, fallback, cost, and time conditions. It fails the registered proper-coloring condition.
+
+Cases `p01-cap1024` and `p05-cap1024` each have a valid edge fraction of 0.75 and proper coloring of 0. They are retained failures, not invalid rewards or runtime exceptions.
+
+One length-limited 512-token response still passes the source parser. A length finish is not automatically a format failure.
+
+### Cost and time per seat
+
+Each cell is the median across that seat's 6 trials. Seat intervals overlap. Do not add them to obtain trial wall time.
+
+| Seat | USD, 512 tokens | USD, 1024 tokens | Wall time, 512 tokens (s) | Wall time, 1024 tokens (s) |
+|---|---:|---:|---:|---:|
+| Bradley (`n0`) | 0.002241048 | 0.002549244 | 81.0594055 | 81.6069325 |
+| Sean (`n1`) | 0.001633260 | 0.001357164 | 82.7266495 | 80.1795240 |
+| Hannah (`n2`) | 0.001709001 | 0.002132997 | 83.8606875 | 82.6364665 |
+| Kathryn (`n3`) | 0.001845495 | 0.001872099 | 83.8975035 | 80.6499710 |
+
+The complete cohort has 295 paid calls and costs USD 0.093563754 from raw usage and the published off-peak tariff. No usage is unknown. No trial or transport retry occurs.
+
+The cohort uses 1 released graph. These counts do not establish a benchmark-wide success rate or a causal quality loss from the larger cap.
+
+The cohort SHA-256 is `286848f036f0c8ea1cbe6b4387eb6d4d305afc62ab07694c6083ae22077b445b`. The observed source snapshot has SHA-256 `900cd00a1b87d50b7145616698b550bc8d936f5bb74f1d8307310bb54c0c3f30`.
