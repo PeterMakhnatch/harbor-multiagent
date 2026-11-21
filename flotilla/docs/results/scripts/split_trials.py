@@ -28,7 +28,7 @@ def _load(name: str, path: Path):
 SPLIT = _load("split", HERE.parents[3] / "games" / "split.py")
 WAVE = _load("wave", HERE.parent / "commons_wave.py")  # trial reading and the token price
 MAX_MISSED = 0.10
-PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40), "sp3": (12, 0.70)}  # plan -> (trials planned, cost cap in dollars)
+PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40), "sp3": (12, 0.70), "sp4": (6, 0.40)}  # plan -> (trials, cost cap $)
 
 
 def equal_first_round_deal(row: dict) -> bool:
@@ -91,11 +91,7 @@ def sp3_tests(valid: list[dict]) -> None:
                   f"{sum(r['split']['missed'] for r in rows) / len(rows):.3f} (mean share of seat-rounds per trial)")
 
 
-def main() -> None:
-    jobs, pattern = Path(sys.argv[1]), sys.argv[2]
-    plan = sys.argv[3] if len(sys.argv) > 3 else "sp1"
-    planned, max_cost = PLANS[plan]
-    tests = {"sp1": sp1_tests, "sp2": sp2_tests, "sp3": sp3_tests}[plan]
+def load_rows(jobs: Path, pattern: str) -> list[dict]:
     rows = []
     for row in WAVE.trials(jobs, pattern, scorer=SPLIT.score_game):  # valid: a score, no error, no exception
         trial = jobs / row["job"] / row["trial"]
@@ -105,6 +101,45 @@ def main() -> None:
         log = (state.get("game") or {}).get("log") or []
         score = SPLIT.score_game(task["game"], log) if row["valid"] else {}
         rows.append({**row, "task": task, "split": score, "messages": state.get("messages") or [], "log": log})
+    return rows
+
+
+def sp4_tests(valid: list[dict], jobs: Path) -> None:
+    """Open arm (sp4) against the sp3 silent and talk trials of the same instances (same seed)."""
+    earlier = [r for r in load_rows(jobs, "sp3-??????") if r["valid"]]
+    by: dict[int, dict[str, dict]] = {}
+    for r in [*earlier, *valid]:
+        by.setdefault(r["instance"], {})[r["arm"]] = r["split"]
+    for game in sorted({r["instance"] for r in valid}):
+        arms = by[game]
+        print(f"instance {game}: " + ", ".join(
+            f"{arm} deal {arms[arm]['agreed']} round {arms[arm]['deal_round']} efficiency {arms[arm]['reward']:.3f}"
+            for arm in ("silent", "open", "talk") if arm in arms))
+    pairs = [arms for arms in by.values() if {"open", "silent"} <= set(arms)]
+    b = sum(arms["open"]["agreed"] and not arms["silent"]["agreed"] for arms in pairs)
+    c = sum(arms["silent"]["agreed"] and not arms["open"]["agreed"] for arms in pairs)
+    p = WAVE.exact_mcnemar(b, c)
+    verdict = "INCONCLUSIVE" if len(pairs) < 6 else "PASS" if b > c and p <= 0.05 else "FAIL"
+    print(f"Primary test (open vs sp3 silent, deal): {len(pairs)} pairs, b = {b}, c = {c}, exact McNemar p = "
+          f"{p:.4f}: {verdict}")
+    talk = [arms for arms in by.values() if {"open", "talk"} <= set(arms)]
+    gaps = [arms["talk"]["reward"] - arms["open"]["reward"] for arms in talk]
+    print(f"Talk - open efficiency per instance: {[round(g, 3) for g in gaps]}"
+          + (f", mean {sum(gaps) / len(gaps):+.3f}" if gaps else ""))
+    strong = []
+    for r in valid:
+        game = r["task"]["game"]
+        if r["split"]["surplus_shares"]:
+            strong.append(r["split"]["surplus_shares"][max(game["outside"], key=game["outside"].get)])
+    print(f"Strong seat's surplus share in open deals: {[round(s, 3) for s in strong]}")
+
+
+def main() -> None:
+    jobs, pattern = Path(sys.argv[1]), sys.argv[2]
+    plan = sys.argv[3] if len(sys.argv) > 3 else "sp1"
+    planned, max_cost = PLANS[plan]
+    tests = {"sp1": sp1_tests, "sp2": sp2_tests, "sp3": sp3_tests, "sp4": lambda v: sp4_tests(v, jobs)}[plan]
+    rows = load_rows(jobs, pattern)
     for row in sorted(rows, key=lambda r: (r["instance"] if r["instance"] is not None else -1, r["arm"] or "")):
         game, score = row["task"]["game"], row["split"]
         print(f"instance {row['instance']} {row['arm']}: pot {game['capacity']}, outside {game['outside']}, "
@@ -134,7 +169,7 @@ def main() -> None:
         passed = sum(r["split"]["passed"] * len(r["log"]) * len(r["task"]["game"]["seats"]) for r in valid)
         print(f"Passed {passed / seat_rounds:.3f} of seat-rounds.")
     tests(valid)
-    for arm in ("silent", "talk"):
+    for arm in ("silent", "talk", "open"):
         scores = [r["split"] for r in valid if r["arm"] == arm]
         if scores:
             print(f"{arm}: deals {sum(s['agreed'] for s in scores)} of {len(scores)}, mean efficiency "

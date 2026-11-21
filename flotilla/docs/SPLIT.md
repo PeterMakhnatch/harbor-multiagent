@@ -294,3 +294,32 @@ the truth, and they then took almost none of the surplus.
 Limits of the comparison: the pre-registered result is 6 of 6 against 0 of 6; 10 of 10 against 0 of 10 pools the
 pilot post hoc. The arms test whether a channel exists, not the effect of one message such as a disclosure. 1
 model, 1 harness. The search does not establish priority.
+
+## 11. Open arm (sp4): pre-registration
+
+Written and committed before the first paid trial of this run (2026-11-21). The analysis is
+`docs/results/scripts/split_trials.py <jobs> 'sp4-??????' sp4`, committed with this section.
+
+**Question.** In sp3, talk made deals and silent did not, and in every talk deal the strong seat stated its true
+outside option. Is that disclosure enough? If the seats cannot talk but every seat knows every outside option (arm
+`open`, section 2), do they make deals?
+
+**Design.** The 6 instances of sp3 (`build_tasks.py ... --conditions open --seed-of .flotilla-local/tasks/sp3/split`:
+the same pots and outside options, checked), arm `open` only: 6 trials, 1 attempt each, 1 at a time in instance
+order, seats and settings as in sp3 (world version 7). The controls are the sp3 silent and talk trials of the same
+instances. They ran earlier the same morning; the arms are paired by instance but not randomized in time.
+Before the run: `qa.py` 0 FAIL (done: PASS) and an oracle check of instance 0.
+
+**Primary test (pass or fail).** Exact McNemar test on `deal`, open against sp3 silent, over the 6 instances.
+PASS (disclosure alone gives deals): b > c and p <= 0.05, which needs a deal in all 6 open trials (sp3 silent had
+0). FAIL: otherwise; then the report says in how many open trials the seats made a deal.
+
+**Validity test (pass or fail).** 6 of 6 trials valid, missed seat-rounds (not passes) at most 10%, real cost at
+most $0.40.
+
+**Reported, no test.** Per instance: open efficiency and deal round against silent and talk; the strong seat's
+share of the surplus in open deals (talk: almost 0); claims round by round.
+
+**Budget.** At most $0.40 of real cost from tokens (off-peak, Saturday). No new trial starts when the spend plus
+$0.10 passes $0.40, or when the account balance is below $4.50 (to keep room for Astra's claim on the shared
+budget).
