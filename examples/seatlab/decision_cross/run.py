@@ -5,6 +5,7 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from .. import capsule
@@ -75,7 +76,7 @@ def _hashes(transport: str) -> dict[str, str]:
     hashes = fork_run._hashes(transport)
     hashes["turn_fork_runner"] = hashes.pop("runner")
     hashes["runner"] = sha256(Path(__file__).read_bytes()).hexdigest()
-    modules = [capsule, fork_analysis, inputs, journal]
+    modules: list[ModuleType] = [capsule, fork_analysis, inputs, journal]
     if transport == "direct":
         modules.append(route_pending)
     for module in modules:

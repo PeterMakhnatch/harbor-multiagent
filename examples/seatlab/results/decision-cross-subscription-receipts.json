@@ -1,0 +1,1 @@
+{"board_sha256":"60b976b6666acde139605d14a855b9d21b66da8d94343d05a029a585b49d4c7b","requested_model":"openai-codex/gpt-6.2-sol","roles":{"dispatch":{"cache_tokens":0,"callback_errors":0,"input_tokens":18424,"matched":56,"output_tokens":2072}},"schema":"seatlab.decision-cross-service/v1","verified_served_model":"openai-codex/gpt-6.2-sol"}
