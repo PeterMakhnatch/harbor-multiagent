@@ -126,12 +126,40 @@ def _dispatch(args: argparse.Namespace) -> int:
             return int(any(row["state"] == "incomplete" for row in rows))
     elif args.mode == "report":
         _print(_collect(packet, board, digest, args.study))
-    elif args.mode == "effects":
+    elif args.mode in ("effects", "summary"):
         from . import analysis, audit
 
         d = audit.verify(packet, board, digest, _report(args.direct_receivers))
         s = audit.verify(packet, board, digest, _report(args.command_receivers))
-        _print(analysis.summarize(board, d, s))
+        effects = analysis.summarize(board, d, s)
+        if args.mode == "effects":
+            _print(effects)
+        else:
+            counts = effects["compression"]
+            print(
+                f"{counts['nonmissing_selection_occurrences']} sender selections produced "
+                f"{counts['unique_observations']} distinct in-source prompts."
+            )
+            for sender, cells in effects["cells"].items():
+                for receiver, cell in cells.items():
+                    print(
+                        f"  sender={sender:8s} receiver={receiver:8s}: "
+                        f"{cell['weighted_optimal_actions']}/{cell['weighted_scored_actions']} optimal "
+                        f"({cell['completed_slots']}/{cell['eligible_slots']} registered uses)."
+                    )
+            print("Same-input agreement across two fresh receiver draws:")
+            for receiver, variation in effects["receiver_draw_agreement"].items():
+                print(
+                    f"  {receiver}: {variation['identical_action_vectors']}/"
+                    f"{variation['matched_unique_observations']} whole answers; "
+                    f"{variation['action_agreements']}/{variation['action_slots']} shipment choices."
+                )
+            print(
+                "Weighted uses may share one actual reply. They are not independent model calls."
+            )
+            print(
+                "Unit: original source world. Stock scores, not new native Harbor rewards."
+            )
     elif args.mode == "compare":
         from . import audit, diagnosis
 
@@ -189,6 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         "run",
         "report",
         "verify",
+        "summary",
         "effects",
         "compare",
         "diagnose",
@@ -237,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
                     type=int,
                     help="Exclusive; defaults to a single fresh draw.",
                 )
-        elif name == "effects":
+        elif name in ("effects", "summary"):
             parser.add_argument(
                 "--direct-receivers",
                 type=Path,

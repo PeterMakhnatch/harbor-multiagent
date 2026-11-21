@@ -525,6 +525,25 @@ python -S -m "$module" verify "$private/report.json"
 **To export your own source:** `export --native-study DIR --native-report REPORT` reads an existing native briefing study with its original configurations. It emits only the accepted synthetic fields. Pin the exact bytes with SHA-256. Supply the pair to readers with `--packet PATH --sha256 DIGEST`. The direct transport accepts only the registered public packet; custom packets can use command programs. Do not publish raw private native folders.
 
 
+## Compare your receiver with the recorded receiver
+
+Use this when a Harbor team loses points and you need to choose between changing its sender and changing its receiver. Start with `python -S -m examples.seatlab.decision_cross summary` from this fork branch. It reads the two published first-attempt cohorts. It does not call a provider.
+
+To try a new receiver, supply a trusted local executable. Give its absolute name in `dispatch.json`: `{"dispatch":{"argv":["/absolute/path/to/your-seat"],"env":[]}}`. The program reads one JSON line with `schema` and `prompt`. It writes one JSON line with `text`, the verbatim model answer. The runner does not pass stock, the source agent name, or an expected answer to that process. The command is not an operating system sandbox. Use only trusted programs.
+
+```sh
+# Use Python 3.12 or later. Keep first attempts in a new private directory.
+study=$(mktemp -d)/receiver
+python -m examples.seatlab.decision_cross seal --study "$study" --transport commands --config "$(pwd -P)/dispatch.json"
+python -m examples.seatlab.decision_cross run --study "$study" --start 0 --stop 1
+python -m examples.seatlab.decision_cross report --study "$study" > candidate.json
+python -S -m examples.seatlab.decision_cross compare examples/seatlab/results/decision-cross-direct-live.json candidate.json
+```
+
+The comparison lists missing decisions and gives bounds. It does not assume unattempted rows failed. Use `pending --study "$study"` to find untouched indices. Give different indices to different workers. Never rerun an occupied index. A full cohort has 56 calls, not 96. Sender comparisons reuse the original 48 selections; receiver agreement counts each distinct input only once. External providers may charge for calls; inspecting the register does not.
+
+If you use Inspect AI, run `python -S -m examples.seatlab.decision_cross inspect-samples > shipments.jsonl`. Load that file with `inspect_ai.dataset.json_dataset`. It contains 28 user prompts and no stock targets. Use 2 epochs for independent first draws. To score an external reply, send its exact UTF-8 text to `python -S -m examples.seatlab.decision_cross grade-external --obs-id "$sample_id"`. Do not add a newline that was absent in the model reply: the receipt hashes the original bytes. This grades the reply. It does not prove service identity or a bill.
+
 ## Which role accounts for a difference between two agents?
 
 **Register before the first crossed receiver call.** Use the 12 native sources from the preceding checkpoint. Use only `aligned` and `repeat` from each of its 2 sender programs. Include all 48 registered selections. An incomplete preceding continuation contributes no selection because its public journal does not authenticate one. Do not choose sources by reward. Do not rerun any sender.
