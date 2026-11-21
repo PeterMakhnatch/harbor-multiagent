@@ -454,6 +454,28 @@ python3.12 -BS -m examples.seatlab.calendar_notices.heldout "$private/tasks/sche
 
 The manifest separates calendar identity from task identity. Reordering attendees or swapping seats cannot turn an old calendar into a new one. Fresh credentials do not change either fingerprint. The manifest itself contains no model outcomes.
 
+#### Check that new calendars give the agents different decisions
+
+Different task IDs do not guarantee different decisions. The intake below compares your candidate block with 48 reference worlds. It keeps track of which starts fit the sender's initial calendar, its revised calendar, and the receiver's calendar. It ignores seat names, weekday labels, and the order of starts within a day. It checks both seat directions.
+
+Generate the 3 blocks in separate private directories. Use the pinned generator and settings above for each block. The first 12 reference worlds are already in the public packet.
+
+| Task directory | Instances | Seed for this study |
+| --- | --- | ---: |
+| `$HELDOUT/schedule` | 12–23 | 1 |
+| `$VISIBLE/schedule` | 24–47 | 471223 |
+| `$CANDIDATE/schedule` | 48–71 | 1062988520 |
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.shape_intake \
+  --heldout "$HELDOUT/schedule" --visible "$VISIBLE/schedule" \
+  --candidate "$CANDIDATE/schedule" --start 48 --count 24 --seed 1062988520
+```
+
+You can substitute another consecutive candidate block and its seed. The command needs no model, Docker, or Harbor installation. It checks the two reference directories against their published manifests. It checks the structure of the candidate tasks, not who generated them.
+
+**Observed:** all 24 new worlds passed. None of their 48 role-specific decision patterns matched the 96 patterns from the reference worlds. This admits the worlds for a transfer test. It does not show that a model can solve them or that a workflow transfers. [Registered question](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062637751) · [Public counts and seed commitment](results/calendar-transfer-48-71-intake.json).
+
 For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_briefing(own_briefing))` returns only that seat’s feasible starts. Do not use the full briefing in a phase that shows only 2 attendees. Keep the peer’s table and the verifier key outside the model context.
 
 The first [stock oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without trial receipts. Later, the [four private-view controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060200350) on these worlds produced the expected native scores. These were separate attempts.
