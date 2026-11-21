@@ -594,6 +594,32 @@ Use all 12 original `blind` calendar observations in the [mixed role pack](resul
 
 Use the common RolePack runner and independent service receipts. The preserved enrollment, role input and score do not establish a new native team reward. No paid API calls, local inference or Docker.
 
+### Run your own questioner and answering teammate
+
+This experiment composes three ordinary RolePacks. It does not add a model client or a scheduler to Harbor. The questioner and responder can use different trusted programs. Use Python 3.12 or later. Only live runs need Inspect AI and a model account.
+
+```sh
+python3.12 -S -m examples.seatlab.calendar_questions ask > ask.json
+python3.12 -S -m examples.seatlab.calendar_questions answer --questions examples/seatlab/results/calendar-question-ask-live.json > answer.json
+python3.12 -S -m examples.seatlab.calendar_questions decide --questions examples/seatlab/results/calendar-question-ask-live.json --answers examples/seatlab/results/calendar-question-answer-live.json > decide.json
+```
+
+These **offline** commands regenerate the actual role requests and the private grading rubrics. Never give the complete pack to a seat. Export the `samples` view or use the standard launcher, which sends only the role's prompt. To reproduce the observed outcome instead of making new calls, use `python3.12 -S -m examples.seatlab.calendar_questions summary`.
+
+To run a new team, use a separate study for each stage. Start with `ask.json`. Set up a [trusted receiver command](#use-a-role-pack-with-your-own-receiver). Example for the first stage:
+
+```sh
+work=$(mktemp -d)
+digest=$(shasum -a 256 ask.json | cut -d ' ' -f 1)
+python -m examples.seatlab.rolepack seal --pack ask.json --sha256 "$digest" --study "$work/ask" --config /absolute/path/questioner.json
+python -m examples.seatlab.rolepack run --pack ask.json --sha256 "$digest" --study "$work/ask" --start 0 --stop 12
+python -m examples.seatlab.rolepack report --pack ask.json --sha256 "$digest" --study "$work/ask" > my-questions.json
+```
+
+Give `my-questions.json` to `calendar_questions answer`. Run the resulting pack with the responder program. Give both new reports to `calendar_questions decide`. Run the final pack with the scheduler program. Use `rolepack plan` after each export. For `ask` and `answer`, run only the first half of the registered indices, which contains draw 0. For `decide`, run both halves in order. The original-only schema schedules no artificial same-role peer condition. The treatment is the actual reply inside two different final role records. Workers can claim disjoint ranges within a draw on a shared local filesystem. Interrupted claims stay incomplete.
+
+Supply all three reports to `calendar_questions summary --questions my-questions.json --answers my-answers.json --decisions my-decisions.json`. For an interrupted pipeline, specify `--no-answers` or `--no-decisions` for missing stages. For an independent check, use `calendar_questions stock --calendar-checkout /absolute/path/to/the/original/calendar/checkout` with the same reports. That command uses the original task scorer, not the receiver's explanation.
+
 ## Use a role pack with your own receiver
 
 A role pack describes what a real seat saw, the peer decision it could receive, and how the task grades a new decision. It does not need a live Harbor environment. Start with two recorded Harbor tasks in the shipped pack:
