@@ -486,6 +486,86 @@ python3.12 -BS -m "$module.role_summary" "$private/role-audit.json"
 
 The summary preserves a verified native zero after an invalid reply. It does not treat a missing stock score as zero. Compare the 2 new arms by world, not by individual model turn. The [registered decision rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061145932) does not pool earlier teams.
 
+#### Check a receiver's own availability against delivered reports
+
+Use this comparison when a receiver must combine a peer's report with its own constraints. Both seats see their own available starts. The `lists` receiver gets the original messages. The `checked` receiver also sees two computed lists: its feasible starts in opened reports, and its feasible starts in the initial report for unopened days. A revised report replaces the old report for that day. Neither arm sees the actual peer calendar.
+
+Generate the [24 registered stock worlds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061523866). This step needs neither Docker nor an API key:
+
+```sh
+umask 077
+private=$(realpath "$(mktemp -d)")
+pin=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+git fetch --depth=1 origin "$pin"
+mkdir "$private/generator"
+git archive "$pin" flotilla | tar -x -C "$private/generator"
+python3.12 -BS "$private/generator/flotilla/build_tasks.py" \
+  --family schedule --instances 24-47 --seats 2 --difficulty easy --seed 471223 \
+  --conditions talk --play-timeout 600 --out "$private/tasks"
+module=examples.seatlab.calendar_notices
+python3.12 -BS -m "$module.heldout" "$private/tasks/schedule" --cohort visible \
+  --expect examples/seatlab/results/flotilla-schedule-visible-24-47.json
+```
+
+Keep the task directory private. The task files contain native credentials and answers. The shared manifest contains only commitments.
+
+Use `control-visible` to check the native path before spending money. In the example below, `python` and `harbor` point to the fork executables. On a shared Docker host, use its trial-slot wrapper for every native command.
+
+```sh
+python="$PWD/.venv/bin/python"
+harbor="$PWD/.venv/bin/harbor"
+mkdir -m 700 "$private/teams"
+"$python" -m "$module" control-visible --job "$private/teams" \
+  --tasks "$private/tasks/schedule" --world w24 --arm checked --policy oracle --harbor "$harbor"
+```
+
+Change `oracle` to `wrong` for the negative control. The two scores must be 1 and 0. For paid runs, use `run-visible` and replace `--policy` with `--spend-dir` and the private meter directory. Run each arm once. Assign different worlds to parallel workers. To get the registered first arm for a world, run `python3.12 -BS -c 'from examples.seatlab.calendar_notices.team_views import JoinCell; print(JoinCell("w24", "lists").first)'`.
+
+After the teams finish, audit the actual deliveries and submitted actions. These two commands use no model or Docker:
+
+```sh
+"$python" -m "$module.audit" "$private/teams" --visible-check \
+  --spend-dir "$SEATLAB_SPEND_DIR" > "$private/checked-audit.json"
+python3.12 -BS -m "$module.visible_summary" "$private/checked-audit.json"
+```
+
+The summary returns `inconclusive` when native evidence is missing. A measured loss with complete evidence remains a loss.
+
+#### Compare 2 workers on your own completed scheduling trial
+
+Use one completed SeatLab `PrivateViewSeat` trial from the private calendar, single-seat-helper, or visible-intersection study. You do not need its paired arm or any trials from our panel. On the original host, keep the stock task directory, trial evidence, and direct-call meter. A final score or a chat log alone is not enough.
+
+Set `TRIAL` to the physical `<job>/cells/<run>/trials/<run>` directory. Set `SEATLAB_SPEND_DIR` to that run's private meter directory. Use the fork’s Python environment for this export. It checks the 4 accepted turns, 3 delivered messages, receiver submission, and native grade. It makes no model calls.
+
+```sh
+umask 077
+private=$(realpath "$(mktemp -d)")
+case_module=examples.seatlab.calendar_case
+"$PWD/.venv/bin/python" -m "$case_module" export "$TRIAL" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --out "$private/case"
+```
+
+**Keep `owner.json` and the stock task on the scorer host.** Send only `requests.jsonl` to each worker. It contains the native receiver's factual input, a view without the computed intersections (`lists`), and a view with them (`checked`). The factual view can match another view. If you want only one view, select it **on the scorer host**:
+
+```sh
+python3.12 -BS -m "$case_module" emit "$private/case" --view factual \
+  > "$private/factual.jsonl"
+```
+
+Each input line has `id`, `prompt_sha256`, and `messages`. Each worker returns one line with the same `id` and `prompt_sha256` and its first answer as a **string** in `reply`. Return the original reply, including invalid JSON. Do not repair it or select a later answer.
+
+For 2 trusted local programs, set `RECEIVER_A` and `RECEIVER_B` to their executable paths. Each receives only the request file on standard input. This is not a sandbox. Use separate hosts for untrusted programs.
+
+```sh
+"$RECEIVER_A" < "$private/case/requests.jsonl" > "$private/a.jsonl" & a=$!
+"$RECEIVER_B" < "$private/case/requests.jsonl" > "$private/b.jsonl" & b=$!
+wait "$a"; wait "$b"
+python3.12 -BS -m "$case_module" compare "$private/case" \
+  "$private/a.jsonl" "$private/b.jsonl"
+```
+
+The scorer needs neither Docker nor an API key. It accepts replies in any order. A missing or invalid answer is not a zero. A valid wrong answer is a zero. A changed input hash or duplicate reply rejects the comparison. The output compares receiver choices, not new team rewards.
+
 #### Could a different report request have helped?
 
 Use the native job you already ran. This diagnostic makes no model calls and starts no containers:

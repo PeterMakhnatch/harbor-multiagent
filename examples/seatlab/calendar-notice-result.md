@@ -1,6 +1,24 @@
 # What helps two agents find a meeting?
 
-**Give each seat the starts that fit its own calendar.** On 12 held-out Flotilla worlds, this raised the number of successful native DeepSeek teams from 0 to 6. Neither seat saw the other calendar or the verifier’s answer.
+**Make the receiver's next decision easy to check.** On 24 fresh scheduling worlds, DeepSeek teams booked 20 meetings with the check and 10 without it. Both arms already had each seat's own feasible starts.
+
+## Does checking the received reports help a live team?
+
+The receiver could open 2 revised weekday reports. It also kept the sender's old reports for the 3 unopened days. The `checked` prompt listed which reported starts still fit the receiver's own calendar. It did not add the other seat's calendar, unread revisions, or the target.
+
+| Native outcome | Reports and local starts (`lists`) | Same format plus local check (`checked`) |
+|---|---:|---:|
+| Teams that booked the meeting | 10/24 | 20/24 |
+| Teams whose received reports included the true meeting | 14/24 | 21/24 |
+| Final choices that fit the receiver’s own calendar | 24/24 | 24/24 |
+
+The check gained 11 paired worlds, tied 12, and lost 1. The gain was 41.7 percentage points. The exact two-sided sign test gave **p = 13/2048 (0.00635)**. This passed the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061523866). All 48 first teams finished. We replaced none.
+
+Each team generated its own reports. The checked teams received better evidence more often, even though the sender's instructions did not change. This result measures the team workflow. It does not attribute all 10 extra bookings to the receiver's check.
+
+The stock Eval Lab reader matched all 48 native scores. Independent checks matched 144 delivered messages and 192 accepted model turns. The 192 direct DeepSeek calls cost **$0.008619348** at the recorded token rates. No hold remains.
+
+[Native results and every charge](results/calendar-visible-check-live.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061789256) · [Run both arms](replication.md#check-a-receivers-own-availability-against-delivered-reports) · [Reuse one of your own completed native trials](replication.md#compare-2-workers-on-your-own-completed-scheduling-trial).
 
 ## Held-out test: change both private calendar views
 
