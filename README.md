@@ -40,6 +40,8 @@ Use the [published team checkpoint](examples/seatlab/replication.md#start-from-t
 
 **Bring your own receiver.** Run `python -S -m examples.seatlab.decision_cross summary` to compare 2 real programs on identical teammate messages. The [receiver quickstart](examples/seatlab/replication.md#compare-your-receiver-with-the-recorded-receiver) shows how to run a different program or export prompt-only samples for Inspect AI. No model or Docker is needed to verify the published results.
 
+**Use Inspect AI as a replacement reviewer.** Run `python -S -m examples.seatlab.peer_update summary` to check the measured result. The [Inspect quickstart](examples/seatlab/replication.md#run-the-reviewer-through-inspect-ai) runs your own trusted role program and saves a native `.eval` archive.
+
 ## Install
 
 ```bash

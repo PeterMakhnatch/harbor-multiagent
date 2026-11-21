@@ -558,6 +558,20 @@ Estimate the difference between the receiver programs with the sender fixed, and
 The [frozen observation register](results/decision-cross-board.json) binds all 48 real sender selections to 28 distinct dispatcher prompts within their source teams. The register SHA-256 is `60b976b6666acde139605d14a855b9d21b66da8d94343d05a029a585b49d4c7b`. Each receiver gets 56 independent first calls instead of 96. Reused observations count once in the repeatability analysis and retain their multiplicity in sender comparisons.
 
 
+## Run the reviewer through Inspect AI
+
+Read the published result with `python -S -m examples.seatlab.peer_update summary`. It needs Python 3.12 or later, not Inspect AI. For your own seat, use an environment with Inspect AI installed. This experiment used version 0.3.276. Use a trusted local [dispatch command](#compare-your-receiver-with-the-recorded-receiver). The command receives one user message, with no tools or answer key.
+
+```sh
+# A new directory protects the first attempt. Do not retry inside a different directory.
+logdir=$(mktemp -d)/inspect
+python -m examples.seatlab.peer_update run-inspect --config "$(pwd -P)/dispatch.json" --log-dir "$logdir" --start 0 --stop 1
+python -m examples.seatlab.peer_update report "$logdir"/*.eval > reviewer.json
+python -S -m examples.seatlab.peer_update summary reviewer.json
+```
+
+The command saves a native Inspect `.eval` archive. Keep it private. To join separate workers, give `report` every original archive. It rejects duplicated sample IDs and mismatched prompt bytes. Missing, invalid and unavailable cases remain separate. You can instead export the 48 inputs for another harness with `python -S -m examples.seatlab.peer_update samples`.
+
 ## Does a real peer draft help a new reviewer use one additional inventory update?
 
 Register before receiving the crossed dispatch results. Start from the [28 prompt commitments](results/decision-cross-board.json) imported from 12 native teams. For each native source, choose the observation with the smallest `prompt_sha256`. Use its first direct receiver reply (draw 0), if valid, as the peer draft. Include all 12 registered sources whether they complete or not. Do not substitute another draw. The direct receiver tried to maximize utility over 6 shipments using 2 current reports and 4 earlier reports. The additional reviewer is a fresh, keyless subscription Sol seat, called using Inspect AI.
