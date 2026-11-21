@@ -204,6 +204,98 @@ def test_seat_shared_bind_volume_access(model, path, flags, expected):
     assert {f.rule for f in volume_findings(path)} == expected
 
 
+def shared_mount_messages(path: Path) -> list[str]:
+    return [
+        finding.message.split(";")[0]
+        for finding in lint_compose(
+            path, task_root=path.parent.parent, seats=["p1", "p2"]
+        )
+        if finding.rule == LintRule.SEAT_SHARED_VOLUME
+    ]
+
+
+@pytest.mark.parametrize(
+    "first,second,read_only,where",
+    [
+        ("./data", "./data", False, "'environment/data'"),
+        ("./data", "./data/child", False, "'environment/data/child'"),
+        ("./data/child", "./data", False, "'environment/data/child'"),
+        ("./data", "./data-other", False, None),
+        ("./data", "./data", True, None),
+        ("../../host-input", "../../host-input", False, "outside the task directory"),
+    ],
+    ids=["same", "parent", "child", "separate", "both-read-only", "external"],
+)
+def test_seat_shared_host_bind_paths(model, path, first, second, read_only, where):
+    bind = {"type": "bind", "source": first, "target": "/data"}
+    model["services"].update(
+        main={"volumes": [bind]},
+        p1={"volumes": [{**bind, "read_only": read_only}]},
+        p2={"volumes": [{**bind, "source": second, "read_only": True}]},
+    )
+    assert shared_mount_messages(path) == (
+        [
+            f"services.p1.volumes[0]: Seat p1 can write a host path {where} also mounted by seat p2"
+        ]
+        if where
+        else []
+    )
+
+
+def test_seat_shared_host_bind_paths_resolve_symlinks(model, path):
+    task_root = path.parent.parent
+    data = task_root / "data"
+    data.mkdir()
+    (path.parent / "alias").symlink_to(data, target_is_directory=True)
+    bind = {"type": "bind", "source": "./alias", "target": "/data"}
+    model["services"].update(
+        p1={"volumes": [bind]},
+        p2={"volumes": [{**bind, "source": str(data), "read_only": True}]},
+    )
+    assert shared_mount_messages(path) == [
+        "services.p1.volumes[0]: Seat p1 can write a host path 'data' also mounted by seat p2"
+    ]
+
+
+@pytest.mark.parametrize("second_name", ["first", "second"])
+def test_seat_shared_local_driver_device(model, path, second_name):
+    driver = {
+        "driver": "local",
+        "driver_opts": {"type": "none", "o": "bind", "device": "./data"},
+    }
+    model["volumes"] = {
+        "a": {**driver, "name": "first"},
+        "b": {**driver, "name": second_name},
+    }
+    model["services"].update(
+        p1={"volumes": [volume()]},
+        p2={"volumes": [{**volume(True), "source": "b"}]},
+    )
+    assert shared_mount_messages(path) == [
+        "services.p1.volumes[0]: Seat p1 can write a host path 'environment/data' "
+        "also mounted by seat p2"
+    ]
+
+
+@pytest.mark.parametrize("subpath,shared", [("p1", True), ("p2", False)])
+def test_seat_direct_and_local_driver_bind_subpaths(model, path, subpath, shared):
+    model["volumes"] = {
+        "a": {"driver_opts": {"type": "none", "o": "bind,ro", "device": "./data"}}
+    }
+    model["services"].update(
+        p1={"volumes": [{"type": "bind", "source": "./data/p1", "target": "/data"}]},
+        p2={"volumes": [volume(subpath=subpath)]},
+    )
+    assert shared_mount_messages(path) == (
+        [
+            "services.p1.volumes[0]: Seat p1 can write a host path 'environment/data/p1' "
+            "also mounted by seat p2"
+        ]
+        if shared
+        else []
+    )
+
+
 @pytest.mark.parametrize(
     "volumes,shared",
     [

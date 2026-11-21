@@ -73,7 +73,7 @@ Compose interpolation uses the applicable agent or verifier environment configur
 | `compose-writable-bind-mount` | ✓ | Host bind mounts with write access. |
 | `compose-external-bind-mount` | ✓ | Bind sources that resolve outside the task directory. |
 | `compose-symlink-bind-mount` | ✓ | Bind sources that traverse a symlink and resolve outside the task directory. |
-| `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. Volumes are compared by the Docker volume name that Compose resolves, so two keys that name one external volume are one volume. A read-only mount in another service, such as `main` reading a seat's files, is allowed. A seat with `volumes_from` is reported too: it gets every volume of the other container, writable unless `:ro`. |
+| `seat-shared-volume` | ✓ | Named volumes that a seat can write while another seat mounts them, or another service also writes them. Named volumes are compared by Docker name. The rule also reports mounts in two seats with the same or nested host paths if at least one seat can write. This includes direct binds and local bind-backed volumes. Two seats can share read-only inputs, even if another service writes them. A seat with `volumes_from` is reported too. |
 | `seat-shared-namespace` | ✓ | Seats that share the host's or another container's network, PID, IPC, user or cgroup namespace (modes compared case-insensitively), and other services that join a seat's namespace with `service:<seat>` or the seat's `container_name`. |
 | `seat-shared-network` | — | Seats that can reach each other directly because they share a Compose network. Seats without `networks` all share the project's default network. |
 | `seat-host-secret` | ✓ | Seats that take values from the runner instead of the task: an `env_file` outside the task directory, an `environment` variable passed through by name with no value, or a `secrets` or `configs` entry whose source is the runner's environment or a file outside the task directory. A support seat could read the tested seat's provider key this way. |
@@ -84,7 +84,7 @@ Seats are the services that run the agents of a [multi-agent task](/tasks/multi-
 
 The other Compose checks apply to every service, so `compose-privileged` reports a privileged seat, and `compose-external-bind-mount` reports a seat that mounts the Docker socket.
 
-`seat-shared-volume` reports any `volumes_from` on a seat but does not compare bind mounts; `compose-writable-bind-mount` reports each writable bind mount. It compares volume subpaths as text, so it does not resolve symlinks inside a volume.
+`seat-shared-volume` resolves host paths where possible. It shows paths relative to the task directory for task-local mounts and omits external host paths. It compares volume subpaths as text, so it does not resolve symlinks inside a volume. `compose-writable-bind-mount` still reports each writable bind mount.
 
 Ignore a seat rule only when the task shares the resource on purpose, for example a workspace that all agents must edit, or host networking that the environment needs. Put the ignore in `task.toml` with a comment that gives the reason, so that a reviewer can tell intended sharing from a mistake:
 
