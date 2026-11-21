@@ -202,6 +202,34 @@ def test_pairs_use_complete_repetitions_and_weight_worlds_equally(
     assert transitions["peer_to_draft_r1"]["both_wrong"] == 2
 
 
+def test_one_missing_repetition_is_not_a_complete_six_world_estimate(
+    checkpoint: _Checkpoint,
+) -> None:
+    packet, board, digest = checkpoint
+    sources = inputs.source_index(packet)
+    choices = {(obs["obs_id"], 0): True for obs in _first_observations(board).values()}
+    direct = _direct_report(checkpoint, choices)
+    panel = protocol.build(packet, board, digest, direct)
+    report = _report(panel)
+    for row in report["rows"]:
+        if row["arm"] not in ("solo-r1", "solo-r2"):
+            continue
+        if row["source_id"] == "s6501-r1" and row["arm"] == "solo-r2":
+            continue
+        _complete(
+            packet,
+            board,
+            row,
+            _answer(sources[row["source_id"]], row["target"], True, other_right=True),
+        )
+    effect = analysis.summarize(packet, board, panel, direct, report)["effects"][
+        "revision_solo"
+    ]
+    assert (effect["matched_sources"], effect["represented_worlds"]) == (11, 6)
+    assert effect["scopes"]["target"]["observed_equal_world_mean"] == 0
+    assert effect["scopes"]["target"]["full_world_mean"] is None
+
+
 def test_smaller_prompt_and_first_unopened_target_stay_fixed_when_draw_zero_is_missing(
     checkpoint: _Checkpoint,
 ) -> None:

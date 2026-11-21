@@ -6,7 +6,7 @@ import os
 from contextvars import ContextVar
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from ..visibility.seat_command import (
     CommandSeat,
@@ -75,6 +75,7 @@ def _register_provider() -> None:
             path = _RUN_CONFIG.get() or Path(os.environ.get(_CONFIG_ENV, ""))
             self._seat = _load_dispatch(path)
 
+        @override
         async def generate(
             self,
             input: list[ChatMessage],

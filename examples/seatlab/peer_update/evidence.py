@@ -4,7 +4,7 @@ from collections import Counter
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from zipfile import BadZipFile, ZipFile
 
 from ..handoff.external_audit import Identity, _receipts
@@ -28,7 +28,9 @@ type _Document = dict[str, Any]
 def _rows(value: object) -> list[_Document]:
     if not isinstance(value, list) or len(value) != _MAX_ROWS:
         raise ValueError("expected the 48 registered peer-update rows")
-    return value
+    if any(not isinstance(row, dict) for row in value):
+        raise ValueError("expected registered peer-update objects")
+    return cast(list[_Document], value)
 
 
 def _index(panel: _Document) -> dict[str, _Document]:

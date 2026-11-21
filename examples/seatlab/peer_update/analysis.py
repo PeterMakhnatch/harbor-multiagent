@@ -128,7 +128,7 @@ def _scopes(
 
 
 def _estimate(outcomes: _Outcomes, weights: _Weights) -> _Document:
-    worlds = []
+    worlds: list[_Document] = []
     registered = len(SEEDS) * len(REPETITIONS)
     totals = {arm: [0] * len(_SCOPES) for arm in weights}
     for seed in SEEDS:
@@ -162,7 +162,7 @@ def _estimate(outcomes: _Outcomes, weights: _Weights) -> _Document:
         )
         scores["pooled_value"] = scores.pop("value")
         scores["observed_equal_world_mean"] = mean
-        scores["full_world_mean"] = mean if len(represented) == len(SEEDS) else None
+        scores["full_world_mean"] = mean if matched == registered else None
     return {
         "weights": weights.copy(),
         "matched_sources": matched,
