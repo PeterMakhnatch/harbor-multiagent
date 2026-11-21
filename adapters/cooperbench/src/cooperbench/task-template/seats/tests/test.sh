@@ -121,15 +121,22 @@ trap on_exit EXIT
 # Helper: strip test-file diffs from a patch, in bytes, so CRLF and
 # non-UTF-8 content stay as they are. CooperBench's line-based filter, plus
 # pure test-infrastructure files (conftest.py, pytest.ini, tox.ini,
-# noxfile.py, .coveragerc), which no CooperBench gold patch touches. The
-# paths of the dropped diffs go to $2.
+# noxfile.py, .coveragerc), which no CooperBench gold patch touches, plus the
+# test files and test configs of other languages (Go *_test.go, JS/TS
+# *.test.* and *.spec.* and __tests__/, Ruby *_spec.rb, Jest, Vitest, Karma,
+# Mocha, RSpec). The paths of the dropped diffs go to $2.
 # -------------------------------------------------------------------------
 filter_test_files() {
     python3 - "$1" "$2" <<'PY'
 import sys
 patch, dropped_path = sys.argv[1], sys.argv[2]
-markers = (b"/test_", b"/tests/", b"_test.py", b"/test/", b"tests.py")
-infra = (b"conftest.py", b"pytest.ini", b"tox.ini", b"noxfile.py", b".coveragerc")
+markers = (b"/test_", b"/tests/", b"_test.py", b"/test/", b"tests.py",
+           b"_test.go", b"/__tests__/", b"_spec.rb")
+js_suffixes = tuple(f".{kind}.{ext}".encode() for kind in ("test", "spec")
+                    for ext in ("js", "jsx", "ts", "tsx", "mjs", "cjs"))
+infra = (b"conftest.py", b"pytest.ini", b"tox.ini", b"noxfile.py", b".coveragerc",
+         b".rspec", b"karma.conf.js")
+infra_prefixes = (b"jest.config.", b"vitest.config.", b".mocharc")
 with open(patch, "rb") as fh:
     lines = fh.readlines()
 
@@ -148,8 +155,12 @@ out, dropped, skip = [], [], False
 for line in lines:
     if line.startswith(b"diff --git"):
         target = line.rstrip(b"\r\n").rstrip(b'"')
-        skip = any(m in line for m in markers) or any(
-            target.endswith(b"/" + name) for name in infra
+        name = target.rsplit(b"/", 1)[-1]
+        skip = (
+            any(m in line for m in markers)
+            or any(target.endswith(b"/" + infra_name) for infra_name in infra)
+            or name.endswith(js_suffixes)
+            or name.startswith(infra_prefixes)
         )
         if skip:
             dropped.append(b_path(line))

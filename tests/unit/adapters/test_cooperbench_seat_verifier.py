@@ -247,6 +247,26 @@ def test_test_files_and_test_infrastructure_are_dropped(world: World):
     assert b"tests/test_app.py" not in merged
 
 
+def test_test_files_of_other_languages_are_dropped(world: World):
+    """Review of fork PR #9, P0-4: the filter caught Python test files only."""
+    implement(world, "agent1", "agent2")
+    for name in ("pkg/app_test.go", "web/app.test.ts", "web/app.spec.jsx", "web/__tests__/x.js",
+                 "lib/x_spec.rb", "jest.config.js", "vitest.config.ts", ".mocharc.json"):
+        world.seat_file("agent1", name).parent.mkdir(parents=True, exist_ok=True)
+        world.seat_file("agent1", name).write_text("// rewritten test\n")
+    world.seat_file("agent1", "src/spec_parser.py").parent.mkdir(parents=True, exist_ok=True)
+    world.seat_file("agent1", "src/spec_parser.py").write_text("PARSER = 1\n")
+
+    reward, details = world.verify()
+
+    assert reward == {"reward": 1}
+    assert sorted(details["dropped_files"]["agent1"]) == sorted([
+        "pkg/app_test.go", "web/app.test.ts", "web/app.spec.jsx", "web/__tests__/x.js",
+        "lib/x_spec.rb", "jest.config.js", "vitest.config.ts", ".mocharc.json",
+    ])
+    assert b"src/spec_parser.py" in world.merged()  # an implementation file named like a spec stays
+
+
 def test_a_patch_that_does_not_apply_fails_the_merge(world: World, tmp_path: Path):
     """Nothing is dropped silently: a non-empty patch that git apply rejects
     gives reward 0 and says so (the rejection is injected with a git shim)."""

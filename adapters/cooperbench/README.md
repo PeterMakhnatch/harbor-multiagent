@@ -219,6 +219,16 @@ cooperbench-seats/
 | Oracle | `main` applies `combined.patch`; the verifier skips the merge | each seat applies its own feature's gold patch; the verifier merges as for agents |
 | Per-agent results | none in `result.json` | `seat_results`: each seat's harness, model, tokens, cost, timing and error |
 
+### What a pass does not show
+
+A pass means that the merged patch of both seats passes both features' tests. It does not show
+cooperation: one seat can implement both features while its teammate does nothing, and the reward is
+still 1, as it is in upstream CooperBench. So do not put seat scores next to sidecar or leaderboard
+numbers as a measure of coordination. A coordination claim needs a per-seat measure, for example
+whether each seat's own patch passes its own feature's tests (not built yet; see the review of fork
+PR #9). The test-file filter is a trust aid, not a sandbox: it drops the test files and test configs
+that it knows (`dropped_files` in `details.json`).
+
 ### Messages between the seats
 
 Each seat has the commands of CooperBench's own messaging tool for CLI agents
