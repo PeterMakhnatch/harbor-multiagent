@@ -1,0 +1,54 @@
+{
+  "calls": [
+    {
+      "cache_hit": 0,
+      "cache_miss": 248,
+      "estimated_usd_high": "0.000048600",
+      "estimated_usd_low": "0.000048600",
+      "output": 19,
+      "role": "dispatch",
+      "run": "peercorrect-s517308-r1",
+      "served_model": "deepseek-flash",
+      "unsettled_hold_usd": "0.000000000"
+    },
+    {
+      "cache_hit": 0,
+      "cache_miss": 162,
+      "estimated_usd_high": "0.000029700",
+      "estimated_usd_low": "0.000029700",
+      "output": 9,
+      "role": "dispatch",
+      "run": "peercorrect-s517313-r1",
+      "served_model": "deepseek-flash",
+      "unsettled_hold_usd": "0.000000000"
+    },
+    {
+      "cache_hit": 0,
+      "cache_miss": 162,
+      "estimated_usd_high": "0.000029700",
+      "estimated_usd_low": "0.000029700",
+      "output": 9,
+      "role": "dispatch",
+      "run": "peercorrect-s517316-r0",
+      "served_model": "deepseek-flash",
+      "unsettled_hold_usd": "0.000000000"
+    },
+    {
+      "cache_hit": 0,
+      "cache_miss": 162,
+      "estimated_usd_high": "0.000029700",
+      "estimated_usd_low": "0.000029700",
+      "output": 9,
+      "role": "dispatch",
+      "run": "peercorrect-s517316-r1",
+      "served_model": "deepseek-flash",
+      "unsettled_hold_usd": "0.000000000"
+    }
+  ],
+  "currency": "USD",
+  "known_usd_low": "0.000137700",
+  "price_source": "https://api-docs.deepseek.com/quick_start/pricing",
+  "schema": "seatlab.direct-flash-cost/v1",
+  "unsettled_calls": 0,
+  "upper_usd_including_holds": "0.000137700"
+}

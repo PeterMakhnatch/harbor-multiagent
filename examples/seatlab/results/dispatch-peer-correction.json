@@ -1,0 +1,613 @@
+{
+  "cells": [
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517301,
+      "selective": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517301,
+      "selective": {
+        "feasible": 6,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "kept": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517302,
+      "selective": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "kept": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517302,
+      "selective": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517303,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517303,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517304,
+      "selective": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517304,
+      "selective": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517305,
+      "selective": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517305,
+      "selective": {
+        "feasible": 6,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517306,
+      "selective": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517306,
+      "selective": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517307,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517307,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517308,
+      "selective": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 3,
+        "optimal": 3
+      },
+      "marked_opened": 0,
+      "marked_unopened": 3,
+      "repetition": 1,
+      "seed": 517308,
+      "selective": {
+        "feasible": 3,
+        "optimal": 3
+      },
+      "status": "valid"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517309,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517309,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517310,
+      "selective": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517310,
+      "selective": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517311,
+      "selective": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517311,
+      "selective": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517312,
+      "selective": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517312,
+      "selective": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517313,
+      "selective": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 5
+      },
+      "kept": {
+        "feasible": 4,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 1,
+      "repetition": 1,
+      "seed": 517313,
+      "selective": {
+        "feasible": 4,
+        "optimal": 4
+      },
+      "status": "valid"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517314,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "kept": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517314,
+      "selective": {
+        "feasible": 6,
+        "optimal": 6
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 0,
+      "seed": 517315,
+      "selective": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "marked_opened": 0,
+      "marked_unopened": 0,
+      "repetition": 1,
+      "seed": 517315,
+      "selective": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "status": "skipped"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "marked_opened": 0,
+      "marked_unopened": 1,
+      "repetition": 0,
+      "seed": 517316,
+      "selective": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "status": "valid"
+    },
+    {
+      "free": {
+        "feasible": 5,
+        "optimal": 4
+      },
+      "kept": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "marked_opened": 0,
+      "marked_unopened": 1,
+      "repetition": 1,
+      "seed": 517316,
+      "selective": {
+        "feasible": 4,
+        "optimal": 3
+      },
+      "status": "valid"
+    }
+  ],
+  "schema": "seatlab.dispatch-peer-correction/v1"
+}

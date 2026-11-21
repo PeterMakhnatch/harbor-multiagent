@@ -14,6 +14,70 @@ The [first-attempt report](results/attention-direct-live.json) contains all 12 m
 
 The [subscription panel](results/attention-subscription-live.json) contains 24 fresh native teams, not rescores of direct-model teams. [Stock Eval Lab](results/attention-subscription-stock.json) agreed on all 144 actions and 24 rewards. The native results reported no model usage for command seats. Separate [service receipts](results/attention-subscription-receipts.json) matched 24 inventory and 48 dispatch calls to `openai-codex/gpt-6.2-sol`. No direct API call was made for this panel. We do not assign the subscription a cash price.
 
+## Does ranking the peer’s reported options improve team reward?
+
+**No gain on the registered measure.** Both groups made 70 stock-optimal choices out of 96. Ranking helped in 8 worlds, hurt in 5 and tied in 3. The net difference was 0; the exact two-sided world test gave p = 1. The registered test required at least 10 more optimal choices and p ≤ 0.05.
+
+| First attempt on each of 16 new worlds | Plain reports | Ranked reports |
+|---|---:|---:|
+| Native teams with a verified reward | 16/16 | 16/16 |
+| Stock-optimal shipments | 70/96 | 70/96 |
+| Feasible shipments | 78/96 | 83/96 |
+
+Each native team used two fresh DeepSeek seats. Inventory sent two revisions per shipment. Dispatch saw the names of the changed reports and could open two. Only the final ranked prompt added a line. It listed the bays in each latest **visible** report, in decreasing order of the dispatcher's own utility. It did not reveal the four unopened updates. Each team made its own inventory and lookup decisions.
+
+The 16 six-shipment problems differ from each other and from all 30 reference problems after normalizing the bay names. Individual shipment patterns recur. Rank alone is not a proven default for a Harbor harness. The 5 extra feasible choices are descriptive, not a second positive result. Equal totals do not prove equivalence.
+
+To reproduce the reported world test, run this from the fork checkout with Python 3.12 or later. No Harbor install, API key or Docker is needed.
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.ranked_result examples/seatlab/results/dispatch-ranked-native.json
+```
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062979540) · [No-key controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063076441) · [First-attempt native receipt](results/dispatch-ranked-native.json) · [96 token-priced calls: $0.009406080, no open holds](results/dispatch-ranked-cost.json).
+
+The stock Harbor grades, an independent shipment scorer and Eval Lab's read-only trial importer agreed for all 32 teams. The receipt binds each row to a native trial UUID and a digest of the whole result. It does not independently authenticate the model provider.
+
+### Does changing only the list order change the receiver’s choice?
+
+**The registered test did not establish a useful gain.** Sorting options by utility increased selections of the best visible option by 7/192, or 3.65 percentage points. The target was at least 20/192 and a two-sided world-level p-value of 0.05 or less. Five worlds improved, two declined and nine tied. The exact p-value was 17/64 (0.266).
+
+| Final decisions on identical peer evidence | Report order | Utility order |
+|---|---:|---:|
+| Chose the best option in the latest visible report | 175/192 | 182/192 |
+| Chose the stock-optimal bay | 150/192 | 154/192 |
+| Chose a feasible bay | 167/192 | 169/192 |
+
+Each of the 16 original plain teams supplied one receiver input. Both formats appended the same six peer lists with the same label and byte length. Only the order within a list could differ. Sorting changed 50 of the 96 lists. Each format got two independent first replies per source. All 64 replies were valid. Two scorers agreed on every reply. The primary test kept both repetitions and all six shipments together within each world.
+
+The first row measures use of visible evidence. The other rows use the stock grader; an unopened update can make an old report wrong. This compares receivers on fixed inputs. It cannot measure how a new team reacts. The high starting result also left only 17 possible improvements, fewer than the 20 required to pass. **Do not pay for this change on the strength of these results.**
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.peer_order_result examples/seatlab/results/dispatch-peer-order.json
+```
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063103003) · [Source admission](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063182403) · [Use your own receiver](replication.md#compare-receivers-on-one-real-dispatch-decision) · [Scored first attempts](results/dispatch-peer-order.json) · [64 physical calls: $0.003034752, no holds](results/dispatch-peer-order-cost.json).
+
+### Is a second receiver worth calling when a choice contradicts its report?
+
+**Not on these proposals.** Four of 32 proposals contained a disputed choice. We sent only those shipments to a second DeepSeek receiver. It returned valid corrections but retained all six disputed choices. The other 28 proposals needed no call.
+
+| Stock outcome on the same 192 shipments | Keep original | Free repair | Ask a receiver |
+|---|---:|---:|---:|
+| Optimal choices | 150 | 155 | 150 |
+| Feasible choices | 167 | 172 | 167 |
+| Additional model calls | 0 | 0 | 4 |
+
+The free rule replaced each disputed choice with the highest-utility bay in its latest visible report. The paid receiver scored 5 fewer optimal choices than that rule. Three worlds favored the rule and 13 tied. The exact two-sided world test gave p = 0.25. This small comparison does not establish a general advantage for the rule.
+
+All six disputed choices used an older report; none used an opened update. Before calling the receiver, we reported that only six choices could change. The registered target of eight additional optimal choices was therefore unreachable. A harness can check this limit without another generation. Do not mistake an old report for current stock.
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.peer_correction_result examples/seatlab/results/dispatch-peer-correction.json
+```
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063233677) · [Trigger count before spending](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063284404) · [Try the correction workflow](replication.md#ask-a-second-receiver-only-about-disputed-shipments) · [First observations](results/dispatch-peer-correction.json) · [4 additional calls: $0.000137700](results/dispatch-peer-correction-cost.json). The original proposals came from the report-order arm above. These results are not new team rewards.
+
 ## Does a revised record help a replacement agent find the right context?
 
 The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.
