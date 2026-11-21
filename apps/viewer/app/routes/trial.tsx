@@ -1,6 +1,7 @@
 import { rolloutPollInterval } from "~/lib/server-controls";
 import { CtrfViewer } from "~/components/ctrf-viewer";
 import { ResourceControls } from "~/components/resource-controls";
+import { formatModelInfo, SeatMeasurements } from "~/components/seat-measurements";
 import { fetchConfig, fetchJob } from "~/lib/api";
 import { resourceKey } from "~/lib/urls";
 import { getTrialUrl } from "~/lib/urls";
@@ -111,7 +112,8 @@ import {
   fetchTrialRecording,
 } from "~/lib/api";
 import type {
-  ModelInfo,
+  FinalMetrics,
+  ModelPricing,
   ObservationContent,
   ObservationResult,
   RewardCriterion,
@@ -2733,13 +2735,6 @@ function RecordingViewer({
   );
 }
 
-function formatModelInfo(modelInfo: ModelInfo | null): string | null {
-  if (!modelInfo) return null;
-  return modelInfo.provider
-    ? `${modelInfo.provider}/${modelInfo.name}`
-    : modelInfo.name;
-}
-
 /** "claude-code · anthropic/claude-haiku-4-5" for an agent panel heading. */
 function formatAgentLabel(
   name: string | null | undefined,
@@ -2952,6 +2947,99 @@ function StepSelector({
   );
 }
 
+function TrialTokensCard({
+  metrics,
+  pricing,
+}: {
+  metrics: FinalMetrics | null | undefined;
+  pricing: ModelPricing | null | undefined;
+}) {
+  const cachedTokens = metrics?.total_cached_tokens ?? 0;
+  const uncachedTokens = Math.max(0, (metrics?.total_prompt_tokens ?? 0) - cachedTokens);
+  const outputTokens = metrics?.total_completion_tokens ?? 0;
+  const cachedRate = pricing?.cache_read_input_token_cost ?? null;
+  const inputRate = pricing?.input_cost_per_token ?? null;
+  const outputRate = pricing?.output_cost_per_token ?? null;
+
+  return (
+    <Card className="gap-3 py-4">
+      <CardHeader>
+        <TrialSectionTitle>Tokens</TrialSectionTitle>
+      </CardHeader>
+      <CardContent>
+        <TokenBar
+          segments={[
+            {
+              label: "Cached Input",
+              value: cachedTokens,
+              color: "var(--color-neutral-400)",
+              costUsd: cachedRate != null ? cachedTokens * cachedRate : null,
+            },
+            {
+              label: "Uncached Input",
+              value: uncachedTokens,
+              color: "var(--color-neutral-500)",
+              costUsd: inputRate != null ? uncachedTokens * inputRate : null,
+            },
+            {
+              label: "Output",
+              value: outputTokens,
+              color: "var(--color-neutral-600)",
+              costUsd: outputRate != null ? outputTokens * outputRate : null,
+            },
+          ]}
+          totalLabel={`${((metrics?.total_prompt_tokens ?? 0) + outputTokens).toLocaleString()} tokens`}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function TrialTimingCard({
+  trial,
+  hasSteps,
+  activeStepResult,
+}: {
+  trial: TrialResult;
+  hasSteps: boolean;
+  activeStepResult: StepResult | null;
+}) {
+  return (
+    <Card className={cn("gap-3 py-4", !hasSteps && "border-b-0")}>
+      <CardHeader>
+        <TrialSectionTitle>Timing</TrialSectionTitle>
+      </CardHeader>
+      <CardContent>
+        <TimingBar
+          phases={[
+            {
+              label: "Env Setup",
+              timing: trial.environment_setup,
+              color: "var(--color-neutral-400)",
+            },
+            {
+              label: "Agent Setup",
+              timing: trial.agent_setup,
+              color: "var(--color-neutral-500)",
+            },
+            {
+              label: "Agent Execution",
+              timing: hasSteps ? activeStepResult?.agent_execution ?? null : trial.agent_execution,
+              color: "var(--color-neutral-600)",
+            },
+            {
+              label: "Verifier",
+              timing: hasSteps ? activeStepResult?.verifier ?? null : trial.verifier,
+              color: "var(--color-neutral-700)",
+            },
+          ]}
+          totalDuration={formatDuration(trial.started_at, trial.finished_at)}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 function TrialContent({
   trial,
   jobName,
@@ -2993,6 +3081,7 @@ function TrialContent({
   const inProgress = !trial.finished_at;
   const availableRecording = isAvailableRecording(recording) ? recording : null;
   const isSimulatedUserTrial = trial.config.user_agent !== null;
+  const seatResults = trial.seat_results;
 
   const { data: trajectory } = useQuery({
     queryKey: ["trajectory", jobName, trialName, step],
@@ -3004,7 +3093,7 @@ function TrialContent({
   const { data: pricing } = useQuery({
     queryKey: ["pricing", trajectoryModel],
     queryFn: () => fetchModelPricing(trajectoryModel!),
-    enabled: !!trajectoryModel,
+    enabled: !!trajectoryModel && !seatResults?.length,
     staleTime: Infinity,
     retry: false,
   });
@@ -3082,90 +3171,14 @@ function TrialContent({
           <StepsOverview steps={trial.step_results!} onSelect={onStepChange} />
         )}
 
-        <Card className="gap-3 py-4">
-          <CardHeader>
-            <TrialSectionTitle>Tokens</TrialSectionTitle>
-          </CardHeader>
-          <CardContent>
-            <TokenBar
-              segments={(() => {
-                const cachedTokens = metrics?.total_cached_tokens ?? 0;
-                const uncachedTokens = Math.max(
-                  0,
-                  (metrics?.total_prompt_tokens ?? 0) - cachedTokens
-                );
-                const outputTokens = metrics?.total_completion_tokens ?? 0;
-                const cachedRate = pricing?.cache_read_input_token_cost ?? null;
-                const inputRate = pricing?.input_cost_per_token ?? null;
-                const outputRate = pricing?.output_cost_per_token ?? null;
-                return [
-                  {
-                    label: "Cached Input",
-                    value: cachedTokens,
-                    color: "var(--color-neutral-400)",
-                    costUsd:
-                      cachedRate != null ? cachedTokens * cachedRate : null,
-                  },
-                  {
-                    label: "Uncached Input",
-                    value: uncachedTokens,
-                    color: "var(--color-neutral-500)",
-                    costUsd:
-                      inputRate != null ? uncachedTokens * inputRate : null,
-                  },
-                  {
-                    label: "Output",
-                    value: outputTokens,
-                    color: "var(--color-neutral-600)",
-                    costUsd:
-                      outputRate != null ? outputTokens * outputRate : null,
-                  },
-                ];
-              })()}
-              totalLabel={`${((metrics?.total_prompt_tokens ?? 0) + (metrics?.total_completion_tokens ?? 0)).toLocaleString()} tokens`}
-            />
-          </CardContent>
-        </Card>
-
-        <Card className={cn("gap-3 py-4", !hasSteps && "border-b-0")}>
-          <CardHeader>
-            <TrialSectionTitle>Timing</TrialSectionTitle>
-          </CardHeader>
-          <CardContent>
-            <TimingBar
-              phases={[
-                {
-                  label: "Env Setup",
-                  timing: trial.environment_setup,
-                  color: "var(--color-neutral-400)",
-                },
-                {
-                  label: "Agent Setup",
-                  timing: trial.agent_setup,
-                  color: "var(--color-neutral-500)",
-                },
-                {
-                  label: "Agent Execution",
-                  timing: hasSteps
-                    ? activeStepResult?.agent_execution ?? null
-                    : trial.agent_execution,
-                  color: "var(--color-neutral-600)",
-                },
-                {
-                  label: "Verifier",
-                  timing: hasSteps
-                    ? activeStepResult?.verifier ?? null
-                    : trial.verifier,
-                  color: "var(--color-neutral-700)",
-                },
-              ]}
-              totalDuration={formatDuration(
-                trial.started_at,
-                trial.finished_at
-              )}
-            />
-          </CardContent>
-        </Card>
+        {seatResults?.length ? (
+          <SeatMeasurements seats={seatResults} />
+        ) : (
+          <>
+            <TrialTokensCard metrics={metrics} pricing={pricing} />
+            <TrialTimingCard trial={trial} hasSteps={hasSteps} activeStepResult={activeStepResult} />
+          </>
+        )}
       </div>
 
       {hasSteps && (
@@ -3592,6 +3605,7 @@ export default function Trial() {
   }, [trial, step, setStep]);
 
   const startedAt = parseAbsoluteTimestampMs(trial?.started_at);
+  const trialModel = formatModelInfo(trial?.agent_info.model_info);
 
   return (
     <PageShell>
@@ -3679,15 +3693,11 @@ export default function Trial() {
                 }
                 className={truncatedHeaderItemClass}
               />
-              {trial.agent_info.model_info && (
+              {trialModel !== null && (
                 <>
                   <span className="text-border shrink-0">|</span>
                   <CopyableValue
-                    value={
-                      trial.agent_info.model_info.provider
-                        ? `${trial.agent_info.model_info.provider}/${trial.agent_info.model_info.name}`
-                        : trial.agent_info.model_info.name
-                    }
+                    value={trialModel}
                     className={truncatedHeaderItemClass}
                   />
                 </>

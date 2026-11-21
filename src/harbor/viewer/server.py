@@ -1319,11 +1319,14 @@ def _register_job_endpoints(
             environment_type: str | None = None
             if config:
                 sources = _job_source_labels(config)
-                agents = sorted(
-                    set(agent.name for agent in config.agents if agent.name is not None)
-                )
-                # Extract provider from model_name (format: "provider/model")
-                for agent in config.agents:
+                agent_configs = config.participants or config.agents
+                agent_labels: set[str] = set()
+                for agent in agent_configs:
+                    label = agent.name
+                    if label is None and config.participants:
+                        label = agent.import_path
+                    if label is not None:
+                        agent_labels.add(label)
                     if agent.model_name:
                         parts = agent.model_name.split("/", 1)
                         if len(parts) == 2:
@@ -1331,6 +1334,7 @@ def _register_job_endpoints(
                             models.append(parts[1])
                         else:
                             models.append(agent.model_name)
+                agents = sorted(agent_labels)
                 providers = sorted(set(providers))
                 models = sorted(set(models))
                 if config.environment.type:

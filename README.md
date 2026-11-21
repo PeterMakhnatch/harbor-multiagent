@@ -72,6 +72,21 @@ Resume requires a known stored start. It rejects a start without an offset
 before it changes results or logs. An explicit resume start must match the
 stored instant. Do not assign a historical zone from the current host settings.
 
+## Native seat measurements
+
+Trials with recorded `seat_results` show one row per seat, including supporting
+seats. The table reads recorded agent and model identities, token counts, USD
+costs, setup and execution seconds, and errors. Input counts include cached
+input. Missing values stay unknown. Known zero values stay zero.
+
+Costs come from the saved result, not a current model price. Phase times are
+recorded wall intervals. Seats can overlap, so their sum is not the Job's elapsed
+time. The table does not recover deleted attempts or unreported billing.
+
+Folder-mode Job lists use participant names or import paths for native rosters,
+search, and filters. They do not import agent modules. Single-agent Trials keep
+the existing Tokens and Timing cards.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a
