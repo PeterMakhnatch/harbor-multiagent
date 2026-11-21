@@ -8,39 +8,26 @@ support.
 
 By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
-## Replay an agent handoff without installing Harbor
+## SeatLab: replay one team role without rerunning Harbor
 
-SeatLab is a fork-only experiment. It lets you change what a replacement agent sees without changing the world or rerunning the departing agent. Start with two service desks and a revised opening time:
-
-```sh
-python -m examples.seatlab.handoff plan \
-  --packet examples/seatlab/handoff/rota.json \
-  --sha256 "$(shasum -a 256 examples/seatlab/handoff/rota.json | cut -d' ' -f1)"
-```
-
-Run this command from this branch with Python 3.12 or later. It needs no account or Docker. The [working example](examples/seatlab/replication.md#run-a-handoff-on-your-own-records) shows how to run two programs, capture their first answers, and score them. It also accepts your own records.
-
-To start from real Harbor data, use the [saved trial packet](examples/seatlab/replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials). No private archive is needed. From your own completed handoff, you can compare [shorter notes](examples/seatlab/replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) or [one worker per answer](examples/seatlab/replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs). Each worker claims a separate first attempt. The [results](examples/seatlab/native-model-results.md#does-a-revised-record-help-a-replacement-agent-find-the-right-context) distinguish a better lookup from a better final decision.
-
-To check results from real Harbor teams without installing Harbor, run this command from the fork branch with Python 3.12 or later:
+This fork adds a role replay tool. Start after one agent receives its teammate's messages. Freeze that observation, substitute a new receiver, and check the receiver's first answer against the original world. Harbor still runs the environment. SeatLab runs the cheaper, conditional comparison outside it.
 
 ```sh
-python -S -m examples.seatlab.native_report examples/seatlab/results/attention-direct-live.json examples/seatlab/results/briefing-direct-live.json
+git clone --depth 1 --branch experiments/seatlab-rolepack https://github.com/PeterMakhnatch/harbor-multiagent.git
+cd harbor-multiagent
+python3.12 -S -m examples.seatlab.rolepack compare
 ```
 
-The first study changes which revisions the dispatcher can identify. The second changes what the inventory agent knows before choosing 2 revisions to send. The command checks the published decisions and score arithmetic. It does not contact a model, start Docker, confirm a bill, or reopen a private trace.
+The command uses only standard Python. It needs no installation, Docker, model account, or private trials. The supplied pack contains original prompts from **Flotilla meeting schedulers** and **shipment dispatch teams**. Two independently identified Inspect AI receivers handle both. The two task scorers stay separate.
 
-**How much does an agent change its answer with the same context?** You can check both real model cohorts in one command. It compares a changed message against a fresh run with the original message:
+- [Run your own receiver or add a task](examples/seatlab/replication.md#use-a-role-pack-with-your-own-receiver). Export user-only messages to Inspect AI or run your trusted role program. Parallel workers share a study and do not retry a claimed call.
+- [Import an existing Inspect archive](examples/seatlab/replication.md#build-your-first-pack-from-native-inspect-logs). Keep the real role input and first reply. Test another teammate without exporting the full trace.
+- [Check the mixed-task results](examples/seatlab/native-model-results.md#does-showing-a-real-peer-proposal-help-the-same-receiver-on-two-tasks). The report distinguishes copied actions, corrected actions, incomplete attempts, and same-input repeats.
+- [Diagnose a sender versus a receiver](examples/seatlab/replication.md#compare-your-receiver-with-the-recorded-receiver), [change a single visible report](examples/seatlab/replication.md#run-the-reviewer-through-inspect-ai), or [continue both seats from a native checkpoint](examples/seatlab/replication.md#start-from-the-published-team-checkpoint). To start with your own team notes, use the [handoff replay](examples/seatlab/replication.md#run-a-handoff-on-your-own-records).
 
-```sh
-python -S -m examples.seatlab.turn_fork summary
-```
+These are new model decisions on retained observations, not new native Harbor rewards. An adapter must export the role's actual observation and the task's grading rule. SeatLab does not infer them from arbitrary Harbor logs.
 
-Use the [published team checkpoint](examples/seatlab/replication.md#start-from-the-published-team-checkpoint) to run your own two agents on the same saved messages. You do not need to rerun the original Harbor teams. This interface scores new decisions against the original world. It does not create a new native reward.
-
-**Bring your own receiver.** Run `python -S -m examples.seatlab.decision_cross summary` to compare 2 real programs on identical teammate messages. The [receiver quickstart](examples/seatlab/replication.md#compare-your-receiver-with-the-recorded-receiver) shows how to run a different program or export prompt-only samples for Inspect AI. No model or Docker is needed to verify the published results.
-
-**Use Inspect AI as a replacement reviewer.** Run `python -S -m examples.seatlab.peer_update summary` to check the measured result. The [Inspect quickstart](examples/seatlab/replication.md#run-the-reviewer-through-inspect-ai) runs your own trusted role program and saves a native `.eval` archive.
+For an example of the boundary, [freeze the scheduler's observation and show or hide the same real reply](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72). To measure a **team reward** instead, [run both seats in the original scheduling task and read its result with stock Eval Lab](https://github.com/PeterMakhnatch/harbor-multiagent/pull/73). The two experiments change different messages.
 
 ## Install
 

@@ -2,6 +2,55 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can I move real teammate decisions from Inspect into a new Harbor role study?
+
+Yes, for a one-turn role with a finite action rubric. The [source index](results/rolepack-inspect-index.json) selects the first registered observation in each of 9 task/world groups, without using its score. The importer recovered each role prompt and the **first actual Sol reply** from a private native Inspect archive. The [public pack](results/rolepack-from-inspect.json) binds those replies to their archive and reply hashes. The input bytes and grading rules match the corresponding original Harbor observations.
+
+A separately served Astra receiver completed all **36/36** registered attempts without retries or paid API calls. Holding the source observation fixed, showing Sol's prior choice did not change any individual decision in this panel. Astra selected the same action even when it could not see Sol's answer. That agreement does **not** prove peer copying.
+
+| Original task | Original prompt: optimal | Original prompt + Sol's proposal: optimal | Original worlds |
+|---|---:|---:|---:|
+| Flotilla calendar | 0/6 | 0/6 | 3 |
+| Shipment dispatch | 66/72 | 66/72 | 6 |
+
+In the earlier service window, the same 9 sources with a direct DeepSeek proposal had the same 4 aggregate scores. That is a descriptive comparison, not a causal comparison between senders. The 36 calls contain **156 choices**, not 156 independent worlds or new native team rewards.
+
+Both original scorers independently verified these **156 choices**: 12 calendar slots and 144 shipments. The [original-world check](results/rolepack-import-original-stock.json) covers 3 calendar cases and 6 shipment teams. It uses the real selected stock worlds, not a duplicate grader.
+
+[Import your own archive](replication.md#build-your-first-pack-from-native-inspect-logs) · [36 first attempts](results/rolepack-import-review-live.json) · [independent service receipts](results/rolepack-import-review-service.json) · [world-level effects and repeatability](results/rolepack-import-review-effects.json).
+
+## Which receiver changes an actual role decision?
+
+Both receivers took the same 96 registered samples. They ran in different service windows. [Astra's receipts](results/rolepack-astra-service.json) and [Sol's receipts](results/rolepack-inspect-service.json) each matched 96 actual first replies. Neither cohort used a paid API. Both original task scorers checked all 336 decisions per receiver.
+
+| Task and input | Sol optimal | Astra optimal | Same decision from both receivers |
+|---|---:|---:|---:|
+| Calendar, original | 4/24 | 2/24 | 20/24 |
+| Calendar, real prior proposal | 4/24 | 3/24 | 17/24 |
+| Shipment, original | 128/144 | 128/144 | 144/144 |
+| Shipment, real prior proposal | 128/144 | 128/144 | 144/144 |
+
+On these shipment worlds, switching models did not change even one of the actions. The calendar result was different: the two models selected different slots, and both scored poorly. Before paying for a model swap on the shipment task, inspect the **information available to dispatch**. On the calendar task, check whether each role supplied usable meeting windows; these 3 calendar worlds do not justify a general model ranking.
+
+`python -S -m examples.seatlab.rolepack compare` recomputes the result offline. For two other programs, supply `compare baseline.json candidate.json`. Add `--json` for matched source draws, transitions and per-world worst/best bounds. The bounds cover missing first attempts; they are **not confidence intervals**. [Matched comparison](results/rolepack-receiver-comparison.json) · [Astra first attempts](results/rolepack-astra-live.json) · [Astra peer and repeat effects](results/rolepack-astra-effects.json) · [Astra original stock check](results/rolepack-astra-stock.json).
+
+### Cost boundary for these cohorts
+
+The mixed-task reviewer cohorts use subscriptions, not paid model APIs. The lane's separate direct DeepSeek ledger contains 11,358 settled calls through this checkpoint. Its token-price estimate is **$0.439350228**. One unused reservation retains its **$0.01** hold. The lane maximum including that hold is **$0.449350228**. This is not the provider invoice or the total for other agents. Earlier studies keep one cost entry per paid run.
+
+## Does showing a real peer proposal help the same receiver on two tasks?
+
+One trusted Inspect receiver took the same role across two Harbor tasks. Each task supplied 12 retained original observations. The 3 calendar worlds and 6 shipment worlds have separate scorers. The packet never gives the receiver a target. Within each source the receiver saw either the exact original bytes, or those same bytes plus a real prior receiver decision. It ran twice on each input.
+
+| Task | Original input: optimal | With peer: optimal | Copied the peer with original input | Copied the peer with proposal shown |
+|---|---:|---:|---:|---:|
+| Calendar scheduling | 4/24 | 4/24 | 2/24 | 4/24 |
+| Shipment dispatch | 128/144 | 128/144 | 130/144 | 130/144 |
+
+The equal-world peer-minus-original difference was zero in both tasks for this receiver. It did not always make the same calendar decision: the 2 independent draws agreed on 10/12 sources with the peer and 12/12 without. Shipment proposals repeated on 12/12 sources in both conditions. The prior calendar choices were all wrong on these selected sources. Copying a peer and earning its task reward are separate outcomes. These are conditional action scores on 9 original worlds, not proof that peer messages never help.
+
+The [public packet](results/rolepack-observations.json) fixes observations and priors; [96 first-attempt rows](results/rolepack-inspect-live.json) record the sanitized results. The [service receipts](results/rolepack-inspect-service.json) matched all 96 Sol answers. The [original task scorers](results/rolepack-original-stock.json) independently checked 48 calendar and 288 shipment actions. The [task-wise analysis](results/rolepack-effects.json) retains the draws, corrections, new errors, coverage and world effects separately. No new native team reward or paid API call.
+
 ## Is one new inventory report more useful to a reviewer than a real peer draft?
 
 A separate Inspect AI program reviewed 12 previous direct dispatch decisions from 6 native worlds. The [protocol](replication.md#does-a-real-peer-draft-help-a-new-reviewer-use-one-additional-inventory-update) fixed the peer, the source observation and the extra report before inference. Only 1 of 12 selected records changed its best available bay between revisions.

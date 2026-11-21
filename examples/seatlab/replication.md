@@ -579,3 +579,109 @@ Register before receiving the crossed dispatch results. Start from the [28 promp
 For each source choose the lexicographically first *unopened* alias, without consulting utility, inventory changes, the peer, or rewards. Cross 2 independent factors: the reviewer sees the peer's 6 proposed actions, or sees no draft; the reviewer sees the actual first or second inventory report for the selected alias. The packet contains both original inventory reports. Never generate a replacement. Both reports carry their original revision number. The reviewer always sees the untouched dispatcher observation as well. Every condition gets one fresh call to the same external service. Rotate the 4 conditions between consecutive sources and process in rounds. Preserve invalid first answers; no retries, missing-row substitutions, or model selection. Use the unmodified stock grader after the receiver returns.
 
 Primary outcome: direct difference in target-shipment optimality, changing only the report revision. Report that difference separately with and without a peer draft. Secondary: change due to showing a draft at fixed revision, accuracy over all 6 shipments, and changes from a wrong to a right peer action or the reverse. Report how often the target's best feasible bay actually changes between revisions. Give the number of source teams, worlds, fresh calls, and missing first answers. Use paired source-world contrasts and distinguish the other 5 shipments from the intervention target. This is a conditional role experiment on 6 worlds, not a new native team reward or a population-level estimate.
+
+
+## Use a role pack with your own receiver
+
+A role pack describes what a real seat saw, the peer decision it could receive, and how the task grades a new decision. It does not need a live Harbor environment. Start with two recorded Harbor tasks in the shipped pack:
+
+```sh
+python3.12 -S -m examples.seatlab.rolepack summary
+python3.12 -S -m examples.seatlab.rolepack samples > role-inputs.jsonl
+python3.12 -S -m examples.seatlab.rolepack show --index 0
+```
+
+`role-inputs.jsonl` is an Inspect dataset. Each available row contains only `id` and `input`, never a target. Give your model only `input`; keep the sample ID with your evaluator. Get the first ID from the JSONL, then grade a real saved reply with `python3.12 -S -m examples.seatlab.rolepack grade --sample-id "$id" < reply.json`. You do not need the original source archives. Publishing a pack with its grading rules makes the answers inspectable. Run untrusted candidate programs in your own isolation; this launcher is for trusted programs, not a security boundary.
+
+### Let more than one worker run the same study
+
+Install `inspect-ai==0.3.276` in a separate Python environment to run the study. The offline commands above need no installs. Set up a trusted one-turn receiver on your own account. `dispatch.json` has the shape `{"dispatch":{"argv":["/absolute/path/to/your-seat"],"env":[]}}`. The program receives the role request on stdin. It returns a JSON object with a `text` string containing the first answer. Read [the program interface](#compare-your-receiver-with-the-recorded-receiver) before writing your adapter. The program cannot silently retry the model, select another model, or use a grader as a tool. Use a private directory on a shared **local** filesystem.
+
+```sh
+study=$(mktemp -d)/study
+python -m examples.seatlab.rolepack seal --study "$study" --config "$PWD/dispatch.json"
+python -m examples.seatlab.rolepack pending --study "$study"
+# Give these commands to two workers. The ranges are half-open.
+python -m examples.seatlab.rolepack run --study "$study" --start 0 --stop 24
+python -m examples.seatlab.rolepack run --study "$study" --start 24 --stop 48
+# After both first-draw ranges, run [48,72) and [72,96) for the repeat.
+python -m examples.seatlab.rolepack report --study "$study" > my-first-attempts.json
+python -S -m examples.seatlab.rolepack summary my-first-attempts.json
+python -S -m examples.seatlab.rolepack effects my-first-attempts.json
+```
+
+The shipped corpus has 96 registered attempts. Run `plan` for another pack. Each sample can be claimed once. If a worker stops after its claim, do not clear the claim and do not start a new study to replace that attempt. The report retains the incomplete coverage. Different proposals by two receivers are not the same as different team rewards. Keep their decisions separate from Harbor's native run results.
+
+### Reproduce the public pack from its two source checkouts
+
+From the mixed-task branch, clone the original fork branch to a separate directory. This requires no account. No trial files, Inspect install, or cloud services are needed.
+
+```sh
+git clone --depth 1 --branch experiments/seatlab-calendar-lists https://github.com/PeterMakhnatch/harbor-multiagent.git ../seatlab-calendar-source
+python3.12 -S -m examples.seatlab.rolepack build --calendar-checkout "$(cd ../seatlab-calendar-source && pwd -P)" > rebuilt.json
+cmp rebuilt.json examples/seatlab/results/rolepack-observations.json
+python3.12 -S -m examples.seatlab.rolepack compare
+```
+
+The original calendar source is `fc22473381e6aa800231026cfb189aac124c0e78`. The pack pins the source files and records the actual prior answer where available. The rebuild matched all 46,969 published bytes in two unauthenticated clones. Both reviewers use this exact same pack.
+
+### Import native Inspect logs from another harness
+
+Export the study with `samples`. Use a one-turn generated answer, one actual model call, one epoch, and no tools. Keep the original sample ID. Do not add a system prompt or transform the answer after generation. Give the native `.eval` archives to the importer:
+
+```sh
+python -m examples.seatlab.rolepack report --inspect-logs first.eval second.eval > external.json
+python -S -m examples.seatlab.rolepack summary external.json
+```
+
+The importer checks the actual model event as well as the dataset input. It rejects duplicate IDs, altered messages, additional calls, cached reads, or a grader-edited answer. Reading an archive does not establish who served the model. An independent service receipt can establish that. For workers using the sealed launcher, `report --study` also distinguishes a locked claim with no finished result from a case nobody claimed. With external logs alone the importer cannot see calls that left no trace.
+
+### Build your first pack from native Inspect logs
+
+Use this when a teammate has a one-turn Inspect run, but no SeatLab pack. You need the original `.eval` archives. Define an index of source sample IDs and their task rubrics. The [9-source public index](results/rolepack-inspect-index.json) shows both a scalar action and a per-item action. The index does not contain the original prompt or peer answer. The importer gets them from the actual recorded model event.
+
+**Keep the generated pack private until you inspect every selected prompt.** It contains the original role input and decoded peer action for the samples you selected. The importer does not anonymize those fields. Do not publish secrets or customer data.
+
+```sh
+umask 077
+python -m examples.seatlab.rolepack from-inspect --index my-index.json --inspect-logs private/*.eval > my-pack.json
+digest=$(shasum -a 256 my-pack.json | cut -d ' ' -f 1)
+python -S -m examples.seatlab.rolepack plan --pack my-pack.json --sha256 "$digest"
+python -S -m examples.seatlab.rolepack show --pack my-pack.json --sha256 "$digest" --index 0
+```
+
+The importer records hashes of the original archive and exact original reply. It records a legal but wrong choice as a real peer action. A recorded invalid reply is unavailable, not replaced. If the archive does not contain a selected observation, the importer cannot know its input and refuses the export. Use `seal` and `run` with the same `--pack` and `--sha256` parameters to measure a new receiver. This does not create a new native Harbor reward.
+
+To try the exact published import without private archives, start from this branch:
+
+```sh
+pack=examples/seatlab/results/rolepack-from-inspect.json
+report=examples/seatlab/results/rolepack-import-review-live.json
+python3.12 -S -m examples.seatlab.rolepack summary --pack "$pack" --sha256 0697a31f1e2961168d189fab6f77843483fcc08fb5587d3374b8c7c4da833f12 "$report"
+```
+
+Use the [results](native-model-results.md#can-i-move-real-teammate-decisions-from-inspect-into-a-new-harbor-role-study) to compare behavior. Private source archives are not published. The hashes let their owners verify the public export. Both string and integer Inspect sample IDs are supported. Use the original JSON type in the source index.
+
+With both original task sources, use `rolepack stock --changed-peer` to verify a compatible imported subset. Pass the imported pack, its SHA-256, its report, the trusted `--calendar-checkout` and `--native-study`. This permits a different prior action, not a changed observation, task, world or scoring rule. Without `--changed-peer`, `stock` requires the full original pack.
+
+### Bring another Harbor task
+
+Export the role's **original model input**. Do not reconstruct a private observation from the answer key. A record needs a source ID, a task name, a world ID, the original input and its UTF-8 SHA-256. Store an authentic parsed peer proposal with the source run and source report hash. Leave `peer` null if the first peer reply is missing. Supply the role's rubric: the response field, scalar or per-item shape, legal choices, and all equally optimal choices. Do not export private credentials or user data. See [the complete mixed pack](results/rolepack-observations.json) for both supported shapes.
+
+Save `{"schema":"seatlab.rolepack/v1","records":[...]}` with your records. Calculate the SHA-256 of the exact file: `shasum -a 256 my-pack.json`. Add `--pack my-pack.json --sha256 "$digest"` after **each** command that works on your pack. Run `plan` and inspect the emitted prompt bytes before calling a model. `seal` binds the records and role config. `stock` uses the original two task adapters; new tasks keep their own independent scorer. The portable rubric supports finite action choices, not arbitrary text quality or new environment transitions.
+
+## Can the same receiver use real peer proposals across two Harbor tasks?
+
+Register before the cross-task calls. Run a single external receiver program through Inspect AI on two different tasks: 12 shipment sources from the frozen dispatch cross and 12 prior Flotilla calendar receivers. Do not grade across tasks. Shipment sources use the smallest prior prompt hash per native team and the observed direct draw 0 on that prompt. Calendar sources are all 3 published eligible worlds, both role directions and both repetitions in the `blind` arm, with the accepted lists unchanged (`rr`) and its original direct draw 0. Do not replace an absent proposal with a later one. The shipment inputs contain live inventory messages. The calendar inputs contain actual peer candidate times. The additional proposal is a prior model's observed final action, printed as canonical JSON, not presented as a direct quotation. No provider sees the grader, stock, source scores, or the other private calendar.
+
+Compare the original receiver prompt (`original`) with that exact prompt plus one peer proposal (`peer`). No extra stock information in either arm. Run two fresh keyless Sol receiver calls per source and arm. Enroll in 4 rounds, rotate arm order across sources, and keep both conditions of draw 0 before draw 1. Use an exclusive first-attempt claim for each registered item when multiple Inspect workers share a study. Do not retry invalid or interrupted attempts. Keep 2 tasks, 9 original worlds, 24 source records and up to 96 fresh calls distinct. Record native-optimal action rate by task with equal weight per source world, same-input repeat agreement, and changed, copied, corrected, or newly wrong choices relative to the original peer. Compare actions against each task's original offline scorer. Do not call this a native reward or a general claim about peer advice.
+## Does switching the receiver change the role decision on the same two tasks?
+
+Register this extension after observing the first Sol draw, before enrolling any replacement. The baseline is the full first-attempt Sol cohort. The candidate is the separately served `openai-codex/gpt-6.2-astra` subscription model. Use exactly the same sealed role pack, settings, prompts, metric, arm rotation and two independent draws per source. Do not select any task, source or arm by the Sol result. Commit all 96 candidate rows before the pilot. If its pilot cannot prove the requested model served the call, stop that cohort. Do not replace the pilot or permit a fallback. No paid API use.
+
+For each task and condition, report the candidate-minus-baseline difference in the native optimal-action fraction. Pair on original world, source, draw and arm; give worlds equal weight. Count changes that improve or reduce the score. Report coverage and worst/best bounds if a partner is absent. Show peer copying and repeat agreement as secondary measures. The calls occur in different service windows. A difference is not an estimate of a general model advantage.
+## Can a new team use actual first answers from someone else’s Inspect run?
+
+Register this workflow before importing or calling a new receiver. Retain the lexicographically first source ID in each of the 9 registered (task, world) groups. The [role index](results/rolepack-inspect-index.json) lists only identity, original sample ID and task rubric. Import Sol's actual `original` draw 0 from its native Inspect archive for each source. Do not choose a peer by accuracy, use a later draw, or reconstruct its answer from stock. Preserve its original observed input.
+
+The next participant is a fresh, independently served Astra reviewer. Use two original first answers per source and condition: no peer, or the observed Sol proposal. Run all 18 first draws before the 18 repeats. Compare the optimal-action rate within each task, across 3 calendar and 6 shipment worlds. Count copying and changes relative to the observed peer. As a descriptive comparison only, examine the same registered Astra cases in the separate direct-peer cohort; the service times differ. No new native reward, paid call, or silent retry. The source `.eval` files are private. Publish the 9 public-safe inputs, peer action, hash of each source archive and role response, and the new actor receipts.
