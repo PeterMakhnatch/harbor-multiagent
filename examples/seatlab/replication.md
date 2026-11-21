@@ -487,3 +487,13 @@ python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-pr
 ```
 
 After each window stops, run `python -m examples.seatlab.visibility.clarify_meter "$study" --spend-dir "$SEATLAB_SPEND_DIR"` offline. It checks both turns against the original ledger and the sealed time boundaries. A late finish differs from a late start. A missing timestamp does not establish that a call never occurred. The meter does not authenticate the provider or verify an invoice.
+
+## Can a sender use the right preference attached to the right record?
+
+**Registered before any continuation call.** Enroll the 12 direct `brief` sources in the native briefing register, seeds `6501`–`6506`, repetitions `0` and `1`. Keep a source only if its native team passes the four-turn audit. Do not replace an absent source or select by score, brief accuracy, or opened reports. Preserve the accepted inventory reports, the actual six-letter card, and hashes for both upstream model turns. This is a scoped export of synthetic shipment data, not a general trace sanitizer.
+
+Freeze those two upstream messages. Start independent inventory and dispatch calls in each of 3 policies. `aligned` releases the original card. `shifted` rotates the same 6 letters left by 1 slot. `repeat` sends the exact `aligned` prompt again with fresh model calls. Rotate policy order by `(seed − 6501 + repetition) mod 3`. Every sender can select 2 of the 6 revisions. Only the selected revisions enter the final dispatch prompt. Do not give the sender utilities or true final stock. Do not show either actor the treatment name or other draws. A repeated letter can survive rotation. Count these slots.
+
+Run 36 continuations per transport. Use direct DeepSeek Flash and separate keyless `openai-codex/gpt-6.2-sol` programs. Do not pool transports. Each has at most 72 first attempts. There are 6 source worlds, not 36. Register failures as missing, without retries. Capture each direct call's cost in the existing results log. Do not rerun native teams. New decisions receive a stock score, not a new native Harbor reward.
+
+Primary: the equal-world difference in optimal choices per 6 shipments, `aligned − shifted`. Within each world, pair by original source and average observed repetitions. Do not report a full-register estimate when a world has no matched repetition. Bound unknown scores over all 12 enrolled sources. Report `aligned − repeat` separately as variation under identical sender inputs. Also report agreement on opened report sets and final actions, changes in the best bay under the two reports, and coverage. These bounds are not confidence intervals.
