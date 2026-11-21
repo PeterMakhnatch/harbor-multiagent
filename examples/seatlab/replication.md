@@ -598,6 +598,7 @@ python3.12 -S -m examples.seatlab.rolepack show --index 0
 Install `inspect-ai==0.3.276` in a separate Python environment to run the study. The offline commands above need no installs. Set up a trusted one-turn receiver on your own account. `dispatch.json` has the shape `{"dispatch":{"argv":["/absolute/path/to/your-seat"],"env":[]}}`. The program receives the role request on stdin. It returns a JSON object with a `text` string containing the first answer. Read [the program interface](#compare-your-receiver-with-the-recorded-receiver) before writing your adapter. The program cannot silently retry the model, select another model, or use a grader as a tool. Use a private directory on a shared **local** filesystem.
 
 ```sh
+study=$(mktemp -d)/study
 python -m examples.seatlab.rolepack seal --study "$study" --config "$PWD/dispatch.json"
 python -m examples.seatlab.rolepack pending --study "$study"
 # Give these commands to two workers. The ranges are half-open.
@@ -611,6 +612,19 @@ python -S -m examples.seatlab.rolepack effects my-first-attempts.json
 
 The shipped corpus has 96 registered attempts. Run `plan` for another pack. Each sample can be claimed once. If a worker stops after its claim, do not clear the claim and do not start a new study to replace that attempt. The report retains the incomplete coverage. Different proposals by two receivers are not the same as different team rewards. Keep their decisions separate from Harbor's native run results.
 
+### Reproduce the public pack from its two source checkouts
+
+From the mixed-task branch, clone the original fork branch to a separate directory. This requires no account. No trial files, Inspect install, or cloud services are needed.
+
+```sh
+git clone --depth 1 --branch experiments/seatlab-calendar-lists https://github.com/PeterMakhnatch/harbor-multiagent.git ../seatlab-calendar-source
+python3.12 -S -m examples.seatlab.rolepack build --calendar-checkout "$(cd ../seatlab-calendar-source && pwd -P)" > rebuilt.json
+cmp rebuilt.json examples/seatlab/results/rolepack-observations.json
+python3.12 -S -m examples.seatlab.rolepack compare
+```
+
+The original calendar source is `fc22473381e6aa800231026cfb189aac124c0e78`. The pack pins the source files and records the actual prior answer where available. The rebuild matched all 46,969 published bytes in two unauthenticated clones. Both reviewers use this exact same pack.
+
 ### Import native Inspect logs from another harness
 
 Export the study with `samples`. Use a one-turn generated answer, one actual model call, one epoch, and no tools. Keep the original sample ID. Do not add a system prompt or transform the answer after generation. Give the native `.eval` archives to the importer:
@@ -621,6 +635,22 @@ python -S -m examples.seatlab.rolepack summary external.json
 ```
 
 The importer checks the actual model event as well as the dataset input. It rejects duplicate IDs, altered messages, additional calls, cached reads, or a grader-edited answer. Reading an archive does not establish who served the model. An independent service receipt can establish that. For workers using the sealed launcher, `report --study` also distinguishes a locked claim with no finished result from a case nobody claimed. With external logs alone the importer cannot see calls that left no trace.
+
+### Build your first pack from native Inspect logs
+
+Use this when a teammate has a one-turn Inspect run, but no SeatLab pack. You need the original `.eval` archives. Define an index of source sample IDs and their task rubrics. The [9-source public index](results/rolepack-inspect-index.json) shows both a scalar action and a per-item action. The index does not contain the original prompt or peer answer. The importer gets them from the actual recorded model event.
+
+**Keep the generated pack private until you inspect every selected prompt.** It contains the original role input and decoded peer action for the samples you selected. The importer does not anonymize those fields. Do not publish secrets or customer data.
+
+```sh
+umask 077
+python -m examples.seatlab.rolepack from-inspect --index my-index.json --inspect-logs private/*.eval > my-pack.json
+digest=$(shasum -a 256 my-pack.json | cut -d ' ' -f 1)
+python -S -m examples.seatlab.rolepack plan --pack my-pack.json --sha256 "$digest"
+python -S -m examples.seatlab.rolepack show --pack my-pack.json --sha256 "$digest" --index 0
+```
+
+The importer records hashes of the original archive and exact original reply. It records a legal but wrong choice as a real peer action. A recorded invalid reply is unavailable, not replaced. If the archive does not contain a selected observation, the importer cannot know its input and refuses the export. Use `seal` and `run` with the same `--pack` and `--sha256` parameters to measure a new receiver. This does not create a new native Harbor reward.
 
 ### Bring another Harbor task
 

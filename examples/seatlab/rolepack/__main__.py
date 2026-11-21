@@ -57,15 +57,41 @@ def _summary(pack: _Doc, report: _Doc) -> None:
             done = [r for r in rows if r["state"] == "complete"]
             n = sum(len(r["outcome"]["correct"]) for r in done)
             right = sum(sum(r["outcome"]["correct"]) for r in done)
+            score = f"{right}/{n} optimal actions" if n else "no scored actions"
             print(
-                f"  {arm}: {right}/{n} optimal actions; {len(done)}/{len(rows)} completed first attempts."
+                f"  {arm}: {score}; {len(done)}/{len(rows)} completed first attempts."
             )
     print(
         "Each task uses its own scorer. These are new role decisions, not new native team rewards."
     )
 
 
+def _show_comparison(result: _Doc) -> None:
+    print(
+        "Matched optimal actions: baseline -> candidate. Bounds give the equal-world difference."
+    )
+    for task, data in result["tasks"].items():
+        for arm, stats in data["by_arm"].items():
+            old = stats["baseline"]["matched_optimal_actions"]
+            new = stats["candidate"]["matched_optimal_actions"]
+            n = stats["matched_actions_per_side"]
+            bounds = stats["equal_world_candidate_minus_baseline_bounds"]
+            interval = (
+                "no eligible source"
+                if bounds is None
+                else f"[{100 * bounds[0]:+.2f}, {100 * bounds[1]:+.2f}] pp"
+            )
+            scores = f"{old}/{n} -> {new}/{n}" if n else "no matched actions"
+            print(f"  {task} ({arm}): {scores}; {interval}.")
+    print("The tasks use distinct original worlds. This is not a new team reward.")
+
+
 def _dispatch(a: argparse.Namespace) -> int:
+    if a.mode == "from-inspect":
+        from . import import_source
+
+        _emit(import_source.build(_report(a.index), a.inspect_logs))
+        return 0
     if a.mode == "build":
         from . import calendar_source, shipment_source
 
@@ -123,8 +149,8 @@ def _dispatch(a: argparse.Namespace) -> int:
             row = next((r for r in rows if r["sample_id"] == a.sample_id), None)
             if row is None or row["prompt_sha256"] is None:
                 raise ValueError("unavailable sample")
-            raw = sys.stdin.buffer.read(65537)
-            if len(raw) > 65536:
+            raw = sys.stdin.buffer.read(protocol._MAX_TURN_BYTES + 1)
+            if len(raw) > protocol._MAX_TURN_BYTES:
                 raise ValueError("oversized response")
             _emit(
                 {
@@ -152,6 +178,23 @@ def _dispatch(a: argparse.Namespace) -> int:
                 _emit(evidence.collect_claimed(pack, *work.snapshot(a.study, pack)))
             else:
                 _emit(evidence.collect(pack, a.inspect_logs))
+    elif a.mode == "compare":
+        from . import compare
+
+        if a.pack is not None and (a.baseline is None or a.candidate is None):
+            raise ValueError("a custom pack requires both receiver reports")
+        if a.candidate is None:
+            baseline, candidate = (
+                _REPORT,
+                a.baseline or _RESULTS / "rolepack-astra-live.json",
+            )
+        else:
+            baseline, candidate = a.baseline, a.candidate
+        result = compare.compare(pack, _report(baseline), _report(candidate))
+        if a.json:
+            _emit(result)
+        else:
+            _show_comparison(result)
     else:
         from . import evidence
 
@@ -188,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     modes = cli.add_subparsers(dest="mode", required=True)
     for name in (
         "build",
+        "from-inspect",
         "plan",
         "samples",
         "show",
@@ -198,11 +242,26 @@ def main(argv: list[str] | None = None) -> int:
         "report",
         "summary",
         "effects",
+        "compare",
         "receipts",
         "stock",
     ):
         p = modes.add_parser(name, allow_abbrev=False)
-        if name != "build":
+        if name == "from-inspect":
+            p.add_argument(
+                "--index",
+                type=Path,
+                required=True,
+                help="Task-owned source IDs and grading rubric; never sent to the model.",
+            )
+            p.add_argument(
+                "--inspect-logs",
+                nargs="+",
+                type=Path,
+                required=True,
+                help="Private original .eval files containing the explicitly selected role samples.",
+            )
+        if name not in ("build", "from-inspect"):
             p.add_argument(
                 "--pack",
                 type=Path,
@@ -250,6 +309,19 @@ def main(argv: list[str] | None = None) -> int:
                     required=True,
                     help="Exclusive. Interruptions stay claimed.",
                 )
+        if name == "compare":
+            p.add_argument(
+                "--json",
+                action="store_true",
+                help="Include per-world changes, bounds, and action transitions.",
+            )
+            p.add_argument(
+                "baseline",
+                nargs="?",
+                type=Path,
+                help="Both reports: baseline first. One report: compare it as the candidate against published Sol.",
+            )
+            p.add_argument("candidate", nargs="?", type=Path)
         if name in ("summary", "effects", "receipts", "stock"):
             p.add_argument("report", nargs="?", type=Path, default=_REPORT)
             if name == "receipts":

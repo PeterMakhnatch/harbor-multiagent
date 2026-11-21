@@ -2,6 +2,25 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Which receiver changes an actual role decision?
+
+Both receivers took the same 96 registered samples. They ran in different service windows. [Astra's receipts](results/rolepack-astra-service.json) and [Sol's receipts](results/rolepack-inspect-service.json) each matched 96 actual first replies. Neither cohort used a paid API. Both original task scorers checked all 336 decisions per receiver.
+
+| Task and input | Sol optimal | Astra optimal | Same decision from both receivers |
+|---|---:|---:|---:|
+| Calendar, original | 4/24 | 2/24 | 20/24 |
+| Calendar, real prior proposal | 4/24 | 3/24 | 17/24 |
+| Shipment, original | 128/144 | 128/144 | 144/144 |
+| Shipment, real prior proposal | 128/144 | 128/144 | 144/144 |
+
+On these shipment worlds, switching models did not change even one of the actions. The calendar result was different: the two models selected different slots, and both scored poorly. Before paying for a model swap on the shipment task, inspect the **information available to dispatch**. On the calendar task, check whether each role supplied usable meeting windows; these 3 calendar worlds do not justify a general model ranking.
+
+`python -S -m examples.seatlab.rolepack compare` recomputes the result offline. For two other programs, supply `compare baseline.json candidate.json`. Add `--json` for matched source draws, transitions and per-world worst/best bounds. The bounds cover missing first attempts; they are **not confidence intervals**. [Matched comparison](results/rolepack-receiver-comparison.json) · [Astra first attempts](results/rolepack-astra-live.json) · [Astra peer and repeat effects](results/rolepack-astra-effects.json) · [Astra original stock check](results/rolepack-astra-stock.json).
+
+### Cost boundary for these cohorts
+
+The mixed-task reviewer cohorts use subscriptions, not paid model APIs. The lane's separate direct DeepSeek ledger contains 11,358 settled calls through this checkpoint. Its token-price estimate is **$0.439350228**. One unused reservation retains its **$0.01** hold. The lane maximum including that hold is **$0.449350228**. This is not the provider invoice or the total for other agents. Earlier studies keep one cost entry per paid run.
+
 ## Does showing a real peer proposal help the same receiver on two tasks?
 
 One trusted Inspect receiver took the same role across two Harbor tasks. Each task supplied 12 retained original observations. The 3 calendar worlds and 6 shipment worlds have separate scorers. The packet never gives the receiver a target. Within each source the receiver saw either the exact original bytes, or those same bytes plus a real prior receiver decision. It ran twice on each input.

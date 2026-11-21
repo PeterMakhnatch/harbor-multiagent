@@ -15,10 +15,10 @@ This fork adds a role replay tool. Start after one agent receives its teammate's
 ```sh
 git clone --depth 1 --branch experiments/seatlab-rolepack https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
-python3.12 -S -m examples.seatlab.rolepack summary
+python3.12 -S -m examples.seatlab.rolepack compare
 ```
 
-The command uses only standard Python. It needs no installation, Docker, model account, or private trials. The supplied pack contains original prompts from **Flotilla meeting schedulers** and **shipment dispatch teams**. The same Inspect AI receiver handles both. The two task scorers stay separate.
+The command uses only standard Python. It needs no installation, Docker, model account, or private trials. The supplied pack contains original prompts from **Flotilla meeting schedulers** and **shipment dispatch teams**. Two independently identified Inspect AI receivers handle both. The two task scorers stay separate.
 
 - [Run your own receiver or add a task](examples/seatlab/replication.md#use-a-role-pack-with-your-own-receiver). Export user-only messages to Inspect AI or run your trusted role program. Parallel workers share a study and do not retry a claimed call.
 - [Check the mixed-task results](examples/seatlab/native-model-results.md#does-showing-a-real-peer-proposal-help-the-same-receiver-on-two-tasks). The report distinguishes copied actions, corrected actions, incomplete attempts, and same-input repeats.
