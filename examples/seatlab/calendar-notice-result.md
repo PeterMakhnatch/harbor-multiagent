@@ -25,7 +25,22 @@ No sender reported its full week correctly. Across 24 revisions, 43 of 146 repor
 
 The true meeting remained in the visible candidates for only 4/24 teams. Only 1/24 final choices fit the receiver’s own calendar. [Checking for a consistent 1-hour or 1-day shift](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059641483) raised that count to at most 4/24. This does not support a simple coordinate mismatch.
 
-Test a private-calendar lookup tool against raw calendars on the [12 fresh native worlds](replication.md#verify-12-held-out-scheduling-worlds). Keep the notice and the 2-read limit the same. Give each seat only its own lookup. In both arms, say an empty report means “the sender listed no start,” not “no start fits.”
+## What helped the receiver?
+
+We replayed each of the 24 final decisions with 2 fresh DeepSeek calls. One saw the original busy-hour calendar. The other saw the exact 2-hour starts for its **own** attendees instead. The peer reports, 2 reads, time grid, and final question stayed the same. Neither receiver saw the peer’s calendar.
+
+| Replay outcome | Raw calendar | Exact local starts | Paired gains / ties / losses | One-sided world p |
+|---|---:|---:|---:|---:|
+| Fits the receiver’s own calendar (primary) | 3/24 | 22/24 | 19 / 5 / 0 | 1/1,024 |
+| Fits both calendars (secondary) | 0/24 | 5/24 | 5 / 19 / 0 | 1/32 |
+
+Both passed the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059949706). The list helped the receiver honor its own constraints. It did not establish better use of peer messages. In 3 of its 5 correct joint choices, the peer reports did not list the chosen start. A uniform choice from each exact local list would yield 4.46 joint successes in expectation. These are not new native team rewards.
+
+An [independent check of 192 earlier live teams](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059980058) shows why both roles matter. Moving a private lookup from sender to receiver raised receiver-valid choices from 21/96 to 66/96. Joint successes changed only from 17/96 to 20/96. Moving the tool changed what the sender could report, too.
+
+**Next live test:** give both seats their own exact starts versus raw calendars on the [12 fresh native worlds](replication.md#verify-12-held-out-scheduling-worlds). Keep the notice and the 2-read limit fixed. In both arms, say an empty report means “the sender listed no start,” not “no start fits.”
+
+[Replay data](results/calendar-presentation-replay.json) · [Run the offline check](replication.md#replay-one-receiver-without-changing-its-teammates) · [48 first replies and token charges: $0.002017524, 0 holds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060041258).
 
 The reported experiment used 1 model and the 12 previously studied worlds. With truthful reports, 7/12 already have one candidate before either read. The result does not estimate performance on unseen calendars.
 

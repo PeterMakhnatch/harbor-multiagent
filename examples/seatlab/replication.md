@@ -335,6 +335,24 @@ python -m "$packet" compare-tables "$private_tasks/schedule"
 
 We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
 
+#### Replay one receiver without changing its teammates
+
+The [weekday-notice study](calendar-notice-result.md) has 24 completed teams. A [separate registered replay](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059949706) freezes each team just before the final receiver decision. It compares the raw calendar with the exact 2-hour starts for that receiver. It does not show the peer's calendar, change the 2 reads, or award a new native reward.
+
+To regrade the published choices, use Python 3.12 or later from the fork root. No model, Docker, or Harbor install is needed:
+
+```bash
+python3 -m examples.seatlab.calendar_notices.presentation_summary
+```
+
+If you have the original private job directory containing `cells/`, you can also reconstruct and verify the inputs:
+
+```bash
+python3 -m examples.seatlab.calendar_notices.presentation_run plan "$NATIVE_NOTICES"
+```
+
+`plan` prints the run IDs and input hashes, not the prompts. To test another harness, call `presentation.contexts(native_root)` from `examples.seatlab.calendar_notices`. It returns the raw and list prompts for each original run ID. Send only one prompt to each fresh receiver. Keep the returned mapping private. A replay can test the receiver's decision. It cannot tell you how a live sender would change its reports.
+
 #### Verify 12 held-out scheduling worlds
 
 Use this panel to test a new workflow without reusing worlds 0–11. The fixed coordinates are `schedule-012-talk` through `schedule-023-talk`, with seed `1`. This check needs Python 3.12 and a clone of the fork that contains the pinned generator. It needs no Docker, model, or API key.
