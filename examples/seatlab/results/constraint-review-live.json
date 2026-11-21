@@ -1,0 +1,863 @@
+{
+  "rows": [
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 445,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000087150",
+        "usd_low": "0.000087150"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "f389f429b896c12090b895291f50074b35a340f210688442d5c7dc46b3bd4ebb",
+      "rep": 0,
+      "response_sha256": "4ca58f19775b0597c90cc6d961c0110c9e248ad61da48be8c8152f346bcc3038",
+      "run": "creview-s6901-r0-specific",
+      "status": "valid",
+      "world": 6901
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 5,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "3822439b78b9491be0f1eff4b87f8bd90618ccbed96de496f6a58f14aaf5c82c",
+      "rep": 0,
+      "response_sha256": "cba36bffe6c544aaf87c234af9078dfb120c53554457d8b4076e6351c069a2c9",
+      "run": "creview-s6901-r0-neutral",
+      "status": "valid",
+      "world": 6901
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 5,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "3822439b78b9491be0f1eff4b87f8bd90618ccbed96de496f6a58f14aaf5c82c",
+      "rep": 1,
+      "response_sha256": "cba36bffe6c544aaf87c234af9078dfb120c53554457d8b4076e6351c069a2c9",
+      "run": "creview-s6901-r1-neutral",
+      "status": "valid",
+      "world": 6901
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 189,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000049518",
+        "usd_low": "0.000049518"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "f389f429b896c12090b895291f50074b35a340f210688442d5c7dc46b3bd4ebb",
+      "rep": 1,
+      "response_sha256": "4ca58f19775b0597c90cc6d961c0110c9e248ad61da48be8c8152f346bcc3038",
+      "run": "creview-s6901-r1-specific",
+      "status": "valid",
+      "world": 6901
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "93b8d1736de766fca733d0d35a5bf41a94a18107a4cad56c6344676e6ce57e01",
+      "rep": 0,
+      "response_sha256": "8bbfee54be37de821ead2dd1d930a092ac2c9a882b87b124df505187b21cdcc8",
+      "run": "creview-s6902-r0-neutral",
+      "status": "valid",
+      "world": 6902
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 445,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000087150",
+        "usd_low": "0.000087150"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "f34ce8f637d403e1ae5deee7bcc28556fc0dfefa1e6fc263e542121b034b199a",
+      "rep": 0,
+      "response_sha256": "df0d2bfc70322774052c351ebeb86e58e8e53f49ca10613dff530bc02f5de2f2",
+      "run": "creview-s6902-r0-specific",
+      "status": "valid",
+      "world": 6902
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 189,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000049518",
+        "usd_low": "0.000049518"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 0,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "f34ce8f637d403e1ae5deee7bcc28556fc0dfefa1e6fc263e542121b034b199a",
+      "rep": 1,
+      "response_sha256": "8bbfee54be37de821ead2dd1d930a092ac2c9a882b87b124df505187b21cdcc8",
+      "run": "creview-s6902-r1-specific",
+      "status": "valid",
+      "world": 6902
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 1,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "93b8d1736de766fca733d0d35a5bf41a94a18107a4cad56c6344676e6ce57e01",
+      "rep": 1,
+      "response_sha256": "8ec1813e391f4c9f21129272ee1351030ade666c2dcfccb0cd32c6cffd1e3cb4",
+      "run": "creview-s6902-r1-neutral",
+      "status": "valid",
+      "world": 6902
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 452,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000088200",
+        "usd_low": "0.000088200"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "daf84c1af29864a3d930efd67320d87ed9e544000de8de098fd59da628f9bb8a",
+      "rep": 0,
+      "response_sha256": "01c1d54393eaaab7690081cd2e48d60afe90eb773aab5e75380682f81392c968",
+      "run": "creview-s6903-r0-specific",
+      "status": "valid",
+      "world": 6903
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 2,
+        "violations": 2
+      },
+      "prompt_sha256": "513042a000296f29fd90e1360efbc24a1a291f00347cacffb78c90b6ea79710e",
+      "rep": 0,
+      "response_sha256": "cb34dc4da8d54dd56e10250d5716df03d0ec057b50b4a086a5a6d891102e191f",
+      "run": "creview-s6903-r0-neutral",
+      "status": "valid",
+      "world": 6903
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 2,
+        "violations": 2
+      },
+      "prompt_sha256": "513042a000296f29fd90e1360efbc24a1a291f00347cacffb78c90b6ea79710e",
+      "rep": 1,
+      "response_sha256": "cb34dc4da8d54dd56e10250d5716df03d0ec057b50b4a086a5a6d891102e191f",
+      "run": "creview-s6903-r1-neutral",
+      "status": "valid",
+      "world": 6903
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 196,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000050568",
+        "usd_low": "0.000050568"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "daf84c1af29864a3d930efd67320d87ed9e544000de8de098fd59da628f9bb8a",
+      "rep": 1,
+      "response_sha256": "110fc5f3469edf33b3addeb372618aeefd83275ed97630e84ec8f6a19b0b88a8",
+      "run": "creview-s6903-r1-specific",
+      "status": "valid",
+      "world": 6903
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 1,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "f6b0fafa861508a825528a572deb048d7e83888f11ca0d24430db8aca93205da",
+      "rep": 0,
+      "response_sha256": "2aa150118a3ec95c65c7b71e0325ebc755ddd022eb7b257894c922a0308c0a55",
+      "run": "creview-s6904-r0-neutral",
+      "status": "valid",
+      "world": 6904
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 445,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000087150",
+        "usd_low": "0.000087150"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 1,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "541842a0a01348de5ac56be478b271d5115d27290b94b1d1ce4cef04018b10c6",
+      "rep": 0,
+      "response_sha256": "2aa150118a3ec95c65c7b71e0325ebc755ddd022eb7b257894c922a0308c0a55",
+      "run": "creview-s6904-r0-specific",
+      "status": "valid",
+      "world": 6904
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 189,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000049518",
+        "usd_low": "0.000049518"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 1,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "541842a0a01348de5ac56be478b271d5115d27290b94b1d1ce4cef04018b10c6",
+      "rep": 1,
+      "response_sha256": "74430fdb2c945da073a6b4734ef83ed6972547ebe91c65e3c8a8ce6dd218e280",
+      "run": "creview-s6904-r1-specific",
+      "status": "valid",
+      "world": 6904
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 0,
+        "introduced": 1,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "f6b0fafa861508a825528a572deb048d7e83888f11ca0d24430db8aca93205da",
+      "rep": 1,
+      "response_sha256": "2aa150118a3ec95c65c7b71e0325ebc755ddd022eb7b257894c922a0308c0a55",
+      "run": "creview-s6904-r1-neutral",
+      "status": "valid",
+      "world": 6904
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 452,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000088200",
+        "usd_low": "0.000088200"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 1,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "c7ae160307bf0142744e6cb261cdd5c06558326b678e85605ac14f1aa6955f66",
+      "rep": 0,
+      "response_sha256": "359d2f79f0c361fb5506e9e17ad6c3d185d52fee298a5620ab5ca165f6a2a382",
+      "run": "creview-s6905-r0-specific",
+      "status": "valid",
+      "world": 6905
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 1,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "d8cc5bcdd0377e54b406981246f7a930fb1b898a0da14ae8b59f8e524252cd70",
+      "rep": 0,
+      "response_sha256": "359d2f79f0c361fb5506e9e17ad6c3d185d52fee298a5620ab5ca165f6a2a382",
+      "run": "creview-s6905-r0-neutral",
+      "status": "valid",
+      "world": 6905
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 1,
+        "preserved": 2,
+        "violations": 2
+      },
+      "prompt_sha256": "d8cc5bcdd0377e54b406981246f7a930fb1b898a0da14ae8b59f8e524252cd70",
+      "rep": 1,
+      "response_sha256": "bbb2a48175cddc7dcb38269e36f591559ade82c22e9d20c45c1a43e29e5e0113",
+      "run": "creview-s6905-r1-neutral",
+      "status": "valid",
+      "world": 6905
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 196,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000050568",
+        "usd_low": "0.000050568"
+      },
+      "metrics": {
+        "initial_violations": 2,
+        "introduced": 0,
+        "optimal": 1,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "c7ae160307bf0142744e6cb261cdd5c06558326b678e85605ac14f1aa6955f66",
+      "rep": 1,
+      "response_sha256": "359d2f79f0c361fb5506e9e17ad6c3d185d52fee298a5620ab5ca165f6a2a382",
+      "run": "creview-s6905-r1-specific",
+      "status": "valid",
+      "world": 6905
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 4,
+        "preserved": 1,
+        "violations": 1
+      },
+      "prompt_sha256": "bdc47fe5dc30c434c1c0156222f2a9578e10077dc4aeb3559c8e2eeba1ba895b",
+      "rep": 0,
+      "response_sha256": "c262ccedbfd9983777751a82ac081ecaa49abe4b1750ee370e18dc85fff4525b",
+      "run": "creview-s6906-r0-neutral",
+      "status": "valid",
+      "world": 6906
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 448,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000087600",
+        "usd_low": "0.000087600"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 5,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "f1f17bef44c99f0ada4ce1cf9843ecfaa86cb8bdaae55aee8af82f85d13a638e",
+      "rep": 0,
+      "response_sha256": "d5ebfeba2bdcf4a4f1b054d4aaad8bc71c9f228b7817142482355db640289f68",
+      "run": "creview-s6906-r0-specific",
+      "status": "valid",
+      "world": 6906
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 192,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000049968",
+        "usd_low": "0.000049968"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 5,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "f1f17bef44c99f0ada4ce1cf9843ecfaa86cb8bdaae55aee8af82f85d13a638e",
+      "rep": 1,
+      "response_sha256": "d5ebfeba2bdcf4a4f1b054d4aaad8bc71c9f228b7817142482355db640289f68",
+      "run": "creview-s6906-r1-specific",
+      "status": "valid",
+      "world": 6906
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 4,
+        "preserved": 1,
+        "violations": 1
+      },
+      "prompt_sha256": "bdc47fe5dc30c434c1c0156222f2a9578e10077dc4aeb3559c8e2eeba1ba895b",
+      "rep": 1,
+      "response_sha256": "c262ccedbfd9983777751a82ac081ecaa49abe4b1750ee370e18dc85fff4525b",
+      "run": "creview-s6906-r1-neutral",
+      "status": "valid",
+      "world": 6906
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 448,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000087600",
+        "usd_low": "0.000087600"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "666c8203cc0bb03265d30189b10c06d7e1d54278cddf75eb734344b3951a6096",
+      "rep": 0,
+      "response_sha256": "d4c628307112eb63f68582c4d9317448201caafd91ec86ecc032f00f29a2d199",
+      "run": "creview-s6907-r0-specific",
+      "status": "valid",
+      "world": 6907
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 2,
+        "preserved": 1,
+        "violations": 1
+      },
+      "prompt_sha256": "0a20d30cc6bf3a1ac50e7d76323d3c6c7dfa116703ad20b530a1ca45e660b1b0",
+      "rep": 0,
+      "response_sha256": "78e5ba75648c9863fe2bfbe42a11c83a14ffaf0a137f2840d12ba8342a4ee5ca",
+      "run": "creview-s6907-r0-neutral",
+      "status": "valid",
+      "world": 6907
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 2,
+        "preserved": 1,
+        "violations": 1
+      },
+      "prompt_sha256": "0a20d30cc6bf3a1ac50e7d76323d3c6c7dfa116703ad20b530a1ca45e660b1b0",
+      "rep": 1,
+      "response_sha256": "78e5ba75648c9863fe2bfbe42a11c83a14ffaf0a137f2840d12ba8342a4ee5ca",
+      "run": "creview-s6907-r1-neutral",
+      "status": "valid",
+      "world": 6907
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 192,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000049968",
+        "usd_low": "0.000049968"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 3,
+        "preserved": 0,
+        "violations": 0
+      },
+      "prompt_sha256": "666c8203cc0bb03265d30189b10c06d7e1d54278cddf75eb734344b3951a6096",
+      "rep": 1,
+      "response_sha256": "12acf6a5c513f291eb03ee0828202f633a588fb4517587ab14be3172854cf39a",
+      "run": "creview-s6907-r1-specific",
+      "status": "valid",
+      "world": 6907
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 431,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000085050",
+        "usd_low": "0.000085050"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 0,
+        "optimal": 2,
+        "preserved": 1,
+        "violations": 1
+      },
+      "prompt_sha256": "edb7b44d4eee028f8f60d04e5984e96fbeacf1e646b452d02682c61f094bec39",
+      "rep": 0,
+      "response_sha256": "73099b3c33038115e6f385bcd0e9f0c825d2fba82c6ea5687c9bd85449bb535d",
+      "run": "creview-s6908-r0-neutral",
+      "status": "valid",
+      "world": 6908
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 0,
+        "cache_miss": 448,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000087600",
+        "usd_low": "0.000087600"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 1,
+        "optimal": 1,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "c9048e3f866a9bcb47462c1bf26436a3ec2418adf40fedc203344ecf0740cf5a",
+      "rep": 0,
+      "response_sha256": "3ee3699a8c2d5ded441b9583573a0a48b35a4b3ba7fabc57ec13575501a4dff7",
+      "run": "creview-s6908-r0-specific",
+      "status": "valid",
+      "world": 6908
+    },
+    {
+      "arm": "specific",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 192,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000049968",
+        "usd_low": "0.000049968"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 1,
+        "optimal": 2,
+        "preserved": 0,
+        "violations": 1
+      },
+      "prompt_sha256": "c9048e3f866a9bcb47462c1bf26436a3ec2418adf40fedc203344ecf0740cf5a",
+      "rep": 1,
+      "response_sha256": "157a76c9871c9d5a4e8094c56943104405c8fb75e86f23d5e4fa26e73d1f2527",
+      "run": "creview-s6908-r1-specific",
+      "status": "valid",
+      "world": 6908
+    },
+    {
+      "arm": "neutral",
+      "charge": {
+        "cache_hit": 256,
+        "cache_miss": 175,
+        "hold_usd": "0.000000000",
+        "output_tokens": 34,
+        "status": "settled",
+        "usd_high": "0.000047418",
+        "usd_low": "0.000047418"
+      },
+      "metrics": {
+        "initial_violations": 1,
+        "introduced": 1,
+        "optimal": 2,
+        "preserved": 1,
+        "violations": 2
+      },
+      "prompt_sha256": "edb7b44d4eee028f8f60d04e5984e96fbeacf1e646b452d02682c61f094bec39",
+      "rep": 1,
+      "response_sha256": "7ba81c793937a8277034c3f9fe519216903c20c3857f01011141de7496f13b72",
+      "run": "creview-s6908-r1-neutral",
+      "status": "valid",
+      "world": 6908
+    }
+  ],
+  "schema": "seatlab.constraint-review/v1",
+  "sources": [
+    {
+      "initial_optimal": 5,
+      "initial_violations": 0,
+      "result_sha256": "3d4916ad92ed2a3c3379ef53862ee66c10d261fc000df270da1d54ecec4953c2",
+      "trial_ref": "54553616cde0674b269416eca4cdd9fc833bb8a026957b9b2db9ad7b4befe7d4",
+      "world": 6901
+    },
+    {
+      "initial_optimal": 3,
+      "initial_violations": 0,
+      "result_sha256": "e73876f224834551993d4a656f3264a3761fadcf36c5b9c5ee3cfa1ab3c17af6",
+      "trial_ref": "cd8135e6ba8708c5c3c2646ddbfeb3be47cd6f59a74962a96d2d922913bc8616",
+      "world": 6902
+    },
+    {
+      "initial_optimal": 3,
+      "initial_violations": 2,
+      "result_sha256": "39efa619f9a5fbf3e9ca200a1fdabae1f7519006aeb0f04f205096d7eeb974f0",
+      "trial_ref": "ae045139b3a74f74b3565b59359fcc713045722d06e5e95e3c24d9bcc7b927d5",
+      "world": 6903
+    },
+    {
+      "initial_optimal": 2,
+      "initial_violations": 0,
+      "result_sha256": "f7f47d2cfd4782d080f58183dfa4563b514b790aa05ae28fb5248166689c6e45",
+      "trial_ref": "9ec6803e8a55c2f10adaa399178899e188b3c4a4b4d4ef8b9349dbcdbfe7e506",
+      "world": 6904
+    },
+    {
+      "initial_optimal": 1,
+      "initial_violations": 2,
+      "result_sha256": "2a364c036e02d741b7d0550bfa107a64eab934bf459a95e2303b0064d95a453d",
+      "trial_ref": "d29f1c911022b9ccace9d13fdc187c1d3c3a77e611c9c72f45a9f1251258b85e",
+      "world": 6905
+    },
+    {
+      "initial_optimal": 4,
+      "initial_violations": 1,
+      "result_sha256": "3e3470cfad8ed8d9bcaccba076f2db082500712732e0aa114e296366026079d5",
+      "trial_ref": "88dc689049cf25e9007f10e9b69323669863d5f1f397503faeb80e979e3b3bb3",
+      "world": 6906
+    },
+    {
+      "initial_optimal": 2,
+      "initial_violations": 1,
+      "result_sha256": "ac6f3530eb44bdda7e2296b9ac666a76938c58a0610c60a17f0f52a86a7fb204",
+      "trial_ref": "0e1cecee1c19d81474356ed2e0c127f3b3536f8615b0c36c9633e03a50f55e8c",
+      "world": 6907
+    },
+    {
+      "initial_optimal": 2,
+      "initial_violations": 1,
+      "result_sha256": "78795c9dc7c106d52365788a090b360bf293fb06689814478b7741c3e69f5bc7",
+      "trial_ref": "dfd7030e4e0b4696455397cec505f0bf92b9ce0ae216ff9de08dcdbdda13e841",
+      "world": 6908
+    }
+  ]
+}
