@@ -27,6 +27,8 @@ The command uses only standard Python. It needs no installation, Docker, model a
 
 These are new model decisions on retained observations, not new native Harbor rewards. An adapter must export the role's actual observation and the task's grading rule. SeatLab does not infer them from arbitrary Harbor logs.
 
+For an example of the boundary, [freeze the scheduler's observation and show or hide the same real reply](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72). To measure a **team reward** instead, [run both seats in the original scheduling task and read its result with stock Eval Lab](https://github.com/PeterMakhnatch/harbor-multiagent/pull/73). The two experiments change different messages.
+
 ## Install
 
 ```bash
