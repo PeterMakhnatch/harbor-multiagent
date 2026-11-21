@@ -161,6 +161,12 @@ Available flags:
 - `--overwrite` — Overwrite existing tasks
 - `--seats` — Generate seat tasks instead of sidecar tasks (default output:
   `datasets/cooperbench-seats`); see [Seat mode](#seat-mode)
+- `--arms` — With `--seats`: the arms to write for each pair, out of `solo`,
+  `silent` and `talk` (default output: `datasets/cooperbench-arms`); see
+  [Arms](#arms-solo-silent-talk)
+- `--solo-budget-scale` — With `--arms solo`: the solo seat's per-seat caps that
+  the task sets (its agent timeout) as a multiple of a team seat's (default 2,
+  the team's total budget; 1 is upstream CooperBench's solo budget)
 
 ## Seat mode
 
@@ -246,7 +252,7 @@ possible. File overlap is not part of this flag. Both features can legitimately
 change the same file. Neither the flag nor the file overlap proves cooperation.
 
 The verifier uses the same runner for both the team and attribution checks.
-It adds at most 3 runner calls, each limited to 120 seconds. Seat tasks add
+It adds at most 3 runner calls, each limited to 120 seconds. Team tasks add
 390 seconds to `--verifier-timeout` for the checks and their setup. Attribution
 results do not change `reward.json`. Regenerate existing seat tasks to get the
 report and the gold path list.
@@ -376,6 +382,171 @@ To compare teams, put any harnesses in the seats, for example
   service_healthy`), which Podman's Compose does not support.
 - `adapter_metadata.json` and `parity_experiment.json` describe the sidecar
   mode only.
+
+### Arms: solo, silent, talk
+
+`--arms` writes the control arms of a coordination experiment, in the design
+of Flotilla (`flotilla/README.md` on the `flotilla/lab` branch). The arms
+separate two reasons a team can do better or worse than one agent: it has two
+workers, and its workers can coordinate.
+
+| Arm | Seats | Features per seat | Messaging |
+|---|---|---|---|
+| `solo` | 1 (`agent1`) | both | off |
+| `silent` | 2 | one each | off |
+| `talk` | 2 | one each | on |
+
+```bash
+uv run cooperbench --seats --arms solo silent talk --subset flash   # into datasets/cooperbench-arms
+```
+
+- `talk` is the seat task above, with each seat on a network of its own
+  (below). Without `--arms`, the output is the seat task as before, byte for
+  byte; `--arms talk` alone is an arms build, with opaque names and the
+  networks.
+- In every arm, each seat is on a Compose network of its own, shared only
+  with `main`, so no seat can reach another seat's container. The seats'
+  messages go through `main`, so `talk` needs no path between seats, and the
+  arms differ only in the intended manipulation. The seats have no `NET_RAW`
+  (`cap_drop`), so they cannot forge frames, and `main` does not forward
+  packets between the seat networks (`net.ipv4.ip_forward: 0`). PR #3's
+  opt-in `seat-shared-network` lint rule reports nothing on the arm tasks.
+- `silent` is `talk` with messaging off. `main` runs `coop_off.py`: every
+  request except `GET /health` gets HTTP 403 "messaging is off in this task"
+  (a bad token gets 401) and is recorded as a `denied` event, and the seats'
+  `coop-*` commands print the refusal. Only the messaging sentences of the
+  instructions change: "you can only exchange messages" becomes "you cannot
+  exchange messages", and the protocol's commands and messaging workflow
+  become one paragraph that says messaging is off. The protocol's "features
+  may overlap" paragraph stays. Nothing else that a seat reads differs from
+  `talk`.
+- `solo` has one seat, `agent1`, with both features' descriptions, joined
+  as upstream CooperBench's solo runner joins them (`## Feature <id>`
+  sections). The verifier runs both features' tests on its patch, and the
+  reward is 1 only if both pass, as for a team. Its oracle applies both gold
+  patches in turn.
+  Solo runs no extra attribution checks and keeps the base verifier timeout.
+  Its `seat-attribution.json` has an empty `seats` object and `rogue_solo: null`
+  because it has no teammate. `silent` and `talk` both get the full attribution
+  report described in [What a pass does not show](#what-a-pass-does-not-show).
+- With `--arms`, each task gets an opaque name, `cb-<12 hex>`, chosen at
+  random when the task is first built; a rebuild into the same folder keeps
+  it. `manifest.json` lists exactly the arm tasks on disk: a task's entry is
+  written once the task is complete, and removed with its folder (a failed
+  rebuild removes both, and the next build picks a new name). A seat can read its trial's container names through reverse DNS, and
+  Harbor derives them from the task folder; Flotilla found a seat doing it.
+  `manifest.json` in the output folder maps each name to its pair and arm,
+  and `task.toml` `[metadata]` has `arm` and `pair`. No seat reads either.
+- An arms build has its own default folder, `datasets/cooperbench-arms`.
+  The adapter refuses an arms build into a folder that holds other tasks,
+  and a build without `--arms` into a folder that holds an arms build, so a
+  job over one folder never mixes them.
+
+#### The solo budget
+
+The solo seat's budget is a team seat's times `--solo-budget-scale`, 2 by
+default, recorded as `solo_budget_scale` in `task.toml` `[metadata]`.
+
+- The one per-seat cap that a task sets is the agent timeout (`[agent]
+  timeout_sec`); the adapter scales it. With 2, solo gets the team's total
+  budget (2 seats times a seat's), which is also the team's budget per
+  feature.
+- Turn, step, iteration and cost caps are participant settings in the job
+  (for example claude-code `max_turns`, mini-swe-agent `cost_limit`,
+  openhands `max_iterations`, or Flotilla's `make_jobs.py --max-turns`). A
+  task cannot set them, so the solo job must get each one times the scale.
+- The scaled timeout survives only if the job sets neither
+  `override_timeout_sec` nor `max_timeout_sec`: Harbor applies those to
+  every task and clamps or equalizes
+  the solo timeout without a warning, while `task.toml` still records the
+  scale. Nothing reads `solo_budget_scale` at run time; it records the build.
+- `--solo-budget-scale 1` is upstream CooperBench's solo budget: upstream
+  gives the solo agent the same limits as each cooperating agent (100 steps
+  and $3 in its mini-swe-agent configs). Solo scores at scale 2 do not
+  compare with upstream's solo results.
+
+#### Reading the arms
+
+On the same pairs, the coordination gain is `score(talk) − score(silent)`,
+the share of the split's cost that talking recovers is
+`(talk − silent) / (solo − silent)`, and the cost of the split itself is
+`solo − silent`. `talk − silent` measures the channel together with the
+protocol's messaging workflow text, which only `talk` has.
+
+Choose a wave's pairs with one rule for all arms. Do not choose them by each
+arm's oracle result: the solo oracle applies the two gold patches in turn,
+the team oracles merge two branches, and the pairs where each earns 1 can
+differ.
+
+#### What the arms cannot hide
+
+Opaque task names hide the arm and the pair from every name a seat can see,
+but not from the task itself: the instructions state the arm, and the
+problem statement and repository are public. A seat with the public network
+can look up the pair, its teammate's feature and the gold patches. Report the
+`rogue_solo` rate separately for `silent` and `talk` next to any arms
+comparison. Report how many trials lack a known result. The `solo` arm
+has no teammate, so this measure does not apply.
+
+#### How to run the arms
+
+1. Build the solo roster and the team roster into folders of their own, so
+   that each job can get its own caps. Run these from `adapters/cooperbench`
+   (the CLI's project); the `../../` paths put the tasks in the repository's
+   git-ignored `datasets/` folder, where step 2 finds them:
+
+   ```bash
+   uv run cooperbench --seats --arms solo --subset flash --output-dir ../../datasets/cooperbench-arms/solo
+   uv run cooperbench --seats --arms silent talk --subset flash --output-dir ../../datasets/cooperbench-arms/team
+   ```
+
+   One folder for all three arms also works (Flotilla's `make_jobs.py`
+   groups tasks by seat roster), as long as no job-level cap needs scaling.
+2. Run 2 jobs: solo tasks have 1 seat and team tasks 2, and a job's
+   participants must fill every task's seats. The names are opaque, so
+   select tasks by folder or by `manifest.json`, not by name. Give both jobs
+   the same settings: timeout multiplier, attempts, retries, concurrency and
+   environment.
+
+   ```yaml title="arms-team.yaml"
+   environment: {type: docker, delete: true}
+   n_concurrent_trials: 2
+   participants:
+     - {seat: agent1, name: claude-code, model_name: anthropic/claude-opus-5-5, kwargs: {max_turns: 100}}
+     - {seat: agent2, name: claude-code, model_name: anthropic/claude-opus-5-5, kwargs: {max_turns: 100}}
+   datasets:
+     - path: datasets/cooperbench-arms/team
+   ```
+
+   ```yaml title="arms-solo.yaml"
+   environment: {type: docker, delete: true}
+   n_concurrent_trials: 2
+   participants:
+     - {seat: agent1, name: claude-code, model_name: anthropic/claude-opus-5-5, kwargs: {max_turns: 200}}   # 2 x 100
+   datasets:
+     - path: datasets/cooperbench-arms/solo
+   ```
+
+3. Each team trial needs 2 Docker networks, and each solo trial 1. Docker's
+   default address pools hold about 30 networks per daemon, so keep
+   concurrency low on one local daemon, or widen `default-address-pools` in
+   the daemon's configuration.
+4. On Modal, set `environment.kwargs: {modal_vm_runtime: true}`. The default
+   sandbox puts every service on host networking, which Compose refuses
+   together with `networks:`.
+5. Cloud environments that size one sandbox from `main`'s `[environment]`
+   (2 CPUs, 4,096 MB) give the solo seat the CPU that 2 team seats share;
+   with scale 2 that is twice the team's CPU time.
+
+Limits of the arms:
+
+- Every seat has internet access, so an outside service is still a possible
+  channel between silent seats. So are, with deliberate work by both seats,
+  the Docker host (on Docker Desktop, `host.docker.internal`), host-wide
+  counters such as free disk space and `/proc/loadavg`, and the timing of
+  `main`'s replies.
+- `talk` with `--arms` is not byte-identical to the seat task without it: it
+  adds the seat networks, the hardening and an opaque name.
 
 ### Oracle checks
 

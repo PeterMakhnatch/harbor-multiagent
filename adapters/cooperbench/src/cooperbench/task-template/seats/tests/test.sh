@@ -1,10 +1,9 @@
 #!/bin/bash
-# CooperBench seat verifier. Runs in main after both seats have ended.
+# CooperBench seat verifier. Runs in main after the seats have ended.
 #
-# agent1 and agent2 were Harbor agents, each in its own container with its own
-# /workspace/repo volume. main mounts those volumes read-only at
-# /agents/<seat>/repo, and no seat mounts the other's, so each captured patch
-# is its own seat's work. main's own /workspace/repo is the untouched base.
+# Each seat has its own container and /workspace/repo volume. Main mounts
+# those volumes read-only at /agents/<seat>/repo, so each patch is its
+# seat's own work. Main's /workspace/repo starts at the base commit.
 #
 # Every exit path writes /logs/verifier/reward.json ({"reward": 0 or 1}), and
 # details.json unless even that cannot be written. COOPERBENCH_* variables
@@ -22,7 +21,13 @@ OUT="${COOPERBENCH_VERIFIER_LOGS:-/logs/verifier}"
 COOP_LOGS="${COOPERBENCH_COOP_LOGS:-/logs/cooperbench}"
 RUNNER="${COOPERBENCH_RUNNER:-/usr/local/bin/runner.sh}"
 ATTRIBUTION_TIMEOUT="${COOPERBENCH_ATTRIBUTION_TIMEOUT_SEC:-120}"
-SEATS="agent1 agent2"
+if [ -f "$TESTS_DIR/solo-mode" ]; then
+    SOLO=1
+    SEATS="agent1"
+else
+    SOLO=0
+    SEATS="agent1 agent2"
+fi
 
 mkdir -p "$OUT/patches" "$PATCHES"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/cooperbench-verify.XXXXXX")"
@@ -111,6 +116,11 @@ PY
 }
 
 write_attribution() {
+    if [ "$SOLO" -eq 1 ]; then
+        printf '%s\n' '{"schema_version": 1, "seats": {}, "rogue_solo": null, "reason": "The solo arm has no teammate."}' \
+            > "$OUT/seat-attribution.json"
+        return
+    fi
     local verified=""
     if [ -n "$ATTRIBUTION_SUM" ] && [ "$(inputs_sum "$ATTRIBUTION")" = "$ATTRIBUTION_SUM" ]; then
         verified="$ATTRIBUTION"
@@ -322,7 +332,7 @@ if [ -n "$ERROR" ]; then
 fi
 
 # -------------------------------------------------------------------------
-# 3. Merge the patches via git branches: naive first, then union fallback
+# 3. Select the solo patch or merge the two seat patches via git branches
 # -------------------------------------------------------------------------
 git config user.email "eval@cooperbench.local"
 git config user.name "CooperBench Eval"
@@ -351,23 +361,27 @@ prepare_attribution() {
     fi
     ATTRIBUTION_SUM=$(inputs_sum "$ATTRIBUTION") || return
 }
-prepare_attribution || echo "could not prepare seat attribution inputs" >&2
-
-git checkout -q agent2_branch
-MERGE_OK=0
-STRATEGY="none"
-if git merge agent1_branch --no-commit --no-ff > /dev/null 2>&1; then
-    git commit -q -m "Merged changes" 2>/dev/null || true
+if [ "$SOLO" -eq 1 ]; then
     MERGE_OK=1
-    STRATEGY="naive"
+    STRATEGY="solo"
 else
-    git merge --abort 2>/dev/null || true
-    # Union merge fallback
-    echo "* merge=union" >> .gitattributes
+    prepare_attribution || echo "could not prepare seat attribution inputs" >&2
+    git checkout -q agent2_branch
+    MERGE_OK=0
+    STRATEGY="none"
     if git merge agent1_branch --no-commit --no-ff > /dev/null 2>&1; then
-        git commit -q -m "Union merged changes" 2>/dev/null || true
+        git commit -q -m "Merged changes" 2>/dev/null || true
         MERGE_OK=1
-        STRATEGY="union"
+        STRATEGY="naive"
+    else
+        git merge --abort 2>/dev/null || true
+        # Union merge fallback
+        echo "* merge=union" >> .gitattributes
+        if git merge agent1_branch --no-commit --no-ff > /dev/null 2>&1; then
+            git commit -q -m "Union merged changes" 2>/dev/null || true
+            MERGE_OK=1
+            STRATEGY="union"
+        fi
     fi
 fi
 

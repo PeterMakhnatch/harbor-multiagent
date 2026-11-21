@@ -19,12 +19,11 @@ from typing import Any
 
 import pytest
 
-TEMPLATE = (
-    Path(__file__).parents[3]
-    / "adapters/cooperbench/src/cooperbench/task-template/seats"
-)
+ADAPTER_SRC = Path(__file__).parents[3] / "adapters/cooperbench/src"
+TEMPLATE = ADAPTER_SRC / "cooperbench/task-template/seats"
 VERIFIER = TEMPLATE / "tests/test.sh"
 SOLVE = TEMPLATE / "solution/solve.sh"
+SOLVE_SOLO = TEMPLATE / "arms/solve.solo.sh"
 COOP_MSG = TEMPLATE / "environment/seat/coop_msg.py"
 SEATS = ("agent1", "agent2")
 
@@ -622,3 +621,78 @@ def test_the_oracle_applies_only_its_own_seats_patch(tmp_path: Path, world: Worl
         ("agent1", "I plan to modify: src/app.py"),
         ("agent1", "Done. I changed: src/app.py"),
     ]
+
+
+# -- the solo arm: one seat, both features ---------------------------------------
+
+
+@pytest.fixture
+def solo_world(world: World) -> World:
+    """The generated solo layout has no agent2 workspace."""
+    (world.root / "tests/solo-mode").touch()
+    (world.root / "tests/feature-files.json").unlink()
+    shutil.rmtree(world.seats.pop("agent2"))
+    return world
+
+
+def implement_both(w: World) -> None:
+    with w.seat_file("agent1", "src/app.py").open("a") as fh:
+        fh.write("FEATURE_ONE = 1\n")
+    with w.seat_file("agent1", "src/other.py").open("a") as fh:
+        fh.write("FEATURE_TWO = 2\n")
+
+
+def test_solo_with_both_features_earns_reward_one(solo_world: World):
+    implement_both(solo_world)
+
+    reward, details = solo_world.verify()
+
+    assert reward == {"reward": 1}
+    assert details["strategy"] == "solo"
+    assert details["patch_files"] == {"agent1": ["src/app.py", "src/other.py"]}
+    assert details["messages_sent"] == {"agent1": 1}
+    assert b"+FEATURE_TWO = 2" in solo_world.merged()
+    assert solo_world.attribution() == {
+        "schema_version": 1,
+        "seats": {},
+        "rogue_solo": None,
+        "reason": "The solo arm has no teammate.",
+    }
+
+
+def test_solo_with_one_feature_earns_reward_zero(solo_world: World):
+    implement(solo_world, "agent1")  # feature 1 only
+
+    reward, details = solo_world.verify()
+
+    assert reward == {"reward": 0}
+    assert (details["feature1_passed"], details["feature2_passed"]) == (True, False)
+    assert solo_world.attribution()["rogue_solo"] is None
+
+
+def test_the_solo_oracle_applies_both_gold_patches(tmp_path: Path, world: World):
+    solution = tmp_path / "solo-solution"
+    solution.mkdir()
+    shutil.copy2(SOLVE_SOLO, solution / "solve.sh")
+    for n, (path, line) in enumerate(
+        (("src/app.py", "FEATURE_ONE = 1"), ("src/other.py", "FEATURE_TWO = 2")),
+        start=1,
+    ):
+        name = path.rsplit("/", 1)[-1].removesuffix(".py")
+        (solution / f"feature{n}.patch").write_text(
+            f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n"
+            f"@@ -1,2 +1,3 @@\n def {name}():\n     return 0\n+{line}\n"
+        )
+    seat = world.seats["agent1"]
+
+    result = subprocess.run(
+        ["bash", str(solution / "solve.sh")],
+        env={**world.env, "COOPERBENCH_REPO": str(seat)},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "FEATURE_ONE = 1" in (seat / "src/app.py").read_text()
+    assert "FEATURE_TWO = 2" in (seat / "src/other.py").read_text()
