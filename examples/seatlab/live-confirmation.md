@@ -1,6 +1,6 @@
 # Does better team context improve Harbor reward?
 
-Across 48 first-attempt DeepSeek teams, no intervention passed the registered team reward test. The useful distinction was where the information stopped helping: selecting a report, asking the right question, or applying the answer.
+None of the 3 original comparisons below established higher native reward across 48 new teams. A later receiver replay isolated a different question: [does the dispatcher use the bay IDs in a peer’s reports?](#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher) It did. This is not a new team reward.
 
 ## Naming changed shipment reports
 
@@ -59,6 +59,51 @@ The paired reward changed by **−6.25 percentage points**. One world improved, 
 **What failed after delivery?** In a post-hoc check, inventory said “no” to 11 visible questions. Dispatch still chose that exact bay for that shipment 7 times. All 11 negative answers were true. Seven of the 16 visible questions concerned a bay whose eligibility had changed. This locates a concrete failure without attributing intent. The next live test should ask whether showing a conflicting answer again before submission improves the native reward.
 
 The [world and turn receipts](https://github.com/PeterMakhnatch/harbor-multiagent/blob/faf0a5bf61/examples/seatlab/results/dispatch-answer-transfer.json) cover 16 native teams and 96 choices. The [cost record](https://github.com/PeterMakhnatch/harbor-multiagent/pull/76#issuecomment-7058634259) accounts for all 64 calls: **$0.005766912**. No registered team was replaced.
+
+## Do the bay IDs in a peer’s reports help the dispatcher?
+
+**Yes, on these 8 native Dispatch worlds.** We kept each inventory submission, the dispatcher’s own utility tables, and its 2 opened revisions fixed. One arm showed the actual bay IDs. The other replaced only those IDs with `?`. Each shown prompt matched the one used by the original native dispatcher.
+
+| Outcome from fresh first replies | IDs masked | IDs shown |
+|---|---:|---:|
+| Optimal shipments | 52/96 | 68/96 |
+| Feasible shipments | 52/96 | 81/96 |
+| Optimal among shipments with an opened revision | 14/32 | 22/32 |
+| Optimal among shipments without an opened revision | 38/64 | 46/64 |
+
+The model made 2 first replies per arm per world. Each reply covered 6 shipments. Showing IDs gained 16 optimal choices: 5 worlds improved, 3 tied, and none declined. The registered minimum was 12 choices. The exact test swapped both replies and all shipments together by world. Its one-sided p-value was **8/256 = 1/32**.
+
+The 4 unopened shipments still had initial reports. The result does not show that their final revisions reached the receiver. A simple receiver that picked the highest-utility bay in the latest visible report scored 44/48 with IDs. The same receiver picked by utility alone with IDs masked and scored 26/48. These controls used one choice per shipment, not a new model draw.
+
+**Harness implication:** preserve action IDs when shortening reports. A message count cannot tell a dispatcher which bay the sender listed. This test changed the receiver input only. It did not rerun inventory, measure live exchange, or establish a team reward gain. The [calendar replay](calendar-notice-result.md#did-the-receiver-use-the-peers-actual-start-ids) tests the same question on a different task. We did not pool their results.
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060559857) · [Native source and no-key controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060590629) · [First-reply receipt](results/dispatch-peer-payload-replay.json) · [32 direct charges: $0.001948416 total, 0 holds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060705269).
+
+To check the world test, token costs, and prompt commitments without credentials:
+
+```sh
+python3.12 -BS examples/seatlab/dispatch_payload_score.py --receipt examples/seatlab/results/dispatch-peer-payload-replay.json
+```
+
+## Give another receiver one real Dispatch input
+
+You can use 8 native Dispatch worlds without the original trial folders, a Harbor install, Docker, or an API key. Start in this fork checkout with Python 3.12 or later:
+
+```sh
+work=$(mktemp -d)
+python3.12 -BS -m examples.seatlab.dispatch_peer_case check
+python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm shown > "$work/6801.shown.txt"
+```
+
+Give the receiver only the file contents. Use `Answer only with JSON.` as its system instruction. Use `--arm masked` to hide the peer’s bay IDs. The shipment aliases, utilities, read choices, and number of bays in each report stay fixed. Assign a different world to each worker (`6801` through `6808`). Keep the scorer and the fixture outside the receiver’s environment.
+
+Save the receiver’s first reply unchanged, then score it in a separate process:
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_peer_case score --world 6801 < "$work/6801.reply.json"
+```
+
+The reader checks the [public source commitments](results/dispatch-peer-sources.json) before it releases a prompt. For these 8 worlds, the public generator reproduces the inventory seat’s **actual submitted rows**, not just a plausible inventory. Both prompt hashes must also match. The score evaluates a new receiver against the stock task. It does not create a native team trial.
 
 ## Reproduce the comparison without a model
 

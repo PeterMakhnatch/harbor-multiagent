@@ -36,6 +36,8 @@ When the received reports contained the joint meeting, shown IDs gave 12/16 corr
 
 [First-reply evidence](results/calendar-peer-payload-replay.json) · [Each direct charge: $0.001471896 total, 0 holds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060463024) · [Use the projection in another harness](replication.md#test-the-content-of-peer-reports).
 
+The [Dispatch replay](live-confirmation.md#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher) tests the same intervention on shipment bays. It also improves receiver decisions. Neither replay measures the team reward for masking IDs.
+
 ## Earlier test: name the changed weekdays
 
 **Naming changed weekdays did not improve native team reward.** Receivers opened more changed reports, but that difference did not meet the registered threshold.

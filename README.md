@@ -8,19 +8,24 @@ support.
 
 By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
-## SeatLab: test a message in a real Harbor team
+## SeatLab: test what a receiver can do with a peer report
 
-Does a responder schedule a better meeting when it sees the scheduler’s two proposed times? This branch runs the same pair of agents with and without that message. Each agent sees only its own calendar. The original Harbor task scores the final submission.
+Give your own agent one input from a real 2-seat Harbor task. Change the peer’s report without changing the receiver’s local information. Score the first reply with the stock task. The public Dispatch example needs Python 3.12 or later, but no API key, Docker, or Harbor install.
 
 ```sh
-git clone --depth 1 --branch experiments/seatlab-native-queries https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch experiments/seatlab-live-confirmation https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
-python3.12 -S -m examples.seatlab.visibility.calendar_query_summary
+python3.12 -BS -m examples.seatlab.dispatch_peer_case check
+python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm shown
 ```
 
-**36 real teams finished.** The team booked the joint meeting in 13/18 trials with the ready marker and 12/18 with proposed times. Stock Eval Lab matched all 36 native rewards. Add `--verify-slots` to independently check every submitted time against both calendars. The [full result](examples/seatlab/native-model-results.md#does-sending-a-short-proposal-change-the-native-team-reward) separates changes in recommendations from changes in team reward.
+The [Dispatch quickstart](examples/seatlab/live-confirmation.md#give-another-receiver-one-real-dispatch-input) shows how to score a reply and divide 8 worlds among workers. Use `masked` instead of `shown` to keep all utility values and report sizes but hide the peer’s bay IDs. Only the model input goes to the worker, not the scorer or answer key.
 
-Reading the published evidence needs no model account, Docker, or package install. To test your own programs, follow the [native two-seat quickstart](examples/seatlab/replication.md#run-two-native-seat-programs-on-your-own-machine). To change only the **last observation** rather than running new teams, use [the role replay experiment](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72) or [import your own Inspect log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/71). These answer different questions.
+In the [Dispatch replay](examples/seatlab/live-confirmation.md#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher), actual bay IDs increased optimal choices from 52/96 to 68/96. The [receipt](examples/seatlab/results/dispatch-peer-payload-replay.json) records every receiver call and its token-priced cost.
+
+For end-to-end behavior, [run both seats in native Harbor](examples/seatlab/replication.md#test-private-calendar-views-with-2-live-seats). In [24 native scheduling teams](examples/seatlab/calendar-notice-result.md), showing each seat its own feasible starts raised team success from 0/12 to 6/12. A separate fixed-transcript replay tests the contribution of the peer’s actual start IDs. Replays measure receiver decisions, not team reward.
+
+Other starting points: [36 teams exchanging meeting proposals](examples/seatlab/native-model-results.md#does-sending-a-short-proposal-change-the-native-team-reward) and [import a role observation from an Inspect log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/71).
 
 ## Install
 
