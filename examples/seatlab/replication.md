@@ -1,6 +1,23 @@
-# Held-out replay and transport stability protocol
+# SeatLab: test a context change in a Harbor team
 
-This record is prospective. It is separate from the [primary experiment](protocol.md). The fixture describes an information handoff, not a real warehouse or a population of agents.
+Use SeatLab when you change what one agent sees and need to know whether the **team** performs better. Harbor runs and grades the team. SeatLab registers the comparison, preserves each first attempt, and lets you inspect or replay the decision afterward. This fork supports the scheduling and Dispatch workflows below. It is not a universal adapter for all Harbor tasks.
+
+**Try it without a key.** From the root of this fork branch, run the public result reader. It uses Python 3.12 and no external package:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.repeat_summary \
+  examples/seatlab/results/calendar-native-repeatability.json
+```
+
+This recomputes the comparison from the recorded grades of [96 actual teams](calendar-notice-result.md#does-the-booking-gain-repeat-in-fresh-teams). It does not regrade the original trials or launch a model. To use the system yourself, choose the question that matches your evidence:
+
+| What do you want to know? | What to run |
+|---|---|
+| Would another receiver decide differently on exactly these reports? | [Send the role's messages to your own workers](#run-your-receiver-on-2-tasks-without-installing-harbor). |
+| Does the change improve reward when both seats can react? | [Run paired native teams on your own stock calendars](#run-two-native-teams-on-each-world-in-your-own-calendar-block). |
+| Why can identical workflows receive different grades? | [Compare repeated teams, then inspect where their decisions first differ](#repeat-a-native-team-without-replacing-its-first-attempt). |
+
+Keep native team rewards separate from receiver-only grades. The historical [primary handoff protocol](protocol.md) and the study registrations below define what each result can support.
 
 ## Run your receiver on 2 tasks without installing Harbor
 
