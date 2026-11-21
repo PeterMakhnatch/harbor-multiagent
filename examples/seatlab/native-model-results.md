@@ -2,6 +2,30 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can a reviewer fix a draft that conflicts with a teammate’s answer?
+
+This test starts from the 8 actual drafts in the [native Dispatch answer study](results/dispatch-answer-transfer.json). Each reviewer gets the same 6 shipments, old inventory reports, 2 delivered answers and original draft. A general review asks for 6 final choices. A specific review also names each draft choice that conflicts with a negative answer. Neither review reveals current inventory or the best choices.
+
+The [registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/76#issuecomment-7058848219) fixes 2 first attempts per arm and world. The comparison uses 8 worlds, not 192 independent shipment choices. These are new receiver decisions on stored team messages, not new Harbor team rewards.
+
+**Naming conflicts helped reviewers obey the answers. It did not improve the shipment score.** All 32 first responses were valid. The original drafts had 7 conflicts and 22 optimal choices across 48 shipments. Each arm reviewed every draft twice.
+
+| Across 16 reviews per arm | General review | Review that names conflicts |
+|---|---:|---:|
+| Original conflicts still present, out of 14 | 12 | 0 |
+| New conflicts with an existing answer | 4 | 4 |
+| Optimal shipment choices, out of 96 | 43 | 42 |
+
+The specific review left 0.75 fewer conflicts per draft. It improved 6 worlds, tied 2 and worsened none (one-sided exact sign test, p = 1/64). But it got 1 fewer optimal choice out of 96. The registered test required no loss in this score, so it **did not pass**. A negative answer excludes a bay. It does not identify the best eligible alternative.
+
+The [public receipt](results/constraint-review-live.json) contains all 32 response hashes, source references, scores and token charges. They total **$0.002159988** at the published rates: 4,096 cached input tokens, 9,966 uncached input tokens and 1,088 output tokens. No unresolved charge remains. This is a token-priced cost, not an invoice.
+
+Read the public receipt without a key, Docker or a package install:
+
+```sh
+python3 -S examples/seatlab/constraint_review/analysis.py
+```
+
 ## Can a dispatcher help another agent decide which two reports to send?
 
 Two live agents share a strict message budget. The dispatcher writes 6 preferred bay letters. The inventory agent chooses 2 revised reports to send. Both policies generate a card. Only `brief` gives it to inventory. The final dispatcher receives the selected reports, not the card. The [register](replication.md#can-a-six-letter-brief-help-another-agent-prioritize-revisions) fixes the order and the 6 worlds before either model runs.
