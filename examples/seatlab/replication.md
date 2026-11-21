@@ -309,3 +309,17 @@ python -m "$module.ownership_report" --archive "$ARCHIVE" --tasks "$TASKS" \
 The demo uses a fixed reply. It does not use a key. We verified all 3 original histories with [separate no-key controls](results/muster-box-ownership-controls.json). Eval Lab read all 9 native seat records. The stock rewards were 0.05, 0.10, and 0.10. The controls found no additional flags. They do not count as model evidence.
 
 For an authorized paid study, use `direct` instead of `demo`, a new private study directory, and the existing initialized `SEATLAB_SPEND_DIR`. Never resubmit an attempted ID. Use `ownership_protocol plan` for the registered order. Use `ownership_meter --study "$STUDY" --spend-dir "$SEATLAB_SPEND_DIR"` to check direct usage, unsettled charges, and native timing. The meter does not replace a native reward with an estimate.
+
+**Result: fewer duplicate choices did not produce more flags.** All 36 matched pairs finished in the stock game. Each team started with the same observations and the same 3 model proposals as its paired team.
+
+| One new move per seat | Neutral | Ownership rule |
+| --- | ---: | ---: |
+| New flag boxes across 36 teams | 48 | 46 |
+| Distinct, previously unopened boxes selected | 89 | 92 |
+| Excess claims on the same new box | 17 | 14 |
+| Seats that changed their initial choice, of 108 | 17 | 23 |
+| Mean native team reward, including the restored prefix | 0.1500 | 0.1472 |
+
+Ownership found more flags in 4 pairs, fewer in 6, and the same number in 26. The registered difference was **−0.056 new flags per team**. The world differences were 0, 0, and −0.167. In the 14 pairs whose initial proposals collided, each policy found 18 new flags. This is one move in 3 fixed worlds. It does not establish that ownership rules reduce reward in general.
+
+The [native decisions and scores](results/box-ownership-native.json) retain all 72 trial identities as digests. The [meter](results/box-ownership-meter.json) matched all 216 new model calls to their native seat receipts. All calls fell after restoration and before the first new open. [Stock Eval Lab](results/box-ownership-evallab.json) independently read all 72 native rewards and 216 seat records. Harbor did not record token counts for these relay seats. The separate [direct ledger](results/box-ownership-cost.json) gives **$0.005842944 USD**, at the published rates for the request times, with no unresolved charges.
