@@ -531,6 +531,57 @@ python3.12 -BS -m "$module.visible_summary" "$private/checked-audit.json"
 
 The summary returns `inconclusive` when native evidence is missing. A measured loss with complete evidence remains a loss.
 
+#### Repeat a native team without replacing its first attempt
+
+Use this when you need to know whether a workflow change is larger than ordinary differences between fresh teams. Keep the stock worlds fixed. Each native sender and receiver generates new answers.
+
+The plan command is free. It prints one JSON line per world. Give each worker a different shard. Each worker runs the 2 arms in printed order. Finish repetition 1 before starting repetition 2.
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.repeat_plan --repeat 1 --shard 0/4
+```
+
+For 4 workers, use `0/4`, `1/4`, `2/4`, and `3/4`. Each gets 6 whole worlds. The first arm reverses in repetition 2. All workers must use the same private job and meter. The native runner refuses to replace an attempt.
+
+**Check the native path before buying model calls.** Use `control-visible` from the preceding section with `--repeat 1` or `--repeat 2`. For an approved live trial, use `run-visible` with the same repeat number. Retain your shared Docker limit. Each trial can use up to 4 model calls. The public plan never launches a trial.
+
+After both repetitions, export a receipt from the 2 native audits:
+
+```sh
+module=examples.seatlab.calendar_notices
+for repeat in 1 2; do
+  "$python" -m "$module.audit" "$private/teams" --visible-check --repeat "$repeat" \
+    --spend-dir "$SEATLAB_SPEND_DIR" > "$private/wave-$repeat.json" || exit 1
+done
+python3.12 -BS -m "$module.repeat_receipt" "$private/wave-1.json" "$private/wave-2.json" \
+  > "$private/repeat-teams.json"
+python3.12 -BS -m "$module.repeat_summary" "$private/repeat-teams.json"
+```
+
+The summary compares 2 fresh teams per arm on each of 24 worlds. It also counts how often the same workflow changes grade. A verified invalid response keeps its native zero. Missing stock evidence or accounting makes the primary comparison inconclusive.
+
+#### Find the first different decision in 2 native team runs
+
+Use 2 complete scheduling trials on the same world, arm, seat assignments, and served model. Set `LEFT` and `RIGHT` to their native trial directories. The reader verifies both against the stock task and the call meter. No model or Docker runs.
+
+```sh
+"$python" -m examples.seatlab.calendar_turn_diff "$LEFT" "$RIGHT" \
+  --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+If the right trial used a separate meter, add `--right-spend-dir PATH`. The output shows whether each recorded prompt and decoded action matched. It does not reveal either action or its hash. Equal prompts do not establish equal provider state.
+
+To analyze the 48 same-workflow pairs together, use the receipt exported above:
+
+```sh
+"$python" -m "$module.turn_collect" "$private/repeat-teams.json" \
+  --job "$private/teams" --spend-dir "$SEATLAB_SPEND_DIR" > "$private/turn-pairs.json"
+python3.12 -BS -m "$module.turn_summary" \
+  "$private/repeat-teams.json" "$private/turn-pairs.json"
+```
+
+The final command needs only the 2 public JSON files and Python 3.12 or newer. It separates changes to the final receiver prompt from different decisions on an unchanged prompt.
+
 #### Compare 2 workers on your own completed scheduling trial
 
 Use one completed SeatLab `PrivateViewSeat` trial from the private calendar, single-seat-helper, or visible-intersection study. You do not need its paired arm or any trials from our panel. On the original host, keep the stock task directory, trial evidence, and direct-call meter. A final score or a chat log alone is not enough.

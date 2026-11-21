@@ -2,7 +2,7 @@ import os
 import sqlite3
 import stat
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .calendar_notices import audit, heldout, team_source, team_views
@@ -12,10 +12,21 @@ from .visibility import calendar_packet, calendar_protocol, spend
 
 
 @dataclass(frozen=True, slots=True)
+class _SourceTurn:
+    phase: str
+    seat: str
+    served_model: str
+    prompt_sha256: str
+    action: tuple[int, ...] | int
+
+
+@dataclass(frozen=True, slots=True)
 class SourceCase:
     trial_uuid: str
     result_sha256: str
     stock_semantics_sha256: str
+    native_run: str
+    native_task_sha256: str
     world: str
     arm: str
     native_reply_sha256: str
@@ -24,6 +35,7 @@ class SourceCase:
     target_visible: bool
     prompts: dict[str, str]
     inquiry: dict[str, object]
+    turns: tuple[_SourceTurn, ...] = field(default=(), repr=False)
 
 
 _CELL_TYPES = {
@@ -183,12 +195,35 @@ def _calls(path: Path, cell: team_views.Cell) -> list[audit.Row]:
     return calls
 
 
+def _read_turns(
+    cell: team_views.Cell,
+    receipts: dict[str, audit.Row],
+    calls: list[audit.Row],
+    actions: tuple[list[int] | int, ...],
+) -> tuple[_SourceTurn, ...]:
+    calls_by_role = {call["role"]: call for call in calls}
+    return tuple(
+        _SourceTurn(
+            phase=phase,
+            seat=receipts[phase]["seat"],
+            served_model=calls_by_role[p.role(cell, phase)]["served_model"],
+            prompt_sha256=calendar_packet._check_digest(
+                receipts[phase]["prompt_sha256"]
+            ),
+            action=tuple(action) if isinstance(action, list) else action,
+        )
+        for phase, action in zip(p.PHASES, actions, strict=True)
+    )
+
+
 def _read_case(
     trial: Path,
     task: Path,
     cell: team_views.Cell,
     row: audit.Row,
     calls: list[audit.Row],
+    *,
+    include_turns: bool,
 ) -> SourceCase:
     result_data = audit.raw(trial / "result.json")
     result = audit._object(result_data)
@@ -260,10 +295,25 @@ def _read_case(
         target_visible is row["joint_slot_in_final_report"],
         "native_source_visibility_binding",
     )
+    turns: tuple[_SourceTurn, ...] = ()
+    if include_turns:
+        turns = _read_turns(
+            cell,
+            receipts,
+            calls,
+            (
+                p.decode(receipts["initial"]["response_text"], "initial"),
+                revision,
+                days,
+                choice,
+            ),
+        )
     return SourceCase(
         trial_uuid=row["trial_uuid"],
         result_sha256=result_sha,
         stock_semantics_sha256=semantics_sha,
+        native_run=result["trial_name"],
+        native_task_sha256=task_sha,
         world=cell.world,
         arm=cell.arm,
         native_reply_sha256=calendar_packet._check_digest(receipt["response_sha256"]),
@@ -288,10 +338,11 @@ def _read_case(
             ),
             "target": target,
         },
+        turns=turns,
     )
 
 
-def _load(trial: Path, spend_dir: Path) -> SourceCase:
+def _load(trial: Path, spend_dir: Path, *, include_turns: bool) -> SourceCase:
     trial = trial.expanduser().absolute()
     spend_dir = spend_dir.expanduser().absolute()
     job, directory, cell = _location(trial)
@@ -323,7 +374,7 @@ def _load(trial: Path, spend_dir: Path) -> SourceCase:
         and row["held_calls"] == 0,
         "incomplete_or_invalid_native_source",
     )
-    source = _read_case(trial, task, cell, row, calls)
+    source = _read_case(trial, task, cell, row, calls, include_turns=include_turns)
     audit.require(
         _ledger(spend_dir) == ledger_before
         and _calls(ledger_before[0], cell) == calls
@@ -335,9 +386,9 @@ def _load(trial: Path, spend_dir: Path) -> SourceCase:
     return source
 
 
-def load(trial: Path, spend_dir: Path) -> SourceCase:
+def load(trial: Path, spend_dir: Path, *, include_turns: bool = False) -> SourceCase:
     try:
-        return _load(trial, spend_dir)
+        return _load(trial, spend_dir, include_turns=include_turns)
     except audit.BindingError:
         raise
     except (
