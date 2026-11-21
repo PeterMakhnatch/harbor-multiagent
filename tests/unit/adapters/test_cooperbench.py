@@ -102,6 +102,8 @@ def test_seat_task_names_two_seats_under_test(tmp_path: Path):
     assert list(task.config.agents) == ["agent1", "agent2"]
     assert all(seat.under_test for seat in task.config.agents.values())
     assert task.config.metadata["seat_features"] == {"agent1": "3", "agent2": "5"}
+    assert task.config.verifier.timeout_sec == 2190
+    assert task.config.verifier.env["COOPERBENCH_ATTRIBUTION_TIMEOUT_SEC"] == "120"
     assert not (task_dir / "instruction.md").exists()
 
 
@@ -165,12 +167,37 @@ def test_solution_and_tests_follow_the_seats(tmp_path: Path):
     assert (task_dir / "solution/agent2.patch").read_text() == PATCH_B
     assert (task_dir / "tests/tests1.patch").read_text() == TESTS_A
     assert (task_dir / "tests/tests2.patch").read_text() == TESTS_B
+    assert json.loads((task_dir / "tests/feature-files.json").read_text()) == {
+        "agent1": ["src/jinja2/loaders.py"],
+        "agent2": ["src/jinja2/loaders.py"],
+    }
     assert not (task_dir / "solution/combined.patch").exists()
     for script in ("solution/solve.sh", "tests/test.sh"):
         assert os.access(task_dir / script, os.X_OK), script
     for dockerfile in ("environment/Dockerfile", "environment/seat/Dockerfile"):
         first = (task_dir / dockerfile).read_text().splitlines()[0]
         assert first == "FROM akhatua/cooperbench-pallets-jinja:task1621"
+
+
+def test_seat_feature_paths_include_both_sides_of_a_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    git_dir = tmp_path / "source"
+    git_dir.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=git_dir, check=True)
+    nested = git_dir / "adapters"
+    nested.mkdir()
+    monkeypatch.chdir(nested)
+    rename = (
+        "diff --git a/src/old name.py b/src/new name.py\n"
+        "similarity index 100%\n"
+        "rename from src/old name.py\n"
+        "rename to src/new name.py\n"
+    )
+    task_dir = generate(tmp_path, make_pair(patch_a=rename))
+
+    files = json.loads((task_dir / "tests/feature-files.json").read_text())
+    assert files["agent1"] == ["src/new name.py", "src/old name.py"]
 
 
 def test_sidecar_mode_keeps_its_layout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -779,6 +806,7 @@ def test_solo_gets_a_scaled_budget(tmp_path: Path, scale: float, timeout: float)
     for arm in ("silent", "talk"):
         assert tasks[arm].config.agent.timeout_sec == 1800.0
         assert "solo_budget_scale" not in tasks[arm].config.metadata
+        assert tasks[arm].config.verifier.timeout_sec == 2190.0
     assert tasks["solo"].config.verifier.timeout_sec == 1800.0
 
 
@@ -867,10 +895,11 @@ def test_solo_is_one_seat_with_both_features(tmp_path: Path):
     assert (solo_dir / "solution/feature1.patch").read_text() == PATCH_A
     assert (solo_dir / "solution/feature2.patch").read_text() == PATCH_B
     assert not (solo_dir / "solution/agent1.patch").exists()
-    verifier = (solo_dir / "tests/test.sh").read_text()
-    assert 'SEATS="agent1"\n' in verifier and 'STRATEGY="solo"\n' in verifier
-    assert "agent2_branch" not in verifier
-    assert "Merge conflict between agent1 and agent2" not in verifier
+    assert (solo_dir / "tests/test.sh").read_bytes() == (
+        SEATS_TEMPLATE / "tests/test.sh"
+    ).read_bytes()
+    assert (solo_dir / "tests/solo-mode").is_file()
+    assert not (solo_dir / "tests/feature-files.json").exists()
 
 
 @pytest.mark.parametrize(

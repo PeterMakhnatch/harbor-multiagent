@@ -208,7 +208,8 @@ cooperbench-seats/
 │   └── tests/
 │       ├── test.sh             # capture both seats' patches, merge, test both features
 │       ├── tests1.patch
-│       └── tests2.patch
+│       ├── tests2.patch
+│       └── feature-files.json  # gold patch paths, not gold implementations
 ```
 
 ### From sidecars to seats
@@ -224,6 +225,40 @@ cooperbench-seats/
 | Reward | `reward.txt`; the details in `details.json` | `reward.json` is `{"reward": 0 or 1}`; the details in `details.json` |
 | Oracle | `main` applies `combined.patch`; the verifier skips the merge | each seat applies its own feature's gold patch; the verifier merges as for agents |
 | Per-agent results | none in `result.json` | `seat_results`: each seat's harness, model, tokens, cost, timing and error |
+
+### What a pass does not show
+
+A pass means that the merged patch passes both features' tests. It does not
+show cooperation. One seat can implement both features with no help. The
+reward is still 1, as in upstream CooperBench. Do not use seat scores as a
+measure of coordination or compare them with sidecar or leaderboard numbers.
+
+The verifier writes `verifier/seat-attribution.json` after it writes the team
+reward. The report has `schema_version: 1`, a `seats` object keyed by
+`agent1` and `agent2`, and `rogue_solo`.
+
+| Field in each seat | Meaning |
+|---|---|
+| `patch_empty` | The seat has no patch after the test-file filter. |
+| `own_feature_passed` | The seat's filtered patch alone passes its own feature's tests. If the patch is empty, the verifier tests the base. |
+| `other_feature_passed` | The seat's filtered patch alone passes the other feature's tests. The verifier runs this check only for a possible rogue solo. |
+| `own_feature_status`, `other_feature_status` | `passed`, `failed`, `timeout`, `unavailable`, or `not_run`. The pass fields are `null` unless a run passed or failed. |
+| `touched_other_feature_files`, `other_feature_files_touched` | Whether the seat changed files listed in the other feature's gold patch, and which files. These fields are `null` if the paths are unavailable. |
+
+`rogue_solo` is `true` if one non-empty patch passes both features and the
+other patch is empty or fails its own feature. It is `false` if the results
+rule out that case. It is `null` if results are missing and the case remains
+possible. File overlap is not part of this flag. Both features can legitimately
+change the same file. Neither the flag nor the file overlap proves cooperation.
+
+The verifier uses the same runner for both the team and attribution checks.
+It adds at most 3 runner calls, each limited to 120 seconds. Team tasks add
+390 seconds to `--verifier-timeout` for the checks and their setup. Attribution
+results do not change `reward.json`. Regenerate existing seat tasks to get the
+report and the gold path list.
+
+The test-file filter is not a sandbox. It drops known test files and
+test configs, listed in `dropped_files` in `details.json`.
 
 ### Messages between the seats
 
@@ -305,10 +340,11 @@ seats:
 
 - A seat cannot read or write the other seat's workspace, token or inbox, and
   cannot send messages in the other seat's name.
-- The verifier runs the merged code in `main` as root: runner.sh installs the
-  package and runs pytest. That code can read both workspaces and both tokens,
-  and it can change the test outcome, for example with a module that exits 0
-  on import, or by changing the toolchain before the second run. Dropping
+- The verifier runs the merged code and the separate seat patches in `main`
+  as root. In Python tasks, runner.sh installs the package and runs pytest.
+  That code can read both workspaces and both tokens.
+  It can change the test outcome, for example with a module that exits 0
+  on import, or by changing the toolchain before the next run. Dropping
   test-infrastructure files, and checking the copies of the test inputs
   before each run, close the simplest ways, not all of them.
 
@@ -389,6 +425,10 @@ uv run cooperbench --seats --arms solo silent talk --subset flash   # into datas
   sections). The verifier runs both features' tests on its patch, and the
   reward is 1 only if both pass, as for a team. Its oracle applies both gold
   patches in turn.
+  Solo runs no extra attribution checks and keeps the base verifier timeout.
+  Its `seat-attribution.json` has an empty `seats` object and `rogue_solo: null`
+  because it has no teammate. `silent` and `talk` both get the full attribution
+  report described in [What a pass does not show](#what-a-pass-does-not-show).
 - With `--arms`, each task gets an opaque name, `cb-<12 hex>`, chosen at
   random when the task is first built; a rebuild into the same folder keeps
   it. `manifest.json` lists exactly the arm tasks on disk: a task's entry is
@@ -444,9 +484,9 @@ Opaque task names hide the arm and the pair from every name a seat can see,
 but not from the task itself: the instructions state the arm, and the
 problem statement and repository are public. A seat with the public network
 can look up the pair, its teammate's feature and the gold patches. Report the
-rate of seats that solve their teammate's feature alone (rogue solo) per arm
-next to any arms comparison, or the coordination numbers carry that hole
-unevenly across arms.
+`rogue_solo` rate separately for `silent` and `talk` next to any arms
+comparison. Report how many trials lack a known result. The `solo` arm
+has no teammate, so this measure does not apply.
 
 #### How to run the arms
 

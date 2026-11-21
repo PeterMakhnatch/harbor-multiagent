@@ -1,7 +1,7 @@
 """The CooperBench seat verifier (seats/tests/test.sh) and the per-seat oracle
 (seats/solution/solve.sh), run as shell scripts on throwaway git repositories,
-without Docker. A stand-in for the image's runner.sh applies the merged patch
-and a feature's test patch, then runs the check that test patch adds."""
+without Docker. A stand-in for the image's runner.sh applies an implementation
+patch and a feature's test patch, then runs the check that test patch adds."""
 
 from __future__ import annotations
 
@@ -28,13 +28,19 @@ COOP_MSG = TEMPLATE / "environment/seat/coop_msg.py"
 SEATS = ("agent1", "agent2")
 
 FAKE_RUNNER = """#!/bin/bash
-# Stand-in for runner.sh: reset, apply the merged patch, apply the test
-# patch, run the check the test patch adds.
+# Stand-in for runner.sh: reset, apply an optional implementation patch and
+# the test patch, then run the check the test patch adds.
 set -e
 cd "$COOPERBENCH_REPO"
 git reset -q --hard HEAD
 git clean -fdxq
-git apply "$COOPERBENCH_PATCHES/$2"
+if [ -n "$2" ]; then
+    git apply "$COOPERBENCH_PATCHES/$2"
+fi
+if [ "$2" = agent1.patch ] && [ "${SLOW_ATTRIBUTION:-}" = 1 ]; then
+    test -f "$COOPERBENCH_VERIFIER_LOGS/reward.json"
+    sleep 5
+fi
 git apply "$COOPERBENCH_PATCHES/$1"
 # TAMPER: what the first run's code overwrites before the second run.
 if [ "$1" = tests1.patch ]; then
@@ -87,12 +93,12 @@ class World:
         return target
 
     def verify(
-        self, exit_code: int = 0, script: Path = VERIFIER, **extra_env: str
+        self, exit_code: int = 0, **extra_env: str
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Run the verifier; Harbor reads only its reward file, not its exit
         code, so a verifier error exits non-zero after writing reward 0."""
         result = subprocess.run(
-            ["bash", str(script)],
+            ["bash", str(VERIFIER)],
             env={**self.env, **extra_env},
             capture_output=True,
             text=True,
@@ -105,6 +111,9 @@ class World:
 
     def merged(self) -> bytes:
         return (self.out / "patches/merged.patch").read_bytes()
+
+    def attribution(self) -> dict[str, Any]:
+        return json.loads((self.out / "seat-attribution.json").read_text())
 
 
 @pytest.fixture
@@ -143,6 +152,9 @@ def world(tmp_path: Path) -> World:
     tests.mkdir()
     (tests / "tests1.patch").write_text(check_patch("grep -q FEATURE_ONE src/app.py"))
     (tests / "tests2.patch").write_text(check_patch("grep -q FEATURE_TWO src/other.py"))
+    (tests / "feature-files.json").write_text(
+        json.dumps({"agent1": ["src/app.py"], "agent2": ["src/other.py"]})
+    )
     runner = tmp_path / "runner.sh"
     runner.write_text(FAKE_RUNNER)
     runner.chmod(runner.stat().st_mode | stat.S_IXUSR)
@@ -190,6 +202,75 @@ def test_both_features_earn_reward_one(world: World):
     # main's logs are read line by line; the truncated last line is skipped
     assert details["messages_sent"] == {"agent1": 1, "agent2": 0}
     assert details["messages_received"] == {"agent1": 0, "agent2": 1}
+    attribution = world.attribution()
+    assert attribution["schema_version"] == 1
+    assert attribution["rogue_solo"] is False
+    for seat in SEATS:
+        assert attribution["seats"][seat] == {
+            "patch_empty": False,
+            "own_feature_status": "passed",
+            "own_feature_passed": True,
+            "other_feature_status": "not_run",
+            "other_feature_passed": None,
+            "touched_other_feature_files": False,
+            "other_feature_files_touched": [],
+        }
+
+
+@pytest.mark.parametrize("solo", SEATS)
+@pytest.mark.parametrize("teammate_empty", (True, False))
+def test_a_rogue_solo_keeps_the_team_reward(
+    world: World, solo: str, teammate_empty: bool
+):
+    teammate = "agent2" if solo == "agent1" else "agent1"
+    for num, path in [(1, "src/app.py"), (2, "src/other.py")]:
+        with world.seat_file(solo, path).open("a") as fh:
+            fh.write(f"FEATURE_{'ONE' if num == 1 else 'TWO'} = {num}\n")
+    if not teammate_empty:
+        world.seat_file(teammate, "docs/notes.md").write_text("An unrelated change.\n")
+
+    reward, _ = world.verify()
+
+    assert reward == {"reward": 1}
+    attribution = world.attribution()
+    assert attribution["rogue_solo"] is True
+    assert attribution["seats"][solo]["own_feature_passed"] is True
+    assert attribution["seats"][solo]["other_feature_passed"] is True
+    assert attribution["seats"][solo]["touched_other_feature_files"] is True
+    teammate_path = "src/other.py" if solo == "agent1" else "src/app.py"
+    assert attribution["seats"][solo]["other_feature_files_touched"] == [teammate_path]
+    assert attribution["seats"][teammate]["patch_empty"] is teammate_empty
+    assert attribution["seats"][teammate]["own_feature_passed"] is False
+    assert attribution["seats"][teammate]["other_feature_status"] == "not_run"
+
+
+def test_both_seats_fail_their_own_feature_tests(world: World):
+    world.seat_file("agent1", "src/app.py").write_text("WRONG = 1\n")
+    world.seat_file("agent2", "src/other.py").write_text("WRONG = 2\n")
+
+    reward, _ = world.verify()
+
+    assert reward == {"reward": 0}
+    attribution = world.attribution()
+    assert attribution["rogue_solo"] is False
+    for seat in SEATS:
+        assert attribution["seats"][seat]["patch_empty"] is False
+        assert attribution["seats"][seat]["own_feature_passed"] is False
+        assert attribution["seats"][seat]["own_feature_status"] == "failed"
+
+
+def test_seat_attribution_timeout_keeps_the_team_reward(world: World):
+    implement(world, "agent1", "agent2")
+
+    reward, _ = world.verify(
+        SLOW_ATTRIBUTION="1", COOPERBENCH_ATTRIBUTION_TIMEOUT_SEC="0.5"
+    )
+
+    assert reward == {"reward": 1}
+    attribution = world.attribution()
+    assert attribution["seats"]["agent1"]["own_feature_status"] == "timeout"
+    assert attribution["seats"]["agent1"]["own_feature_passed"] is None
+    assert attribution["rogue_solo"] is None
 
 
 def test_an_idle_seat_earns_reward_zero(world: World):
@@ -244,6 +325,46 @@ def test_test_files_and_test_infrastructure_are_dropped(world: World):
     merged = world.merged()
     assert b"conftest.py" not in merged and b"pytest.ini" not in merged
     assert b"tests/test_app.py" not in merged
+
+
+def test_test_files_of_other_languages_are_dropped(world: World):
+    """Review of fork PR #9, P0-4: the filter caught Python test files only."""
+    implement(world, "agent1", "agent2")
+    for name in (
+        "pkg/app_test.go",
+        "web/app.test.ts",
+        "web/app.spec.jsx",
+        "web/__tests__/x.js",
+        "lib/x_spec.rb",
+        "jest.config.js",
+        "vitest.config.ts",
+        ".mocharc.json",
+    ):
+        world.seat_file("agent1", name).parent.mkdir(parents=True, exist_ok=True)
+        world.seat_file("agent1", name).write_text("// rewritten test\n")
+    world.seat_file("agent1", "src/spec_parser.py").parent.mkdir(
+        parents=True, exist_ok=True
+    )
+    world.seat_file("agent1", "src/spec_parser.py").write_text("PARSER = 1\n")
+
+    reward, details = world.verify()
+
+    assert reward == {"reward": 1}
+    assert sorted(details["dropped_files"]["agent1"]) == sorted(
+        [
+            "pkg/app_test.go",
+            "web/app.test.ts",
+            "web/app.spec.jsx",
+            "web/__tests__/x.js",
+            "lib/x_spec.rb",
+            "jest.config.js",
+            "vitest.config.ts",
+            ".mocharc.json",
+        ]
+    )
+    assert (
+        b"src/spec_parser.py" in world.merged()
+    )  # an implementation file named like a spec stays
 
 
 def test_a_patch_that_does_not_apply_fails_the_merge(world: World, tmp_path: Path):
@@ -506,17 +627,12 @@ def test_the_oracle_applies_only_its_own_seats_patch(tmp_path: Path, world: Worl
 
 
 @pytest.fixture
-def solo_verifier(tmp_path: Path) -> Path:
-    """The solo arm's verifier, made from the seat verifier as the adapter
-    makes it."""
-    sys.path.insert(0, str(ADAPTER_SRC))
-    try:
-        from cooperbench.adapter import CooperBenchAdapter
-    finally:
-        sys.path.remove(str(ADAPTER_SRC))
-    script = tmp_path / "solo-test.sh"
-    script.write_text(CooperBenchAdapter._solo_verifier(VERIFIER.read_text()))
-    return script
+def solo_world(world: World) -> World:
+    """The generated solo layout has no agent2 workspace."""
+    (world.root / "tests/solo-mode").touch()
+    (world.root / "tests/feature-files.json").unlink()
+    shutil.rmtree(world.seats.pop("agent2"))
+    return world
 
 
 def implement_both(w: World) -> None:
@@ -526,25 +642,32 @@ def implement_both(w: World) -> None:
         fh.write("FEATURE_TWO = 2\n")
 
 
-def test_solo_with_both_features_earns_reward_one(world: World, solo_verifier: Path):
-    implement_both(world)
+def test_solo_with_both_features_earns_reward_one(solo_world: World):
+    implement_both(solo_world)
 
-    reward, details = world.verify(script=solo_verifier)
+    reward, details = solo_world.verify()
 
     assert reward == {"reward": 1}
     assert details["strategy"] == "solo"
     assert details["patch_files"] == {"agent1": ["src/app.py", "src/other.py"]}
     assert details["messages_sent"] == {"agent1": 1}
-    assert b"+FEATURE_TWO = 2" in world.merged()
+    assert b"+FEATURE_TWO = 2" in solo_world.merged()
+    assert solo_world.attribution() == {
+        "schema_version": 1,
+        "seats": {},
+        "rogue_solo": None,
+        "reason": "The solo arm has no teammate.",
+    }
 
 
-def test_solo_with_one_feature_earns_reward_zero(world: World, solo_verifier: Path):
-    implement(world, "agent1")  # feature 1 only
+def test_solo_with_one_feature_earns_reward_zero(solo_world: World):
+    implement(solo_world, "agent1")  # feature 1 only
 
-    reward, details = world.verify(script=solo_verifier)
+    reward, details = solo_world.verify()
 
     assert reward == {"reward": 0}
     assert (details["feature1_passed"], details["feature2_passed"]) == (True, False)
+    assert solo_world.attribution()["rogue_solo"] is None
 
 
 def test_the_solo_oracle_applies_both_gold_patches(tmp_path: Path, world: World):

@@ -30,6 +30,7 @@ import json
 import re
 import secrets
 import shutil
+import subprocess
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
@@ -43,6 +44,8 @@ from typing import Iterable
 
 REGISTRY = "akhatua"
 IMAGE_PREFIX = "cooperbench"
+SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC = 120
+SEAT_ATTRIBUTION_OVERHEAD_SEC = 30
 
 # Mapping from HuggingFace repo slug to GitHub dataset directory name.
 # See https://github.com/cooperbench/CooperBench/tree/main/dataset
@@ -104,6 +107,28 @@ def _fetch_combined_patch(repo: str, task_id: str) -> str:
 
     _combined_patch_cache[key] = patch
     return patch
+
+
+def _reference_patch_paths(patch: str) -> list[str] | None:
+    """Get paths without the base repo or any gold implementation in tests/."""
+    if not patch.strip():
+        return []
+
+    raw = patch.encode("utf-8")
+    paths = set()
+    for direction in ((), ("--reverse",)) if b"\nrename from " in raw else ((),):
+        result = subprocess.run(
+            ["git", "apply", "--numstat", "-z", "--recount", *direction],
+            cwd=Path.cwd().anchor,
+            input=raw,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            return None
+        for record in result.stdout.split(b"\0"):
+            if record:
+                paths.add(record.split(b"\t", 2)[2].decode("utf-8", "surrogateescape"))
+    return sorted(paths)
 
 
 # ---------------------------------------------------------------------------
@@ -961,6 +986,11 @@ class CooperBenchAdapter:
         arms_dir = template / "arms"
         image_name = get_image_name(GITHUB_DIR_FOR_REPO[pair.repo], pair.task_id)
         features = dict(zip(self.SEATS, (pair.feature_a, pair.feature_b)))
+        verifier_timeout = self.verifier_timeout_sec
+        if arm != "solo":
+            verifier_timeout += (
+                3 * SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC + SEAT_ATTRIBUTION_OVERHEAD_SEC
+            )
 
         # -- task.toml -----------------------------------------------------
         toml_text = (template / "task.toml").read_text(encoding="utf-8")
@@ -986,7 +1016,8 @@ class CooperBenchAdapter:
             toml_text,
             pair_id=task_dir.name,
             agent_timeout_sec=f"{agent_timeout_sec:.1f}",
-            verifier_timeout_sec=f"{self.verifier_timeout_sec:.1f}",
+            verifier_timeout_sec=f"{verifier_timeout:.1f}",
+            seat_attribution_run_timeout_sec=str(SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC),
             repo=pair.repo,
             task_id=pair.task_id,
             feature_a=pair.feature_a.cooperbench_feature_id,
@@ -1081,15 +1112,9 @@ class CooperBenchAdapter:
             pair.feature_b.test_patch, encoding="utf-8"
         )
         test_sh_path = paths.tests_dir / "test.sh"
+        shutil.copy2(template / "tests" / "test.sh", test_sh_path)
         if arm == "solo":
-            test_sh_path.write_text(
-                self._solo_verifier(
-                    (template / "tests" / "test.sh").read_text(encoding="utf-8")
-                ),
-                encoding="utf-8",
-            )
-        else:
-            shutil.copy2(template / "tests" / "test.sh", test_sh_path)
+            (paths.tests_dir / "solo-mode").touch()
         test_sh_path.chmod(0o755)
 
         # -- solution/: each seat's own feature's gold patch (solo: both,
@@ -1113,6 +1138,21 @@ class CooperBenchAdapter:
 
         # -- upstream bug fixes ------------------------------------------------
         self._apply_seat_upstream_fixes(pair, paths, seat_patches)
+        if arm != "solo":
+            (paths.tests_dir / "feature-files.json").write_text(
+                json.dumps(
+                    {
+                        seat: _reference_patch_paths(
+                            patch_path.read_text(encoding="utf-8")
+                        )
+                        for seat, patch_path in zip(
+                            self.SEATS, seat_patches, strict=True
+                        )
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
         return task_dir
 
@@ -1275,42 +1315,6 @@ class CooperBenchAdapter:
             "# Both seats are under test: play lasts until both agents have ended.\n"
             "[agents.agent1]\n\n[agents.agent2]\n",
             "# The one seat is under test.\n[agents.agent1]\n",
-        )
-
-    @staticmethod
-    def _solo_verifier(text: str) -> str:
-        """The seat verifier for one seat: agent1's patch is the merged patch,
-        and both features' tests run on it."""
-        text = _swap_span(
-            text,
-            "# CooperBench seat verifier. Runs in main after both seats have ended.\n",
-            "# is its own seat's work. main's own /workspace/repo is the untouched base.\n",
-            "# CooperBench seat verifier, solo arm. Runs in main after the seat has\n"
-            "# ended.\n"
-            "#\n"
-            "# agent1, the one seat, was a Harbor agent in its own container with its\n"
-            "# own /workspace/repo volume, which main mounts read-only at\n"
-            "# /agents/agent1/repo. It implemented both features, and its patch is the\n"
-            "# merged patch. main's own /workspace/repo is the untouched base.\n",
-        )
-        text = _swap(text, 'SEATS="agent1 agent2"\n', 'SEATS="agent1"\n')
-        text = _swap(  # one patch cannot conflict with itself
-            text,
-            'if [ "$MERGE_OK" -eq 0 ]; then\n'
-            '    write_results 0 false false 0 none "merge conflict"\n'
-            '    echo "Merge conflict between agent1 and agent2 patches" > "$OUT/test-output.txt"\n'
-            "    exit 0\n"
-            "fi\n",
-            "",
-        )
-        return _swap_span(
-            text,
-            "git checkout -q agent2_branch\nMERGE_OK=0\n",
-            '        STRATEGY="union"\n    fi\nfi\n',
-            "# One seat: its patch is the merged patch.\n"
-            "git checkout -q agent1_branch\n"
-            "MERGE_OK=1\n"
-            'STRATEGY="solo"\n',
         )
 
     # -- batch generation ---------------------------------------------------
