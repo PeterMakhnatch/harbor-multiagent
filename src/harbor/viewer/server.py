@@ -35,6 +35,7 @@ from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -331,6 +332,28 @@ def _open_trial_file(trial_dir: Path, target: Path) -> BinaryIO | None:
         file.close()
         return None
     return file
+
+
+def _read_trial_bytes(trial_dir: Path, path: Path) -> bytes | None:
+    """The bytes of a regular file inside the trial, read without following a
+    link out of it; None when the path is missing, leaves the trial or is not
+    a regular file now.
+
+    Every reader of trial files goes through ``_trial_file`` and
+    ``_open_trial_file``, so a plain link out of the trial and a folder
+    swapped after the check both fail (fork PR #4 review, F3).
+    """
+    target = _trial_file(trial_dir, path)
+    if target is None:
+        return None
+    try:
+        file = _open_trial_file(trial_dir, target)
+    except FileNotFoundError:
+        return None
+    if file is None:
+        return None
+    with file:
+        return file.read()
 
 
 _LOOPBACK_HOSTNAMES = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -2560,12 +2583,13 @@ def _register_job_endpoints(
         root = _resolve_step_root(trial_dir, step)
 
         def read_text(path: str | None) -> str | None:
-            if path is None or not (root / path).is_file():
+            if path is None:
                 return None
             try:
-                return (root / path).read_text()
+                data = _read_trial_bytes(trial_dir, root / path)
             except OSError as error:
                 raise HTTPException(500, f"Failed to read {path}: {error}") from error
+            return None if data is None else data.decode()
 
         user = artifacts.json_object(
             read_text("user-agent/trajectory.json"), "user-agent trajectory"
@@ -2616,10 +2640,9 @@ def _register_job_endpoints(
         verifier_dir = _resolve_step_root(trial_dir, step) / "verifier"
 
         def _read_text(path: Path) -> str | None:
-            if not path.exists():
-                return None
             try:
-                return path.read_text()
+                data = _read_trial_bytes(trial_dir, path)
+                return None if data is None else data.decode()
             except Exception:
                 return "[Error reading file]"
 
@@ -2656,6 +2679,10 @@ def _register_job_endpoints(
         def scan_dir(dir_path: Path, relative_base: str = "") -> None:
             try:
                 for item in sorted(dir_path.iterdir()):
+                    if (
+                        item.is_symlink()
+                    ):  # a linked folder could list names outside the trial
+                        continue
                     relative_path = (
                         f"{relative_base}/{item.name}" if relative_base else item.name
                     )
@@ -2745,7 +2772,7 @@ def _register_job_endpoints(
         trial_name: str,
         file_path: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
-    ) -> PlainTextResponse | FileResponse:
+    ) -> PlainTextResponse | StreamingResponse:
         """Get content of a file in a trial directory.
 
         For text files, returns PlainTextResponse with the content.
@@ -2791,8 +2818,17 @@ def _register_job_endpoints(
         size_limit = (
             MAX_MEDIA_FILE_SIZE if suffix in MEDIA_EXTENSIONS else MAX_FILE_SIZE
         )
-        file_size = full_path.stat().st_size
+        # Read from a descriptor opened without following a link: a folder
+        # swapped after the check above fails the open (fork PR #4 review, F3).
+        try:
+            file = _open_trial_file(trial_dir, full_path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found")
+        if file is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+        file_size = os.fstat(file.fileno()).st_size
         if file_size > size_limit:
+            file.close()
             raise HTTPException(
                 status_code=413,
                 detail=f"File too large: {_format_size(file_size)} (max {_format_size(size_limit)})",
@@ -2800,16 +2836,26 @@ def _register_job_endpoints(
 
         # Handle image files - serve as binary with correct media type
         if suffix in MEDIA_EXTENSIONS:
-            return FileResponse(
-                path=full_path,
+
+            def chunks() -> Iterable[bytes]:
+                with file:
+                    while chunk := file.read(1 << 16):
+                        yield chunk
+
+            return StreamingResponse(
+                chunks(),
                 media_type=MEDIA_EXTENSIONS[suffix],
-                filename=full_path.name,
+                headers={
+                    "Content-Length": str(file_size),
+                    "Content-Disposition": f'attachment; filename="{full_path.name}"',
+                },
             )
 
         # For text files, read and return as plain text
+        with file:
+            data = file.read()
         try:
-            content = full_path.read_text()
-            return PlainTextResponse(content)
+            return PlainTextResponse(data.decode())
         except UnicodeDecodeError:
             raise HTTPException(
                 status_code=415, detail="File is binary and cannot be displayed"
@@ -2838,8 +2884,9 @@ def _register_job_endpoints(
         manifest_path = artifacts_dir / "manifest.json"
         if manifest_path.exists():
             try:
-                manifest = json.loads(manifest_path.read_text())
-            except (json.JSONDecodeError, OSError):
+                data = _read_trial_bytes(trial_dir, manifest_path)
+                manifest = json.loads(data) if data is not None else None
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError):
                 manifest = None
 
         # Scan artifacts directory for files, excluding manifest.json
@@ -2848,6 +2895,10 @@ def _register_job_endpoints(
         def scan_dir(dir_path: Path, relative_base: str = "") -> None:
             try:
                 for item in sorted(dir_path.iterdir()):
+                    if (
+                        item.is_symlink()
+                    ):  # a linked folder could list names outside the trial
+                        continue
                     relative_path = (
                         f"{relative_base}/{item.name}" if relative_base else item.name
                     )
