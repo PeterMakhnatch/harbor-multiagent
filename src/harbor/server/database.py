@@ -42,6 +42,7 @@ from harbor.server.models import (
 from harbor.server import listing, query
 from harbor.server.projections import input_projection, result_projection
 from harbor.server.schema import SCHEMA, SCHEMA_VERSION, VIEWS, VIEW_NAMES
+from harbor.utils.timestamps import known_utc_timestamp
 
 Table = Literal["internal_job", "internal_rollout_request", "internal_rollout"]
 
@@ -142,6 +143,11 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _native_utc_key(value: str | None) -> str | None:
+    instant = known_utc_timestamp(value)
+    return instant.isoformat(timespec="microseconds") if instant is not None else None
+
+
 def fingerprint(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(
@@ -232,11 +238,18 @@ class Database(Protocol):
 
 
 class SQLiteDatabase(Database):
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(self, data_dir: Path, *, native_job_times: bool = False) -> None:
         self.data_dir = data_dir
+        self._native_job_times = native_job_times
         self.db: sqlite3.Connection
         self._cipher: Fernet
         self._read_only = False
+
+    def _configure_clock(self) -> None:
+        if self._native_job_times:
+            self.db.create_function(
+                "native_utc_key", 1, _native_utc_key, deterministic=True
+            )
 
     @override
     @contextmanager
@@ -289,6 +302,7 @@ class SQLiteDatabase(Database):
                 )
                 # Query connections must supply a caller; unscoped public reads fail closed.
                 self.db.create_function("current_owner_id", 0, lambda: None)
+                self._configure_clock()
                 yield self
             finally:
                 self.db.close()
@@ -296,7 +310,7 @@ class SQLiteDatabase(Database):
     @override
     @contextmanager
     def reader(self) -> Iterator["SQLiteDatabase"]:
-        reader = SQLiteDatabase(self.data_dir)
+        reader = SQLiteDatabase(self.data_dir, native_job_times=self._native_job_times)
         reader._read_only = True
         reader._cipher = self._cipher
         reader.db = sqlite3.connect(
@@ -306,6 +320,7 @@ class SQLiteDatabase(Database):
         try:
             reader.db.execute("PRAGMA query_only=ON")
             reader.db.create_function("current_owner_id", 0, lambda: None)
+            reader._configure_clock()
             yield reader
         finally:
             reader.db.close()
@@ -356,6 +371,14 @@ class SQLiteDatabase(Database):
                     ) from None
             elif key in JSON_COLUMNS and value is not None:
                 values[key] = json.loads(value)
+            elif (
+                not self._native_job_times
+                and key in listing.TIMESTAMP_FIELDS
+                and value is not None
+            ):
+                timestamp = datetime.fromisoformat(value)
+                if timestamp.utcoffset() is None:
+                    values[key] = timestamp.replace(tzinfo=UTC).isoformat()
         return values
 
     def _encode(self, column: str, value: Any) -> Any:
@@ -722,7 +745,14 @@ class SQLiteDatabase(Database):
     def page_jobs(
         self, request: ListJobsRequest, *, owner_id: str, columns: Columns
     ) -> Page[Row]:
-        page = listing.page(self.db, "internal_job", request, owner_id, columns)
+        page = listing.page(
+            self.db,
+            "internal_job",
+            request,
+            owner_id,
+            columns,
+            native_job_times=self._native_job_times,
+        )
         page.items = [self._decode(row) for row in page.items]
         return page
 
@@ -748,7 +778,13 @@ class SQLiteDatabase(Database):
         self, filters: JobFilters, *, field: FilterField, owner_id: str, limit: int
     ) -> FilterValuesResponse:
         return listing.filter_values(
-            self.db, "internal_job", filters, owner_id, limit, field
+            self.db,
+            "internal_job",
+            filters,
+            owner_id,
+            limit,
+            field,
+            native_job_times=self._native_job_times,
         )
 
     @override

@@ -1,11 +1,39 @@
 import json
 import logging
+from datetime import datetime
 
 import pytest
 from pydantic import ValidationError
 
-from harbor.cli.utils import load_mcp_servers, parse_kwargs, parse_tpu_spec
+from harbor.cli.utils import (
+    format_duration,
+    load_mcp_servers,
+    parse_kwargs,
+    parse_tpu_spec,
+)
 from harbor.models.task.config import TpuSpec
+
+
+@pytest.mark.parametrize(
+    ("start", "finish", "duration"),
+    [
+        ("2026-07-03T08:00:00", None, "unknown"),
+        ("2026-07-03T08:00:00", "2026-07-03T12:05:00Z", "unknown"),
+        ("2026-07-03T08:00:00-04:00", "2026-07-03T12:05:00", "unknown"),
+        ("2026-07-03T08:00:00", "2026-07-03T08:05:00", "5m 0s"),
+        ("2026-07-03T08:00:00-04:00", "2026-07-03T12:05:00Z", "5m 0s"),
+    ],
+)
+def test_format_duration_with_historical_missing_offsets(
+    start: str, finish: str | None, duration: str
+) -> None:
+    assert (
+        format_duration(
+            datetime.fromisoformat(start),
+            datetime.fromisoformat(finish) if finish else None,
+        )
+        == duration
+    )
 
 
 class TestParseKwargs:

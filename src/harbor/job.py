@@ -2,7 +2,7 @@ import asyncio
 import logging
 import shutil
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -57,6 +57,7 @@ from harbor.trial.hooks import HookCallback, TrialEvent, TrialHookEvent
 from harbor.trial.queue import TrialQueue
 from harbor.utils.logger import logger
 from harbor.utils.pass_at_k import compute_pass_at_k_by_evals
+from harbor.utils.timestamps import require_utc_timestamp
 
 CANCELLED_ERROR_TYPE = "CancelledError"
 
@@ -82,6 +83,7 @@ class Job:
         _metrics: dict[str, list[BaseMetric[Any]]] | None = None,
         _task_download_results: dict[TaskIdType, TaskDownloadResult] | None = None,
         _source_job_dirs: list[Path] | None = None,
+        _existing_job_result: JobResult | None = None,
     ):
         """Deprecated. Use ``await Job.create(config)`` instead."""
         if _task_configs is None or _metrics is None or _task_download_results is None:
@@ -92,11 +94,11 @@ class Job:
 
         self.config = config
         self._source_job_dirs = _source_job_dirs
-        self._existing_job_result = (
-            JobResult.model_validate_json(self._job_result_path.read_text())
-            if self._job_result_path.exists()
-            else None
-        )
+        self._existing_job_result = _existing_job_result
+        if self._existing_job_result is None:
+            self._existing_job_result = self._load_resumable_result(
+                self._job_result_path
+            )
         self.is_resuming = self._existing_job_result is not None
 
         self._trial_completion_lock = asyncio.Lock()
@@ -176,6 +178,9 @@ class Job:
             UnavailableDatasetTasksError: A package dataset has inaccessible tasks.
             ValueError: No datasets or tasks remain after resolution.
         """
+        existing_result = cls._load_resumable_result(
+            config.jobs_dir / config.job_name / "result.json"
+        )
         EnvironmentFactory.validate_options(config.environment)
         cls._resolve_agent_skills(config)
         if not config.source_jobs:
@@ -213,6 +218,7 @@ class Job:
             _metrics=metrics,
             _task_download_results=task_download_results,
             _source_job_dirs=source_job_dirs,
+            _existing_job_result=existing_result,
         )
 
         if datasets and not job.is_resuming:
@@ -741,6 +747,33 @@ class Job:
         return self.job_dir / "result.json"
 
     @staticmethod
+    def _load_resumable_result(result_path: Path) -> JobResult | None:
+        try:
+            raw = result_path.read_text()
+        except FileNotFoundError:
+            return None
+        result = JobResult.model_validate_json(raw)
+        require_utc_timestamp(
+            result.started_at, f"Cannot resume {result_path.parent}: stored started_at"
+        )
+        return result
+
+    def _resolve_started_at(self, started_at: datetime | None = None) -> datetime:
+        if started_at is not None:
+            started_at = require_utc_timestamp(started_at, "Job.run started_at")
+        if self._existing_job_result is None:
+            return started_at if started_at is not None else datetime.now(UTC)
+
+        stored_start = require_utc_timestamp(
+            self._existing_job_result.started_at, "Stored job started_at"
+        )
+        if started_at is not None and started_at != stored_start:
+            raise ValueError(
+                "Job.run started_at must match the stored start on resume."
+            )
+        return started_at if started_at is not None else stored_start
+
+    @staticmethod
     def _is_cancelled_result(trial_result: TrialResult) -> bool:
         return any(
             error.exception_type == CANCELLED_ERROR_TYPE
@@ -752,8 +785,11 @@ class Job:
         *,
         updated_at: datetime | None = None,
     ) -> None:
-        updated_at = updated_at or datetime.now()
-        self._job_result.updated_at = updated_at
+        self._job_result.updated_at = (
+            require_utc_timestamp(updated_at, "Job updated_at")
+            if updated_at is not None
+            else datetime.now(UTC)
+        )
         self._job_result.stats.update_progress_counts(
             n_total_trials=self._job_result.n_total_trials,
             n_running_trials=len(self._running_trial_names),
@@ -1092,14 +1128,10 @@ class Job:
                 mapping["api_format_source"],
             )
 
-    async def run(self) -> JobResult:
+    async def run(self, started_at: datetime | None = None) -> JobResult:
         """Run all configured trials and return the final aggregated job result."""
         try:
-            started_at = (
-                self._existing_job_result.started_at
-                if self._existing_job_result is not None
-                else datetime.now()
-            )
+            started_at = self._resolve_started_at(started_at)
             self._job_result = JobResult(
                 id=self._id,
                 started_at=started_at,
@@ -1218,7 +1250,7 @@ class Job:
             self._job_result.stats = final_stats
             self._job_result.trial_results = combined_trial_results
 
-            finished_at = datetime.now()
+            finished_at = datetime.now(UTC)
             self._job_result.finished_at = finished_at
             self._refresh_job_progress(updated_at=finished_at)
             self._write_job_result(exclude_trial_results=True)
@@ -1232,7 +1264,7 @@ class Job:
                 # In-memory only, so telemetry gets a duration while the
                 # persisted result keeps finished_at unset: consumers such as
                 # the viewer treat a set finished_at as a completed job.
-                job_result.finished_at = datetime.now()
+                job_result.finished_at = datetime.now(UTC)
                 capture_job_finished_async(self, job_result, exception=exc)
             raise
         finally:

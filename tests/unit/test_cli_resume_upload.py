@@ -11,13 +11,15 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
 from harbor.cli.job_plugins import PluginConfig
+from harbor.models.job.result import JobResult, JobStats
 
 
 def _write_minimal_resumable_job(tmp_path: Path) -> Path:
@@ -165,7 +167,16 @@ class TestResumeUploadWiring:
         from harbor.cli.jobs import resume
 
         job_dir = _write_minimal_resumable_job(tmp_path)
-        self._patch_job_run(monkeypatch)
+        stored_start = datetime(2026, 7, 3, 8, tzinfo=timezone(timedelta(hours=-4)))
+        (job_dir / "result.json").write_text(
+            JobResult(
+                id=uuid4(), started_at=stored_start, n_total_trials=0, stats=JobStats()
+            ).model_dump_json()
+        )
+        job_instance = self._patch_job_run(monkeypatch)
+        job_instance._resolve_started_at.return_value = stored_start.astimezone(
+            timezone.utc
+        )
 
         plugin = MagicMock()
         plugin.on_job_start = AsyncMock()
@@ -179,6 +190,10 @@ class TestResumeUploadWiring:
 
         plugin_cls.assert_called_once()
         assert plugin_cls.call_args.kwargs["public"] is None
+        started_at = plugin_cls.call_args.kwargs["started_at"]
+        assert started_at.tzinfo is timezone.utc
+        assert started_at == stored_start
+        job_instance.run.assert_awaited_once_with(started_at=started_at)
         plugin.on_job_start.assert_awaited_once()
         plugin.on_job_end.assert_awaited_once()
 
@@ -316,6 +331,45 @@ class TestResumePluginWiring:
 
 
 class TestResumeFilterErrorTypes:
+    def test_offsetless_resume_stops_before_filter_and_upload(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from harbor.cli.jobs import resume
+
+        job_dir = _write_minimal_resumable_job(tmp_path)
+        result_path = job_dir / "result.json"
+        result_path.write_text(
+            JobResult(
+                id=uuid4(),
+                started_at=datetime(2026, 7, 3, 8),
+                n_total_trials=1,
+                stats=JobStats(),
+            ).model_dump_json()
+        )
+        log_path = job_dir / "job.log"
+        log_path.write_text("original job log\n")
+        trial_dir = _write_trial_result(
+            job_dir, "filtered-trial", exception_type="RetryableError"
+        )
+        results = {
+            path: path.read_bytes() for path in job_dir.rglob("*") if path.is_file()
+        }
+        create = AsyncMock()
+        plugin = MagicMock()
+        monkeypatch.setattr("harbor.job.Job.create", create)
+        monkeypatch.setattr(
+            "harbor.cli.plugins.harbor_hub.HarborHubUploadPlugin", plugin
+        )
+
+        with pytest.raises(SystemExit) as exc:
+            resume(job_path=job_dir, upload=True, filter_error_types=["RetryableError"])
+
+        assert exc.value.code == 1
+        assert trial_dir.exists()
+        assert {path: path.read_bytes() for path in results} == results
+        create.assert_not_awaited()
+        plugin.assert_not_called()
+
     def test_skips_unparseable_results_and_filters_valid_trials(
         self,
         tmp_path: Path,

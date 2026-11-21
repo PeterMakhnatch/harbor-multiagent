@@ -2,10 +2,11 @@ import asyncio
 import json
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import logging
 from pathlib import Path
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -146,12 +147,16 @@ async def test_direct_task_source_gets_default_metric(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "started_at", [None, datetime(2026, 4, 28, 8, tzinfo=timezone(timedelta(hours=-4)))]
+)
 async def test_job_writes_initial_result_before_trials_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, started_at: datetime | None
 ) -> None:
     job = _make_job(tmp_path)
     trial_config = job._trial_configs[0]
     trial_result = _trial_result(trial_config)
+    before_run = datetime.now(timezone.utc)
 
     async def fake_run_trials(*args) -> list[TrialResult]:
         result_path = job.job_dir / "result.json"
@@ -161,6 +166,9 @@ async def test_job_writes_initial_result_before_trials_run(
         assert config_data["n_attempts"] == job.config.n_attempts
         assert config_data["timeout_multiplier"] == job.config.timeout_multiplier
         partial_result = JobResult.model_validate_json(result_path.read_text())
+        assert partial_result.started_at.utcoffset() == timedelta(0)
+        assert partial_result.updated_at is not None
+        assert partial_result.updated_at.utcoffset() == timedelta(0)
         assert partial_result.n_total_trials == 1
         assert partial_result.stats.n_completed_trials == 0
         assert partial_result.stats.n_pending_trials == 1
@@ -169,15 +177,64 @@ async def test_job_writes_initial_result_before_trials_run(
     monkeypatch.setattr(job, "_run_trials_with_queue", fake_run_trials)
 
     try:
-        result = await job.run()
+        result = await job.run(started_at=started_at)
     finally:
         job._close_logger_handlers()
 
     persisted = JobResult.model_validate_json((job.job_dir / "result.json").read_text())
+    assert persisted.started_at.utcoffset() == timedelta(0)
+    assert persisted.finished_at is not None
+    assert persisted.finished_at.utcoffset() == timedelta(0)
+    if started_at is None:
+        assert before_run <= persisted.started_at <= persisted.finished_at
+    else:
+        assert persisted.started_at == started_at
     assert result.stats.n_completed_trials == 1
     assert persisted.stats.n_completed_trials == 1
     assert persisted.stats.n_pending_trials == 0
     assert persisted.updated_at == persisted.finished_at
+
+
+@pytest.mark.unit
+async def test_job_run_refuses_supplied_start_without_offset(tmp_path: Path) -> None:
+    job = _make_job(tmp_path)
+
+    with pytest.raises(ValueError, match="Job.run started_at.*UTC offset"):
+        await job.run(started_at=datetime(2026, 4, 28, 8))
+
+    assert not (job.job_dir / "config.json").exists()
+    assert not (job.job_dir / "result.json").exists()
+
+
+@pytest.mark.unit
+async def test_job_create_refuses_offsetless_resume_before_preflight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = JobConfig(job_name="legacy-job", jobs_dir=tmp_path)
+    job_dir = tmp_path / config.job_name
+    job_dir.mkdir()
+    result_path = job_dir / "result.json"
+    original = JobResult(
+        id=uuid4(),
+        started_at=datetime(2026, 4, 28, 8),
+        n_total_trials=0,
+        stats=JobStats(),
+    ).model_dump_json()
+    result_path.write_text(original)
+    assert JobResult.model_validate_json(original).started_at.utcoffset() is None
+    validate_options = MagicMock()
+    monkeypatch.setattr(
+        "harbor.job.EnvironmentFactory.validate_options", validate_options
+    )
+
+    with pytest.raises(
+        ValueError, match="Cannot resume .*stored started_at.*UTC offset"
+    ):
+        await Job.create(config)
+
+    validate_options.assert_not_called()
+    assert result_path.read_text() == original
+    assert list(job_dir.iterdir()) == [result_path]
 
 
 async def test_live_and_final_metrics_exclude_invalid_rewards(tmp_path, monkeypatch):

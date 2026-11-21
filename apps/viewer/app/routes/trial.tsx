@@ -33,6 +33,11 @@ import { useHotkeys } from "react-hotkeys-hook";
 import { parseAsString, useQueryState } from "nuqs";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
+import {
+  elapsedTimestampMs,
+  parseAbsoluteTimestampMs,
+  UNKNOWN_TIME_LABEL,
+} from "~/lib/timestamps";
 import type { StepResult, TimingInfo } from "~/lib/types";
 
 import {
@@ -150,19 +155,12 @@ function TrialSectionTitle({
   );
 }
 
-function formatDateTime(date: string | null): string {
-  if (!date) return "-";
-  return new Date(date).toLocaleString();
-}
-
 function formatDuration(
   startedAt: string | null,
   finishedAt: string | null
 ): string {
-  if (!startedAt) return "-";
-  const start = new Date(startedAt).getTime();
-  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
-  const durationMs = end - start;
+  const durationMs = elapsedTimestampMs(startedAt, finishedAt ?? Date.now());
+  if (durationMs === null) return "-";
 
   const seconds = Math.floor(durationMs / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -179,11 +177,9 @@ function formatDuration(
 
 function getDurationMs(timing: TimingInfo | null): number {
   if (!timing?.started_at) return 0;
-  const start = new Date(timing.started_at).getTime();
-  const end = timing.finished_at
-    ? new Date(timing.finished_at).getTime()
-    : Date.now();
-  return end - start;
+  return (
+    elapsedTimestampMs(timing.started_at, timing.finished_at ?? Date.now()) ?? 0
+  );
 }
 
 interface TimingPhase {
@@ -497,11 +493,8 @@ function formatStepDuration(
   prevTimestamp: string | null,
   currentTimestamp: string | null
 ): string | null {
-  if (!prevTimestamp || !currentTimestamp) return null;
-  const prev = new Date(prevTimestamp).getTime();
-  const current = new Date(currentTimestamp).getTime();
-  const durationMs = current - prev;
-  if (durationMs < 0) return null;
+  const durationMs = elapsedTimestampMs(prevTimestamp, currentTimestamp);
+  if (durationMs === null) return null;
 
   return formatMs(durationMs);
 }
@@ -1503,14 +1496,6 @@ function getOscillatingColor(index: number): string {
   return colors[colorIndex];
 }
 
-function parseStepTimeMs(
-  timestamp: string | null | undefined
-): number | null {
-  if (!timestamp) return null;
-  const ms = new Date(timestamp).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
 /** Horizontal padding (px) kept between the tooltip and the bar edges. */
 const STEP_DURATION_TOOLTIP_EDGE_PADDING_PX = 8;
 
@@ -1571,20 +1556,13 @@ function StepDurationBar({
 
   // Timeline origin: first step with a parseable timestamp.
   // Never fall back to 0 — that formats absolute Unix ms as ~495586h.
-  let startTime: number | null = null;
-  for (const step of steps) {
-    const t = parseStepTimeMs(step.timestamp);
-    if (t !== null) {
-      startTime = t;
-      break;
-    }
-  }
+  const stepTimes = steps.map((step) => parseAbsoluteTimestampMs(step.timestamp));
+  const startTime = stepTimes.find((timestamp) => timestamp !== null) ?? null;
 
   // Calculate durations: each step's duration is time since previous step
   const stepDurations: StepDurationInfo[] = steps.map((step, idx) => {
-    const stepTime = parseStepTimeMs(step.timestamp);
-    const prevStep = idx > 0 ? steps[idx - 1] : null;
-    const prevTime = prevStep ? parseStepTimeMs(prevStep.timestamp) : null;
+    const stepTime = stepTimes[idx];
+    const prevTime = stepTimes[idx - 1] ?? null;
 
     let durationMs = 0;
     if (stepTime !== null && prevTime !== null) {
@@ -3517,8 +3495,8 @@ export default function Trial() {
       if (query.state.data?.available) return false;
       if (!trial?.finished_at) return IN_PROGRESS_POLL_MS;
 
-      const finishedAt = Date.parse(trial.finished_at);
-      if (Number.isNaN(finishedAt)) return false;
+      const finishedAt = parseAbsoluteTimestampMs(trial.finished_at);
+      if (finishedAt === null) return false;
 
       return Date.now() - finishedAt < RECORDING_POST_FINISH_POLL_MS
         ? IN_PROGRESS_POLL_MS
@@ -3612,6 +3590,8 @@ export default function Trial() {
     if (step && steps.some((s) => s.step_name === step)) return;
     setStep(steps[0].step_name);
   }, [trial, step, setStep]);
+
+  const startedAt = parseAbsoluteTimestampMs(trial?.started_at);
 
   return (
     <PageShell>
@@ -3715,9 +3695,13 @@ export default function Trial() {
               {trial.started_at && (
                 <>
                   <span className="text-border shrink-0">|</span>
-                  <time dateTime={trial.started_at} className="shrink-0">
-                    Started {formatDateTime(trial.started_at)}
-                  </time>
+                  {startedAt === null ? (
+                    <span className="shrink-0">Started: {UNKNOWN_TIME_LABEL}</span>
+                  ) : (
+                    <time dateTime={trial.started_at} className="shrink-0">
+                      Started {new Date(Math.floor(startedAt)).toLocaleString()}
+                    </time>
+                  )}
                 </>
               )}
             </PageHeaderMetaPrimary>

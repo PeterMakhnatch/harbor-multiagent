@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -106,23 +107,25 @@ def test_jobs_list_sources_include_dataset_task_and_path_labels(
 
 
 @pytest.mark.unit
-def test_jobs_list_sorts_mixed_naive_and_aware_started_at(tmp_path: Path) -> None:
+def test_jobs_list_keeps_unknown_starts_last(tmp_path: Path) -> None:
     _write_job(
         tmp_path,
         job_name="aware-job",
         started_at=datetime(2026, 4, 28, 9, 0, tzinfo=timezone.utc),
     )
-    _write_job(
+    legacy_dir = _write_job(
         tmp_path,
         job_name="naive-job",
         started_at=datetime(2026, 4, 28, 10, 0),
     )
+    legacy_path = legacy_dir / "result.json"
+    legacy_bytes = legacy_path.read_bytes()
     client = TestClient(create_app(tmp_path))
 
     response = client.get("/api/jobs")
 
     assert response.status_code == 200
-    assert [item["name"] for item in response.json()["items"]] == [
-        "naive-job",
-        "aware-job",
-    ]
+    items = response.json()["items"]
+    assert [item["name"] for item in items] == ["aware-job", "naive-job"]
+    assert items[1]["started_at"] == json.loads(legacy_bytes)["started_at"]
+    assert legacy_path.read_bytes() == legacy_bytes

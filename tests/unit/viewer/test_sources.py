@@ -2,7 +2,7 @@
 
 import gzip
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -130,6 +130,127 @@ def test_folder_contract_and_legacy_routes(tmp_path):
             == 0
         )
         require(not (tmp_path / "harbor.sqlite3").exists())
+
+
+def test_native_job_dates_keep_offsetless_starts_outside_absolute_order(tmp_path):
+    reference = datetime.now(UTC)
+    recent = (reference - timedelta(hours=13)).astimezone(
+        timezone(-timedelta(hours=12))
+    )
+    older = (reference - timedelta(hours=25)).astimezone(timezone(timedelta(hours=14)))
+    unknown = reference.replace(tzinfo=None)
+    historical = {}
+    for name, start in (
+        ("recent", recent),
+        ("older", older),
+        ("unknown-a", unknown),
+        ("unknown-b", unknown + timedelta(hours=1)),
+    ):
+        result, _, trial = write_job(tmp_path)
+        result.started_at = start
+        result.updated_at = reference
+        trial.parent.rename(tmp_path / name)
+        path = tmp_path / name / "result.json"
+        path.write_text(result.model_dump_json())
+        if name.startswith("unknown"):
+            historical[name] = (result, path, path.read_bytes())
+
+    with TestClient(create_app(tmp_path), client=("127.0.0.1", 50000)) as client:
+        legacy = client.get("/api/jobs").json()["items"]
+        assert [row["name"] for row in legacy[:2]] == ["recent", "older"]
+        assert {row["name"] for row in legacy[2:]} == set(historical)
+        assert [
+            row["name"]
+            for row in client.get("/api/jobs", params={"date": "today"}).json()["items"]
+        ] == ["recent"]
+
+        for sort in ("-created_at", "created_at", "-started_at", "started_at"):
+            cursor = ""
+            shared = []
+            for _ in range(4):
+                response = client.get(
+                    "/api/source/jobs",
+                    params={"page_size": 1, "sort": sort, "page_token": cursor},
+                )
+                assert response.status_code == 200, response.text
+                page = response.json()
+                assert page["total"] == 4
+                shared.extend(page["items"])
+                cursor = page["next_page_token"]
+            assert cursor == ""
+            expected = (
+                ["recent", "older"] if sort.startswith("-") else ["older", "recent"]
+            )
+            assert [row["name"] for row in shared[:2]] == expected
+            assert {row["name"] for row in shared[2:]} == set(historical)
+
+        cutoff = (
+            (reference - timedelta(days=1))
+            .astimezone(timezone(-timedelta(hours=5)))
+            .isoformat()
+        )
+        for field, expected in (
+            ("created_after", "recent"),
+            ("created_before", "older"),
+        ):
+            response = client.get("/api/source/jobs", params={field: cutoff})
+            assert response.status_code == 200, response.text
+            assert [row["name"] for row in response.json()["items"]] == [expected]
+            facets = client.get(
+                "/api/source/jobs/filters", params={"field": "state", field: cutoff}
+            )
+            assert facets.json()["values"] == [{"value": "finished", "count": 1}]
+
+        for name, (result, path, raw) in historical.items():
+            start = result.started_at.isoformat()
+            assert (
+                next(row for row in legacy if row["name"] == name)["started_at"]
+                == start
+            )
+            assert (
+                next(row for row in shared if row["name"] == name)["started_at"]
+                == start
+            )
+            assert client.get(f"/api/jobs/{name}").json()["started_at"] == start
+            detail = client.get(f"/api/source/jobs/{result.id}").json()["job"]
+            assert detail["started_at"] == start
+            assert detail["created_at"] == start
+            assert path.read_bytes() == raw
+
+
+def test_native_trial_sorts_keep_unknown_instants_last(tmp_path):
+    _, trial, directory = write_job(tmp_path)
+    reference = datetime(2026, 1, 5, tzinfo=UTC)
+    later = (reference + timedelta(hours=1)).astimezone(timezone(-timedelta(hours=12)))
+    for name, start, duration in (
+        ("earlier", reference, 1),
+        ("later", later, 10),
+        ("original-local", reference.replace(tzinfo=None), 5),
+    ):
+        target = directory.parent / name
+        target.mkdir()
+        saved = trial.model_copy(
+            update={
+                "id": uuid4(),
+                "trial_name": name,
+                "started_at": start,
+                "finished_at": start + timedelta(seconds=duration),
+            }
+        )
+        (target / "result.json").write_text(saved.model_dump_json())
+    (directory / "result.json").unlink()
+
+    with TestClient(create_app(tmp_path), client=("127.0.0.1", 50000)) as client:
+        for sort in ("started_at", "finished_at", "duration"):
+            for direction, first in (("asc", "earlier"), ("desc", "later")):
+                params = {"sort_by": sort, "sort_order": direction, "page_size": 2}
+                response = client.get("/api/rollouts", params=params)
+                assert response.status_code == 200, response.text
+                assert response.json()["items"][0]["name"] == first
+                response = client.get("/api/rollouts", params={**params, "page": 2})
+                assert [row["name"] for row in response.json()["items"]] == [
+                    "original-local"
+                ]
 
 
 def test_folder_downloads_and_lifecycle(tmp_path):

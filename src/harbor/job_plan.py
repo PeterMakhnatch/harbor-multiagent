@@ -2,7 +2,7 @@ import asyncio
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -18,6 +18,7 @@ from harbor.models.trial.config import TaskConfig, TrialConfig
 from harbor.models.trial.result import TrialResult
 from harbor.tasks.client import TaskClient, TaskDownloadResult, TaskIdType
 from harbor.utils.pass_at_k import compute_pass_at_k_by_evals
+from harbor.utils.timestamps import require_utc_timestamp
 
 
 @dataclass(slots=True)
@@ -340,13 +341,25 @@ class JobPlan:
         trial_results = list(trial_results)
         if n_total_trials is None:
             n_total_trials = len(self.trial_configs)
-        finished_at = finished_at or datetime.now()
-        started_at = started_at or self._infer_started_at(trial_results) or finished_at
+        finished_at = (
+            require_utc_timestamp(finished_at, "JobPlan.aggregate finished_at")
+            if finished_at is not None
+            else datetime.now(UTC)
+        )
+        started_at = (
+            require_utc_timestamp(started_at, "JobPlan.aggregate started_at")
+            if started_at is not None
+            else self._infer_started_at(trial_results) or finished_at
+        )
 
         return JobResult(
             id=self.id,
             started_at=started_at,
-            updated_at=updated_at or finished_at,
+            updated_at=(
+                require_utc_timestamp(updated_at, "JobPlan.aggregate updated_at")
+                if updated_at is not None
+                else finished_at
+            ),
             finished_at=finished_at,
             n_total_trials=n_total_trials,
             stats=self.aggregate_stats(
@@ -407,9 +420,14 @@ class JobPlan:
 
     @staticmethod
     def _infer_started_at(trial_results: Sequence[TrialResult]) -> datetime | None:
-        started_values = [
-            trial_result.started_at
-            for trial_result in trial_results
-            if trial_result.started_at is not None
-        ]
-        return min(started_values) if started_values else None
+        return min(
+            (
+                require_utc_timestamp(
+                    trial_result.started_at,
+                    f"Trial {trial_result.trial_name} started_at",
+                )
+                for trial_result in trial_results
+                if trial_result.started_at is not None
+            ),
+            default=None,
+        )

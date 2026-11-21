@@ -6,7 +6,7 @@ import logging
 import tarfile
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -21,6 +21,7 @@ from harbor.models.job.result import JobResult
 from harbor.models.trial.result import TrialResult
 from harbor.upload.db_client import OwnerOrgError, UploadDB
 from harbor.upload.storage import UploadStorage
+from harbor.utils.timestamps import known_utc_timestamp, require_utc_timestamp
 
 logger = logging.getLogger(__name__)
 _DIGEST_PREFIX = "sha256:"
@@ -192,6 +193,9 @@ class Uploader:
 
         owner_org: dict[str, Any] | None
         if not already_existed:
+            started_at = require_utc_timestamp(
+                started_at, f"Cannot register job {job_id} with Harbor Hub: started_at"
+            )
             owner_org = await self.db.resolve_owner_org(org)
             org_id = (
                 UUID(str(owner_org["id"]))
@@ -321,6 +325,17 @@ class Uploader:
         calls this for incomplete jobs or when new attempts were uploaded.
         A revision preserves immutable storage objects on re-upload.
         """
+        require_utc_timestamp(
+            job_result.started_at,
+            f"Cannot finalize job {job_result.id} on Harbor Hub: started_at",
+        )
+        finished_at = job_result.finished_at
+        if finished_at is not None:
+            finished_at = require_utc_timestamp(
+                finished_at,
+                f"Cannot finalize job {job_result.id} on Harbor Hub: finished_at",
+            )
+
         log_path: str | None = None
         job_log = job_dir / "job.log"
         if job_log.exists():
@@ -346,7 +361,7 @@ class Uploader:
             job_result.id,
             archive_path=archive_path,
             log_path=log_path,
-            finished_at=job_result.finished_at or datetime.now(),
+            finished_at=finished_at or datetime.now(UTC),
         )
         local_archive_path.unlink(missing_ok=True)
         upload_url_path.unlink(missing_ok=True)
@@ -614,50 +629,55 @@ class Uploader:
             # let an interrupted or concurrent attempt continue without
             # overwriting the existing metadata. Artifact paths stay NULL until
             # every required upload succeeds.
-            await self.db.insert_trial(
-                id=trial_result.id,
-                trial_name=trial_result.trial_name,
-                task_name=trial_result.task_name,
-                task_content_hash=trial_lock.task.digest.removeprefix(_DIGEST_PREFIX),
-                lock=trial_lock.model_dump(mode="json", exclude_none=True),
-                job_id=job_id,
-                agent_id=agent_id,
-                started_at=trial_result.started_at,
-                finished_at=trial_result.finished_at,
-                config=trial_result.config.model_dump(mode="json"),
-                rewards=(
-                    trial_result.verifier_result.rewards
-                    if trial_result.reward_valid and trial_result.verifier_result
-                    else None
-                ),
-                exception_type=(
-                    trial_result.exception_info.exception_type
-                    if trial_result.exception_info
-                    else None
-                ),
-                environment_setup_started_at=_timing_field(
-                    trial_result.environment_setup, "started_at"
-                ),
-                environment_setup_finished_at=_timing_field(
-                    trial_result.environment_setup, "finished_at"
-                ),
-                agent_setup_started_at=_timing_field(
-                    trial_result.agent_setup, "started_at"
-                ),
-                agent_setup_finished_at=_timing_field(
-                    trial_result.agent_setup, "finished_at"
-                ),
-                agent_execution_started_at=_timing_field(
-                    trial_result.agent_execution, "started_at"
-                ),
-                agent_execution_finished_at=_timing_field(
-                    trial_result.agent_execution, "finished_at"
-                ),
-                verifier_started_at=_timing_field(trial_result.verifier, "started_at"),
-                verifier_finished_at=_timing_field(
-                    trial_result.verifier, "finished_at"
-                ),
-            )
+            if remote is None:
+                await self.db.insert_trial(
+                    id=trial_result.id,
+                    trial_name=trial_result.trial_name,
+                    task_name=trial_result.task_name,
+                    task_content_hash=trial_lock.task.digest.removeprefix(
+                        _DIGEST_PREFIX
+                    ),
+                    lock=trial_lock.model_dump(mode="json", exclude_none=True),
+                    job_id=job_id,
+                    agent_id=agent_id,
+                    started_at=known_utc_timestamp(trial_result.started_at),
+                    finished_at=known_utc_timestamp(trial_result.finished_at),
+                    config=trial_result.config.model_dump(mode="json"),
+                    rewards=(
+                        trial_result.verifier_result.rewards
+                        if trial_result.reward_valid and trial_result.verifier_result
+                        else None
+                    ),
+                    exception_type=(
+                        trial_result.exception_info.exception_type
+                        if trial_result.exception_info
+                        else None
+                    ),
+                    environment_setup_started_at=_timing_field(
+                        trial_result.environment_setup, "started_at"
+                    ),
+                    environment_setup_finished_at=_timing_field(
+                        trial_result.environment_setup, "finished_at"
+                    ),
+                    agent_setup_started_at=_timing_field(
+                        trial_result.agent_setup, "started_at"
+                    ),
+                    agent_setup_finished_at=_timing_field(
+                        trial_result.agent_setup, "finished_at"
+                    ),
+                    agent_execution_started_at=_timing_field(
+                        trial_result.agent_execution, "started_at"
+                    ),
+                    agent_execution_finished_at=_timing_field(
+                        trial_result.agent_execution, "finished_at"
+                    ),
+                    verifier_started_at=_timing_field(
+                        trial_result.verifier, "started_at"
+                    ),
+                    verifier_finished_at=_timing_field(
+                        trial_result.verifier, "finished_at"
+                    ),
+                )
 
             if model_id is not None:
                 agent_result = trial_result.agent_result
@@ -770,10 +790,7 @@ def _load_job_from_disk(
 def _timing_field(timing: object | None, field: str) -> datetime | None:
     if timing is None:
         return None
-    value = getattr(timing, field, None)
-    if isinstance(value, datetime):
-        return value
-    return None
+    return known_utc_timestamp(getattr(timing, field, None))
 
 
 def _extract_primary_reward(trial_result: TrialResult) -> float | int | None:

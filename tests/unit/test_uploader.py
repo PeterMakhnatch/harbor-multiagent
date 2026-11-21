@@ -1,7 +1,7 @@
 import json
 import tarfile
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -670,7 +670,7 @@ class TestUploadJob:
         )
 
         assert second.error is None
-        assert mock_uploader.db.insert_trial.await_count == 2
+        mock_uploader.db.insert_trial.assert_awaited_once()
         assert mock_uploader.db.insert_trial_model.await_count == 2
         assert mock_uploader.db.finalize_trial_artifacts.await_count == 2
         assert not (trial_dir / ".harbor-upload" / "trial.tar.gz").exists()
@@ -777,6 +777,48 @@ class TestUploadJob:
             call.args[0].parent.name == ".harbor-upload" for call in archive_calls
         )
         assert all(not call.args[0].exists() for call in archive_calls)
+
+    @pytest.mark.asyncio
+    async def test_upload_refuses_new_hub_job_with_unknown_start(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        job_dir, job_result, _ = _write_job_dir(tmp_path, [])
+        job_result.started_at = datetime(2026, 4, 17, 9)
+        result_path = job_dir / "result.json"
+        original = job_result.model_dump_json()
+        result_path.write_text(original)
+
+        with pytest.raises(
+            ValueError, match="Cannot register .*started_at.*UTC offset"
+        ):
+            await mock_uploader.upload_job(job_dir)
+
+        mock_uploader.db.insert_job.assert_not_awaited()
+        mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+        assert result_path.read_text() == original
+
+    @pytest.mark.asyncio
+    async def test_upload_omits_unknown_optional_trial_times(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        trial_result = _make_trial_result()
+        trial_result.started_at = datetime(2026, 4, 17, 6)
+        aware_finish = datetime(2026, 4, 17, 7, tzinfo=timezone(timedelta(hours=-4)))
+        trial_result.finished_at = aware_finish
+        trial_result.agent_setup = TimingInfo(started_at=trial_result.started_at)
+        job_dir, _, _ = _write_job_dir(tmp_path, [trial_result])
+        result_path = job_dir / trial_result.trial_name / "result.json"
+        original = result_path.read_bytes()
+
+        upload = await mock_uploader.upload_job(job_dir)
+
+        assert upload.n_trials_uploaded == 1
+        sent = mock_uploader.db.insert_trial.await_args.kwargs
+        assert sent["started_at"] is None
+        assert sent["agent_setup_started_at"] is None
+        assert sent["finished_at"] == aware_finish
+        assert sent["finished_at"].tzinfo is timezone.utc
+        assert result_path.read_bytes() == original
 
     @pytest.mark.asyncio
     async def test_inserts_trial_row_before_uploading_archive(
@@ -921,6 +963,7 @@ class TestUploadJob:
         self, tmp_path: Path, mock_uploader: Uploader
     ) -> None:
         trial_result = _make_trial_result(rewards={"reward": 1.0})
+        trial_result.started_at = datetime(2026, 4, 17, 6)
         mock_uploader.db.get_job_visibility.return_value = "private"
         mock_uploader.db.list_trials_for_job.return_value = [
             {"id": str(trial_result.id), "archive_path": None}
@@ -935,7 +978,8 @@ class TestUploadJob:
 
         assert result.n_trials_uploaded == 1
         assert result.n_trials_skipped == 0
-        mock_uploader.db.insert_trial.assert_awaited_once()
+        mock_uploader.db.insert_trial.assert_not_awaited()
+        mock_uploader.db.insert_trial_model.assert_awaited_once()
         mock_uploader.db.finalize_trial_artifacts.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -980,7 +1024,7 @@ class TestUploadJob:
         mock_uploader.db.list_trials_for_job.return_value = [
             {"id": str(trial_result.id), "archive_path": "trials/existing/trial.tar.gz"}
         ]
-        job_dir, _, _ = _write_job_dir(tmp_path, [trial_result])
+        job_dir, job_result, _ = _write_job_dir(tmp_path, [trial_result])
 
         await mock_uploader.upload_job(job_dir)
         mock_uploader.db.get_job.return_value = {
@@ -989,6 +1033,9 @@ class TestUploadJob:
             ]
         }
         mock_uploader.db.finalize_job.reset_mock()
+        job_result.started_at = datetime(2026, 4, 17, 9)
+        job_result.finished_at = datetime(2026, 4, 17, 10)
+        (job_dir / "result.json").write_text(job_result.model_dump_json())
 
         result = await mock_uploader.upload_job(job_dir)
 
@@ -1032,11 +1079,14 @@ class TestUploadJob:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("has_finish", [False, True])
     async def test_finalize_resumes_existing_job_archive_upload(
-        self, tmp_path: Path, mock_uploader: Uploader
+        self, tmp_path: Path, mock_uploader: Uploader, has_finish: bool
     ) -> None:
         trial_results = [_make_trial_result(rewards={"reward": 1.0})]
         job_dir, job_result, job_config = _write_job_dir(tmp_path, trial_results)
+        if not has_finish:
+            job_result.finished_at = None
         archive_path = job_dir / ".harbor-upload" / "job.tar.gz"
         archive_path.parent.mkdir()
         archive_path.write_bytes(b"partial gzip bytes")
@@ -1052,6 +1102,10 @@ class TestUploadJob:
             )
 
         create_archive.assert_not_called()
+        finalized_at = mock_uploader.db.finalize_job.await_args.kwargs["finished_at"]
+        assert finalized_at.utcoffset() == timezone.utc.utcoffset(None)
+        if has_finish:
+            assert finalized_at == job_result.finished_at
         mock_uploader.storage.upload_large_file.assert_awaited_once()
         mock_uploader.storage.upload_resumable_file.assert_awaited_once_with(
             archive_path,
@@ -1059,6 +1113,24 @@ class TestUploadJob:
         )
         assert not archive_path.exists()
         assert not archive_path.with_suffix(archive_path.suffix + ".tus-url").exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("field", ["started_at", "finished_at"])
+    async def test_finalize_refuses_unknown_job_times_before_upload(
+        self, tmp_path: Path, mock_uploader: Uploader, field: str
+    ) -> None:
+        job_dir, job_result, job_config = _write_job_dir(tmp_path, [])
+        job_result.finished_at = None
+        setattr(job_result, field, datetime(2026, 4, 17, 10))
+
+        with pytest.raises(ValueError, match=f"Cannot finalize .*{field}.*UTC offset"):
+            await mock_uploader.finalize_job(
+                job_dir, job_result=job_result, job_config=job_config
+            )
+
+        mock_uploader.storage.upload_large_file.assert_not_awaited()
+        mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+        mock_uploader.db.finalize_job.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_records_per_trial_errors_without_failing_job(

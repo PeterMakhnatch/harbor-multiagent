@@ -1,6 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { RewardCell } from "~/components/reward-cell";
 import { SortableHeader } from "~/components/ui/data-table";
+import {
+  elapsedTimestampMs,
+  parseAbsoluteTimestampMs,
+  UNKNOWN_TIME_LABEL,
+} from "~/lib/timestamps";
 import type { TrialSummary } from "~/lib/types";
 import { formatCostUSD, formatStatus } from "~/lib/utils";
 
@@ -97,28 +102,22 @@ export const rolloutColumns: ColumnDef<TrialSummary>[] = [
   },
   {
     id: "duration",
-    accessorFn: (row) => {
-      if (!row.started_at) return null;
-      const start = new Date(row.started_at).getTime();
-      const end = row.finished_at
-        ? new Date(row.finished_at).getTime()
-        : Date.now();
-      return end - start;
-    },
+    accessorFn: (row) => elapsedTimestampMs(row.started_at, row.finished_at),
     header: ({ column }) => (
       <div className="text-right">
         <SortableHeader column={column}>Duration</SortableHeader>
       </div>
     ),
-    cell: ({ row }) => {
+    cell: ({ row, getValue }) => {
       const { started_at, finished_at } = row.original;
-      if (!started_at) {
+      const durationMs = finished_at === null
+        ? elapsedTimestampMs(started_at, Date.now())
+        : getValue<number | null>();
+      if (durationMs === null) {
         return <div className="text-right text-muted-foreground">-</div>;
       }
-      const start = new Date(started_at).getTime();
-      const end = finished_at ? new Date(finished_at).getTime() : Date.now();
-      const duration = formatDurationMs(end - start);
-      if (!finished_at) {
+      const duration = formatDurationMs(durationMs);
+      if (finished_at === null) {
         return (
           <div className="text-right text-muted-foreground">{duration}...</div>
         );
@@ -127,15 +126,21 @@ export const rolloutColumns: ColumnDef<TrialSummary>[] = [
     },
   },
   {
-    accessorKey: "started_at",
+    id: "started_at",
+    accessorFn: (row) => parseAbsoluteTimestampMs(row.started_at),
     header: ({ column }) => (
       <SortableHeader column={column}>Started</SortableHeader>
     ),
-    cell: ({ row }) => {
-      if (!row.original.started_at) {
-        return <span className="text-muted-foreground">-</span>;
+    cell: ({ row, getValue }) => {
+      const ms = getValue<number | null>();
+      if (ms === null) {
+        return (
+          <span className="text-muted-foreground">
+            {row.original.started_at === null ? "-" : UNKNOWN_TIME_LABEL}
+          </span>
+        );
       }
-      return new Date(row.original.started_at).toLocaleString();
+      return new Date(Math.floor(ms)).toLocaleString();
     },
   },
   {

@@ -3,12 +3,16 @@ import { CursorPagination } from "~/components/cursor-pagination";
 import { useCursorPage } from "~/lib/cursor-page";
 import { resourceKey } from "~/lib/urls";
 import {
-  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { ColumnDef, RowSelectionState, VisibilityState } from "@tanstack/react-table";
+import type {
+  ColumnDef,
+  RowSelectionState,
+  SortingState,
+  VisibilityState,
+} from "@tanstack/react-table";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Delete02Icon from "@hugeicons/core-free-icons/Delete02Icon";
 import FolderOpenIcon from "@hugeicons/core-free-icons/FolderOpenIcon";
@@ -58,6 +62,11 @@ import {
 } from "~/components/ui/pagination";
 import { deleteJob, fetchConfig, fetchJobFilters, fetchJobs } from "~/lib/api";
 import { useDebouncedValue, useKeyboardTableNavigation } from "~/lib/hooks";
+import {
+  elapsedTimestampMs,
+  parseAbsoluteTimestampMs,
+  UNKNOWN_TIME_LABEL,
+} from "~/lib/timestamps";
 import type { EvalSummary, JobSummary } from "~/lib/types";
 import { formatCostUSD } from "~/lib/utils";
 
@@ -83,15 +92,7 @@ function getPrimaryMetric(
   return entries.find(([name]) => name === "reward") ?? entries[0] ?? null;
 }
 
-function formatDuration(
-  startedAt: string | null,
-  finishedAt: string | null
-): string {
-  if (!startedAt) return "-";
-  const start = new Date(startedAt).getTime();
-  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
-  const durationMs = end - start;
-
+function formatDuration(durationMs: number): string {
   const seconds = Math.floor(durationMs / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -202,14 +203,17 @@ const columns: ColumnDef<JobSummary>[] = [
     },
   },
   {
-    accessorKey: "started_at",
+    id: "started_at",
+    accessorFn: (row) => parseAbsoluteTimestampMs(row.started_at),
     header: ({ column }) => (
       <SortableHeader column={column}>Started</SortableHeader>
     ),
-    cell: ({ row }) => {
-      const date = row.original.started_at;
-      if (!date) return "-";
-      return new Date(date).toLocaleString(undefined, {
+    cell: ({ row, getValue }) => {
+      const ms = getValue<number | null>();
+      if (ms === null) {
+        return row.original.started_at === null ? "-" : UNKNOWN_TIME_LABEL;
+      }
+      return new Date(Math.floor(ms)).toLocaleString(undefined, {
         dateStyle: "short",
         timeStyle: "short",
       });
@@ -220,16 +224,10 @@ const columns: ColumnDef<JobSummary>[] = [
     header: ({ column }) => (
       <SortableHeader column={column}>Duration</SortableHeader>
     ),
-    accessorFn: (row) => {
-      if (!row.started_at || !row.finished_at) return 0;
-      return (
-        new Date(row.finished_at).getTime() - new Date(row.started_at).getTime()
-      );
-    },
-    cell: ({ row }) => {
-      const { started_at, finished_at } = row.original;
-      if (!started_at || !finished_at) return "-";
-      return formatDuration(started_at, finished_at);
+    accessorFn: (row) => elapsedTimestampMs(row.started_at, row.finished_at),
+    cell: ({ getValue }) => {
+      const durationMs = getValue<number | null>();
+      return durationMs === null ? "-" : formatDuration(durationMs);
     },
   },
   {
@@ -368,6 +366,7 @@ export default function Home() {
   );
   const [isDeleting, setIsDeleting] = useState(false);
   const [page, setPage] = useState(1);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useQueryState(
     "q",
     parseAsString.withDefault("")
@@ -552,6 +551,7 @@ export default function Home() {
     return days.length ? new Date(Date.now() - Math.max(...days) * 86400000).toISOString() : undefined;
   }, [dateKey]);
   const isServer = viewerConfig?.source === "server";
+  const dateScope = isServer ? createdAfter : dateKey;
   const cursorPage = useCursorPage(JSON.stringify([debouncedSearch, agentFilter, providerFilter, modelFilter, dateFilter, createdAfter]));
   const { data: jobsData, isLoading, isFetching, refetch: refetchJobs } = useQuery({
     queryKey: [
@@ -561,8 +561,7 @@ export default function Home() {
       agentFilter,
       providerFilter,
       modelFilter,
-      dateFilter,
-      isServer ? createdAfter : undefined,
+      dateScope,
     ],
     queryFn: () =>
       fetchJobs(isServer ? cursorPage.page : page, PAGE_SIZE, {
@@ -573,11 +572,27 @@ export default function Home() {
         dates: dateFilter.length > 0 ? dateFilter : undefined,
         createdAfter: isServer ? createdAfter : undefined,
       }, isServer ? cursorPage.cursor : undefined),
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey.at(-1) === dateScope ? previous : undefined,
     enabled: isJobsMode,
   });
 
-  const jobs = jobsData?.items ?? [];
+  const startedDescending =
+    sorting[0]?.id === "started_at" ? sorting[0].desc : undefined;
+  const jobs = useMemo(() => {
+    const rows = jobsData?.items ?? [];
+    if (startedDescending === undefined) return rows;
+    const keyed = rows.map((job) => ({
+      job,
+      started: parseAbsoluteTimestampMs(job.started_at),
+    }));
+    keyed.sort((a, b) => {
+      if (a.started === null) return b.started === null ? 0 : 1;
+      if (b.started === null) return -1;
+      return startedDescending ? b.started - a.started : a.started - b.started;
+    });
+    return keyed.map(({ job }) => job);
+  }, [jobsData?.items, startedDescending]);
   const totalPages = jobsData?.total_pages ?? 0;
   const total = jobsData?.total ?? 0;
 
@@ -736,6 +751,9 @@ export default function Home() {
         rowSelection={rowSelection}
         onRowSelectionChange={handleRowSelectionChange}
         columnVisibility={columnVisibility}
+        sorting={sorting}
+        onSortingChange={setSorting}
+        manualSorting={startedDescending !== undefined}
         getRowId={resourceKey}
         isLoading={isLoading || isConfigPending}
         highlightedIndex={highlightedIndex}

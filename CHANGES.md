@@ -10,13 +10,15 @@ several Harbor agents in one environment, each in its own Compose service
 | File | Why |
 |---|---|
 | `.github/workflows/*.yml` | Harbor runs its CI on Blacksmith runners (`blacksmith-<n>vcpu-<os>` labels), which only a repository with the Blacksmith GitHub App installed can use; this repository does not have it, so those jobs would wait in the queue and never start. Each job runs on the GitHub-hosted runner of the same OS instead (`ubuntu-26.04`, `ubuntu-24.04`, `windows-2025`); the steps are Harbor's. The `agents` runtime suite's test VM gets 4 CPUs and 12 GB, as Harbor's other two runtime suites do, where Harbor gives it 8 and 24: a GitHub-hosted Linux runner has 4 CPUs and 16 GB, and QEMU fails to start a VM larger than its host. The non-runtime suites run one pytest worker per CPU (`-n auto`) where Harbor runs eight: eight workers on four CPUs made the relay tests' 2 to 5 s waits time out; with half the CPUs the Windows suite takes 13 to 16 minutes, so both non-runtime jobs get 30 minutes where Harbor gives 15. Tradeoff: the suites run slower than on the Blacksmith sizes Harbor picked. |
-| `README.md` | Describes this fork and how to install it. Harbor's README is at [harbor-framework/harbor](https://github.com/harbor-framework/harbor). |
+| `README.md` | Describes this fork, installation, and the Job timestamp contract. Harbor's README is at [harbor-framework/harbor](https://github.com/harbor-framework/harbor). |
+| `CHANGELOG.md` | Records the breaking Job timestamp boundary and legacy reader behavior. |
 | `src/harbor/models/task/config.py` | `SeatConfig` and `TaskConfig.agents` (`[agents.<service>]`), with the seat refusals at task load. |
 | `src/harbor/models/task/paths.py` | `seat_instruction_path`: `instructions/<seat>.md`. |
 | `src/harbor/models/task/task.py` | Reads each seat's instruction and does not require `instruction.md` for a seat task. |
 | `src/harbor/models/trial/config.py` | `Participant` (an `AgentConfig` plus `seat`) and `TrialConfig.participants`, refusing duplicate seats and per-agent settings seats cannot honor. |
 | `src/harbor/models/job/config.py` | `JobConfig.participants`. |
-| `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. |
+| `src/harbor/job.py` | Emits aware UTC lifecycle times and rejects unsafe resume before it changes files or logs. |
+| `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. Normalizes aggregate boundaries and rejects an unknown inferred start. |
 | `src/harbor/models/job/lock.py` | Records participants in `lock.json` and its equality, so a changed roster is a changed run. |
 | `src/harbor/models/trial/result.py` | `SeatResult` and `TrialResult.seat_results`; seat errors count as recorded errors and seat usage counts in the token and cost totals. |
 | `src/harbor/environments/base.py` | `service_upload_file` and `service_upload_dir`, raising the existing unsupported-service error off `main`. |
@@ -32,6 +34,13 @@ several Harbor agents in one environment, each in its own Compose service
 | `docs-mintlify/docs.json` | Lists `tasks/multi-agent` in the Tasks group. |
 | `src/harbor/cli/trials.py` | `harbor trial start` lists a seat trial's participants (`seat: harness model`, agents under test marked) where it prints `Agent:` for one agent. |
 | `src/harbor/trial/trial.py` | `Trial.create` routes seat tasks to `SeatsTrial`, and refuses `participants` on a task without seats and a regrade of a seat task. `_scrub_jobs_dir` takes its secrets from a new `_secrets_to_scrub`, so a seat trial scrubs once with every seat's secrets. `_secrets_to_scrub`, `_validate_agent_capabilities` and `_compute_agent_setup_timeout_sec` take an optional agent and agent config, defaulting to `self.agent` and `self.config.agent`, so a seat trial passes each seat's instead of swapping trial fields; Harbor's callers are unchanged. |
+| `src/harbor/cli/jobs.py`, `src/harbor/cli/utils.py`, `src/harbor/cli/plugins/harbor_hub.py` | Share one aware start between native execution and Hub records. Reject unknown required upload boundaries. |
+| `src/harbor/upload/uploader.py` | Validates required Job times, omits unknown optional Trial times, and preserves archived payloads. Existing reservations do not rewrite timestamps. |
+| `src/harbor/viewer/server.py`, `src/harbor/viewer/sources/folder.py` | Keep historical raw times unchanged. Sort unknown starts last and exclude them from absolute date filters. |
+| `src/harbor/server/listing.py`, `src/harbor/server/database.py` | Restore the known UTC contract at REST boundaries when the SQLite codec drops the offset. Keep stored and raw SQL values unchanged. |
+| `apps/viewer/app/lib/pareto.ts`, `apps/viewer/app/lib/server-controls.ts`, `apps/viewer/app/routes/home.tsx`, `apps/viewer/app/routes/trial.tsx`, `apps/viewer/app/components/rollout-columns.tsx`, `apps/viewer/app/components/interaction-viewer.tsx` | Show unknown absolute times explicitly. Keep date filters, ordering, and durations consistent across Job and Trial views. |
+| `tests/unit/test_job_status.py`, `tests/unit/test_job_plan.py`, `tests/unit/test_cli_run_upload.py`, `tests/unit/test_cli_resume_upload.py`, `tests/unit/cli/test_utils.py`, `tests/unit/test_trial_queue_integration.py`, `tests/unit/test_uploader.py` | Exercise UTC lifecycle boundaries, safe resume, native and Hub start equality, and legacy upload behavior. |
+| `tests/unit/viewer/test_sources.py`, `tests/unit/viewer/test_job_status.py`, `tests/unit/test_server_filters.py` | Cover mixed-offset ordering, unknown date filters, preserved historical bytes, and server REST UTC without changing stored values. |
 
 Readers of `agent_info` are untouched: a seat trial fills it with its first
 agent under test. Readers of `exception_info` are untouched too: a seat
@@ -48,3 +57,5 @@ agent's.
 | `examples/tasks/hello-seats/`, `examples/configs/features/seats-trial.yaml`, `examples/configs/features/seats-job.yaml` | A runnable two-agent example task and the trial and job configs that run it. |
 | `tests/unit/models/test_task_config_seats.py`, `tests/unit/models/test_trial_participants.py`, `tests/unit/environments/test_seat.py`, `tests/unit/environments/test_dind_service_upload.py`, `tests/unit/trial/test_seats.py` | Unit tests; none needs Docker. |
 | `tests/runtime/test_hello_seats_docker.py` | Runs hello-seats with the oracle in both seats on real Docker. |
+| `src/harbor/utils/timestamps.py` | Defines known UTC instants and required offset-aware timestamp boundaries. |
+| `apps/viewer/app/lib/timestamps.ts` | Keeps browser formatting, instant parsing, ordering, and durations consistent without assigning a zone to legacy values. |

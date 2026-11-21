@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Breaking (Job timestamps):** Emit aware UTC lifecycle times and share the CLI start with Hub uploads. Supplied Job and required upload times must include an offset. Reject unsafe legacy resume before file changes. Keep unknown historical starts readable, last in start-time sorting, and outside absolute date filters. Normalize proven server-UTC columns at the REST boundary without rewriting stored dates.
+
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.
 
 - **Global Rollouts viewer:** Browse rollouts across jobs with server-side status, error, and metadata filters, backed by global rollout listing and filter APIs.

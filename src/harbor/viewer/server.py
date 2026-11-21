@@ -46,6 +46,7 @@ from harbor.models.trial.config import ResourceMode
 from harbor.models.job.result import JobStats
 from harbor.telemetry import LAUNCH_SOURCE_ENV
 from harbor.models.trial.result import TrialResult
+from harbor.utils.timestamps import known_utc_timestamp
 from harbor.viewer.stream import StreamManager, register_stream_endpoints
 from harbor.viewer.models import (
     ComparisonGridData,
@@ -208,12 +209,9 @@ def _job_source_labels(config: JobConfig | None) -> list[str]:
     return sorted(sources)
 
 
-def _started_at_sort_key(started_at: datetime | None) -> tuple[bool, float]:
-    if started_at is None:
-        return (False, 0.0)
-    if started_at.tzinfo is None or started_at.utcoffset() is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
-    return (True, started_at.timestamp())
+def _started_at_sort_key(started_at: datetime | None) -> tuple[bool, datetime | None]:
+    instant = known_utc_timestamp(started_at)
+    return (instant is not None, instant)
 
 
 # Maximum file size to serve for text responses, which are read into memory.
@@ -1381,7 +1379,6 @@ def _register_job_endpoints(
                     )
                 )
 
-        # Sort by started_at descending (most recent first), jobs without started_at go last
         summaries.sort(
             key=lambda s: _started_at_sort_key(s.started_at),
             reverse=True,
@@ -1437,7 +1434,7 @@ def _register_job_endpoints(
         ),
     ) -> PaginatedResponse[JobSummary]:
         """List all jobs with summary information."""
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
         summaries = _get_all_job_summaries()
 
@@ -1470,7 +1467,7 @@ def _register_job_endpoints(
 
         # Filter by date (OR within dates - use the most permissive)
         if date:
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             cutoffs = []
             for d in date:
                 if d == "today":
@@ -1486,8 +1483,8 @@ def _register_job_endpoints(
                 summaries = [
                     s
                     for s in summaries
-                    if s.started_at is not None
-                    and s.started_at.replace(tzinfo=None) >= cutoff
+                    if (instant := known_utc_timestamp(s.started_at)) is not None
+                    and instant >= cutoff
                 ]
 
         # Paginate
@@ -2290,20 +2287,29 @@ def _register_job_endpoints(
         if sort_by:
             reverse = sort_order == "desc"
             if sort_by == "duration":
-                now = datetime.now(timezone.utc).timestamp()
-                present = [s for s in all_summaries if s.started_at is not None]
-                missing = [s for s in all_summaries if s.started_at is None]
-
-                def duration_key(summary: TrialSummary) -> float:
+                now = datetime.now(timezone.utc)
+                timed: list[tuple[float, TrialSummary]] = []
+                pending: list[TrialSummary] = []
+                unknown: list[TrialSummary] = []
+                for summary in all_summaries:
+                    if summary.started_at is None:
+                        pending.append(summary)
+                        continue
+                    start = known_utc_timestamp(summary.started_at)
                     end = (
-                        _started_at_sort_key(summary.finished_at)[1]
-                        if summary.finished_at is not None
-                        else now
+                        now
+                        if summary.finished_at is None
+                        else known_utc_timestamp(summary.finished_at)
                     )
-                    return end - _started_at_sort_key(summary.started_at)[1]
-
-                present.sort(key=duration_key, reverse=reverse)
-                all_summaries = missing + present if reverse else present + missing
+                    if start is None or end is None:
+                        unknown.append(summary)
+                    else:
+                        timed.append(((end - start).total_seconds(), summary))
+                timed.sort(key=lambda entry: entry[0], reverse=reverse)
+                ordered = [summary for _, summary in timed]
+                all_summaries = (
+                    pending + ordered if reverse else ordered + pending
+                ) + unknown
             elif sort_by == "reward":
                 all_summaries.sort(
                     key=lambda s: (
@@ -2313,13 +2319,16 @@ def _register_job_endpoints(
                     reverse=reverse,
                 )
             elif sort_by in {"started_at", "finished_at"}:
-                present = [s for s in all_summaries if getattr(s, sort_by) is not None]
-                missing = [s for s in all_summaries if getattr(s, sort_by) is None]
-                present.sort(
-                    key=lambda s: _started_at_sort_key(getattr(s, sort_by))[1],
-                    reverse=reverse,
-                )
-                all_summaries = present + missing
+                dated: list[tuple[datetime, TrialSummary]] = []
+                missing: list[TrialSummary] = []
+                for summary in all_summaries:
+                    instant = known_utc_timestamp(getattr(summary, sort_by))
+                    if instant is None:
+                        missing.append(summary)
+                    else:
+                        dated.append((instant, summary))
+                dated.sort(key=lambda entry: entry[0], reverse=reverse)
+                all_summaries = [summary for _, summary in dated] + missing
             elif sort_by in TrialSummary.model_fields and sort_by != "evals":
                 present = [s for s in all_summaries if getattr(s, sort_by) is not None]
                 missing = [s for s in all_summaries if getattr(s, sort_by) is None]

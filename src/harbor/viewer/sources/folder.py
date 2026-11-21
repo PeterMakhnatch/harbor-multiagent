@@ -43,7 +43,9 @@ class FolderSource(JobScanner):
     def __init__(self, jobs_dir: Path):
         super().__init__(jobs_dir.resolve())
         self._temporary = TemporaryDirectory(prefix="harbor-view-index-")
-        self._database = SQLiteDatabase(Path(self._temporary.name))
+        self._database = SQLiteDatabase(
+            Path(self._temporary.name), native_job_times=True
+        )
         self._signature: list[tuple[str, int, int]] | None = None
         self._executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="harbor-folder"

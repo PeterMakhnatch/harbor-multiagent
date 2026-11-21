@@ -39,6 +39,7 @@ METADATA_FIELDS = (
 NOT_NULL_SORT_FIELDS = frozenset(
     {"id", "name", "state", "created_at", "updated_at", "task_name"}
 )
+TIMESTAMP_FIELDS = frozenset({"created_at", "updated_at", "started_at", "finished_at"})
 
 
 def column(field: str, alias: str) -> str:
@@ -50,6 +51,7 @@ def predicates(
     owner_id: str,
     *,
     jobs: bool,
+    native_job_times: bool = False,
     joined_metadata: bool = False,
     public: bool = False,
     exclude: str | None = None,
@@ -79,8 +81,12 @@ def predicates(
         if value is not None:
             if value.tzinfo is None:
                 value = value.replace(tzinfo=UTC)
-            clauses.append(f"julianday({alias}.created_at) {op} julianday(?)")
-            params.append(value.astimezone(UTC).isoformat())
+            if native_job_times:
+                clauses.append(f"native_utc_key(j.created_at) {op} ?")
+                params.append(value.astimezone(UTC).isoformat(timespec="microseconds"))
+            else:
+                clauses.append(f"julianday({alias}.created_at) {op} julianday(?)")
+                params.append(value.astimezone(UTC).isoformat())
     metadata = []
     metadata_params: list[Any] = []
     for field in METADATA_FIELDS:
@@ -129,6 +135,7 @@ def page(
     owner_id: str,
     columns: tuple[str, ...],
     *,
+    native_job_times: bool = False,
     job_id: UUID | None = None,
 ) -> Page[dict[str, Any]]:
     jobs = table == "internal_job"
@@ -138,9 +145,15 @@ def page(
     if field not in request.sort_fields:
         raise APIError("BadRequest", "Unsupported sort field.")
     key = column(field, alias)
+    nullable_timestamp = native_job_times and field in TIMESTAMP_FIELDS
+    if nullable_timestamp:
+        key = f"native_utc_key({key})"
+    non_null_sort = field in NOT_NULL_SORT_FIELDS and not nullable_timestamp
     direction = "DESC" if request.sort.startswith("-") else "ASC"
     comparison = "<" if direction == "DESC" else ">"
     scope_filters = request.model_dump(mode="json", exclude={"page_token", "page_size"})
+    if native_job_times:
+        scope_filters["native_job_times"] = True
     # Descriptive pin names and repeated OR ordering do not change task identity.
     scope_filters["task"] = sorted(
         {
@@ -159,7 +172,9 @@ def page(
             sort_keys=True,
         ).encode()
     ).hexdigest()
-    where, params = predicates(request, owner_id, jobs=jobs, job_id=job_id)
+    where, params = predicates(
+        request, owner_id, jobs=jobs, native_job_times=native_job_times, job_id=job_id
+    )
 
     page_where, page_params = where, params.copy()
     if request.page_token:
@@ -172,7 +187,7 @@ def page(
                 or seq < 0
                 or not (value is None or type(value) in (str, int, float))
                 or (isinstance(value, float) and not math.isfinite(value))
-                or (field in NOT_NULL_SORT_FIELDS and value is None)
+                or (non_null_sort and value is None)
             ):
                 raise ValueError
         except (ValueError, KeyError, TypeError):
@@ -180,7 +195,7 @@ def page(
                 "InvalidPageToken",
                 "Use a current page token with the same filters and sort, or restart from the first page.",
             ) from None
-        if field in NOT_NULL_SORT_FIELDS:
+        if non_null_sort:
             page_where += f" AND ({key}, {alias}.seq) {comparison} (?, ?)"
             page_params.extend((value, seq))
         elif value is None:
@@ -222,6 +237,7 @@ def filter_values(
     limit: int,
     field: FilterField,
     *,
+    native_job_times: bool = False,
     job_id: UUID | None = None,
 ) -> FilterValuesResponse:
     jobs = table == "internal_job"
@@ -231,6 +247,7 @@ def filter_values(
         filters,
         owner_id,
         jobs=jobs,
+        native_job_times=native_job_times,
         joined_metadata=jobs and field != "state",
         exclude=field,
         job_id=job_id,

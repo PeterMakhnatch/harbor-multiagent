@@ -8,6 +8,7 @@ real orchestrator. Those flow-end tests live under `tests/integration/`.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,9 +17,11 @@ from rich.console import Console
 
 from harbor.cli.plugins.harbor_hub import HarborHubUploadPlugin
 
+STARTED_AT = datetime(2026, 7, 3, 12, tzinfo=UTC)
+
 
 def _make_plugin(**kwargs) -> HarborHubUploadPlugin:
-    return HarborHubUploadPlugin(console=Console(), **kwargs)
+    return HarborHubUploadPlugin(started_at=STARTED_AT, console=Console(), **kwargs)
 
 
 class TestHarborHubUploadPluginFinalize:
@@ -195,16 +198,13 @@ class TestHarborHubUploadPluginOnJobStart:
             AsyncMock(),
         )
 
-    def _make_job_mock(self, monkeypatch) -> MagicMock:
-        from datetime import datetime as _dt
-
+    def _make_job_mock(self) -> MagicMock:
         job = MagicMock()
         job.id = "job-uuid"
         job.config.job_name = "my-job"
         job.config.model_dump.return_value = {"job_name": "my-job"}
         job.on_trial_ended = MagicMock()
         job.__len__ = MagicMock(return_value=7)
-        monkeypatch.setattr("harbor.cli.plugins.harbor_hub.datetime", _dt)
         return job
 
     @pytest.mark.asyncio
@@ -213,7 +213,7 @@ class TestHarborHubUploadPluginOnJobStart:
     ) -> None:
         self._patch_auth_ok(monkeypatch)
         instance = self._patched_uploader(monkeypatch)
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=True)
 
         await plugin.on_job_start(job)
@@ -224,6 +224,7 @@ class TestHarborHubUploadPluginOnJobStart:
         kwargs = instance.start_job.await_args.kwargs
         assert kwargs["job_id"] == "job-uuid"
         assert kwargs["job_name"] == "my-job"
+        assert kwargs["started_at"] is STARTED_AT
         assert kwargs["visibility"] == "public"
         assert kwargs["n_planned_trials"] == 7
         job.config.model_dump.assert_called_once_with(mode="json")
@@ -236,7 +237,7 @@ class TestHarborHubUploadPluginOnJobStart:
         instance.start_job.side_effect = RuntimeError(
             "Not authenticated. Please run `harbor auth login` first."
         )
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=True)
 
         with pytest.raises(SystemExit) as exc:
@@ -257,7 +258,7 @@ class TestHarborHubUploadPluginOnJobStart:
             "harbor.cli.plugins.harbor_hub.require_hub_upload_auth",
             AsyncMock(side_effect=NotAuthenticatedError(STORED_KEY_REJECTED_MESSAGE)),
         )
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=True)
 
         with pytest.raises(SystemExit) as exc:
@@ -274,7 +275,7 @@ class TestHarborHubUploadPluginOnJobStart:
         self._patch_auth_ok(monkeypatch)
         instance = self._patched_uploader(monkeypatch)
         instance.start_job.side_effect = RuntimeError("network blip")
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=False)
 
         await plugin.on_job_start(job)
@@ -292,7 +293,7 @@ class TestHarborHubUploadPluginOnJobStart:
 
         self._patch_auth_ok(monkeypatch)
         instance = self._patched_uploader(monkeypatch)
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=None)
 
         await plugin.on_job_start(job)
@@ -320,7 +321,7 @@ class TestHarborHubUploadPluginOnJobStart:
         self._patch_auth_ok(monkeypatch)
         instance = self._patched_uploader(monkeypatch)
         instance.upload_single_trial.side_effect = RuntimeError("network blip")
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=False)
 
         await plugin.on_job_start(job)
@@ -334,13 +335,53 @@ class TestHarborHubUploadPluginOnJobStart:
 
         await registered_cb(event)
 
+    def test_cli_run_shares_one_utc_start_with_hub(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from harbor.cli.jobs import start
+        from harbor.job import Job
+        from harbor.models.job.config import JobConfig
+        from harbor.models.job.result import JobResult
+
+        self._patch_auth_ok(monkeypatch)
+        uploader = self._patched_uploader(monkeypatch)
+        uploader.upload_job = AsyncMock(return_value=MagicMock(owner_org=None))
+
+        async def create_without_trials(config: JobConfig) -> Job:
+            job = Job(config, _task_configs=[], _metrics={}, _task_download_results={})
+            monkeypatch.setattr(
+                job, "_run_trials_with_queue", AsyncMock(return_value=[])
+            )
+            return job
+
+        monkeypatch.setattr("harbor.job.Job.create", create_without_trials)
+        monkeypatch.setattr("harbor.cli.jobs._run_preflight", lambda _: None)
+        monkeypatch.setattr(
+            "harbor.cli.jobs.show_registry_hint_if_first_run", lambda _: None
+        )
+        monkeypatch.setattr("harbor.cli.jobs.print_job_results_tables", lambda _: None)
+
+        task_dir = tmp_path / "task"
+        task_dir.mkdir()
+        (task_dir / "task.toml").write_text('version = "1.0"\n')
+        start(path=task_dir, jobs_dir=tmp_path, job_name="uploaded", upload=True)
+
+        result = JobResult.model_validate_json(
+            (tmp_path / "uploaded" / "result.json").read_text()
+        )
+        uploader.start_job.assert_awaited_once()
+        registered_start = uploader.start_job.await_args.kwargs["started_at"]
+        assert registered_start.tzinfo is UTC
+        assert result.started_at.utcoffset() == UTC.utcoffset(None)
+        assert result.started_at == registered_start
+
     @pytest.mark.asyncio
     async def test_streaming_hook_ignores_when_uploader_unavailable(
         self, monkeypatch
     ) -> None:
         self._patch_auth_ok(monkeypatch)
         instance = self._patched_uploader(monkeypatch)
-        job = self._make_job_mock(monkeypatch)
+        job = self._make_job_mock()
         plugin = _make_plugin(public=None)
 
         await plugin.on_job_start(job)

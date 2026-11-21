@@ -1,4 +1,5 @@
 import { compareReasoningEffort } from "~/lib/reasoning-effort";
+import { elapsedTimestampMs } from "~/lib/timestamps";
 import type { TrialSummary } from "~/lib/types";
 
 export function trialGroupKey(
@@ -113,10 +114,8 @@ export function trialTokens(
 export function trialSeconds(
   trial: Pick<TrialSummary, "started_at" | "finished_at">,
 ): number | null {
-  if (!trial.started_at || !trial.finished_at) return null;
-  const seconds =
-    (Date.parse(trial.finished_at) - Date.parse(trial.started_at)) / 1000;
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+  const elapsedMs = elapsedTimestampMs(trial.started_at, trial.finished_at);
+  return elapsedMs === null ? null : elapsedMs / 1000;
 }
 
 // Match the first finite metric consistently when names occur in multiple metrics.

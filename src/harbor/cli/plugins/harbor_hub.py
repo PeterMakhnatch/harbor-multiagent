@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, override
 
@@ -15,8 +14,11 @@ from harbor.upload.auth import (
 )
 from harbor.upload.db_client import OwnerOrgError
 from harbor.upload.uploader import Uploader
+from harbor.utils.timestamps import require_utc_timestamp
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from rich.console import Console
 
     from harbor.job import Job
@@ -35,6 +37,7 @@ class HarborHubUploadPlugin(BaseJobPlugin):
     def __init__(
         self,
         *,
+        started_at: datetime,
         public: bool | None,
         org: str | None = None,
         share_orgs: list[str] | None = None,
@@ -43,6 +46,7 @@ class HarborHubUploadPlugin(BaseJobPlugin):
         yes: bool = False,
         console: Console,
     ) -> None:
+        self._started_at = require_utc_timestamp(started_at, "Harbor Hub started_at")
         self._public = public
         self._org = org
         self._share_orgs = share_orgs
@@ -71,7 +75,7 @@ class HarborHubUploadPlugin(BaseJobPlugin):
             job_start = await uploader.start_job(
                 job_id=job.id,
                 job_name=job.config.job_name,
-                started_at=datetime.now(),
+                started_at=self._started_at,
                 config=job.config.model_dump(mode="json"),
                 visibility=visibility,
                 org=self._org,

@@ -16,8 +16,9 @@ from harbor.registry.client.base import (
     EmptyDatasetError,
     UnavailableDatasetTasksError,
 )
-from harbor.utils.logger import logger
 from harbor.utils.async_cleanup import with_async_cleanup
+from harbor.utils.logger import logger
+from harbor.utils.timestamps import known_utc_timestamp
 
 DATASET_RESOLUTION_ERRORS = (EmptyDatasetError, UnavailableDatasetTasksError)
 
@@ -25,6 +26,12 @@ DATASET_RESOLUTION_ERRORS = (EmptyDatasetError, UnavailableDatasetTasksError)
 def format_duration(started_at: datetime | None, finished_at: datetime | None) -> str:
     if started_at is None or finished_at is None:
         return "unknown"
+    utc_start = known_utc_timestamp(started_at)
+    utc_finish = known_utc_timestamp(finished_at)
+    if (utc_start is None) != (utc_finish is None):
+        return "unknown"
+    if utc_start is not None and utc_finish is not None:
+        started_at, finished_at = utc_start, utc_finish
 
     total_seconds = max(0, int((finished_at - started_at).total_seconds()))
     minutes, seconds = divmod(total_seconds, 60)
