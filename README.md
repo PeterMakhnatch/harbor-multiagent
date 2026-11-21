@@ -79,9 +79,12 @@ seats. The table reads recorded agent and model identities, token counts, USD
 costs, setup and execution seconds, and errors. Input counts include cached
 input. Missing values stay unknown. Known zero values stay zero.
 
-Costs come from the saved result, not a current model price. Phase times are
-recorded wall intervals. Seats can overlap, so their sum is not the Job's elapsed
-time. The table does not recover deleted attempts or unreported billing.
+Costs come from the saved result, not a current model price. When an agent
+reports counts, the table shows calls with observed or unknown usage. Unknown
+usage calls mark partial usage. Recorded costs do not verify a provider bill.
+Phase times are recorded wall intervals. Seats can overlap, so their sum is
+not the Job's elapsed time. The table does not recover deleted attempts or
+unreported billing.
 
 Folder-mode Job lists use participant names or import paths for native rosters,
 search, and filters. They do not import agent modules. Single-agent Trials keep

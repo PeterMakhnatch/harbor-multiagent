@@ -153,6 +153,7 @@ export interface SeatResult {
     n_cache_tokens?: number | null;
     n_output_tokens?: number | null;
     cost_usd?: number | null;
+    metadata?: Record<string, unknown> | null;
   } | null;
   agent_setup?: TimingInfo | null;
   agent_execution?: TimingInfo | null;
