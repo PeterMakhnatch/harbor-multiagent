@@ -2,6 +2,24 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## What happens when a second agent sees different evidence?
+
+**The complementary reviewer helped on the clean source and hurt on the noisiest one.** Both agents used direct DeepSeek Flash. The reviewer saw either the decision maker's own fields or a different pair of fields. The decision maker received either the reviewer's vote alone or the same vote plus its transcribed numbers. Both delivery arms used the same actual review. These are new model decisions using stored observations, not new native rewards.
+
+| Source | Duplicate: vote | Duplicate: vote + numbers | Complementary: vote | Complementary: vote + numbers |
+| --- | ---: | ---: | ---: | ---: |
+| Clean reports | 56/72 | 63/72 | 51/72 | 69/72 |
+| Intermediate source | 49/71 | 55/71 | 50/71 | 51/71 |
+| Noisiest source | 48/72 | 50/72 | 51/72 | 39/72 |
+
+The registered effect of complementary rather than duplicate evidence was **−4.19 percentage points** across 215 complete matched blocks. It improved 32 blocks, worsened 41, and tied 142. The full 216-block range was **−4.63 to −3.70 points**, including unknown outcomes. These are missing-data bounds, not confidence intervals. Adding the numbers rather than only the vote improved accuracy by 3.25 points for complementary views and 6.98 points for duplicate views.
+
+Every measured reviewer copied its own numbers exactly: **431/431**. Accurate copying did not make an incorrect source report true. The [numeric reference](results/crucible-routed-reference.json) used each physical case and coordinator view once. Compared with using only the coordinator's two fields, averaging overlapping values from both views fixed 0 decisions and worsened 9 of 54. This describes this packet, not arbitrary information sharing.
+
+The 3 archived source trials contain 18 source-rounds but only **6 distinct true worlds** and 12 distinct combinations of reports and truth. A/B swaps and repeated generations are not additional worlds. The [full decisions and prompt hashes](results/crucible-routed-live.json) include all 216 first-attempt claims. We did not retry the interrupted block. The [host meter](results/crucible-routed-cost.json) reconciled 1,291 calls at **$0.039034800 USD**. One unresolved request retains a $0.01 hold, for an upper estimate of **$0.049034800 USD**. Four other registered turns have no ledger row. These amounts are not invoices.
+
+Use the [two-program CLI](replication.md#run-your-own-reviewer-and-decision-maker) to test other reviewer and decision programs against the same fixed packet.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.

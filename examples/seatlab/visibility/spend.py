@@ -25,6 +25,8 @@ _ROLES = {
     "analyst_2",
     "analyst_3",
     "analyst_4",
+    "route_review",
+    "route_decide",
 }
 _HOST_LEDGER: Path | None = None
 

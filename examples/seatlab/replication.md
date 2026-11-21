@@ -18,6 +18,68 @@ Report eligible, attempted, completed and missed counts separately for each arm.
 
 Separate workers can add new worlds, actor-side context transformations, and cross-run readers. Keep world state with the task. Keep observation and analysis formats outside Harbor. Only changes to native runtime semantics belong in the framework itself.
 
+## What should a second agent see and send?
+
+**Registered before collection.** Two roles make an operations choice from 2 partially observed numeric routes. The reviewer and the decision maker can use different harnesses. Compare a second look at the same evidence with a second look at different evidence. Also compare a vote with a vote plus its supporting numbers. Use the same reviewer reply in both message branches.
+
+- Select the first UUID in the existing [blinded listener](#receiver-visibility-stored-teams-and-fresh-model-decisions) order for each of the 3 registered Crucible scout policies. Try all 6 rounds in each source. Require the original authenticated receiver fetch of all 3 reports before its decision. Reconstruct the answer from overlapping private observations, not the original decision. Keep any ineligible round in the register. Do not replace it.
+- In each round, index the 3 source reports in this order: `scout_3`, `scout_1`, `scout_2`. Rotate the decision maker's report through all 3 positions. In `duplicate`, the reviewer receives the same report. In `complementary`, the reviewer receives the next report cyclically. The latter has 1 overlapping attribute and 1 other attribute. Do not identify the source, scout, treatment, or answer in either seat's instructions.
+- Use both assignments of the display labels A and B, and 2 independent repetitions. This gives up to 216 blocks. The reviewer sees 4 numbers for 2 named attributes. It recommends a route and transcribes the numbers. Do not repair an incorrect transcription. The decision maker sees its own 4 numbers and either the reviewer's recommendation alone (`vote`), or the recommendation and its attributed numbers (`evidence`). A malformed review starts neither child. A malformed decision has no accepted choice.
+- Use independent stateless calls, even when inputs match. Six first attempts per complete block: 2 reviewers and 4 decisions. Balance which reviewer input runs first by the parity of the zero-based policy, round, rotation, label map and repetition indices. Reverse which message branch runs first on the second reviewer. Give each role the same direct Flash settings as in the listener cohort. Keep missing, invalid and interrupted first attempts. No retries or paid fallback.
+- Primary: compare complementary minus duplicate reviewer context **with the evidence channel**, paired within each block. Report correct physical choices, complete-pair differences and worst/best differences over the full register. Average within each source policy and weight the 3 policies equally. Secondary: the same difference with votes only; evidence minus vote for each reviewer input; the paired interaction on complete quartets. Report transcription errors, recommendation following, label swaps and repeat disagreement. Do not treat repeated rounds, permutations or identical prompts as independent worlds.
+- The public packet contains only allowlisted numeric values, event references and source commitments. Only the scorer can use the answer key. Role callbacks receive a prompt string, not a path or the packet. These are new 2-agent decisions from recorded observations, **not** a native Harbor rerun, a measurement of the archived scouts' model use, or a comparison with a single model using all the evidence.
+
+Within each lens, reverse the channel order across the 2 repetitions. Start with `vote` when `(rotation + repetition + is_complementary)` is even. This balances channel order separately from which reviewer runs first.
+
+### Run your own reviewer and decision maker
+
+The packet and its SHA-256 commitment ship on this branch. These commands need Python 3.12 or later. The demo does not use a model, an API key, Docker, Eval Lab, or the source archive.
+
+```bash
+module=examples.seatlab.visibility.route_cli
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+python -m "$module" plan
+python -m "$module" demo --study "$private" --start 0 --stop 1
+python -m "$module" report --study "$private" > "$private/report.json"
+```
+
+For model seats, use `commands` instead of `demo` and use a new private study directory. Give each role its own executable in a JSON config:
+
+```json
+{
+  "reviewer": {"argv": ["/absolute/path/to/my-reviewer"], "env": []},
+  "decider": {"argv": ["/absolute/path/to/my-decider"], "env": []}
+}
+```
+
+Run `python -m "$module" commands --config seats.json --study "$private" --start 0 --stop 1`. Each program reads one UTF-8 JSON line: `{"schema":"seatlab.seat-turn/v1","prompt":"..."}`. It writes one JSON line: `{"text":"..."}`. Return the model's first text unchanged. The runner starts a fresh process for every turn. Both decision branches receive the same actual review. Different workers may claim disjoint block ranges in the same private study. The runner refuses a second attempt at a claimed block.
+
+Use only trusted executables. The runner starts each in an empty working directory and passes only the environment variables named for that role. This is not an operating-system sandbox. An executable can still use the network and read files available to its user. The offline report verifies the selected role inputs and observed replies. It makes no claim about model identity or billing for external commands. For Python callbacks, use `route_run.play_block(..., reviewer=my_reviewer, decider=my_decider)`; both callbacks take one prompt string.
+
+## Can a coordinator use team memory to choose one reviewer?
+
+**Separate registration, before the first delegation run.** The preceding packet has 3 sources but only 6 distinct sets of true route scores. A second report can add incorrect numbers. This study gives a live coordinator one reviewer request. Both conditions receive the same prior accuracy counts. Only one identifies which count belongs to which candidate.
+
+- Use the same packet commitment. Reserve rounds 1 and 2 for history. Test rounds 3–6 of all 3 sources, each of 3 coordinator views, both A/B assignments, and 2 repetitions: 144 blocks. A prior numeric audit qualifies only if its report events, truth observations, and authenticated fetch all precede the current fetch in the same trial. Require 2 qualifying earlier rounds. Never read an earlier decision as feedback. In the third source, multiple fetches occurred before any decision.
+- The coordinator sees its own 2-field report and the fields available from candidates `X` and `Y`. Each candidate represents one of the other 2 reports. A prior report counts as exact only if all 4 reported numbers match the independent previous observations. Show the 2 audit rows in ascending `(exact, checked)` order. Under `bound`, identify their respective candidates. Under `anonymous`, remove the candidate names from those rows. Do not show the current truth, report quality, source policy, round number, or either candidate's current numbers.
+- Set X to the next report cyclically if `(policy + round + swap + rep)` is even; otherwise X is the previous report. Y is the other candidate. Run `bound` first when `(rotation + swap + rep)` is even. Run X first when both candidates are requested and `(policy + round + rotation + rep)` is even. These names are local to one block.
+- Collect both real selections before contacting any reviewer. Call each distinct selected reviewer once. Its reply contains its vote and transcribed numbers. Give the coordinator a fresh final turn with its own report and the selected review, but no history, candidate name, or selection treatment. If both managers select the same reviewer, deliver the same actual final result to both policies. Never call an unselected reviewer. Never repair a malformed selection, review, or decision. Each complete block uses 4–6 first calls.
+- Primary: correct final decisions under `bound` minus `anonymous`, matched within each block. Average within source, then weight the 3 sources equally. Report complete pairs and best/worst differences over all 144. Secondary: choice of the historically more accurate candidate when the counts differ; choice of a currently exact report; how often choices and final branches differ; and repeat disagreement. Report distinct paid turns and unknown charges separately. Do not count a shared final as 2 independent observations.
+- Use the same direct Flash settings as above, with at most 864 calls under the existing ledger. This compares 2 real delegation policies with a limited review budget. It is not a test of closed-loop learning by the archived agents. The prior audits are new information that the study supplies.
+
+Use `--workflow delegate` on the same runnable commands. The 2 trusted programs use the stdin/stdout contract above. The decision program handles selection (`{"ask":"X"}` or `{"ask":"Y"}`) as well as the final choice. The reviewer program receives no request if neither selector chose it. The commands below make no built-in provider calls:
+
+```sh
+python -m examples.seatlab.visibility.route_cli plan --workflow delegate
+umask 077
+private=$(mktemp -d)
+python -m examples.seatlab.visibility.route_cli commands --workflow delegate \
+  --config seats.json --study "$private" --start 0 --stop 1
+python -m examples.seatlab.visibility.route_cli report --workflow delegate --study "$private"
+```
+
+Use `demo` instead of `commands` and omit `--config` for a no-model transport check. Use a new private directory for a new run. A registered block has one claim, even if a process fails. The report distinguishes unclaimed blocks, known unselected branches, missing replies, and identical selections that share one actual final response.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.
