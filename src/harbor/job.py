@@ -800,7 +800,15 @@ class Job:
 
         evals_key, dataset_name = self._evals_key_for_result(previous_result)
         self._live_rewards[evals_key].pop(trial_name, None)
-        self._job_result.stats.remove_trial(previous_result)
+        stats = self._job_result.stats
+        stats.remove_trial(previous_result)
+        retained_stats = JobStats.from_trial_results(
+            list(self._previous_trial_results.values())
+        )
+        stats.n_input_tokens = retained_stats.n_input_tokens
+        stats.n_cache_tokens = retained_stats.n_cache_tokens
+        stats.n_output_tokens = retained_stats.n_output_tokens
+        stats.cost_usd = retained_stats.cost_usd
         if self._is_cancelled_result(previous_result):
             self._cancelled_trial_names.discard(trial_name)
         self._n_retries += 1
