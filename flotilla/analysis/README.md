@@ -119,6 +119,14 @@ more than 2.5% of resamples have a gap below 0.05; otherwise the interval uses t
 percentiles of the defined resamples (Hyndman–Fan type 7) and reports the number left out. Draws
 come from `random.Random("<seed>/<label>/<team>/<purpose>")`.
 
+Each decomposition row uses the same paired instance set. The report gives its size and marks
+conditions whose score levels use a different set. The scripted-peer effects give the pair count
+for each effect and mark any difference from its condition levels. A two-sided sign-flip test
+with 5 or fewer nonzero pairs cannot reach p ≤ 0.05. The report shows the smallest achievable p.
+
+Intervals account for instance variation, not job-level clustering. Solo runs in a separate job.
+The intervals do not measure variation between jobs.
+
 **Cost** per condition: input tokens (cache included, Harbor's convention), cached and output tokens
 and USD per trial, summed over the seats under test (a scripted seat is not part of the team). A trial
 with any seat's value missing is incomplete and left out of the means. Ratios talk/solo and

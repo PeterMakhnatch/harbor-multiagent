@@ -44,6 +44,7 @@ only for a gap of at least 0.05 reward points on the [0, 1] scale. It shows the 
 95% t interval next to recovery. Score and gain intervals are 95% t intervals over instance means.
 Recovery intervals use a percentile bootstrap. The p values are exact sign-flip tests on paired
 instances. With binary outcomes and 5 to 12 instances, the two can disagree.
+The intervals do not account for job-level clustering. Solo runs in a separate job.
 "Resolved" below means exact p < 0.05.
 
 ## R1. Talking adds a resolved gain for DeepSeek; for 3 models the gain is positive but not resolved
@@ -157,13 +158,15 @@ instance; "deceived" means the final answer is the liar's decoy.
   [0.05, 0.95] and Qwen 0.80 [0.24, 1.00]; the exact p is 0.125 for both, so neither is resolved.
   The warning effects have intervals that include 0.
 - GPT-OSS's failures are mostly other valid windows (16 of its 18 "corrupted" outcomes), not the decoy.
-- Who wrote the final answer matters, and this effect is resolved. Across the liar conditions of all
-  3 models (42 trials), when p1 (the only seat that can check the lie) wrote last, the team was correct
-  11 times and deceived once; when p2 wrote last, correct 5 times and deceived 14 times (Fisher
-  two-sided p = 0.0006; `flotilla-analyze` reports this table per model, and
-  [results/scripts/liar_writes.py](results/scripts/liar_writes.py) pools the models). In 9 of the
-  15 deceived trials, the right answer had been submitted first. This is an association, because write
-  order is not randomized.
+- Final writer and correctness show an association, but the paired test does not resolve it.
+  Across the 42 liar trials with a known outcome and final writer, p1 wrote 11 correct,
+  1 deceived and 5 corrupted answers. p2 wrote 5 correct, 14 deceived and 6 corrupted answers.
+  The [exact paired test](results/scripts/liar_writes.py) matches the warned and unwarned trials
+  within each model and instance. It omits 11 of 42 corrupted trials. Of the 13 remaining pairs,
+  4 are informative: p1 is correct in all 4 (two-sided p = 0.1250). Counting corrupted trials
+  as deceived or as correct gives 21 pairs and a two-sided p = 0.0625 in each case.
+  Two trials lack a usable outcome or final writer. In 9 of the 15 deceived trials, the right
+  answer had been submitted first. Write order was not randomized, so this is not a causal effect.
 - The world-v1 pilot was confounded (the seats could read the label `talk-liar`, and the liar also
   posted a machine-readable block). There, DeepSeek was deceived in 5 of 10 talk-liar trials; on
   world v2, in 5 of 8. These data do not show that the label changed DeepSeek's deception rate.

@@ -141,20 +141,27 @@ def decomposition_rows(
     rows = []
     for (label, team), every in groups.items():
         conditions = ("solo", "silent", "talk")
-        flagged = [t for t in every if leaks.get(t.path) is True and t.condition in conditions]
-        trials = every if keep_leaks else [t for t in every if leaks.get(t.path) is not True]
+        members = {c: [t for t in every if t.condition == c] for c in conditions}
+        flagged = sum(leaks.get(t.path) is True for group in members.values() for t in group)
         means = {
-            c: _instance_means([t for t in trials if t.condition == c]) for c in ("solo", "silent", "talk")
+            c: _instance_means(group if keep_leaks else [t for t in group if leaks.get(t.path) is not True])
+            for c, group in members.items()
         }
         if not any(means.values()):
             continue
         paired = sorted(set(means["solo"]) & set(means["silent"]) & set(means["talk"]))
+        level_counts = (
+            {c: len({t.instance for t in group if t.reward is not None}) for c, group in members.items()}
+            if flagged and not keep_leaks
+            else {c: len(means[c]) for c in conditions}
+        )
         row: dict[str, Any] = {
             "label": label,
             "team": team,
             "scored_instances": {c: len(means[c]) for c in ("solo", "silent", "talk")},
             "paired_instances": len(paired),
-            "example_leak_trials": len(flagged),
+            "different_level_sets": {c: n for c, n in level_counts.items() if n != len(paired)},
+            "example_leak_trials": flagged,
             "example_leak_rule": "kept" if keep_leaks else "left out",
         }
         if not paired:
@@ -261,6 +268,9 @@ def liar_rows(
                 "minuend": plus,
                 "subtrahend": minus,
                 "outcome": key,
+                "different_level_sets": {
+                    c: len(means[c][key]) for c in (plus, minus) if len(means[c][key]) != len(paired)
+                },
                 **_estimate(stats.t_interval(diffs, bounds=(-1.0, 1.0))),
                 "test": asdict(test),
             }

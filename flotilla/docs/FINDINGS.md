@@ -271,7 +271,11 @@ Observed:
 | p1 (can check the lie) | 11 | 1 | 5 |
 | p2 (cannot check it) | 5 | 14 | 6 |
 
-- Fisher two-sided p = 0.0006 for final writer against correct or deceived.
+- Fisher two-sided p = 0.0006 for final writer against correct or deceived, but that test treats the 2 trials
+  of one instance as independent and leaves out the 11 corrupted trials. The paired test (warned against
+  unwarned trial of the same model and instance, 2026-11-21) has 4 informative pairs of 13, all with p1 correct:
+  p = 0.125; with corrupted trials counted either way, 5 of 21, p = 0.0625. The direction holds; the pairs are
+  too few to resolve it.
 - 14 of the 15 deceived trials end with p2's answer. In 9 of the 15, the right answer had been
   submitted first, and p2's decoy replaced it.
 - With a warning, DeepSeek's p1 submitted the right answer in 8 of 8 trials, and 3 trials still

@@ -51,6 +51,7 @@ they need 48 to more than 256 instances (see RESULTS.md, "How many instances the
   Seats read a condition label, used a counter as a channel, scanned the network, and tried to install
   the world's software by the name in its `Server` header.
 - The commit protocol decides more results than the message channel: a later wrong write lost 7 of
-  36 found answers, and in the liar runs the final writer predicted deception (p = 0.0006).
+  36 found answers, and in the liar runs the final writer went with deception (unpaired Fisher
+  p = 0.0006; the paired test has too few informative pairs: p = 0.125, see FINDINGS.md).
 - Write every reported number from `flotilla-analyze` or a script in `docs/results/scripts/`, and have
   an independent agent re-derive the headline numbers from the raw files before you report them.

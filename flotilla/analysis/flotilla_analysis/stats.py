@@ -139,6 +139,7 @@ class PermutationTest:
     method: str  # "exact", "monte carlo" or "none"
     nonzero: int
     draws: int
+    min_p_value: float | None  # for exact tests only
 
 
 def sign_flip_test(
@@ -154,9 +155,9 @@ def sign_flip_test(
     nonzero = [abs(d) for d in differences if d != 0.0]
     k = len(nonzero)
     if not differences:
-        return PermutationTest(None, "none", 0, 0)
+        return PermutationTest(None, "none", 0, 0, None)
     if k == 0:
-        return PermutationTest(1.0, "exact", 0, 0)
+        return PermutationTest(1.0, "exact", 0, 0, 1.0)
     observed = abs(math.fsum(differences))
     tolerance = 1e-9 * math.fsum(nonzero)
 
@@ -166,9 +167,9 @@ def sign_flip_test(
 
     if k <= EXACT_MAX_NONZERO:
         count = sum(1 for mask in range(1 << k) if extreme(mask))
-        return PermutationTest(count / (1 << k), "exact", k, 1 << k)
+        return PermutationTest(count / (1 << k), "exact", k, 1 << k, 2 / (1 << k))
     count = sum(1 for _ in range(draws) if extreme(rng.getrandbits(k)))
-    return PermutationTest((count + 1) / (draws + 1), "monte carlo", k, draws)
+    return PermutationTest((count + 1) / (draws + 1), "monte carlo", k, draws, None)
 
 
 def percentile(sorted_values: Sequence[float], q: float) -> float:

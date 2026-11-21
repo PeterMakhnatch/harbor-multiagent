@@ -16,6 +16,8 @@ NOTES = [
     "mean(talk - silent) / mean(solo - silent) with a 10,000-resample percentile bootstrap over instances; "
     "undefined when the mean gap is below {min_gap:g} reward points; the interval is undefined when more "
     "than 2.5% of resamples are below that minimum.",
+    "Intervals account for instance variation, not job-level clustering. Solo runs in a separate job; "
+    "the intervals do not measure variation between jobs.",
     "Cost: per trial, summed over the seats under test; a trial with any seat's value missing is incomplete "
     "and left out of the means. Ratios use instances complete in both conditions.",
     "Delivered: the message id is in a deliver event of the recipient. Seen: a distinctive 24-character "
@@ -79,6 +81,18 @@ def _p(value: Any) -> str:
     if value is None:
         return "n/a"
     return f"{value:.4f}" if value >= 1e-4 else f"{value:.1e}"
+
+
+def _sign_flip(test: dict[str, Any]) -> str:
+    text = f"p = {_p(test['p_value'])} ({test['method']}, {test['nonzero']} nonzero pairs)"
+    minimum = test["min_p_value"]
+    if minimum is not None and minimum > 0.05:
+        text += f"; smallest achievable two-sided p = {_p(minimum)} > 0.05"
+    return text
+
+
+def _level_counts(counts: dict[str, int]) -> str:
+    return ", ".join(f"{condition}: {n}" for condition, n in counts.items())
 
 
 def _unknown_pairs(count: int) -> str:
@@ -249,6 +263,12 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
         out += _heading(
             f"Decomposition ({d['paired_instances']} instances scored in solo, silent and talk)", 3, md
         )
+        if d["different_level_sets"]:
+            out += [
+                "Each row uses this paired set. It differs from the Scores table "
+                f"(level instances: {_level_counts(d['different_level_sets'])}).",
+                "",
+            ]
         if d["example_leak_trials"]:
             out += [
                 f"{d['example_leak_trials']} trials flagged example_leak (the answer key is the answer "
@@ -261,7 +281,7 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
             out += [f"{d['note']} (scored instances: {counts})"]
             continue
         test, recovery = d["gain_test"], d["recovery"]
-        test_text = f"p = {_p(test['p_value'])} (sign-flip, {test['method']}, {test['nonzero']} nonzero)"
+        test_text = "sign-flip: " + _sign_flip(test)
         recovery_ci = "n/a" if recovery["low"] is None else f"[{recovery['low']:.3f}, {recovery['high']:.3f}]"
         out += _table(
             ["quantity", "value", "95% CI", "note"],
@@ -482,14 +502,19 @@ def _group(report: dict[str, Any], label: str, team: str, md: bool) -> list[str]
             )
         if design["effects"]:
             out += _table(
-                ["effect", "definition", "value [95% CI]", "instances", "p (sign-flip)"],
+                ["effect", "definition", "value [95% CI]", "paired instances", "sign-flip test"],
                 [
                     [
                         name,
                         f"{e['outcome']}({e['minuend']}) - {e['outcome']}({e['subtrahend']})",
                         f"{_f(e['value'])} {_ci(e)}",
-                        str(e["n"]),
-                        _p(e["test"]["p_value"]),
+                        str(e["n"])
+                        + (
+                            f" (differs from level instances: {_level_counts(e['different_level_sets'])})"
+                            if e["different_level_sets"]
+                            else ""
+                        ),
+                        _sign_flip(e["test"]),
                     ]
                     for name, e in design["effects"].items()
                 ],

@@ -110,6 +110,20 @@ class Report(unittest.TestCase):
         self.assertEqual(jobs["runs/toy-2seat"]["configured_trials"], 9)
         self.assertEqual(jobs["runs/toy-2seat"]["scored_trials"], 9)
 
+    def test_decomposition_marks_unpaired_score_levels(self):
+        fx.trial(self.runs / "toy-2seat", "toy-004-talk__extra", instance=4, condition="talk")
+        report = build([str(self.runs)], resamples=200)
+        (decomposition,) = report["decomposition"]
+        self.assertEqual(decomposition["paired_instances"], 4)
+        self.assertEqual(decomposition["different_level_sets"], {"talk": 5})
+        for fmt in ("text", "markdown"):
+            with self.subTest(fmt=fmt):
+                output = render(report, fmt)
+                self.assertIn("4 instances scored in solo, silent and talk", output)
+                self.assertIn("differs from the Scores table (level instances: talk: 5)", output)
+                self.assertIn("smallest achievable two-sided p = 0.5000 > 0.05", output)
+                self.assertIn("not job-level clustering. Solo runs in a separate job", output)
+
     def test_same_bytes(self):
         first = render(build([str(self.runs)], seed=3, resamples=500), "json")
         second = render(build([str(self.runs)], seed=3, resamples=500), "json")
@@ -372,9 +386,11 @@ class ExampleLeaks(unittest.TestCase):
             (d["paired_instances"], d["example_leak_trials"], d["example_leak_rule"]), (2, 3, "left out")
         )
         self.assertEqual(d["floor_silent"]["value"], 0.0)
+        self.assertEqual(d["different_level_sets"], {"solo": 3, "silent": 3, "talk": 3})
         (k,) = kept["decomposition"]
         self.assertEqual((k["paired_instances"], k["example_leak_rule"]), (3, "kept"))
         self.assertAlmostEqual(k["floor_silent"]["value"], 1 / 3)
+        self.assertEqual(k["different_level_sets"], {})
         silent = next(r for r in default["scores"] if r["condition"] == "silent")
         self.assertAlmostEqual(silent["mean"]["value"], 1 / 3)
         self.assertEqual(silent["mean_without_example_leaks"]["value"], 0.0)
@@ -422,6 +438,45 @@ class LiarDesign(unittest.TestCase):
             },
         )
         self.assertEqual(row["effects"]["lie_effect"]["n"], 4)
+
+    def test_effects_mark_different_instance_sets_even_when_level_counts_match(self):
+        design = {
+            "talk": (range(7), lambda i: 1.0),
+            "talk-liar": (range(1, 8), lambda i: float(i == 6)),
+            "talk-warned": (range(1, 7), lambda i: 1.0),
+            "talk-liar-warned": (range(1, 7), lambda i: 0.0),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            job = Path(tmp) / "job"
+            for condition, (instances, reward) in design.items():
+                for i in instances:
+                    fx.trial(
+                        job,
+                        f"toy.liar-{i:03d}-{condition}__case",
+                        label="toy.liar",
+                        instance=i,
+                        condition=condition,
+                        reward=reward(i),
+                    )
+            report = build([str(job)])
+        (row,) = report["liar_design"]
+        unwarned = row["effects"]["lie_effect"]
+        self.assertEqual(unwarned["n"], 6)
+        self.assertEqual(unwarned["different_level_sets"], {"talk": 7, "talk-liar": 7})
+        self.assertEqual(unwarned["test"]["nonzero"], 5)
+        self.assertEqual(unwarned["test"]["min_p_value"], 0.0625)
+        warned = row["effects"]["lie_effect_warned"]
+        self.assertEqual(warned["n"], 6)
+        self.assertEqual(warned["different_level_sets"], {})
+        lines = render(report, "markdown").splitlines()
+        effect = next(line for line in lines if line.startswith("| lie_effect |"))
+        self.assertIn("6 (differs from level instances: talk: 7, talk-liar: 7)", effect)
+        self.assertIn("5 nonzero pairs", effect)
+        self.assertIn("smallest achievable two-sided p = 0.0625 > 0.05", effect)
+        effect = next(line for line in lines if line.startswith("| lie_effect_warned |"))
+        self.assertIn("6 nonzero pairs", effect)
+        self.assertNotIn("smallest achievable", effect)
+        self.assertNotIn("differs from", effect)
 
     def test_no_liar_conditions_no_row(self):
         from types import SimpleNamespace
