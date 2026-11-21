@@ -232,6 +232,21 @@ python -m examples.seatlab.visibility.calendar_query_summary --study "$study"
 
 The command claims a block before the first model turn. Different workers can run distinct world/direction pairs against the same study directory. Never submit the same block twice. A failed attempt stays in the register. Keep all raw native output private. Export the sanitized register with `calendar_query_summary --study "$study" --export > native.json`. Another worker can run `calendar_query_summary --input native.json` with standard Python only. The export contains decoded slot choices, original rewards and turn hashes. It contains no raw role prompts or task credentials.
 
+##### Split the native register between two workers
+
+Give one worker direction 0 and one direction 1. Both use the same private study directory. Each worker takes only unstarted pairs from its own direction. Never queue an existing partial or invalid pair as a replacement. The register does not select worlds by reward. The original task runs at most one native team at a time in each worker. Apply the host-wide Docker limit if other projects also run trials.
+
+```bash
+worker=0  # use 1 in the second terminal
+queue=$(mktemp)
+python -m examples.seatlab.visibility.calendar_query_summary --study "$study" --export |
+  jq -r --argjson d "$worker" '.rows[] | select(.direction == $d and .status == "not_started") | .world' > "$queue"
+while read -r world; do
+  python -m examples.seatlab.visibility.calendar_query_run --tasks "$private/tasks/schedule" --study "$study" --commands /absolute/path/to/commands.json --world "$world" --direction "$worker" || exit 1
+done < "$queue"
+rm "$queue"
+```
+
 ### Can the receiver help its teammate recheck a calendar?
 
 **Registered before the first calendar generation.** The 12 retained Flotilla `c1` talk worlds split 6 synthetic calendars evenly between 2 seats. Each world has exactly 1 common two-hour meeting. Earlier talk-versus-silent results do not say whether a receiver can help its sender correct a report. This study compares a peer-informed recheck with a blind recheck. It starts new teams; it does not replay the old free-text conversations.
