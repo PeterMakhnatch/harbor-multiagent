@@ -11,14 +11,16 @@ from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from types import ModuleType
-from typing import Any, override
+from typing import Annotated, Any, override
 from uuid import UUID
 from weakref import WeakValueDictionary
 
 import httpx
+from pydantic import Field
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.installed.base import NonZeroAgentExitCodeError
+from harbor.agents.options import AgentOptions
 from harbor.environments.base import BaseEnvironment
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext, ModelUsage
@@ -29,15 +31,23 @@ BASE_URL = "https://api.deepseek.com"
 BALANCE_FLOOR = Decimal("1.50")
 MAX_MESSAGE_BYTES = 30_720
 MAX_INPUT_TOKENS = 32_768
-MAX_OUTPUT_TOKENS = 512
+MIN_OUTPUT_TOKENS = 512
+MAX_OUTPUT_TOKENS = 1024
 MAX_SEAT_CALLS = 10
 MAX_TRIAL_CALLS = 40
 MAX_HTTP_BYTES = 262_144
 PEAK_NANODOLLARS = (300, 6, 1200)
 OFF_PEAK_NANODOLLARS = (150, 3, 600)
-RESERVE_NANODOLLARS = (
-    MAX_INPUT_TOKENS * PEAK_NANODOLLARS[0] + MAX_OUTPUT_TOKENS * PEAK_NANODOLLARS[2]
-)
+
+
+class AgentsNetOptions(AgentOptions):
+    max_output_tokens: int = Field(
+        default=MIN_OUTPUT_TOKENS,
+        strict=True,
+        ge=MIN_OUTPUT_TOKENS,
+        le=MAX_OUTPUT_TOKENS,
+    )
+    trial_budget_nanodollars: Annotated[int, Field(strict=True, ge=0)] | None = None
 
 
 def _load_protocol() -> ModuleType:
@@ -90,8 +100,11 @@ def _rates(started: datetime) -> tuple[int, int, int]:
 
 @dataclass
 class _Admission:
+    budget_nanodollars: int | None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     started_calls: int = 0
+    observed_cost_nanodollars: int = 0
+    outstanding_reserve_nanodollars: int = 0
     stopped: str | None = None
 
     def require_open(self) -> None:
@@ -102,11 +115,18 @@ class _Admission:
 _admissions: WeakValueDictionary[UUID, _Admission] = WeakValueDictionary()
 
 
-def _trial_admission(context_id: UUID) -> _Admission:
+def _trial_admission(
+    context_id: UUID, trial_budget_nanodollars: int | None
+) -> _Admission:
     admission = _admissions.get(context_id)
     if admission is None:
-        admission = _Admission()
+        admission = _Admission(budget_nanodollars=trial_budget_nanodollars)
         _admissions[context_id] = admission
+    elif admission.budget_nanodollars != trial_budget_nanodollars:
+        message = "AgentsNet seats must share the same trial_budget_nanodollars"
+        if admission.stopped is None:
+            admission.stopped = message
+        raise ValueError(message)
     return admission
 
 
@@ -124,7 +144,9 @@ class _Usage:
     cost_nanodollars: int
 
     @classmethod
-    def from_response(cls, payload: dict[str, Any], started: datetime) -> "_Usage":
+    def from_response(
+        cls, payload: dict[str, Any], started: datetime, max_output_tokens: int
+    ) -> "_Usage":
         usage = _object(payload.get("usage"))
         input_tokens = _token_count(usage.get("prompt_tokens"))
         cache_tokens = _token_count(usage.get("prompt_cache_hit_tokens"))
@@ -133,7 +155,7 @@ class _Usage:
         if (
             cache_tokens + miss_tokens != input_tokens
             or input_tokens > MAX_INPUT_TOKENS
-            or output_tokens > MAX_OUTPUT_TOKENS
+            or output_tokens > max_output_tokens
         ):
             raise ValueError(
                 "DeepSeek usage exceeds the admitted bounds or is inconsistent"
@@ -157,8 +179,10 @@ class _Account:
     cache_tokens: int = 0
     output_tokens: int = 0
     cost_nanodollars: int = 0
+    outstanding_reserve_nanodollars: int = 0
 
-    def add(self, usage: _Usage) -> None:
+    def add(self, usage: _Usage, reserve_nanodollars: int) -> None:
+        self.outstanding_reserve_nanodollars -= reserve_nanodollars
         self.observed += 1
         self.input_tokens += usage.input_tokens
         self.cache_tokens += usage.cache_tokens
@@ -183,9 +207,9 @@ class _Account:
             "started_calls": self.started,
             "observed_usage_calls": self.observed,
             "unknown_usage_calls": self.started - self.observed,
-            "unknown_usage_reserve_usd": _usd(
-                (self.started - self.observed) * RESERVE_NANODOLLARS
-            ),
+            "observed_model_cost_nanodollars": self.cost_nanodollars,
+            "unknown_usage_reserve_nanodollars": self.outstanding_reserve_nanodollars,
+            "unknown_usage_reserve_usd": _usd(self.outstanding_reserve_nanodollars),
         }
 
 
@@ -255,82 +279,109 @@ def _completion(payload: dict[str, Any]) -> str:
     return text
 
 
-async def _request(
-    client: httpx.AsyncClient,
-    key: str,
-    body: bytes,
-    started: datetime,
-    logs_dir: Path,
-    call: dict[str, Any],
-) -> tuple[str, _Usage]:
-    captured = _Capture()
-    response = None
-    usage = None
-    failure = None
-    raw = None
-    try:
-        await captured.read(
-            client, "POST", "/chat/completions", body=body, timeout_sec=45
-        )
-        if captured.status is None or not 200 <= captured.status < 300:
-            raise ValueError("DeepSeek completion did not return HTTP success")
-        raw = captured.raw(key)
-        response = _decode_object(raw)
-        text = _completion(response)
-        usage = _Usage.from_response(response, started)
-        return text, usage
-    except asyncio.CancelledError:
-        failure = "CancelledError"
-        raise
-    except (httpx.HTTPError, TimeoutError, ValueError, RecursionError) as exc:
-        failure = type(exc).__name__
-        if type(exc) is ValueError:
-            failure = str(exc)
-        raise NonZeroAgentExitCodeError(
-            "DeepSeek request has unknown usage; stopped admission"
-        ) from None
-    finally:
-        if raw is None:
-            raw = captured.raw(key)
-        try:
-            raw_text, raw_base64 = raw.decode("utf-8"), None
-        except UnicodeDecodeError:
-            raw_text, raw_base64 = None, base64.b64encode(raw).decode("ascii")
-        _record(
-            logs_dir,
-            "call_finished",
-            **call,
-            finished_at=datetime.now(UTC).isoformat(),
-            status_code=captured.status,
-            response_body=raw_text,
-            response_body_base64=raw_base64,
-            response_model=response.get("model") if response else None,
-            usage=response.get("usage") if response else None,
-            cost_usd=_usd(usage.cost_nanodollars) if usage else None,
-            unknown_usage_reserve_usd=0 if usage else _usd(RESERVE_NANODOLLARS),
-            error=failure,
-        )
-
-
 @dataclass
 class _SeatModel:
     client: httpx.AsyncClient
     key: str = field(repr=False)
     admission: _Admission
     logs_dir: Path
+    max_output_tokens: int
     account: _Account = field(default_factory=_Account)
     history: list[dict[str, str]] = field(default_factory=list)
+
+    async def _request(
+        self, body: bytes, started: datetime, call: dict[str, Any], reserve: int
+    ) -> str:
+        captured = _Capture()
+        response = None
+        usage = None
+        failure = None
+        raw = None
+        try:
+            await captured.read(
+                self.client, "POST", "/chat/completions", body=body, timeout_sec=45
+            )
+            if captured.status is None or not 200 <= captured.status < 300:
+                raise ValueError("DeepSeek completion did not return HTTP success")
+            raw = captured.raw(self.key)
+            response = _decode_object(raw)
+            usage = _Usage.from_response(response, started, self.max_output_tokens)
+            self.account.add(usage, reserve)
+            self.admission.outstanding_reserve_nanodollars -= reserve
+            self.admission.observed_cost_nanodollars += usage.cost_nanodollars
+            return _completion(response)
+        except asyncio.CancelledError:
+            failure = "CancelledError"
+            raise
+        except (httpx.HTTPError, TimeoutError, ValueError, RecursionError) as exc:
+            failure = type(exc).__name__
+            if type(exc) is ValueError:
+                failure = str(exc)
+            if usage is None:
+                raise NonZeroAgentExitCodeError(
+                    "DeepSeek request has unknown usage; stopped admission"
+                ) from None
+            raise NonZeroAgentExitCodeError(
+                "DeepSeek completion did not contain a valid text reply"
+            ) from None
+        finally:
+            if raw is None:
+                raw = captured.raw(self.key)
+            try:
+                raw_text, raw_base64 = raw.decode("utf-8"), None
+            except UnicodeDecodeError:
+                raw_text, raw_base64 = None, base64.b64encode(raw).decode("ascii")
+            _record(
+                self.logs_dir,
+                "call_finished",
+                **call,
+                finished_at=datetime.now(UTC).isoformat(),
+                status_code=captured.status,
+                response_body=raw_text,
+                response_body_base64=raw_base64,
+                response_model=response.get("model") if response else None,
+                usage=response.get("usage") if response else None,
+                cost_usd=_usd(usage.cost_nanodollars) if usage else None,
+                unknown_usage_reserve_usd=0 if usage else _usd(reserve),
+                error=failure,
+            )
+
+    async def _check_balance(self, round_number: int, attempt: int) -> Decimal:
+        try:
+            return await _balance(self.client)
+        except (
+            httpx.HTTPError,
+            TimeoutError,
+            ValueError,
+            InvalidOperation,
+            RecursionError,
+        ) as exc:
+            _record(
+                self.logs_dir,
+                "admission_refused",
+                at=datetime.now(UTC).isoformat(),
+                round=round_number,
+                attempt=attempt,
+                error=type(exc).__name__,
+            )
+            raise NonZeroAgentExitCodeError(
+                "DeepSeek balance did not satisfy the admission floor"
+            ) from None
 
     async def query(self, prompt: str, round_number: int, attempt: int) -> str:
         self.history.append({"role": "user", "content": prompt})
         payload = {
             "model": MODEL,
             "messages": self.history,
-            "max_tokens": MAX_OUTPUT_TOKENS,
+            "max_tokens": self.max_output_tokens,
             "stream": False,
             "thinking": {"type": "disabled"},
         }
         message_bytes = len(_json_body(self.history))
+        reserve = (
+            MAX_INPUT_TOKENS * PEAK_NANODOLLARS[0]
+            + self.max_output_tokens * PEAK_NANODOLLARS[2]
+        )
         async with self.admission.lock:
             self.admission.require_open()
             if (
@@ -341,26 +392,17 @@ class _SeatModel:
                 raise NonZeroAgentExitCodeError(
                     "AgentsNet request exceeds admission bounds"
                 )
-            try:
-                balance = await _balance(self.client)
-            except (
-                httpx.HTTPError,
-                TimeoutError,
-                ValueError,
-                InvalidOperation,
-                RecursionError,
-            ) as exc:
-                _record(
-                    self.logs_dir,
-                    "admission_refused",
-                    at=datetime.now(UTC).isoformat(),
-                    round=round_number,
-                    attempt=attempt,
-                    error=type(exc).__name__,
-                )
+            budget = self.admission.budget_nanodollars
+            if budget is not None and (
+                self.admission.observed_cost_nanodollars
+                + self.admission.outstanding_reserve_nanodollars
+                + reserve
+                > budget
+            ):
                 raise NonZeroAgentExitCodeError(
-                    "DeepSeek balance did not satisfy the admission floor"
-                ) from None
+                    "AgentsNet request exceeds the trial budget"
+                )
+            balance = await self._check_balance(round_number, attempt)
             self.admission.require_open()
             started = datetime.now(UTC)
             call = {
@@ -369,7 +411,7 @@ class _SeatModel:
                 "round": round_number,
                 "attempt": attempt,
                 "started_at": started.isoformat(),
-                "reserve_usd": _usd(RESERVE_NANODOLLARS),
+                "reserve_usd": _usd(reserve),
                 "rates_nanodollars_per_token": _rates(started),
             }
             body = _json_body(payload)
@@ -383,15 +425,17 @@ class _SeatModel:
                 request=payload,
             )
             self.account.started += 1
+            self.account.outstanding_reserve_nanodollars += reserve
             self.admission.started_calls += 1
+            self.admission.outstanding_reserve_nanodollars += reserve
             try:
-                reply, usage = await _request(
-                    self.client, self.key, body, started, self.logs_dir, call
-                )
+                reply = await self._request(body, started, call, reserve)
             except BaseException:
-                self.admission.stopped = "A prior DeepSeek request has unknown usage"
+                if self.account.outstanding_reserve_nanodollars:
+                    self.admission.stopped = (
+                        "A prior DeepSeek request has unknown usage"
+                    )
                 raise
-            self.account.add(usage)
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
@@ -461,6 +505,10 @@ async def _wait_turn(
 
 
 class AgentsNetAgent(BaseAgent):
+    options_model = AgentsNetOptions
+    options: AgentsNetOptions
+    _admission: _Admission
+
     @staticmethod
     @override
     def name() -> str:
@@ -477,17 +525,26 @@ class AgentsNetAgent(BaseAgent):
             or self.model_name != MODEL_SLUG
         ):
             raise ValueError(f"AgentsNetAgent requires a native seat and {MODEL_SLUG}")
+        self._bind_admission()
+
+    def _bind_admission(self) -> _Admission:
+        if self.context_id is None:
+            raise ValueError("AgentsNetAgent requires a native seat trial")
+        self._admission = _trial_admission(
+            self.context_id, self.options.trial_budget_nanodollars
+        )
+        return self._admission
 
     @override
     async def run(
         self, instruction: str, environment: BaseEnvironment, context: AgentContext
     ) -> None:
-        if not isinstance(environment, SeatEnvironment) or self.context_id is None:
+        if not isinstance(environment, SeatEnvironment):
             raise ValueError("AgentsNetAgent requires a native seat trial")
+        admission = self._bind_admission()
         key = os.environ.get("DEEPSEEK_API_KEY")
         if not key:
             raise NonZeroAgentExitCodeError("DEEPSEEK_API_KEY is missing on the host")
-        admission = _trial_admission(self.context_id)
         async with httpx.AsyncClient(
             base_url=BASE_URL,
             headers={
@@ -499,7 +556,9 @@ class AgentsNetAgent(BaseAgent):
             timeout=httpx.Timeout(45.0, connect=10.0),
             follow_redirects=False,
         ) as client:
-            model = _SeatModel(client, key, admission, self.logs_dir)
+            model = _SeatModel(
+                client, key, admission, self.logs_dir, self.options.max_output_tokens
+            )
             try:
                 await self._play(instruction, environment, model)
             except NonZeroAgentExitCodeError as exc:

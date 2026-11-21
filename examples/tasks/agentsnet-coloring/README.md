@@ -100,20 +100,34 @@ The only model credential is `DEEPSEEK_API_KEY`. Keep it in the key store. Do no
 ```sh
 /tmp/crucible-docker-slot.sh \
   keys run -- "$PYTHON" -B "$TASK/environment/world/capability_env.py" \
-  "$PYTHON" -B "$TASK/run.py" deepseek "$OUTPUT_ROOT/deepseek"
+  "$PYTHON" -B "$TASK/run.py" deepseek "$OUTPUT_ROOT/deepseek" \
+  --max-output-tokens 512 --trial-budget-nanodollars 250000000
 ```
 
 The adapter uses `https://api.deepseek.com/chat/completions` directly. It requests `deepseek-flash`, disables provider thinking mode, and uses the original visible reasoning prompts. It makes no transport retries.
 
-Each role has 5 scheduled model calls. The source's single format retry permits at most 10 calls per role, or 40 total. Each call permits at most 512 output tokens.
+Each role has 5 scheduled model calls. The source's single format retry permits at most 10 calls per role, or 40 total. The default output cap is 512 tokens. `--max-output-tokens` accepts 512 through 1024.
 
-The serialized message guard is 30,720 UTF-8 bytes. The planning reserve allows 32,768 input tokens per call, including framing. Peak-price reservation is **USD 0.417792** for all 40 calls. It is not actual spend.
+The serialized message guard is 30,720 UTF-8 bytes. The planning reserve allows 32,768 input tokens per call, including framing.
+
+| Output cap | Peak reserve per POST (USD) | Peak reserve for 40 calls (USD) |
+|---|---:|---:|
+| 512 | 0.0104448 | 0.417792 |
+| 1024 | 0.0110592 | 0.442368 |
+
+These reserves are bounds, not actual spend.
 
 Before each paid request, the adapter checks the direct account balance. It stops new admission below USD 1.50 or after unknown usage. Balance and generation use a trial-scoped lock. Provider calls are serial; the round barriers remain synchronous. Do not interpret the baseline as a parallel-provider latency measurement.
 
 The adapter records every response, format retry, token count, cache subset, price window, and cost. A failed started call without usage remains unknown. It does not become a zero-cost call.
 
 The response model alias is not proof of a fixed provider build. Cost means the token-priced amount, not a wallet difference or invoice amount.
+
+`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. Before each POST, known cost plus unresolved reserves plus the next peak reserve must fit the limit. A refused request has no charge.
+
+Valid usage replaces its reserve with actual token cost. Unknown usage keeps its reserve and stops new admission. A reserve is not a bill.
+
+`summary.json` records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
 
 ## Retained artifacts
 
@@ -127,7 +141,7 @@ Keep raw role traces private. A public result should contain the source pins, co
 
 One registered DeepSeek trial runs on local Docker. No trial or transport retry occurs. All 4 native seats remain under test.
 
-The executed source is [`18f8e8fbbb902b8fd4b13f254818c98c23332ea9`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/18f8e8fbbb902b8fd4b13f254818c98c23332ea9). The later result entry changes only this README.
+The executed source is [`18f8e8fbbb902b8fd4b13f254818c98c23332ea9`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/18f8e8fbbb902b8fd4b13f254818c98c23332ea9). Reporting commit `103d7c3587d024512668a95acecc3fbbd663f4fc` changes only this README.
 
 | Run measure | Observed value |
 |---|---:|
