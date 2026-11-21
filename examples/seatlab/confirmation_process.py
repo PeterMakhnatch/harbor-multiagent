@@ -534,6 +534,13 @@ def _dispatch_process(root: Path, row: dict[str, Any]) -> dict[str, int]:
         for alias, bay in question
     ]
     stock = [bay in world["cases"][aliases[alias]]["after"] for alias, bay in question]
+    prior = [
+        bay in accepted[aliases[alias]]["reports"][0]["available"]
+        for alias, bay in question
+    ]
+    chosen = [
+        world["cases"][aliases[alias]]["chosen"] == bay for alias, bay in question
+    ]
     return {
         "yes_bits": sum(bits),
         "own_revision_2_correct_bits": sum(
@@ -545,6 +552,15 @@ def _dispatch_process(root: Path, row: dict[str, Any]) -> dict[str, int]:
         "own_revision_2_vs_stock_truth_disagreement_bits": sum(
             own_fact != stock_fact
             for own_fact, stock_fact in zip(own, stock, strict=True)
+        ),
+        "queried_eligibility_changed": sum(
+            a != b for a, b in zip(prior, stock, strict=True)
+        ),
+        "queried_bay_chosen_on_generated_yes": sum(
+            yes and used for yes, used in zip(bits, chosen, strict=True)
+        ),
+        "queried_bay_chosen_on_generated_no": sum(
+            not yes and used for yes, used in zip(bits, chosen, strict=True)
         ),
     }
 
@@ -590,6 +606,14 @@ def _dispatch_panel(
             ),
             0,
         )
+        post_hoc = dict.fromkeys(
+            (
+                "queried_eligibility_changed",
+                "queried_bay_chosen_on_generated_yes",
+                "queried_bay_chosen_on_generated_no",
+            ),
+            0,
+        )
         matrix = {
             key: {"perfect_reward": 0, "less_than_perfect_reward": 0}
             for key in ("both_bits_correct", "at_least_one_wrong_bit")
@@ -618,6 +642,8 @@ def _dispatch_panel(
             states["observed"] += 1
             for key in counts:
                 counts[key] += observed[key]
+            for key in post_hoc:
+                post_hoc[key] += observed[key]
             both_correct = observed["own_revision_2_correct_bits"] == 2
             fact = "both_bits_correct" if both_correct else "at_least_one_wrong_bit"
             perfect = outcome["native_score"] == 1
@@ -630,6 +656,7 @@ def _dispatch_panel(
             "no_bits": 2 * n - counts["yes_bits"],
             **counts,
             "own_revision_2_correctness_by_native_team_reward": matrix,
+            "post_hoc_question_use": post_hoc,
         }
     return panels
 
