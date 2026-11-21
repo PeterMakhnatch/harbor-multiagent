@@ -31,7 +31,7 @@ _ACTIONS = {
     "WAIT": (0, 0),
     "USE": "interact",
 }
-_CHECKPOINT_TICK = 12
+_CHECKPOINT_TICKS = (12, 14)
 _FIRST_COUNT = 16
 _IDLE_COUNT = 18
 _SECOND_TICK = _FIRST_COUNT + _IDLE_COUNT
@@ -281,7 +281,7 @@ class KitchenPilotAgent(BaseAgent):
 
     @override
     def version(self) -> str:
-        return "6"
+        return "7"
 
     @override
     async def setup(self, environment: BaseEnvironment) -> None:
@@ -345,6 +345,7 @@ class KitchenPilotAgent(BaseAgent):
             raise RuntimeError("Kitchen plan exchange is not prepared")
 
         turns: list[dict[str, Any]] = []
+        checkpoints: list[dict[str, Any]] = []
         context.metadata = {
             **(context.metadata or {}),
             "model_auth": AUTH,
@@ -352,7 +353,7 @@ class KitchenPilotAgent(BaseAgent):
             "phase_turns": turns,
             "peer_plan_seen": None,
             "peer_wait_seconds": None,
-            "checkpoint": None,
+            "checkpoints": checkpoints,
             "repair_peer_plan_seen": None,
         }
         context.cost_usd = None
@@ -385,31 +386,39 @@ class KitchenPilotAgent(BaseAgent):
                     turns,
                     peer_plan=peer_plan,
                 )
-                start = _CHECKPOINT_TICK
-                observation = await _seat_phase(
-                    environment, self._role, 0, actions[:start]
-                )
-                eligible = _repair_eligible(observation["state"], actions[start])
-                repair_called = eligible and self._mode == "repair"
-                context.metadata["checkpoint"] = {
-                    "tick": start,
-                    "eligible": eligible,
-                    "repair_called": repair_called,
-                }
-                actions = actions[start:]
-                if repair_called:
-                    repair_peer_plan = list(peer_plan[start:])
-                    context.metadata["repair_peer_plan_seen"] = repair_peer_plan
-                    actions = await self._turn(
-                        "repair",
-                        start,
-                        len(actions),
-                        observation,
-                        context,
-                        turns,
-                        own_plan=actions,
-                        peer_plan=repair_peer_plan,
+                repair_used = False
+                for tick in _CHECKPOINT_TICKS:
+                    prefix_count = tick - start
+                    observation = await _seat_phase(
+                        environment, self._role, start, actions[:prefix_count]
                     )
+                    actions = actions[prefix_count:]
+                    start = tick
+                    eligible = _repair_eligible(observation["state"], actions[0])
+                    repair_called = (
+                        eligible and self._mode == "repair" and not repair_used
+                    )
+                    checkpoints.append(
+                        {
+                            "tick": tick,
+                            "eligible": eligible,
+                            "repair_called": repair_called,
+                        }
+                    )
+                    if repair_called:
+                        repair_used = True
+                        repair_peer_plan = list(peer_plan[tick:])
+                        context.metadata["repair_peer_plan_seen"] = repair_peer_plan
+                        actions = await self._turn(
+                            "repair",
+                            tick,
+                            len(actions),
+                            observation,
+                            context,
+                            turns,
+                            own_plan=actions,
+                            peer_plan=repair_peer_plan,
+                        )
         except (Exception, asyncio.CancelledError):
             if self._role == "chef1":
                 exchange.cancel()

@@ -74,7 +74,7 @@ def _receipt(job_dir: Path, mode: str) -> dict[str, Any]:
                 "phase_turns": metadata.get("phase_turns"),
                 "peer_wait_seconds": metadata.get("peer_wait_seconds"),
                 "peer_plan_seen": metadata.get("peer_plan_seen"),
-                "checkpoint": metadata.get("checkpoint"),
+                "checkpoints": metadata.get("checkpoints"),
                 "repair_peer_plan_seen": metadata.get("repair_peer_plan_seen"),
                 "input_tokens": usage.get("n_input_tokens"),
                 "cached_input_tokens": usage.get("n_cache_tokens"),
@@ -94,7 +94,7 @@ def _receipt(job_dir: Path, mode: str) -> dict[str, Any]:
         else []
     )
     return {
-        "schema": "harbor-cramped-room-subscription/v1",
+        "schema": "harbor-cramped-room-subscription/v2",
         "trial_id": native["id"],
         "mode": mode,
         "runtime_commit": job_lock["harbor"]["git_commit_hash"],

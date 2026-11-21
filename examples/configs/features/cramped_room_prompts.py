@@ -55,20 +55,22 @@ def phase_prompt(
             "pot access. Return only your own actions and prepare for the idle transitions."
         )
     elif stage == "repair":
+        count = 4 if tick == 12 else 2
         if (
             role != "chef0"
-            or tick != 12
+            or tick not in (12, 14)
             or not isinstance(own_plan, list)
-            or len(own_plan) != 4
+            or len(own_plan) != count
             or not isinstance(peer_plan, list)
-            or len(peer_plan) != 4
+            or len(peer_plan) != count
         ):
             raise ValueError(
-                "Repair requires chef0, state tick 12, and two 4-action plans"
+                "Repair requires chef0 and two plans of 4 actions at state tick 12 "
+                "or 2 actions at state tick 14"
             )
-        count = 4
         phase = (
-            "Recover the opening from the observed state. Return your next 4 actions. "
+            "Recover the opening from the observed state. "
+            f"Return your next {count} actions. "
             "You may keep or change the old actions in own_plan. "
             "Chef1 will execute peer_plan unchanged. Check both plans for movement "
             "conflicts and competing pot access."
@@ -98,7 +100,7 @@ def phase_prompt(
         plans_json = json.dumps(
             {"own_plan": own_plan, "peer_plan": peer_plan}, separators=(",", ":")
         )
-        sections.append(f"Opening actions for ticks 12 through 15:\n{plans_json}")
+        sections.append(f"Opening actions for ticks {tick} through 15:\n{plans_json}")
     sections.extend(
         (
             "If a goal is no longer reachable in this phase, make the best legal plan "
