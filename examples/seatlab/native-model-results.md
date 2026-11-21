@@ -22,6 +22,8 @@ The first packing block reused the original 337-byte note. Each policy produced 
 
 An offline inspection also identified why the original final answers were incomplete. Of 152 distinct received final answers, 104 met the contract. All other **48** returned a well-formed `choices` object for exactly one registered ID: the record the agent just opened. Each returned a valid option for that ID. The contract required all 4 IDs. We did not infer the other choices or change any score.
 
+The [saved-trial replication](replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials) uses the accepted sender messages from 3 actual native teams. All 6 source seats acknowledged their input. Both replacement policies in the first block chose the same record and shared a complete new decision. All 4 direct calls matched at **$0.000276468 USD**. The saved Harbor scores did not change.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.
