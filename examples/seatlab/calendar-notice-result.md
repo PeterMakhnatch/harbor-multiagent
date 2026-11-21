@@ -1,4 +1,27 @@
-# Do changed-report names help a live scheduling team?
+# What helps two agents find a meeting?
+
+**Give each seat the starts that fit its own calendar.** On 12 held-out Flotilla worlds, this raised the number of successful native DeepSeek teams from 0 to 6. Neither seat saw the other calendar or the verifier’s answer.
+
+## Held-out test: change both private calendar views
+
+We ran 2 fresh teams on each world. Both teams got the same game, the same weekday notices, and the same 2-report limit. Only the calendar view changed. The first sender turn saw 2 attendees. Its revision and the receiver saw all 3 attendees at their own seat.
+
+| Outcome | Raw busy hours | Exact local starts |
+|---|---:|---:|
+| Native teams that found the joint meeting | 0/12 | 6/12 |
+| Sender gave an exact final list | 0/11 | 10/12 |
+| Receiver chose a locally valid start | 1/11 | 12/12 |
+| The received reports left only the correct start | 1/11 | 8/12 |
+
+The exact view gained 6 worlds, tied 6, and lost 0. The one-sided paired p-value was **1/64**. This passed the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060106913). One raw sender returned an invalid revision. We kept its native score of 0; it had no receiver decision.
+
+The receiver took the sole correct option in 6 of the 8 exact-view teams where the reports identified it. A [no-message policy](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060302615) trained on 256 separate calendars got 4/12 using only local starts. The native test changed both seats together. It does not show how many wins required the peer’s messages.
+
+The stock Eval Lab reader matched all 24 native scores. The 23 full conversations delivered 69 messages and matched 92 recorded turns. The [4 no-key native controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060200350) scored as expected. Direct DeepSeek served 94 first replies for **$0.005690322**. No charge remained unsettled. These results cover 1 model, 1 paired draw, and 12 scheduling worlds.
+
+[Native evidence](results/calendar-private-views-live.json) · [Per-team costs](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060350368) · [Run the experiment](replication.md#test-private-calendar-views-with-2-live-seats) · [What other reads could reveal](results/calendar-read-opportunities.json).
+
+## Earlier test: name the changed weekdays
 
 **Naming changed weekdays did not improve native team reward.** Receivers opened more changed reports, but that difference did not meet the registered threshold.
 
@@ -40,8 +63,6 @@ Both passed the [registered test](https://github.com/PeterMakhnatch/harbor-multi
 
 An [independent check of 192 earlier live teams](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059980058) shows why both roles matter. Moving a private lookup from sender to receiver raised receiver-valid choices from 21/96 to 66/96. Joint successes changed only from 17/96 to 20/96. Moving the tool changed what the sender could report, too.
 
-**Next live test:** give both seats their own exact starts versus raw calendars on the [12 fresh native worlds](replication.md#verify-12-held-out-scheduling-worlds). Keep the notice and the 2-read limit fixed. In both arms, say an empty report means “the sender listed no start,” not “no start fits.”
-
 [Replay data](results/calendar-presentation-replay.json) · [Run the offline check](replication.md#replay-one-receiver-without-changing-its-teammates) · [48 first replies and token charges: $0.002017524, 0 holds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060041258).
 
 The reported experiment used 1 model and the 12 previously studied worlds. With truthful reports, 7/12 already have one candidate before either read. The result does not estimate performance on unseen calendars.
@@ -50,6 +71,7 @@ The reported experiment used 1 model and the 12 previously studied worlds. With 
 
 ```sh
 python3 examples/seatlab/calendar_notices/summary.py
+python3 examples/seatlab/calendar_notices/summary.py examples/seatlab/results/calendar-private-views-live.json
 ```
 
 [Redacted per-team evidence and direct token charges](results/calendar-notice-live.json) · [Frozen harness](https://github.com/PeterMakhnatch/harbor-multiagent/tree/0bd4b5563ea6df03d277cdc81c5e013bb33d2f34/examples/seatlab/calendar_notices) · [Native control evidence](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059482347) · [Fixture checks](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059394292).
