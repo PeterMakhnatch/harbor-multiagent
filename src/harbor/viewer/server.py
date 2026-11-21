@@ -66,7 +66,7 @@ from harbor.viewer.models import (
     evals_from_reward_totals,
     evals_from_rewards,
 )
-from harbor.viewer.scanner import JobScanner
+from harbor.viewer.scanner import JobScanner, declared_job_agent_names
 from harbor.viewer.comparison import build_comparison
 from harbor.viewer import artifacts
 from harbor.viewer.queries import sql
@@ -1319,14 +1319,8 @@ def _register_job_endpoints(
             environment_type: str | None = None
             if config:
                 sources = _job_source_labels(config)
-                agent_configs = config.participants or config.agents
-                agent_labels: set[str] = set()
-                for agent in agent_configs:
-                    label = agent.name
-                    if label is None and config.participants:
-                        label = agent.import_path
-                    if label is not None:
-                        agent_labels.add(label)
+                agents = declared_job_agent_names(config)
+                for agent in config.participants or config.agents:
                     if agent.model_name:
                         parts = agent.model_name.split("/", 1)
                         if len(parts) == 2:
@@ -1334,7 +1328,6 @@ def _register_job_endpoints(
                             models.append(parts[1])
                         else:
                             models.append(agent.model_name)
-                agents = sorted(agent_labels)
                 providers = sorted(set(providers))
                 models = sorted(set(models))
                 if config.environment.type:

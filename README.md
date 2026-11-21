@@ -86,9 +86,14 @@ Phase times are recorded wall intervals. Seats can overlap, so their sum is
 not the Job's elapsed time. The table does not recover deleted attempts or
 unreported billing.
 
-Folder-mode Job lists use participant names or import paths for native rosters,
-search, and filters. They do not import agent modules. Single-agent Trials keep
-the existing Tokens and Timing cards.
+Folder-mode Job metadata uses nonempty participant rosters before the legacy
+agent list. The viewer and shared API use the same declared names or full import
+paths without importing task modules. Shared lists, details, agent filters, and
+facets keep these identifiers consistent. Declared identifiers can differ from
+recorded runtime names. Empty rosters keep the legacy agent list. Single-agent
+Trials keep the existing Tokens and Timing cards.
+
+Folder state comes from saved progress, not a process liveness check.
 
 ## Toward Harbor
 

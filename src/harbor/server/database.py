@@ -5,7 +5,7 @@ import json
 import os
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -238,17 +238,31 @@ class Database(Protocol):
 
 
 class SQLiteDatabase(Database):
-    def __init__(self, data_dir: Path, *, native_job_times: bool = False) -> None:
+    def __init__(
+        self,
+        data_dir: Path,
+        *,
+        native_job_times: bool = False,
+        job_agent_names: Callable[[str], list[str]] | None = None,
+    ) -> None:
         self.data_dir = data_dir
         self._native_job_times = native_job_times
+        self._job_agent_names = job_agent_names
         self.db: sqlite3.Connection
         self._cipher: Fernet
         self._read_only = False
 
-    def _configure_clock(self) -> None:
+    def _configure_projections(self) -> None:
         if self._native_job_times:
             self.db.create_function(
                 "native_utc_key", 1, _native_utc_key, deterministic=True
+            )
+        if (job_agent_names := self._job_agent_names) is not None:
+            self.db.create_function(
+                "folder_job_agent_names",
+                1,
+                lambda job_id: json.dumps(job_agent_names(job_id)),
+                deterministic=True,
             )
 
     @override
@@ -302,7 +316,7 @@ class SQLiteDatabase(Database):
                 )
                 # Query connections must supply a caller; unscoped public reads fail closed.
                 self.db.create_function("current_owner_id", 0, lambda: None)
-                self._configure_clock()
+                self._configure_projections()
                 yield self
             finally:
                 self.db.close()
@@ -310,7 +324,11 @@ class SQLiteDatabase(Database):
     @override
     @contextmanager
     def reader(self) -> Iterator["SQLiteDatabase"]:
-        reader = SQLiteDatabase(self.data_dir, native_job_times=self._native_job_times)
+        reader = SQLiteDatabase(
+            self.data_dir,
+            native_job_times=self._native_job_times,
+            job_agent_names=self._job_agent_names,
+        )
         reader._read_only = True
         reader._cipher = self._cipher
         reader.db = sqlite3.connect(
@@ -320,7 +338,7 @@ class SQLiteDatabase(Database):
         try:
             reader.db.execute("PRAGMA query_only=ON")
             reader.db.create_function("current_owner_id", 0, lambda: None)
-            reader._configure_clock()
+            reader._configure_projections()
             yield reader
         finally:
             reader.db.close()
@@ -642,12 +660,13 @@ class SQLiteDatabase(Database):
         placeholders = ",".join("?" for _ in job_ids)
         states = ("queued", "running", "paused", "cancelling", "cancelled", "finished")
         identities = {
-            "agent_names": "agent_name",
             "model_names": "model_name",
             "model_providers": "model_provider",
             "reasoning_efforts": "reasoning_effort",
             "sources": "task_source",
         }
+        if self._job_agent_names is None:
+            identities["agent_names"] = "agent_name"
         columns = [
             "job_id",
             "count(*) AS n_total",
@@ -705,6 +724,9 @@ class SQLiteDatabase(Database):
                 "mean": row["mean"],
                 "count": row["count"],
             }
+        if (job_agent_names := self._job_agent_names) is not None:
+            for job_id, summary in summaries.items():
+                summary["agent_names"] = job_agent_names(job_id)
         return summaries
 
     @override
@@ -752,6 +774,7 @@ class SQLiteDatabase(Database):
             owner_id,
             columns,
             native_job_times=self._native_job_times,
+            declared_job_agents=self._job_agent_names is not None,
         )
         page.items = [self._decode(row) for row in page.items]
         return page
@@ -785,6 +808,7 @@ class SQLiteDatabase(Database):
             limit,
             field,
             native_job_times=self._native_job_times,
+            declared_job_agents=self._job_agent_names is not None,
         )
 
     @override

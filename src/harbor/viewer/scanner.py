@@ -13,6 +13,17 @@ from harbor.models.trial.result import TrialResult
 logger = logging.getLogger(__name__)
 
 
+def declared_job_agent_names(config: JobConfig) -> list[str]:
+    names: set[str] = set()
+    for agent in config.participants or config.agents:
+        name = agent.name
+        if name is None and config.participants:
+            name = agent.import_path
+        if name is not None:
+            names.add(name)
+    return sorted(names)
+
+
 def _normalize_viewer_job_config(data: Any) -> Any:
     # Temporary compatibility patch for hosted configs that stored numeric
     # dataset refs; remove once platform persists these as strings.
