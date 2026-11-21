@@ -44,6 +44,17 @@ This no-key demo selects the tool, sends empty lists, and picks slot 0. It start
 
 Assign different blocks to parallel workers. Each block claims its first attempt on disk. A second study cannot start the same native Compose project while it is active. Do not copy, resume, or replace a failed first attempt. The report keeps missing rooms unknown. To check costs from the first-party `direct` mode, pass `--spend-dir` to the report. External callbacks get native verification without a DeepSeek billing claim.
 
+### Read the native results with stock Eval Lab
+
+Use a Python environment that already has Eval Lab. Run the reader from this fork. It calls `evallab.results.load_trial` locally. It does not write to Eval Lab, start Harbor, call a model, or import the SeatLab scorer.
+
+```bash
+"$eval_lab_python" -B -m examples.seatlab.visibility.crossread_calendar_tools \
+  "$private/tool-demo" "$private/report.json"
+```
+
+The reader checks each reported award against the native trial ID, both seat records, message IDs, and the stock reward. It flags a scored native trial omitted from the public report. A missing reward differs from a verified zero. A missing native token count differs from a free call. Host estimates stay separate. Use `--world`, `--direction`, and `--repetition` to inspect one block.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.
