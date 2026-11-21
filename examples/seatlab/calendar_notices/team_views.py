@@ -32,6 +32,22 @@ _JOIN_LISTS_FIRST = frozenset(
 _VIEW_PREFIX = calendar_protocol._RULES[
     : calendar_protocol._RULES.index("Your calendar: ")
 ]
+_OWN_STARTS = "Your calendar: 2-hour start IDs that fit all attendees in this view: "
+_INITIAL_REPORT = "Initial report from the other calendar: "
+_OPENED_REPORTS = "Opened weekday reports: "
+_CHOICE_RULES = (
+    "Each opened report replaces the initial list for that weekday. An empty "
+    "report means the sender listed no start for that weekday; it is not proof none exists. "
+    "For every other weekday, the initial list is your only information about the "
+    'other calendar. Select one joint start. Return only JSON: {"slot":n}. '
+    "Replace n with one slot ID."
+)
+_VISIBLE = "Visible intersections: "
+_CHECK_LIMITS = (
+    "Both sets depend on the peer's reports. A listed start can be invalid "
+    "(a false positive), and a valid start can be absent (a false negative). "
+    "You may select any slot ID, even if it is not listed in either set."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,12 +182,7 @@ def _view(table: calendar_packet.Table, arm: str, *, first_two: bool = False) ->
         raise ValueError("invalid_arm")
     visible = (*table[:2], (0,) * len(calendar_protocol._DAYS)) if first_two else table
     starts = p.wire(calendar_packet.starts(visible))
-    return (
-        _VIEW_PREFIX
-        + f"Your calendar: 2-hour start IDs that fit all attendees in this view: {starts}."
-        + "\n\nTask:\n"
-        + p._DAY_IDS
-    )
+    return _VIEW_PREFIX + _OWN_STARTS + starts + ".\n\nTask:\n" + p._DAY_IDS
 
 
 def initial_prompt(table: calendar_packet.Table, arm: str) -> str:
@@ -268,20 +279,10 @@ def choice_prompt(
     visible = _visible_sets(table, initial, reports) if arm == "checked" else None
     baseline = (
         _view(table, _view_arm(arm, "receiver-exact"))
-        + f"Initial report from the other calendar: {p.wire(initial)}\n"
-        + f"Opened weekday reports: {p.wire(opened)}\n"
-        + "Each opened report replaces the initial list for that weekday. An empty "
-        "report means the sender listed no start for that weekday; it is not proof none exists. "
-        "For every other weekday, the initial list is your only information about the "
-        'other calendar. Select one joint start. Return only JSON: {"slot":n}. '
-        "Replace n with one slot ID."
+        + f"{_INITIAL_REPORT}{p.wire(initial)}\n"
+        + f"{_OPENED_REPORTS}{p.wire(opened)}\n"
+        + _CHOICE_RULES
     )
     if visible is None:
         return baseline
-    return (
-        baseline
-        + f"\nVisible intersections: {p.wire(visible)}\n"
-        + "Both sets depend on the peer's reports. A listed start can be invalid "
-        "(a false positive), and a valid start can be absent (a false negative). "
-        "You may select any slot ID, even if it is not listed in either set."
-    )
+    return f"{baseline}\n{_VISIBLE}{p.wire(visible)}\n{_CHECK_LIMITS}"
