@@ -93,7 +93,7 @@ On Peter's shared host, prefix every native command with `/tmp/crucible-docker-s
 
 For a standalone host, use the inner capability-wrapper command with 1 active trial. The wrapper keeps capabilities in the child environment. It does not print them.
 
-### Direct DeepSeek baseline
+### Direct DeepSeek
 
 The only model credential is `DEEPSEEK_API_KEY`. Keep it in the key store. Do not place it in a task file or container.
 
@@ -117,19 +117,25 @@ The serialized message guard is 30,720 UTF-8 bytes. Each POST reserves 32,768 in
 
 These reserves are bounds, not actual spend.
 
-Before each paid request, the adapter checks the direct account balance. It stops new admission below USD 1.50 or after unknown usage. Balance and generation use a trial-scoped lock. Provider calls are serial; the round barriers remain synchronous. Do not interpret the baseline as a parallel-provider latency measurement.
+The adapter allows up to 4 completion POSTs per trial and 1 per seat at a time. The round barriers remain synchronous. This is a configured maximum, not measured overlap or a speedup.
+
+Before each POST, the adapter checks the direct USD balance against the USD 1.50 floor. The balance GET runs outside the trial lock. A successful check does not reserve wallet funds. Concurrent charges can lower the balance after a check.
 
 The adapter records every response, format retry, token count, cache subset, estimated price window, and cost. A failed started call without usage remains unknown. It does not become a zero-cost call.
 
 Reported cost uses the published rate schedule at the client start time. The estimate does not apply the Chinese public holiday exception. It does not establish the provider's billing clock, wallet debit, or invoice amount. The response model alias does not attest to a fixed provider build.
 
-`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. The budget check runs before the balance GET and the completion POST. Prior peak-priced charges, unresolved reserves, and the next peak reserve must fit the limit. A refused request has no charge.
+`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. The adapter checks capacity before the balance GET and rechecks it under the trial lock before reserving for the POST. Peak-priced charges, outstanding reserves, and the next peak reserve must fit the limit. A refused request does not start a POST.
 
-For budget admission only, valid usage replaces its reserve with the published peak prices for the actual uncached input, cached input, and output tokens. This upper bound does not depend on which price window the provider uses. Unknown usage keeps the full reserve and stops new admission. A reserve is not a bill.
+For budget admission only, complete valid usage replaces its reserve with the published peak prices for actual uncached input, cached input, and output tokens. This upper bound does not depend on which price window the provider uses.
+
+Unknown usage keeps the full reserve and stops new admission. A partial response does not establish usage, even if its captured bytes contain a usage field. A rejected balance check also stops new admission. Already admitted calls still settle when their client requests end.
+
+Cancellation ends the client request and retains the full reserve when usage is unknown. It does not guarantee that the provider stops processing. A reserve is not a bill.
 
 Each seat records the exact integer `budgeted_model_cost_nanodollars` for valid usage. In `call_finished`, that field is the call's budget charge, while `cost_usd` is its reported cost estimate. Unknown usage leaves both fields null and records the reserve separately.
 
-`summary.json` still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
+`summary.json` labels `model_call_concurrency` as a `configured_maximum` and records the balance admission and cancellation policies. It still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
 
 ## Retained artifacts
 
@@ -180,7 +186,7 @@ All calls start on Saturday. The stored cost estimate uses the published off-pea
 
 The source-parity proof compares the pinned prompts, parser, histories, routing, and both scores without a provider call. All 3 native controls also pass.
 
-This is 1 successful episode, not an estimated success rate. Provider calls remain serial. The trial does not establish communication necessity or model superiority.
+This is 1 successful episode, not an estimated success rate. This run uses serial provider calls. It does not establish communication necessity or model superiority.
 
 ## Repeated output-cap study
 

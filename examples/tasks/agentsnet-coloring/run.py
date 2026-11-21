@@ -55,7 +55,7 @@ def _runtime(mode: str) -> dict[str, Any]:
     if any(not path.is_relative_to(SDK) for path in imported.values()):
         raise RuntimeError(f"Harbor did not load from {SDK}: {imported}")
     declared = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
-    return {
+    runtime: dict[str, Any] = {
         "mode": mode,
         "repo_root": str(REPO),
         "repo_revision": _git("HEAD"),
@@ -66,9 +66,26 @@ def _runtime(mode: str) -> dict[str, Any]:
         "sdk_source_version": declared["project"]["version"],
         "python": sys.executable,
         "trial_retries": 0,
-        "model_call_concurrency": 1 if mode == "deepseek" else None,
+        "model_call_concurrency": None,
         "transport_retries": 0 if mode == "deepseek" else None,
     }
+    if mode == "deepseek":
+        from agentsnet_agent import BALANCE_FLOOR, MAX_LIVE_CALLS
+
+        runtime.update(
+            model_call_concurrency=MAX_LIVE_CALLS,
+            model_call_concurrency_basis="configured_maximum",
+            balance_admission={
+                "floor_usd": str(BALANCE_FLOOR),
+                "fresh_check_per_post": True,
+                "reserves_wallet_funds": False,
+            },
+            cancellation={
+                "scope": "client",
+                "unknown_usage_keeps_full_reserve": True,
+            },
+        )
+    return runtime
 
 
 def _config(

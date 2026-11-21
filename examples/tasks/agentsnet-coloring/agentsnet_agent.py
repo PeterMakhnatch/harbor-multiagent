@@ -35,6 +35,7 @@ MIN_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 1024
 MAX_SEAT_CALLS = 10
 MAX_TRIAL_CALLS = 40
+MAX_LIVE_CALLS = 4
 MAX_HTTP_BYTES = 262_144
 PEAK_NANODOLLARS = (300, 6, 1200)
 OFF_PEAK_NANODOLLARS = (150, 3, 600)
@@ -117,6 +118,11 @@ class _Admission:
     budgeted_cost_nanodollars: int = 0
     outstanding_reserve_nanodollars: int = 0
     stopped: str | None = None
+    live_calls: int = field(default=0, init=False)
+
+    def stop(self, message: str) -> None:
+        if self.stopped is None:
+            self.stopped = message
 
     def require_open(self) -> None:
         if self.stopped is not None:
@@ -135,8 +141,7 @@ def _trial_admission(
         _admissions[context_id] = admission
     elif admission.budget_nanodollars != trial_budget_nanodollars:
         message = "AgentsNet seats must share the same trial_budget_nanodollars"
-        if admission.stopped is None:
-            admission.stopped = message
+        admission.stop(message)
         raise ValueError(message)
     return admission
 
@@ -305,6 +310,74 @@ class _SeatModel:
     max_output_tokens: int
     account: _Account = field(default_factory=_Account)
     history: list[dict[str, str]] = field(default_factory=list)
+    _querying: bool = field(default=False, init=False)
+    _active_trial_call: int | None = field(default=None, init=False)
+
+    def _require_capacity(self, message_bytes: int, reserve: int) -> None:
+        self.admission.require_open()
+        if (
+            message_bytes > MAX_MESSAGE_BYTES
+            or self.account.started >= MAX_SEAT_CALLS
+            or self.admission.started_calls >= MAX_TRIAL_CALLS
+            or self._active_trial_call is not None
+            or self.account.outstanding_reserve_nanodollars != 0
+            or self.admission.live_calls >= MAX_LIVE_CALLS
+        ):
+            raise NonZeroAgentExitCodeError(
+                "AgentsNet request exceeds admission bounds"
+            )
+        budget = self.admission.budget_nanodollars
+        if budget is not None and (
+            self.admission.budgeted_cost_nanodollars
+            + self.admission.outstanding_reserve_nanodollars
+            + reserve
+            > budget
+        ):
+            raise NonZeroAgentExitCodeError(
+                "AgentsNet request exceeds the trial budget"
+            )
+
+    def _reserve(
+        self, message_bytes: int, reserve: int, round_number: int, attempt: int
+    ) -> tuple[datetime, dict[str, Any]]:
+        self._require_capacity(message_bytes, reserve)
+        started = datetime.now(UTC)
+        call = {
+            "seat_call": self.account.started + 1,
+            "trial_call": self.admission.started_calls + 1,
+            "round": round_number,
+            "attempt": attempt,
+            "started_at": started.isoformat(),
+            "reserve_usd": _usd(reserve),
+            "rates_nanodollars_per_token": _rates(started),
+        }
+        self.account.started += 1
+        self.account.outstanding_reserve_nanodollars += reserve
+        self.admission.started_calls += 1
+        self.admission.outstanding_reserve_nanodollars += reserve
+        self.admission.live_calls += 1
+        self._active_trial_call = self.admission.started_calls
+        return started, call
+
+    def _settle(self, call: dict[str, Any], reserve: int, usage: _Usage | None) -> None:
+        if (
+            self._active_trial_call != call["trial_call"]
+            or self.account.started != call["seat_call"]
+            or self.account.outstanding_reserve_nanodollars != reserve
+            or self.admission.outstanding_reserve_nanodollars < reserve
+            or not 0 < self.admission.live_calls <= MAX_LIVE_CALLS
+        ):
+            raise RuntimeError("AgentsNet request has no matching live reservation")
+        if usage is not None and not 0 <= usage.budgeted_cost_nanodollars <= reserve:
+            raise RuntimeError("AgentsNet usage exceeds its reserved peak charge")
+        self._active_trial_call = None
+        self.admission.live_calls -= 1
+        if usage is None:
+            self.admission.stop("A prior DeepSeek request has unknown usage")
+            return
+        self.account.add(usage, reserve)
+        self.admission.outstanding_reserve_nanodollars -= reserve
+        self.admission.budgeted_cost_nanodollars += usage.budgeted_cost_nanodollars
 
     async def _request(
         self, body: bytes, started: datetime, call: dict[str, Any], reserve: int
@@ -323,9 +396,6 @@ class _SeatModel:
             raw = captured.raw(self.key)
             response = _decode_object(raw)
             usage = _Usage.from_response(response, started, self.max_output_tokens)
-            self.account.add(usage, reserve)
-            self.admission.outstanding_reserve_nanodollars -= reserve
-            self.admission.budgeted_cost_nanodollars += usage.budgeted_cost_nanodollars
             return _completion(response)
         except asyncio.CancelledError:
             failure = "CancelledError"
@@ -342,6 +412,8 @@ class _SeatModel:
                 "DeepSeek completion did not contain a valid text reply"
             ) from None
         finally:
+            async with self.admission.lock:
+                self._settle(call, reserve, usage)
             if raw is None:
                 raw = captured.raw(self.key)
             try:
@@ -376,6 +448,8 @@ class _SeatModel:
             InvalidOperation,
             RecursionError,
         ) as exc:
+            message = "DeepSeek balance did not satisfy the admission floor"
+            self.admission.stop(message)
             _record(
                 self.logs_dir,
                 "admission_refused",
@@ -384,11 +458,21 @@ class _SeatModel:
                 attempt=attempt,
                 error=type(exc).__name__,
             )
-            raise NonZeroAgentExitCodeError(
-                "DeepSeek balance did not satisfy the admission floor"
-            ) from None
+            raise NonZeroAgentExitCodeError(message) from None
 
     async def query(self, prompt: str, round_number: int, attempt: int) -> str:
+        if self._querying:
+            raise NonZeroAgentExitCodeError("AgentsNet seat already has a live query")
+        self._querying = True
+        try:
+            return await self._query(prompt, round_number, attempt)
+        except asyncio.CancelledError:
+            self.admission.stop("A DeepSeek request was cancelled")
+            raise
+        finally:
+            self._querying = False
+
+    async def _query(self, prompt: str, round_number: int, attempt: int) -> str:
         self.history.append({"role": "user", "content": prompt})
         payload = {
             "model": MODEL,
@@ -403,38 +487,12 @@ class _SeatModel:
             + self.max_output_tokens * PEAK_NANODOLLARS[2]
         )
         async with self.admission.lock:
-            self.admission.require_open()
-            if (
-                message_bytes > MAX_MESSAGE_BYTES
-                or self.account.started >= MAX_SEAT_CALLS
-                or self.admission.started_calls >= MAX_TRIAL_CALLS
-            ):
-                raise NonZeroAgentExitCodeError(
-                    "AgentsNet request exceeds admission bounds"
-                )
-            budget = self.admission.budget_nanodollars
-            if budget is not None and (
-                self.admission.budgeted_cost_nanodollars
-                + self.admission.outstanding_reserve_nanodollars
-                + reserve
-                > budget
-            ):
-                raise NonZeroAgentExitCodeError(
-                    "AgentsNet request exceeds the trial budget"
-                )
-            balance = await self._check_balance(round_number, attempt)
-            self.admission.require_open()
-            started = datetime.now(UTC)
-            call = {
-                "seat_call": self.account.started + 1,
-                "trial_call": self.admission.started_calls + 1,
-                "round": round_number,
-                "attempt": attempt,
-                "started_at": started.isoformat(),
-                "reserve_usd": _usd(reserve),
-                "rates_nanodollars_per_token": _rates(started),
-            }
-            body = _json_body(payload)
+            self._require_capacity(message_bytes, reserve)
+        body = _json_body(payload)
+        balance = await self._check_balance(round_number, attempt)
+        async with self.admission.lock:
+            started, call = self._reserve(message_bytes, reserve, round_number, attempt)
+        try:
             _record(
                 self.logs_dir,
                 "call_started",
@@ -444,18 +502,11 @@ class _SeatModel:
                 message_bytes=message_bytes,
                 request=payload,
             )
-            self.account.started += 1
-            self.account.outstanding_reserve_nanodollars += reserve
-            self.admission.started_calls += 1
-            self.admission.outstanding_reserve_nanodollars += reserve
-            try:
-                reply = await self._request(body, started, call, reserve)
-            except BaseException:
-                if self.account.outstanding_reserve_nanodollars:
-                    self.admission.stopped = (
-                        "A prior DeepSeek request has unknown usage"
-                    )
-                raise
+        except BaseException:
+            async with self.admission.lock:
+                self._settle(call, reserve, None)
+            raise
+        reply = await self._request(body, started, call, reserve)
         self.history.append({"role": "assistant", "content": reply})
         return reply
 
@@ -582,8 +633,7 @@ class AgentsNetAgent(BaseAgent):
             try:
                 await self._play(instruction, environment, model)
             except NonZeroAgentExitCodeError as exc:
-                if admission.stopped is None:
-                    admission.stopped = str(exc)
+                admission.stop(str(exc))
                 raise
             finally:
                 model.account.publish(context)
