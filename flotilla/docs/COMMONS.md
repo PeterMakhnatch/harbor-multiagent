@@ -398,3 +398,25 @@ Limits: 1 model (DeepSeek-V4.1-Flash), 1 harness (terminus-2), 3 seats, regime B
 a time in instance order; the solo trials ran in a second lane during the first 2 hours. Inferred, not tested:
 the effect is the message channel and not the extra time, because both arms had the same round length and turn
 budget.
+
+## 16. Why the silent lakes collapsed (an independent reading)
+
+A headless worker (GPT-6.2 Sol, on the Codex subscription, $0) read the trajectories of the 32 team trials. For
+each over-use event, it found the step that sent the request, and it classified the motive from the model's own
+text, with a quote. The full table is `docs/results/commons-wave1-overuse.md`. This is a model's reading, not a
+measurement; 3 of its quotes were checked against the raw trajectories, and all 3 are there.
+
+| Motive | silent | talk |
+|---|---|---|
+| Self-interest ("Since only our score matters. Let's request maybe 39.") | 21 | 1 |
+| Response to others' over-use ("Because p1 is aggressive and the lake is likely to collapse soon, the best immediate opportunity is to capture most of the current stock now.") | 12 | 0 |
+| Arithmetic or rule error | 1 | 0 |
+| End-of-season belief | 0 | 0 |
+| A script or bot written earlier | 0 | 0 |
+| Unclear | 3 | 0 |
+| Total | 37 | 1 |
+
+- 11 of the 12 trials with an over-use event collapsed; all 20 trials without one survived.
+- The silent collapses are mostly deliberate: seats knew the fair share and took more for their own score, and
+  the others then raced for what was left. They are not arithmetic errors and not bots.
+- The only talk event is the broken pledge of instance 4: "Request 109 maximizes share given 109 cap."

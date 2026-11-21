@@ -60,3 +60,32 @@ FAIL: otherwise. With 3 pairs, this is an observation, not a test of a rate.
 
 **Reported, no test.** Efficiency per arm, surplus shares, seats that took less than their outside option, and
 what talk seats say about their outside options.
+
+## 5. Pilot result
+
+The pilot ran from 2:09 AM to 2:44 AM ET (2026-11-21), off-peak. `split_trials.py` on the 6 pilot jobs
+(`'sp1-??????'`):
+
+- **Validity test: PASS.** 6 of 6 trials valid, 0 missed seat-rounds, real cost $0.0897 from tokens.
+- **Behavior prediction: FAIL.** Every talk trial made a deal in round 1, as predicted, but so did every silent
+  trial. No silent trial needed more than one round.
+
+| Instance | Pot | Outside options (p1, p2) | silent claims | talk claims |
+|---|---|---|---|---|
+| 0 | 90 | 19, 16 | 45, 45 | 45, 45 |
+| 1 | 119 | 47, 6 | 59, 59 (1 point left) | 59, 60 |
+| 2 | 104 | 6, 37 | 52, 52 | 52, 52 |
+
+Observed:
+
+- In all 6 trials, the seats took the equal split in round 1 (efficiency: silent 0.997, talk 1.000).
+- The outside options did not move the split. In instance 1, p1 (outside option 47) took 59, and p2 (outside
+  option 6) also took 59 or 60, so p1 got 18% of the surplus. In instance 2 (talk), both seats stated their true
+  outside options (6 and 37) and still split 52 and 52.
+- No seat misstated its outside option. 2 of 6 talk seats stated it; both were true.
+
+Inferred: at these settings, the equal split is a focal point that every seat prefers to its outside option,
+because both outside options are below half of the pot. So the game has no conflict to resolve, and the arms
+cannot differ: a ceiling, like commons regime A. A next version needs an outside option above half of the pot
+for one seat (then the equal split is worse than no deal for that seat), or 3 seats with unequal outside options.
+Draw them as a regime `b` and pre-register again.
