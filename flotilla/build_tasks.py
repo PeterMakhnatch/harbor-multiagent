@@ -437,10 +437,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
-            if game:  # the public rules only: never the season length, never another seat's private value
+            if game:
                 arm = inst | ({"players": ["p1"]} if condition == "solo" else {})
                 if hasattr(family, "briefing"):
-                    briefings = {s: family.briefing(arm, s) for s in seats}
+                    briefings = {s: family.briefing(arm, s, condition) for s in seats}
                 else:
                     public = {key: arm[key] for key in ("capacity", "growth", "collapse_below", "seats")}
                     briefings = {s: public | {"players": seats} for s in seats}
@@ -610,9 +610,13 @@ def main() -> None:
                         help="game families, talk arm: messages per seat in each round (%(default)s)")
     args = parser.parse_args()
     conditions = tuple(c for c in args.conditions.split(",") if c)
-    unknown = [c for c in conditions if c not in CONDITION_TEXT]
-    if unknown:
-        parser.error(f"unknown conditions {unknown}; known: {sorted(CONDITION_TEXT)}")
+    known = set(CONDITION_TEXT)
+    if any(c not in known for c in conditions):
+        path = family_path(args.family)
+        if path.parent == ROOT / "games" and path.is_file():
+            known.update(load_family(args.family).ARMS)
+        if unknown := [c for c in conditions if c not in known]:
+            parser.error(f"unknown conditions {unknown}; known: {sorted(known)}")
     if args.scripted and args.conditions == ",".join(CONDITIONS):
         conditions = ("talk", "talk-liar")
     if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else args.seats) + 1)]:

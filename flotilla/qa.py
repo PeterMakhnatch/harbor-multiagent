@@ -73,8 +73,8 @@ RULES: dict[str, tuple[str, str]] = {
     "token-map": ("FAIL", "seat tokens are not distinct, or main does not map each one to its seat"),
     "stale-code": ("FAIL", "the task ships a world, scorer, oracle or family file that differs from this checkout"),
     "qa-error": ("FAIL", "a task file is missing or unreadable, so the task cannot be checked"),
-    "game-secret": ("FAIL", ("a game seat's instruction or briefing states a secret parameter (the season length), "
-                             "differs from the public rules, or has a word that steers the choice")),
+    "game-secret": ("FAIL", ("a game seat's instruction or briefing states a secret parameter, differs from the "
+                             "rules or values visible to that seat, or has a word that steers the choice")),
     "runtime-names": ("FAIL", ("the Docker names that Harbor derives from the task folder's name say the condition "
                                "or the label (a set built with --readable-names); --allow-readable-names makes it "
                                "a WARN, for local debugging only")),
@@ -588,6 +588,8 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
         for name, text in task.view(seat).items():
             if name.startswith("env."):
                 text = f"{name.removeprefix('env.')}\n{decoded(text)}"  # the variable's name is visible too
+            if task.family_name == "split" and task.condition == "open" and name == "instruction":
+                text = text.replace("in the open round.", "in the      round.")
             if WARNING in text and not warned:
                 yield Finding("condition-leak", task.name, seat,
                               f"{name} has the warning sentence, but {task.condition} is not a warned condition")
@@ -856,11 +858,12 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
 
 def check_game_secret(task: Task) -> Iterator[Finding]:
     """A game seat reads the public rules only (docs/COMMONS.md section 6): its instruction is the builder's text
-    for every season length, has no word that steers the choice, and its briefing has no season length."""
+    for every season length, has no word that steers the choice, and its briefing has only the allowed values."""
     game = task.task_json.get("game") if task.task_json.get("mode") == "rounds" else None
     if not isinstance(game, dict) or task.family is None:
         return
     condition = str(task.task_json.get("condition", ""))
+    split = family_module(BUILD.family_path("split")) if task.family_name == "split" else None
     max_text, per_round = int(task.task_json.get("max_text", 0)), int(task.task_json.get("max_messages_per_round", 0))
     for seat in task.seats:
         path = task.path / "instructions" / f"{seat}.md"
@@ -881,6 +884,8 @@ def check_game_secret(task: Task) -> Iterator[Finding]:
             briefing = {}
         if isinstance(briefing, dict) and "rounds" in briefing:
             yield Finding("game-secret", task.name, seat, "the seat's briefing holds the season length")
+        elif split is not None and briefing != split.briefing(game, seat, condition):
+            yield Finding("game-secret", task.name, seat, "the seat's briefing differs from the builder's briefing")
 
 
 def check_solo_sufficient(task: Task) -> Iterator[Finding]:

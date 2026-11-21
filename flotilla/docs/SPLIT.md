@@ -30,6 +30,10 @@ to misstate its outside option in talk, and a reason to claim too much in silenc
 default; this section said 400 before 2026-11-21, but both pilots used 4000). Both arms use the same instances (one
 build with `--conditions silent,talk`).
 
+`open`: no messages, as in `silent`, but every seat sees every outside option in its instruction and briefing.
+Build all 3 arms with `--conditions silent,talk,open`. To add only `open`, use `--conditions open` and
+`--seed-of <earlier-label-folder>`. Use the same difficulty, seat count and instance numbers as the earlier build.
+
 ## 3. Measures
 
 From the world's round log (`score_game`): deal, deal round, efficiency (the reward), surplus at the deal, each

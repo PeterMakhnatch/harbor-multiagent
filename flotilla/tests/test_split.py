@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from fractions import Fraction
 
 import pytest
@@ -89,35 +91,117 @@ def test_old_round_logs_keep_their_scores_and_misses():
 
 def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     params = example()
-    for arm in SPLIT.ARMS:
+    for arm in ("silent", "talk"):
         text = SPLIT.instruction_text(params, "p1", arm, 400, 2)
         assert text == SPLIT.instruction_text(example({"p1": 30, "p2": 44}), "p1", arm, 400, 2)
         assert "Your outside option is 30 points." in text and "20 points" not in text
         assert sum('`{"pass": true}` to `POST /claim`' in line for line in text.splitlines()) == 1
         assert not [word for word in SPLIT.STEERING_WORDS if word in text.lower()], text
-    assert SPLIT.briefing(params, "p1") == {"capacity": 100, "shrink": [4, 5], "seats": ["p1", "p2"],
-                                            "players": ["p1", "p2"], "my_outside": 30}
+        assert SPLIT.briefing(params, "p1", arm) == {
+            "capacity": 100, "shrink": [4, 5], "seats": ["p1", "p2"], "players": ["p1", "p2"], "my_outside": 30
+        }
     silent, talk = (SPLIT.instruction_text(params, "p2", arm, 400, 2).splitlines() for arm in ("silent", "talk"))
     assert [line for line in talk if line not in silent] and all(
         "messages" in line or line == "" for line in talk if line not in silent)
 
 
-def test_a_split_build_passes_qa_and_keeps_each_outside_option_in_its_own_seat(tmp_path):
-    tasks = BUILD.build("split", [0, 1], 2, "a", 98765432101, ("silent", "talk"), tmp_path / "out",
-                        round_seconds=120.0, max_messages_per_round=2)
-    assert len(tasks) == 4
+@pytest.mark.parametrize("outside", [{"p1": 30, "p2": 20}, {"p1": 30, "p2": 20, "p3": 11}])
+def test_open_replaces_only_the_private_option_line_with_one_line_per_seat(outside):
+    params = example(outside)
+    for seat, value in outside.items():
+        own = f"Your outside option is {value} points."
+        private = f"{own} Each other player has its own outside option; the world does not tell you its value."
+        others = [f"{other}'s outside option is {points} points." for other, points in outside.items() if other != seat]
+        options = "\n".join([own, *others])
+        silent = SPLIT.instruction_text(params, seat, "silent", 400, 2)
+        text = SPLIT.instruction_text(params, seat, "open", 400, 2)
+        assert private in silent and text == silent.replace(private, options)
+        assert "/messages" not in text
+        assert not [word for word in SPLIT.STEERING_WORDS if word in text.lower()], text
+
+
+def run_builder(*args):
+    run = subprocess.run([sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "split", *map(str, args)],
+                         capture_output=True, text=True, check=False)
+    assert run.returncode == 0, run.stderr
+
+
+def task_data(task):
+    return json.loads((task / "environment" / "task.json").read_text())
+
+
+def test_a_split_build_passes_qa_and_exposes_outside_options_only_in_open(tmp_path):
+    run_builder("--instances", "0-1", "--difficulty", "a", "--conditions", "silent,talk,open", "--out", tmp_path)
+    tasks = sorted((tmp_path / "split").iterdir())
+    assert len(tasks) == 6
+    assert {task_data(task)["condition"] for task in tasks} == {"silent", "talk", "open"}
     for task in tasks:
-        data = json.loads((task / "environment" / "task.json").read_text())
+        data = task_data(task)
         assert data["mode"] == "rounds" and set(data["game"]["outside"]) == {"p1", "p2"}
         spec = yaml.safe_load((task / "environment" / "docker-compose.yaml").read_text())
         for seat in ("p1", "p2"):
             brief = json.loads(spec["services"][seat]["environment"]["SEAT_BRIEFING"])
-            assert brief["my_outside"] == data["game"]["outside"][seat] and "outside" not in brief
-            other = "p2" if seat == "p1" else "p1"
+            outside = data["game"]["outside"]
+            assert brief["my_outside"] == outside[seat]
             text = (task / "instructions" / f"{seat}.md").read_text()
-            assert f"Your outside option is {data['game']['outside'][seat]} points." in text
-            assert text == BUILD.game_instruction(SPLIT, {**data["game"], "outside": {
-                seat: data["game"]["outside"][seat], other: -1}}, seat, data["condition"], data["max_text"], 2)
+            assert f"Your outside option is {outside[seat]} points." in text
+            if data["condition"] == "open":
+                assert brief["outside"] == outside
+                for other in data["seats"]:
+                    if other != seat:
+                        assert f"{other}'s outside option is {outside[other]} points." in text
+                assert "/messages" not in text
+            else:
+                assert "outside" not in brief
+                assert text == BUILD.game_instruction(SPLIT, {**data["game"], "outside": {seat: outside[seat]}},
+                                                      seat, data["condition"], data["max_text"], 2)
         assert (task / "solution" / "oracle.py").read_bytes() == (FLOTILLA / "games" / "oracle.py").read_bytes()
     findings, _ = QA.check(tasks)
     assert not [f for f in findings if f.level == "FAIL"], findings
+
+
+@pytest.mark.parametrize("arm", ["silent", "talk"])
+def test_qa_catches_outside_options_leaked_in_an_instruction_or_briefing(tmp_path, arm):
+    task, = BUILD.build("split", [0], 2, "b", 98765432101, (arm,), tmp_path)
+    outside = task_data(task)["game"]["outside"]
+    with (task / "instructions" / "p1.md").open("a") as instruction:
+        instruction.write(f"p2's outside option is {outside['p2']} points.\n")
+    compose = task / "environment" / "docker-compose.yaml"
+    spec = yaml.safe_load(compose.read_text())
+    environment = spec["services"]["p2"]["environment"]
+    briefing = json.loads(environment["SEAT_BRIEFING"])
+    environment["SEAT_BRIEFING"] = json.dumps(briefing | {"outside": outside})
+    compose.write_text(yaml.safe_dump(spec))
+    findings, _ = QA.check([task])
+    assert [(f.seat, f.level) for f in findings if f.rule == "game-secret"] == [("p1", "FAIL"), ("p2", "FAIL")], findings
+
+
+def test_open_only_build_keeps_and_pairs_with_the_earlier_arms_in_a_variant(tmp_path):
+    settings = ("--instances", "0,2,4", "--difficulty", "b", "--seats", "3", "--variant", "paired", "--out", tmp_path)
+    run_builder(*settings, "--conditions", "silent,talk")
+    label = tmp_path / "split.paired"
+    original = {task: task_data(task) for task in label.iterdir()}
+    assert len(original) == 6
+    run_builder(*settings, "--conditions", "open", "--seed-of", label)
+    added = set(label.iterdir()) - original.keys()
+    assert {task_data(task)["instance"] for task in added} == {0, 2, 4} and len(added) == 3
+    assert {task: task_data(task) for task in original} == original
+    for task in added:
+        data = task_data(task)
+        assert data["condition"] == "open"
+        twins = [earlier for earlier in original.values() if earlier["instance"] == data["instance"]]
+        assert {earlier["condition"] for earlier in twins} == {"silent", "talk"}
+        assert all(earlier["seed"] == data["seed"] and earlier["game"] == data["game"] for earlier in twins)
+
+
+def test_world_rejects_messages_in_open(start_world, tmp_path):
+    task, = BUILD.build("split", [0], 2, "b", 98765432101, ("open",), tmp_path)
+    environment = task / "environment"
+    spec = yaml.safe_load((environment / "docker-compose.yaml").read_text())
+    arm = spec["services"]["main"]["environment"]["FLOTILLA_CONDITION"]
+    assert arm == "open"
+    world = start_world(arm, FLOTILLA_GAME=str(environment / "family.py"),
+                        FLOTILLA_GAME_PARAMS=str(environment / "task.json"))
+    assert world.seat("p1", "GET", "/whoami")[1]["messaging"] is False
+    assert world.seat("p1", "GET", "/messages")[0] == 403
+    assert world.seat("p1", "POST", "/messages", {"to": "all", "text": "test"})[0] == 403

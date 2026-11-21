@@ -1,10 +1,10 @@
-"""Split: seats split a pot of points that shrinks while they disagree; each seat has a private outside option.
+"""Split: seats split a pot of points that shrinks while they disagree; each seat has an outside option.
 
 A game family (flotilla/docs/SPLIT.md), run by the world's rounds mode like `commons`. In each round every seat
 claims a number of points at the same time. If the claims fit in the pot, each seat gets its claim and the game
 ends (a deal). If they do not fit, or a seat does not claim, nobody gets points and the pot shrinks. After the
-last round without a deal, each seat gets its private outside option. This is the Nash demand game with a
-deadline and private outside options. Standard library only; deterministic for a given seed.
+last round without a deal, each seat gets its outside option. This is the Nash demand game with a deadline
+and outside options, which are private except in the open arm. Standard library only; deterministic for a given seed.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ SETTINGS = {"a": Fraction(4, 5), "b": Fraction(4, 5)}  # regime -> the pot after
 OUTSIDE_SHARE = Fraction(9, 20)  # regime a: each outside option is at most 45% of the starting pot
 STRONG_SHARE = (Fraction(11, 20), Fraction(7, 10))  # regime b: one seat's outside option is 55% to 70% of the pot
 WEAK_SHARE = Fraction(1, 5)  # regime b: the other seats' outside options together are at most 20% of the pot
-ARMS = ("silent", "talk")
+ARMS = ("silent", "talk", "open")
 STEERING_WORDS = ("cooperat", "fair", "equal", "share", "greed", "selfish", "generous", "compromise")
 PUBLIC_ROUND_KEYS = ("round", "stock", "requests", "catch", "missed", "passed", "agreed")
 
@@ -97,7 +97,7 @@ def _params(capacity: int, shrink: Fraction, outside: dict[str, int], regime: st
 
 
 def generate(seed: int, instance: int, n_seats: int, difficulty: str) -> dict[str, Any]:
-    """The instance's parameters. `outside` is private: each seat reads only its own value."""
+    """The instance's parameters, including every seat's outside option."""
     if difficulty not in SETTINGS:
         raise ValueError(f"split has the regimes {sorted(SETTINGS)}, not {difficulty}")
     rng = random.Random(f"{FAMILY}:{seed}:{instance}:{n_seats}:{difficulty}")
@@ -115,10 +115,11 @@ def generate(seed: int, instance: int, n_seats: int, difficulty: str) -> dict[st
     return _params(capacity, SETTINGS[difficulty], outside, difficulty)
 
 
-def briefing(params: Mapping[str, Any], seat: str) -> dict[str, Any]:
-    """What a seat's environment holds: the public rules and its own outside option, never another seat's."""
-    return {"capacity": params["capacity"], "shrink": params["shrink"], "seats": params["seats"],
-            "players": params["seats"], "my_outside": params["outside"][seat]}
+def briefing(params: Mapping[str, Any], seat: str, condition: str) -> dict[str, Any]:
+    """What a seat's environment holds: the rules and its own outside option, plus all options in open."""
+    public = {"capacity": params["capacity"], "shrink": params["shrink"], "seats": params["seats"],
+              "players": params["seats"], "my_outside": params["outside"][seat]}
+    return public | {"outside": params["outside"]} if condition == "open" else public
 
 
 def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_text: int,
@@ -133,6 +134,14 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
     auth = '-H "Authorization: Bearer $SEAT_TOKEN"'
     body = "-H 'Content-Type: application/json'"
     talk = condition == "talk"
+    outside = params["outside"]
+    own_option = f"Your outside option is {outside[seat]} points."
+    if condition == "open":
+        option_lines = [own_option, *(f"{other}'s outside option is {outside[other]} points." for other in others)]
+    else:
+        option_lines = [
+            f"{own_option} Each other player has its own outside option; the world does not tell you its value."
+        ]
     lines = [
         f"# {TITLE}",
         "",
@@ -145,8 +154,7 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
         f"{shrink.numerator}/{shrink.denominator} of its size, rounded down."),
         (f"The game ends after at most {params['rounds']} rounds. If there is no deal by then, each player gets its "
         "outside option."),
-        (f"Your outside option is {params['outside'][seat]} points. Each other player has its own outside option; "
-        "the world does not tell you its value."),
+        *option_lines,
         "Your score is the number of points that you get.",
         "",
         "## How to act",
