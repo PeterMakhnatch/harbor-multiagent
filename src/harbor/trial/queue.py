@@ -2,13 +2,27 @@ import asyncio
 import shutil
 from collections.abc import Coroutine
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from harbor.models.job.config import RetryConfig
 from harbor.models.trial.config import TrialConfig
 from harbor.models.trial.result import TrialResult
 from harbor.trial.hooks import HookCallback, TrialEvent, TrialHookEvent
 from harbor.utils.logger import logger
+
+
+def _archive_retry_attempt(result_path: Path, trial_id: UUID) -> None:
+    archive_path = result_path.parent.parent / f"retry-attempt-{trial_id}.json"
+    with result_path.open("rb") as source:
+        destination = archive_path.open("xb")
+        try:
+            with destination:
+                shutil.copyfileobj(source, destination)
+        except BaseException:
+            archive_path.unlink(missing_ok=True)
+            raise
 
 
 @dataclass(frozen=True)
@@ -200,6 +214,7 @@ class TrialQueue:
                 )
                 return result
 
+            _archive_retry_attempt(trial.paths.result_path, result.id)
             shutil.rmtree(trial.paths.trial_dir, ignore_errors=True)
 
             delay_sec = self._calculate_backoff_delay_sec(attempt)
