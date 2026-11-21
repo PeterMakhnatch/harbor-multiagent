@@ -279,7 +279,7 @@ print(f"Matched {len(seen)} native team rewards; {successes} successes.")
 PY
 ```
 
-The pilot printed `Matched 2 native team rewards; 2 successes.` These are team rewards, not two independent seat rewards per team. A standalone native trial need not have an Eval Lab job UUID.
+On the complete private register, stock Eval Lab printed `Matched 36 native team rewards; 25 successes.` These are team rewards, not 2 independent seat rewards per team. A standalone native trial need not have an Eval Lab job UUID.
 
 ### Can the receiver help its teammate recheck a calendar?
 
