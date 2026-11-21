@@ -98,6 +98,25 @@ def _collect(packet: dict[str, Any], digest: str, study: Path) -> dict[str, Any]
     return _envelope(packet, digest, transport, rows)
 
 
+def _describe(public: dict[str, Any]) -> str:
+    report = public["summary"]
+    primary, repeat = report["primary"], report["negative_control"]
+    stable = report["secondary"]["aligned_vs_repeat"]
+
+    def points(value: float | None) -> str:
+        return "not estimable" if value is None else f"{100 * value:+.2f} pp"
+
+    return "\n".join(
+        (
+            f"{public['transport']}: {report['cell_states']['complete']}/{report['registered_cells']} completed continuations",
+            f"  Aligned minus shifted: {points(primary['estimate'])} from {primary['matched_pairs']}/{primary['registered_pairs']} source pairs.",
+            f"  Aligned minus a fresh same-input repeat: {points(repeat['estimate'])}.",
+            f"  Same-input repeats chose the same reports in {stable['opened_set_agreements']}/{stable['matched_pairs']} pairs.",
+            f"  Their final decisions agreed in {stable['action_agreements']}/{stable['action_slots']} slots.",
+        )
+    )
+
+
 def _dispatch(args: argparse.Namespace) -> int:
     if args.mode == "export":
         from .extract import build
@@ -168,6 +187,17 @@ def _dispatch(args: argparse.Namespace) -> int:
                     if row["state"] == "unclaimed" and index not in reserved
                 ]
             )
+    elif args.mode == "summary":
+        paths = args.reports or [
+            _RESULTS / "turn-fork-direct-live.json",
+            _RESULTS / "turn-fork-subscription-live.json",
+        ]
+        summaries = [_describe(verified(packet, digest, path)) for path in paths]
+        print("\n".join(summaries))
+        print("Unit: source world. Conditional stock scores, not new Harbor rewards.")
+        print(
+            "This command checks public observations and scores, not service identity or billing."
+        )
     else:
         report = verified(packet, digest, args.report)
         if args.mode == "verify":
@@ -205,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     modes = cli.add_subparsers(dest="mode", required=True)
     for name in (
         "plan",
+        "summary",
         "show",
         "export",
         "seal",
@@ -227,6 +258,13 @@ def main(argv: list[str] | None = None) -> int:
             help="Use a different exported packet; requires --sha256.",
         )
         parser.add_argument("--sha256", help="Exact SHA-256 of the packet bytes.")
+        if name == "summary":
+            parser.add_argument(
+                "reports",
+                nargs="*",
+                type=Path,
+                help="Defaults to the two published cohorts.",
+            )
         if name in ("seal", "run", "pending", "report"):
             parser.add_argument("--study", type=Path, required=True)
         if name == "seal":
