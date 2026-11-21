@@ -7,8 +7,9 @@ import os
 import re
 import stat
 import sys
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal, NoReturn, TypedDict
+from typing import Literal, NoReturn, Protocol, TypedDict
 
 from . import panel_sources
 
@@ -16,6 +17,11 @@ _MAX_CASES = 32
 _MAX_REPLY_BYTES = 64 * 1024
 _MAX_LINE_BYTES = 6 * _MAX_REPLY_BYTES + 1024
 _WORKER_FIELDS = {"id", "prompt_sha256", "reply"}
+
+
+class _PromptCommitment(Protocol):
+    @property
+    def prompt_sha256(self) -> str: ...
 
 
 class _Row(TypedDict):
@@ -46,22 +52,42 @@ def _print_json(value: object) -> None:
     sys.stdout.buffer.write((text + "\n").encode("utf-8"))
 
 
+def _write_request(
+    case_id: str,
+    task: str,
+    world: int,
+    trial_sha256: str,
+    prompt_sha256: str,
+    system: str,
+    prompt: str,
+) -> None:
+    _print_json(
+        {
+            "id": case_id,
+            "task": task,
+            "world": world,
+            "trial_sha256": trial_sha256,
+            "prompt_sha256": prompt_sha256,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+        }
+    )
+
+
 def _emit(cases: dict[str, panel_sources.Case], shard: tuple[int, int]) -> None:
     index, count = shard
     for position, case in enumerate(cases.values()):
         if position % count == index:
-            _print_json(
-                {
-                    "id": case.id,
-                    "task": case.task,
-                    "world": case.world,
-                    "trial_sha256": case.trial_sha256,
-                    "prompt_sha256": case.prompt_sha256,
-                    "messages": [
-                        {"role": "system", "content": case.system},
-                        {"role": "user", "content": case.prompt},
-                    ],
-                }
+            _write_request(
+                case.id,
+                case.task,
+                case.world,
+                case.trial_sha256,
+                case.prompt_sha256,
+                case.system,
+                case.prompt,
             )
 
 
@@ -104,7 +130,7 @@ def _open_nonblocking(path: str, flags: int) -> int:
 
 
 def _read_replies(
-    files: list[Path], cases: dict[str, panel_sources.Case]
+    files: list[Path], cases: Mapping[str, _PromptCommitment]
 ) -> dict[str, tuple[str, str]]:
     replies: dict[str, tuple[str, str]] = {}
     for path in files:

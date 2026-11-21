@@ -38,6 +38,27 @@ Each grade binds the reply digest to its original user prompt and native trial I
 
 **Check against real teams:** We replayed the actual first returns from all 32 source trials through 4 separate worker processes. Every per-case grade matched its native grade. Reversing the worker files produced the same report byte for byte. The original receivers booked **0/24 meetings** and chose **36/48 optimal shipment bays**. These are two separate workloads, not one score. [Historical per-case scores and hashes](results/public-receiver-panel-native.json) · [Registered check](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061270837).
 
+### Test whether a receiver uses a visible conflict
+
+This Dispatch panel uses the same worker format as the panel above. Both views contain the same 6 shipments and the same peer reports. One view also marks whether each latest displayed report lists the receiver's favorite bay. The marker does not check stock or recommend a bay.
+
+```sh
+module=examples.seatlab.dispatch_conflict_panel
+work=$(mktemp -d)
+for i in 0 1 2 3; do
+  python3.12 -BS -m "$module" emit --shard "$i/4" > "$work/input-$i.jsonl"
+done
+```
+
+Give each worker one file. Send only `messages` to the receiver. Preserve each first reply in the format above. Each worker receives 2 whole worlds. Across all workers, each of 8 worlds gets 4 fresh replies per view.
+
+```sh
+python3.12 -BS -m "$module" score "$work"/reply-*.jsonl > "$work/scores.json"
+python3.12 -BS -m "$module" summarize "$work/scores.json"
+```
+
+The summary separates choices that contradict a visible report from choices that fail the stock grader. A stale report can be wrong. The comparison uses 8 world blocks, not 192 independent shipments. These commands do not call a model or start Harbor.
+
 ## Let a third agent select between two receivers
 
 Use the [public receiver panel](#run-your-receiver-on-2-tasks-without-installing-harbor) twice. Save a complete file of valid first replies from each receiver as `draft-a.jsonl` and `draft-b.jsonl`. Keep the files private. The selector never receives the source grade.
