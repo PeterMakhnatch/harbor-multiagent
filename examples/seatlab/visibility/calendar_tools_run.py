@@ -18,8 +18,7 @@ _PICK = "cal_tool_pick"
 _REPLY = "cal_tool_reply"
 _DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _CLAIM = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-# Arguments: meter descriptor, stage ID, native role, prompt.
-_StageResponse = Callable[[int, str, str, str], str]
+_StageResponse = Callable[[int, str, tools.View, str], str]
 
 
 @contextmanager
@@ -37,10 +36,10 @@ def _claim_directory(parent: int, name: str) -> Generator[int, None, None]:
 
 
 def _reply(
-    respond: _StageResponse, meter: int, stage: str, role: str, prompt: str
+    respond: _StageResponse, meter: int, stage: str, view: tools.View, prompt: str
 ) -> str:
     try:
-        text = respond(meter, stage, role, prompt)
+        text = respond(meter, stage, view, prompt)
     except Exception:  # noqa: BLE001 - Do not expose callback diagnostics.
         raise calendar_client.CalendarClientError("model_callback_failed") from None
     calendar_client._text_bytes(text, "invalid_callback_text")
@@ -68,10 +67,11 @@ def _collect(
     with os.fdopen(fd, "w", encoding="utf-8") as out:
         os.fchmod(out.fileno(), 0o600)
         selection = tools.select_prompt(view)
-        selected = _reply(respond, meter, f"{run}:{_PICK}", view.role, selection)
-        result = tools.tool_result(view, policy, selected)
+        selected = _reply(respond, meter, f"{run}:{_PICK}", view, selection)
+        access = tools.access_for(block, policy, view.seat)
+        result = tools.tool_result(view, access, selected)
         final = tools.final_prompt(view, result)
-        text = _reply(respond, meter, f"{run}:{_REPLY}", view.role, final)
+        text = _reply(respond, meter, f"{run}:{_REPLY}", view, final)
         session.accept(identifier, text)
         receipt = {
             "schema": SCHEMA,
@@ -123,9 +123,11 @@ def _play_pair(
     respond: _StageResponse,
     *,
     prepare: Callable[[], None] | None = None,
+    design: str = "availability",
 ) -> dict[str, str]:
     # Reject unregistered coordinates before claiming any storage.
     calendar_client._request_plan(block)
+    policies = tools.policies(block, design=design)
     run = tools.native_id(block)
     parent = study / run
     try:
@@ -137,7 +139,7 @@ def _play_pair(
                 prepare()
             return {
                 policy: _play_policy(tasks, parent, pair, block, policy, respond)
-                for policy in tools.policies(block)
+                for policy in policies
             }
     except OSError:
         raise calendar_list_run.CaptureError("private_storage_unavailable") from None
@@ -151,19 +153,41 @@ def play_pair(
 ) -> dict[str, str]:
     """Claim one pair and give the callback only the text for each model call."""
 
-    def answer(_meter: int, _stage: str, _role: str, prompt: str) -> str:
+    def answer(_meter: int, _stage: str, _view: tools.View, prompt: str) -> str:
         return respond(prompt)
 
     return _play_pair(tasks, study, block, answer)
 
 
-def _demo(_meter: int, stage: str, role: str, _prompt: str) -> str:
+def play_roles(
+    tasks: Path,
+    study: Path,
+    block: calendar_protocol.Block,
+    *,
+    sender: Callable[[str], str],
+    receiver: Callable[[str], str],
+    design: str = "role-access",
+) -> dict[str, str]:
+    if not callable(sender) or not callable(receiver):
+        raise TypeError("seat callbacks must be callable")
+
+    def answer(_meter: int, _stage: str, view: tools.View, prompt: str) -> str:
+        if view.seat == block.sender:
+            return sender(prompt)
+        if view.seat == block.receiver:
+            return receiver(prompt)
+        raise ValueError("invalid native seat")
+
+    return _play_pair(tasks, study, block, answer, design=design)
+
+
+def _demo(_meter: int, stage: str, view: tools.View, _prompt: str) -> str:
     if stage.endswith(f":{_PICK}"):
         return '{"tool":"local_starts"}'
-    return '{"slot":0}' if role == "cal_decide" else '{"starts":[]}'
+    return '{"slot":0}' if view.role == "cal_decide" else '{"starts":[]}'
 
 
-def _direct(meter: int, stage: str, _role: str, prompt: str) -> str:
+def _direct(meter: int, stage: str, _view: tools.View, prompt: str) -> str:
     return calendar_client._direct_turn(meter, stage, prompt)
 
 
@@ -180,20 +204,52 @@ def _prepare_direct() -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    parser.add_argument("mode", choices=("demo", "direct"))
+    parser.add_argument("mode", choices=("demo", "direct", "commands"))
+    parser.add_argument("--design", choices=("availability", "role-access"))
+    parser.add_argument("--config", type=Path)
     parser.add_argument("--tasks", type=Path, required=True)
     parser.add_argument("--study", type=Path, required=True)
     parser.add_argument("--world", type=int, required=True)
     parser.add_argument("--direction", type=int, required=True)
     parser.add_argument("--repetition", type=int, required=True)
     args = parser.parse_args(argv)
+    config = args.config
+    if args.mode != "commands" and config is not None:
+        parser.error("--config is only supported in commands mode")
     block = calendar_protocol.Block(args.world, args.direction, args.repetition)
+    design = args.design
+    if design is None:
+        design = "role-access" if args.mode == "commands" else "availability"
     try:
-        if args.mode == "demo":
-            statuses = _play_pair(args.tasks, args.study, block, _demo)
+        if args.mode == "commands":
+            if config is None:
+                parser.error("--config is required in commands mode")
+            from .seat_command import load_commands
+
+            try:
+                sender, receiver = load_commands(config, roles=("sender", "receiver"))
+            except (OSError, ValueError):
+                raise calendar_client.CalendarClientError(
+                    "invalid_command_config"
+                ) from None
+            statuses = play_roles(
+                args.tasks,
+                args.study,
+                block,
+                sender=sender,
+                receiver=receiver,
+                design=design,
+            )
+        elif args.mode == "demo":
+            statuses = _play_pair(args.tasks, args.study, block, _demo, design=design)
         else:
             statuses = _play_pair(
-                args.tasks, args.study, block, _direct, prepare=_prepare_direct
+                args.tasks,
+                args.study,
+                block,
+                _direct,
+                prepare=_prepare_direct,
+                design=design,
             )
     except (calendar_client.CalendarClientError, calendar_list_run.CaptureError) as exc:
         print(f"calendar-tools: {exc}", file=sys.stderr)

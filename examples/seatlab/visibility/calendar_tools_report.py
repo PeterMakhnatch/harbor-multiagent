@@ -26,6 +26,7 @@ _SCORED = ("complete", "model_invalid_scored_zero")
 _Row = dict[str, Any]
 _Key = tuple[str, str]
 _Proof = calendar_tools_evidence._Policy
+_PhaseCounts = dict[str, Counter[str]]
 
 
 def _blocked(reason: Literal["missing", "invalid"]) -> _Proof:
@@ -111,11 +112,14 @@ def _row(
     }
 
 
-def _billing(spend_dir: Path | None) -> tuple[_Row | None, dict[_Key, _Row]]:
+def _billing(
+    spend_dir: Path | None, *, design: str = "availability"
+) -> tuple[_Row | None, dict[_Key, _Row]]:
+    prefix = calendar_tools_protocol.spend_prefix(design)
     if spend_dir is None:
         return None, {}
     try:
-        ledger = spend.report(spend_dir.absolute(), run_prefix="tl-")
+        ledger = spend.report(spend_dir.absolute(), run_prefix=prefix)
         index = {(row["run"], row["role"]): row for row in ledger["calls"]}
         if len(index) != len(ledger["calls"]):
             return None, {}
@@ -199,20 +203,65 @@ def _meters(
     return matched, +issues
 
 
-def analyze(study: Path, spend_dir: Path | None = None) -> _Row:
+def _count_actions(
+    block: calendar_protocol.Block,
+    proof: _Proof,
+    by_phase: _PhaseCounts,
+    by_actor: dict[str, _PhaseCounts] | None,
+) -> None:
+    for action in proof["actions"].values():
+        if action.get("status") != "bound":
+            continue
+        role = action["role"]
+        phase = (
+            "opening"
+            if role.startswith("cal_initial_")
+            else "recheck"
+            if role == "cal_recheck"
+            else "decision"
+        )
+        groups = [by_phase]
+        if by_actor is not None:
+            seat = action["seat"]
+            assert seat in (block.sender, block.receiver)
+            actor = "sender" if seat == block.sender else "receiver"
+            groups.append(by_actor[actor])
+        tool_status = action["tool_status"]
+        assert tool_status is not None
+        exact = action["exact_local_list"]
+        for group in groups:
+            counts = group.setdefault(phase, Counter())
+            counts["bound"] += 1
+            counts[tool_status] += 1
+            if type(exact) is bool:
+                counts["observed_lists"] += 1
+                counts["exact_local_lists"] += int(exact)
+
+
+def analyze(
+    study: Path, spend_dir: Path | None = None, *, design: str = "availability"
+) -> _Row:
+    arms = calendar_tools_protocol.design_arms(design)
+    availability = design == "availability"
     study = study.absolute()
-    ledger, index = _billing(spend_dir)
+    ledger, index = (
+        _billing(spend_dir) if availability else _billing(spend_dir, design=design)
+    )
     proofs: list[tuple[calendar_protocol.Block, str, _Proof]] = []
     matched: set[_Key] = set()
     issues: Counter[str] = Counter()
-    actions: dict[str, dict[str, Counter[str]]] = {p: {} for p in ("on", "off")}
+    action_order = ("on", "off") if availability else arms
+    actions: dict[str, _PhaseCounts] = {policy: {} for policy in action_order}
+    by_actor: dict[str, _PhaseCounts] | None = (
+        None if availability else {"sender": {}, "receiver": {}}
+    )
     for block in calendar_protocol.blocks():
-        for policy in calendar_tools_protocol.policies(block):
+        for policy in calendar_tools_protocol.policies(block, design=design):
             directory = study / calendar_tools_protocol.native_id(block) / policy
             try:
                 with calendar_list_run._root(directory):
                     proof = calendar_tools_evidence.read_policy(
-                        directory, block, policy
+                        directory, block, policy, design=design
                     )
             except FileNotFoundError:
                 proof = _blocked("missing")
@@ -223,37 +272,20 @@ def analyze(study: Path, spend_dir: Path | None = None) -> _Row:
                 bound, problems = _meters(directory, block, policy, proof, index)
                 matched.update(bound)
                 issues.update(problems)
-            for action in proof["actions"].values():
-                if action.get("status") != "bound":
-                    continue
-                role = action["role"]
-                phase = (
-                    "opening"
-                    if role.startswith("cal_initial_")
-                    else "recheck"
-                    if role == "cal_recheck"
-                    else "decision"
-                )
-                counts = actions[policy].setdefault(phase, Counter())
-                counts["bound"] += 1
-                tool_status = action["tool_status"]
-                assert (
-                    tool_status is not None
-                )  # A bound action has a replayed tool result.
-                counts[tool_status] += 1
-                exact = action["exact_local_list"]
-                if type(exact) is bool:
-                    counts["observed_lists"] += 1
-                    counts["exact_local_lists"] += int(exact)
+            _count_actions(block, proof, actions[policy], by_actor)
     aliases, mixed = _identity(proofs)
     rows = [
         _row(b, p, room, e, aliases, mixed) for b, p, e in proofs for room in b.arms
     ]
     held = {k for k, v in index.items() if v.get("estimated_usd_high") is None}
-    return {
-        "schema": "seatlab.calendar-local-tools/v1",
+    result: _Row = {
+        "schema": "seatlab.calendar-local-tools/v1"
+        if availability
+        else "seatlab.calendar-role-tools/v1",
         "scope": "Registered fresh teams in 12 fixed worlds. Both rooms share one policy's opening lists. Host receipts are not provider invoices.",
-        "outcomes": calendar_tools_summary.summarize(rows),
+        "outcomes": calendar_tools_summary.summarize(rows)
+        if availability
+        else calendar_tools_summary.summarize(rows, policies=arms),
         "rows": rows,
         "actions": actions,
         "reused_trial_id_sha256": sorted(aliases),
@@ -293,16 +325,22 @@ def analyze(study: Path, spend_dir: Path | None = None) -> _Row:
             for b, p, proof in proofs
         ],
     }
+    if by_actor is not None:
+        result["by_actor"] = by_actor
+    return result
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("study", type=Path)
     parser.add_argument("--spend-dir", type=Path)
+    parser.add_argument(
+        "--design", choices=("availability", "role-access"), default="availability"
+    )
     args = parser.parse_args()
     print(
         json.dumps(
-            analyze(args.study, args.spend_dir),
+            analyze(args.study, args.spend_dir, design=args.design),
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,
