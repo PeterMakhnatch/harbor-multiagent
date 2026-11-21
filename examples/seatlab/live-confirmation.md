@@ -2,6 +2,24 @@
 
 None of the 3 original comparisons below established higher native reward across 48 new teams. A later receiver replay isolated a different question: [does the dispatcher use the bay IDs in a peer’s reports?](#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher) It did. This is not a new team reward.
 
+## Does a flag help the dispatcher avoid an unsupported choice?
+
+**No. On these 8 sources, the flag made the decisions worse.** We gave 2 groups of receivers the same reports, local utilities, and task. One group also saw a Boolean for each shipment: did the latest visible report list its highest-utility bay? The flag used no hidden stock information.
+
+| First-reply outcome | Original reports | Same reports plus flags |
+|---|---:|---:|
+| Chose a top bay absent from the opened report | 10/36 | 25/36 |
+| Chose a top bay absent from an unopened shipment's older report | 11/60 | 51/60 |
+| Selected a stock-optimal bay, across all shipments | 146/192 | 120/192 |
+
+The flag increased unsupported top choices by **55/96 (57.3 percentage points)**. All 8 worlds moved in that direction. The exact two-sided sign-flip test by world gave **p = 1/128**. The [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062397891) required fewer unsupported choices and no loss of stock-optimal decisions. Both conditions failed.
+
+An absent bay is not always infeasible: an unopened report can be stale. The stock grader, not the flag, determined which choices were optimal. Four new decisions per format per source produced 64 valid first replies. An independent calculation matched all 384 shipment grades. The 64 direct calls cost **$0.003409728**. No call required a retry.
+
+**Practical use:** keep the original reports for this dispatcher. Do not assume that a flag helps because it is correct. This study tests the final decision on fixed reports, not the reward of a new team. It does not explain why the receiver changed its choice.
+
+[Runnable comparison](replication.md#test-whether-a-receiver-uses-a-visible-conflict) · [All first replies scored, without reply text](results/dispatch-claim-conflicts.json) · [Every charge](results/dispatch-claim-conflicts-cost.json).
+
 ## Can a third agent choose between two proposed answers?
 
 **Check whether either proposal can succeed before adding a reviewer.** On scheduling, not one of the 48 proposed times booked the meeting. On Dispatch, the reviewer recovered most of the available gain, but it did not reliably select the same proposal after we reversed their order.
