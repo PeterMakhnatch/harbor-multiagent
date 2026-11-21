@@ -142,6 +142,14 @@ To use Dispatch Handoff instead, omit `--packet` and `--sha256`. `packet` prints
 - Primary: `rewrite − prefix` in correct choices on **unchanged** records. Compute the fraction within each block, then the mean within each native world, then the mean across 12 worlds. A correct answer to a disclosed revised record cannot improve this measure. Report complete pairs and missing-choice bounds. Do not present a 12-world estimate when any world lacks a complete pair. Report revised-record accuracy, shared answers, invalid sources, byte use, and actual call costs separately.
 - Use the existing direct DeepSeek Flash settings and ledger. Each block can start 1 packing call and 2 successor calls at most: 360 total. The prefix policy has no packing-call charge. The experiment tests this cost tradeoff, not equal compute. Check observed default-domain decisions against the original native scorer. These are new decisions on fixed records, not new Harbor trials.
 
+### Repeat the handoff comparison on saved native Harbor trials
+
+**Recorded-source replication, registered before new model responses.** For each of the 4 registered mixed-roster seeds, select the first scored `reordered` trial in the published register. This selects seeds `4001`, `4003`, and `4007`. Seed `4013` has no eligible trial. Use every shipment ID, `0` through `5`. Do not select on score, disagreement, or whether a shipment changed.
+
+The writer receives the **accepted native inventory reports**, not reports regenerated from world truth. One case per shipment exposes its revision 1 report at turnover. All other reports come from revision 2. Include a stable case and 2 repetitions. The 3 original trials yield 42 new handoffs, including 36 with one revised record. Their timing is a replay intervention. Original dispatch choices are not inputs. Retain incorrect sender reports if present. Score against true current stock, not what the sender said.
+
+Repeat the same `bound` versus `anonymous` comparison and primary measure above. Use new DeepSeek writers and successors, the same note limit, and the same sharing rule for identical final requests. Report exact support, cost, and missing bounds across the 3 observed worlds. Do not extrapolate to the missing fourth world. Do not combine this result with the 12 newly generated worlds. No original model, native trial, or Docker container needs to restart.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
