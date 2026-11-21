@@ -2,6 +2,19 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Does showing a real peer proposal help the same receiver on two tasks?
+
+One trusted Inspect receiver took the same role across two Harbor tasks. Each task supplied 12 retained original observations. The 3 calendar worlds and 6 shipment worlds have separate scorers. The packet never gives the receiver a target. Within each source the receiver saw either the exact original bytes, or those same bytes plus a real prior receiver decision. It ran twice on each input.
+
+| Task | Original input: optimal | With peer: optimal | Copied the peer with original input | Copied the peer with proposal shown |
+|---|---:|---:|---:|---:|
+| Calendar scheduling | 4/24 | 4/24 | 2/24 | 4/24 |
+| Shipment dispatch | 128/144 | 128/144 | 130/144 | 130/144 |
+
+The equal-world peer-minus-original difference was zero in both tasks for this receiver. It did not always make the same calendar decision: the 2 independent draws agreed on 10/12 sources with the peer and 12/12 without. Shipment proposals repeated on 12/12 sources in both conditions. The prior calendar choices were all wrong on these selected sources. Copying a peer and earning its task reward are separate outcomes. These are conditional action scores on 9 original worlds, not proof that peer messages never help.
+
+The [public packet](results/rolepack-observations.json) fixes observations and priors; [96 first-attempt rows](results/rolepack-inspect-live.json) record the sanitized results. The [service receipts](results/rolepack-inspect-service.json) matched all 96 Sol answers. The [original task scorers](results/rolepack-original-stock.json) independently checked 48 calendar and 288 shipment actions. The [task-wise analysis](results/rolepack-effects.json) retains the draws, corrections, new errors, coverage and world effects separately. No new native team reward or paid API call.
+
 ## Is one new inventory report more useful to a reviewer than a real peer draft?
 
 A separate Inspect AI program reviewed 12 previous direct dispatch decisions from 6 native worlds. The [protocol](replication.md#does-a-real-peer-draft-help-a-new-reviewer-use-one-additional-inventory-update) fixed the peer, the source observation and the extra report before inference. Only 1 of 12 selected records changed its best available bay between revisions.

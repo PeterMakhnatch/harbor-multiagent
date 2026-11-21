@@ -611,6 +611,17 @@ python -S -m examples.seatlab.rolepack effects my-first-attempts.json
 
 The shipped corpus has 96 registered attempts. Run `plan` for another pack. Each sample can be claimed once. If a worker stops after its claim, do not clear the claim and do not start a new study to replace that attempt. The report retains the incomplete coverage. Different proposals by two receivers are not the same as different team rewards. Keep their decisions separate from Harbor's native run results.
 
+### Import native Inspect logs from another harness
+
+Export the study with `samples`. Use a one-turn generated answer, one actual model call, one epoch, and no tools. Keep the original sample ID. Do not add a system prompt or transform the answer after generation. Give the native `.eval` archives to the importer:
+
+```sh
+python -m examples.seatlab.rolepack report --inspect-logs first.eval second.eval > external.json
+python -S -m examples.seatlab.rolepack summary external.json
+```
+
+The importer checks the actual model event as well as the dataset input. It rejects duplicate IDs, altered messages, additional calls, cached reads, or a grader-edited answer. Reading an archive does not establish who served the model. An independent service receipt can establish that. For workers using the sealed launcher, `report --study` also distinguishes a locked claim with no finished result from a case nobody claimed. With external logs alone the importer cannot see calls that left no trace.
+
 ### Bring another Harbor task
 
 Export the role's **original model input**. Do not reconstruct a private observation from the answer key. A record needs a source ID, a task name, a world ID, the original input and its UTF-8 SHA-256. Store an authentic parsed peer proposal with the source run and source report hash. Leave `peer` null if the first peer reply is missing. Supply the role's rubric: the response field, scalar or per-item shape, legal choices, and all equally optimal choices. Do not export private credentials or user data. See [the complete mixed pack](results/rolepack-observations.json) for both supported shapes.
