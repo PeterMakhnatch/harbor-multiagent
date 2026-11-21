@@ -662,6 +662,8 @@ python3.12 -S -m examples.seatlab.rolepack summary --pack "$pack" --sha256 0697a
 
 Use the [results](native-model-results.md#can-i-move-real-teammate-decisions-from-inspect-into-a-new-harbor-role-study) to compare behavior. Private source archives are not published. The hashes let their owners verify the public export. Both string and integer Inspect sample IDs are supported. Use the original JSON type in the source index.
 
+With both original task sources, use `rolepack stock --changed-peer` to verify a compatible imported subset. Pass the imported pack, its SHA-256, its report, the trusted `--calendar-checkout` and `--native-study`. This permits a different prior action, not a changed observation, task, world or scoring rule. Without `--changed-peer`, `stock` requires the full original pack.
+
 ### Bring another Harbor task
 
 Export the role's **original model input**. Do not reconstruct a private observation from the answer key. A record needs a source ID, a task name, a world ID, the original input and its UTF-8 SHA-256. Store an authentic parsed peer proposal with the source run and source report hash. Leave `peer` null if the first peer reply is missing. Supply the role's rubric: the response field, scalar or per-item shape, legal choices, and all equally optimal choices. Do not export private credentials or user data. See [the complete mixed pack](results/rolepack-observations.json) for both supported shapes.

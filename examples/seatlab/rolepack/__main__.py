@@ -215,10 +215,14 @@ def _dispatch(a: argparse.Namespace) -> int:
                     "schema": "seatlab.rolepack-stock/v1",
                     "pack_sha256": protocol.digest(pack),
                     "calendar": calendar_source.check(
-                        a.calendar_checkout, pack, report
+                        a.calendar_checkout, pack, report, allow_repeer=a.changed_peer
                     ),
                     "shipment": shipment_source.check(
-                        a.shipment_results, pack, report, a.native_study
+                        a.shipment_results,
+                        pack,
+                        report,
+                        a.native_study,
+                        allow_repeer=a.changed_peer,
                     ),
                     "measurement": "original_task_scorers_not_new_native_team_rewards",
                 }
@@ -278,6 +282,11 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--shipment-results", type=Path, default=_RESULTS)
             if name == "stock":
                 p.add_argument("--native-study", type=Path, required=True)
+                p.add_argument(
+                    "--changed-peer",
+                    action="store_true",
+                    help="Allow a different peer or a subset of the original source records; verify every observation and scoring rule independently.",
+                )
         if name == "show":
             p.add_argument("--index", type=int, required=True)
         if name == "grade":

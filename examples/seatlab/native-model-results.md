@@ -15,6 +15,8 @@ A separately served Astra receiver completed all **36/36** registered attempts w
 
 In the earlier service window, the same 9 sources with a direct DeepSeek proposal had the same 4 aggregate scores. That is a descriptive comparison, not a causal comparison between senders. The 36 calls contain **156 choices**, not 156 independent worlds or new native team rewards.
 
+Both original scorers independently verified these **156 choices**: 12 calendar slots and 144 shipments. The [original-world check](results/rolepack-import-original-stock.json) covers 3 calendar cases and 6 shipment teams. It uses the real selected stock worlds, not a duplicate grader.
+
 [Import your own archive](replication.md#build-your-first-pack-from-native-inspect-logs) · [36 first attempts](results/rolepack-import-review-live.json) · [independent service receipts](results/rolepack-import-review-service.json) · [world-level effects and repeatability](results/rolepack-import-review-effects.json).
 
 ## Which receiver changes an actual role decision?

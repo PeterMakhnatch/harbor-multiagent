@@ -278,7 +278,9 @@ def _completed(plan: list[_Document], rows: object) -> list[tuple[str, int, bool
     return actions
 
 
-def check(root: Path, pack: _Document, report: _Document) -> _Document:
+def check(
+    root: Path, pack: _Document, report: _Document, *, allow_repeer: bool = False
+) -> _Document:
     from . import protocol
 
     validated = protocol.validate(pack)
@@ -290,12 +292,19 @@ def check(root: Path, pack: _Document, report: _Document) -> _Document:
     if len(actions) > _MAX_ACTIONS:
         raise ValueError("too many calendar actions")
     result = _worker(root, [(record_id, slot) for record_id, slot, _ in actions])
-    records = sorted(
-        (record for record in validated["records"] if record["task"] == "calendar"),
-        key=lambda record: record["id"],
-    )
-    if records != result["records"]:
-        raise ValueError("calendar pack does not match the published source")
+    if allow_repeer:
+        from .native_subset import select_registered_subset
+
+        select_registered_subset(
+            validated["records"], result["records"], task="calendar"
+        )
+    else:
+        records = sorted(
+            (record for record in validated["records"] if record["task"] == "calendar"),
+            key=lambda record: record["id"],
+        )
+        if records != result["records"]:
+            raise ValueError("calendar pack does not match the published source")
     scores = result["scores"]
     if scores != [score for _, _, score in actions]:
         raise ValueError("calendar score does not match the original scorer")

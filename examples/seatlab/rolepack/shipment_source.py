@@ -7,6 +7,7 @@ from ..decision_cross import audit, inputs
 from ..decision_cross.stock import _native_sources
 from ..turn_fork import packet as checkpoint
 from . import protocol
+from .native_subset import select_registered_subset
 
 _PACKET_SHA256 = "158b218350a788a3aab116e7ea61780930c63a46a470efb6bf13d3b0e7177fb9"
 _BOARD_SHA256 = "60b976b6666acde139605d14a855b9d21b66da8d94343d05a029a585b49d4c7b"
@@ -191,17 +192,32 @@ def check(
     pack: dict[str, Any],
     report: dict[str, Any],
     native_study: Path,
+    *,
+    allow_repeer: bool = False,
 ) -> dict[str, Any]:
     pack = protocol.validate(pack)
     digest = protocol.digest(pack)
     sources, enrolled = _load(results)
-    records = {record["id"]: record for record in enrolled}
-    if records != {
-        record["id"]: record for record in pack["records"] if record["task"] == _TASK
-    }:
-        raise ValueError("pack shipments differ from the registered source records")
+    if allow_repeer:
+        records = select_registered_subset(pack["records"], enrolled, task=_TASK)
+        sources = {
+            source_id: source
+            for source_id, source in sources.items()
+            if f"ship-{source_id}" in records
+        }
+    else:
+        records = {record["id"]: record for record in enrolled}
+        if records != {
+            record["id"]: record
+            for record in pack["records"]
+            if record["task"] == _TASK
+        }:
+            raise ValueError("pack shipments differ from the registered source records")
     rows = _shipment_rows(pack, report, digest)
-    worlds, original = _native_sources(sources, native_study)
+    if allow_repeer and not sources:
+        worlds, original = {}, dict.fromkeys(("episodes", "optimal", "feasible"), 0)
+    else:
+        worlds, original = _native_sources(sources, native_study)
     if worlds.keys() != sources.keys():
         raise ValueError("native shipment worlds do not cover the registered sources")
     sources_by_record = {f"ship-{source_id}": source_id for source_id in sources}
@@ -225,7 +241,7 @@ def check(
         "schema": "seatlab.rolepack-shipment-stock/v1",
         "pack_sha256": digest,
         "measurement": "offline_rescore_not_new_native_rewards",
-        "source_teams": len(worlds),
+        "source_teams": len(sources),
         "native_original": original,
         "conditional": arms,
     }
