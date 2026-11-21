@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from ..attention.protocol import aliases
-from ..rolepack import protocol, shipment_source
-from ..turn_fork.protocol import decide_prompt
+from examples.seatlab.attention.protocol import aliases
+from examples.seatlab.rolepack import protocol, shipment_source
+from examples.seatlab.turn_fork.protocol import decide_prompt
 
 _RESULTS = Path(__file__).resolve().parents[1] / "results"
 _RECEIVER = "decision-cross-direct-live.json"
@@ -37,7 +37,11 @@ def test_export_uses_exact_minimum_prompt_and_first_direct_actions(
     for record in records:
         source = sources[record["id"]]
         observations = sorted(
-            (obs for obs in board["observations"] if obs["source_id"] == source["source_id"]),
+            (
+                obs
+                for obs in board["observations"]
+                if obs["source_id"] == source["source_id"]
+            ),
             key=lambda obs: obs["prompt_sha256"],
         )
         chosen = observations[0]
@@ -52,7 +56,9 @@ def test_export_uses_exact_minimum_prompt_and_first_direct_actions(
         choices = {row["id"]: row["choice"] for row in expected["outcome"]["actions"]}
         names = aliases(source["cases"], source["seed"], source["repetition"])
         assert record["peer"] == {
-            "answer": {"choices": {alias: choices[case_id] for alias, case_id in names.items()}},
+            "answer": {
+                "choices": {alias: choices[case_id] for alias, case_id in names.items()}
+            },
             "run": expected["run"],
             "source_sha256": sha256(raw).hexdigest(),
             "response_sha256": expected["turn"]["response_sha256"],
@@ -63,12 +69,16 @@ def test_missing_selected_peer_leaves_all_four_rows_unavailable(
     tmp_path: Path, public: tuple[dict[str, Any], dict[str, Any], bytes]
 ) -> None:
     _, board, raw = public
-    observations = [obs for obs in board["observations"] if obs["source_id"] == "s6501-r1"]
+    observations = [
+        obs for obs in board["observations"] if obs["source_id"] == "s6501-r1"
+    ]
     assert len(observations) > 1
     selected = min(observations, key=lambda obs: obs["prompt_sha256"])
     report = json.loads(raw)
     draw = next(
-        row for row in report["rows"] if row["obs_id"] == selected["obs_id"] and row["draw"] == 0
+        row
+        for row in report["rows"]
+        if row["obs_id"] == selected["obs_id"] and row["draw"] == 0
     )
     assert draw["state"] == "complete"
     draw.update(state="incomplete", outcome=None)
@@ -82,7 +92,9 @@ def test_missing_selected_peer_leaves_all_four_rows_unavailable(
     (results / _RECEIVER).write_bytes(json.dumps(report, indent=2).encode() + b"\n")
     records = shipment_source.export(results)
     assert len(records) == 12
-    assert [record["id"] for record in records if record["peer"] is None] == ["ship-s6501-r1"]
+    assert [record["id"] for record in records if record["peer"] is None] == [
+        "ship-s6501-r1"
+    ]
     missing = next(record for record in records if record["id"] == "ship-s6501-r1")
     assert missing["prompt_sha256"] == selected["prompt_sha256"]
     rows = protocol.plan({"schema": "seatlab.rolepack/v1", "records": records})
@@ -152,4 +164,6 @@ def test_check_rejects_peer_proposals_swapped_within_a_world(tmp_path: Path) -> 
     first["peer"], second["peer"] = second["peer"], first["peer"]
     pack = {"schema": "seatlab.rolepack/v1", "records": records}
     with pytest.raises(ValueError, match="differ from the registered source records"):
-        shipment_source.check(_RESULTS, pack, _unclaimed_report(pack), tmp_path / "unused-native-study")
+        shipment_source.check(
+            _RESULTS, pack, _unclaimed_report(pack), tmp_path / "unused-native-study"
+        )

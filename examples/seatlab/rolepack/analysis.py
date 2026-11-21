@@ -30,7 +30,9 @@ def _relation(same: bool, prior_correct: bool, correct: bool) -> str:
 
 
 def _state_counts(rows: _Rows, records: list[_Document], arm: str) -> dict[str, int]:
-    counts = Counter(rows[record["id"], arm, draw]["state"] for record in records for draw in _DRAWS)
+    counts = Counter(
+        rows[record["id"], arm, draw]["state"] for record in records for draw in _DRAWS
+    )
     return {state: counts[state] for state in _STATES}
 
 
@@ -60,7 +62,11 @@ def _arm(
             compared_proposals += 1
             copied_proposals += outcome["values"] == prior["values"]
             for old, new, was_correct, is_correct in zip(
-                prior["values"], outcome["values"], prior["correct"], outcome["correct"], strict=True
+                prior["values"],
+                outcome["values"],
+                prior["correct"],
+                outcome["correct"],
+                strict=True,
             ):
                 relations[_relation(old == new, was_correct, is_correct)] += 1
     copied = relations["same_correct"] + relations["same_wrong"]
@@ -80,7 +86,9 @@ def _arm(
             "compared_proposals": compared_proposals,
             "copied_proposals": copied_proposals,
             "compared_actions": actions,
-            "prior_wrong_actions": relations["same_wrong"] + relations["wrong_different"] + relations["corrected"],
+            "prior_wrong_actions": relations["same_wrong"]
+            + relations["wrong_different"]
+            + relations["corrected"],
             "copied": copied,
             "changed": actions - copied,
             **{relation: relations[relation] for relation in _RELATIONS},
@@ -140,7 +148,11 @@ def _task(rows: _Rows, records: list[_Document]) -> _Document:
             priors[record["id"]] = protocol.grade(record, json.dumps(prior["answer"]))
     worlds = {world: _world(rows, group) for world, group in sorted(by_world.items())}
     represented = [stats for stats in worlds.values() if stats["matched_source_draws"]]
-    effect = fmean(stats["peer_minus_original"] for stats in represented) if represented else None
+    effect = (
+        fmean(stats["peer_minus_original"] for stats in represented)
+        if represented
+        else None
+    )
     coverage = (
         "registered_sources",
         "available_sources",
@@ -154,10 +166,16 @@ def _task(rows: _Rows, records: list[_Document]) -> _Document:
         "registered_worlds": len(worlds),
         "represented_worlds": len(represented),
         "observed_equal_world_peer_minus_original": effect,
-        "equal_world_peer_minus_original": effect if len(represented) == len(worlds) else None,
+        "equal_world_peer_minus_original": effect
+        if len(represented) == len(worlds)
+        else None,
         "observed_equal_world_matched_optimal_rate_by_arm": {
-            arm: fmean(stats["mean_matched_draw_optimal_rate_by_arm"][arm] for stats in represented)
-            if represented else None
+            arm: fmean(
+                stats["mean_matched_draw_optimal_rate_by_arm"][arm]
+                for stats in represented
+            )
+            if represented
+            else None
             for arm in _ARMS
         },
         "by_arm": {arm: _arm(rows, records, arm, priors) for arm in _ARMS},
@@ -175,5 +193,7 @@ def summarize(pack: _Document, report: _Document) -> _Document:
         "schema": "seatlab.rolepack-summary/v1",
         "pack_sha256": report["pack_sha256"],
         "measurement": "matched_draw_optimal_action_fraction_equal_weight_per_world",
-        "tasks": {task: _task(rows, records) for task, records in sorted(tasks.items())},
+        "tasks": {
+            task: _task(rows, records) for task, records in sorted(tasks.items())
+        },
     }

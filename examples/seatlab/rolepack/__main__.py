@@ -148,7 +148,10 @@ def _dispatch(a: argparse.Namespace) -> int:
         else:
             from . import evidence
 
-            _emit(evidence.collect(pack, work.logs(a.study, pack)))
+            if a.study is not None:
+                _emit(evidence.collect_claimed(pack, *work.snapshot(a.study, pack)))
+            else:
+                _emit(evidence.collect(pack, a.inspect_logs))
     else:
         from . import evidence
 
@@ -221,7 +224,17 @@ def main(argv: list[str] | None = None) -> int:
         if name == "grade":
             p.add_argument("--sample-id", required=True)
         if name in ("seal", "pending", "run", "report"):
-            p.add_argument("--study", type=Path, required=True)
+            if name == "report":
+                source = p.add_mutually_exclusive_group(required=True)
+                source.add_argument("--study", type=Path)
+                source.add_argument(
+                    "--inspect-logs",
+                    nargs="+",
+                    type=Path,
+                    help="Original one-turn, one-epoch Inspect archives, including incomplete first attempts.",
+                )
+            else:
+                p.add_argument("--study", type=Path, required=True)
             if name == "seal":
                 p.add_argument(
                     "--config",

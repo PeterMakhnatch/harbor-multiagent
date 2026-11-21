@@ -4,8 +4,9 @@ import stat
 import subprocess
 import sys
 from hashlib import sha256
+from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _PUBLIC_REPORT = "flotilla-calendar-list-results.json"
 _REPORT_SHA256 = "9085102e5b3043e44ac5987f55041a9e41461beacfee9b9a7dfa10a257842a24"
@@ -74,7 +75,12 @@ def _peer(row: _Document, grade: Any, case: Any, source_hash: str) -> _Document 
     status, slot, reward = row["status"], row["slot"], row["reward"]
     if status == "missing" and slot is None and reward is None:
         return None
-    if status == "model_invalid" and slot is None and type(reward) is int and reward == 0:
+    if (
+        status == "model_invalid"
+        and slot is None
+        and type(reward) is int
+        and reward == 0
+    ):
         return None
     if (
         status != "complete"
@@ -92,18 +98,30 @@ def _peer(row: _Document, grade: Any, case: Any, source_hash: str) -> _Document 
 
 
 def _records(
-    cases: dict[str, Any], stock: Any, rows: dict[str, _Document], legal: list[int], source_hash: str
+    cases: dict[str, Any],
+    stock: Any,
+    rows: dict[str, _Document],
+    legal: list[int],
+    source_hash: str,
 ) -> list[_Document]:
     records = []
     for case_id, (world, direction, repetition) in sorted(_CASES.items()):
         case = cases[case_id]
         run = stock.Cell(case, 0, "rr").id
         row = rows[run]
-        if (case.world, case.direction, case.repetition) != (world, direction, repetition):
+        if (case.world, case.direction, case.repetition) != (
+            world,
+            direction,
+            repetition,
+        ):
             raise ValueError("calendar case coordinates differ")
         if (
-            (row["case"], row["source_arm"], row["condition"]) != (case_id, "blind", "rr")
-            or any(type(row[key]) is not int for key in ("world", "direction", "repetition", "draw"))
+            (row["case"], row["source_arm"], row["condition"])
+            != (case_id, "blind", "rr")
+            or any(
+                type(row[key]) is not int
+                for key in ("world", "direction", "repetition", "draw")
+            )
             or (row["world"], row["direction"], row["repetition"], row["draw"])
             != (world, direction, repetition, 0)
         ):
@@ -139,22 +157,32 @@ def _stock(root: Path, actions: list[tuple[str, int]]) -> _Document:
     for name in _PACKET_FILES:
         _read(results / name)
     sys.path.insert(0, str(root))
-    from examples.seatlab.visibility import (
-        calendar_list_packet,
-        calendar_list_protocol,
-        calendar_packet,
-        calendar_protocol,
-    )
+    # These modules belong to the pinned external task checkout, not this package.
+    source = "examples.seatlab.visibility"
+    calendar_packet = import_module(f"{source}.calendar_packet")
+    calendar_list_packet = import_module(f"{source}.calendar_list_packet")
+    calendar_list_protocol = import_module(f"{source}.calendar_list_protocol")
+    calendar_protocol = import_module(f"{source}.calendar_protocol")
 
     report = calendar_packet._json(raw)
-    cases = {case.id: case for case in calendar_list_packet.load() if case.arm == "blind"}
-    if cases.keys() != _CASES.keys() or report["schema"] != "seatlab.calendar-list-report/v1":
+    cases = {
+        case.id: case for case in calendar_list_packet.load() if case.arm == "blind"
+    }
+    if (
+        cases.keys() != _CASES.keys()
+        or report["schema"] != "seatlab.calendar-list-report/v1"
+    ):
         raise ValueError("invalid registered calendar source")
     rows = {row["run"]: row for row in report["rows"]}
     if len(rows) != len(report["rows"]) or len(rows) != 192:
         raise ValueError("duplicate or absent calendar result rows")
-    legal = [calendar_protocol._checked_slot(slot) for slot in range(calendar_protocol._SLOT_COUNT)]
-    records = _records(cases, calendar_list_protocol, rows, legal, sha256(raw).hexdigest())
+    legal = [
+        calendar_protocol._checked_slot(slot)
+        for slot in range(calendar_protocol._SLOT_COUNT)
+    ]
+    records = _records(
+        cases, calendar_list_protocol, rows, legal, sha256(raw).hexdigest()
+    )
     scores = []
     for record_id, slot in actions:
         if not isinstance(record_id, str) or not record_id.startswith("cal-"):
@@ -198,7 +226,9 @@ def export(root: Path) -> list[_Document]:
 
 def _completed(plan: list[_Document], rows: object) -> list[tuple[str, int, bool]]:
     if not isinstance(rows, list) or len(rows) != len(plan):
-        raise ValueError("calendar check requires the complete rolepack report registration")
+        raise ValueError(
+            "calendar check requires the complete rolepack report registration"
+        )
     actions = []
     for expected, row in zip(plan, rows, strict=True):
         if not isinstance(row, dict) or any(
@@ -215,6 +245,7 @@ def _completed(plan: list[_Document], rows: object) -> list[tuple[str, int, bool
             raise ValueError("invalid calendar check report state")
         if not isinstance(outcome, dict) or outcome.keys() != {"values", "correct"}:
             raise ValueError("invalid calendar check action")
+        outcome = cast(_Document, outcome)
         values, correct = outcome["values"], outcome["correct"]
         if (
             not isinstance(values, list)
@@ -227,8 +258,12 @@ def _completed(plan: list[_Document], rows: object) -> list[tuple[str, int, bool
         ):
             raise ValueError("invalid calendar check action or score")
         turn = row.get("turn")
-        if not isinstance(turn, dict) or turn.keys() != {"prompt_sha256", "response_sha256"}:
+        if not isinstance(turn, dict) or turn.keys() != {
+            "prompt_sha256",
+            "response_sha256",
+        }:
             raise ValueError("invalid calendar check turn receipt")
+        turn = cast(_Document, turn)
         digest = turn["response_sha256"]
         if (
             not isinstance(digest, str)
@@ -236,7 +271,9 @@ def _completed(plan: list[_Document], rows: object) -> list[tuple[str, int, bool
             or any(digit not in "0123456789abcdef" for digit in digest)
             or turn["prompt_sha256"] != expected["prompt_sha256"]
         ):
-            raise ValueError("calendar check response does not match the registered prompt")
+            raise ValueError(
+                "calendar check response does not match the registered prompt"
+            )
         actions.append((expected["record_id"], values[0], correct[0]))
     return actions
 
@@ -245,10 +282,9 @@ def check(root: Path, pack: _Document, report: _Document) -> _Document:
     from . import protocol
 
     validated = protocol.validate(pack)
-    if (
-        report.get("schema") != "seatlab.rolepack-report/v1"
-        or report.get("pack_sha256") != protocol.digest(validated)
-    ):
+    if report.get("schema") != "seatlab.rolepack-report/v1" or report.get(
+        "pack_sha256"
+    ) != protocol.digest(validated):
         raise ValueError("calendar check report does not match the pack")
     actions = _completed(protocol.plan(validated), report.get("rows"))
     if len(actions) > _MAX_ACTIONS:
@@ -279,7 +315,9 @@ def _main() -> int:
         if not isinstance(actions, list) or len(actions) > _MAX_ACTIONS:
             return 1
         result = _stock(_physical(Path(sys.argv[1])), actions)
-        sys.stdout.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
+        sys.stdout.write(
+            json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n"
+        )
     except (ImportError, KeyError, OSError, RuntimeError, TypeError, ValueError):
         return 1
     return 0

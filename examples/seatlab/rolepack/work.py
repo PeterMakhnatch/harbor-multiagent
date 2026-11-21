@@ -197,7 +197,10 @@ def _reserve(
         prepared.mkdir(mode=0o700)
         with _directory(prepared) as batch:
             _publish(
-                batch, "batch.json", {"pack_sha256": digest, "indices": indices}, mode=0o600
+                batch,
+                "batch.json",
+                {"pack_sha256": digest, "indices": indices},
+                mode=0o600,
             )
             for i in indices:
                 _publish(batch, f"claim-{i}.json", rows[i], mode=0o600)
@@ -237,7 +240,15 @@ def _verify_log(raw: bytes, ids: list[str]) -> None:
             or header["eval"]["dataset"]["sample_ids"] != ids
         ):
             raise ValueError
-    except (BadZipFile, OSError, RuntimeError, ValueError, TypeError, KeyError, RecursionError):
+    except (
+        BadZipFile,
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        RecursionError,
+    ):
         raise StudyError("invalid_registered_inspect_archive") from None
 
 
@@ -269,7 +280,10 @@ def _execute(batch: Path, config: bytes, samples: list[bytes], ids: list[str]) -
         with _directory(batch) as fd:
             _private(fd, mode=0o700)
             _publish(
-                fd, "log.json", {"name": log.name, "sha256": sha256(raw).hexdigest()}, mode=0o600
+                fd,
+                "log.json",
+                {"name": log.name, "sha256": sha256(raw).hexdigest()},
+                mode=0o600,
             )
     return log
 
@@ -283,12 +297,18 @@ def run(study: Path, pack: _Doc, start: int, stop: int) -> _Doc:
     study = _study_path(_path(study))
     with _study(study) as root, _lock(root, fcntl.LOCK_EX):
         doc, rows, claimed, _ = _state(root, pack)
-        if type(start) is not int or type(stop) is not int or not 0 <= start < stop <= len(rows):
+        if (
+            type(start) is not int
+            or type(stop) is not int
+            or not 0 <= start < stop <= len(rows)
+        ):
             raise StudyError("range_outside_study")
         config = _config(_path(Path(doc["config_path"])))
         if sha256(config).hexdigest() != doc["config_sha256"]:
             raise StudyError("study_config_changed")
-        eligible = [i for i in range(start, stop) if rows[i]["prompt_sha256"] is not None]
+        eligible = [
+            i for i in range(start, stop) if rows[i]["prompt_sha256"] is not None
+        ]
         indices = [i for i in eligible if i not in claimed]
         job = None
         if indices:
@@ -312,15 +332,19 @@ def pending(study: Path, pack: _Doc) -> list[int]:
     """List only untouched eligible indices. The dispatch config is not needed offline."""
     with _study(_path(study)) as root, _lock(root, fcntl.LOCK_SH):
         _, rows, claimed, _ = _state(root, pack)
-        return [i for i, row in enumerate(rows) if i not in claimed and row["prompt_sha256"] is not None]
+        return [
+            i
+            for i, row in enumerate(rows)
+            if i not in claimed and row["prompt_sha256"] is not None
+        ]
 
 
-def logs(study: Path, pack: _Doc) -> list[Path]:
-    """List only pinned native logs. An interrupted batch has no log receipt."""
+def snapshot(study: Path, pack: _Doc) -> tuple[list[Path], set[str]]:
+    """Read pinned logs and every accepted claim at the same point in time."""
     study = _study_path(_path(study))
     found = []
     with _study(study) as root, _lock(root, fcntl.LOCK_SH):
-        _, _, _, batches = _state(root, pack)
+        _, rows, claimed, batches = _state(root, pack)
         for name in batches:
             batch = study / name
             with _directory(batch) as fd:
@@ -336,4 +360,4 @@ def logs(study: Path, pack: _Doc) -> list[Path]:
             if sha256(raw).hexdigest() != receipt["sha256"]:
                 raise StudyError("inspect_archive_changed")
             found.append(log_dir / receipt["name"])
-    return found
+    return found, {rows[index]["sample_id"] for index in claimed}

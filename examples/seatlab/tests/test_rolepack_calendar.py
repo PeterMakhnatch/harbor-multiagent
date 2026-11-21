@@ -19,7 +19,9 @@ def calendar_root() -> Path:
     return Path(path).absolute()
 
 
-def test_altered_public_report_is_rejected_before_source_execution(tmp_path: Path) -> None:
+def test_altered_public_report_is_rejected_before_source_execution(
+    tmp_path: Path,
+) -> None:
     source = tmp_path.resolve() / _REPORT
     source.parent.mkdir(parents=True)
     source.write_bytes(b'{"schema":"seatlab.calendar-list-report/v1","rows":[]}\n')
@@ -97,8 +99,12 @@ def test_stock_check_scores_actions_not_provenance_aliases(calendar_root: Path) 
     }
 
     wrong_score = deepcopy(report)
-    first_accepted = next(row for row in wrong_score["rows"] if row["state"] == "complete")
-    first_accepted["outcome"]["correct"][0] = not first_accepted["outcome"]["correct"][0]
+    first_accepted = next(
+        row for row in wrong_score["rows"] if row["state"] == "complete"
+    )
+    first_accepted["outcome"]["correct"][0] = not first_accepted["outcome"]["correct"][
+        0
+    ]
     with pytest.raises(ValueError, match="score"):
         calendar_source.check(calendar_root, pack, wrong_score)
 
@@ -108,4 +114,6 @@ def test_stock_check_scores_actions_not_provenance_aliases(calendar_root: Path) 
         aliased["records"][0]["peer"],
     )
     with pytest.raises(ValueError, match="published source"):
-        calendar_source.check(calendar_root, aliased, evidence.from_samples(aliased, []))
+        calendar_source.check(
+            calendar_root, aliased, evidence.from_samples(aliased, [])
+        )

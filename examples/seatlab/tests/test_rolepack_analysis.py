@@ -27,7 +27,9 @@ def _record(
         "world": world,
         "prompt": prompt,
         "prompt_sha256": sha256(prompt.encode("utf-8")).hexdigest(),
-        "peer": None if answer is None else {
+        "peer": None
+        if answer is None
+        else {
             "answer": answer,
             "run": f"prior-{record_id}",
             "source_sha256": "1" * 64,
@@ -86,7 +88,9 @@ def test_matched_draw_rates_weight_worlds_equally_with_a_missing_repetition() ->
         *_record_samples(second, (a, a), (b, b)),
         *_record_samples(third, (b, b), (a, a)),
     ]
-    task = analysis.summarize(pack, evidence.from_samples(pack, samples))["tasks"]["shipment"]
+    task = analysis.summarize(pack, evidence.from_samples(pack, samples))["tasks"][
+        "shipment"
+    ]
     assert task["matched_source_draws"] == 5
     assert task["registered_source_draws"] == 6
     assert task["matched_actions_per_arm"] == 8
@@ -124,11 +128,19 @@ def test_matched_draw_rates_weight_worlds_equally_with_a_missing_repetition() ->
 def test_scalar_calendar_has_separate_effect_and_no_credit_for_prior_success() -> None:
     items = [_item("slot", [0, 1, 2], [0, 2])]
     zero, one, two = {"slot": 0}, {"slot": 1}, {"slot": 2}
-    case = _record("cal-rx-w00-d0-r0-blind", "calendar", "w00", "slot", items, zero, scalar=True)
-    absent = _record("cal-rx-w04-d0-r0-blind", "calendar", "w04", "slot", items, None, scalar=True)
+    case = _record(
+        "cal-rx-w00-d0-r0-blind", "calendar", "w00", "slot", items, zero, scalar=True
+    )
+    absent = _record(
+        "cal-rx-w04-d0-r0-blind", "calendar", "w04", "slot", items, None, scalar=True
+    )
     ship = _record(
-        "ship-s6501-r0", "shipment", "s6501", "choices",
-        [_item("Q1", ["A", "B"], ["B"])], _choices("A"),
+        "ship-s6501-r0",
+        "shipment",
+        "s6501",
+        "choices",
+        [_item("Q1", ["A", "B"], ["B"])],
+        _choices("A"),
     )
     pack = {"schema": "seatlab.rolepack/v1", "records": [case, absent, ship]}
     samples = [
@@ -156,8 +168,13 @@ def test_scalar_calendar_has_separate_effect_and_no_credit_for_prior_success() -
 
 def test_summarize_rejects_a_forged_outcome() -> None:
     case = _record(
-        "cal-rx-w00-d0-r0-blind", "calendar", "w00", "slot",
-        [_item("slot", [0, 1], [1])], {"slot": 0}, scalar=True,
+        "cal-rx-w00-d0-r0-blind",
+        "calendar",
+        "w00",
+        "slot",
+        [_item("slot", [0, 1], [1])],
+        {"slot": 0},
+        scalar=True,
     )
     pack = {"schema": "seatlab.rolepack/v1", "records": [case]}
     samples = _record_samples(case, ({"slot": 0}, None), (None, None))

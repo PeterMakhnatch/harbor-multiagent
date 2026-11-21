@@ -9,7 +9,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from examples.seatlab.rolepack import protocol, work
+from examples.seatlab.rolepack import evidence, protocol, work
 
 _CONFIG = b'{"dispatch":{"argv":["/bin/cat","private-config-marker"],"env":[]}}\n'
 _RUBRIC_ONLY = "do-not-send-this-rubric-only-action"
@@ -29,7 +29,9 @@ def _record(record_id: str, task: str, peer: bool) -> dict[str, Any]:
             "run": f"prior-{record_id}",
             "source_sha256": "a" * 64,
             "response_sha256": None,
-        } if peer else None,
+        }
+        if peer
+        else None,
         "rubric": {
             "field": "action",
             "scalar": True,
@@ -69,12 +71,14 @@ def _archive(log_dir: Path, ids: list[str], status: str = "success") -> Path:
     with ZipFile(log, "x") as archive:
         archive.writestr(
             "header.json",
-            json.dumps({
-                "version": 2,
-                "status": status,
-                "eval": {"dataset": {"sample_ids": ids}},
-                "metadata": {"private": _PRIVATE_REPLY},
-            }),
+            json.dumps(
+                {
+                    "version": 2,
+                    "status": status,
+                    "eval": {"dataset": {"sample_ids": ids}},
+                    "metadata": {"private": _PRIVATE_REPLY},
+                }
+            ),
         )
     return log
 
@@ -119,20 +123,29 @@ def test_concurrent_ranges_claim_each_eligible_sample_once(
 
     assert calls == [
         [
-            {"id": row["sample_id"], "input": protocol.prompt(records[row["record_id"]], row["arm"])}
+            {
+                "id": row["sample_id"],
+                "input": protocol.prompt(records[row["record_id"]], row["arm"]),
+            }
             for row in enrolled
         ]
         for enrolled in (first_requests, second_requests)
     ]
     assert first_job["claimed"] == len(first_requests)
     assert second_job["claimed"] == len(second_requests)
-    assert second_job["already_claimed"] == sum(row["index"] >= 3 for row in first_requests)
+    assert second_job["already_claimed"] == sum(
+        row["index"] >= 3 for row in first_requests
+    )
     assert work.pending(study, pack) == []
     assert work.run(study, pack, 0, len(plan))["claimed"] == 0
     assert len(calls) == 2
-    assert work.logs(study, pack) == [Path(job["inspect_log"]) for job in (first_job, second_job)]
+    assert work.snapshot(study, pack)[0] == [
+        Path(job["inspect_log"]) for job in (first_job, second_job)
+    ]
     public = json.dumps([first_job, second_job])
-    assert all(marker not in public for marker in (_RUBRIC_ONLY, _PRIVATE_REPLY, str(config)))
+    assert all(
+        marker not in public for marker in (_RUBRIC_ONLY, _PRIVATE_REPLY, str(config))
+    )
 
 
 def test_interrupted_batch_is_never_replayed_or_exposed(
@@ -153,8 +166,12 @@ def test_interrupted_batch_is_never_replayed_or_exposed(
     assert entered == [protocol.plan(pack)[0]["sample_id"]]
     assert 0 not in work.pending(study, pack)
     assert work.run(study, pack, 0, 1)["inspect_log"] is None
-    assert work.logs(study, pack) == []
+    assert work.snapshot(study, pack)[0] == []
     assert len(entered) == 1
+    result = evidence.collect_claimed(pack, *work.snapshot(study, pack))
+    assert result["rows"][0]["state"] == "incomplete"
+    assert result["rows"][0]["turn"] is None
+    assert any(row["state"] == "unclaimed" for row in result["rows"][1:])
 
 
 def test_changes_fail_before_a_call(
@@ -195,14 +212,14 @@ def test_only_registered_unchanged_native_archives_are_listed(
 
     monkeypatch.setattr(work, "run_inspect", record)
     _archive(study, [protocol.plan(pack)[0]["sample_id"]])
-    assert work.logs(study, pack) == []
+    assert work.snapshot(study, pack)[0] == []
     job = work.run(study, pack, 0, 1)
     log = Path(job["inspect_log"])
-    assert work.logs(study, pack) == [log]
+    assert work.snapshot(study, pack)[0] == [log]
     with log.open("ab") as out:
         out.write(b"changed-log")
     with pytest.raises(ValueError, match="^inspect_archive_changed$"):
-        work.logs(study, pack)
+        work.snapshot(study, pack)[0]
     marker = log.parent.parent / "claim-0.json"
     marker.write_text("{}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="^invalid_batch_claims$"):
@@ -221,4 +238,4 @@ def test_archive_from_another_batch_is_not_pinned(
     with pytest.raises(ValueError, match="^invalid_registered_inspect_archive$"):
         work.run(study, pack, 0, 1)
     assert 0 not in work.pending(study, pack)
-    assert work.logs(study, pack) == []
+    assert work.snapshot(study, pack)[0] == []

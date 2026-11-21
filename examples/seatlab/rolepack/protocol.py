@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from hashlib import sha256
 from io import BytesIO
 from math import isfinite
-from typing import Any
+from typing import Any, cast
 
 SCHEMA = "seatlab.rolepack/v1"
 _MAX_RECORDS = 1024
@@ -120,7 +120,7 @@ def loads(text: str | bytes) -> Any:
 def _object(value: object, label: str, *keys: str) -> Document:
     if type(value) is not dict or len(value) != len(keys) or value.keys() != set(keys):
         raise ValueError(f"invalid {label} fields")
-    return value
+    return cast(Document, value)
 
 
 def _list(value: object, minimum: int, maximum: int, label: str) -> list[Any]:
@@ -130,7 +130,11 @@ def _list(value: object, minimum: int, maximum: int, label: str) -> list[Any]:
 
 
 def _name(value: object, label: str, limit: int = _MAX_NAME_BYTES) -> str:
-    if not isinstance(value, str) or not _utf8(value, limit, label) or not value.isprintable():
+    if (
+        not isinstance(value, str)
+        or not _utf8(value, limit, label)
+        or not value.isprintable()
+    ):
         raise ValueError(f"invalid {label}")
     if not value.strip():
         raise ValueError(f"invalid {label}")
@@ -207,7 +211,15 @@ def _peer_prompt(record: Document) -> str:
 
 def _validate_record(value: object) -> Document:
     record = _object(
-        value, "record", "id", "task", "world", "prompt", "prompt_sha256", "peer", "rubric"
+        value,
+        "record",
+        "id",
+        "task",
+        "world",
+        "prompt",
+        "prompt_sha256",
+        "peer",
+        "rubric",
     )
     for label in ("id", "task", "world"):
         _name(record[label], f"record {label}")

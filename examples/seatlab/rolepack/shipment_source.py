@@ -39,9 +39,13 @@ def _record(
     names = aliases(cases, source["seed"], source["repetition"])
     peer = None
     if draw["state"] == "complete":
-        choices = {action["id"]: action["choice"] for action in draw["outcome"]["actions"]}
+        choices = {
+            action["id"]: action["choice"] for action in draw["outcome"]["actions"]
+        }
         peer = {
-            "answer": {"choices": {alias: choices[case_id] for alias, case_id in names.items()}},
+            "answer": {
+                "choices": {alias: choices[case_id] for alias, case_id in names.items()}
+            },
             "run": draw["run"],
             "source_sha256": report_sha256,
             "response_sha256": draw["turn"]["response_sha256"],
@@ -90,7 +94,9 @@ def _load(
     records = []
     for source_id, source in sorted(sources.items()):
         obs = _select(board, source_id)
-        records.append(_record(packet, source, obs, first[obs["obs_id"]], source_sha256))
+        records.append(
+            _record(packet, source, obs, first[obs["obs_id"]], source_sha256)
+        )
     return sources, records
 
 
@@ -119,7 +125,9 @@ def _shipment_rows(
             or type(row["draw"]) is not int
             or any(row[key] != value for key, value in expected.items())
         ):
-            raise ValueError("rolepack report row differs from its planned task or source")
+            raise ValueError(
+                "rolepack report row differs from its planned task or source"
+            )
         if expected["task"] != _TASK:
             continue
         state, turn = row["state"], row["turn"]
@@ -207,7 +215,9 @@ def check(
         counts[row["state"]] += 1
         if row["state"] == "complete":
             source_id = sources_by_record[record_id]
-            score = _score_row(row, records[record_id], sources[source_id], worlds[source_id])
+            score = _score_row(
+                row, records[record_id], sources[source_id], worlds[source_id]
+            )
             counts["actions"] += score["episodes"]
             counts["optimal"] += score["optimal"]
             counts["feasible"] += score["feasible"]

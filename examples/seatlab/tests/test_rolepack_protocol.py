@@ -78,7 +78,9 @@ def test_rounds_are_stable_and_missing_proposals_remove_both_arms() -> None:
         protocol.prompt(c, "peer")
 
 
-def test_prompt_keeps_original_bytes_and_does_not_expose_changes_to_peer_score() -> None:
+def test_prompt_keeps_original_bytes_and_does_not_expose_changes_to_peer_score() -> (
+    None
+):
     before = _record()
     after = deepcopy(before)
     after["rubric"]["items"][0]["optimal"] = [0]
@@ -211,8 +213,7 @@ def test_canonical_pack_encoding_and_strict_source_parse() -> None:
 def test_rubric_item_count_is_bounded() -> None:
     record = _record()
     record["rubric"]["items"] = [
-        {"key": f"item-{index}", "valid": [0], "optimal": []}
-        for index in range(129)
+        {"key": f"item-{index}", "valid": [0], "optimal": []} for index in range(129)
     ]
     with pytest.raises(ValueError, match="rubric items count"):
         protocol.validate(_pack(record))
