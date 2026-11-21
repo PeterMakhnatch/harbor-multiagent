@@ -122,3 +122,46 @@ Each run records its imported SDK and source root in `runtime.json`. Native resu
 Real-model records remain in each seat's `agent/deepseek.jsonl`. The world exports `/logs/world/agentsnet.json` for the verifier and task artifacts.
 
 Keep raw role traces private. A public result should contain the source pins, complete trial count, both scores, elapsed time, token counts, actual cost, and any unknown usage.
+
+## Observed real-model baseline
+
+One registered DeepSeek trial runs on local Docker. No trial or transport retry occurs. All 4 native seats remain under test.
+
+The executed source is [`18f8e8fbbb902b8fd4b13f254818c98c23332ea9`](https://github.com/PeterMakhnatch/harbor-multiagent/tree/18f8e8fbbb902b8fd4b13f254818c98c23332ea9). The later result entry changes only this README.
+
+| Run measure | Observed value |
+|---|---:|
+| Edge fraction | 1.0 |
+| Proper coloring | 1.0 |
+| Native play | 96.767085 s |
+| Native trial | 109.948753 s |
+| Format retries | 8 |
+| Responses at the output limit | 9 |
+| Empty-message fallbacks | 1 |
+| Calls with unknown usage | 0 |
+
+Kathryn's round-3 message uses the source's empty-map fallback after 2 failed parses. No final answer uses a fallback. The result retains every response.
+
+| Seat | Calls | Input tokens | Cached subset | Output tokens | Native wall time (s) | Token-priced USD |
+|---|---:|---:|---:|---:|---:|---:|
+| Bradley (`n0`) | 7 | 15603 | 13312 | 2472 | 92.546335 | 0.001866786 |
+| Sean (`n1`) | 6 | 11155 | 9728 | 2497 | 96.758635 | 0.001741434 |
+| Hannah (`n2`) | 6 | 11699 | 9856 | 2428 | 94.471291 | 0.001762818 |
+| Kathryn (`n3`) | 9 | 24723 | 22272 | 3897 | 91.382557 | 0.002772666 |
+| **Total** | **28** | **63180** | **55168** | **11294** | — | **0.008143704** |
+
+Every paid call has a complete provider usage record. Native token totals and cost agree with those records.
+
+Native usage lives in `seat_results`. The trial-level `agent_result` is null for native seats; it does not mean zero usage.
+
+All calls start on Saturday. The token price uses the verified off-peak rates:
+
+| Token category | USD per 1 million tokens |
+|---|---:|
+| Uncached input | 0.15 |
+| Cached input | 0.003 |
+| Output | 0.60 |
+
+The source-parity proof compares the pinned prompts, parser, histories, routing, and both scores without a provider call. All 3 native controls also pass.
+
+This is 1 successful episode, not an estimated success rate. Provider calls remain serial. The trial does not establish communication necessity or model superiority.
