@@ -307,6 +307,16 @@ def _reward(
     return scored if valid else None
 
 
+def _same_team_config(embedded: dict, saved: dict) -> bool:
+    if embedded == saved:
+        return True
+    if "agent" in saved or not saved.get("participants"):
+        return False
+    from harbor.models.trial.config import AgentConfig
+
+    return embedded == {**saved, "agent": AgentConfig().model_dump(mode="json")}
+
+
 def _read_native(
     cell: _Cell, load_trial: Callable[[Path], Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -344,7 +354,7 @@ def _read_native(
     )
     config = _object(raw["config"], "invalid native trial config")
     _need(
-        config == record.config
+        _same_team_config(config, record.config)
         and config.get("trial_name") == trial.name
         and config.get("trials_dir") == str(trial.parent),
         "native trial config mismatch",
@@ -667,7 +677,7 @@ def main(argv: list[str] | None = None) -> int:
         receipt = collect(_decode(args.private_index.read_bytes()), args.ledger)
     except ImportError:
         parser.error(
-            "use the Eval Lab Python environment with the Harbor fork on PYTHONPATH"
+            "run with the Harbor fork's Python and the Eval Lab src directory on PYTHONPATH"
         )
     except _EvidenceError as exc:
         parser.exit(2, f"confirmation_custody: {exc}\n")
