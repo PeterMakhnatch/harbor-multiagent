@@ -400,6 +400,33 @@ For a paid replication, use `views-run` instead of `views-control`. Remove `--po
 
 Audit a private job offline with `"$python" -m "$module.audit" "$private/teams" --private-views --spend-dir "$SEATLAB_SPEND_DIR"`. Add `--controls` to audit controls instead. Missing native rewards stay unknown. The public summary reader needs only Python; it does not run Docker or contact a model.
 
+#### Give just one scheduling seat the calendar helper
+
+Use this test if you can compute valid starts for one role but not both. The sender writes and revises its availability. The receiver requests 2 weekday reports and books the meeting. `sender-exact` changes only the sender's own calendar view. `receiver-exact` changes only the receiver's view. The channel rules stay fixed. The agents can send different reports.
+
+Use the same pinned tasks, interpreter, and `module` as above. Start a separate private job. The following control runs Docker but does not call a model:
+
+```sh
+mkdir -m 700 "$private/roles"
+"$python" -m "$module" role-views-control --job "$private/roles" \
+  --tasks "$private/tasks/schedule" --world w12 --arm sender-exact \
+  --policy oracle --harbor "$harbor"
+```
+
+Use a slot wrapper on shared Docker hosts. Replace `oracle` with `wrong` to check a native score of 0.
+
+**Paid replication:** use `role-views-run`, remove `--policy`, and supply `--spend-dir`. Run each world and arm only once. Use `sender-exact` first on worlds 12, 15, 16, 19, 20, and 23. Use `receiver-exact` first on the other 6. A second arm needs the first arm's completed attempt in the same job. Assign different worlds to parallel workers.
+
+Audit your native trials, then summarize the registered comparison offline:
+
+```sh
+"$python" -m "$module.audit" "$private/roles" --role-views \
+  --spend-dir "$SEATLAB_SPEND_DIR" > "$private/role-audit.json"
+python3.12 -BS -m "$module.role_summary" "$private/role-audit.json"
+```
+
+The summary preserves a verified native zero after an invalid reply. It does not treat a missing stock score as zero. Compare the 2 new arms by world, not by individual model turn. The [registered decision rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061145932) does not pool earlier teams.
+
 #### Could a different report request have helped?
 
 Use the native job you already ran. This diagnostic makes no model calls and starts no containers:

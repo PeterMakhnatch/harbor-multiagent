@@ -38,6 +38,8 @@ def _directory(job: Path, cell: _Cell) -> Path:
 
 
 def _schema(cell: _Cell) -> str:
+    if isinstance(cell, team_views.RoleCell):
+        return team_views.ROLE_SCHEMA
     return team_views.SCHEMA if isinstance(cell, team_views.Cell) else SCHEMA
 
 
@@ -47,6 +49,8 @@ def _cell_from_attempt(attempt: dict[str, Any]) -> _Cell:
         cell_type = p.Cell
     elif schema == team_views.SCHEMA:
         cell_type = team_views.Cell
+    elif schema == team_views.ROLE_SCHEMA:
+        cell_type = team_views.RoleCell
     else:
         raise ValueError("invalid_attempt_schema")
     return cell_type(attempt["world"], attempt["arm"], attempt["control"])
@@ -323,22 +327,26 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         description="Launch one native calendar notice trial."
     )
     sub = parser.add_subparsers(dest="mode", required=True)
-    for mode, variant in (
-        ("run", p),
-        ("control", p),
-        ("views-run", team_views),
-        ("views-control", team_views),
+    role_worlds = team_views.WORLDS
+    role_arms = team_views.ROLE_ARMS
+    for mode, cell_type, worlds, arms in (
+        ("run", p.Cell, p.WORLDS, p.ARMS),
+        ("control", p.Cell, p.WORLDS, p.ARMS),
+        ("views-run", team_views.Cell, team_views.WORLDS, team_views.ARMS),
+        ("views-control", team_views.Cell, team_views.WORLDS, team_views.ARMS),
+        ("role-views-run", team_views.RoleCell, role_worlds, role_arms),
+        ("role-views-control", team_views.RoleCell, role_worlds, role_arms),
     ):
         command = sub.add_parser(mode)
-        command.set_defaults(cell_type=variant.Cell)
+        command.set_defaults(cell_type=cell_type)
         command.add_argument("--job", type=Path, required=True)
         command.add_argument("--tasks", type=Path, required=True)
-        command.add_argument("--world", choices=variant.WORLDS, required=True)
-        command.add_argument("--arm", choices=variant.ARMS, required=True)
+        command.add_argument("--world", choices=worlds, required=True)
+        command.add_argument("--arm", choices=arms, required=True)
         command.add_argument(
             "--harbor", type=Path, default=Path(sys.executable).with_name("harbor")
         )
-        if mode in ("run", "views-run"):
+        if mode in ("run", "views-run", "role-views-run"):
             command.add_argument("--spend-dir", type=Path, required=True)
         else:
             command.add_argument("--policy", choices=POLICIES, required=True)

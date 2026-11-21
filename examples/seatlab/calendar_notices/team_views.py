@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from typing import override
 
 from ..visibility import calendar_packet, calendar_protocol
 from . import protocol as p
 
 WORLDS = tuple(f"w{i:02d}" for i in range(12, 24))
 ARMS = ("raw", "exact")
+ROLE_ARMS = ("sender-exact", "receiver-exact")
 SEATS = p.SEATS
 PHASES = p.PHASES
 MODEL = p.MODEL
@@ -12,6 +14,7 @@ AGENT_IMPORT = "examples.seatlab.calendar_notices.seat:PrivateViewSeat"
 AGENT_NAME = "seatlab-calendar-private-view"
 AGENT_VERSION = "1.0.0"
 SCHEMA = "seatlab.native-calendar-private-views/v1"
+ROLE_SCHEMA = "seatlab.native-calendar-role-views/v1"
 
 _VIEW_PREFIX = calendar_protocol._RULES[
     : calendar_protocol._RULES.index("Your calendar: ")
@@ -58,6 +61,35 @@ class Cell:
         return f"schedule-{self.index:03d}-talk"
 
 
+@dataclass(frozen=True, slots=True)
+class RoleCell(Cell):
+    @override
+    def __post_init__(self) -> None:
+        if (
+            self.world not in WORLDS
+            or self.arm not in ROLE_ARMS
+            or self.control not in ("live", "oracle", "wrong")
+        ):
+            raise ValueError("invalid_cell")
+
+    @property
+    @override
+    def first(self) -> str:
+        return "sender-exact" if self.index % 4 in (0, 3) else "receiver-exact"
+
+    @property
+    @override
+    def run(self) -> str:
+        mode = "" if self.control == "live" else f"ctl-{self.control}-"
+        return f"crv-{mode}{self.world}-{self.arm}"
+
+
+def _view_arm(arm: str, exact_arm: str) -> str:
+    if arm in ROLE_ARMS:
+        return "exact" if arm == exact_arm else "raw"
+    return arm
+
+
 def _view(table: calendar_packet.Table, arm: str, *, first_two: bool = False) -> str:
     if len(table) != 3:
         raise ValueError("expected_three_attendees")
@@ -77,7 +109,7 @@ def _view(table: calendar_packet.Table, arm: str, *, first_two: bool = False) ->
 
 def initial_prompt(table: calendar_packet.Table, arm: str) -> str:
     return (
-        _view(table, arm, first_two=True)
+        _view(table, _view_arm(arm, "sender-exact"), first_two=True)
         + "Find every start that fits both attendees.\n"
         + p._LIST_RULE
     )
@@ -85,7 +117,7 @@ def initial_prompt(table: calendar_packet.Table, arm: str) -> str:
 
 def revision_prompt(table: calendar_packet.Table, old: object, arm: str) -> str:
     return (
-        _view(table, arm)
+        _view(table, _view_arm(arm, "sender-exact"))
         + f"Your initial report: {p.wire({'starts': p._starts(old)})}\n"
         + "Check the initial report against all 3 attendees. Return the full "
         "revised list of starts that fit all 3 attendees, not just the changes.\n"
@@ -105,7 +137,7 @@ def pick_prompt(
     if len(days) != count or days != sorted(days):
         raise ValueError("invalid_changed_days")
     return (
-        _view(table, arm)
+        _view(table, _view_arm(arm, "receiver-exact"))
         + f"Notice from the other calendar: {p.wire(notice)}\n"
         + "The notice contains the full initial list, the number of weekdays "
         "whose list changed, and the IDs of those weekdays. A weekday changed if any "
@@ -130,7 +162,7 @@ def choice_prompt(
         if any(p._day(slot) != day for slot in starts):
             raise ValueError("opened_report_slot_on_wrong_day")
     return (
-        _view(table, arm)
+        _view(table, _view_arm(arm, "receiver-exact"))
         + f"Initial report from the other calendar: {p.wire(p._starts(old))}\n"
         + f"Opened weekday reports: {p.wire(opened)}\n"
         + "Each opened report replaces the initial list for that weekday. An empty "

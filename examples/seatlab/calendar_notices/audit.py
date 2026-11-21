@@ -29,6 +29,7 @@ from . import team_source, team_views
 
 SCHEMA = "seatlab.calendar-notice-audit/v1"
 PRIVATE_VIEWS_SCHEMA = "seatlab.calendar-private-view-audit/v1"
+ROLE_VIEWS_SCHEMA = "seatlab.calendar-role-view-audit/v1"
 _REGISTRATION = "seatlab.native-calendar-notices/v1"
 _WORLD = {
     "world_version": 2,
@@ -67,6 +68,8 @@ def _sealed(path: Path) -> bytes:
 
 
 def _schema(cell: Cell) -> str:
+    if isinstance(cell, team_views.RoleCell):
+        return team_views.ROLE_SCHEMA
     return team_views.SCHEMA if isinstance(cell, team_views.Cell) else _REGISTRATION
 
 
@@ -958,21 +961,39 @@ def _counts(rows: list[Row]) -> Row:
 
 
 def report(
-    job: Path, spend_dir: Path, *, controls: bool = False, private_views: bool = False
+    job: Path,
+    spend_dir: Path,
+    *,
+    controls: bool = False,
+    private_views: bool = False,
+    role_views: bool = False,
 ) -> Row:
+    if private_views and role_views:
+        raise ValueError("conflicting_view_modes")
     job = job.expanduser().absolute()
-    study = team_views if private_views else p
-    prefix = "cpv-" if private_views else "cdn-"
+    if role_views:
+        cell_type, world_ids, arms = (
+            team_views.RoleCell,
+            team_views.WORLDS,
+            team_views.ROLE_ARMS,
+        )
+        prefix, schema = "crv-", ROLE_VIEWS_SCHEMA
+    elif private_views:
+        cell_type, world_ids, arms = team_views.Cell, team_views.WORLDS, team_views.ARMS
+        prefix, schema = "cpv-", PRIVATE_VIEWS_SCHEMA
+    else:
+        cell_type, world_ids, arms = p.Cell, p.WORLDS, p.ARMS
+        prefix, schema = "cdn-", SCHEMA
     worlds = (
         None
-        if private_views
+        if private_views or role_views
         else calendar_packet.load(calendar_packet.PACKET, calendar_packet.PACKET_SHA256)
     )
     control_types = ("oracle", "wrong") if controls else ("live",)
     cells = [
-        study.Cell(world, arm, control)
-        for world in study.WORLDS
-        for arm in study.ARMS
+        cell_type(world, arm, control)
+        for world in world_ids
+        for arm in arms
         for control in control_types
     ]
     if controls:
@@ -1004,12 +1025,11 @@ def report(
     ]
     _reconcile(rows)
     return {
-        "schema": PRIVATE_VIEWS_SCHEMA if private_views else SCHEMA,
+        "schema": schema,
         "mode": "controls" if controls else "live",
         "cells": rows,
         "counts": {
-            arm: _counts([row for row in rows if row["arm"] == arm])
-            for arm in study.ARMS
+            arm: _counts([row for row in rows if row["arm"] == arm]) for arm in arms
         },
         "ledger_error": ledger_error,
         "unassigned_calls": sum(call["run"] not in run_ids for call in selected),
@@ -1024,7 +1044,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("job", type=Path)
     parser.add_argument("--spend-dir", type=Path, required=True)
     parser.add_argument("--controls", action="store_true")
-    parser.add_argument("--private-views", action="store_true")
+    views = parser.add_mutually_exclusive_group()
+    views.add_argument("--private-views", action="store_true")
+    views.add_argument("--role-views", action="store_true")
     args = parser.parse_args(argv)
     print(
         json.dumps(
@@ -1033,6 +1055,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.spend_dir,
                 controls=args.controls,
                 private_views=args.private_views,
+                role_views=args.role_views,
             ),
             sort_keys=True,
         )
