@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sqlite3
 import stat
 import subprocess
@@ -54,10 +55,64 @@ def _checked_study(path: Path) -> Path:
     return teams._root(path)
 
 
+def _source_git(root: Path, env: dict[str, str], *args: str) -> bytes:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(root), "--git-dir=.git", *args],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        raise ValueError("historical seat sources are unavailable") from None
+
+
+def _seat_source_bytes(
+    spec: Experiment, source_revision: str | None
+) -> dict[str, bytes]:
+    seatlab_dir = Path(__file__).resolve().parent
+    paths = {
+        **{name: seatlab_dir / spec.tag / name for name in spec.seat_sources},
+        **{f"shared/{name}": seatlab_dir / name for name in spec.shared_seat_sources},
+    }
+    if source_revision is None:
+        return {name: path.read_bytes() for name, path in paths.items()}
+    if re.fullmatch(r"[0-9a-f]{40}", source_revision) is None:
+        raise ValueError("source revision must be a full lowercase commit ID")
+    root = seatlab_dir.parent.parent
+    env = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    env.update(
+        GIT_ALLOW_PROTOCOL="",
+        GIT_NO_LAZY_FETCH="1",
+        GIT_NO_REPLACE_OBJECTS="1",
+    )
+    if (
+        _source_git(root, env, "rev-parse", "--show-object-format") != b"sha1\n"
+        or _source_git(root, env, "cat-file", "-t", source_revision) != b"commit\n"
+    ):
+        raise ValueError("source revision must identify a local SHA-1 commit")
+    sources: dict[str, bytes] = {}
+    for name, path in paths.items():
+        ref = f"{source_revision}:{path.relative_to(root).as_posix()}"
+        if _source_git(root, env, "cat-file", "-t", ref) != b"blob\n":
+            raise ValueError("historical seat source is not a blob")
+        sources[name] = _source_git(root, env, "cat-file", "blob", ref)
+    return sources
+
+
 def _plan(
-    spec: Experiment, cells: list[Record], transport: str, config_sha: str | None
+    spec: Experiment,
+    cells: list[Record],
+    transport: str,
+    config_sha: str | None,
+    *,
+    source_revision: str | None = None,
 ) -> Record:
-    seat_dir = Path(__file__).with_name(spec.tag)
     return {
         "schema": spec.schema("plan"),
         "transport": transport,
@@ -65,15 +120,7 @@ def _plan(
         "episodes": _EPISODES,
         "max_direct_calls": spec.max_calls(cells) if transport == "direct" else 0,
         "sources": _stamps(panel._snapshot("arrival")),
-        "seat_sources": _stamps(
-            {
-                **{name: (seat_dir / name).read_bytes() for name in spec.seat_sources},
-                **{
-                    f"shared/{name}": (seat_dir.parent / name).read_bytes()
-                    for name in spec.shared_seat_sources
-                },
-            }
-        ),
+        "seat_sources": _stamps(_seat_source_bytes(spec, source_revision)),
         "cells": cells,
     }
 
@@ -135,12 +182,17 @@ def _register(
 
 
 def _load(
-    spec: Experiment, cells: list[Record], root: Path
+    spec: Experiment,
+    cells: list[Record],
+    root: Path,
+    *,
+    source_revision: str | None = None,
 ) -> tuple[Record, Record | None]:
     teams._check_path(root, 0o700, directory=True)
     teams._check_path(root / "cells", 0o700, directory=True)
     record = files._object(teams._read_sealed(root / "register.json"))
-    transport = record["plan"]["transport"]
+    registered_plan: Record = record["plan"]
+    transport = registered_plan["transport"]
     spend_directory = None
     if transport == "commands":
         digest = sha256(teams._read_sealed(root / "commands.json")).hexdigest()
@@ -156,8 +208,10 @@ def _load(
             raise ValueError("original direct spend directory unavailable")
     else:
         raise ValueError("unsupported transport")
-    plan = _plan(spec, cells, transport, digest)
-    if teams._bytes(record["plan"]) != teams._bytes(plan):
+    expected_plan = _plan(
+        spec, cells, transport, digest, source_revision=source_revision
+    )
+    if teams._bytes(registered_plan) != teams._bytes(expected_plan):
         raise ValueError("registered sources or cells changed")
     keys = {cell["cell_id"] for cell in cells}
     with os.scandir(root / "cells") as entries:
@@ -167,7 +221,7 @@ def _load(
         ):
             raise ValueError("unexpected native trial claim")
     ledger = None if spend_directory is None else _ledger(spec, spend_directory, cells)
-    return plan, ledger
+    return registered_plan, ledger
 
 
 def _config(spec: Experiment, root: Path, cell: Record, transport: str) -> Record:
@@ -230,7 +284,7 @@ def _observed(
     spec: Experiment, root: Path, cell: Record, plan: Record, ledger: Record | None
 ) -> Record:
     directory = _cell_dir(root, cell)
-    row = dict(cell, state="unclaimed", outcome=None)
+    row: Record = dict(cell, state="unclaimed", outcome=None)
     if not os.path.lexists(directory):
         if _reserved(ledger, cell):
             row["state"] = "reserved_without_trial"
@@ -378,7 +432,12 @@ def _dispatch(spec: Experiment, args: argparse.Namespace) -> int:
     if args.mode == "seal":
         _register(spec, cells, root, args)
         return 0
-    plan, ledger = _load(spec, cells, root)
+    source_revision = (
+        getattr(args, "source_revision", None)
+        if args.mode in ("collect", "report")
+        else None
+    )
+    plan, ledger = _load(spec, cells, root, source_revision=source_revision)
     if args.mode in ("run", "collect"):
         cell = next((cell for cell in cells if cell["cell_id"] == args.cell), None)
         if cell is None:
@@ -430,6 +489,11 @@ def main(spec: Experiment, argv: list[str] | None = None, *, description: str) -
             )
         if mode in ("run", "collect"):
             sub.add_argument("--cell", required=True)
+        if mode in ("collect", "report"):
+            sub.add_argument(
+                "--source-revision",
+                help="Full lowercase commit ID for the registered seat source files.",
+            )
     args = cli.parse_args(argv)
     try:
         return _dispatch(spec, args)

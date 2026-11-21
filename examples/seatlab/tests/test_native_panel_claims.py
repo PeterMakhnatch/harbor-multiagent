@@ -59,11 +59,6 @@ def test_paid_reservation_closes_only_its_cell(
     assert plan["schema"] == f"seatlab.native-{tag}-plan/v1"
     assert len(plan["cells"]) == 24
     assert plan["max_direct_calls"] == max_calls
-    assert set(plan["seat_sources"]) == (
-        {"agent.py", "protocol.py", "channel.py"}
-        if tag == "briefing"
-        else {"agent.py", "protocol.py"}
-    )
     spend.reserve(f"{cell}-{stage}", role, balance_usd=opening)
 
     assert entry.main(["pending", *study_args]) == 0

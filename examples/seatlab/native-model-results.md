@@ -2,6 +2,10 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can a dispatcher help another agent decide which two reports to send?
+
+Both [briefing](replication.md#can-a-six-letter-brief-help-another-agent-prioritize-revisions) roles use a model. The dispatcher writes 6 preferred bay letters. The inventory agent can send only 2 updates. The first direct team and first subscription team both submitted all 6 optimal decisions. Both cards named all 6 preferred bays correctly. Each team produced 4 role turns. The [direct pilot ledger](results/briefing-direct-pilot-cost.json) records **$0.000348450 USD**. These 2 treated teams do not measure the effect of releasing a brief.
+
 ## Can a native dispatcher use revision notices to allocate two reads?
 
 The [native attention experiment](replication.md#can-a-change-notice-help-a-live-team-spend-two-reads) starts an inventory agent and a dispatch agent in each native trial. Both arms may open 2 of 6 current reports. The `named` arm also tells the dispatcher which of the sender's reports changed. The first named team earned 0.5 native reward. Its 2 reads covered changed reports. One changed the optimal bay. All 3 direct calls settled at **$0.000315300 USD**. This first team does not measure the treatment difference.

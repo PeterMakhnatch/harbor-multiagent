@@ -16,6 +16,7 @@ with pytest.MonkeyPatch.context() as patch:
     audit = importlib.import_module("examples.seatlab.briefing.audit")
     protocol = importlib.import_module("examples.seatlab.briefing.protocol")
     attention = importlib.import_module("examples.seatlab.attention.protocol")
+    attention_audit = importlib.import_module("examples.seatlab.attention.audit")
     native = importlib.import_module("examples.seatlab.visibility.native_pairs")
 
 _STAGES = ("inventory", "brief", "push", "decide")
@@ -207,7 +208,9 @@ def _simulate(
     ]
 
 
-def _trial(tmp_path: Path, arm: str, transport: str) -> tuple[Path, dict, dict, dict]:
+def _trial(
+    tmp_path: Path, arm: str, transport: str
+) -> tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any]]:
     cell = next(cell for cell in protocol.grid() if cell["arm"] == arm)
     direct = transport == "direct"
     config = _config(tmp_path.resolve(), cell, direct)
@@ -322,12 +325,15 @@ def test_audit_rejects_inconsistent_native_evidence(
             protocol.push_prompt(reports, seed, rep, inv["brief_seen"])
         )
     elif mutation in ("matching false selection", "wrong final prompt"):
-        opened = tuple(f"Q{i}" for i in range(1, 7) if f"Q{i}" not in inv["opened"])[:2]
+        remaining = (f"Q{i}" for i in range(1, 7) if f"Q{i}" not in inv["opened"])
+        opened = (next(remaining), next(remaining))
         if mutation == "matching false selection":
             inv["opened"] = dispatch["opened"] = list(opened)
-        view = audit.reconstructed_capsules(dossier)["dispatch"]["view"]
+        cases = attention_audit._capsule_cases(
+            audit.reconstructed_capsules(dossier)["dispatch"]
+        )
         dispatch["turns"][1]["prompt_sha256"] = _sha(
-            attention.decide_prompt(view["cases"], seed, rep, opened)
+            attention.decide_prompt(cases, seed, rep, opened)
         )
     elif mutation == "different final choice":
         final = dispatch["turns"][1]
@@ -435,7 +441,7 @@ def test_summary_reports_bounds_when_no_pair_completes() -> None:
 )
 def test_summary_rejects_unregistered_evidence(mutation: str) -> None:
     cells = list(protocol.grid())
-    rows = [
+    rows: list[dict[str, Any]] = [
         {**cell, "state": "complete", "outcome": _outcome(cell, 1)} for cell in cells
     ]
     if mutation == "wrong roster":

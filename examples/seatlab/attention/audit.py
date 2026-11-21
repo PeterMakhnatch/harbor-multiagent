@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from hashlib import sha256
 from math import fsum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .. import evidence, run_panel, seat_agent, team_report
+from ..capsule import Capsule
 from ..export_capsules import reconstructed_capsules
 from ..visibility import native_pairs
 from . import protocol
@@ -92,7 +94,7 @@ def _read_native(
 
 
 def _turn(
-    record: object, stage: str, role: str, cell_id: str, transport: str
+    raw: object, stage: str, role: str, cell_id: str, transport: str
 ) -> tuple[str, dict[str, Any]]:
     identity = {
         "stage": stage,
@@ -100,8 +102,11 @@ def _turn(
         "role": role,
         "status": "received",
     }
-    if not run_panel._config_matches(record, identity):
+    if not isinstance(raw, dict) or not run_panel._config_matches(raw, identity):
         raise ValueError("native model turn identity or stage mismatch")
+    record = cast(dict[str, Any], raw)
+    if not {"text", "response_sha256", "usage", "prompt_sha256"} <= record.keys():
+        raise ValueError("missing native model turn fields")
     text = record["text"]
     response_hash = record["response_sha256"]
     if not isinstance(text, str) or response_hash != _digest(text):
@@ -129,7 +134,7 @@ def _turn(
 
 def _seat_metadata(
     record: dict[str, Any],
-    capsule: dict[str, Any],
+    capsule: Mapping[str, object],
     role: str,
     cell_id: str,
     rows: list[dict[str, Any]],
@@ -161,6 +166,16 @@ def _seat_metadata(
     return metadata
 
 
+def _capsule_cases(capsule: Capsule) -> list[dict[str, Any]]:
+    view = capsule["view"]
+    if not isinstance(view, dict):
+        raise ValueError("invalid native capsule view")
+    cases = view.get("cases")
+    if not isinstance(cases, list) or not all(isinstance(case, dict) for case in cases):
+        raise ValueError("invalid native capsule cases")
+    return cast(list[dict[str, Any]], cases)
+
+
 def _check_prompt(turn: dict[str, Any], prompt: str) -> None:
     if turn["prompt_sha256"] != _digest(prompt):
         raise ValueError("native model prompt hash mismatch")
@@ -171,7 +186,7 @@ def _reconcile_turns(
     world: dict[str, Any],
     cell: dict[str, Any],
     transport: str,
-) -> tuple[list[str], list[dict[str, Any]]]:
+) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
     cell_id, seed, rep = cell["cell_id"], cell["seed"], cell["repetition"]
     capsules = reconstructed_capsules(world)
     inventory_rows = [
@@ -210,7 +225,7 @@ def _reconcile_turns(
     )
     _check_prompt(
         inv_turn,
-        native_pairs._prompt("inventory", capsules["inventory"]["view"]["cases"]),
+        native_pairs._prompt("inventory", _capsule_cases(capsules["inventory"])),
     )
     submitted = seat_agent._json_object(inventory_text, "inventory model")
     seat_agent._checked_submission(submitted, "inventory", _EPISODES)
@@ -220,7 +235,7 @@ def _reconcile_turns(
     ):
         raise ValueError("inventory model response differs from accepted reports")
 
-    cases = capsules["dispatch"]["view"]["cases"]
+    cases = _capsule_cases(capsules["dispatch"])
     select_text, select_turn = _turn(
         dispatch["turns"][0], "select", "dispatch", cell_id, transport
     )
@@ -240,7 +255,7 @@ def _reconcile_turns(
         != dispatch["decision_sha256"]
     ):
         raise ValueError("dispatch model response differs from accepted decisions")
-    return list(opened), [inv_turn, select_turn, decide_turn]
+    return list(opened), [inv_turn, select_turn, decide_turn], cases
 
 
 def _observation_metrics(
@@ -295,7 +310,7 @@ def inspect_trial(
         ):
             raise ValueError("native world differs from the registered world")
         records = evidence._by_role(native.get("seat_results"), "seat_results")
-        opened, turns = _reconcile_turns(records, world, cell, transport)
+        opened, turns, cases = _reconcile_turns(records, world, cell, transport)
         return {
             "trial_id": receipt["trial_id"],
             "fingerprint": receipt["fingerprint"],
@@ -310,12 +325,7 @@ def inspect_trial(
                 for grade, case in zip(score["rows"], world["cases"], strict=True)
             ],
             "opened": opened,
-            **_observation_metrics(
-                world,
-                reconstructed_capsules(world)["dispatch"]["view"]["cases"],
-                cell,
-                opened,
-            ),
+            **_observation_metrics(world, cases, cell, opened),
             "turns": turns,
         }
     except (
