@@ -232,6 +232,10 @@ python -m examples.seatlab.visibility.calendar_query_summary --study "$study"
 
 The command claims a block before the first model turn. Different workers can run distinct world/direction pairs against the same study directory. Never submit the same block twice. A failed attempt stays in the register. Keep all raw native output private. Export the sanitized register with `calendar_query_summary --study "$study" --export > native.json`. Another worker can run `calendar_query_summary --input native.json` with standard Python only. The export contains decoded slot choices, original rewards and turn hashes. It contains no raw role prompts or task credentials.
 
+**Export before you move the study.** The full native audit checks the original task and trial directory against the recorded configuration. A relocated private study can still supply the original team UUID and reward to stock Eval Lab. It cannot pass the full native audit at a different address. Never edit recorded paths to make it pass.
+
+To check an exported submission away from the original machine, run `python3.12 -S -m examples.seatlab.visibility.calendar_query_summary --input native.json --verify-slots`. The check computes legal starts from both seats' public availability tables and compares each decoded submission with its recorded native reward. It cannot verify an undecoded submission or authenticate an unknown source archive. The service check binds model replies separately.
+
 ##### Split the native register between two workers
 
 Give one worker direction 0 and one direction 1. Both use the same private study directory. Each worker takes only unstarted pairs from its own direction. Never queue an existing partial or invalid pair as a replacement. The register does not select worlds by reward. The original task runs at most one native team at a time in each worker. Apply the host-wide Docker limit if other projects also run trials.
@@ -252,7 +256,7 @@ rm "$queue"
 Eval Lab stays a consumer. Use a Python environment with Eval Lab installed. Point `$study` at your **private native run directory**, not the public result files. Use the archive exported from that directory. This reads every scored arm through `evallab.results.load_trial`. It checks the trial UUID and team reward against the archive. Unknown scores stay unknown. No API call, ingestion, catalog, or Eval Lab write is needed.
 
 ```bash
-"$EVALLAB_PYTHON" -B - "$study" native-archive.json <<'PY'
+"$EVALLAB_PYTHON" -B - "$study" native.json <<'PY'
 import hashlib, json, sys
 from pathlib import Path
 from evallab.results import load_trial

@@ -427,6 +427,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--json", action="store_true", help="Emit the complete analysis."
     )
     output.add_argument(
+        "--verify-slots",
+        action="store_true",
+        help="Independently score decoded submissions using the pinned public calendars.",
+    )
+    output.add_argument(
         "--export",
         action="store_true",
         help="From --study, export verified native scores, decoded slot choices and turn commitments, not private task files.",
@@ -441,9 +446,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             else _read_archive(args.input)
         )
         result = analyze(rows)
+        if args.verify_slots:
+            from .calendar_query_worlds import verify_slots
+
+            result = verify_slots(rows)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
-    if args.export or args.json:
+    if args.export or args.json or args.verify_slots:
         value = {"schema": _SCHEMA, "rows": rows} if args.export else result
         print(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False))
     else:
