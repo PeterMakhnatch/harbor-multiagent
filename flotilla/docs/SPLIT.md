@@ -372,3 +372,35 @@ facts and no channel, both seats claimed the surplus and no deal fit. In talk, t
 before they claimed: the strong seat named its outside option as its claim, and the weak seat took the rest. The
 channel let them coordinate who gets the surplus; the information alone did not. Limits: 6 instances, 1 model;
 open ran after sp3 on the same morning, not in a randomized order.
+
+## 13. Propose arm (sp5): pre-registration
+
+Written and committed before the first paid trial of this run (2026-11-21). Peter approved the run. The analysis is
+`docs/results/scripts/split_trials.py <jobs> 'sp5-??????' sp5`, committed with this section.
+
+**Question.** Section 12 found that public outside options alone gave no deals, and inferred that talk works by
+letting the seats agree on one split. Does a binding-proposal procedure without free text (arm `propose`, section
+2: no messages, private outside options, seats post public splits and accept the other seat's) give the same
+deals as talk?
+
+**Design.** The 6 instances of sp3 (`build_tasks.py --family split --difficulty b --seats 2 --instances 0-5
+--conditions propose --round-seconds 240 --max-messages-per-round 2 --seed-of .flotilla-local/tasks/sp3/split`; the
+same pots and outside options, checked), arm `propose` only, world version 8: 6 trials, 1 attempt each, 1 at a time
+in instance order, seats and settings as in sp3. Controls: the sp3 silent and talk trials of the same instances
+(earlier the same day; paired by instance, not randomized in time). Before the run: `qa.py` 0 FAIL (done: PASS)
+and an oracle check of instance 0 (the oracle claims half; reward at least (P - 1) / P).
+
+**Primary test (pass or fail).** Exact McNemar test on `deal`, propose against sp3 silent, over the 6 instances.
+PASS: b > c and p <= 0.05, which needs a deal in all 6 propose trials (sp3 silent had 0). FAIL: otherwise; the
+report then gives the number of propose deals.
+
+**Validity test (pass or fail).** 6 of 6 trials valid, missed seat-rounds (not passes) at most 10%, real cost at
+most $0.40.
+
+**Reported, no test.** Per instance: deal, deal round, `via` (proposal or claim), efficiency against silent and
+talk; the strong seat's share of the surplus (talk: almost 0); number of proposals and acceptances; who proposed
+the accepted split.
+
+**Budget.** At most $0.40 of real cost from tokens. DeepSeek's peak price (double) applies 01:00-04:00 and
+06:00-10:00 UTC Monday to Friday; this run is on Saturday, so the off-peak price applies. No new trial starts when
+the spend plus $0.10 passes $0.40, or when the balance is below $3.50 (balance before: $4.69).

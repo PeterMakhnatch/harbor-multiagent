@@ -28,7 +28,7 @@ def _load(name: str, path: Path):
 SPLIT = _load("split", HERE.parents[3] / "games" / "split.py")
 WAVE = _load("wave", HERE.parent / "commons_wave.py")  # trial reading and the token price
 MAX_MISSED = 0.10
-PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40), "sp3": (12, 0.70), "sp4": (6, 0.40)}  # plan -> (trials, cost cap $)
+PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40), "sp3": (12, 0.70), "sp4": (6, 0.40), "sp5": (6, 0.40)}  # trials, cap $
 
 
 def equal_first_round_deal(row: dict) -> bool:
@@ -104,8 +104,8 @@ def load_rows(jobs: Path, pattern: str) -> list[dict]:
     return rows
 
 
-def sp4_tests(valid: list[dict], jobs: Path) -> None:
-    """Open arm (sp4) against the sp3 silent and talk trials of the same instances (same seed)."""
+def arm_tests(valid: list[dict], jobs: Path, arm: str) -> None:
+    """A new arm (sp4 open, sp5 propose) against the sp3 silent and talk trials of the same instances (same seed)."""
     earlier = [r for r in load_rows(jobs, "sp3-??????") if r["valid"]]
     by: dict[int, dict[str, dict]] = {}
     for r in [*earlier, *valid]:
@@ -113,32 +113,36 @@ def sp4_tests(valid: list[dict], jobs: Path) -> None:
     for game in sorted({r["instance"] for r in valid}):
         arms = by[game]
         print(f"instance {game}: " + ", ".join(
-            f"{arm} deal {arms[arm]['agreed']} round {arms[arm]['deal_round']} efficiency {arms[arm]['reward']:.3f}"
-            for arm in ("silent", "open", "talk") if arm in arms))
-    pairs = [arms for arms in by.values() if {"open", "silent"} <= set(arms)]
-    b = sum(arms["open"]["agreed"] and not arms["silent"]["agreed"] for arms in pairs)
-    c = sum(arms["silent"]["agreed"] and not arms["open"]["agreed"] for arms in pairs)
+            f"{name} deal {arms[name]['agreed']} round {arms[name]['deal_round']} efficiency "
+            f"{arms[name]['reward']:.3f}" for name in ("silent", arm, "talk") if name in arms))
+    pairs = [arms for arms in by.values() if {arm, "silent"} <= set(arms)]
+    b = sum(arms[arm]["agreed"] and not arms["silent"]["agreed"] for arms in pairs)
+    c = sum(arms["silent"]["agreed"] and not arms[arm]["agreed"] for arms in pairs)
     p = WAVE.exact_mcnemar(b, c)
     verdict = "INCONCLUSIVE" if len(pairs) < 6 else "PASS" if b > c and p <= 0.05 else "FAIL"
-    print(f"Primary test (open vs sp3 silent, deal): {len(pairs)} pairs, b = {b}, c = {c}, exact McNemar p = "
+    print(f"Primary test ({arm} vs sp3 silent, deal): {len(pairs)} pairs, b = {b}, c = {c}, exact McNemar p = "
           f"{p:.4f}: {verdict}")
-    talk = [by[game] for game in sorted(by) if {"open", "talk"} <= set(by[game])]
-    gaps = [arms["talk"]["reward"] - arms["open"]["reward"] for arms in talk]
-    print(f"Talk - open efficiency per instance: {[round(g, 3) for g in gaps]}"
+    talk = [by[game] for game in sorted(by) if {arm, "talk"} <= set(by[game])]
+    gaps = [arms["talk"]["reward"] - arms[arm]["reward"] for arms in talk]
+    print(f"Talk - {arm} efficiency per instance: {[round(g, 3) for g in gaps]}"
           + (f", mean {sum(gaps) / len(gaps):+.3f}" if gaps else ""))
     strong = []
     for r in valid:
         game = r["task"]["game"]
         if r["split"]["surplus_shares"]:
             strong.append(r["split"]["surplus_shares"][max(game["outside"], key=game["outside"].get)])
-    print(f"Strong seat's surplus share in open deals: {[round(s, 3) for s in strong]}")
+    print(f"Strong seat's surplus share in {arm} deals: {[round(s, 3) for s in strong]}")
+    vias = [r["split"].get("via") for r in valid if r["split"]["agreed"]]
+    if any(vias):
+        print(f"Deals by: {vias}")
 
 
 def main() -> None:
     jobs, pattern = Path(sys.argv[1]), sys.argv[2]
     plan = sys.argv[3] if len(sys.argv) > 3 else "sp1"
     planned, max_cost = PLANS[plan]
-    tests = {"sp1": sp1_tests, "sp2": sp2_tests, "sp3": sp3_tests, "sp4": lambda v: sp4_tests(v, jobs)}[plan]
+    tests = {"sp1": sp1_tests, "sp2": sp2_tests, "sp3": sp3_tests,
+             "sp4": lambda v: arm_tests(v, jobs, "open"), "sp5": lambda v: arm_tests(v, jobs, "propose")}[plan]
     rows = load_rows(jobs, pattern)
     for row in sorted(rows, key=lambda r: (r["instance"] if r["instance"] is not None else -1, r["arm"] or "")):
         game, score = row["task"]["game"], row["split"]
