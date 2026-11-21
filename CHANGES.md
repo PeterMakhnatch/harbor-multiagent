@@ -42,6 +42,7 @@ agent's.
 
 | File | What |
 |---|---|
+| `docs-mintlify/tasks/multi-agent-validity.mdx` | A validity checklist for controlled multi-agent tasks: faults found in real runs, how to check a task for each, and how to fix it. `docs-mintlify/docs.json` lists it after `tasks/multi-agent`, and `multi-agent.mdx` links to it. |
 | `src/harbor/trial/seats.py` | `SeatsTrial`, a `SingleStepTrial` with one agent per seat. It calls Harbor's trial methods where they take what a seat needs, and mirrors, per seat, the ones that hard-code the single agent (`_init_agent`, `_prepare`, `_setup_agent`, `_run_agent_phase`, `_download_role_logs`, `_sync_agent_output`). |
 | `src/harbor/environments/seat.py` | `SeatEnvironment`: one Compose service of the trial's project as a `BaseEnvironment`, over the per-service operations. Ordinary execs pass no `-u`, so Compose's `user:` applies in full; `default_user` holds that uid for agents' ownership fixes only. |
 | `docs-mintlify/tasks/multi-agent.mdx` | The task format, participants, how a run starts and ends, logs, the verifier, and the limitations. |

@@ -189,6 +189,7 @@
                   "tasks/resources",
                   "tasks/multi-container",
                   "tasks/multi-agent",
+                  "tasks/multi-agent-validity",
                   "tasks/network-policies",
                   "tasks/multi-step",
                   "tasks/separate-verifier",

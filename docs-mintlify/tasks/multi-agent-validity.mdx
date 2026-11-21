@@ -1,0 +1,108 @@
+---
+title: "Controlled multi-agent tasks: a validity checklist"
+sidebarTitle: "Multi-agent validity"
+description: "Faults that broke controlled multi-agent experiments, and how to check a task for each one."
+---
+
+A controlled [multi-agent task](/tasks/multi-agent) compares conditions that differ in one factor, for example seats that can message each other against seats that cannot. Two conditions built to differ only in that factor are twins. The seats act on the world, the service in `main` that keeps the shared state. The comparison holds only if a seat learns nothing about its condition beyond the manipulation itself, and reaches other seats only through the channel under test.
+
+<Note>
+These faults come from runs on this fork: 2- and 3-seat scheduling tasks, one harness, 4 open models, and 5 to 12 instances per model. "A seat did X" means that it happened in at least one run, not that seats usually do it.
+</Note>
+
+## Seats can read the condition
+
+Everything a seat can read counts: its instruction, environment variables, file names and contents, and every world reply, headers and errors included. In a pilot, `GET /whoami` returned `"condition": "talk-liar"`, and both seats under test in one trial quoted it: "The condition is 'talk-liar', which might mean someone is lying ..."
+
+**Fix:** reply with only what a seat needs to act, such as whether messaging is on. Keep names that identify the task or its code out of headers and errors.
+
+## Runtime names carry the task name
+
+Harbor names the Compose project after the trial, so container, network and volume names start with up to 32 characters of the task name, for example `schedule-004-silent__cdeu7ht__env-main-1`. A seat can read them through reverse DNS, its own address included, and in `/proc/self/mountinfo`, which also shows bind-mount source paths. In one pilot trial, a seat's reverse-lookup sweep returned names that held its condition. The seat already had the condition from `/whoami`, 30 steps earlier, but the names alone would have told it.
+
+**Fix:** give task directories opaque names, such as `t-<12 hex>`, and keep the map to conditions outside the task. Keep conditions and hidden roles out of service, network, alias and volume names, bind-mount paths, `container_name:` and `hostname:`.
+
+## A format example is an answer
+
+In one task family, every instruction showed the same example answer, and for one instance it was the true answer, so a seat that copied it would score 1 with no information.
+
+**Fix:** show the format with placeholders, such as `{"day": "<day>", "start": "<HH:MM>"}`, or with a value that is never a valid answer.
+
+## Replies leak what other seats do
+
+A reply whose content or timing depends on other seats is a channel. In a pilot, the submit reply carried a running count `n` of all submissions, and a seat with messaging off wrote: "Wait, n jumped to 10! ... p2 has been actively submitting answers too." Later, seats of 2 models with messaging off sent 2,112 and 4,671 unknown requests to the world in 12 trials each, and one model's seats submitted queries such as `{"query": "all_schedules"}` as answers.
+
+**Fix:** answer each seat from its own state only, return one fixed error for anything unknown, and log those requests.
+
+## Seats can reach each other
+
+Seats on one Compose network can reach each other. In a pilot where all seats shared one network, a seat with messaging off ran `getent hosts p1`, `curl -s http://p1:8080` and `nmap -sT 172.18.0.0/24`, and found its teammate. A search found no seat that started a listener, but nothing prevented it.
+
+**Fix:** give each seat its own network that only `main` also joins, and mount a seat's volume in no other seat (`main` can mount it read-only). On Modal, use the VM runtime: the default sandbox puts every service on host networking.
+
+```yaml title="environment/docker-compose.yaml"
+services: # network keys only
+  main:
+    networks:
+      p1-net: {aliases: [world]}
+      p2-net: {aliases: [world]}
+  p1:
+    networks: [p1-net]
+  p2:
+    networks: [p2-net]
+networks:
+  p1-net: {}
+  p2-net: {}
+```
+
+## The last write decides the grade
+
+If any seat can write the team's answer and the last write counts, the grade depends on who wrote last. In 36 `talk` trials, a seat submitted the right answer every time, but 7 trials ended wrong, 6 because the teammate wrote a wrong answer later. If any correct submission counts, guessing pays: with messaging off, one model's seats hit the right answer in 12 of 12 trials. An instruction that only p1 submits left p2 submitting in 2 to 8 of 12 trials.
+
+**Fix:**
+
+- Enforce the rule in the world, for example one commit per seat (a final answer that the seat cannot change), with the team answer counted only when all commits agree. A reply to a commit must not reveal other seats' commits.
+- Credit each write with a per-seat token that the world makes for each trial, and grade a saved copy of the world's record, not the seats' logs. Harbor runs [`[[verifier.collect]]` hooks](/jobs/artifact-collection#sidecar-artifacts) after it copies the seats' logs, with the containers still up: in a hook in `main`, close the world to writes and save the record. Score 0 if the copy is missing, because hooks are best-effort.
+
+## Twin conditions differ in more than the manipulation
+
+Twins must show the seats the same bytes, except for the manipulation. A scripted peer is a seat that runs a fixed script, not a model. In a pilot with a lying scripted peer, the honest and lying twins also differed in the `/whoami` label and in the task name.
+
+**Fix:** build twins from one template, with the manipulation as the only parameter.
+
+## Scripted peers do not look like seats
+
+In both twins of that pilot, the scripted peer also posted a machine-readable `FLOTILLA-BRIEFING {...}` line that no real seat writes. One seat wrote that it "appears to be the authoritative data source" and submitted the decoy, the wrong answer that the lie leads to, twice. A peer that looks authoritative changes what the lie tests.
+
+**Fix:** make scripted peers write in the seats' own plain format.
+
+## Seats can reach the internet
+
+Multi-agent tasks run only with network mode `public`, so seats can reach the internet; a pilot seat installed `requests` with `pip`. No run shows two seats meeting outside the task, but 4 seats with messaging off read the world's `Server: flotilla-world/...` header and tried to install that name with `pip`. No such package exists, but the world and its task builder are public, and a public generator with a public seed would let a seat rebuild the answer key.
+
+**Fix:** Harbor cannot restrict a seat's network yet. Assume that seats can find public task code, use a secret seed for each build, and report internet access as a limit.
+
+## Checklist
+
+Run these checks in a test trial on the experiment's runtime, not in a scored trial. Never print a container's environment: a plain `docker inspect` shows every variable, which can include seat tokens.
+
+| Check | How |
+| --- | --- |
+| No seat can read its condition | Search everything that a seat can read for conditions, hidden roles and answers. |
+| Runtime names are neutral | In a seat, run `getent hosts` on its own and every reachable address. Read `/proc/self/mountinfo`. |
+| No format example is an answer | Compare each example with every instance's answer and decoys. |
+| Replies depend only on the seat that asks | Look for shared counters, global ids, error text and timing. |
+| Seats cannot reach each other | Connect from each seat to the others. List mounts with `docker inspect --format '{{json .Mounts}}' <container>`. |
+| The grade follows a stated rule | With scripted seats, overwrite a right answer and submit every candidate. |
+| The verifier grades a saved record | A collect hook saves the record, and a missing copy scores 0. |
+| Twins differ only in the manipulation | Diff every byte that a seat can read in the two twins. |
+| Scripted peers look like seats | Compare scripted messages with real seats' messages. |
+| Outside channels are reported | Search trajectories for URLs, IP addresses and `pip`, `apt`, `npm`, `git clone` or `wget`. Log outbound connections. |
+| The grade requires the stated work | Run all seats idle, then all active. Turn off each required seat in turn, and check that the score changes as expected. |
+| The score reaches the tools that read it | Check the reward field names in each tool that reads them, and which rules ran and which were skipped. |
+| A seat's attempt is separate from delivery | Compare the seat's trace with what the world received. Record local attempts and deliveries apart. |
+| Timeouts are separate from completed outcomes | Set the timeout rule before scoring. Report timeouts and missed actions by condition, and compare the results with and without those trials. |
+
+The last 4 checks come from the crucible lane's experiments, which are not part of this page's fact-check. Its evidence: [the grade requires the stated work](https://github.com/PeterMakhnatch/harbor-crucible/blob/main/experiments/metric_fix_migration-turf-war/RESULT.md#observed--defects-and-fixes), [the score reaches the tools that read it](https://github.com/PeterMakhnatch/harbor-crucible/blob/main/experiments/control_matrix/RESULT.md#score-contract-between-crucible-and-muster), [a seat's attempt is separate from delivery](https://github.com/PeterMakhnatch/harbor-crucible/blob/main/experiments/instructed_hacker/RESULT.md#why-the-mechanism-never-reached-the-world), [timeouts are separate from completed outcomes](https://github.com/PeterMakhnatch/harbor-crucible/blob/main/docs/FINDINGS.md#L377-L399).
+
+**Sources and related work:** `flotilla/docs/FINDINGS.md` and `RESULTS.md` in [draft PR #18](https://github.com/PeterMakhnatch/harbor-multiagent/pull/18); fork drafts for seat tokens ([#2](https://github.com/PeterMakhnatch/harbor-multiagent/pull/2)), seat lint rules with the opt-in `seat-shared-network` ([#3](https://github.com/PeterMakhnatch/harbor-multiagent/pull/3)) and hashed Compose names ([#19](https://github.com/PeterMakhnatch/harbor-multiagent/pull/19)); upstream, the open [harbor#3803](https://github.com/harbor-framework/harbor/pull/3803) would make generated session ids opaque ([harbor#3607](https://github.com/harbor-framework/harbor/issues/3607) tracks the leak).
