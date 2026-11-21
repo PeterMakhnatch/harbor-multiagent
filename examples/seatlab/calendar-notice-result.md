@@ -2,6 +2,26 @@
 
 **Showing the local calendar check helped the receiver on both sets of 24 worlds. It did not establish a live team reward gain on the second set.** When the whole team runs again, the sender can change what the receiver sees.
 
+## Replay a real booking from a fresh checkout
+
+From this fork's `experiments/seatlab-live-confirmation` branch, run:
+
+```sh
+case_dir=examples/seatlab/results/open-booking/w72
+python3.12 -BS -m examples.seatlab.calendar_notices.replay_booking \
+  "$case_dir" "$case_dir/first.jsonl"
+```
+
+The command needs no Harbor installation, Docker, model key, or private archive. It checks the native input, the original first reply, and the stock grade. It then runs the booking policy against the same input. Its result is a replay, not a new team reward.
+
+We ran 8 new DeepSeek teams before making these 4 synthetic worlds public. All 8 completed the native verifier. The `lists` teams booked 1/4 meetings. The `checked` teams booked 4/4. Three worlds improved and 1 tied (exact two-sided **p = 1/4**). This small release is for testing software, not for estimating a general performance gain. Do not use these open worlds as unseen tasks.
+
+Replace `w72` with `w73`, `w74`, or `w75` to replay another checked team. All 4 supplied exactly one locally compatible reported start. The policy used that start; it never called a fallback. For another qualified case, add `--fallback /absolute/path/to/receiver` to use your own trusted receiver **on deferral only**. Without that option, a deferral uses the recorded native first reply. A replay checks the supplied artifacts against their commitments; it does not rerun Docker.
+
+The scorer and original reply intentionally contain answers. Keep both away from any worker you evaluate. To send only the checked role input, use `python3.12 -BS -m examples.seatlab.calendar_case emit "$case_dir" --view checked`. Do not give an untrusted worker filesystem access to the scorer. An external executable is not a sandbox.
+
+[Open cases](results/open-booking/) · [Pinned stock manifest](results/flotilla-schedule-open-72-75.json) · [8 native outcomes](results/calendar-open-native-72-75.json) · [32 physical charges: $0.001530534](results/calendar-open-native-72-75-cost.json) · [Study and cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063995977).
+
 ## Does checking the received reports help a live team?
 
 The receiver could open 2 revised weekday reports. It also kept the sender's old reports for the 3 unopened days. The `checked` prompt listed which reported starts still fit the receiver's own calendar. It did not add the other seat's calendar, unread revisions, or the target.

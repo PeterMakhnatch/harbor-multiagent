@@ -21,6 +21,15 @@ python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm 
 
 The [Dispatch quickstart](examples/seatlab/live-confirmation.md#give-another-receiver-one-real-dispatch-input) shows how to score a reply and divide 8 worlds among workers. Use `masked` instead of `shown` to keep all utility values and report sizes but hide the peer’s bay IDs. Only the model input goes to the worker, not the scorer or answer key.
 
+To replay a complete native booking decision, use a public synthetic calendar case. This command checks the original receiver reply and stock grade, then runs the booking policy. It needs only Python 3.12 or later:
+
+```sh
+case_dir=examples/seatlab/results/open-booking/w72
+python3.12 -BS -m examples.seatlab.calendar_notices.replay_booking "$case_dir" "$case_dir/first.jsonl"
+```
+
+The output identifies the native trial, the route, and both grades. It is **not** a new team reward. [See all 4 open cases, the native results, and how to supply your own receiver](examples/seatlab/calendar-notice-result.md#replay-a-real-booking-from-a-fresh-checkout).
+
 To compare your own harness across tasks, [send 32 real receiver inputs to independent workers](examples/seatlab/replication.md#run-your-receiver-on-2-tasks-without-installing-harbor). Each worker receives one seat’s messages. The offline scorer accepts replies in any order. It reports meeting and shipment scores separately.
 
 Have your own completed scheduling trial? [Send its final receiver input to 2 independent workers](examples/seatlab/replication.md#compare-2-workers-on-your-own-completed-scheduling-trial). Keep the answer key on the original host. The workers need neither Harbor nor an API key to use the file format.

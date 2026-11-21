@@ -8,7 +8,7 @@ import stat
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
 from typing import Literal, NoReturn, TypedDict, override
@@ -73,6 +73,8 @@ class _Capsule:
     source: dict[str, str]
     target: int
     requests: dict[str, _Request]
+    _native_reply_sha256: str = field(repr=False)
+    _native_reward: int = field(repr=False)
 
 
 def _wire(value: object) -> bytes:
@@ -195,13 +197,13 @@ def _parse_capsule(owner_data: bytes, packet: bytes) -> _Capsule:
     owner = calendar_packet._object(_json(owner_data), *_OWNER_FIELDS)
     if owner["schema"] != _SCHEMA:
         raise ValueError("unsupported capsule schema")
-    for field in (
+    for digest_field in (
         "result_sha256",
         "stock_semantics_sha256",
         "native_reply_sha256",
         "requests_sha256",
     ):
-        calendar_packet._check_digest(owner[field])
+        calendar_packet._check_digest(owner[digest_field])
     if sha256(packet).hexdigest() != owner["requests_sha256"]:
         raise ValueError("request packet digest mismatch")
     trial_uuid = owner["trial_uuid"]
@@ -237,6 +239,8 @@ def _parse_capsule(owner_data: bytes, packet: bytes) -> _Capsule:
         source={field: owner[field] for field in _PUBLIC_FIELDS},
         target=target,
         requests=requests,
+        _native_reply_sha256=owner["native_reply_sha256"],
+        _native_reward=owner["native_reward"],
     )
 
 
@@ -282,6 +286,13 @@ def _export(
     _write_capsule(out, owner, packet)
 
 
+def _reply_evidence(reply: str) -> tuple[str, str]:
+    encoded = reply.encode("utf-8")
+    if len(encoded) > _MAX_REPLY_BYTES:
+        raise ValueError("reply exceeds the byte limit")
+    return reply, sha256(encoded).hexdigest()
+
+
 def _read_replies(path: Path, capsule: _Capsule) -> dict[str, tuple[str, str]]:
     with _directory(path.parent) as directory:
         data = _read_at(directory, path.name, _MAX_PACKET_BYTES)
@@ -293,10 +304,7 @@ def _read_replies(path: Path, capsule: _Capsule) -> dict[str, tuple[str, str]]:
         case_id, commitment, reply = _worker_line(line + b"\n")
         if case_id in observed or allowed.get(case_id) != commitment:
             raise ValueError("unexpected worker ID or commitment")
-        encoded = reply.encode("utf-8")
-        if len(encoded) > _MAX_REPLY_BYTES:
-            raise ValueError("reply exceeds the byte limit")
-        observed[case_id] = (reply, sha256(encoded).hexdigest())
+        observed[case_id] = _reply_evidence(reply)
     return observed
 
 
