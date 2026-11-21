@@ -7,12 +7,13 @@ from .. import evidence, run_panel, seat_agent, team_report
 from ..attention import audit as attention
 from ..attention import protocol as attention_protocol
 from ..export_capsules import reconstructed_capsules
+from ..native_report import summarize_briefing as summarize
 from ..visibility import native_pairs
 from . import protocol
 
+__all__ = ["inspect_trial", "summarize"]
+
 _EPISODES = 6
-_ARMS = ("brief", "masked")
-_STAGES = ("inventory", "brief", "push", "decide")
 _AGENT_IMPORT = "examples.seatlab.briefing.agent:BriefingSeat"
 _AGENT_NAME = "seatlab-dispatch-briefing"
 _SEAT_SCHEMA = "seatlab.native-briefing-seat/v1"
@@ -218,50 +219,3 @@ def inspect_trial(
         raise ValueError(
             "native briefing evidence is incomplete or inconsistent"
         ) from None
-
-
-def _secondary(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
-    correct = slots = 0
-    for outcome in outcomes:
-        hits = outcome["brief_correct"]
-        if (
-            type(hits) is not int
-            or not 0 <= hits <= _EPISODES
-            or type(outcome["brief_slots"]) is not int
-            or outcome["brief_slots"] != _EPISODES
-        ):
-            raise ValueError("invalid briefing card counts")
-        correct += hits
-        slots += _EPISODES
-    return {
-        **attention._secondary(outcomes),
-        "brief_correct": correct,
-        "brief_slots": slots,
-        "brief_correct_rate": correct / slots if slots else None,
-    }
-
-
-def summarize(
-    cells: list[dict[str, Any]], rows: list[dict[str, Any]]
-) -> dict[str, Any]:
-    registered = {cell["cell_id"]: cell for cell in protocol.grid()}
-    attention._index(registered, cells, outcomes=False)
-    indexed = attention._index(registered, rows, outcomes=True)
-    scores = attention._score_index(indexed, stages=_STAGES)
-    observed = sum(score is not None for score in scores.values())
-    return {
-        "registered_cells": len(registered),
-        "observed_cells": observed,
-        "missing_cells": len(registered) - observed,
-        "primary": attention._primary(scores, arms=_ARMS),
-        "secondary": {
-            arm: _secondary(
-                [
-                    row["outcome"]
-                    for row in indexed.values()
-                    if row["arm"] == arm and row["outcome"] is not None
-                ]
-            )
-            for arm in _ARMS
-        },
-    }

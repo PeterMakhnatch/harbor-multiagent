@@ -4,7 +4,11 @@ The run measured **12 of 16 registered native Harbor trials**. In the 3 complete
 
 ## Can a dispatcher help another agent decide which two reports to send?
 
-Both [briefing](replication.md#can-a-six-letter-brief-help-another-agent-prioritize-revisions) roles use a model. The dispatcher writes 6 preferred bay letters. The inventory agent can send only 2 updates. The first direct team and first subscription team both submitted all 6 optimal decisions. Both cards named all 6 preferred bays correctly. Each team produced 4 role turns. The [direct pilot ledger](results/briefing-direct-pilot-cost.json) records **$0.000348450 USD**. These 2 treated teams do not measure the effect of releasing a brief.
+Two live agents share a strict message budget. The dispatcher writes 6 preferred bay letters. The inventory agent chooses 2 revised reports to send. Both policies generate a card. Only `brief` gives it to inventory. The final dispatcher receives the selected reports, not the card. The [register](replication.md#can-a-six-letter-brief-help-another-agent-prioritize-revisions) fixes the order and the 6 worlds before either model runs.
+
+**DeepSeek Flash:** All 24 native teams finished. Releasing the card increased the native reward by **5.56 percentage points**: 64 versus 60 optimal choices out of 72 per arm. The sender selected 24 changed reports out of 24 slots in each arm. Of these, 14 versus 13 affected the best bay. The generated cards named the dispatcher's actual top bay in 50/72 released slots and 53/72 masked slots. The card did not always encode the correct preference. This comparison does not isolate which card errors caused later decisions.
+
+The [direct report](results/briefing-direct-live.json) contains every accepted action and all 96 turn hashes. The [independent stock reader](results/briefing-direct-stock.json) matched every native reward and all 144 dispatch decisions. The [direct ledger](results/briefing-direct-cost.json) estimates **$0.007830252 USD** for all 96 calls, including the [4 pilot calls](results/briefing-direct-pilot-cost.json) at $0.000348450. No call has an unsettled reservation. These are token-price estimates, not invoice amounts.
 
 ## Can a native dispatcher use revision notices to allocate two reads?
 
