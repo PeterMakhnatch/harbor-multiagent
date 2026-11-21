@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import os
 import threading
 import time
@@ -30,15 +31,18 @@ from urllib.parse import parse_qs, urlsplit
 # Version 4: an optional rounds mode for game families (games/<game>.py, docs/COMMONS.md), on only when
 # FLOTILLA_GAME names the game module. It adds /state, /harvest and /wait and drops /submit; the
 # answer-slot families do not change.
-WORLD_VERSION = 4
+# Version 5 (review of fork PR #18, world half): the world freezes itself FLOTILLA_PLAY_SECONDS after the
+# first seat call (a seat process that outlives play cannot act); messages after a freeze get 409; the admin
+# token works on /admin/ only; JSON numbers must be finite; the world refuses a config that lets a request
+# act as the wrong seat.
+WORLD_VERSION = 5
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
 SEATS = [s for s in os.environ.get("FLOTILLA_SEATS", "p1,p2").split(",") if s]
-TOKENS = {
-    token: seat
-    for seat, token in (pair.split(":", 1) for pair in os.environ.get("FLOTILLA_TOKENS", "").split(",") if pair)
-}
+_TOKEN_PAIRS = [pair.split(":", 1) for pair in os.environ.get("FLOTILLA_TOKENS", "").split(",") if pair]
+TOKENS = {pair[1]: pair[0] for pair in _TOKEN_PAIRS if len(pair) == 2}
+PLAY_SECONDS = float(os.environ.get("FLOTILLA_PLAY_SECONDS") or 0)  # 0: no deadline of the world's own
 ADMIN = os.environ.get("FLOTILLA_ADMIN", "")
 MESSAGING = CONDITION.startswith("talk")  # talk, talk-liar, talk-warned, talk-liar-warned
 DEFAULT_MAX_TEXT = 4000
@@ -87,6 +91,7 @@ STATE: dict[str, Any] = {
     "submissions": [],  # {"n", "seat", "answer", "t"}
     "frozen": False,
     "sent": {seat: 0 for seat in SEATS},
+    "first_call": None,  # world time of the first authorized seat request
 }
 if GAME is not None:
     STATE["game"] = {
@@ -116,6 +121,30 @@ def whoami(seat: str) -> dict[str, Any]:
     """What a seat may know about the run. Never the condition's name: it would tell a seat, for
     example, that one of its teammates lies."""
     return {"seat": seat, "seats": SEATS, "messaging": MESSAGING, "limits": limits()}
+
+
+def config_problems() -> list[str]:
+    """Settings that would let a request act as the wrong seat (review of fork PR #18, M5)."""
+    tokens = [pair[1] for pair in _TOKEN_PAIRS if len(pair) == 2]
+    problems = [
+        "a seat is named admin" if "admin" in SEATS else "",
+        "a FLOTILLA_TOKENS entry is not seat:token" if any(len(pair) != 2 for pair in _TOKEN_PAIRS) else "",
+        "a seat token is empty" if any(not token for token in tokens) else "",
+        "two seats share a token" if len(set(tokens)) != len(tokens) else "",
+        "no admin token" if not ADMIN else "",
+        "the admin token is also a seat token" if ADMIN and ADMIN in tokens else "",
+        "a token names a seat that is not in FLOTILLA_SEATS" if set(TOKENS.values()) - set(SEATS) else "",
+    ]
+    return [problem for problem in problems if problem]
+
+
+def expire() -> None:
+    """Freeze the world PLAY_SECONDS after the first seat call, so that a seat process that outlives play
+    cannot change the result before the verifier freezes it (review of fork PR #18, S1). Callers hold LOCK."""
+    first = STATE["first_call"]
+    if PLAY_SECONDS and not STATE["frozen"] and first is not None and now() >= first + PLAY_SECONDS:
+        STATE["frozen"] = True
+        record("freeze", None, {"reason": "play time is over", "after_s": PLAY_SECONDS})
 
 
 def tick() -> None:
@@ -172,6 +201,13 @@ def game_view(seat: str) -> dict[str, Any]:
     }
 
 
+def _finite(text: str) -> float:
+    value = float(text)
+    if not math.isfinite(value):  # 1e999 parses as inf; the logs must stay standard JSON
+        raise ValueError(f"{text} is not a finite number")
+    return value
+
+
 def _no_constants(name: str) -> Any:
     raise ValueError(f"{name} is not standard JSON")  # NaN and Infinity would make the logs non-standard
 
@@ -226,7 +262,7 @@ class World(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             return None, "body too large"
         try:
-            body = json.loads(self.rfile.read(length) or b"{}", parse_constant=_no_constants)
+            body = json.loads(self.rfile.read(length) or b"{}", parse_constant=_no_constants, parse_float=_finite)
         except (ValueError, RecursionError):  # includes JSONDecodeError and UnicodeDecodeError
             return None, "not JSON"
         return (body, "") if isinstance(body, dict) else (None, "not a JSON object")
@@ -266,6 +302,15 @@ class World(BaseHTTPRequestHandler):
         seat = self._authorize()
         if seat is None:
             return
+        if seat == "admin" and not path.startswith("/admin/"):  # the verifier's token is not a seat
+            with LOCK:
+                record("denied", "admin", {"path": path, "reason": "the admin token is for /admin/ only"})
+            self._reply(403, {"error": "the admin token is for /admin/ only"})
+            return
+        if seat != "admin":
+            with LOCK:
+                STATE["first_call"] = now() if STATE["first_call"] is None else STATE["first_call"]
+                expire()
         if GAME is not None and seat != "admin":
             with LOCK:
                 game = STATE["game"]
@@ -340,6 +385,10 @@ class World(BaseHTTPRequestHandler):
                           f"messages are limited to {MAX_TEXT} characters")
             return
         with LOCK:
+            if STATE["frozen"]:  # review of fork PR #18, M2: a frozen world takes no more evidence
+                record("late", seat, {"path": "/messages", "chars": len(text)})
+                self._reply(409, {"error": "play has ended; the world is frozen"})
+                return
             if GAME is not None and MAX_MESSAGES_PER_ROUND:
                 tick()
                 key = f"{seat}:{STATE['game']['round']}"
@@ -438,6 +487,8 @@ class World(BaseHTTPRequestHandler):
 
 def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
     """Bind the server, open the logs and record the start event; the caller runs serve_forever()."""
+    if problems := config_problems():
+        raise SystemExit(f"world config refused: {'; '.join(problems)}")
     server = ThreadingHTTPServer((host, port), World)
     LOGS.mkdir(parents=True, exist_ok=True)
     for name in ("events.jsonl", "messages.jsonl"):

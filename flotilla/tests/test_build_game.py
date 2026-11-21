@@ -34,6 +34,7 @@ def test_a_game_build_writes_round_tasks_with_the_secret_only_in_the_world(tmp_p
         world = spec["services"]["main"]["environment"]
         assert world["FLOTILLA_GAME"] == "/world/family.py" and world["FLOTILLA_GAME_PARAMS"] == "/world/task.json"
         assert world["FLOTILLA_ROUND_SECONDS"] == "90.0" and world["FLOTILLA_MAX_MESSAGES_PER_ROUND"] == "2"
+        assert world["FLOTILLA_PLAY_SECONDS"] == "1020.0"  # the world freezes itself at the agent timeout
         for seat in data["seats"]:
             briefing = json.loads(spec["services"][seat]["environment"]["SEAT_BRIEFING"])
             assert "rounds" not in briefing and briefing["players"] == data["seats"]

@@ -30,6 +30,17 @@ def call(method: str, path: str) -> dict[str, Any]:
         return json.load(response)
 
 
+EVENTS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world")) / "events.jsonl"
+
+
+def world_restarts() -> int:
+    """Start events after the first: a restarted world lost its in-memory state, so its score is not evidence
+    (review of fork PR #18, S2)."""
+    if not EVENTS.is_file():
+        return 0
+    return max(0, sum('"kind": "start"' in line for line in EVENTS.read_text().splitlines()) - 1)
+
+
 def load_family(path: Path) -> Any:
     spec = importlib.util.spec_from_file_location("family", path)
     if spec is None or spec.loader is None:
@@ -49,6 +60,8 @@ def score_game_task(task: dict[str, Any], game: Any) -> None:
     except OSError as exc:  # the world died: score no round
         state, error = {"game": {"log": []}, "messages": []}, f"world unreachable: {type(exc).__name__}"
     log = (state.get("game") or {}).get("log") or []
+    if (restarts := world_restarts()) and error is None:
+        error = f"the world restarted {restarts} time(s) during play; its state was lost"
     try:
         result = game.score_game(task["game"], log)
     except Exception as exc:  # noqa: BLE001 - a log the scorer cannot read earns nothing; the error is kept
@@ -86,6 +99,8 @@ def main() -> None:
         error = None
     except OSError as exc:  # the world died: no answer can be trusted
         state, error = {"submissions": [], "messages": []}, f"world unreachable: {type(exc).__name__}"
+    if (restarts := world_restarts()) and error is None:
+        error = f"the world restarted {restarts} time(s) during play; its state was lost"
     submissions = state.get("submissions") or []
     final = submissions[-1] if submissions else None
     try:

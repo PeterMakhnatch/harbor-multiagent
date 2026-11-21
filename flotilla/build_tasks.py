@@ -494,7 +494,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 )
             (env / "docker-compose.yaml").write_text(
                 compose(condition, seats, tokens, admin, briefings, max_text, max_messages,
-                        world_env=game_env if game else None)
+                        world_env=(game_env if game else {}) | {"FLOTILLA_PLAY_SECONDS": str(play_timeout)})
             )
             (env / "Dockerfile").write_text(MAIN_DOCKERFILE)
             (env / "player" / "Dockerfile").write_text(PLAYER_DOCKERFILE)

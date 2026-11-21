@@ -273,6 +273,15 @@ with agent, model, usage, exceptions; `verifier_result.rewards.reward`),
 task folder's `task.toml` or the build's `manifest.json` (section 2): keep the manifest with the jobs
 when the task folders are removed.
 
+## 9a. World version 5 (review of fork PR #18, world half)
+
+The world freezes itself `FLOTILLA_PLAY_SECONDS` (the task's agent timeout) after the first seat call, so a
+seat process that outlives play cannot change the result before the verifier freezes it. After a freeze,
+`/submit`, `/messages` and `/harvest` answer 409 and log a `late` event. The admin token works on `/admin/`
+only. JSON numbers must be finite. The world refuses to start when a seat is named `admin`, a token is empty,
+shared, unknown or equal to the admin token, or there is no admin token. The verifier reports an error when
+`events.jsonl` has more than one `start` event: a restarted world lost its in-memory state.
+
 ## 10. Game families (world version 4, rounds mode)
 
 A game family (`games/<game>.py`, first `commons`, see `docs/COMMONS.md`) has no answer key. The world
