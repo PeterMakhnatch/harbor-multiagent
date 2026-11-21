@@ -1,0 +1,1411 @@
+{
+  "across_arms_dispatch_choices": {
+    "changed_decisions": 19,
+    "complete_comparisons": 11,
+    "matched_decisions": 44,
+    "scheduled_comparisons": 12
+  },
+  "cells": [
+    {
+      "attempted": true,
+      "cell_id": "s3101-r0-fresh",
+      "condition": "fresh",
+      "native_score": null,
+      "pairing": "MM",
+      "reason": "receipt_missing",
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": null,
+          "returned_model": null
+        },
+        "inventory": {
+          "requested_model": null,
+          "returned_model": null
+        }
+      },
+      "seed": 3101,
+      "status": "incomplete"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r0-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3101,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r1-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3101,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r1-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3101,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r2-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3101,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r2-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3101,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r0-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3103,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r0-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3103,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r1-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3103,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r1-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3103,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r2-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3103,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r2-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3103,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r0-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3109,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r0-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3109,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r1-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3109,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r1-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3109,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r2-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3109,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r2-silent",
+      "condition": "silent",
+      "native_score": 0.5,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3109,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r0-silent",
+      "condition": "silent",
+      "native_score": 0.75,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3119,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r0-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 0,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3119,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r1-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3119,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r1-silent",
+      "condition": "silent",
+      "native_score": 0.75,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 1,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3119,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r2-silent",
+      "condition": "silent",
+      "native_score": 0.75,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3119,
+      "status": "valid"
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r2-fresh",
+      "condition": "fresh",
+      "native_score": 1.0,
+      "pairing": "MM",
+      "reason": null,
+      "repetition": 2,
+      "seats": {
+        "dispatch": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        },
+        "inventory": {
+          "requested_model": "deepseek-flash",
+          "returned_model": "deepseek-flash"
+        }
+      },
+      "seed": 3119,
+      "status": "valid"
+    }
+  ],
+  "counts": {
+    "attempted": 24,
+    "complete_pairs": 11,
+    "incomplete": 1,
+    "scheduled": 24,
+    "scheduled_pairs": 12,
+    "unattempted": 0,
+    "valid": 23
+  },
+  "effect": {
+    "contrast": "fresh_minus_silent_native_score",
+    "equal_seed_weight_mean": 0.4375,
+    "seed_blocks": [
+      {
+        "complete_pairs": 2,
+        "fresh_minus_silent": 0.5,
+        "seed": 3101
+      },
+      {
+        "complete_pairs": 3,
+        "fresh_minus_silent": 0.5,
+        "seed": 3103
+      },
+      {
+        "complete_pairs": 3,
+        "fresh_minus_silent": 0.5,
+        "seed": 3109
+      },
+      {
+        "complete_pairs": 3,
+        "fresh_minus_silent": 0.25,
+        "seed": 3119
+      }
+    ]
+  },
+  "episodes_per_cell": 4,
+  "hash_basis": {
+    "inventory_decision_and_both_prompts_and_views": "native_runner_attested_in_first_attempt_receipt",
+    "world_and_dispatch_decision": "recomputed"
+  },
+  "independent_task_seeds": 4,
+  "pairs": [
+    {
+      "dispatch_choices": null,
+      "fresh_cell": "s3101-r0-fresh",
+      "fresh_minus_silent": null,
+      "fresh_score": null,
+      "fresh_status": "incomplete",
+      "repetition": 0,
+      "seed": 3101,
+      "silent_cell": "s3101-r0-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3101-r1-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 1,
+      "seed": 3101,
+      "silent_cell": "s3101-r1-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3101-r2-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 2,
+      "seed": 3101,
+      "silent_cell": "s3101-r2-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3103-r0-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 0,
+      "seed": 3103,
+      "silent_cell": "s3103-r0-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3103-r1-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 1,
+      "seed": 3103,
+      "silent_cell": "s3103-r1-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3103-r2-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 2,
+      "seed": 3103,
+      "silent_cell": "s3103-r2-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3109-r0-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 0,
+      "seed": 3109,
+      "silent_cell": "s3109-r0-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3109-r1-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 1,
+      "seed": 3109,
+      "silent_cell": "s3109-r1-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 2,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3109-r2-fresh",
+      "fresh_minus_silent": 0.5,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 2,
+      "seed": 3109,
+      "silent_cell": "s3109-r2-silent",
+      "silent_score": 0.5,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 1,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3119-r0-fresh",
+      "fresh_minus_silent": 0.25,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 0,
+      "seed": 3119,
+      "silent_cell": "s3119-r0-silent",
+      "silent_score": 0.75,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 1,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3119-r1-fresh",
+      "fresh_minus_silent": 0.25,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 1,
+      "seed": 3119,
+      "silent_cell": "s3119-r1-silent",
+      "silent_score": 0.75,
+      "silent_status": "valid"
+    },
+    {
+      "dispatch_choices": {
+        "changed_decisions": 1,
+        "matched_decisions": 4
+      },
+      "fresh_cell": "s3119-r2-fresh",
+      "fresh_minus_silent": 0.25,
+      "fresh_score": 1.0,
+      "fresh_status": "valid",
+      "repetition": 2,
+      "seed": 3119,
+      "silent_cell": "s3119-r2-silent",
+      "silent_score": 0.75,
+      "silent_status": "valid"
+    }
+  ],
+  "published_model_revision": "DeepSeek-V4.1-Flash-1017",
+  "registered_model": "deepseek-flash",
+  "schema": "seatlab.visibility-native-pair-report/v1",
+  "within_arm_dispatch_choices": {
+    "fresh": {
+      "changed_decisions": 0,
+      "complete_comparisons": 10,
+      "matched_decisions": 40,
+      "scheduled_comparisons": 12
+    },
+    "silent": {
+      "changed_decisions": 0,
+      "complete_comparisons": 12,
+      "matched_decisions": 48,
+      "scheduled_comparisons": 12
+    }
+  },
+  "within_arm_repeats": [
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": null,
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": null,
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "fresh",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 1,
+        "matched_decisions": 4,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 2,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 2,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 2,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 2,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 2,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 2,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3101,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 2,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "silent",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3101,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "fresh",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3103,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "silent",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3103,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "fresh",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3109,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "silent",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3109,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "fresh",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3119,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    },
+    {
+      "comparisons": [
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            1
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            0,
+            2
+          ]
+        },
+        {
+          "dispatch_choices": {
+            "changed_decisions": 0,
+            "matched_decisions": 4
+          },
+          "repetitions": [
+            1,
+            2
+          ]
+        }
+      ],
+      "condition": "silent",
+      "dispatch_choices": {
+        "changed_decisions": 0,
+        "complete_comparisons": 3,
+        "matched_decisions": 12,
+        "scheduled_comparisons": 3
+      },
+      "evidence_hashes": {
+        "dispatch": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        },
+        "inventory": {
+          "decision_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "prompt_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          },
+          "view_sha256": {
+            "distinct": 1,
+            "observations": 3,
+            "status": "identical"
+          }
+        }
+      },
+      "seed": 3119,
+      "world_fingerprint": {
+        "distinct": 1,
+        "observations": 3,
+        "status": "identical"
+      }
+    }
+  ]
+}

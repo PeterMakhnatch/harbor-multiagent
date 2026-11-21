@@ -1,0 +1,357 @@
+{
+  "population": "e1-boxes-behavior",
+  "matching": "source-task-instance",
+  "weighting": "equal-instance",
+  "repeat_definition": "peer-only-plus-both",
+  "attempts_per_instance": 3,
+  "arms": {
+    "e1/indep-3": {
+      "native_trials": 30,
+      "mean_reward": 0.515,
+      "mean_cross_seat_repeat_share": 0.39822866344605473,
+      "relations": {
+        "accepted_opens": 806,
+        "cross_seat_repeats": 321,
+        "own": 0,
+        "peer_only": 321,
+        "both": 0
+      },
+      "instances": [
+        {
+          "instance": 1,
+          "trials": 3,
+          "mean_reward": 0.6,
+          "mean_cross_seat_repeat_share": 0.32796564680622653,
+          "reward_dispersion": [
+            0.15,
+            0.5,
+            0.65,
+            0.65
+          ]
+        },
+        {
+          "instance": 2,
+          "trials": 3,
+          "mean_reward": 0.48333333333333334,
+          "mean_cross_seat_repeat_share": 0.4444444444444444,
+          "reward_dispersion": [
+            0.25,
+            0.35,
+            0.5,
+            0.6
+          ]
+        },
+        {
+          "instance": 3,
+          "trials": 3,
+          "mean_reward": 0.5333333333333333,
+          "mean_cross_seat_repeat_share": 0.4074074074074074,
+          "reward_dispersion": [
+            0.3,
+            0.35,
+            0.6,
+            0.65
+          ]
+        },
+        {
+          "instance": 4,
+          "trials": 3,
+          "mean_reward": 0.5,
+          "mean_cross_seat_repeat_share": 0.41975308641975306,
+          "reward_dispersion": [
+            0.15,
+            0.45,
+            0.45,
+            0.6
+          ]
+        },
+        {
+          "instance": 5,
+          "trials": 3,
+          "mean_reward": 0.48333333333333334,
+          "mean_cross_seat_repeat_share": 0.3950617283950617,
+          "reward_dispersion": [
+            0.35,
+            0.3,
+            0.5,
+            0.65
+          ]
+        },
+        {
+          "instance": 6,
+          "trials": 3,
+          "mean_reward": 0.4666666666666667,
+          "mean_cross_seat_repeat_share": 0.4567901234567901,
+          "reward_dispersion": [
+            0.1,
+            0.4,
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "instance": 7,
+          "trials": 3,
+          "mean_reward": 0.6166666666666667,
+          "mean_cross_seat_repeat_share": 0.38271604938271603,
+          "reward_dispersion": [
+            0.15,
+            0.55,
+            0.6,
+            0.7
+          ]
+        },
+        {
+          "instance": 8,
+          "trials": 3,
+          "mean_reward": 0.5166666666666667,
+          "mean_cross_seat_repeat_share": 0.38271604938271603,
+          "reward_dispersion": [
+            0.4,
+            0.3,
+            0.55,
+            0.7
+          ]
+        },
+        {
+          "instance": 9,
+          "trials": 3,
+          "mean_reward": 0.45,
+          "mean_cross_seat_repeat_share": 0.3950617283950617,
+          "reward_dispersion": [
+            0.25,
+            0.3,
+            0.5,
+            0.55
+          ]
+        },
+        {
+          "instance": 10,
+          "trials": 3,
+          "mean_reward": 0.5,
+          "mean_cross_seat_repeat_share": 0.37037037037037035,
+          "reward_dispersion": [
+            0.2,
+            0.4,
+            0.5,
+            0.6
+          ]
+        }
+      ]
+    },
+    "e1/team-3": {
+      "native_trials": 30,
+      "mean_reward": 0.8566666666666667,
+      "mean_cross_seat_repeat_share": 0.18101630950906314,
+      "relations": {
+        "accepted_opens": 791,
+        "cross_seat_repeats": 146,
+        "own": 0,
+        "peer_only": 146,
+        "both": 0
+      },
+      "instances": [
+        {
+          "instance": 1,
+          "trials": 3,
+          "mean_reward": 0.8333333333333334,
+          "mean_cross_seat_repeat_share": 0.21202361782071927,
+          "reward_dispersion": [
+            0.3,
+            0.7,
+            0.8,
+            1.0
+          ]
+        },
+        {
+          "instance": 2,
+          "trials": 3,
+          "mean_reward": 0.9166666666666666,
+          "mean_cross_seat_repeat_share": 0.1517197241834923,
+          "reward_dispersion": [
+            0.25,
+            0.75,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "instance": 3,
+          "trials": 3,
+          "mean_reward": 0.9666666666666667,
+          "mean_cross_seat_repeat_share": 0.06172839506172839,
+          "reward_dispersion": [
+            0.1,
+            0.9,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "instance": 4,
+          "trials": 3,
+          "mean_reward": 0.9166666666666666,
+          "mean_cross_seat_repeat_share": 0.09975308641975308,
+          "reward_dispersion": [
+            0.15,
+            0.85,
+            0.9,
+            1.0
+          ]
+        },
+        {
+          "instance": 5,
+          "trials": 3,
+          "mean_reward": 0.7,
+          "mean_cross_seat_repeat_share": 0.2839506172839506,
+          "reward_dispersion": [
+            0.15,
+            0.65,
+            0.65,
+            0.8
+          ]
+        },
+        {
+          "instance": 6,
+          "trials": 3,
+          "mean_reward": 0.7833333333333333,
+          "mean_cross_seat_repeat_share": 0.2962962962962963,
+          "reward_dispersion": [
+            0.1,
+            0.75,
+            0.75,
+            0.85
+          ]
+        },
+        {
+          "instance": 7,
+          "trials": 3,
+          "mean_reward": 0.9166666666666666,
+          "mean_cross_seat_repeat_share": 0.13679012345679012,
+          "reward_dispersion": [
+            0.2,
+            0.8,
+            0.95,
+            1.0
+          ]
+        },
+        {
+          "instance": 8,
+          "trials": 3,
+          "mean_reward": 0.9666666666666667,
+          "mean_cross_seat_repeat_share": 0.09876543209876543,
+          "reward_dispersion": [
+            0.1,
+            0.9,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "instance": 9,
+          "trials": 3,
+          "mean_reward": 0.75,
+          "mean_cross_seat_repeat_share": 0.2345679012345679,
+          "reward_dispersion": [
+            0.3,
+            0.6,
+            0.75,
+            0.9
+          ]
+        },
+        {
+          "instance": 10,
+          "trials": 3,
+          "mean_reward": 0.8166666666666667,
+          "mean_cross_seat_repeat_share": 0.2345679012345679,
+          "reward_dispersion": [
+            0.1,
+            0.75,
+            0.85,
+            0.85
+          ]
+        }
+      ]
+    }
+  },
+  "talk": {
+    "trials": 30,
+    "seats": 90,
+    "trials_with_peer_fetch": 30,
+    "seats_with_peer_fetch": 90,
+    "before_first_peer_fetch": {
+      "accepted_opens": 163,
+      "cross_seat_repeats": 26,
+      "own": 0,
+      "peer_only": 26,
+      "both": 0
+    },
+    "no_peer_fetch": {
+      "accepted_opens": 0,
+      "cross_seat_repeats": 0,
+      "own": 0,
+      "peer_only": 0,
+      "both": 0
+    },
+    "after_first_peer_fetch": {
+      "accepted_opens": 628,
+      "cross_seat_repeats": 120,
+      "own": 0,
+      "peer_only": 120,
+      "both": 0
+    },
+    "early_late": {
+      "early": {
+        "before": {
+          "accepted_opens": 155,
+          "cross_seat_repeats": 19,
+          "own": 0,
+          "peer_only": 19,
+          "both": 0
+        },
+        "no-fetch": {
+          "accepted_opens": 0,
+          "cross_seat_repeats": 0,
+          "own": 0,
+          "peer_only": 0,
+          "both": 0
+        },
+        "after": {
+          "accepted_opens": 235,
+          "cross_seat_repeats": 28,
+          "own": 0,
+          "peer_only": 28,
+          "both": 0
+        }
+      },
+      "late": {
+        "before": {
+          "accepted_opens": 8,
+          "cross_seat_repeats": 7,
+          "own": 0,
+          "peer_only": 7,
+          "both": 0
+        },
+        "no-fetch": {
+          "accepted_opens": 0,
+          "cross_seat_repeats": 0,
+          "own": 0,
+          "peer_only": 0,
+          "both": 0
+        },
+        "after": {
+          "accepted_opens": 393,
+          "cross_seat_repeats": 92,
+          "own": 0,
+          "peer_only": 92,
+          "both": 0
+        }
+      }
+    }
+  },
+  "unresolved": {
+    "world_audits": 0,
+    "accepted_opens": 0,
+    "peer_fetches": 0
+  }
+}

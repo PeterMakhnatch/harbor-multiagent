@@ -1,0 +1,1174 @@
+{
+  "counts": {
+    "attempted_runs": 24,
+    "registered_runs": 24,
+    "seats": {
+      "ambiguous": 2,
+      "known": 46,
+      "unattempted": 0
+    },
+    "verified_native_trials": 23
+  },
+  "join_basis": "The stock result must match the sealed native path and receipt UUID. The direct ledger has only cell and role labels. Use the ledger for this study; the stock reader cannot verify that the ledger belongs to it.",
+  "runs": [
+    {
+      "attempted": true,
+      "cell_id": "s3101-r0-fresh",
+      "native_trial": null,
+      "native_trial_issue": "registration_unverified",
+      "seats": {
+        "dispatch": {
+          "direct_ledger": null,
+          "native_submitted_action": null,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": "registration_unverified",
+          "status": "ambiguous"
+        },
+        "inventory": {
+          "direct_ledger": null,
+          "native_submitted_action": null,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": "registration_unverified",
+          "status": "ambiguous"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r0-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 274,
+            "estimated_usd_high": "0.000065700",
+            "estimated_usd_low": "0.000065700",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 264,
+            "estimated_usd_high": "0.000126600",
+            "estimated_usd_low": "0.000126600",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r1-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r1-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 326,
+            "estimated_usd_high": "0.000073500",
+            "estimated_usd_low": "0.000073500",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r2-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3101-r2-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r0-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 274,
+            "estimated_usd_high": "0.000065700",
+            "estimated_usd_low": "0.000065700",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 264,
+            "estimated_usd_high": "0.000126600",
+            "estimated_usd_low": "0.000126600",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r0-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 326,
+            "estimated_usd_high": "0.000073500",
+            "estimated_usd_low": "0.000073500",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r1-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r1-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r2-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3103-r2-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r0-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 326,
+            "estimated_usd_high": "0.000073500",
+            "estimated_usd_low": "0.000073500",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 264,
+            "estimated_usd_high": "0.000126600",
+            "estimated_usd_low": "0.000126600",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r0-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 274,
+            "estimated_usd_high": "0.000065700",
+            "estimated_usd_low": "0.000065700",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r1-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r1-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r2-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3109-r2-silent",
+      "native_trial": {
+        "reward": 0.5,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r0-silent",
+      "native_trial": {
+        "reward": 0.75,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 274,
+            "estimated_usd_high": "0.000065700",
+            "estimated_usd_low": "0.000065700",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 264,
+            "estimated_usd_high": "0.000126600",
+            "estimated_usd_low": "0.000126600",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r0-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 0,
+            "cache_miss": 326,
+            "estimated_usd_high": "0.000073500",
+            "estimated_usd_low": "0.000073500",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r1-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r1-silent",
+      "native_trial": {
+        "reward": 0.75,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r2-silent",
+      "native_trial": {
+        "reward": 0.75,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 146,
+            "estimated_usd_high": "0.000046884",
+            "estimated_usd_low": "0.000046884",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    },
+    {
+      "attempted": true,
+      "cell_id": "s3119-r2-fresh",
+      "native_trial": {
+        "reward": 1.0,
+        "reward_valid": true
+      },
+      "native_trial_issue": null,
+      "seats": {
+        "dispatch": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 198,
+            "estimated_usd_high": "0.000054684",
+            "estimated_usd_low": "0.000054684",
+            "output": 41,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        },
+        "inventory": {
+          "direct_ledger": {
+            "cache_hit": 128,
+            "cache_miss": 136,
+            "estimated_usd_high": "0.000107784",
+            "estimated_usd_low": "0.000107784",
+            "output": 145,
+            "paid_provider_response": true,
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_submitted_action": true,
+          "native_usage": {
+            "n_cache_tokens": null,
+            "n_input_tokens": null,
+            "n_output_tokens": null
+          },
+          "reason": null,
+          "status": "known"
+        }
+      }
+    }
+  ],
+  "schema": "seatlab.visibility-native-usage/v1",
+  "unjoined_ledger": []
+}

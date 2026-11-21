@@ -1,0 +1,340 @@
+{
+  "between_arms_complete_pairs": {
+    "both_valid": 18,
+    "none_only_correct": 3,
+    "same_choice": 12,
+    "scheduled": 18,
+    "visible_only_correct": 3
+  },
+  "by_arm": {
+    "none": {
+      "A": 18,
+      "B": 0,
+      "correct": 12,
+      "correct_fraction_of_valid": 0.6666666666666666,
+      "distinct_prompts": 1,
+      "invalid": 0,
+      "not_run": 0,
+      "repeat_disagreement": {
+        "A*B": 0,
+        "denominator": 18
+      },
+      "request_error": 0,
+      "reserved_without_result": 0,
+      "scheduled": 18,
+      "seat_unavailable": 0,
+      "valid": 18
+    },
+    "visible": {
+      "A": 12,
+      "B": 6,
+      "correct": 12,
+      "correct_fraction_of_valid": 0.6666666666666666,
+      "distinct_prompts": 6,
+      "invalid": 0,
+      "not_run": 0,
+      "repeat_disagreement": {
+        "A*B": 4,
+        "denominator": 18
+      },
+      "request_error": 0,
+      "reserved_without_result": 0,
+      "scheduled": 18,
+      "seat_unavailable": 0,
+      "valid": 18
+    }
+  },
+  "eligible_best_label_counts": {
+    "A": 4,
+    "B": 2
+  },
+  "eligible_cases": 6,
+  "planned_cells": 36,
+  "schedule_sha256": "b95aa3434271a357cd297d8a56b1715ff8edae1fd4a8566441b4a0995c1dedda",
+  "scope": "Conditional standalone choices on selected archived numeric reports; not new native team trials or a replay of archived rewards. Repeated requests and identical prompts do not create independent source worlds.",
+  "selected_cases": 6,
+  "within_case": [
+    {
+      "between_arms": {
+        "both_valid": 3,
+        "none_only_correct": 0,
+        "same_choice": 3,
+        "scheduled": 3,
+        "visible_only_correct": 0
+      },
+      "case": "p00-r1",
+      "ineligible_reason": null,
+      "within_arm": {
+        "none": {
+          "A": 3,
+          "B": 0,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        },
+        "visible": {
+          "A": 3,
+          "B": 0,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        }
+      }
+    },
+    {
+      "between_arms": {
+        "both_valid": 3,
+        "none_only_correct": 0,
+        "same_choice": 3,
+        "scheduled": 3,
+        "visible_only_correct": 0
+      },
+      "case": "p00-r2",
+      "ineligible_reason": null,
+      "within_arm": {
+        "none": {
+          "A": 3,
+          "B": 0,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        },
+        "visible": {
+          "A": 3,
+          "B": 0,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        }
+      }
+    },
+    {
+      "between_arms": {
+        "both_valid": 3,
+        "none_only_correct": 0,
+        "same_choice": 3,
+        "scheduled": 3,
+        "visible_only_correct": 0
+      },
+      "case": "p50-r1",
+      "ineligible_reason": null,
+      "within_arm": {
+        "none": {
+          "A": 3,
+          "B": 0,
+          "correct": 0,
+          "correct_fraction_of_valid": 0.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        },
+        "visible": {
+          "A": 3,
+          "B": 0,
+          "correct": 0,
+          "correct_fraction_of_valid": 0.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        }
+      }
+    },
+    {
+      "between_arms": {
+        "both_valid": 3,
+        "none_only_correct": 0,
+        "same_choice": 0,
+        "scheduled": 3,
+        "visible_only_correct": 3
+      },
+      "case": "p50-r2",
+      "ineligible_reason": null,
+      "within_arm": {
+        "none": {
+          "A": 3,
+          "B": 0,
+          "correct": 0,
+          "correct_fraction_of_valid": 0.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        },
+        "visible": {
+          "A": 0,
+          "B": 3,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        }
+      }
+    },
+    {
+      "between_arms": {
+        "both_valid": 3,
+        "none_only_correct": 2,
+        "same_choice": 1,
+        "scheduled": 3,
+        "visible_only_correct": 0
+      },
+      "case": "p100-r1",
+      "ineligible_reason": null,
+      "within_arm": {
+        "none": {
+          "A": 3,
+          "B": 0,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        },
+        "visible": {
+          "A": 1,
+          "B": 2,
+          "correct": 1,
+          "correct_fraction_of_valid": 0.3333333333333333,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 2,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        }
+      }
+    },
+    {
+      "between_arms": {
+        "both_valid": 3,
+        "none_only_correct": 1,
+        "same_choice": 2,
+        "scheduled": 3,
+        "visible_only_correct": 0
+      },
+      "case": "p100-r2",
+      "ineligible_reason": null,
+      "within_arm": {
+        "none": {
+          "A": 3,
+          "B": 0,
+          "correct": 3,
+          "correct_fraction_of_valid": 1.0,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 0,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        },
+        "visible": {
+          "A": 2,
+          "B": 1,
+          "correct": 2,
+          "correct_fraction_of_valid": 0.6666666666666666,
+          "invalid": 0,
+          "not_run": 0,
+          "repeat_disagreement": {
+            "A*B": 2,
+            "denominator": 3
+          },
+          "request_error": 0,
+          "reserved_without_result": 0,
+          "scheduled": 3,
+          "seat_unavailable": 0,
+          "valid": 3
+        }
+      }
+    }
+  ]
+}
