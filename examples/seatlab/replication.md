@@ -358,6 +358,8 @@ The manifest separates calendar identity from task identity. Reordering attendee
 
 For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_briefing(own_briefing))` returns only that seat’s feasible starts. Do not use the full briefing in a phase that shows only 2 attendees. Keep the peer’s table and the verifier key outside the model context.
 
+The [native oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without a native trial receipt. Neither world has an observed team reward from that check. The manifest verifies the task files, not a completed native run.
+
 #### Native replication with an external harness
 
 The archived task hashes above cannot be recreated: each build makes fresh service credentials. This independent replication uses the public Flotilla generator and freshly built tasks. It does not add replacements to the original panel.
