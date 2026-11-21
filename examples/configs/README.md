@@ -56,5 +56,27 @@ The [Kit Check subscription runner](features/kit_check_subscription.py) uses
 3 real Codex seats by default: `left`, `right`, and `builder`.
 Use `--scripted-reviewers` for a comparison with 2 scripted reviewers and the
 same Codex builder. The builder waits up to 150 seconds for both reviews.
-The subscription cost in USD is unknown. The receipt records `cost_usd` as
-`null`, not `0`.
+Use the [#35](https://github.com/PeterMakhnatch/harbor-multiagent/pull/35)
+runtime to record native seat freezes. The studies used `bfbfe127e1`.
+
+### Observed cleanup on the pinned runtime
+
+- **Normal play:** All 6 trials graded valid at 144/144 correct kits.
+  In the 3 active trials, the runtime canceled a live left-seat audit.
+  The local launchers exited and the observed children were absent before
+  grading. All 18 seat freezes finished before grading.
+- **Failed play:** The follow-up kept all 6 trials. The 3 healthy trials
+  graded valid at 72/72 correct kits. After each of 2 planned builder
+  POST faults, the runtime canceled a live left-seat audit.
+  The launchers exited and the observed children were absent before the
+  last recovery freeze. The remaining trial hit a 120 s right-seat model
+  timeout before the planned fault. All 3 failed trials completed recovery
+  freezes and had no verifier or reward. The evidence passed integrity
+  checks, but the cohort did not meet all acceptance criteria.
+
+These results cover local process cleanup and native seat freezes only.
+They do not establish shared-world freeze, verifier isolation, or provider
+compute or billing cancellation. Both cohorts used a ChatGPT subscription,
+not a paid API. The receipts record `cost_usd` as `null`. Incomplete turns
+have unknown token use. Native job totals can omit known completed turns
+from a seat whose total usage is unknown.
