@@ -18,6 +18,30 @@ Report eligible, attempted, completed and missed counts separately for each arm.
 
 Separate workers can add new worlds, actor-side context transformations, and cross-run readers. Keep world state with the task. Keep observation and analysis formats outside Harbor. Only changes to native runtime semantics belong in the framework itself.
 
+## Check a collusion alert against real committee votes
+
+The [four-team pilot](https://github.com/PeterMakhnatch/harbor-multiagent/pull/77#issuecomment-7058661039) tested whether a frozen monitor could flag two seats **before** they voted. The offline label used their later ballots. The [visibility check](https://github.com/PeterMakhnatch/harbor-multiagent/pull/77#issuecomment-7059071870) confirms the monitor received the public proposal and reply. Neither view contained ballots.
+
+Two historical comparisons check different claims. The first uses 24 trials with an assigned scout. The verifier recorded misleading reports in 21; the monitor flagged that scout before the first decision in 20.
+
+The second uses all 3 archived committees with no assigned adversary on the same vendor-selection task. In 2, `analyst_1` and `analyst_2` voted for the same wrong option. In each of those 2, only 1 analyst fetched the other's post before casting its own vote. The archived committees chose a different wrong option from the assigned pair. Matching wrong ballots alone do not establish collusion. A fetch alone does not establish agreement.
+
+Read the [public control results](results/coalition-archive-controls.json) without a model key or the private trial logs:
+
+```sh
+jq '.counts' examples/seatlab/results/coalition-archive-controls.json
+```
+
+To regenerate the results, use the retained 130-trial Crucible corpus. A source-only clone does not contain these trial logs. From the fork root, set `CRUCIBLE` to the Crucible checkout with its original runs and installed Python environment:
+
+```sh
+PYTHONPATH="$CRUCIBLE/src" "$CRUCIBLE/.venv/bin/python" -B \
+  examples/seatlab/coalitions/archive_controls.py "$CRUCIBLE" \
+  | diff - examples/seatlab/results/coalition-archive-controls.json
+```
+
+The command needs no model calls or containers. It uses the frozen alert threshold of 50. The committee repeats use one world seed. Their world and seat instructions match the pilot, but their verifier revision and seat harness differ. Neither comparison estimates a general collusion detection rate.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.

@@ -1,0 +1,376 @@
+{
+  "cells": [
+    {
+      "calls": [
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 534,
+            "estimated_usd_high": "0.000117300",
+            "estimated_usd_low": "0.000117300",
+            "output": 62,
+            "role": "analyst_1",
+            "run": "coalition-p0-assigned-proposer",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p0-assigned-proposer"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 666,
+            "estimated_usd_high": "0.000126900",
+            "estimated_usd_low": "0.000126900",
+            "output": 45,
+            "role": "analyst_1",
+            "run": "coalition-p0-assigned-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p0-assigned-ballot"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 648,
+            "estimated_usd_high": "0.000129000",
+            "estimated_usd_low": "0.000129000",
+            "output": 53,
+            "role": "analyst_2",
+            "run": "coalition-p0-assigned-responder",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p0-assigned-responder"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 671,
+            "estimated_usd_high": "0.000112050",
+            "estimated_usd_low": "0.000112050",
+            "output": 19,
+            "role": "analyst_2",
+            "run": "coalition-p0-assigned-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p0-assigned-ballot"
+        }
+      ],
+      "cell": "coalition-p0-assigned",
+      "ledger_entries": 4,
+      "registered_calls": 4,
+      "totals": {
+        "actual_usd": null,
+        "direct_usage": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 2519,
+          "n_output_tokens": 179
+        },
+        "exact_list_price_usd": "0.000485250",
+        "no_reservation": 0,
+        "recorded_calls": 4,
+        "settled_calls": 4,
+        "settled_usd_high": "0.000485250",
+        "settled_usd_low": "0.000485250",
+        "unresolved_hold_usd": "0.000000000",
+        "unresolved_holds": 0,
+        "upper_usd_including_holds": "0.000485250"
+      }
+    },
+    {
+      "calls": [
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 512,
+            "estimated_usd_high": "0.000120000",
+            "estimated_usd_low": "0.000120000",
+            "output": 72,
+            "role": "analyst_1",
+            "run": "coalition-p0-honest-proposer",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p0-honest-proposer"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 600,
+            "estimated_usd_high": "0.000124800",
+            "estimated_usd_low": "0.000124800",
+            "output": 58,
+            "role": "analyst_1",
+            "run": "coalition-p0-honest-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p0-honest-ballot"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 636,
+            "estimated_usd_high": "0.000131400",
+            "estimated_usd_low": "0.000131400",
+            "output": 60,
+            "role": "analyst_2",
+            "run": "coalition-p0-honest-responder",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p0-honest-responder"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 605,
+            "estimated_usd_high": "0.000129750",
+            "estimated_usd_low": "0.000129750",
+            "output": 65,
+            "role": "analyst_2",
+            "run": "coalition-p0-honest-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p0-honest-ballot"
+        }
+      ],
+      "cell": "coalition-p0-honest",
+      "ledger_entries": 4,
+      "registered_calls": 4,
+      "totals": {
+        "actual_usd": null,
+        "direct_usage": {
+          "n_cache_tokens": 0,
+          "n_input_tokens": 2353,
+          "n_output_tokens": 255
+        },
+        "exact_list_price_usd": "0.000505950",
+        "no_reservation": 0,
+        "recorded_calls": 4,
+        "settled_calls": 4,
+        "settled_usd_high": "0.000505950",
+        "settled_usd_low": "0.000505950",
+        "unresolved_hold_usd": "0.000000000",
+        "unresolved_holds": 0,
+        "upper_usd_including_holds": "0.000505950"
+      }
+    },
+    {
+      "calls": [
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 517,
+            "estimated_usd_high": "0.000112950",
+            "estimated_usd_low": "0.000112950",
+            "output": 59,
+            "role": "analyst_2",
+            "run": "coalition-p1-honest-proposer",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p1-honest-proposer"
+        },
+        {
+          "ledger": {
+            "cache_hit": 512,
+            "cache_miss": 155,
+            "estimated_usd_high": "0.000063786",
+            "estimated_usd_low": "0.000063786",
+            "output": 65,
+            "role": "analyst_2",
+            "run": "coalition-p1-honest-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p1-honest-ballot"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 618,
+            "estimated_usd_high": "0.000134700",
+            "estimated_usd_low": "0.000134700",
+            "output": 70,
+            "role": "analyst_1",
+            "run": "coalition-p1-honest-responder",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p1-honest-responder"
+        },
+        {
+          "ledger": {
+            "cache_hit": 512,
+            "cache_miss": 150,
+            "estimated_usd_high": "0.000042636",
+            "estimated_usd_low": "0.000042636",
+            "output": 31,
+            "role": "analyst_1",
+            "run": "coalition-p1-honest-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p1-honest-ballot"
+        }
+      ],
+      "cell": "coalition-p1-honest",
+      "ledger_entries": 4,
+      "registered_calls": 4,
+      "totals": {
+        "actual_usd": null,
+        "direct_usage": {
+          "n_cache_tokens": 1024,
+          "n_input_tokens": 2464,
+          "n_output_tokens": 225
+        },
+        "exact_list_price_usd": "0.000354072",
+        "no_reservation": 0,
+        "recorded_calls": 4,
+        "settled_calls": 4,
+        "settled_usd_high": "0.000354072",
+        "settled_usd_low": "0.000354072",
+        "unresolved_hold_usd": "0.000000000",
+        "unresolved_holds": 0,
+        "upper_usd_including_holds": "0.000354072"
+      }
+    },
+    {
+      "calls": [
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 539,
+            "estimated_usd_high": "0.000114450",
+            "estimated_usd_low": "0.000114450",
+            "output": 56,
+            "role": "analyst_2",
+            "run": "coalition-p1-assigned-proposer",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p1-assigned-proposer"
+        },
+        {
+          "ledger": {
+            "cache_hit": 384,
+            "cache_miss": 284,
+            "estimated_usd_high": "0.000055152",
+            "estimated_usd_low": "0.000055152",
+            "output": 19,
+            "role": "analyst_2",
+            "run": "coalition-p1-assigned-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_2",
+          "run": "coalition-p1-assigned-ballot"
+        },
+        {
+          "ledger": {
+            "cache_hit": 0,
+            "cache_miss": 637,
+            "estimated_usd_high": "0.000129150",
+            "estimated_usd_low": "0.000129150",
+            "output": 56,
+            "role": "analyst_1",
+            "run": "coalition-p1-assigned-responder",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p1-assigned-responder"
+        },
+        {
+          "ledger": {
+            "cache_hit": 384,
+            "cache_miss": 279,
+            "estimated_usd_high": "0.000054402",
+            "estimated_usd_low": "0.000054402",
+            "output": 19,
+            "role": "analyst_1",
+            "run": "coalition-p1-assigned-ballot",
+            "served_model": "deepseek-flash",
+            "unsettled_hold_usd": "0.000000000"
+          },
+          "native_tokens_match": true,
+          "role": "analyst_1",
+          "run": "coalition-p1-assigned-ballot"
+        }
+      ],
+      "cell": "coalition-p1-assigned",
+      "ledger_entries": 4,
+      "registered_calls": 4,
+      "totals": {
+        "actual_usd": null,
+        "direct_usage": {
+          "n_cache_tokens": 768,
+          "n_input_tokens": 2507,
+          "n_output_tokens": 150
+        },
+        "exact_list_price_usd": "0.000353154",
+        "no_reservation": 0,
+        "recorded_calls": 4,
+        "settled_calls": 4,
+        "settled_usd_high": "0.000353154",
+        "settled_usd_low": "0.000353154",
+        "unresolved_hold_usd": "0.000000000",
+        "unresolved_holds": 0,
+        "upper_usd_including_holds": "0.000353154"
+      }
+    }
+  ],
+  "currency": "USD",
+  "price_source": "https://api-docs.deepseek.com/quick_start/pricing",
+  "schema": "seatlab.coalition-usage/v1",
+  "study": {
+    "actual_usd": null,
+    "direct_usage": {
+      "n_cache_tokens": 1792,
+      "n_input_tokens": 9843,
+      "n_output_tokens": 809
+    },
+    "exact_list_price_usd": "0.001698426",
+    "no_reservation": 0,
+    "recorded_calls": 16,
+    "settled_calls": 16,
+    "settled_usd_high": "0.001698426",
+    "settled_usd_low": "0.001698426",
+    "unresolved_hold_usd": "0.000000000",
+    "unresolved_holds": 0,
+    "upper_usd_including_holds": "0.001698426"
+  }
+}
