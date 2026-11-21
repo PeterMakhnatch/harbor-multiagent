@@ -14,6 +14,7 @@ from uuid import UUID
 
 from .. import team_driver, team_report
 from . import dispatch_mix_plan as plan
+from . import dispatch_mix_run as runner
 
 
 def _require(check: bool, reason: str) -> None:
@@ -38,6 +39,29 @@ def _reward(value: object) -> float | None:
         raise ValueError("invalid_native_reward")
     _require(math.isfinite(value) and 0 <= value <= 1, "invalid_native_reward")
     return float(value)
+
+
+def _check_configs(
+    file: dict[str, Any], result: dict[str, Any], registered: dict[str, Any]
+) -> None:
+    for value in (file, result):
+        team_report._check_config(value, registered)
+        # Native result serialization adds an unused default agent to a seat
+        # trial. Its standalone config can omit it. Never allow a third actor.
+        if "agent" not in value:
+            continue
+        default = value["agent"]
+        _require(
+            isinstance(default, dict)
+            and default.get("name") == "oracle"
+            and all(
+                setting is None or setting is False or setting == {} or setting == []
+                for key, setting in default.items()
+                if key != "name"
+            ),
+            "unexpected_top_level_agent",
+        )
+    team_report._check_config(file, {k: v for k, v in result.items() if k != "agent"})
 
 
 def _trial(
@@ -84,7 +108,7 @@ def _trial(
     if public.get("status") == "valid":
         _require(public.get("trial_id") == uid, "unbound_public_score")
     cfg = raw["config"]
-    team_report._check_config(record.config, cfg)
+    _check_configs(record.config, cfg, runner.config(study, cell))
     participants = cfg["participants"]
     _require(
         len(participants) == 2 and {p["seat"] for p in participants} == set(plan.ROLES),
