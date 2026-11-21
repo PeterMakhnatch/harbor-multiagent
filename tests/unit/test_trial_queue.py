@@ -13,6 +13,7 @@ from harbor.models.trial.config import (
     TaskConfig,
     TrialConfig,
 )
+from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import AgentInfo, ExceptionInfo, StepResult, TrialResult
 from harbor.trial.hooks import TrialEvent, TrialHookEvent
 from harbor.trial.queue import TrialQueue
@@ -30,6 +31,24 @@ def _make_trial_result(config: TrialConfig, *, task_name: str = "task") -> Trial
     )
 
 
+def _mock_trial_with_result_file(
+    result: TrialResult, *, result_bytes: bytes | None = None
+) -> MagicMock:
+    paths = TrialPaths(result.config.trials_dir / result.trial_name)
+
+    async def run() -> TrialResult:
+        paths.trial_dir.mkdir()
+        data = (
+            result.model_dump_json().encode() if result_bytes is None else result_bytes
+        )
+        paths.result_path.write_bytes(data)
+        return result
+
+    return MagicMock(
+        config=result.config, id=result.id, paths=paths, run=AsyncMock(side_effect=run)
+    )
+
+
 def _make_trial_lock(task_name: str = "task") -> TrialLock:
     return TrialLock(
         task=TaskLock(name=task_name, type="local", digest=f"sha256:{'a' * 64}"),
@@ -40,12 +59,13 @@ def _make_trial_lock(task_name: str = "task") -> TrialLock:
 
 
 @pytest.fixture
-def trial_config():
+def trial_config(tmp_path):
     """Create a basic trial config for testing."""
     return TrialConfig(
         task=TaskConfig(path=Path("/test/task")),
         trial_name="test_trial",
         job_id=uuid4(),
+        trials_dir=tmp_path,
     )
 
 
@@ -53,6 +73,19 @@ def trial_config():
 def trial_result(trial_config):
     """Create a basic trial result for testing."""
     return _make_trial_result(trial_config, task_name="test_task")
+
+
+@pytest.fixture
+def retryable_trial_result(trial_result):
+    trial_result.exception_info = ExceptionInfo.from_exception(RuntimeError("failure"))
+    return trial_result
+
+
+@pytest.fixture
+def retrying_queue():
+    return TrialQueue(
+        n_concurrent=1, retry_config=RetryConfig(max_retries=1, min_wait_sec=0)
+    )
 
 
 @pytest.fixture
@@ -84,7 +117,7 @@ def queue(hooks):
 async def test_queue_retries_consider_all_steps(
     trial_config, trial_result, errors, max_retries, retried, tmp_path
 ):
-    failed = trial_result.model_copy(deep=True)
+    failed = trial_result.model_copy(deep=True, update={"id": uuid4()})
     failed.step_results = [
         StepResult(
             step_name=str(index),
@@ -94,18 +127,144 @@ async def test_queue_retries_consider_all_steps(
         )
         for index, error in enumerate(errors)
     ]
-    trial = MagicMock(config=trial_config)
-    trial.run = AsyncMock(side_effect=[failed, trial_result])
-    trial.paths.trial_dir = tmp_path / "attempt"
+    failed_trial = _mock_trial_with_result_file(failed)
+    replacement = _mock_trial_with_result_file(trial_result)
+    create = AsyncMock(side_effect=[failed_trial, replacement])
     queue = TrialQueue(
         n_concurrent=1,
         retry_config=RetryConfig(max_retries=max_retries, min_wait_sec=0),
     )
-    with patch("harbor.trial.trial.Trial.create", AsyncMock(return_value=trial)):
+    with patch("harbor.trial.trial.Trial.create", create):
         result = await queue.submit(trial_config)
 
-    assert trial.run.await_count == 1 + retried
+    assert create.await_count == 1 + retried
+    failed_trial.run.assert_awaited_once_with()
+    assert replacement.run.await_count == retried
     assert result is (trial_result if retried else failed)
+    if not retried:
+        assert not list(tmp_path.glob("retry-attempt-*.json"))
+        assert failed_trial.paths.result_path.read_bytes() == (
+            failed.model_dump_json().encode()
+        )
+
+
+async def test_queue_archives_native_bytes_by_attempt_id(
+    trial_config, retryable_trial_result, tmp_path
+):
+    first = retryable_trial_result
+    second = first.model_copy(update={"id": uuid4()})
+    retained = first.model_copy(update={"id": uuid4()})
+    first_bytes = (
+        first.model_dump_json().encode().removesuffix(b"}")
+        + b',\r\n  "extra": {"unknown": null, "cost": 0.000}\r\n}\r\n'
+    )
+    second_bytes = second.model_dump_json(indent=4).encode() + b"\n"
+    first_trial = _mock_trial_with_result_file(first, result_bytes=first_bytes)
+    second_trial = _mock_trial_with_result_file(second, result_bytes=second_bytes)
+    retained_trial = _mock_trial_with_result_file(retained)
+    create = AsyncMock(side_effect=[first_trial, second_trial, retained_trial])
+    queue = TrialQueue(
+        n_concurrent=1, retry_config=RetryConfig(max_retries=2, min_wait_sec=0)
+    )
+    with patch("harbor.trial.trial.Trial.create", create):
+        result = await queue.submit(trial_config)
+
+    assert result is retained
+    assert create.await_count == 3
+    assert first_trial.paths == second_trial.paths == retained_trial.paths
+    assert retained_trial.paths.result_path.read_bytes() == (
+        retained.model_dump_json().encode()
+    )
+    assert {
+        path.name: path.read_bytes() for path in tmp_path.glob("retry-attempt-*.json")
+    } == {
+        f"retry-attempt-{first.id}.json": first_bytes,
+        f"retry-attempt-{second.id}.json": second_bytes,
+    }
+
+
+@pytest.mark.parametrize("entry_type", ["file", "symlink", "directory"])
+async def test_queue_preserves_trial_when_retry_archive_exists(
+    trial_config, retryable_trial_result, retrying_queue, tmp_path, entry_type
+):
+    trial = _mock_trial_with_result_file(retryable_trial_result)
+    archive = tmp_path / f"retry-attempt-{retryable_trial_result.id}.json"
+    if entry_type == "directory":
+        archive.mkdir()
+        existing = archive / "sentinel"
+    elif entry_type == "symlink":
+        existing = tmp_path / "existing.json"
+        archive.symlink_to(existing)
+    else:
+        existing = archive
+    existing.write_bytes(b"previous archive")
+    create = AsyncMock(return_value=trial)
+
+    with (
+        patch("harbor.trial.trial.Trial.create", create),
+        pytest.raises(FileExistsError),
+    ):
+        await retrying_queue.submit(trial_config)
+
+    create.assert_awaited_once_with(trial_config)
+    assert existing.read_bytes() == b"previous archive"
+    if entry_type == "symlink":
+        assert archive.readlink() == existing
+    assert trial.paths.result_path.read_bytes() == (
+        retryable_trial_result.model_dump_json().encode()
+    )
+
+
+async def test_queue_preserves_trial_when_retry_archive_write_fails(
+    trial_config, retryable_trial_result, retrying_queue, tmp_path
+):
+    trial = _mock_trial_with_result_file(retryable_trial_result)
+    create = AsyncMock(return_value=trial)
+    write_error = OSError("archive write failed")
+
+    def fail_copy(source, destination):
+        assert destination.write(source.read(5)) == 5
+        raise write_error
+
+    with (
+        patch("harbor.trial.trial.Trial.create", create),
+        patch("harbor.trial.queue.shutil.copyfileobj", side_effect=fail_copy),
+        pytest.raises(OSError, match="archive write failed") as exc_info,
+    ):
+        await retrying_queue.submit(trial_config)
+
+    assert exc_info.value is write_error
+    create.assert_awaited_once_with(trial_config)
+    assert trial.paths.result_path.read_bytes() == (
+        retryable_trial_result.model_dump_json().encode()
+    )
+    assert not list(tmp_path.glob("retry-attempt-*.json"))
+
+
+async def test_queue_preserves_trial_when_retry_source_is_missing(
+    trial_config, retryable_trial_result, retrying_queue, tmp_path
+):
+    paths = TrialPaths(tmp_path / trial_config.trial_name)
+    paths.trial_dir.mkdir()
+    paths.log_path.write_bytes(b"original trial log")
+    trial = MagicMock(
+        config=trial_config,
+        id=retryable_trial_result.id,
+        paths=paths,
+        run=AsyncMock(return_value=retryable_trial_result),
+    )
+    create = AsyncMock(return_value=trial)
+    with (
+        patch("harbor.trial.trial.Trial.create", create),
+        pytest.raises(FileNotFoundError) as exc_info,
+    ):
+        await retrying_queue.submit(trial_config)
+
+    assert exc_info.value.filename == str(paths.result_path)
+    create.assert_awaited_once_with(trial_config)
+    assert paths.log_path.read_bytes() == b"original trial log"
+    assert not list(tmp_path.glob("retry-attempt-*.json"))
+    assert not paths.result_path.exists()
 
 
 class TestTrialQueue:
@@ -615,15 +774,18 @@ async def test_queue_uses_job_policy_overrides(
         },
     )
     trial_config.override_error_policy = job.override_error_policy
-    failed = trial_result.model_copy(deep=True)
+    failed = trial_result.model_copy(deep=True, update={"id": uuid4()})
     failed.exception_info = ExceptionInfo.from_exception(
         AgentTimeoutError("timeout"),
         override_error_policy=trial_config.override_error_policy,
     )
-    trial = MagicMock(config=trial_config)
-    trial.run = AsyncMock(side_effect=[failed, trial_result])
-    trial.paths.trial_dir = tmp_path / "attempt"
+    failed_trial = _mock_trial_with_result_file(failed)
+    replacement = _mock_trial_with_result_file(trial_result)
+    create = AsyncMock(side_effect=[failed_trial, replacement])
     queue = TrialQueue(n_concurrent=1, retry_config=job.retry)
-    with patch("harbor.trial.trial.Trial.create", AsyncMock(return_value=trial)):
-        await queue.submit(trial_config)
-    assert trial.run.await_count == 1 + retry_error
+    with patch("harbor.trial.trial.Trial.create", create):
+        result = await queue.submit(trial_config)
+    assert create.await_count == 1 + retry_error
+    failed_trial.run.assert_awaited_once_with()
+    assert replacement.run.await_count == retry_error
+    assert result is (trial_result if retry_error else failed)
