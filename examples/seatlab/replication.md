@@ -18,6 +18,15 @@ Report eligible, attempted, completed and missed counts separately for each arm.
 
 Separate workers can add new worlds, actor-side context transformations, and cross-run readers. Keep world state with the task. Keep observation and analysis formats outside Harbor. Only changes to native runtime semantics belong in the framework itself.
 
+## Where should the second model serve in a real Harbor team?
+
+**Registered before collecting this mixed roster.** Each native Dispatch Handoff team has one direct DeepSeek Flash seat and one first-party Claude Max subscription seat. Does assigning Claude to dispatch rather than inventory change the team's verifier score when an old report arrives last? This tests two whole, replaceable harnesses. It does not identify an intrinsic model effect.
+
+- Fix new seeds `4001,4003,4007,4013` and 6 shipments per trial. Cross `fresh` and `reordered` with rosters `cd` (Claude inventory, DeepSeek dispatch) and `dc` (DeepSeek inventory, Claude dispatch). Run 2 independent repetitions: 32 native trials, at most 32 subscription turns and 32 direct turns. No arm receives the treatment name or the other model's identity. The inventory output is real in both arms. Neither harness sees the score before submission.
+- Use the canonical cell order `fresh/cd`, `fresh/dc`, `reordered/cd`, `reordered/dc`. Within each seed and repetition, use the corresponding row of the balanced order matrix `(0,1,3,2); (1,2,0,3); (2,3,1,0); (3,0,2,1)`. The row index is `(seed_index + 2 * repetition) % 4`. Submit one unmodified first answer per seat. Keep native errors, missing answers, unverified identities and unresolved charges. Never replace the first attempt.
+- **Primary:** the native reward under `dc` minus `cd` for `reordered`, paired by seed and repetition. Average within seed, then equally across seeds. Secondary: the same comparison under `fresh`, their difference on complete four-cell blocks, the inventory's exact reporting of both revisions, and optimal choices on changed versus stable shipments. A failed attestation does not prove a zero score. Show incomplete-block bounds and repeat disagreement. These are 4 fixed worlds; 192 shipments across 32 trials are not 192 independent samples.
+- Reconstruct each delivered role view and submitted decision from the native world. Check both native identities and link the direct receipt to its host ledger. Keep the CLI's subscription estimate separate from direct API cost. Do not use another paid API key, fallback route, or command that changes the subscription. Stop on confirmed route exhaustion. A different model needs a new registration.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.
