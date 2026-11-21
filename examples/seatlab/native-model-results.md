@@ -20,6 +20,10 @@ The [96-byte follow-up](replication.md#can-a-model-pack-an-actual-outgoing-note-
 
 The first packing block reused the original 337-byte note. Each policy produced a complete new decision. All 3 model calls matched the ledger at **$0.000180150 USD**. The original block still has no decision.
 
+Across [all 120 notes](results/packing-live.json), the rewrite and the byte prefix produced identical text 27 times. Among the 66 blocks with two complete decisions, rewriting improved unchanged-record accuracy in 16 blocks, reduced it in 6, and tied in 44. The equal-world difference was **+9.25 percentage points** among complete pairs. Bounds across all 120 blocks span **−24.03 to +37.64 points**. Rewriting required one extra model call per note. This result does not justify a general switch from clipping to rewriting.
+
+The [stock check](results/packing-stock.json) confirmed 592 choices in 148 distinct decisions. The [ledger](results/packing-cost.json) matched all 333 calls at **$0.018413250 USD**, including the first block. No hold remains.
+
 An offline inspection also identified why the original final answers were incomplete. Of 152 distinct received final answers, 104 met the contract. All other **48** returned a well-formed `choices` object for exactly one registered ID: the record the agent just opened. Each returned a valid option for that ID. The contract required all 4 IDs. We did not infer the other choices or change any score.
 
 The [saved-trial replication](replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials) uses the accepted sender messages from 3 actual native teams. All 6 source seats acknowledged their input. Both replacement policies in the first block chose the same record and shared a complete new decision. All 4 direct calls matched at **$0.000276468 USD**. The saved Harbor scores did not change.
