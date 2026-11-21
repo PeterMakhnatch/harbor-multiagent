@@ -97,6 +97,18 @@ python -m examples.seatlab.visibility.route_cli report --workflow delegate --stu
 
 Use `demo` instead of `commands` and omit `--config` for a no-model transport check. Use a new private directory for a new run. A registered block has one claim, even if a process fails. The report distinguishes unclaimed blocks, known unselected branches, missing replies, and identical selections that share one actual final response.
 
+## Which record should a replacement agent read?
+
+**Registered before the first handoff call.** A new agent inherits a short note from a departing agent. It can open only one current record before it must make its decisions. Does identifying the record whose revision changed improve its choices? This tests a context-handoff interface. It does not simulate an EVE mission or resume a model session.
+
+- Use 12 new Dispatch Handoff seeds, `5801` through `5812`. From the first 8 native shipments, use IDs `1, 3, 5, 7`, named `P, Q, R, S`. Keep their actual old and current stock and utility ranks. Do not select by difficulty.
+- Construct 5 handoffs per seed. In 4 of them, one different record changes at turnover. The writer sees its old stock. For the other 3 records, the writer sees current stock. In the fifth handoff, no record changes. The timing of these publications is an intervention, not an observed native event.
+- Use 2 repetitions per case: 120 matched blocks, including 96 with a change. Each block starts with a new direct DeepSeek Flash writer. It sees only the old record contents and writes one note of at most 256 UTF-8 bytes. Both successor policies receive that same actual note. The writer sees neither utility ranks nor revision receipts.
+- Both selectors see the record questions and the same number of changed and unchanged receipts. `bound` identifies the record for each receipt. `anonymous` gives only their sorted statuses. A selector chooses exactly one record to read. Alternate which policy goes first by case index and repetition. The final dispatcher receives the note, its selected current record, and the questions, but not the revision receipts.
+- If both policies select the same record, deliver the same final prompt and use **one actual final response** for both. Otherwise request two independent final responses. Record each selected record and each returned choice. Never infer a missing answer or retry any stage. Each block uses at most 5 first calls, for at most 600 calls total.
+- Primary: `bound − anonymous` in current optimal choices **for the changed record**. Match within case and repetition. Average within seed, then across all 12 seeds. Report complete coverage and sharp missing-data bounds over the fixed register. If a seed has no complete pair, omit the full-register point estimate. Secondary: selecting the changed record, all-record accuracy, unchanged controls, and cases where the old and current best choices differ.
+- Use an independent copy of the unchanged stock scoring rule for observed final choices. These are host-side decisions on native worlds, not Harbor trial rewards. Share no private note or unrequested record in public evidence. Report direct usage separately from external harnesses.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
