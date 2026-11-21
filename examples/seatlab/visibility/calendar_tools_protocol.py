@@ -10,6 +10,8 @@ from . import calendar_packet, calendar_protocol
 
 _BLOCKS = frozenset(calendar_protocol.blocks())
 _SEATS = ("p1", "p2")
+_AVAILABILITY = ("off", "on")
+_ROLE_ACCESS = ("sender", "receiver")
 
 
 class _Returned(TypedDict):
@@ -32,26 +34,68 @@ class View:
     table: calendar_packet.Table
 
 
-def native_id(block: calendar_protocol.Block) -> str:
+def _check_block(block: calendar_protocol.Block) -> None:
     if (
-        type(block.world) is not int
+        not isinstance(block, calendar_protocol.Block)
+        or type(block.world) is not int
         or type(block.direction) is not int
         or type(block.repetition) is not int
         or block not in _BLOCKS
     ):
         raise ValueError("invalid calendar block")
+
+
+def native_id(block: calendar_protocol.Block) -> str:
+    _check_block(block)
     return f"rx-w{block.world:02d}-d{block.direction}-r{block.repetition}"
 
 
-def policies(block: calendar_protocol.Block) -> tuple[str, str]:
-    native_id(block)  # Only registered blocks have a policy order.
+def _design(design: str) -> tuple[tuple[str, str], str]:
+    if design == "availability":
+        return _AVAILABILITY, "tl-"
+    if design == "role-access":
+        return _ROLE_ACCESS, "ra-"
+    raise ValueError("invalid calendar tool design")
+
+
+def design_arms(design: str) -> tuple[str, str]:
+    return _design(design)[0]
+
+
+def spend_prefix(design: str) -> str:
+    return _design(design)[1]
+
+
+def policies(
+    block: calendar_protocol.Block, *, design: str = "availability"
+) -> tuple[str, str]:
+    _check_block(block)
+    first, second = design_arms(design)
     if (block.world // 2 + block.direction + block.repetition) % 2 == 0:
-        return "off", "on"
-    return "on", "off"
+        return first, second
+    return second, first
+
+
+def _policy_design(policy: str) -> str:
+    if policy in _AVAILABILITY:
+        return "availability"
+    if policy in _ROLE_ACCESS:
+        return "role-access"
+    raise ValueError("invalid calendar tool policy")
+
+
+def access_for(block: calendar_protocol.Block, policy: str, seat: str) -> str:
+    _check_block(block)
+    if seat not in _SEATS:
+        raise ValueError("invalid calendar seat")
+    if _policy_design(policy) == "availability":
+        return policy
+    allowed = block.sender if policy == "sender" else block.receiver
+    return "on" if seat == allowed else "off"
 
 
 def _check_policy(policy: str) -> None:
-    if policy not in ("off", "on"):
+    if policy not in _AVAILABILITY:
         raise ValueError("invalid calendar tool policy")
 
 
@@ -67,12 +111,12 @@ def _actions(run: str, arms: tuple[str, str]) -> dict[str, str]:
 
 
 def action_id(block: calendar_protocol.Block, policy: str, identifier: str) -> str:
-    _check_policy(policy)
+    prefix = spend_prefix(_policy_design(policy))
     run = native_id(block)
     suffix = _actions(run, block.arms).get(identifier)
     if suffix is None:
         raise ValueError("invalid native turn identifier")
-    return f"tl-{run.removeprefix('rx-')}-{policy}-{suffix}"
+    return f"{prefix}{run.removeprefix('rx-')}-{policy}-{suffix}"
 
 
 class Session:

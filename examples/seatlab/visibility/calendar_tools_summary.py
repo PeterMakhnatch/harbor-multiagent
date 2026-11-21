@@ -6,13 +6,14 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from itertools import product
 from statistics import mean
-from typing import NamedTuple, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict
 
 _WORLDS = tuple(range(12))
 _PRIOR_WORLDS = (0, 4, 8)
 _DIRECTIONS = _REPETITIONS = (0, 1)
 _ROOMS = ("blind", "peer")
-_POLICIES = ("off", "on")
+_AVAILABILITY = ("off", "on")
+_ROLE_ACCESS = ("sender", "receiver")
 _CELLS = tuple(product(_WORLDS, _DIRECTIONS, _REPETITIONS, _ROOMS))
 _INVALID_ZERO = "model_invalid_scored_zero"
 _UNKNOWN = {
@@ -38,8 +39,8 @@ class _Pair(NamedTuple):
     direction: int
     repetition: int
     room: str
-    off: _Outcome
-    on: _Outcome
+    first: _Outcome
+    second: _Outcome
 
 
 class _NativeCounts(TypedDict):
@@ -75,11 +76,21 @@ class _Slice(TypedDict):
     all_registered_pair_bounds_by_world: dict[str, list[float]]
 
 
+class _RepeatCounts(TypedDict):
+    accepted_slot_pairs: int
+    slot_agreements: int
+    slot_disagreements: int
+    native_reward_pairs: int
+    native_reward_agreements: int
+    native_reward_disagreements: int
+
+
 class _Summary(_Slice):
     by_room: dict[str, _Slice]
     by_cohort: dict[str, _Slice]
     by_direction: dict[str, _Slice]
     by_repetition: dict[str, _Slice]
+    repeat_agreement: NotRequired[dict[str, _RepeatCounts]]
 
 
 def _outcome(row: Mapping[str, object]) -> _Outcome:
@@ -105,7 +116,15 @@ def _outcome(row: Mapping[str, object]) -> _Outcome:
     return _Outcome(status, bound, reward, slot)
 
 
-def _pairs(rows: Iterable[Mapping[str, object]]) -> list[_Pair]:
+def _pairs(
+    rows: Iterable[Mapping[str, object]], policies: tuple[str, str]
+) -> list[_Pair]:
+    if (
+        type(policies) is not tuple
+        or any(type(policy) is not str for policy in policies)
+        or policies not in (_AVAILABILITY, _ROLE_ACCESS)
+    ):
+        raise ValueError("expected registered policy arms in contrast order")
     outcomes: dict[tuple[int, int, int, str, str], _Outcome] = {}
     for row in rows:
         world = row.get("world")
@@ -123,19 +142,20 @@ def _pairs(rows: Iterable[Mapping[str, object]]) -> list[_Pair]:
             or type(room) is not str
             or room not in _ROOMS
             or type(policy) is not str
-            or policy not in _POLICIES
+            or policy not in policies
         ):
             raise ValueError("unregistered native team coordinates")
         key = (world, direction, repetition, room, policy)
         if key in outcomes:
             raise ValueError("duplicate registered native team")
         outcomes[key] = _outcome(row)
-    if len(outcomes) != len(_CELLS) * len(_POLICIES):
+    if len(outcomes) != len(_CELLS) * len(policies):
         raise ValueError(
             "missing registered native teams; include explicit unknown rows"
         )
+    first, second = policies
     return [
-        _Pair(*cell, outcomes[*cell, "off"], outcomes[*cell, "on"]) for cell in _CELLS
+        _Pair(*cell, outcomes[*cell, first], outcomes[*cell, second]) for cell in _CELLS
     ]
 
 
@@ -176,24 +196,26 @@ def _contrast(by_world: dict[int, list[int]]) -> _Contrast:
     }
 
 
-def _slice(pairs: list[_Pair]) -> _Slice:
+def _slice(pairs: list[_Pair], policies: tuple[str, str]) -> _Slice:
     worlds = sorted({pair.world for pair in pairs})
     primary: dict[int, list[int]] = {world: [] for world in worlds}
     accepted: dict[int, list[int]] = {world: [] for world in worlds}
     bounds: dict[int, list[tuple[int, int]]] = {world: [] for world in worlds}
     for pair in pairs:
-        off = pair.off.reward if pair.off.bound else None
-        on = pair.on.reward if pair.on.bound else None
+        first = pair.first.reward if pair.first.bound else None
+        second = pair.second.reward if pair.second.bound else None
         bounds[pair.world].append(
             (
-                (on if on is not None else 0) - (off if off is not None else 1),
-                (on if on is not None else 1) - (off if off is not None else 0),
+                (second if second is not None else 0)
+                - (first if first is not None else 1),
+                (second if second is not None else 1)
+                - (first if first is not None else 0),
             )
         )
-        if off is not None and on is not None:
-            delta = on - off
+        if first is not None and second is not None:
+            delta = second - first
             primary[pair.world].append(delta)
-            if pair.off.slot is not None and pair.on.slot is not None:
+            if pair.first.slot is not None and pair.second.slot is not None:
                 accepted[pair.world].append(delta)
 
     world_bounds = {
@@ -201,8 +223,8 @@ def _slice(pairs: list[_Pair]) -> _Slice:
         for world, values in bounds.items()
     }
     native = {
-        "off": _native_counts([pair.off for pair in pairs]),
-        "on": _native_counts([pair.on for pair in pairs]),
+        policies[0]: _native_counts([pair.first for pair in pairs]),
+        policies[1]: _native_counts([pair.second for pair in pairs]),
     }
     return {
         "registered_pairs": len(pairs),
@@ -217,8 +239,57 @@ def _slice(pairs: list[_Pair]) -> _Slice:
     }
 
 
-def summarize(rows: Iterable[Mapping[str, object]]) -> _Summary:
-    """Match on/off within world, direction, repetition, and native room.
+def _repeat_agreement(
+    pairs: list[_Pair], policies: tuple[str, str]
+) -> dict[str, _RepeatCounts]:
+    counts: dict[str, _RepeatCounts] = {
+        policy: {
+            "accepted_slot_pairs": 0,
+            "slot_agreements": 0,
+            "slot_disagreements": 0,
+            "native_reward_pairs": 0,
+            "native_reward_agreements": 0,
+            "native_reward_disagreements": 0,
+        }
+        for policy in policies
+    }
+    first_repetitions = {
+        (pair.world, pair.direction, pair.room): pair
+        for pair in pairs
+        if pair.repetition == 0
+    }
+    for pair in pairs:
+        if pair.repetition != 1:
+            continue
+        initial = first_repetitions[pair.world, pair.direction, pair.room]
+        for policy, before, after in zip(
+            policies,
+            (initial.first, initial.second),
+            (pair.first, pair.second),
+            strict=True,
+        ):
+            if not before.bound or not after.bound:
+                continue
+            arm = counts[policy]
+            if before.slot is not None and after.slot is not None:
+                arm["accepted_slot_pairs"] += 1
+                if before.slot == after.slot:
+                    arm["slot_agreements"] += 1
+                else:
+                    arm["slot_disagreements"] += 1
+            if before.reward is not None and after.reward is not None:
+                arm["native_reward_pairs"] += 1
+                if before.reward == after.reward:
+                    arm["native_reward_agreements"] += 1
+                else:
+                    arm["native_reward_disagreements"] += 1
+    return counts
+
+
+def summarize(
+    rows: Iterable[Mapping[str, object]], *, policies: tuple[str, str] = ("off", "on")
+) -> _Summary:
+    """Subtract the first policy from the second in each registered team pair.
 
     Require all registered teams, including unknowns. A reward is known for
     policy comparisons and bounds only if the stock score and tools are bound.
@@ -227,21 +298,26 @@ def summarize(rows: Iterable[Mapping[str, object]]) -> _Summary:
     any world in the slice lacks a comparison. Rooms share opening lists, so
     matched pair counts describe coverage, not independent samples.
     """
-    pairs = _pairs(rows)
-    return {
-        **_slice(pairs),
+    pairs = _pairs(rows, policies)
+    result: _Summary = {
+        **_slice(pairs, policies),
         "by_room": {
-            room: _slice([p for p in pairs if p.room == room]) for room in _ROOMS
+            room: _slice([p for p in pairs if p.room == room], policies)
+            for room in _ROOMS
         },
         "by_cohort": {
-            "prior": _slice([p for p in pairs if p.world in _PRIOR_WORLDS]),
-            "new": _slice([p for p in pairs if p.world not in _PRIOR_WORLDS]),
+            "prior": _slice([p for p in pairs if p.world in _PRIOR_WORLDS], policies),
+            "new": _slice([p for p in pairs if p.world not in _PRIOR_WORLDS], policies),
         },
         "by_direction": {
-            str(d): _slice([p for p in pairs if p.direction == d]) for d in _DIRECTIONS
+            str(d): _slice([p for p in pairs if p.direction == d], policies)
+            for d in _DIRECTIONS
         },
         "by_repetition": {
-            str(r): _slice([p for p in pairs if p.repetition == r])
+            str(r): _slice([p for p in pairs if p.repetition == r], policies)
             for r in _REPETITIONS
         },
     }
+    if policies == _ROLE_ACCESS:
+        result["repeat_agreement"] = _repeat_agreement(pairs, policies)
+    return result

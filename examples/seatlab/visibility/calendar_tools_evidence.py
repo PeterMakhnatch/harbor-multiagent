@@ -194,11 +194,11 @@ def _action(run: str, identifier: str, block: calendar_protocol.Block) -> _Actio
 
 
 def _bind(
-    fd: int, row: _Action, identifier: str, policy: str, view: tools.View, text: str
+    fd: int, row: _Action, identifier: str, level: str, view: tools.View, text: str
 ) -> None:
     receipt = _read(fd, f"{row['run']}.json", _ACTION_BYTES)
     selection = _text(receipt.get("select_text"))
-    result = tools.tool_result(view, policy, selection)
+    result = tools.tool_result(view, level, selection)
     select_prompt_hash = tools.digest(tools.select_prompt(view))
     select_response_hash = tools.digest(selection)
     final_prompt_hash = tools.digest(tools.final_prompt(view, result))
@@ -313,7 +313,8 @@ def _replay(
                     # tool receipt cannot affect the next stock prompt.
                     session.accept(identifier, text)
                     if has_receipt and action_fd is not None:
-                        _bind(action_fd, row, identifier, policy, view, text)
+                        level = tools.access_for(block, policy, view.seat)
+                        _bind(action_fd, row, identifier, level, view, text)
                     else:
                         row["status"] = action_issue or "missing"
                 except FileNotFoundError:
@@ -330,12 +331,16 @@ def _replay(
 
 
 def read_policy(
-    directory: Path, block: calendar_protocol.Block, policy: str
+    directory: Path,
+    block: calendar_protocol.Block,
+    policy: str,
+    *,
+    design: str = "availability",
 ) -> _Policy:
     """Read a private policy bundle without exposing its text or inferring rewards."""
     output: _Policy = {"native": None, "actions": {}, "protocol_status": "missing"}
     try:
-        if policy not in {"off", "on"}:
+        if policy not in tools.design_arms(design):
             raise ValueError("invalid policy")
         directory = directory.absolute()
         if directory.resolve() != directory:

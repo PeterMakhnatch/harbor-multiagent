@@ -18,6 +18,36 @@ Report eligible, attempted, completed and missed counts separately for each arm.
 
 Separate workers can add new worlds, actor-side context transformations, and cross-run readers. Keep world state with the task. Keep observation and analysis formats outside Harbor. Only changes to native runtime semantics belong in the framework itself.
 
+## Which teammate should receive a local tool?
+
+**Registered before collection.** If only one teammate can request an exact list of its own free slots, should it be the sender or the receiver? The sender publishes a revised list. The receiver makes the final choice. This experiment reallocates one capability between roles. It does not give either seat the other calendar or a joint answer.
+
+- Use the same 12 public scheduling worlds, both role directions, and 2 repetitions. For each of the 48 blocks, start 2 independent policies: `sender` and `receiver`. Each policy starts 2 stock Harbor rooms, `blind` and `peer`, sharing only that policy's 2 new opening replies. Do not reuse any calls or openings from the all-seats tool experiment.
+- Both teammates receive the same tool offer and the same number of calls per action. Only the named role can obtain its own feasible starts on a valid request. This applies to its opening and later action. A valid request from the other seat returns `unavailable`. The model can decline. A malformed request stays invalid. The native world receives the agent's first final reply without repair.
+- Start `sender` first if `(world // 2 + direction + repetition)` is even; otherwise start `receiver` first. Leave native room order unchanged. Use the registered direct Flash settings and stop rules. Register at most 192 teams, 96 matched comparisons, and 1,152 direct calls. Every started cell keeps its first attempt. Report missing or malformed openings separately from a verified native zero.
+- Primary: native success under `receiver` minus `sender`, matched within world, direction, repetition, and room. Weight the 12 worlds equally. Report all registered lower and upper bounds. Show the room conditions, the 9 worlds outside the initial public cohort, and each role direction separately. Secondary: role-specific requests, exact self-reported lists, received tool results, accepted slots, and disagreement across repeats. Report costs separately from native scores.
+- This measures which of 2 role assignments works better for this model and game. Both teammates' inputs can change downstream. It does not estimate the isolated benefit of a tool call. These are fresh model teams. A second program can replace either role without modifying the Harbor environment.
+
+### Run a sender and a receiver from separate harnesses
+
+Prepare the native schedule tasks as in [Run your own live team](#run-your-own-live-team). Create a new private study directory. Use two trusted executables with absolute paths. Each reads `{"schema":"seatlab.seat-turn/v1","prompt":"..."}` from standard input. Each writes `{"text":"..."}` to standard output. Do not print logs to standard output. Use a new conversation for each call.
+
+```json
+{
+  "sender": {"argv": ["/absolute/path/to/sender"], "env": []},
+  "receiver": {"argv": ["/absolute/path/to/receiver"], "env": []}
+}
+```
+
+```bash
+mkdir -m 700 "$private/role-teams"
+"$python" -m "$module.calendar_tools_run" commands --design role-access --config seats.json \
+  --tasks "$tasks" --study "$private/role-teams" --world 3 --direction 1 --repetition 1
+"$python" -m "$module.calendar_tools_report" --design role-access "$private/role-teams"
+```
+
+`sender` and `receiver` are game roles, not fixed seat IDs. Their native seats reverse when `--direction` changes. Each program gets only its own turn. Configure credentials separately per executable, on the host. An empty `env` list passes no host credentials. These processes run as your user, not in a security sandbox. The external transport makes no billing claim. The study keeps verified Harbor results even when host usage is unknown.
+
 ## Can live teammates choose and use a tool that reads only their own calendar?
 
 **Registered before collection.** Messages arrived in all 24 public replica teams, but none found a common start. A tool can reduce the work of reading a calendar without giving away the other seat's schedule. Test a complete team policy, not another replacement of a recorded list.
