@@ -214,7 +214,12 @@ def _parse_capsule(owner_data: bytes, packet: bytes) -> _Capsule:
     world, arm = owner["world"], owner["arm"]
     if (
         not isinstance(world, str)
-        or not re.fullmatch(r"w[0-9]{2}", world)
+        or not re.fullmatch(
+            r"w(?:[0-9]{2}|[1-9][0-9]{2,5})"
+            if arm in ("lists", "checked")
+            else r"w[0-9]{2}",
+            world,
+        )
         or arm
         not in ("raw", "exact", "sender-exact", "receiver-exact", "lists", "checked")
         or type(owner["native_reward"]) is not int
@@ -242,10 +247,12 @@ def _load_capsule(path: Path) -> _Capsule:
     return _parse_capsule(owner, packet)
 
 
-def _export(trial: Path, spend_dir: Path, out: Path) -> None:
+def _export(
+    trial: Path, spend_dir: Path, out: Path, *, cohort_sha256: str | None = None
+) -> None:
     from . import calendar_case_source
 
-    source = calendar_case_source.load(trial, spend_dir)
+    source = calendar_case_source.load(trial, spend_dir, cohort_sha256=cohort_sha256)
     if source.prompts.keys() != set(_VIEWS):
         raise ValueError("unexpected source views")
     requests = {
@@ -328,6 +335,7 @@ def main() -> int:
     export.add_argument("trial", type=Path)
     export.add_argument("--spend-dir", required=True, type=Path)
     export.add_argument("--out", required=True, type=Path)
+    export.add_argument("--cohort-sha256")
     emit = commands.add_parser("emit", allow_abbrev=False)
     emit.add_argument("capsule", type=Path)
     emit.add_argument("--view", choices=_VIEWS, required=True)
@@ -338,7 +346,9 @@ def main() -> int:
     try:
         args = parser.parse_args()
         if args.command == "export":
-            _export(args.trial, args.spend_dir, args.out)
+            _export(
+                args.trial, args.spend_dir, args.out, cohort_sha256=args.cohort_sha256
+            )
         else:
             capsule = _load_capsule(args.capsule)
             record = (

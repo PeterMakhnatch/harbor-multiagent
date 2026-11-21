@@ -5,7 +5,13 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .calendar_notices import audit, heldout, team_source, team_views
+from .calendar_notices import (
+    audit,
+    heldout,
+    team_source,
+    team_views,
+    transfer_registration,
+)
 from .calendar_notices import protocol as p
 from .confirmation_custody import _select_charge, _Turn
 from .visibility import calendar_packet, calendar_protocol, spend
@@ -53,7 +59,9 @@ def _private(path: Path) -> None:
     )
 
 
-def _location(trial: Path) -> tuple[Path, Path, team_views.Cell]:
+def _location(
+    trial: Path, *, cohort_sha256: str | None
+) -> tuple[Path, Path, team_views.Cell]:
     heldout._physical_directory(trial)
     directory = trial.parent.parent
     job = directory.parent.parent
@@ -64,7 +72,18 @@ def _location(trial: Path) -> tuple[Path, Path, team_views.Cell]:
         "invalid_native_source_location",
     )
     prefix, suffix = trial.name.split("-", 1)
-    if prefix == "cvr":
+    audit.require(
+        (cohort_sha256 is not None) == (prefix == "cvt"),
+        "native_source_cohort_digest_mismatch",
+    )
+    cell: team_views.Cell
+    if prefix == "cvt":
+        digest = calendar_packet._check_digest(cohort_sha256)
+        _, world, arm = suffix.split("-", 2)
+        cell = transfer_registration.TransferCell(
+            world, arm, control="live", cohort_sha256=digest
+        )
+    elif prefix == "cvr":
         wave, world, arm = suffix.split("-", 2)
         audit.require(wave.startswith("r"), "unsupported_native_source_cell")
         cell = team_views.RepeatJoinCell(world, arm, repetition=int(wave[1:]))
@@ -218,6 +237,7 @@ def _read_turns(
 
 
 def _read_case(
+    job: Path,
     trial: Path,
     task: Path,
     cell: team_views.Cell,
@@ -240,7 +260,11 @@ def _read_case(
         and result["task_id"] == {"path": str(task)},
         "native_source_result_binding",
     )
-    identity, tables = team_source._checked(task, cell)
+    identity, tables = (
+        transfer_registration.checked(job, task, cell)
+        if isinstance(cell, transfer_registration.TransferCell)
+        else team_source._checked(task, cell)
+    )
     audit.require(
         (identity.native_sha256, identity.semantics_sha256)
         == (task_sha, semantics_sha),
@@ -343,10 +367,12 @@ def _read_case(
     )
 
 
-def _load(trial: Path, spend_dir: Path, *, include_turns: bool) -> SourceCase:
+def _load(
+    trial: Path, spend_dir: Path, *, include_turns: bool, cohort_sha256: str | None
+) -> SourceCase:
     trial = trial.expanduser().absolute()
     spend_dir = spend_dir.expanduser().absolute()
-    job, directory, cell = _location(trial)
+    job, directory, cell = _location(trial, cohort_sha256=cohort_sha256)
     config = directory / "config.json"
     native_files = (
         directory / "attempt.json",
@@ -354,6 +380,8 @@ def _load(trial: Path, spend_dir: Path, *, include_turns: bool) -> SourceCase:
         directory / "outcome.json",
         *_artifacts(trial, cell),
     )
+    if isinstance(cell, transfer_registration.TransferCell):
+        native_files += (job / transfer_registration._COHORT_FILE,)
     native_before = _snapshot(job, native_files)
     registration = audit._object(audit._sealed(config))
     task = Path(registration["task"]["path"])
@@ -375,7 +403,7 @@ def _load(trial: Path, spend_dir: Path, *, include_turns: bool) -> SourceCase:
         and row["held_calls"] == 0,
         "incomplete_or_invalid_native_source",
     )
-    source = _read_case(trial, task, cell, row, calls, include_turns=include_turns)
+    source = _read_case(job, trial, task, cell, row, calls, include_turns=include_turns)
     audit.require(
         _ledger(spend_dir) == ledger_before
         and _calls(ledger_before[0], cell) == calls
@@ -387,9 +415,17 @@ def _load(trial: Path, spend_dir: Path, *, include_turns: bool) -> SourceCase:
     return source
 
 
-def load(trial: Path, spend_dir: Path, *, include_turns: bool = False) -> SourceCase:
+def load(
+    trial: Path,
+    spend_dir: Path,
+    *,
+    include_turns: bool = False,
+    cohort_sha256: str | None = None,
+) -> SourceCase:
     try:
-        return _load(trial, spend_dir, include_turns=include_turns)
+        return _load(
+            trial, spend_dir, include_turns=include_turns, cohort_sha256=cohort_sha256
+        )
     except audit.BindingError:
         raise
     except (
