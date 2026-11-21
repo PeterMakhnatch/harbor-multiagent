@@ -1,0 +1,53 @@
+{
+  "accounted_cohort_cases": 180,
+  "cohort": {
+    "authenticated_eligible_cases": 180,
+    "case_denominator": 180,
+    "distinct_claim_patterns": 15,
+    "distinct_mixed_claim_patterns": 6,
+    "distinct_true_tables": 6,
+    "ineligibility_reasons": {},
+    "ineligible_cases": 0,
+    "missing_evidence_cases": 0,
+    "mixed_cases": 90,
+    "near_tie_cases": 0,
+    "report_denominator": 540,
+    "tied_reports": 0
+  },
+  "complete_authenticated_coverage": true,
+  "enrolled_trials": 30,
+  "event_logs_read": 30,
+  "expected_cohort_cases": 180,
+  "expected_trials": 30,
+  "gate": {
+    "minimum_distinct_heldout_mixed_claim_patterns": 8,
+    "minimum_distinct_heldout_true_tables": 8,
+    "passed": false,
+    "status": "not_met"
+  },
+  "integrity_scope": "Checks retained archive bytes, not their origin or the model.",
+  "original_overlap_and_holdout": {
+    "eligible_case_denominator_including_original_six": 180,
+    "original_overlapping_cases": 60,
+    "strict_heldout_cases": 60,
+    "strict_heldout_distinct_mixed_claim_patterns": 4,
+    "strict_heldout_distinct_true_tables": 4
+  },
+  "original_six": {
+    "authenticated_eligible_cases": 6,
+    "case_denominator": 6,
+    "distinct_claim_patterns": 4,
+    "distinct_mixed_claim_patterns": 2,
+    "distinct_true_tables": 2,
+    "ineligibility_reasons": {},
+    "ineligible_cases": 0,
+    "missing_evidence_cases": 0,
+    "mixed_cases": 3,
+    "near_tie_cases": 0,
+    "report_denominator": 18,
+    "tied_reports": 0
+  },
+  "retained_log_integrity": "verified",
+  "rounds_per_trial": 6,
+  "scope": "Retained report_final5 inputs only. Distinct inputs are not independent seeds. No route outcomes or model requests."
+}
