@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ..live_answers import __main__ as live
-from ..visibility import calendar_driver, calendar_replica_source
+from ..visibility import calendar_driver, calendar_packet, calendar_replica_source
 from . import protocol as p
 from . import team_source, team_views
 
@@ -19,6 +19,7 @@ BINDINGS = ("DEEPSEEK_API_KEY", "SEATLAB_SPEND_DIR")
 POLICIES = ("oracle", "wrong")
 
 _Cell = p.Cell | team_views.Cell
+_Tables = tuple[calendar_packet.Table, calendar_packet.Table]
 
 
 def _require(ok: bool, category: str) -> None:
@@ -38,6 +39,8 @@ def _directory(job: Path, cell: _Cell) -> Path:
 
 
 def _schema(cell: _Cell) -> str:
+    if isinstance(cell, team_views.JoinCell):
+        return team_views.JOIN_SCHEMA
     if isinstance(cell, team_views.RoleCell):
         return team_views.ROLE_SCHEMA
     return team_views.SCHEMA if isinstance(cell, team_views.Cell) else SCHEMA
@@ -51,26 +54,33 @@ def _cell_from_attempt(attempt: dict[str, Any]) -> _Cell:
         cell_type = team_views.Cell
     elif schema == team_views.ROLE_SCHEMA:
         cell_type = team_views.RoleCell
+    elif schema == team_views.JOIN_SCHEMA:
+        cell_type = team_views.JoinCell
     else:
         raise ValueError("invalid_attempt_schema")
     return cell_type(attempt["world"], attempt["arm"], attempt["control"])
 
 
-def _source(task: Path, cell: _Cell) -> dict[str, str]:
-    identity = (
-        team_source.identity(task, cell)
-        if isinstance(cell, team_views.Cell)
-        else calendar_replica_source.verify(task, cell.index)
-    )
-    return {
-        "task_sha256": identity.native_sha256,
-        "semantics_sha256": identity.semantics_sha256,
-    }
-
-
-def _seat_kwargs(task: Path, cell: _Cell, seat: str) -> dict[str, Any]:
+def _source(task: Path, cell: _Cell) -> tuple[dict[str, str], _Tables | None]:
+    tables = None
     if isinstance(cell, team_views.Cell):
-        return team_source.seat_kwargs(task, cell, seat)
+        identity, tables = team_source._checked(task, cell)
+    else:
+        identity = calendar_replica_source.verify(task, cell.index)
+    return (
+        {
+            "task_sha256": identity.native_sha256,
+            "semantics_sha256": identity.semantics_sha256,
+        },
+        tables,
+    )
+
+
+def _seat_kwargs(cell: _Cell, seat: str, tables: _Tables | None) -> dict[str, Any]:
+    if isinstance(cell, team_views.Cell):
+        if tables is None:
+            raise ValueError("missing_private_tables")
+        return team_source._seat_kwargs(tables, cell, seat)
     return {
         "world": cell.world,
         "arm": cell.arm,
@@ -79,7 +89,9 @@ def _seat_kwargs(task: Path, cell: _Cell, seat: str) -> dict[str, Any]:
     }
 
 
-def _config(directory: Path, task: Path, cell: _Cell) -> dict[str, Any]:
+def _config(
+    directory: Path, task: Path, cell: _Cell, tables: _Tables | None
+) -> dict[str, Any]:
     variant = team_views if isinstance(cell, team_views.Cell) else p
     model = {"model_name": variant.MODEL} if cell.control == "live" else {}
     return {
@@ -99,7 +111,7 @@ def _config(directory: Path, task: Path, cell: _Cell) -> dict[str, Any]:
                 "seat": seat,
                 "import_path": variant.AGENT_IMPORT,
                 **model,
-                "kwargs": _seat_kwargs(task, cell, seat),
+                "kwargs": _seat_kwargs(cell, seat, tables),
             }
             for seat in variant.SEATS
         ],
@@ -125,18 +137,21 @@ def _check_binding(
     cell: _Cell,
     task: Path,
     source: dict[str, str],
+    tables: _Tables | None,
     attempt: dict[str, Any],
     config: bytes,
 ) -> None:
     _require(
         directory == _directory(directory.parent.parent, cell)
         and attempt == _attempt(cell, source, p.digest(config))
-        and config == (p.wire(_config(directory, task, cell)) + "\n").encode(),
+        and config == (p.wire(_config(directory, task, cell, tables)) + "\n").encode(),
         "attempt_binding_invalid",
     )
 
 
-def _check_first(job: Path, cell: _Cell, task: Path, source: dict[str, str]) -> None:
+def _check_first(
+    job: Path, cell: _Cell, task: Path, source: dict[str, str], tables: _Tables | None
+) -> None:
     if cell.control != "live" or cell.arm == cell.first:
         return
     first = type(cell)(cell.world, cell.first, "live")
@@ -154,6 +169,7 @@ def _check_first(job: Path, cell: _Cell, task: Path, source: dict[str, str]) -> 
         first,
         task,
         source,
+        tables,
         live._sealed(directory / "attempt.json"),
         team._read_sealed(directory / "config.json"),
     )
@@ -196,9 +212,9 @@ def _host_trial(directory: Path, harbor: Path) -> int:
         team = calendar_driver._team_helpers()
         config = team._read_sealed(config_path)
         task = Path(json.loads(config)["task"]["path"])
-        source = _source(task, cell)
-        _check_binding(directory, cell, task, source, attempt, config)
-        _check_first(directory.parent.parent, cell, task, source)
+        source, tables = _source(task, cell)
+        _check_binding(directory, cell, task, source, tables, attempt, config)
+        _check_first(directory.parent.parent, cell, task, source, tables)
         (directory / "trials").mkdir(mode=0o700)
         harbor = calendar_driver._entrypoint(harbor)
         team.run_panel._check_native(harbor, dict(os.environ))
@@ -287,15 +303,15 @@ def _run(
             "job_overlaps_tasks",
         )
         task = tasks / cell.task_name
-        source = _source(task, cell)
+        source, tables = _source(task, cell)
         attempt["source"] = source
         outcome["error"] = "native_config_failed"
         attempt["config_sha256"] = live._seal(
-            directory / "config.json", _config(directory, task, cell)
+            directory / "config.json", _config(directory, task, cell, tables)
         )
         live._seal(directory / "attempt.json", attempt)
         outcome["error"] = "first_arm_binding_failed"
-        _check_first(job, cell, task, source)
+        _check_first(job, cell, task, source, tables)
         outcome["error"] = "native_launch_failed"
         code = _launch(directory, harbor, spend_dir)
         outcome["returncode"] = code
@@ -329,6 +345,8 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     sub = parser.add_subparsers(dest="mode", required=True)
     role_worlds = team_views.WORLDS
     role_arms = team_views.ROLE_ARMS
+    join_worlds = team_views.JOIN_WORLDS
+    join_arms = team_views.JOIN_ARMS
     for mode, cell_type, worlds, arms in (
         ("run", p.Cell, p.WORLDS, p.ARMS),
         ("control", p.Cell, p.WORLDS, p.ARMS),
@@ -336,6 +354,8 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         ("views-control", team_views.Cell, team_views.WORLDS, team_views.ARMS),
         ("role-views-run", team_views.RoleCell, role_worlds, role_arms),
         ("role-views-control", team_views.RoleCell, role_worlds, role_arms),
+        ("run-visible", team_views.JoinCell, join_worlds, join_arms),
+        ("control-visible", team_views.JoinCell, join_worlds, join_arms),
     ):
         command = sub.add_parser(mode)
         command.set_defaults(cell_type=cell_type)
@@ -346,7 +366,7 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         command.add_argument(
             "--harbor", type=Path, default=Path(sys.executable).with_name("harbor")
         )
-        if mode in ("run", "views-run", "role-views-run"):
+        if mode in ("run", "views-run", "role-views-run", "run-visible"):
             command.add_argument("--spend-dir", type=Path, required=True)
         else:
             command.add_argument("--policy", choices=POLICIES, required=True)

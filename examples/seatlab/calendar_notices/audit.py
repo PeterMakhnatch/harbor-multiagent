@@ -30,6 +30,7 @@ from . import team_source, team_views
 SCHEMA = "seatlab.calendar-notice-audit/v1"
 PRIVATE_VIEWS_SCHEMA = "seatlab.calendar-private-view-audit/v1"
 ROLE_VIEWS_SCHEMA = "seatlab.calendar-role-view-audit/v1"
+VISIBLE_CHECK_SCHEMA = "seatlab.native-calendar-visible-check-results/v1"
 _REGISTRATION = "seatlab.native-calendar-notices/v1"
 _WORLD = {
     "world_version": 2,
@@ -38,6 +39,13 @@ _WORLD = {
     "limits": {"max_messages": 200, "max_text": 4000},
 }
 _USAGE = ("n_input_tokens", "n_cache_tokens", "n_output_tokens")
+_VISIBLE_READOUTS = (
+    "own_valid",
+    "target_in_opened",
+    "target_in_initial_unopened",
+    "chose_opened",
+    "chose_initial_unopened",
+)
 Row = dict[str, Any]
 Cell = p.Cell | team_views.Cell
 Tables = tuple[calendar_packet.Table, calendar_packet.Table]
@@ -68,6 +76,8 @@ def _sealed(path: Path) -> bytes:
 
 
 def _schema(cell: Cell) -> str:
+    if isinstance(cell, team_views.JoinCell):
+        return team_views.JOIN_SCHEMA
     if isinstance(cell, team_views.RoleCell):
         return team_views.ROLE_SCHEMA
     return team_views.SCHEMA if isinstance(cell, team_views.Cell) else _REGISTRATION
@@ -254,10 +264,9 @@ def _messages(trial: Path, cell: Cell) -> list[Row]:
     return messages
 
 
-def _score(
-    trial: Path, cell: Cell, row: Row, messages: list[Row], target: int
-) -> Row | None:
-    logs = trial / "verifier"
+def _frozen_submission(
+    logs: Path, cell: Cell, messages: list[Row]
+) -> tuple[Row | None, int]:
     frozen = _read(logs / "world-state.json")
     submissions = frozen["submissions"]
     require(isinstance(submissions, list) and len(submissions) <= 1, "submission_count")
@@ -289,6 +298,15 @@ def _score(
             and answer in map(calendar_protocol.answer, range(35)),
             "native_submission_shape",
         )
+    return submit, len(submissions)
+
+
+def _score(
+    trial: Path, cell: Cell, row: Row, messages: list[Row], target: int
+) -> Row | None:
+    logs = trial / "verifier"
+    submit, n_submissions = _frozen_submission(logs, cell, messages)
+    answer = submit["answer"] if submit is not None else None
     won = int(answer == calendar_protocol.answer(target))
     file_reward = _read(logs / "reward.json")
     score = _read(logs / "score.json")
@@ -299,6 +317,19 @@ def _score(
         and _binary(score["score"]) == won,
         "stock_reward_mismatch",
     )
+    _score_binding(score, cell, messages, submit, n_submissions, won)
+    return submit
+
+
+def _score_binding(
+    score: Row,
+    cell: Cell,
+    messages: list[Row],
+    submit: Row | None,
+    n_submissions: int,
+    grade: int,
+) -> None:
+    answer = submit["answer"] if submit is not None else None
     require(
         p.wire({k: v for k, v in score.items() if k != "score"})
         == p.wire(
@@ -310,17 +341,44 @@ def _score(
                 "condition": "talk",
                 "seats": list(p.SEATS),
                 "world_version": 2,
-                "fields_correct": won,
+                "fields_correct": grade,
                 "fields_total": 1,
                 "answer": answer,
                 "submitted_by": cell.receiver if submit is not None else None,
-                "n_submissions": len(submissions),
+                "n_submissions": n_submissions,
                 "n_messages": len(messages),
             }
         ),
         "stock_score_binding",
     )
-    return submit
+
+
+def _visible_stock(
+    trial: Path, cell: Cell, row: Row, messages: list[Row], target: int
+) -> tuple[set[str], dict[str, str] | None]:
+    logs = trial / "verifier"
+    submit, n_submissions = _frozen_submission(logs, cell, messages)
+    require(n_submissions == int(submit is not None), "native_submission_shape")
+    delivered, answer = _timeline(trial, messages, submit)
+    stock = row["stock"]
+    stock["oracle"] = int(answer == calendar_protocol.answer(target))
+    reward_path, score_path = logs / "reward.json", logs / "score.json"
+    if _present(reward_path) and _present(score_path):
+        file_reward = _read(reward_path)
+        score = _read(score_path)
+        grade = _binary(file_reward.get("reward"))
+        if (
+            file_reward.keys() != {"reward"}
+            or grade is None
+            or _binary(score["score"]) != grade
+        ):
+            raise BindingError("stock_reward_mismatch")
+        _score_binding(score, cell, messages, submit, n_submissions, grade)
+        stock["verifier"] = grade
+    grades = set(stock.values())
+    require(len(grades - {None}) <= 1, "stock_reward_mismatch")
+    row["reward_verified"] = None not in grades
+    return delivered, answer
 
 
 def _timeline(
@@ -587,6 +645,26 @@ def _turn_path(
     return values.get("choice")
 
 
+def _visible_readouts(
+    messages: list[Row], choice: int, receiver: calendar_packet.Table, target: int
+) -> Row:
+    notice, request, opened = (_object(message["text"]) for message in messages)
+    own = set(calendar_packet.starts(receiver))
+    from_opened = own.intersection(
+        slot for report in opened["reports"] for slot in report["starts"]
+    )
+    from_initial_unopened = own.intersection(
+        slot for slot in notice["initial"] if p._day(slot) not in request["days"]
+    )
+    return {
+        "own_valid": choice in own,
+        "target_in_opened": target in from_opened,
+        "target_in_initial_unopened": target in from_initial_unopened,
+        "chose_opened": choice in from_opened,
+        "chose_initial_unopened": choice in from_initial_unopened,
+    }
+
+
 def _model_usage(context: Row, turns: list[Row]) -> None:
     expected = {}
     for turn in turns:
@@ -686,7 +764,11 @@ def _transport(
         if not private_views or _present(world / "messages.jsonl")
         else []
     )
-    if not private_views or row["reward"] is not None:
+    if isinstance(cell, team_views.JoinCell):
+        if _present(trial / "verifier" / "world-state.json"):
+            delivered, answer = _visible_stock(trial, cell, row, messages, target)
+            return messages, delivered, answer
+    elif not private_views or row["reward"] is not None:
         submit = _score(trial, cell, row, messages, target)
         delivered, answer = _timeline(trial, messages, submit)
         row["reward_verified"] = row["reward_valid"]
@@ -745,7 +827,7 @@ def _inspect(
     if not private_views:
         seats_done = _seat_path(result, cell, receipts, tables, messages, delivered)
     outcome = _outcome(trial.parent.parent, cell)
-    row["complete"] = bool(
+    complete = bool(
         row["reward_verified"]
         and result["started_at"]
         and result["finished_at"]
@@ -761,6 +843,9 @@ def _inspect(
         and delivered == {"m1", "m2", "m3"}
         and row["error"] is None
     )
+    if complete and isinstance(cell, team_views.JoinCell):
+        row.update(_visible_readouts(messages, choice, tables[cell.receiver], target))
+    row["complete"] = complete
     if not row["complete"] and row["error"] is None:
         category = (
             "missing_native_reward"
@@ -833,7 +918,7 @@ def _cell(
 ) -> Row:
     directory = job / ("cells" if cell.control == "live" else "controls") / cell.run
     trial = directory / "trials" / cell.run
-    row = {
+    row: Row = {
         "run": cell.run,
         "world": cell.world,
         "arm": cell.arm,
@@ -860,6 +945,12 @@ def _cell(
         "_source": None,
         **_cost(ledger),
     }
+    if isinstance(cell, team_views.JoinCell):
+        row.update(
+            evidence_complete=False,
+            stock=dict.fromkeys(("outer", "verifier", "oracle")),
+            **dict.fromkeys(_VISIBLE_READOUTS),
+        )
     if not row["attempted"]:
         row["error"] = "ledger_without_attempt" if ledger else "not_attempted"
         return row
@@ -894,6 +985,13 @@ def _cell(
         )
         config, tables = _registration(directory, cell, row, tables)
         _result_binding(directory, cell, result, config, row)
+        if (
+            isinstance(cell, team_views.JoinCell)
+            and row["reward_valid"]
+            and isinstance(reward, dict)
+            and reward.keys() == {"reward"}
+        ):
+            row["stock"]["outer"] = row["reward"]
         _inspect(trial, cell, row, result, tables, ledger)
         if ledger_error and cell.control == "live":
             row.update(complete=False, error=ledger_error)
@@ -938,6 +1036,15 @@ def _reconcile(rows: list[Row]) -> None:
                 )
     for row in rows:
         row["source"] = row.pop("_source")
+        if "evidence_complete" in row:
+            row["evidence_complete"] = row["complete"]
+            if not row["complete"]:
+                row.update(dict.fromkeys(_VISIBLE_READOUTS))
+            if row["error"] in (
+                "duplicate_native_trial_uuid",
+                "matched_stock_source_mismatch",
+            ):
+                row["stock"] = dict.fromkeys(row["stock"])
 
 
 def _counts(rows: list[Row]) -> Row:
@@ -967,11 +1074,19 @@ def report(
     controls: bool = False,
     private_views: bool = False,
     role_views: bool = False,
+    visible_check: bool = False,
 ) -> Row:
-    if private_views and role_views:
+    if sum((private_views, role_views, visible_check)) > 1:
         raise ValueError("conflicting_view_modes")
     job = job.expanduser().absolute()
-    if role_views:
+    if visible_check:
+        cell_type, world_ids, arms = (
+            team_views.JoinCell,
+            team_views.JOIN_WORLDS,
+            team_views.JOIN_ARMS,
+        )
+        prefix, schema = "cvj-", VISIBLE_CHECK_SCHEMA
+    elif role_views:
         cell_type, world_ids, arms = (
             team_views.RoleCell,
             team_views.WORLDS,
@@ -986,7 +1101,7 @@ def report(
         prefix, schema = "cdn-", SCHEMA
     worlds = (
         None
-        if private_views or role_views
+        if private_views or role_views or visible_check
         else calendar_packet.load(calendar_packet.PACKET, calendar_packet.PACKET_SHA256)
     )
     control_types = ("oracle", "wrong") if controls else ("live",)
@@ -1047,6 +1162,7 @@ def main(argv: list[str] | None = None) -> int:
     views = parser.add_mutually_exclusive_group()
     views.add_argument("--private-views", action="store_true")
     views.add_argument("--role-views", action="store_true")
+    views.add_argument("--visible-check", action="store_true")
     args = parser.parse_args(argv)
     print(
         json.dumps(
@@ -1056,6 +1172,7 @@ def main(argv: list[str] | None = None) -> int:
                 controls=args.controls,
                 private_views=args.private_views,
                 role_views=args.role_views,
+                visible_check=args.visible_check,
             ),
             sort_keys=True,
         )

@@ -7,6 +7,8 @@ from . import protocol as p
 WORLDS = tuple(f"w{i:02d}" for i in range(12, 24))
 ARMS = ("raw", "exact")
 ROLE_ARMS = ("sender-exact", "receiver-exact")
+JOIN_WORLDS = tuple(f"w{i:02d}" for i in range(24, 48))
+JOIN_ARMS = ("lists", "checked")
 SEATS = p.SEATS
 PHASES = p.PHASES
 MODEL = p.MODEL
@@ -15,6 +17,16 @@ AGENT_NAME = "seatlab-calendar-private-view"
 AGENT_VERSION = "1.0.0"
 SCHEMA = "seatlab.native-calendar-private-views/v1"
 ROLE_SCHEMA = "seatlab.native-calendar-role-views/v1"
+JOIN_SCHEMA = "seatlab.native-calendar-visible-check/v1"
+
+_JOIN_LISTS_FIRST = frozenset(
+    world
+    for offset in range(2)
+    for world in sorted(
+        JOIN_WORLDS[offset::2],
+        key=lambda world: p.digest(f"seatlab-visible-intersection-v1:{world}"),
+    )[:6]
+)
 
 _VIEW_PREFIX = calendar_protocol._RULES[
     : calendar_protocol._RULES.index("Your calendar: ")
@@ -84,9 +96,34 @@ class RoleCell(Cell):
         return f"crv-{mode}{self.world}-{self.arm}"
 
 
+@dataclass(frozen=True, slots=True)
+class JoinCell(Cell):
+    @override
+    def __post_init__(self) -> None:
+        if (
+            self.world not in JOIN_WORLDS
+            or self.arm not in JOIN_ARMS
+            or self.control not in ("live", "oracle", "wrong")
+        ):
+            raise ValueError("invalid_cell")
+
+    @property
+    @override
+    def first(self) -> str:
+        return "lists" if self.world in _JOIN_LISTS_FIRST else "checked"
+
+    @property
+    @override
+    def run(self) -> str:
+        mode = "" if self.control == "live" else f"ctl-{self.control}-"
+        return f"cvj-{mode}{self.world}-{self.arm}"
+
+
 def _view_arm(arm: str, exact_arm: str) -> str:
     if arm in ROLE_ARMS:
         return "exact" if arm == exact_arm else "raw"
+    if arm in JOIN_ARMS:
+        return "exact"
     return arm
 
 
@@ -147,9 +184,7 @@ def pick_prompt(
     )
 
 
-def choice_prompt(
-    table: calendar_packet.Table, old: object, opened: dict[str, object], arm: str
-) -> str:
+def _opened_starts(opened: dict[str, object]) -> dict[int, tuple[int, ...]]:
     reports = calendar_packet._list(
         calendar_packet._object(opened, "reports")["reports"]
     )
@@ -157,17 +192,66 @@ def choice_prompt(
         raise ValueError("expected_two_opened_reports")
     items = [calendar_packet._object(report, "day", "starts") for report in reports]
     days = p._days([item["day"] for item in items])
+    parsed = {}
     for day, item in zip(days, items, strict=True):
         starts = p._starts(calendar_packet._list(item["starts"]))
         if any(p._day(slot) != day for slot in starts):
             raise ValueError("opened_report_slot_on_wrong_day")
-    return (
+        parsed[day] = starts
+    return parsed
+
+
+def _visible_sets(
+    table: calendar_packet.Table,
+    initial: tuple[int, ...],
+    reports: dict[int, tuple[int, ...]],
+) -> dict[str, list[int]]:
+    if len(table) != 3 or any(
+        len(row) != len(calendar_protocol._DAYS) for row in table
+    ):
+        raise ValueError("invalid_calendar_shape")
+    for row in table:
+        for mask in row:
+            calendar_protocol._checked_mask(mask)
+    own = set(calendar_packet.starts(table))
+    return {
+        "opened": sorted(
+            own.intersection(slot for starts in reports.values() for slot in starts)
+        ),
+        "unopened_initial": [
+            slot for slot in initial if p._day(slot) not in reports and slot in own
+        ],
+    }
+
+
+def visible_sets(
+    table: calendar_packet.Table, old: object, opened: dict[str, object]
+) -> dict[str, list[int]]:
+    return _visible_sets(table, p._starts(old), _opened_starts(opened))
+
+
+def choice_prompt(
+    table: calendar_packet.Table, old: object, opened: dict[str, object], arm: str
+) -> str:
+    reports = _opened_starts(opened)
+    initial = p._starts(old)
+    visible = _visible_sets(table, initial, reports) if arm == "checked" else None
+    baseline = (
         _view(table, _view_arm(arm, "receiver-exact"))
-        + f"Initial report from the other calendar: {p.wire(p._starts(old))}\n"
+        + f"Initial report from the other calendar: {p.wire(initial)}\n"
         + f"Opened weekday reports: {p.wire(opened)}\n"
         + "Each opened report replaces the initial list for that weekday. An empty "
         "report means the sender listed no start for that weekday; it is not proof none exists. "
         "For every other weekday, the initial list is your only information about the "
         'other calendar. Select one joint start. Return only JSON: {"slot":n}. '
         "Replace n with one slot ID."
+    )
+    if visible is None:
+        return baseline
+    return (
+        baseline
+        + f"\nVisible intersections: {p.wire(visible)}\n"
+        + "Both sets depend on the peer's reports. A listed start can be invalid "
+        "(a false positive), and a valid start can be absent (a false negative). "
+        "You may select any slot ID, even if it is not listed in either set."
     )

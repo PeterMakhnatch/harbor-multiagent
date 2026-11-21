@@ -484,6 +484,8 @@ class PrivateViewSeat(NoticeSeat):
     def _make_cell(world: str, arm: str, control: str) -> team_views.Cell:
         if arm in team_views.ROLE_ARMS:
             return team_views.RoleCell(world, arm, control)
+        if arm in team_views.JOIN_ARMS:
+            return team_views.JoinCell(world, arm, control)
         return team_views.Cell(world, arm, control)
 
     @override

@@ -4,29 +4,14 @@ from ..visibility import calendar_packet as packet
 from ..visibility import calendar_replica_source
 from . import heldout, team_views
 from . import protocol as p
+from .heldout import MANIFEST, MANIFEST_SHA256
 
-MANIFEST = (
-    Path(__file__).resolve().parents[1] / "results/flotilla-schedule-heldout-12-23.json"
+JOIN_MANIFEST = (
+    Path(__file__).resolve().parents[1] / "results/flotilla-schedule-visible-24-47.json"
 )
-MANIFEST_SHA256 = "7539109a5a7ec4dc5ffa0d26455021a8270391ec19d03e367e20c79a7fa0c192"
-
-
-def _expected(cell: team_views.Cell) -> tuple[str, str]:
-    path = heldout._physical_directory(MANIFEST.parent) / MANIFEST.name
-    raw = packet._read(path, heldout._MAX_MANIFEST_BYTES)
-    if packet._digest(raw) != MANIFEST_SHA256:
-        raise packet._Invalid("heldout manifest checksum mismatch")
-    manifest = packet._object(packet._json(raw))
-    rows = packet._list(manifest["worlds"])
-    row = packet._object(
-        rows[team_views.WORLDS.index(cell.world)],
-        "instance",
-        "calendar_sha256",
-        "stock_semantics_sha256",
-    )
-    if row["instance"] != cell.index:
-        raise packet._Invalid("heldout manifest instance mismatch")
-    return row["calendar_sha256"], row["stock_semantics_sha256"]
+JOIN_MANIFEST_SHA256 = (
+    "671425d16ca2a0b84e417fbb88d6065a7df254c98a482e57f66d6bbbdcbe02dd"
+)
 
 
 def _checked(
@@ -34,14 +19,18 @@ def _checked(
 ) -> tuple[calendar_replica_source.Identity, tuple[packet.Table, packet.Table]]:
     if task.name != cell.task_name:
         raise packet._Invalid("heldout task name differs from the calendar world")
-    task = heldout._physical_directory(task)
-    calendar, semantics = _expected(cell)
-    heldout._check_layout(task)
-    source = calendar_replica_source._fingerprint(task)
-    if source.semantics_sha256 != semantics:
-        raise packet._Invalid("heldout task differs from the pinned stock semantics")
-    own_tables = packet._checked_source_tables(
-        task, cell.index, cell.task_name, stock_limits=heldout._STOCK_LIMITS
+    if isinstance(cell, team_views.JoinCell):
+        cohort = heldout._VISIBLE
+        path, sha256 = JOIN_MANIFEST, JOIN_MANIFEST_SHA256
+        task = heldout._check_schedule(task.parent, cohort) / task.name
+    else:
+        cohort = heldout._LEGACY
+        path, sha256 = MANIFEST, MANIFEST_SHA256
+        task = heldout._physical_directory(task)
+    rows = heldout._pinned_manifest_rows(path, sha256, cohort)
+    calendar, semantics = rows[cell.index - cohort.first]
+    source, own_tables = heldout._checked_stock(
+        task, cell.index, cell.task_name, cohort, expected_semantics_sha256=semantics
     )
     if heldout._calendar_digest(own_tables) != calendar:
         raise packet._Invalid("heldout task differs from the pinned calendar identity")
@@ -59,9 +48,14 @@ def tables(task: Path, cell: team_views.Cell) -> tuple[packet.Table, packet.Tabl
 
 
 def seat_kwargs(task: Path, cell: team_views.Cell, seat: str) -> dict[str, str | int]:
+    return _seat_kwargs(tables(task, cell), cell, seat)
+
+
+def _seat_kwargs(
+    own_tables: tuple[packet.Table, packet.Table], cell: team_views.Cell, seat: str
+) -> dict[str, str | int]:
     if seat not in team_views.SEATS:
         raise ValueError("invalid_seat")
-    own_tables = tables(task, cell)
     table = own_tables[team_views.SEATS.index(seat)]
     kwargs: dict[str, str | int] = {
         "world": cell.world,

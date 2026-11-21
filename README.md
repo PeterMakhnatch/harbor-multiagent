@@ -23,6 +23,8 @@ The [Dispatch quickstart](examples/seatlab/live-confirmation.md#give-another-rec
 
 To compare your own harness across tasks, [send 32 real receiver inputs to independent workers](examples/seatlab/replication.md#run-your-receiver-on-2-tasks-without-installing-harbor). Each worker receives one seat’s messages. The offline scorer accepts replies in any order. It reports meeting and shipment scores separately.
 
+If 2 agents propose different answers, [test a third agent as the selector](examples/seatlab/replication.md#let-a-third-agent-select-between-two-receivers). The test reverses the proposals and scores the selected answer. In [80 real selections](examples/seatlab/live-confirmation.md#can-a-third-agent-choose-between-two-proposed-answers), the reviewer could not improve bookings because neither scheduling proposal was correct.
+
 In the [Dispatch replay](examples/seatlab/live-confirmation.md#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher), actual bay IDs increased optimal choices from 52/96 to 68/96. The [receipt](examples/seatlab/results/dispatch-peer-payload-replay.json) records every receiver call and its token-priced cost.
 
 For end-to-end behavior, [run both seats in native Harbor](examples/seatlab/replication.md#test-private-calendar-views-with-2-live-seats). In [24 native scheduling teams](examples/seatlab/calendar-notice-result.md), showing each seat its own feasible starts raised team success from 0/12 to 6/12. A separate fixed-transcript replay tests the contribution of the peer’s actual start IDs. Replays measure receiver decisions, not team reward.
