@@ -213,6 +213,25 @@ Use one pair per world and assignment direction, repetition 0. This registers 18
 
 Use the stock counterbalanced arm order and both directions in every world. Make no replacement when a seed, arm, native reward, or service receipt is missing. Distinguish an unscored team from a verified zero. Primary: native success with proposals minus success without proposals. Average complete direction pairs within each world. Report this estimate only if every registered world has a pair. Also report worst/best bounds on the full register, numbers of improvements and harms, recommendation overlap, and query length adherence. The 18 pairs share 9 worlds. This is not a replication of the earlier +62.5-point role-input contrast: it tests a different message in a live system.
 
+#### Run two native seat programs on your own machine
+
+Use Python 3.12 or later, the fork's locked environment, and local Docker Compose. For a new run, [generate the public Flotilla tasks](#native-replication-with-an-external-harness) into a private directory. Generated tasks contain service credentials; do not commit or share them. A full study uses 18 paired blocks, but one block is enough to exercise your harness.
+
+Each seat program receives one JSON line on standard input, with `schema: "seatlab.seat-turn/v1"` and one `prompt` string. Return one newline-terminated JSON object with a `text` string on standard output. The string is the model’s unchanged first reply. For example, `print(json.dumps({"text": reply}))`. Inside that string, lists use `{"starts":[...]}`. The final submission uses `{"slot":...}`. The host assigns the roles and sends the native messages. The seat does not need task files or Harbor credentials. Use an absolute executable path. The command config has exactly two roles:
+
+```json
+{"sender":{"argv":["/absolute/path/to/responder"],"env":[]},"receiver":{"argv":["/absolute/path/to/scheduler"],"env":[]}}
+```
+
+```sh
+umask 077
+study=$(realpath "$(mktemp -d)")
+python -m examples.seatlab.visibility.calendar_query_run --tasks "$private/tasks/schedule" --study "$study" --commands /absolute/path/to/commands.json --world 1 --direction 0
+python -m examples.seatlab.visibility.calendar_query_summary --study "$study"
+```
+
+The command claims a block before the first model turn. Different workers can run distinct world/direction pairs against the same study directory. Never submit the same block twice. A failed attempt stays in the register. Keep all native output private. The checked public result includes no raw role prompts or task credentials.
+
 ### Can the receiver help its teammate recheck a calendar?
 
 **Registered before the first calendar generation.** The 12 retained Flotilla `c1` talk worlds split 6 synthetic calendars evenly between 2 seats. Each world has exactly 1 common two-hour meeting. Earlier talk-versus-silent results do not say whether a receiver can help its sender correct a report. This study compares a peer-informed recheck with a blind recheck. It starts new teams; it does not replay the old free-text conversations.
