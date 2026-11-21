@@ -2,6 +2,14 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Does a revised record help a replacement agent find the right context?
+
+The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.
+
+The first DeepSeek writer returned a 337-byte note against the 256-byte limit. It returned valid JSON, but neither replacement received a note. The host ledger matched the one call at **$0.000072300 USD**. No decision or native score exists for it. The experiment retains this block and does not retry the writer.
+
+Two independent local programs also ran a non-shipping example with 18 subprocess calls. The replacement answered questions about opening hours. Two changed cases used separate final answers, and two unchanged cases shared one actual answer each. No private note or opening time appeared in the report. This checks the portable interface, not a model.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.
