@@ -46,6 +46,28 @@ def _turn(stage: str, role: str, instruction: str, data: dict[str, object]) -> T
     )
 
 
+def writer_turn(block: Block) -> Turn:
+    return _turn(
+        "note",
+        "route_review",
+        'Write a handoff note for a replacement agent. Return only {"note":"..."}. '
+        "Use a nonempty printable string of at most 256 UTF-8 bytes.",
+        {
+            "brief": block.packet.brief,
+            "records": [{"id": r.id, "body": r.before} for r in block.case.records],
+        },
+    )
+
+
+def reader_context(block: Block, note: str) -> dict[str, object]:
+    return {
+        "brief": block.packet.brief,
+        "note": note,
+        "questions": [{"id": r.id, "question": r.question} for r in block.case.records],
+        "options": block.packet.choices,
+    }
+
+
 def episode(block: Block, ask: Callable[[Turn], str | None]) -> dict[str, Any]:
     packet = block.packet
     records = {record.id: record for record in block.case.records}
@@ -64,18 +86,7 @@ def episode(block: Block, ask: Callable[[Turn], str | None]) -> dict[str, Any]:
         "note_sha256": None,
         "arms": arms,
     }
-    raw = ask(
-        _turn(
-            "note",
-            "route_review",
-            'Write a handoff note for a replacement agent. Return only {"note":"..."}. '
-            "Use a nonempty printable string of at most 256 UTF-8 bytes.",
-            {
-                "brief": packet.brief,
-                "records": [{"id": r.id, "body": r.before} for r in records.values()],
-            },
-        )
-    )
+    raw = ask(writer_turn(block))
     if raw is None:
         return state
     state["note_status"] = "invalid"
@@ -91,12 +102,7 @@ def episode(block: Block, ask: Callable[[Turn], str | None]) -> dict[str, Any]:
         note_sha256=hashlib.sha256(note_bytes).hexdigest(),
     )
 
-    context = {
-        "brief": packet.brief,
-        "note": note,
-        "questions": [{"id": r.id, "question": r.question} for r in records.values()],
-        "options": packet.choices,
-    }
+    context = reader_context(block, note)
     statuses = {
         r.id: "same" if r.old_version == r.new_version else "revised"
         for r in records.values()
