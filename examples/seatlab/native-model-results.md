@@ -2,6 +2,12 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## What changes when an agent sees the same preferences on different records?
+
+All 12 direct source teams passed the original native audit. The [portable packet](results/turn-fork-packet.json) fixes the 2 real upstream messages for each team. Under the aligned policy it reproduces all 24 original downstream prompt hashes and the scores for all 72 original actions. These new runs start at the sender's selection, not in a new Harbor world.
+
+The first direct continuation used 2 settled calls, with an estimated cost of **$0.000090618**. The inventory call cost $0.000033834. The dispatch call cost $0.000056784. This pilot is part of the registered cohort, not an extra attempt. The first keyless continuation produced 2 separate service receipts. Neither pilot was retried.
+
 ## Can a dispatcher help another agent decide which two reports to send?
 
 Two live agents share a strict message budget. The dispatcher writes 6 preferred bay letters. The inventory agent chooses 2 revised reports to send. Both policies generate a card. Only `brief` gives it to inventory. The final dispatcher receives the selected reports, not the card. The [register](replication.md#can-a-six-letter-brief-help-another-agent-prioritize-revisions) fixes the order and the 6 worlds before either model runs.
