@@ -1,5 +1,7 @@
 # Native speaker–listener results
 
+For the direct DeepSeek team experiments, see [Does better team context improve Harbor reward?](live-confirmation.md). It separates a visible notice, a delivered answer, and the final team reward.
+
 ## Does sending a short proposal change the native team reward?
 
 **Sending the proposed times did not improve the native team score on these 9 worlds.** All 18 registered pairs completed. Sending the proposals helped 1 pair, hurt 2, and left 15 scores unchanged. The equal-world difference was **−5.56 percentage points**. Each world supplied 2 seat directions. They are not 18 independent worlds.
@@ -151,7 +153,23 @@ We ran [72 new requests](results/visibility-label-crossover.json). Each case app
 
 The no-report prompt was identical under both maps. The listener always chose A. With reports, its choices followed the physical route in 13 pairs, but still kept the same letter in 5. This separates label preference from sensitivity to evidence. It does not show that the listener always interprets the reports correctly.
 
-All 72 calls returned a valid first response. They repeat 6 source worlds, not 72 independent tasks. The [per-call cost record](results/visibility-label-crossover-cost.json) gives a token-based estimate of **$0.001641600 USD**, with no unresolved reservation.
+All 72 calls returned a valid first response. They repeat 6 source trials, not 72 independent tasks. The [per-call cost record](results/visibility-label-crossover-cost.json) gives a token-based estimate of **$0.001641600 USD**, with no unresolved reservation.
+
+### How many distinct numerical problems did these trials contain?
+
+**Six archived receiver cases contained only 2 distinct underlying problems.** We checked every attribute value in the private stock record. We also compared the 3 numerical reports the receiver actually fetched. We kept each reporter and attribute fixed. A simultaneous reversal of the route labels did not create a new input.
+
+| Source | Authenticated rounds | Distinct true tables | Distinct claim patterns | Distinct patterns with opposing reports |
+| --- | ---: | ---: | ---: | ---: |
+| Original listener panel | 6 | 2 | 4 | 2 |
+| Full native archive, including the original panel | 180 | 6 | 15 | 6 |
+| Mixed claims and true tables both absent from the original panel | 60 | 4 | 4 | 4 |
+
+Two reports oppose each other when their own numerical totals strictly favor different routes. None of the 180 rounds had a mean route-score difference within 5 points. An authenticated round is not an independent problem or a new team.
+
+**Decision: do not buy more receiver samples to claim generalization from this archive.** The [registered holdout rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062533433) required 8 new true tables and 8 new mixed claim patterns. The archive supplied 4 of each. This does not rule out a report-order effect. Use new task instances to test it across different problems.
+
+To check your retained copy, run `python -m examples.seatlab.visibility.listener_coverage "$CRUCIBLE_ROOT"` from the fork. The command reads the archive and returns [aggregate counts](results/visibility-listener-coverage.json). It makes no model call and starts no container.
 
 ### Did current inventory reports help a new Harbor team?
 

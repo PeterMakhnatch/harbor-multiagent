@@ -1,0 +1,1605 @@
+{
+  "cells": [
+    {
+      "arm": "shown",
+      "id": "dcf-s6801-r0-shown",
+      "prompt_sha256": "7149ed4198447fa2d2667b2544d2389df950f5466bd647766d703aaa5a1037f2",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 1,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6801-r0-flagged",
+      "prompt_sha256": "6d0d5782ceecee4b65452d6186962b3fb75aae92854e4ff2c21a92dff89307fb",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 1,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6801-r1-flagged",
+      "prompt_sha256": "6d0d5782ceecee4b65452d6186962b3fb75aae92854e4ff2c21a92dff89307fb",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 1,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6801-r1-shown",
+      "prompt_sha256": "7149ed4198447fa2d2667b2544d2389df950f5466bd647766d703aaa5a1037f2",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 1,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6801-r2-shown",
+      "prompt_sha256": "7149ed4198447fa2d2667b2544d2389df950f5466bd647766d703aaa5a1037f2",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 1,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6801-r2-flagged",
+      "prompt_sha256": "6d0d5782ceecee4b65452d6186962b3fb75aae92854e4ff2c21a92dff89307fb",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 1,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6801-r3-flagged",
+      "prompt_sha256": "6d0d5782ceecee4b65452d6186962b3fb75aae92854e4ff2c21a92dff89307fb",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 1,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6801-r3-shown",
+      "prompt_sha256": "7149ed4198447fa2d2667b2544d2389df950f5466bd647766d703aaa5a1037f2",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 1,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "fe32a69e5bff23e50de757efd17baa6aaac934fb39beaf5e4185cf7a8e24be66",
+      "status": "complete",
+      "world": 6801
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6802-r0-flagged",
+      "prompt_sha256": "c4c4d33f991ca6bcbf352b230adb5aa23ebf55c8dfdc1803e66e4a18b98706e2",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6802-r0-shown",
+      "prompt_sha256": "4062edbb34a6726d66d9e43af38afa076ac5bb15e905a9f12f679d6b4e741723",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6802-r1-shown",
+      "prompt_sha256": "4062edbb34a6726d66d9e43af38afa076ac5bb15e905a9f12f679d6b4e741723",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6802-r1-flagged",
+      "prompt_sha256": "c4c4d33f991ca6bcbf352b230adb5aa23ebf55c8dfdc1803e66e4a18b98706e2",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6802-r2-flagged",
+      "prompt_sha256": "c4c4d33f991ca6bcbf352b230adb5aa23ebf55c8dfdc1803e66e4a18b98706e2",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6802-r2-shown",
+      "prompt_sha256": "4062edbb34a6726d66d9e43af38afa076ac5bb15e905a9f12f679d6b4e741723",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6802-r3-shown",
+      "prompt_sha256": "4062edbb34a6726d66d9e43af38afa076ac5bb15e905a9f12f679d6b4e741723",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6802-r3-flagged",
+      "prompt_sha256": "c4c4d33f991ca6bcbf352b230adb5aa23ebf55c8dfdc1803e66e4a18b98706e2",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "d9b71a940a215c0b24ea46530fcdac99dcefb019755cb74931f21d71dcf714b3",
+      "status": "complete",
+      "world": 6802
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6803-r0-shown",
+      "prompt_sha256": "bb0835cefede4bfe750752d1091fe3438cfa8409113deb31122a01084a1d28ce",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6803-r0-flagged",
+      "prompt_sha256": "a5c665f5bfc4fd2e605c149312494ee93acb3aab4de03697c04176a0db7e6184",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6803-r1-flagged",
+      "prompt_sha256": "a5c665f5bfc4fd2e605c149312494ee93acb3aab4de03697c04176a0db7e6184",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 0,
+          "opportunities": 2,
+          "optimal": 0,
+          "shipments": 2,
+          "unsupported": 2
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6803-r1-shown",
+      "prompt_sha256": "bb0835cefede4bfe750752d1091fe3438cfa8409113deb31122a01084a1d28ce",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6803-r2-shown",
+      "prompt_sha256": "bb0835cefede4bfe750752d1091fe3438cfa8409113deb31122a01084a1d28ce",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6803-r2-flagged",
+      "prompt_sha256": "a5c665f5bfc4fd2e605c149312494ee93acb3aab4de03697c04176a0db7e6184",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 0,
+          "opportunities": 2,
+          "optimal": 0,
+          "shipments": 2,
+          "unsupported": 2
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6803-r3-flagged",
+      "prompt_sha256": "a5c665f5bfc4fd2e605c149312494ee93acb3aab4de03697c04176a0db7e6184",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 0,
+          "opportunities": 2,
+          "optimal": 0,
+          "shipments": 2,
+          "unsupported": 2
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6803-r3-shown",
+      "prompt_sha256": "bb0835cefede4bfe750752d1091fe3438cfa8409113deb31122a01084a1d28ce",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "904b4ffd4fc357f11c19a9b7318bf627a02a699878d92c844f56024de53e1ca2",
+      "status": "complete",
+      "world": 6803
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6804-r0-flagged",
+      "prompt_sha256": "7dd03dafaaafd5288a4c92b00eaa646b462e13e6b6b5a46f5efdac1c2f60539e",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6804-r0-shown",
+      "prompt_sha256": "b4769b5eaae797655a7f6abfe6a0db1b287af414ec19b3160110537b078d37a6",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6804-r1-shown",
+      "prompt_sha256": "b4769b5eaae797655a7f6abfe6a0db1b287af414ec19b3160110537b078d37a6",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6804-r1-flagged",
+      "prompt_sha256": "7dd03dafaaafd5288a4c92b00eaa646b462e13e6b6b5a46f5efdac1c2f60539e",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6804-r2-flagged",
+      "prompt_sha256": "7dd03dafaaafd5288a4c92b00eaa646b462e13e6b6b5a46f5efdac1c2f60539e",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6804-r2-shown",
+      "prompt_sha256": "b4769b5eaae797655a7f6abfe6a0db1b287af414ec19b3160110537b078d37a6",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6804-r3-shown",
+      "prompt_sha256": "b4769b5eaae797655a7f6abfe6a0db1b287af414ec19b3160110537b078d37a6",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6804-r3-flagged",
+      "prompt_sha256": "7dd03dafaaafd5288a4c92b00eaa646b462e13e6b6b5a46f5efdac1c2f60539e",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "c5cf7562f027f0972ec2f51cf578a8584f9790fae4b38dba3c5ff76a11fac5eb",
+      "status": "complete",
+      "world": 6804
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6805-r0-shown",
+      "prompt_sha256": "e92745cc1ad63f49250c6502bce6fe6cb5d0809d12f65f89c61237b2601f2e61",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6805-r0-flagged",
+      "prompt_sha256": "8cf69363b96b7896155f0342a3b17d7d0e9434e43f0f69728f891cec1631b606",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6805-r1-flagged",
+      "prompt_sha256": "8cf69363b96b7896155f0342a3b17d7d0e9434e43f0f69728f891cec1631b606",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6805-r1-shown",
+      "prompt_sha256": "e92745cc1ad63f49250c6502bce6fe6cb5d0809d12f65f89c61237b2601f2e61",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6805-r2-shown",
+      "prompt_sha256": "e92745cc1ad63f49250c6502bce6fe6cb5d0809d12f65f89c61237b2601f2e61",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6805-r2-flagged",
+      "prompt_sha256": "8cf69363b96b7896155f0342a3b17d7d0e9434e43f0f69728f891cec1631b606",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6805-r3-flagged",
+      "prompt_sha256": "8cf69363b96b7896155f0342a3b17d7d0e9434e43f0f69728f891cec1631b606",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6805-r3-shown",
+      "prompt_sha256": "e92745cc1ad63f49250c6502bce6fe6cb5d0809d12f65f89c61237b2601f2e61",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 0,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "256e88c89ee3bbd8c60511e548be69a80eee0f3eddcfb44967d7f8c1814e7baf",
+      "status": "complete",
+      "world": 6805
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6806-r0-flagged",
+      "prompt_sha256": "ae05fecefbe6b1138c3a81b7781851d69d60d37dee0c7d4fbe9b68c710e1e5cc",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 0,
+          "opportunities": 2,
+          "optimal": 0,
+          "shipments": 2,
+          "unsupported": 2
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6806-r0-shown",
+      "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6806-r1-shown",
+      "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6806-r1-flagged",
+      "prompt_sha256": "ae05fecefbe6b1138c3a81b7781851d69d60d37dee0c7d4fbe9b68c710e1e5cc",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 0,
+          "opportunities": 2,
+          "optimal": 0,
+          "shipments": 2,
+          "unsupported": 2
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6806-r2-flagged",
+      "prompt_sha256": "ae05fecefbe6b1138c3a81b7781851d69d60d37dee0c7d4fbe9b68c710e1e5cc",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6806-r2-shown",
+      "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6806-r3-shown",
+      "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 2,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 1
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6806-r3-flagged",
+      "prompt_sha256": "ae05fecefbe6b1138c3a81b7781851d69d60d37dee0c7d4fbe9b68c710e1e5cc",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 2,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 2
+        }
+      },
+      "source_result_sha256": "ebf6aeb9b984c1c1e775f16abaea501283cc16848d34d527fe7d071e1357903f",
+      "status": "complete",
+      "world": 6806
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6807-r0-shown",
+      "prompt_sha256": "441701d18338b9a2de4a7e08aa84224352a6117899f9aad44c994cb8bd32c697",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6807-r0-flagged",
+      "prompt_sha256": "ce099a57e3640b813a949a752c6f1c37e5562858fb0f02c7fc412a967ebcb5b9",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6807-r1-flagged",
+      "prompt_sha256": "ce099a57e3640b813a949a752c6f1c37e5562858fb0f02c7fc412a967ebcb5b9",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6807-r1-shown",
+      "prompt_sha256": "441701d18338b9a2de4a7e08aa84224352a6117899f9aad44c994cb8bd32c697",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6807-r2-shown",
+      "prompt_sha256": "441701d18338b9a2de4a7e08aa84224352a6117899f9aad44c994cb8bd32c697",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6807-r2-flagged",
+      "prompt_sha256": "ce099a57e3640b813a949a752c6f1c37e5562858fb0f02c7fc412a967ebcb5b9",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6807-r3-flagged",
+      "prompt_sha256": "ce099a57e3640b813a949a752c6f1c37e5562858fb0f02c7fc412a967ebcb5b9",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 0,
+          "opportunities": 2,
+          "optimal": 0,
+          "shipments": 2,
+          "unsupported": 2
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6807-r3-shown",
+      "prompt_sha256": "441701d18338b9a2de4a7e08aa84224352a6117899f9aad44c994cb8bd32c697",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 2,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 0,
+          "optimal": 4,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "c0780c216d9eb5dc152a6aacd8fd384d865eda84e935f42a3f6a529809277679",
+      "status": "complete",
+      "world": 6807
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6808-r0-flagged",
+      "prompt_sha256": "9603c9e6c60a8f39f2ec5fe897fb8ce7338c3c9f1dd363c14c93cb7043e25fcd",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6808-r0-shown",
+      "prompt_sha256": "a29d0aa42b8a5dc1ff3855e585123264783fc74c4776d90cbf01814a7c8dd2b6",
+      "repeat": 0,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6808-r1-shown",
+      "prompt_sha256": "a29d0aa42b8a5dc1ff3855e585123264783fc74c4776d90cbf01814a7c8dd2b6",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 3,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6808-r1-flagged",
+      "prompt_sha256": "9603c9e6c60a8f39f2ec5fe897fb8ce7338c3c9f1dd363c14c93cb7043e25fcd",
+      "repeat": 1,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6808-r2-flagged",
+      "prompt_sha256": "9603c9e6c60a8f39f2ec5fe897fb8ce7338c3c9f1dd363c14c93cb7043e25fcd",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6808-r2-shown",
+      "prompt_sha256": "a29d0aa42b8a5dc1ff3855e585123264783fc74c4776d90cbf01814a7c8dd2b6",
+      "repeat": 2,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 2,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "shown",
+      "id": "dcf-s6808-r3-shown",
+      "prompt_sha256": "a29d0aa42b8a5dc1ff3855e585123264783fc74c4776d90cbf01814a7c8dd2b6",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 2,
+          "opportunities": 1,
+          "optimal": 2,
+          "shipments": 2,
+          "unsupported": 0
+        },
+        "unopened": {
+          "feasible": 4,
+          "opportunities": 3,
+          "optimal": 3,
+          "shipments": 4,
+          "unsupported": 0
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    },
+    {
+      "arm": "flagged",
+      "id": "dcf-s6808-r3-flagged",
+      "prompt_sha256": "9603c9e6c60a8f39f2ec5fe897fb8ce7338c3c9f1dd363c14c93cb7043e25fcd",
+      "repeat": 3,
+      "score": {
+        "opened": {
+          "feasible": 1,
+          "opportunities": 1,
+          "optimal": 1,
+          "shipments": 2,
+          "unsupported": 1
+        },
+        "unopened": {
+          "feasible": 1,
+          "opportunities": 3,
+          "optimal": 1,
+          "shipments": 4,
+          "unsupported": 3
+        }
+      },
+      "source_result_sha256": "2ac184b4a697da64440ea249d2fa03469d3e2961bc0c1826c8db1855651dac56",
+      "status": "complete",
+      "world": 6808
+    }
+  ],
+  "schema": "seatlab.dispatch-claim-conflicts/v1"
+}

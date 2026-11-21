@@ -10,7 +10,8 @@ import selectors
 import signal
 import subprocess
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -57,7 +58,13 @@ def _remaining(deadline: float) -> float:
     return seconds
 
 
-def _exchange(process: subprocess.Popen[bytes], request: bytes, deadline: float) -> str:
+def _exchange_line(
+    process: subprocess.Popen[bytes],
+    request: bytes,
+    deadline: float,
+    *,
+    max_reply_bytes: int,
+) -> bytearray:
     assert process.stdin is not None and process.stdout is not None
     stdin, stdout = process.stdin.fileno(), process.stdout.fileno()
     os.set_blocking(stdin, False)
@@ -80,14 +87,14 @@ def _exchange(process: subprocess.Popen[bytes], request: bytes, deadline: float)
                     continue
                 try:
                     chunk = os.read(
-                        stdout, min(8192, _MAX_REPLY_BYTES - len(response) + 1)
+                        stdout, min(8192, max_reply_bytes - len(response) + 1)
                     )
                 except BlockingIOError:
                     continue
                 if not chunk:
                     ready.unregister(stdout)
                     continue
-                if len(response) + len(chunk) > _MAX_REPLY_BYTES:
+                if len(response) + len(chunk) > max_reply_bytes:
                     raise ValueError("seat command reply is too large")
                 if response.endswith(b"\n") or chunk.find(b"\n") not in (
                     -1,
@@ -98,6 +105,54 @@ def _exchange(process: subprocess.Popen[bytes], request: bytes, deadline: float)
 
     if not response.endswith(b"\n"):
         raise ValueError("invalid seat command reply")
+    return response
+
+
+@contextmanager
+def _command_line(
+    argv: Sequence[str],
+    request: bytes,
+    *,
+    deadline: float,
+    max_reply_bytes: int,
+    search_path: str,
+    environ: Mapping[str, str],
+) -> Iterator[bytearray]:
+    with (
+        TemporaryDirectory(prefix="seatlab-turn-") as home,
+        subprocess.Popen(
+            argv,
+            cwd=home,
+            env={"PATH": search_path, "HOME": home, **_TRACING_OFF, **environ},
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        ) as process,
+    ):
+        try:
+            yield _exchange_line(
+                process, request, deadline, max_reply_bytes=max_reply_bytes
+            )
+            if process.wait(timeout=_remaining(deadline)) != 0:
+                raise ValueError("seat command failed")
+        finally:
+            _reap_and_kill_group(process)
+
+
+def _reap_and_kill_group(process: subprocess.Popen[bytes]) -> None:
+    process.poll()
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if process.poll() is None:
+            process.kill()
+            raise
+
+
+def _decode_text(response: bytearray) -> str:
     try:
         frame = json.loads(
             response.decode("utf-8"),
@@ -180,38 +235,15 @@ class CommandSeat:
         except UnicodeError:
             raise ValueError("invalid seat command prompt") from None
         try:
-            with TemporaryDirectory(prefix="seatlab-turn-") as home:
-                with subprocess.Popen(
-                    self._argv,
-                    cwd=home,
-                    env={
-                        "PATH": "/usr/bin:/bin",
-                        "HOME": home,
-                        **_TRACING_OFF,
-                        **self._environ,
-                    },
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True,
-                ) as process:
-                    try:
-                        text = _exchange(process, request, deadline)
-                        if process.wait(timeout=_remaining(deadline)) != 0:
-                            raise ValueError("seat command failed")
-                        return text
-                    finally:
-                        # Reap an exited leader first. Darwin can return EPERM
-                        # for a group containing only its unreaped leader.
-                        process.poll()
-                        try:
-                            os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        except PermissionError:
-                            if process.poll() is None:
-                                process.kill()
-                                raise
+            with _command_line(
+                self._argv,
+                request,
+                deadline=deadline,
+                max_reply_bytes=_MAX_REPLY_BYTES,
+                search_path="/usr/bin:/bin",
+                environ=self._environ,
+            ) as response:
+                return _decode_text(response)
         except (TimeoutError, subprocess.TimeoutExpired):
             raise TimeoutError("seat command timed out") from None
         except (OSError, UnicodeError):

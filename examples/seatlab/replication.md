@@ -1,6 +1,103 @@
-# Held-out replay and transport stability protocol
+# SeatLab: test a context change in a Harbor team
 
-This record is prospective. It is separate from the [primary experiment](protocol.md). The fixture describes an information handoff, not a real warehouse or a population of agents.
+Use SeatLab when you change what one agent sees and need to know whether the **team** performs better. Harbor runs and grades the team. SeatLab registers the comparison, preserves each first attempt, and lets you inspect or replay the decision afterward. This fork supports the scheduling and Dispatch workflows below. It is not a universal adapter for all Harbor tasks.
+
+**Try it without a key.** From the root of this fork branch, run the public result reader. It uses Python 3.12 and no external package:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.repeat_summary \
+  examples/seatlab/results/calendar-native-repeatability.json
+```
+
+This recomputes the comparison from the recorded grades of [96 actual teams](calendar-notice-result.md#does-the-booking-gain-repeat-in-fresh-teams). It does not regrade the original trials or launch a model. To use the system yourself, choose the question that matches your evidence:
+
+| What do you want to know? | What to run |
+|---|---|
+| Would another receiver decide differently on exactly these reports? | [Send the role's messages to your own workers](#run-your-receiver-on-2-tasks-without-installing-harbor). |
+| Does the change improve reward when both seats can react? | [Run paired native teams on your own stock calendars](#run-two-native-teams-on-each-world-in-your-own-calendar-block). |
+| Why can identical workflows receive different grades? | [Compare repeated teams, then inspect where their decisions first differ](#repeat-a-native-team-without-replacing-its-first-attempt). |
+
+Keep native team rewards separate from receiver-only grades. The historical [primary handoff protocol](protocol.md) and the study registrations below define what each result can support.
+
+## Run your receiver on 2 tasks without installing Harbor
+
+Use Python 3.12 or later. The panel needs no key, Docker, Harbor, or third-party package. It exports 32 factual receiver inputs: 24 scheduling decisions from 3 worlds and 8 Dispatch decisions from 8 worlds. Each Dispatch decision covers 6 shipments. This tests the receiver on fixed teammate reports. It does not run a new native team.
+
+Divide the sources into 4 disjoint shards. You can give each input file to a separate worker. Do not give a worker the scorer, the published outcomes, or another seat’s data.
+
+```sh
+work=$(mktemp -d)
+for i in 0 1 2 3; do
+  python3.12 -BS -m examples.seatlab.receiver_panel emit --shard "$i/4" > "$work/input-$i.jsonl"
+done
+```
+
+Send only `messages` to the receiver. Keep `id` and `prompt_sha256` outside the model. For each input, return one JSON line with these two fields and `reply`. Set `reply` to the **text** of the first return, not a parsed object. Do not repair or retry an invalid reply.
+
+This working example uses a constant receiver to check the transport. It does not call a model. Replace the `answer = ...` line with your receiver’s first return from `x["messages"]`.
+
+```sh
+for i in 0 1 2 3; do
+  python3.12 -BS -c '
+import json, sys
+for line in sys.stdin:
+    x = json.loads(line)
+    answer = "{\"slot\":0}" if x["task"] == "calendar" else json.dumps({"choices": {f"Q{i}": "A" for i in range(1, 7)}})
+    print(json.dumps({"id": x["id"], "prompt_sha256": x["prompt_sha256"], "reply": answer}))
+' < "$work/input-$i.jsonl" > "$work/reply-$i.jsonl" &
+done
+wait
+python3.12 -BS -m examples.seatlab.receiver_panel score "$work"/reply-*.jsonl > "$work/scores.json"
+python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["tasks"])' "$work/scores.json"
+```
+
+Each grade binds the reply digest to its original user prompt and native trial ID. An invalid reply is an observation with no grade. An absent reply is missing. Neither is a measured zero. A stale prompt digest, repeated case ID, or unknown case rejects the entire input with exit code `2` and no report. Valid files have exit code `0` even if some cases are missing. Compare coverage as well as grades.
+
+**Check against real teams:** We replayed the actual first returns from all 32 source trials through 4 separate worker processes. Every per-case grade matched its native grade. Reversing the worker files produced the same report byte for byte. The original receivers booked **0/24 meetings** and chose **36/48 optimal shipment bays**. These are two separate workloads, not one score. [Historical per-case scores and hashes](results/public-receiver-panel-native.json) · [Registered check](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061270837).
+
+### Test whether a receiver uses a visible conflict
+
+This Dispatch panel uses the same worker format as the panel above. Both views contain the same 6 shipments and the same peer reports. One view also marks whether each latest displayed report lists the receiver's favorite bay. The marker does not check stock or recommend a bay.
+
+```sh
+module=examples.seatlab.dispatch_conflict_panel
+work=$(mktemp -d)
+for i in 0 1 2 3; do
+  python3.12 -BS -m "$module" emit --shard "$i/4" > "$work/input-$i.jsonl"
+done
+```
+
+Give each worker one file. Send only `messages` to the receiver. Preserve each first reply in the format above. Each worker receives 2 whole worlds. Across all workers, each of 8 worlds gets 4 fresh replies per view.
+
+```sh
+python3.12 -BS -m "$module" score "$work"/reply-*.jsonl > "$work/scores.json"
+python3.12 -BS -m "$module" summarize "$work/scores.json"
+```
+
+The summary separates choices that contradict a visible report from choices that fail the stock grader. A stale report can be wrong. The comparison uses 8 world blocks, not 192 independent shipments. These commands do not call a model or start Harbor.
+
+## Let a third agent select between two receivers
+
+Use the [public receiver panel](#run-your-receiver-on-2-tasks-without-installing-harbor) twice. Save a complete file of valid first replies from each receiver as `draft-a.jsonl` and `draft-b.jsonl`. Keep the files private. The selector never receives the source grade.
+
+```sh
+python3.12 -BS -m examples.seatlab.peer_choice draft-a.jsonl draft-b.jsonl > review-inputs.jsonl
+```
+
+Pass only `messages` from each line to the selector. Return one line with `id`, `prompt_sha256`, and the first raw `reply`. A valid reply is `{"pick":1}` or `{"pick":2}`. Each different pair appears 4 times: 2 calls in each order. Identical actions do not need a selector. Do not send the task scorer or earlier grades to the selector.
+
+```sh
+python3.12 -BS -m examples.seatlab.peer_choice_result draft-a.jsonl draft-b.jsonl review-replies.jsonl > review-result.json
+python3.12 -BS -m examples.seatlab.peer_choice_score review-result.json
+```
+
+Use an empty reply file if no requests were emitted. A missing or invalid selector reply leaves the task verdict inconclusive. An unknown, repeated, or stale request rejects the file. The summary separates variation across repeated calls from changes after reversing the two proposals. It also shows how many correct choices were attainable from either proposal.
+
+To check the [published DeepSeek result](live-confirmation.md#can-a-third-agent-choose-between-two-proposed-answers) without a model, run:
+
+```sh
+python3.12 -BS -m examples.seatlab.peer_choice_score examples/seatlab/results/public-peer-choice-live.json
+```
 
 ## Independent native replay
 
@@ -251,6 +348,63 @@ done < "$queue"
 rm "$queue"
 ```
 
+##### Compare a model sender reply with a local check
+
+Use [the stock Flotilla task generator](#native-replication-with-an-external-harness) and the fork's locked Python environment. This comparison uses worlds `w00` through `w07`. Both real seats see only their own original busy-hour tables. The sender drafts an answer to the receiver's 2 proposals in both arms. The `local-report` arm then replaces the draft with the sender's actual availability for those 2 starts. The receiver may still book a different start.
+
+Run both no-key controls for one world before any paid replication. Use the same private job and physical task directory for both. Wrap each native run in the shared Docker slot command on a shared host:
+
+```sh
+umask 077
+job=$(realpath "$(mktemp -d)")
+python="$PWD/.venv/bin/python"
+harbor="$PWD/.venv/bin/harbor"
+module=examples.seatlab.live_answers
+for arm in model-report local-report; do
+  /tmp/crucible-docker-slot.sh "$python" -m "$module" control-repair \
+    --world w00 --arm "$arm" --job "$job" \
+    --tasks "$private/tasks/schedule" --harbor "$harbor" || exit 1
+done
+"$python" -m "$module" collect-repair --job "$job" --controls
+```
+
+The controls intentionally draft false sender facts. Expect `delivered_matches_sender` to be false for `model-report` and true for `local-report`. Do not treat an unattempted world as a verified loss.
+
+**Paid replication:** use a new private job. Check your direct DeepSeek balance and set an explicit budget first. Use `run-repair` instead of `control-repair` and pass `--spend-dir "$SEATLAB_SPEND_DIR"`. Supply only the direct DeepSeek key to the model process. Start `model-report` first on worlds 00, 01, 06, and 07. Start `local-report` first on the other 4. Give parallel workers different worlds; each world must finish its first native attempt before its second starts.
+
+Use `collect-repair --job "$job" --spend-dir "$SEATLAB_SPEND_DIR"` for the private audit. It checks the original sender draft, the actual message delivered to the other seat, and the stock grade separately. It reports a paired probability only after all 8 matched worlds have complete evidence. [Observed native result](calendar-notice-result.md#does-the-local-sender-check-help-a-whole-team).
+
+##### Change only the receiver's first question
+
+Use this test to separate a bad question from a wrong answer. In both arms, the sender drafts an answer and checks it against its own calendar before sending. The final receiver sees the same format in both arms. Only the first receiver input changes: `raw-question` gives its own busy-hour table; `local-question` gives the exact starts that fit the same table. Neither input gives the sender's availability.
+
+Using the same variables as above, create a new private job. For W00, the registered order is **local first**:
+
+```sh
+job=$(realpath "$(mktemp -d)")
+for arm in local-question raw-question; do
+  /tmp/crucible-docker-slot.sh "$python" -m "$module" control-questions \
+    --world w00 --arm "$arm" --job "$job" \
+    --tasks "$private/tasks/schedule" --harbor "$harbor" || exit 1
+done
+"$python" -m "$module" collect-questions --job "$job" --controls
+```
+
+The controls intentionally draft wrong sender answers. Both actual deliveries must match the sender's calendar. `question_both_locally_valid` checks the receiver's proposed pair, not the final team reward.
+
+For a paid run, create another new job. Use `run-questions` and `--spend-dir "$SEATLAB_SPEND_DIR"` only after you set a budget. Start `local-question` first on W00, W01, W06, and W07. Start `raw-question` first on W02 through W05. Split whole worlds between workers. Read `collect-questions --job "$job" --spend-dir "$SEATLAB_SPEND_DIR"`. Incomplete pairs do not count as losses.
+
+To check the **published** team scores and the bill without running Harbor, use Python 3.12 or later:
+
+```sh
+results=examples/seatlab/results
+python3.12 -BS -m examples.seatlab.live_answers.public_result \
+  "$results/calendar-native-question-policy.json" \
+  "$results/calendar-native-question-policy-cost.json"
+```
+
+The command checks all 16 team rows, the paired test, and the 48 settled calls. It verifies public arithmetic, not that a private native job actually took place. For the earlier sender comparison, use `calendar-native-sender-repair` in both filenames.
+
 ##### Read the same native teams with stock Eval Lab
 
 Eval Lab stays a consumer. Use a Python environment with Eval Lab installed. Point `$study` at your **private native run directory**, not the public result files. Use the archive exported from that directory. This reads every scored arm through `evallab.results.load_trial`. It checks the trial UUID and team reward against the archive. Unknown scores stay unknown. No API call, ingestion, catalog, or Eval Lab write is needed.
@@ -334,6 +488,520 @@ python -m "$packet" compare-tables "$private_tasks/schedule"
 ```
 
 We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
+
+#### Replay one receiver without changing its teammates
+
+The [weekday-notice study](calendar-notice-result.md) has 24 completed teams. A [separate registered replay](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059949706) freezes each team just before the final receiver decision. It compares the raw calendar with the exact 2-hour starts for that receiver. It does not show the peer's calendar, change the 2 reads, or award a new native reward.
+
+To regrade the published choices, use Python 3.12 or later from the fork root. No model, Docker, or Harbor install is needed:
+
+```bash
+python3 -m examples.seatlab.calendar_notices.presentation_summary
+```
+
+If you have the original private job directory containing `cells/`, you can also reconstruct and verify the inputs:
+
+```bash
+python3 -m examples.seatlab.calendar_notices.presentation_run plan "$NATIVE_NOTICES"
+```
+
+`plan` prints the run IDs and input hashes, not the prompts. To test another harness, call `presentation.contexts(native_root)` from `examples.seatlab.calendar_notices`. It returns the raw and list prompts for each original run ID. Send only one prompt to each fresh receiver. Keep the returned mapping private. A replay can test the receiver's decision. It cannot tell you how a live sender would change its reports.
+
+#### Verify 12 held-out scheduling worlds
+
+Use this panel to test a new workflow without reusing worlds 0–11. The fixed coordinates are `schedule-012-talk` through `schedule-023-talk`, with seed `1`. This check needs Python 3.12 and a clone of the fork that contains the pinned generator. It needs no Docker, model, or API key.
+
+Keep the generated directory private. It contains service credentials and the verifier’s answers. Share only the [answer-free manifest](results/flotilla-schedule-heldout-12-23.json).
+
+```bash
+umask 077
+private=$(realpath "$(mktemp -d)")
+pin=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+mkdir "$private/generator"
+git archive "$pin" flotilla | tar -x -C "$private/generator"
+python3.12 -BS "$private/generator/flotilla/build_tasks.py" \
+  --family schedule --instances 12-23 --seats 2 --difficulty easy --seed 1 \
+  --conditions talk --play-timeout 600 --out "$private/tasks"
+python3.12 -BS -m examples.seatlab.calendar_notices.heldout "$private/tasks/schedule" \
+  --expect examples/seatlab/results/flotilla-schedule-heldout-12-23.json
+```
+
+The manifest separates calendar identity from task identity. Reordering attendees or swapping seats cannot turn an old calendar into a new one. Fresh credentials do not change either fingerprint. The manifest itself contains no model outcomes.
+
+#### Check that new calendars give the agents different decisions
+
+Different task IDs do not guarantee different decisions. The intake below compares your candidate block with 48 reference worlds. It keeps track of which starts fit the sender's initial calendar, its revised calendar, and the receiver's calendar. It ignores seat names, weekday labels, and the order of starts within a day. It checks both seat directions.
+
+Generate the 3 blocks in separate private directories. Use the pinned generator and settings above for each block. The first 12 reference worlds are already in the public packet.
+
+| Task directory | Instances | Seed for this study |
+| --- | --- | ---: |
+| `$HELDOUT/schedule` | 12–23 | 1 |
+| `$VISIBLE/schedule` | 24–47 | 471223 |
+| `$CANDIDATE/schedule` | 48–71 | 1062988520 |
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.shape_intake \
+  --heldout "$HELDOUT/schedule" --visible "$VISIBLE/schedule" \
+  --candidate "$CANDIDATE/schedule" --start 48 --count 24 --seed 1062988520
+```
+
+You can substitute another consecutive candidate block and its seed. The command needs no model, Docker, or Harbor installation. It checks the two reference directories against their published manifests. It checks the structure of the candidate tasks, not who generated them.
+
+**Observed:** all 24 new worlds passed. None of their 48 role-specific decision patterns matched the 96 patterns from the reference worlds. This admits the worlds for a transfer test. It does not show that a model can solve them or that a workflow transfers. [Registered question](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062637751) · [Public counts and seed commitment](results/calendar-transfer-48-71-intake.json).
+
+#### Run two native teams on each world in your own calendar block
+
+Use the existing `run-visible` workflow with new stock tasks. You do not have to add world IDs to the source. Freeze the task commitments once. Assign **whole worlds**, not single arms, to workers. Each worker runs the 2 arms in the listed order.
+
+Use only tasks you trust. The manifest checks that the task still matches the one you approved. It does not establish who wrote the task. Keep the generated task directory private.
+
+```sh
+umask 077
+job=$(realpath "$(mktemp -d)")
+module=examples.seatlab.calendar_notices
+python3.12 -BS -m "$module.transfer_registration" freeze "$CANDIDATE/schedule" \
+  --start 48 --count 24 --seed 1062988520 > "$job/calendar-cohort.json"
+chmod 400 "$job/calendar-cohort.json"
+sha=8995d5311e9627989a1a35065902ef89a39f72eb693409532a95513b22a4a61a
+python3.12 -BS -m "$module.transfer_registration" plan "$job/calendar-cohort.json" \
+  --sha256 "$sha" --shard 0/4
+```
+
+The SHA above selects the [published stock manifest](results/flotilla-schedule-transfer-48-71.json). For your own block, record your manifest's SHA-256 before running any team. Use a starting instance divisible by 4 and at least 48. Choose 4–32 consecutive instances, in multiples of 4. The public plan needs no Harbor installation, Docker, or key. Four workers can read shards `0/4` through `3/4`.
+
+First test the real verifier without a key. Set `TRIAL_SLOT` to the shared Docker trial-slot wrapper. Set `python` and `harbor` to the fork's executables.
+
+```sh
+"$TRIAL_SLOT" "$python" -m "$module" control-visible --job "$job" \
+  --tasks "$CANDIDATE/schedule" --world w48 --arm checked \
+  --policy oracle --cohort-sha256 "$sha" --harbor "$harbor"
+```
+
+Use `wrong` for the negative control. For live teams, use `run-visible` with an approved direct model budget. Replace `--policy` with `--spend-dir "$meter"`. Keep the same job, manifest, physical task directory and SHA within each world. Each run claims one attempt and refuses a replacement. Workers on one host must use the shared Docker limit.
+
+After the run, create a shareable receipt. Keep the owner audit private. The commands below make no model calls:
+
+```sh
+"$python" -m "$module.audit" "$job" --visible-check --cohort-sha256 "$sha" \
+  --spend-dir "$meter" > "$job/audit.json"
+python3.12 -BS -m "$module.transfer_result" receipt "$job/audit.json" \
+  --manifest "$job/calendar-cohort.json" --sha256 "$sha" > "$job/receipt.json"
+python3.12 -BS -m "$module.transfer_result" summarize "$job/receipt.json" \
+  --manifest "$job/calendar-cohort.json" --sha256 "$sha"
+```
+
+The summary separates missing evidence from a verified loss. It measures a gain only when both teams in every world have complete native evidence and 4 settled calls each. The public summary checks the supplied receipt against the manifest. Only the owner audit checks the underlying native artifacts.
+
+For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_briefing(own_briefing))` returns only that seat’s feasible starts. Do not use the full briefing in a phase that shows only 2 attendees. Keep the peer’s table and the verifier key outside the model context.
+
+The first [stock oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without trial receipts. Later, the [four private-view controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060200350) on these worlds produced the expected native scores. These were separate attempts.
+
+#### Test private calendar views with 2 live seats
+
+The [registered live comparison](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060106913) uses both arms on each held-out world. `raw` shows each seat its own busy hours. `exact` shows valid starts for the same attendees. The first sender turn sees only 2 attendees, not 3. Both arms name the changed weekdays and let the receiver open 2 reports. No seat gets the other calendar or a suggested meeting.
+
+Generate and verify the tasks above. Use the Python executable from your installed fork and the matching `harbor` executable. Start with this **no-key** oracle control:
+
+```bash
+umask 077
+python="$PWD/.venv/bin/python"
+harbor="$PWD/.venv/bin/harbor"
+module=examples.seatlab.calendar_notices
+mkdir -m 700 "$private/teams"
+"$python" -m "$module" views-control --job "$private/teams" \
+  --tasks "$private/tasks/schedule" --world w12 --arm raw --policy oracle --harbor "$harbor"
+```
+
+The positive control must earn 1. The `wrong` control must earn 0. These are scripted controls, not DeepSeek trials. On a shared Docker host, run each command under the host's slot limit. On our host that wrapper is `/tmp/crucible-docker-slot.sh`.
+
+For a paid replication, use `views-run` instead of `views-control`. Remove `--policy` and pass `--spend-dir` with the existing private spend database. Supply only the direct DeepSeek credential through `keys run --`. Make the first attempt once per registered arm. Use `raw` first on worlds 12, 15, 16, 19, 20, and 23. Use `exact` first on the other 6. Start the second arm only after the first ends. Give parallel workers different worlds.
+
+Audit a private job offline with `"$python" -m "$module.audit" "$private/teams" --private-views --spend-dir "$SEATLAB_SPEND_DIR"`. Add `--controls` to audit controls instead. Missing native rewards stay unknown. The public summary reader needs only Python; it does not run Docker or contact a model.
+
+#### Give just one scheduling seat the calendar helper
+
+Use this test if you can compute valid starts for one role but not both. The sender writes and revises its availability. The receiver requests 2 weekday reports and books the meeting. `sender-exact` changes only the sender's own calendar view. `receiver-exact` changes only the receiver's view. The channel rules stay fixed. The agents can send different reports.
+
+Use the same pinned tasks, interpreter, and `module` as above. Start a separate private job. The following control runs Docker but does not call a model:
+
+```sh
+mkdir -m 700 "$private/roles"
+"$python" -m "$module" role-views-control --job "$private/roles" \
+  --tasks "$private/tasks/schedule" --world w12 --arm sender-exact \
+  --policy oracle --harbor "$harbor"
+```
+
+Use a slot wrapper on shared Docker hosts. Replace `oracle` with `wrong` to check a native score of 0.
+
+**Paid replication:** use `role-views-run`, remove `--policy`, and supply `--spend-dir`. Run each world and arm only once. Use `sender-exact` first on worlds 12, 15, 16, 19, 20, and 23. Use `receiver-exact` first on the other 6. A second arm needs the first arm's completed attempt in the same job. Assign different worlds to parallel workers.
+
+Audit your native trials, then summarize the registered comparison offline:
+
+```sh
+"$python" -m "$module.audit" "$private/roles" --role-views \
+  --spend-dir "$SEATLAB_SPEND_DIR" > "$private/role-audit.json"
+python3.12 -BS -m "$module.role_summary" "$private/role-audit.json"
+```
+
+The summary preserves a verified native zero after an invalid reply. It does not treat a missing stock score as zero. Compare the 2 new arms by world, not by individual model turn. The [registered decision rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061145932) does not pool earlier teams.
+
+#### Check a receiver's own availability against delivered reports
+
+Use this comparison when a receiver must combine a peer's report with its own constraints. Both seats see their own available starts. The `lists` receiver gets the original messages. The `checked` receiver also sees two computed lists: its feasible starts in opened reports, and its feasible starts in the initial report for unopened days. A revised report replaces the old report for that day. Neither arm sees the actual peer calendar.
+
+Generate the [24 registered stock worlds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061523866). This step needs neither Docker nor an API key:
+
+```sh
+umask 077
+private=$(realpath "$(mktemp -d)")
+pin=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+git fetch --depth=1 origin "$pin"
+mkdir "$private/generator"
+git archive "$pin" flotilla | tar -x -C "$private/generator"
+python3.12 -BS "$private/generator/flotilla/build_tasks.py" \
+  --family schedule --instances 24-47 --seats 2 --difficulty easy --seed 471223 \
+  --conditions talk --play-timeout 600 --out "$private/tasks"
+module=examples.seatlab.calendar_notices
+python3.12 -BS -m "$module.heldout" "$private/tasks/schedule" --cohort visible \
+  --expect examples/seatlab/results/flotilla-schedule-visible-24-47.json
+```
+
+Keep the task directory private. The task files contain native credentials and answers. The shared manifest contains only commitments.
+
+Use `control-visible` to check the native path before spending money. In the example below, `python` and `harbor` point to the fork executables. On a shared Docker host, use its trial-slot wrapper for every native command.
+
+```sh
+python="$PWD/.venv/bin/python"
+harbor="$PWD/.venv/bin/harbor"
+mkdir -m 700 "$private/teams"
+"$python" -m "$module" control-visible --job "$private/teams" \
+  --tasks "$private/tasks/schedule" --world w24 --arm checked --policy oracle --harbor "$harbor"
+```
+
+Change `oracle` to `wrong` for the negative control. The two scores must be 1 and 0. For paid runs, use `run-visible` and replace `--policy` with `--spend-dir` and the private meter directory. Run each arm once. Assign different worlds to parallel workers. To get the registered first arm for a world, run `python3.12 -BS -c 'from examples.seatlab.calendar_notices.team_views import JoinCell; print(JoinCell("w24", "lists").first)'`.
+
+After the teams finish, audit the actual deliveries and submitted actions. These two commands use no model or Docker:
+
+```sh
+"$python" -m "$module.audit" "$private/teams" --visible-check \
+  --spend-dir "$SEATLAB_SPEND_DIR" > "$private/checked-audit.json"
+python3.12 -BS -m "$module.visible_summary" "$private/checked-audit.json"
+```
+
+The summary returns `inconclusive` when native evidence is missing. A measured loss with complete evidence remains a loss.
+
+#### Repeat a native team without replacing its first attempt
+
+Use this when you need to know whether a workflow change is larger than ordinary differences between fresh teams. Keep the stock worlds fixed. Each native sender and receiver generates new answers.
+
+The plan command is free. It prints one JSON line per world. Give each worker a different shard. Each worker runs the 2 arms in printed order. Finish repetition 1 before starting repetition 2.
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.repeat_plan --repeat 1 --shard 0/4
+```
+
+For 4 workers, use `0/4`, `1/4`, `2/4`, and `3/4`. Each gets 6 whole worlds. The first arm reverses in repetition 2. All workers must use the same private job and meter. The native runner refuses to replace an attempt.
+
+**Check the native path before buying model calls.** Use `control-visible` from the preceding section with `--repeat 1` or `--repeat 2`. For an approved live trial, use `run-visible` with the same repeat number. Retain your shared Docker limit. Each trial can use up to 4 model calls. The public plan never launches a trial.
+
+After both repetitions, export a receipt from the 2 native audits:
+
+```sh
+module=examples.seatlab.calendar_notices
+for repeat in 1 2; do
+  "$python" -m "$module.audit" "$private/teams" --visible-check --repeat "$repeat" \
+    --spend-dir "$SEATLAB_SPEND_DIR" > "$private/wave-$repeat.json" || exit 1
+done
+python3.12 -BS -m "$module.repeat_receipt" "$private/wave-1.json" "$private/wave-2.json" \
+  > "$private/repeat-teams.json"
+python3.12 -BS -m "$module.repeat_summary" "$private/repeat-teams.json"
+```
+
+The summary compares 2 fresh teams per arm on each of 24 worlds. It also counts how often the same workflow changes grade. A verified invalid response keeps its native zero. Missing stock evidence or accounting makes the primary comparison inconclusive.
+
+#### Find the first different decision in 2 native team runs
+
+Use 2 complete scheduling trials on the same world, arm, seat assignments, and served model. Set `LEFT` and `RIGHT` to their native trial directories. The reader verifies both against the stock task and the call meter. No model or Docker runs.
+
+```sh
+"$python" -m examples.seatlab.calendar_turn_diff "$LEFT" "$RIGHT" \
+  --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+If the right trial used a separate meter, add `--right-spend-dir PATH`. The output shows whether each recorded prompt and decoded action matched. It does not reveal either action or its hash. Equal prompts do not establish equal provider state.
+
+To analyze the 48 same-workflow pairs together, use the receipt exported above:
+
+```sh
+"$python" -m "$module.turn_collect" "$private/repeat-teams.json" \
+  --job "$private/teams" --spend-dir "$SEATLAB_SPEND_DIR" > "$private/turn-pairs.json"
+python3.12 -BS -m "$module.turn_summary" \
+  "$private/repeat-teams.json" "$private/turn-pairs.json"
+```
+
+The final command needs only the 2 public JSON files and Python 3.12 or newer. It separates changes to the final receiver prompt from different decisions on an unchanged prompt.
+
+#### Compare 2 workers on your own completed scheduling trial
+
+Use one completed SeatLab `PrivateViewSeat` trial from the private calendar, single-seat-helper, or visible-intersection study. You do not need its paired arm or any trials from our panel. On the original host, keep the stock task directory, trial evidence, and direct-call meter. A final score or a chat log alone is not enough.
+
+Set `TRIAL` to the physical `<job>/cells/<run>/trials/<run>` directory. Set `SEATLAB_SPEND_DIR` to that run's private meter directory. Use the fork’s Python environment for this export. It checks the 4 accepted turns, 3 delivered messages, receiver submission, and native grade. It makes no model calls.
+
+```sh
+umask 077
+private=$(realpath "$(mktemp -d)")
+case_module=examples.seatlab.calendar_case
+"$PWD/.venv/bin/python" -m "$case_module" export "$TRIAL" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --out "$private/case"
+```
+
+For a native transfer trial (`cvt-…`), append `--cohort-sha256 "$COHORT_SHA256"` to the export command. Use the full SHA-256 from your registration, not the prefix in the trial name. The exporter checks the original job's cohort snapshot. It refuses command controls, a missing or different seal, and a seal on an older study.
+
+**Keep `owner.json` and the stock task on the scorer host.** Send only `requests.jsonl` to each worker. It contains the native receiver's factual input, a view without the computed intersections (`lists`), and a view with them (`checked`). The factual view can match another view. If you want only one view, select it **on the scorer host**:
+
+```sh
+python3.12 -BS -m "$case_module" emit "$private/case" --view factual \
+  > "$private/factual.jsonl"
+```
+
+Each input line has `id`, `prompt_sha256`, and `messages`. Each worker returns one line with the same `id` and `prompt_sha256` and its first answer as a **string** in `reply`. Return the original reply, including invalid JSON. Do not repair it or select a later answer.
+
+For 2 trusted local programs, set `RECEIVER_A` and `RECEIVER_B` to their executable paths. Each receives only the request file on standard input. This is not a sandbox. Use separate hosts for untrusted programs.
+
+```sh
+"$RECEIVER_A" < "$private/case/requests.jsonl" > "$private/a.jsonl" & a=$!
+"$RECEIVER_B" < "$private/case/requests.jsonl" > "$private/b.jsonl" & b=$!
+wait "$a"; wait "$b"
+python3.12 -BS -m "$case_module" compare "$private/case" \
+  "$private/a.jsonl" "$private/b.jsonl"
+```
+
+The scorer needs neither Docker nor an API key. It accepts replies in any order. A missing or invalid answer is not a zero. A valid wrong answer is a zero. A changed input hash or duplicate reply rejects the comparison. The output compares receiver choices, not new team rewards.
+
+To check the published comparison instead, run the command below. It reads the 24 source identities and all 96 first-reply grades. It recomputes the exact two-sided test by world:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.visible_replay_summary \
+  examples/seatlab/results/calendar-visible-fixed-replay.json
+```
+
+For the transfer cohort, give the reader the native receipt and the full manifest seal. It checks each source ID and returns no verdict if a first decision is missing:
+
+```sh
+results=examples/seatlab/results
+python3.12 -BS -m examples.seatlab.calendar_notices.transfer_fixed_result \
+  "$results/calendar-fixed-transfer-48-71.json" \
+  --native "$results/calendar-native-transfer-48-71.json" \
+  --manifest "$results/flotilla-schedule-transfer-48-71.json" \
+  --sha256 8995d5311e9627989a1a35065902ef89a39f72eb693409532a95513b22a4a61a
+```
+
+#### Route a booking before calling a receiver
+
+Use the checked scheduling request from the export above. Keep the owner capsule on the scorer host. Set `RECEIVER` to the absolute path of a trusted worker executable. Run from the fork root:
+
+```sh
+umask 077
+python3.12 -BS -m examples.seatlab.calendar_case emit "$private/case" --view checked \
+  > "$private/checked.jsonl"
+python3.12 -BS -m examples.seatlab.calendar_notices.booking_worker \
+  --fallback "$RECEIVER" < "$private/checked.jsonl" > "$private/routed.jsonl"
+```
+
+The worker returns one booked slot without starting the executable when the visible evidence supports exactly one start. Otherwise, the executable receives the original request and must return one matching reply envelope. The worker keeps the first reply, even when its booking is invalid. A failed executable or a mismatched envelope fails the command. There is no retry. The executable gets a private working directory and does not inherit API keys. It still runs as your user; this is not a sandbox.
+
+To inspect a route without invoking a receiver, use `examples.seatlab.calendar_notices.route_booking` with the same input. To score a paired reply, pass `"$private/routed.jsonl"` to the `calendar_case compare` command above. To reproduce the two registered routing verdicts without a worker or an API key:
+
+```sh
+results=examples/seatlab/results
+reader=examples.seatlab.calendar_notices.route_result
+python3.12 -BS -m "$reader" "$results/calendar-booking-route-transfer-fixed.json" \
+  --cost "$results/calendar-fixed-transfer-48-71-cost.json"
+python3.12 -BS -m "$reader" "$results/calendar-booking-route-role-stress.json" \
+  --cost "$results/calendar-booking-route-role-stress-cost.json"
+```
+
+#### Ask a peer to check 2 starts
+
+Use this optional exchange when the checked request contains no compatible start. It adds a question and an answer; it does not preserve the original message budget. The receiver proposes 2 locally feasible starts. The sender can confirm both, 1, or neither.
+
+Start with `checked.jsonl` and the owner capsule from the commands above. On the scorer host, export the original sender's local calendar. Keep that file off the receiver host:
+
+```sh
+ns=examples.seatlab.calendar_notices
+"$PWD/.venv/bin/python" -B -m "$ns.clarify_source" "$TRIAL" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --out "$private/sender.json"
+```
+
+Append `--cohort-sha256 "$COHORT_SHA256"` for a transfer trial. The export fails if the source did not finish, the evidence is not empty, or the output file exists.
+
+Set `RECEIVER` and `SENDER` to trusted worker executables. Each reads one request on stdin. It returns `id`, `prompt_sha256`, and the original `reply` string as one JSON line. Give only the emitted request to its named worker. Keep all reply files private.
+
+```sh
+set -eo pipefail
+codec="$ns.clarify"
+python3.12 -BS -m "$codec" propose --checked "$private/checked.jsonl" \
+  | "$RECEIVER" > "$private/nomination.reply"
+jq -ej '.reply | select(type == "string")' "$private/nomination.reply" \
+  > "$private/nomination.raw"
+python3.12 -BS -m "$codec" admit --checked "$private/checked.jsonl" \
+  --nomination "$private/nomination.raw" > "$private/proposals.json"
+python3.12 -BS -m "$codec" ask --sender "$private/sender.json" \
+  --nomination "$private/proposals.json" | "$SENDER" > "$private/confirmation.reply"
+jq -ej '.reply | select(type == "string")' "$private/confirmation.reply" \
+  > "$private/confirmation.raw"
+python3.12 -BS -m "$codec" book --checked "$private/checked.jsonl" \
+  --nomination "$private/proposals.json" | "$RECEIVER" > "$private/blind.reply"
+python3.12 -BS -m "$codec" book --checked "$private/checked.jsonl" \
+  --nomination "$private/proposals.json" --confirmation "$private/confirmation.raw" \
+  | "$RECEIVER" > "$private/peer.reply"
+```
+
+Start a fresh receiver for each final request. Both may book any locally feasible slot. A valid `{"fits":[]}` says the sender rejected both proposed starts. It is not the same as no reply. Score the original first envelopes on the owner host:
+
+```sh
+results=examples/seatlab/results
+python3.12 -BS -m "$ns.clarify_case" "$private/case" --sender "$private/sender.json" \
+  --nomination "$private/nomination.reply" --confirmation "$private/confirmation.reply" \
+  --blind "$private/blind.reply" --peer "$private/peer.reply"
+python3.12 -BS -m "$ns.clarify_result" "$results/calendar-bounded-clarification.json" \
+  --routing "$results/calendar-booking-route-role-stress.json"
+```
+
+Omit a missing reply file. The owner scorer distinguishes a missing reply from an invalid reply and a wrong booking. It rejects a final reply for a different source, prompt, or unreachable stage. The public result reader does not need any private files or an API key.
+
+To check the same 2 proposals without calling a sender model, run this on the sender host:
+
+```sh
+python3.12 -BS -m "$codec" verify-local --sender "$private/sender.json" \
+  --nomination "$private/proposals.json" > "$private/checked-subset.json"
+```
+
+Use `checked-subset.json` instead of `confirmation.raw` in `book --confirmation`. It contains only the proposed IDs that fit the sender's own calendar. Do not send `sender.json` to the receiver. The public before-and-after comparison runs without any worker:
+
+```sh
+python3.12 -BS -m "$ns.clarify_repair_result" \
+  "$results/calendar-clarification-repair.json" \
+  --parent "$results/calendar-bounded-clarification.json" \
+  --cost "$results/calendar-clarification-repair-cost.json"
+```
+
+##### Ask again only when the first pair is rejected
+
+Start with the original nomination envelope, admitted proposals, and locally checked subset from above. Give each worker only its emitted request. Keep the owner capsule and sender table away from the receiver. Use Bash:
+
+```bash
+set -eo pipefail
+second="$ns.second_question"
+first=(--checked "$private/checked.jsonl" --prior "$private/proposals.json" --verified "$private/checked-subset.json")
+score=(--sender "$private/sender.json" --prior "$private/nomination.reply" --stop "$private/stop.reply")
+python3.12 -BS -m "$second" book "${first[@]}" | "$RECEIVER" > "$private/stop.reply"
+count=$(python3.12 -BS -m "$second" opportunity "${first[@]}" | jq -er '.count')
+if ((count > 0)); then
+  python3.12 -BS -m "$second" ask "${first[@]}" | "$RECEIVER" > "$private/extra.reply"
+  jq -ej '.reply | select(type == "string")' "$private/extra.reply" > "$private/extra.raw"
+  score+=(--extra "$private/extra.reply")
+  if python3.12 -BS -m "$second" admit "${first[@]}" --extra "$private/extra.raw" > "$private/extra.json"; then
+    python3.12 -BS -m "$second" verify-local --sender "$private/sender.json" \
+      --extra "$private/extra.json" > "$private/extra-verified.json"
+    python3.12 -BS -m "$second" book "${first[@]}" --extra "$private/extra.json" \
+      --extra-verified "$private/extra-verified.json" | "$RECEIVER" > "$private/long.reply"
+    score+=(--long "$private/long.reply")
+  fi
+fi
+python3.12 -BS -m "$ns.second_question_case" "$private/case" "${score[@]}"
+```
+
+Run `verify-local` on the sender host and the last command on the owner host. When `count` is zero, the scorer shares the single `stop.reply` between both policies. When a second nomination is invalid, the scorer still grades `stop.reply`. It does not invent a final answer for the longer policy. Give different native cases to different workers. [Observed results and token costs](calendar-notice-result.md#should-the-receiver-stop-after-a-verified-rejection).
+
+For production use, check whether the second nomination needs a model at all. On the receiver host, reuse the same `first` arguments:
+
+```bash
+python3.12 -BS -m "$second" route "${first[@]}"
+```
+
+`stop` means no second question. `exhaustive` supplies every remaining local start as `proposals` because they all fit the allowed question size. Send those starts to `verify-local` without a nomination call. `model` means the question has a real choice; use `ask` as above. The route reads no sender data. Do not report a supplied question as a model reply.
+
+#### Let a receiver choose which report to read next
+
+Use this when the receiver can ask for 2 reports and you want to test **when to deliver the first one**. Use one completed SeatLab calendar trial with private views. Run the export in the fork environment on the scorer host:
+
+```sh
+umask 077
+inquiry=examples.seatlab.calendar_inquiry
+owner="$private/staged.owner.json"
+"$python" -B -m "$inquiry" export "$TRIAL" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --out "$owner"
+python3.12 -BS -m "$inquiry" next "$owner" --timing immediate
+```
+
+**Keep the owner file on the scorer host.** It contains the sender's full accepted revision and the stock answer. Send only the output record with `messages` to the worker. Keep each original reply in the same envelope format as above. On the scorer host, supply the cumulative reply history for that branch:
+
+```sh
+python3.12 -BS -m "$inquiry" next "$owner" --timing immediate \
+  --history "$private/immediate-replies.jsonl"
+```
+
+Both branches start with the same request and first reply. With `immediate`, the worker sees the first report before it chooses a second day. With `delayed`, it sees the same first day ID, but the report is pending. The worker must choose 2 different days. It then gets the 2 requested reports and the same checked booking format in both branches.
+
+Stop when `next` returns `status`. This record is for the scorer only. An invalid reply has no booking grade. Without a reply, `next` still shows the outstanding request. None of these steps needs Docker, a model key, or a running Harbor service after export.
+
+To compare both timings programmatically, use `calendar_inquiry_pair.play_pair(source, first_timing=..., respond=...)`. The callback receives a call label and a worker request. Return the worker's reply envelope, or `None` if it is missing. The runner calls each second decision separately. If both bookings have identical inputs, it calls the worker only once. Never send the returned trace to a worker. This compares receivers against one recorded sender; it does not rerun the full team.
+
+For the W24–W47 study, `calendar_inquiry_receipt.public_source(source, trace, first_timing=...)` regenerates both branches and exports only their grades and commitments. It rejects a missing turn record. An explicit missing worker reply remains missing. To reproduce the published result without any native data or model calls:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.inquiry_summary \
+  examples/seatlab/results/calendar-staged-report-study.json
+```
+
+The [result page](calendar-notice-result.md#should-the-receiver-wait-for-the-first-report-before-requesting-a-second-one) separates native team rewards from this fixed-sender comparison.
+
+#### Could a different report request have helped?
+
+Use the native job you already ran. This diagnostic makes no model calls and starts no containers:
+
+```bash
+"$python" -m examples.seatlab.calendar_notices.offer_replay "$private/teams" \
+  --private-views --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+Remove `--private-views` for the original count-versus-names study. Each complete row contains 10 possible pairs of weekday reads, summarized as counts. `visible_pairs` counts pairs that would leave the true meeting among the receiver’s legal options. `unique_correct_pairs` counts pairs that would leave **only** that meeting. `actual_visible` checks the 2 reports the receiver really selected. A zero does not mean the team could not guess the answer. The diagnostic holds the recorded sender fixed; it does not measure a new native reward.
+
+The optional comparison sorts days by the number of provisional, locally valid starts. It requests the first 2 days and picks the earliest remaining start. Ties use weekday order. This rule never sees the target or unopened responses. The diagnostic keeps a missing or inconsistent transcript as a missing row, not a loss. The output contains no calendars, messages, or answer IDs.
+
+#### Test the content of peer reports
+
+The [registered receiver replay](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060340046) has a `shown` arm and a `masked` arm. Each arm uses the same exact local starts, 5 initial weekday lists, and 2 delivered reports. `masked` replaces each peer start ID with `?`. It preserves the day, order, and count of entries. Neither arm gets an unopened revision. These are receiver choices, not new native team scores.
+
+On the original private job, the no-key plan prints source UUIDs and prompt hashes, not prompts:
+
+```bash
+"$python" -m examples.seatlab.calendar_notices.peer_payload_run plan "$private/teams" \
+  --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+Regenerating a world does not recreate its trial UUID. For another scheduling harness, use `peer_payload.project(own_table, initial, opened, masked=...)` with its actual delivered data. Send just one resulting string to each fresh receiver. Do not send the native task or the entire transcript.
+
+For a **different completed private-view cohort**, pin its own audit instead of editing the frozen one. Keep the native job and ledger private:
+
+```bash
+receipt="$private/private-views.audit.json"
+"$python" -m examples.seatlab.calendar_notices.audit "$private/teams" \
+  --private-views --spend-dir "$SEATLAB_SPEND_DIR" > "$receipt"
+shasum -a 256 "$receipt"
+```
+
+Record that digest before assigning workers. Set `SOURCE_SHA256` from that record, not from a file supplied by a worker. Give each worker a different `--world`:
+
+```bash
+"$python" -m examples.seatlab.calendar_notices.peer_payload "$private/teams" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --receipt "$receipt" \
+  --expect-sha256 "${SOURCE_SHA256:?use the recorded audit digest}" --world w12
+```
+
+One worker receives one row with a native UUID, native result hash, and 2 prompt hashes. Omit `--world` for all 12 rows. The reader checks the entire exact-view cohort even when it prints just one row. It makes no model calls. To get the actual prompt pair privately, use `peer_payload.contexts_for_receipt(native, ledger, receipt=receipt, expected_sha256=digest)[world]`. The original paid runner remains bound to its historical inputs.
 
 #### Native replication with an external harness
 

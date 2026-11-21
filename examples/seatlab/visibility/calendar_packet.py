@@ -66,9 +66,13 @@ class _Invalid(ValueError):
 
 
 def _object(value: object, *keys: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or (keys and value.keys() != set(keys)):
+    if (
+        not isinstance(value, dict)
+        or any(not isinstance(key, str) for key in value)
+        or (keys and value.keys() != set(keys))
+    ):
         raise _Invalid("unexpected object fields")
-    return value
+    return cast(dict[str, Any], value)
 
 
 def _list(value: object) -> list[Any]:
@@ -349,13 +353,23 @@ def _task_name(index: int) -> str:
 
 def source_tables(task: Path, index: int) -> tuple[Table, Table]:
     """Read an original stock task's p1/p2 tables; never return its stored key."""
-    name = _task_name(index)
+    return _checked_source_tables(task, index, _task_name(index))
+
+
+def _checked_source_tables(
+    task: Path,
+    index: int,
+    name: str,
+    *,
+    stock_limits: tuple[int, int, int, float] | None = None,
+) -> tuple[Table, Table]:
     _directory(task)
     environment = task / "environment"
     _directory(environment)
+    raw_config = _text(task / "task.toml")
     try:
-        config = tomllib.loads(_text(task / "task.toml"))
-    except tomllib.TOMLDecodeError:
+        config = tomllib.loads(raw_config)
+    except (ValueError, RecursionError):
         raise _Invalid("invalid task TOML") from None
     meta = _object(config.get("metadata"))
     if (
@@ -398,11 +412,21 @@ def source_tables(task: Path, index: int) -> tuple[Table, Table]:
         or any(meta.get(k) != payload[k] for k in (*markers, "instance", *counts))
     ):
         raise _Invalid("task payload does not match calendar world metadata")
+    if stock_limits is not None and (
+        (*(payload[k] for k in counts), meta.get("play_timeout_sec")) != stock_limits
+        or _object(config.get("agent")).get("timeout_sec") != stock_limits[3]
+    ):
+        raise _Invalid("task does not match pinned stock limits")
     p1, p2 = _compose_briefings(_text(environment / "docker-compose.yaml"), payload)
     if _calendars(p1).keys() & _calendars(p2).keys():
         raise _Invalid("seat briefing attendee sets overlap")
     tables = (normalize_briefing(p1), normalize_briefing(p2))
-    key = _object(payload["answer_key"], "day", "start")
+    _check_answer_key(tables, payload["answer_key"])
+    return tables
+
+
+def _check_answer_key(tables: tuple[Table, Table], value: object) -> None:
+    key = _object(value, "day", "start")
     key_time = key["start"]
     match = (
         re.fullmatch(r"(09|1[0-5]):00", key_time) if isinstance(key_time, str) else None
@@ -411,7 +435,6 @@ def source_tables(task: Path, index: int) -> tuple[Table, Table]:
         raise _Invalid("stored key is not a legal start")
     if _shared(tables) != _DAYS.index(key["day"]) * 7 + int(match[1]) - 9:
         raise _Invalid("shared start does not match the stored key")
-    return tables
 
 
 def _source_hashes(task: Path) -> tuple[str, str, str]:

@@ -1,0 +1,65 @@
+{
+  "generator_commit": "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3",
+  "intake": {
+    "candidate_vs_reference": {
+      "candidate_distinct_role_shapes": 48,
+      "candidate_unique_worlds": 24,
+      "candidate_worlds": 24,
+      "candidate_worlds_colliding_candidate": 0,
+      "candidate_worlds_colliding_either": 0,
+      "candidate_worlds_colliding_reference": 0,
+      "pass": true,
+      "reference_distinct_role_shapes": 96,
+      "reference_unique_worlds": 48,
+      "reference_worlds": 48
+    },
+    "cohort_sizes": {
+      "candidate": 24,
+      "heldout": 12,
+      "public_packet": 12,
+      "visible": 24
+    },
+    "methodology": {
+      "basis": "calendar_tables_only",
+      "calendar_uniqueness": "across_all_cohorts_ignoring_seat_and_attendee_order",
+      "candidate_selection": "consecutive_instances_without_resampling",
+      "candidate_source_checks": {
+        "authenticates_generator_origin": false,
+        "checks_declared_metadata_and_limits": true,
+        "checks_seat_tables_and_stored_answer_consistency": true,
+        "checks_stock_layout": true
+      },
+      "condition": "talk",
+      "difficulty": "easy",
+      "family": "schedule",
+      "historical_generator_commit": "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3",
+      "historical_source": "pinned_packet_and_stock_manifests",
+      "max_messages": 200,
+      "max_text": 4000,
+      "play_timeout_sec": 600,
+      "seats": 2
+    },
+    "pass": true,
+    "prior_visible_vs_preceding": {
+      "candidate_distinct_role_shapes": 48,
+      "candidate_unique_worlds": 24,
+      "candidate_worlds": 24,
+      "candidate_worlds_colliding_candidate": 0,
+      "candidate_worlds_colliding_either": 0,
+      "candidate_worlds_colliding_reference": 0,
+      "pass": true,
+      "reference_distinct_role_shapes": 48,
+      "reference_unique_worlds": 24,
+      "reference_worlds": 24
+    },
+    "schema": "seatlab.calendar-shape-intake/v1"
+  },
+  "pre_registration": "https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062637751",
+  "study_window": {
+    "first": 48,
+    "last": 71,
+    "seed": 1062988520,
+    "seed_commitment_sha256": "1085f3677f53ebe9ead9b20ac89da0c0c431890d9f92a0a1c1028f27d2dc61f8",
+    "seed_salt": "da13beacb3a782a669b62202bdcb5917"
+  }
+}

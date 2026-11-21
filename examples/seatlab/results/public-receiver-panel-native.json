@@ -1,0 +1,378 @@
+{
+  "rows": [
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d0-r0-blind",
+      "prompt_sha256": "47cddc69a3d8f51b9079f2fb5810df9add214dfea9edeba9d801a1662d03e64f",
+      "reply_sha256": "25a3324473cf915ad9b502200798bd113e42f265feed773ae2542d6f649b9482",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "5c497df0569cce1898fa4b8790f442a5d7495a981e150bf7bbbb72e64efb7c5b",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d0-r0-peer",
+      "prompt_sha256": "98a7988db656cc113da6358db65381ca00347d2cc516140e88e8cec47df233df",
+      "reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "e450532dcdaf0e5a3cc4c14f0f1d60e74845b4b304acb9b49d885bf06ee09f0e",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d0-r1-blind",
+      "prompt_sha256": "be1e937c4a6a033d9c5d19352ab832787d3e4d4e030250aeabac6b49f3117f3f",
+      "reply_sha256": "b34053e97618ffbdefe72af8117810cf8558f402471cdc39207a974a93552c14",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "ecd490e19181b154362c02e92644f71fc110a9cba17ecc0d0b7a337f559cfaa4",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d0-r1-peer",
+      "prompt_sha256": "d6747217d2599376c3883f9c4ace046a9cad0bc025dde7b621e0ec0950ff5f3a",
+      "reply_sha256": "f74fcabc5e48b9a4c19bfa4c8c4d503a0ca000d0141d61f19ff0822337a68843",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "2ef3283c2da567b6baff598e46f6dd28a689f736e26fac995acb46d6706b998f",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d1-r0-blind",
+      "prompt_sha256": "6952bacee57b9f3e0abc21c14377584302115a1eb3a1c965a319243f629b5b95",
+      "reply_sha256": "f3e320ba56f92e5103ad9bd93b2bad18e8b107530107b34f5cb5ac32bcd09450",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "f421f0d904897925bf56c8a4a8181b254cd76292675da0561a0d1fe54f84262c",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d1-r0-peer",
+      "prompt_sha256": "0294b997bfc75932fe7d2b7a16c191a8c17b871b7692d68de1fb3e6846110069",
+      "reply_sha256": "903b2d2b82a3ee913be77dac2f48f7b3e8af2ffe0dd0a9279496cf3102554be2",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "d515458e131955853f4efb45d8ce934fc2f20126eb8b2d53e710fd7debab6d13",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d1-r1-blind",
+      "prompt_sha256": "df78cf0713930e8518a659f5152fd843b5c9ec0e108285e743533c88de63a18f",
+      "reply_sha256": "aa89dc831557f56a7d4a9739c6cf8ce8f28e16fccbe5ed3270b9de0a379d8583",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "95d41d268e0db45d39612ffdf34ff1bad5e813609e268df519e71945f3c43673",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w00-d1-r1-peer",
+      "prompt_sha256": "5a896b50c678304c084ab82a54559cb7e0bdff3504e35d6b8e8aabd6e30436e0",
+      "reply_sha256": "f74fcabc5e48b9a4c19bfa4c8c4d503a0ca000d0141d61f19ff0822337a68843",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "46987299ade293e1b80c09afb567700e1301696f935f0a40653d182bfd27a386",
+      "units": 1,
+      "world": 0
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d0-r0-blind",
+      "prompt_sha256": "956ae9aec6896dc1e2e65ef8500bef2adb01608c13fb5dfc2239783dd20d9d32",
+      "reply_sha256": "fd0fb973499480893baee48260579d40363e9ae3c8bcda7645078cd9e0271799",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "1ae0beb73912592627b08b623f0ab6a498e511e6f8c5c1cd6574f510d164bb92",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d0-r0-peer",
+      "prompt_sha256": "6f1330bc91ce1e14e1804668a43bf9d71325b5482fe173030f129a465237454b",
+      "reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "460f631570bfcc9513c9968871c7f814fce8436c075c74fb6c49649eaa9d9aee",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d0-r1-blind",
+      "prompt_sha256": "9d5fdea84f2a375e38e6822f23d249dc84d508e9e7925b4cc0db209f7921597f",
+      "reply_sha256": "0dc98a643a24cceef59a172c0b1d4f8c0b49122605af1defdc22b155bf055dbc",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "9bb6a41f2682c01e13569b2c1a393435f027fb7a74b65f254916e3cfbec3fd17",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d0-r1-peer",
+      "prompt_sha256": "82d1a389a65a8ba591e601e6c867173aa47fed21277f31aef402de43e795bfcd",
+      "reply_sha256": "84bcf0750ee8c27e6a3c3d3b7148b6eb47d09bef1a07f2d53678670acc314f8b",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "f47dd8897d11ef4da8950e850e81581ace8b8f71de2a63357ee1e5a103f383f7",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d1-r0-blind",
+      "prompt_sha256": "4e2c5cd5947124feb973e0ff6e26b5070a1299ebd6a1201fcfdf5febaeecefb1",
+      "reply_sha256": "ea087165bcaa2f3babd3464fa4ae0235fc44edb1acc0568dde63c869aba785a0",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "f6c44206c010fbb0c4a9b2a73d6bccb14dbcd8f4c654278a8abcc284db183ac2",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d1-r0-peer",
+      "prompt_sha256": "c595a7a6aa69f3d93328144ab08fa4728bdb145adee9d570dcc2ccfe6c21609f",
+      "reply_sha256": "f3e320ba56f92e5103ad9bd93b2bad18e8b107530107b34f5cb5ac32bcd09450",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "4fe77ccc6a4b38b3e0d5b010adaf57b2cfbb2bfa1b3c54f0aebe4026e6a992b5",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d1-r1-blind",
+      "prompt_sha256": "638bbc3684fd8c318ac815de9320f6df7f08e2aa2945440b741426c10b488015",
+      "reply_sha256": "85931b61e66a68b85396f3f6fbeeae3f59d0cbfe53f8135c249048546d488d1d",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "0fb4dc4dc72b217b23dabb291cda6c7085e16527573381df0a7e34ef768cdb4a",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w04-d1-r1-peer",
+      "prompt_sha256": "203a9fbe90755c09c53cad08d25a8f51165b7af55b0ac4ebffd12c00e212f213",
+      "reply_sha256": "d40f57a5fd4200c0044d9823cd9dd21147b407648822898d374b975e46933c10",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "fca41c3befe886b5a524640d603d0282568c9b890efcb25769f0d2447504fe91",
+      "units": 1,
+      "world": 4
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d0-r0-blind",
+      "prompt_sha256": "93633b0f476ee6e1a08e25f7d71b23219eea34c34cff0544b7739d27d905cc47",
+      "reply_sha256": "e81c6ef0f6ff6ee1b50ff34ed0aa6dcffa4cccdd25c3ffd5f20646f17d4c69c5",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "e368b883c786dfaf3fa75604426b97a1027af690fe26353a5bce4613165b947f",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d0-r0-peer",
+      "prompt_sha256": "55d093ed52fb5d53be672ad5b35ae4d492d3e141aa4e2a0b1e8a45ddd87b0c4b",
+      "reply_sha256": "e5c63f0e15f5e4968d0c74e363449411a396a95355a8ace0febcc4e077d9748f",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "a363dc5b6341f2254251f3d73523525bd550c87de7ca9cd9be7b35359be19508",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d0-r1-blind",
+      "prompt_sha256": "55aebc73c12b67024ee426bda6fa9b4046081cddb185b23363ee2bad551f92d5",
+      "reply_sha256": "2778f397d01b426c303a4d793cc45a3cd3147aa9aeb75178f050dddd8df73cb4",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "ee4e2a64db2cf77c6a17a76a4a37c21355e204273c841d8cf96034cbe8973e8f",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d0-r1-peer",
+      "prompt_sha256": "5115d703d0f0098e521dc33bd6a5a928008e1ac77e85ba912afbfe104dec82f7",
+      "reply_sha256": "b4545d44772e665e99724fa5fd4a631a6c85e2bb0fc1589254b04e96160971d2",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "9765f4f9956871c3ee6231d8635a4fdd0006913eb73496ae8b2e8f001284f35c",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d1-r0-blind",
+      "prompt_sha256": "4a03466fafa78fe6aba326ab5fc15b84c36c91655a17e9ce94d85b3bc4fc0d6e",
+      "reply_sha256": "f74fcabc5e48b9a4c19bfa4c8c4d503a0ca000d0141d61f19ff0822337a68843",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "dc745c7425322c51990d104d24e411963693502671ca1b21e4e96470985b8c96",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d1-r0-peer",
+      "prompt_sha256": "91b8a836578b1c3412212584eb0b67cf6c8aea3d89185b65519280bb24a9ad94",
+      "reply_sha256": "b4545d44772e665e99724fa5fd4a631a6c85e2bb0fc1589254b04e96160971d2",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "d01e37cacb170a53c7b0d6c63c80c9467444067b81a3b0c1ec0380ccd756cb17",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d1-r1-blind",
+      "prompt_sha256": "63fd2721f0faf6798649314d9ef49398d684ce093b3894a2d130e0622ce67a8e",
+      "reply_sha256": "11941ee0289b22513a6733d8e1cf1e23c9812e5d0ece41217684edace8bbf1f2",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "98ea9294e57f7ae7a348e3fdab9685666e031222498d6a03c12630b4f96e007c",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 0,
+      "id": "calendar/rx-w08-d1-r1-peer",
+      "prompt_sha256": "62e2265e99b923a9d3749cc847f882c4c5762fd5703ba274d85af53a5523fa97",
+      "reply_sha256": "b8e8ca418ec209c7c89d8952767458e3d6bb2f6ef2ccc0fb725e97b4cea095a0",
+      "state": "valid",
+      "task": "calendar",
+      "trial_sha256": "5e98c8d03ba63eb048fdab6e4e99d5d5e09ddf32e87ea77a39da150c5091308d",
+      "units": 1,
+      "world": 8
+    },
+    {
+      "correct": 5,
+      "id": "dispatch/6801",
+      "prompt_sha256": "7149ed4198447fa2d2667b2544d2389df950f5466bd647766d703aaa5a1037f2",
+      "reply_sha256": "d9035786df80695791f5f7f942e351feaf61d289e2323e10c40fbe36e04d73cb",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "ba3f81c1540b76178a701dec7bc21a54baa28ca0dd42d9ea898fee8486b95470",
+      "units": 6,
+      "world": 6801
+    },
+    {
+      "correct": 5,
+      "id": "dispatch/6802",
+      "prompt_sha256": "4062edbb34a6726d66d9e43af38afa076ac5bb15e905a9f12f679d6b4e741723",
+      "reply_sha256": "c3dbba4bd7061bd2470b1d5ff293b68528597aa53d37911f42bac69df65c97ed",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "5c94678c24c75104fda21645cc95977b869b49dfacb21c803e4d423bb0ba5747",
+      "units": 6,
+      "world": 6802
+    },
+    {
+      "correct": 5,
+      "id": "dispatch/6803",
+      "prompt_sha256": "bb0835cefede4bfe750752d1091fe3438cfa8409113deb31122a01084a1d28ce",
+      "reply_sha256": "a6ac5e80bfd1121affe01a88f33b80a0ee1bd97adb61cfd477643fd8da60f9bb",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "213f6cb4d398eb0b689208ae5815ce3095c28a1eae79fb059e2781fa68293f0c",
+      "units": 6,
+      "world": 6803
+    },
+    {
+      "correct": 4,
+      "id": "dispatch/6804",
+      "prompt_sha256": "b4769b5eaae797655a7f6abfe6a0db1b287af414ec19b3160110537b078d37a6",
+      "reply_sha256": "f894df313dca29ce87964691d232b0945222a205be69defc598a29455bf54c76",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "ac591143ccf34f958b55ddc2d56645594abf688a50083ff61d54eb069aade725",
+      "units": 6,
+      "world": 6804
+    },
+    {
+      "correct": 4,
+      "id": "dispatch/6805",
+      "prompt_sha256": "e92745cc1ad63f49250c6502bce6fe6cb5d0809d12f65f89c61237b2601f2e61",
+      "reply_sha256": "938f223b27ef96c2047b0c7be17f2f71fbf968f63e327091537339a00ad2847e",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "4c6330120871e966d8b86d0de787925e5b3d7802ec56e718ce7e6e2457d51241",
+      "units": 6,
+      "world": 6805
+    },
+    {
+      "correct": 4,
+      "id": "dispatch/6806",
+      "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+      "reply_sha256": "db850907a54534ab59a0ec98a83fbba4fddc1f8dbfb36ce19a5095ec05fd67b6",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "5bb7c4effabac1280d351701f44be28b32358132ba4501ec957c6ee76de12770",
+      "units": 6,
+      "world": 6806
+    },
+    {
+      "correct": 6,
+      "id": "dispatch/6807",
+      "prompt_sha256": "441701d18338b9a2de4a7e08aa84224352a6117899f9aad44c994cb8bd32c697",
+      "reply_sha256": "ea645343c86cd60b5ed7928df6a9cb547b5ab63f96966501fb62c4bee4acf41a",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "226886d6e5de1222ec5169200bf6868d3d3bb4eb31dae7d196e12b2fe3379f71",
+      "units": 6,
+      "world": 6807
+    },
+    {
+      "correct": 3,
+      "id": "dispatch/6808",
+      "prompt_sha256": "a29d0aa42b8a5dc1ff3855e585123264783fc74c4776d90cbf01814a7c8dd2b6",
+      "reply_sha256": "037fd7d5e26027c92a832f8b62a8e209458068ee756c379329a8b6e7afce68eb",
+      "state": "valid",
+      "task": "dispatch",
+      "trial_sha256": "eaeb05114d7f08b442cfe3080d9e1318122a46e22f7a8b0968202bc1fbd745cb",
+      "units": 6,
+      "world": 6808
+    }
+  ],
+  "schema": "seatlab.public-receiver-panel/v1",
+  "scope": "Conditional receiver replies on fixed factual inputs only; not native team rewards.",
+  "tasks": {
+    "calendar": {
+      "correct": 0,
+      "invalid": 0,
+      "missing": 0,
+      "registered": 24,
+      "scored_units": 24,
+      "valid": 24,
+      "worlds": 3
+    },
+    "dispatch": {
+      "correct": 36,
+      "invalid": 0,
+      "missing": 0,
+      "registered": 8,
+      "scored_units": 48,
+      "valid": 8,
+      "worlds": 8
+    }
+  }
+}

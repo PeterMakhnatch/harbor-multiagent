@@ -1,0 +1,486 @@
+{
+  "schema": "seatlab.calendar-booking-route-evidence/v1",
+  "sources": [
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 0,
+          "run": "cfxfer-w48-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 0,
+          "run": "cfxfer-w48-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "7add9daaea8f1516982fbf9d0673d9e4840fd355f1fd7f4673540980711c3c2b",
+      "route": "empty",
+      "singleton_correct": null,
+      "trial_uuid": "2ec06bfe-6c96-47ec-b8e2-728e2c067aad",
+      "world": "w48"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 0,
+          "run": "cfxfer-w49-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 0,
+          "run": "cfxfer-w49-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "94f53ca0145107bece3346b0e5cf2b24e1018ea3371620644071182426f931b3",
+      "route": "empty",
+      "singleton_correct": null,
+      "trial_uuid": "2d42b88e-b8e8-49b1-9047-c9bc90b6a23c",
+      "world": "w49"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w50-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w50-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "dd2dc3089fd5115565a1c04f0f7562921ea144162f205a4217abd0282165ae26",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "f41b318a-3787-4a8c-ba0f-dd7e3068159c",
+      "world": "w50"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w51-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w51-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "f58ffc03f7fc3892a50aac90da566aa3ce4b7b1f2b1cde006a97c8becef7780d",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "ce9804c2-74fd-4909-8a7d-64bce0d30520",
+      "world": "w51"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w52-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w52-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "1b4252c4ba8218a098646d057e98d638cc6a14cdb9f0979c820a08466f159310",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "e9c520ed-8440-44fe-9500-2859c8375065",
+      "world": "w52"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w53-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w53-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "6bea6c1e8772ed521ba9c252e53b12e76998583c0a1b9f5e162bd11a2b1f2d3b",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "d79f1fbf-782d-4298-ac31-447b3dda9e7d",
+      "world": "w53"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w54-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w54-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "bb9e0ca05025b91eab47ff9484a469d101b196db95272ca96de0397392197117",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "b609b3c5-2e62-49d4-a4f1-5f94a6bfabae",
+      "world": "w54"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w55-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w55-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "0215e7363a03f7b4f27220189f5472e5a47d7c22c5e065a822e929f34153d4b6",
+      "route": "multiple",
+      "singleton_correct": null,
+      "trial_uuid": "540867ea-273b-4429-babc-84f61bc167bb",
+      "world": "w55"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w56-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w56-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "824e8b510a61f2858449f979f9822967dfd908e9cd383c3de43ed7b19e25c98a",
+      "route": "multiple",
+      "singleton_correct": null,
+      "trial_uuid": "91e3c8c0-21a5-4129-ab1d-b7f4566c5bc5",
+      "world": "w56"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w57-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w57-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "7cbdd17114b0443de26b6dd3832fe314dee8c097222005add4b683063ee258a5",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "d6d82554-cffc-4d22-9892-4e8a335979f7",
+      "world": "w57"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w58-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w58-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "a476c2140901d2209b42ceafebba9f89be0a721c0a1d1554063c971ddaabadc7",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "217e91a1-a069-4a71-92ee-302a8289a5c3",
+      "world": "w58"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w59-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w59-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "4a81a614281dc382923a9d0e2e2dc91862eb0de63a39be7f62deddbcf0466804",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "92eebe67-ecd9-4b2a-9306-5383552191f1",
+      "world": "w59"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 0,
+          "run": "cfxfer-w60-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 0,
+          "run": "cfxfer-w60-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "56ac174cde950bedfc4aaf8b612600ab2b2143ea7ebced9bcc34a38a127b749b",
+      "route": "multiple",
+      "singleton_correct": null,
+      "trial_uuid": "313f1383-664a-4ed9-a181-6ab911ffdb35",
+      "world": "w60"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w61-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w61-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "580fefe2d9734e63103e7a5d3f1d5af8775dad7b175cf834cb3e71cdcb50293d",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "8cb848b6-37ea-43b9-8224-76ee4f4b5989",
+      "world": "w61"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w62-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w62-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "99e89ad236a178b6e63989bb1e36c418bf7eaf0590612d2e5642525dbc7af614",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "e1eb491e-f057-4c0c-a5d5-c293bb548010",
+      "world": "w62"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w63-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w63-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "95d53020ee4bdcc54890d614d73113ee53fda288c89e317521444d4fc9f15e0a",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "e711dea9-3e4f-44d6-8ffd-db087c520f16",
+      "world": "w63"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w64-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w64-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "1e844cf83644c1f2708a2cfb90175c34072dd5b59ca924da8abf38c39719f282",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "2205e21a-c60b-49d9-94bb-f0edc367d594",
+      "world": "w64"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w65-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w65-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "84b33c396747e903c9592611c655088985b1ef9281f8660f67aca7fd06dce293",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "c597a64f-3fde-4c5b-9b41-2d57d09010c0",
+      "world": "w65"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w66-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w66-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "1e931b9c659216ac09fabb27303e9b31ed9f6687435742f88e3fd8baf1a08d3e",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "f99d624a-42d4-455e-a8a1-b982b054ac81",
+      "world": "w66"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w67-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w67-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "b0a0c8cb6398b169552e14ecf9923e08f9e5358a28dd06590b46b4a849514de3",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "0f9545e8-afe1-4ecd-a084-77d25a899d06",
+      "world": "w67"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w68-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w68-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "31659e16edfaec4869d85f79c96475f9d4ba91fc1113bc3db955d7c318122502",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "f35f6089-58db-456d-9838-c484d72cecf8",
+      "world": "w68"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w69-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w69-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "114f2d1729aa252bcb1d953ba8515e4659c60fa91cd91946cf83a9e3d5138500",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "0ec9f8fa-323f-469c-b9b2-8b98e130f6e5",
+      "world": "w69"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w70-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w70-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "494bf5c179b06cdae80415ddddae472322d5dc43a9295a15bc623973e77e58d2",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "4b2b3033-53ae-4937-8b4f-81b30d7727f4",
+      "world": "w70"
+    },
+    {
+      "arm": "lists",
+      "first": [
+        {
+          "correct": 1,
+          "run": "cfxfer-w71-r0-checked",
+          "status": "scored"
+        },
+        {
+          "correct": 1,
+          "run": "cfxfer-w71-r1-checked",
+          "status": "scored"
+        }
+      ],
+      "result_sha256": "018223d684f70a169ee6dd19db38f44a2fba1fa2b3815771273fa15af2e842fd",
+      "route": "single",
+      "singleton_correct": true,
+      "trial_uuid": "e7c94327-aa60-4d0a-aae1-6e74e9a42b77",
+      "world": "w71"
+    }
+  ],
+  "study": "transfer-fixed"
+}

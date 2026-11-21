@@ -1,0 +1,1493 @@
+{
+  "schema": "seatlab.calendar-staged-report-study/v1",
+  "sources": [
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "9ad9565fadeb0ca419d6fe3eb450223a7edbbde0eac32af0218b5e29a27bece2",
+          "book_reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+          "correct": 1,
+          "second_prompt_sha256": "a2c1f7c38ca8adae2fdee17ba2ad60d3fe934bf097c4bec7af3cd59349a3c77b",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "9ad9565fadeb0ca419d6fe3eb450223a7edbbde0eac32af0218b5e29a27bece2",
+          "book_reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+          "correct": 1,
+          "second_prompt_sha256": "de51b5ae599fc6b901c1334d1a4b831b33cb748a9a3ef025ad1c97e26ba295a4",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "ed5b4adbcaa5936d6cabea32abc5bca005104c5cdfcae432a3e34488f46f00ca",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "f49b3c744eddd40befa1ae5bcd1b5a24ececf3d0cbfcec697fb4a86493740676",
+      "same_second_day": true,
+      "trial_uuid": "64ce5d77-bb3c-461c-8653-c54d01103f6a",
+      "world": "w24"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "728f86a9a258a16a5ea9562c93f91eb0453bc7e02b63fb060a5567996f6eb3bb",
+          "book_reply_sha256": "444880f96cc00dc92b3ee828a467d3cbea52edf33d2757523f2329e1017ab915",
+          "correct": 0,
+          "second_prompt_sha256": "d5753ffed3886126a6b71bdb941aaee5924cdc499c8fee17747cf42654d937bf",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "728f86a9a258a16a5ea9562c93f91eb0453bc7e02b63fb060a5567996f6eb3bb",
+          "book_reply_sha256": "444880f96cc00dc92b3ee828a467d3cbea52edf33d2757523f2329e1017ab915",
+          "correct": 0,
+          "second_prompt_sha256": "62e5ae217cd384996a4fc6b16311a94d407d7ae1b69c2a1e7f2ef4f93a297ee8",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "ea1960821967dcd38d7f166ef384c2521d9701c6ff8b4b1a08e67948bb6775f6",
+      "first_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+      "result_sha256": "dd0ddf4d9ba39c72694d0ac76e30924fa7be860f6ba4cd5aaded09d12203c274",
+      "same_second_day": true,
+      "trial_uuid": "9ff6364a-a790-4e08-bcee-63708298664c",
+      "world": "w24"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "a47dfae1a5fffcdec0a8571a8a19e65e4c8142db978d29dfe12cbb709810508e",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "bdab2cd178895f15539b48098cec3ab077f5e726a36fee90dc809fb564d0e205",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "a47dfae1a5fffcdec0a8571a8a19e65e4c8142db978d29dfe12cbb709810508e",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "df9daab585235a59e6742fb95ee29909caa2bb31a50ac287fc0cac50f086c2b7",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "b84b6b3b97352720b423f4ece4d66da588a72c1b8ad3a55610a23fe326036031",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "4212b6d8b26408862c89d2fbfedf0e74df3eff278b2732119eabde4be62bbcfe",
+      "same_second_day": true,
+      "trial_uuid": "b41f8e6e-c4a6-43e4-81fc-d0426c62c76b",
+      "world": "w25"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "2265863a66a5e35964e7febfb9d32cbf673ee72659854c9eb5ce55ce989e9bdc",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 0,
+          "second_prompt_sha256": "18da0156b10f1f0b51bc475313a4e00914a8d28789488757bb9c70e9bd821df0",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "2265863a66a5e35964e7febfb9d32cbf673ee72659854c9eb5ce55ce989e9bdc",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 0,
+          "second_prompt_sha256": "c66f6c3805e88ae17162c50e23968f1f98a97bf69eab4025cac1ead19b33e8e6",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "755b0645724033cb28d0c59bfb85dd77af8056d945219108480f894cec21e7a3",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "1f4e4272895dfe65c16bd65bafcd449ad96582c21f22e6333ac4a0e0d38f8e3d",
+      "same_second_day": true,
+      "trial_uuid": "b991019d-85aa-406b-a286-b8d656d4ba70",
+      "world": "w25"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "d95aa1995beb8863f06bc2b82712ed5b86824d340acda31aa9f83d7c64c6d3da",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "02c1f3391872b8b4b061fe023d2d92bcc355e002844ea48e50e06992b2937b10",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "d95aa1995beb8863f06bc2b82712ed5b86824d340acda31aa9f83d7c64c6d3da",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "629f29291fa331ea17ae89607a6dadc1c9afb0957d0fad5478b1583dd0011c24",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "32f21bbe53971b98a9e29b048c46dc6059d8d8722dfd984c6641d4c5801c6dba",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "ed929e88b839adef4a54234874ee18bc08283e0c66e45bd221035cfc67fb09e6",
+      "same_second_day": true,
+      "trial_uuid": "b9cd2282-0c4b-4f19-b165-3d048b88d77e",
+      "world": "w26"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c55bc5bef67ad4c604eaabeb54277a630a9f34a66e7a100336a58711a14a3d32",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "e552ed1f7b409e0d57b7c22914e52238c7f73770c9d68eaa395a8804f2c83d84",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "c55bc5bef67ad4c604eaabeb54277a630a9f34a66e7a100336a58711a14a3d32",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "d8e3e9cdc5c915099dadf155765a0f05539d1d590a255d67b441f23cd820dcda",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "7738e7d75dd7b9ec5eea93a2ff6cf54b6564aef5256a38e68e55275f82b04f03",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "0f11730c3846a1e63c08f6122bec1f83443e32625fa37018f1c9eb437b94a121",
+      "same_second_day": true,
+      "trial_uuid": "33c41720-4cb9-48b6-8729-5798e66456a1",
+      "world": "w26"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "2af433a25b5763a5fdda94903e7c5588100e1ad3d4b02d4d6e71d239efa43764",
+          "book_reply_sha256": "51bc114e43f1d8c36252762441b7afeb41da2b21a0e5c9de598932fb82811f0b",
+          "correct": 1,
+          "second_prompt_sha256": "93e4bc56137e256e5707507d3f24e8b0153e2b8b1d6461922b813380628d5218",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "4729d24c85530d7bdfca7130dfb255258cd5f36136fd6c3ecc7ba7247b2d5955",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "42be9a6b3e4e3ffdb7b5e937f6c6788021eee0fcb1d40b3bc36616eb72a7e7c9",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "8de85303120d8075b7b94fb5ef2830c469eb372eb495a252f16ea7997cb537c7",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "37f352651e90993b6039b73ef92a4f738e2c6e6e8ab87fc7861e775646e6f705",
+      "same_second_day": false,
+      "trial_uuid": "c648409c-dd93-4c25-993a-1e576944d6d9",
+      "world": "w27"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "4754002e6c6d8090eb61f0e728155fde031f2ff4d7943ca3e1c9cb14e6039743",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "4cae05a880e45be92ebd0f55ee40582ef5546e7fe17a942d77cf598c6ba38552",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "4754002e6c6d8090eb61f0e728155fde031f2ff4d7943ca3e1c9cb14e6039743",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "8b9d25509ad8c8b9d0ba136fcce0c3e50da15a732c5f7f29edb971214d316890",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "8de85303120d8075b7b94fb5ef2830c469eb372eb495a252f16ea7997cb537c7",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "a271414692cdf55e0aaa93750da6fe0bb10fa0b205e889b3946be18db4091e40",
+      "same_second_day": true,
+      "trial_uuid": "eff0f0b1-ed08-4cbc-ab04-a46eb5b432be",
+      "world": "w27"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c760d875b58f1f7034a8ea9c2a65c9a5060ae33bcdf87296e549153186a1ac68",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "aec7bf156e02836c5e8e867c05ef2a4925eafa31b3f13b2219f86a74d15e54a8",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "d04d3f84700a6e54c2267cd2547b108ee6d3c1a536404299262ff2428ce97186",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "d078b94b5e4e1a550e6aa20b549a8d58c1acd7dd8098f67a64b05b094d0f63ae",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "95a0108d677b8b3f01d59c3b6ad80482ae01f5d9cfc27df7d92cbea261075eeb",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "a6e1d59181d66e5c381dbc51b93d94215e9f00fbb191c06a649d265ec813a927",
+      "same_second_day": false,
+      "trial_uuid": "43d2c50d-f9f6-48b9-8dc9-b3c5a7450a50",
+      "world": "w28"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c760d875b58f1f7034a8ea9c2a65c9a5060ae33bcdf87296e549153186a1ac68",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "aec7bf156e02836c5e8e867c05ef2a4925eafa31b3f13b2219f86a74d15e54a8",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "c760d875b58f1f7034a8ea9c2a65c9a5060ae33bcdf87296e549153186a1ac68",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "d078b94b5e4e1a550e6aa20b549a8d58c1acd7dd8098f67a64b05b094d0f63ae",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "95a0108d677b8b3f01d59c3b6ad80482ae01f5d9cfc27df7d92cbea261075eeb",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "8d17617b5c106846abb3a0281265e8e8be0c9be1d617d788d376592f2a812398",
+      "same_second_day": true,
+      "trial_uuid": "bf4f5e0a-602d-4b31-8c1b-28dd9d1444f4",
+      "world": "w28"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "86a57a4ca10a40ff810ba1332f5fa86121e0601cbc0160df56b8bc324227c92d",
+          "book_reply_sha256": "6201982120852026b7fd5453b9a2dacf0875bf2bbd2c3d18b1e24ac24d482156",
+          "correct": 0,
+          "second_prompt_sha256": "67692653d71ef111002d44d6e9e119dc7da0f81f4ad3c2e8609541f328f6b9ab",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "86a57a4ca10a40ff810ba1332f5fa86121e0601cbc0160df56b8bc324227c92d",
+          "book_reply_sha256": "6201982120852026b7fd5453b9a2dacf0875bf2bbd2c3d18b1e24ac24d482156",
+          "correct": 0,
+          "second_prompt_sha256": "7f5c13af57ace3a4fdf87acca9d2af6eb1dd26c044cfe7ffd1cc9d734917a750",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "b731f2b4cfc7d64edc59d8779f982d5579f01bcd272c83141f3755de7b4d344b",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "26d6a64b3c6fed1d36d904893f63578d9e598e660a2a9c166a2b0949cbc65111",
+      "same_second_day": true,
+      "trial_uuid": "7a54ef67-8934-42fd-a6e6-0bd115407685",
+      "world": "w29"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "7ebba5c186bbada21461613f7f12d4781a9008a7ea22476d8933e8e3a0a8334a",
+          "book_reply_sha256": "2d35fd546eca67a8c16ffccfbbce7d8e5e94a2c2fd920f0c69a4248852039aa1",
+          "correct": 1,
+          "second_prompt_sha256": "860491b59356a04b88e826e0e63a9b604de87c70fd4b07f7008a5f6c06dc7aa8",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "7ebba5c186bbada21461613f7f12d4781a9008a7ea22476d8933e8e3a0a8334a",
+          "book_reply_sha256": "2d35fd546eca67a8c16ffccfbbce7d8e5e94a2c2fd920f0c69a4248852039aa1",
+          "correct": 1,
+          "second_prompt_sha256": "70225ffb66dd680eef4655755974ec2b1a2b9415c7719a4638e823f9a5d5d8e4",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "1ece44583a16b8a517d153502d5dd2949cf5fcaaac47bb0d942ef43e64f20d86",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "50495eac7484228cfbfbd6babc1edbb73b79701fea07ff0f7e3774db4ac143e4",
+      "same_second_day": true,
+      "trial_uuid": "d8b24158-b5ef-4476-82a6-773e190503c7",
+      "world": "w29"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "0599fb6fe45ea3f59984aa2861467f495bd83acdc959949cfdcb807a47703623",
+          "book_reply_sha256": "c12c7b72aa569211b98eb9f1111dc837199a1d90cdcfe3e4d147bb8c09031b8a",
+          "correct": 0,
+          "second_prompt_sha256": "9ab246a3311b42ecd39920196286fed59e57cd6c1e18b4dae4fa586abc32c62f",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "0599fb6fe45ea3f59984aa2861467f495bd83acdc959949cfdcb807a47703623",
+          "book_reply_sha256": "c12c7b72aa569211b98eb9f1111dc837199a1d90cdcfe3e4d147bb8c09031b8a",
+          "correct": 0,
+          "second_prompt_sha256": "3a11ff6a7bf245f57e1aaf1f83aba0e6999081b2d1e69c51ede6d156173a4215",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "6252e0b65ee399fc7f5a8d4f15ea9b6ed1457ee8bfbd848ec4f97a10b3f169f2",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "822a9a3a9c00dd5b35a5f1cf7f0a659789a8d06d44d8e9b17d385e9ae9f12e8c",
+      "same_second_day": true,
+      "trial_uuid": "21920fec-8521-4034-b544-518568118568",
+      "world": "w30"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "185211a8748e0aac0b303317afa43780049241e5f7ba862dce1c25119cd90a9d",
+          "book_reply_sha256": "444880f96cc00dc92b3ee828a467d3cbea52edf33d2757523f2329e1017ab915",
+          "correct": 1,
+          "second_prompt_sha256": "00a029bd2820594aa701873c4d331c8ac4906d16d8f3e63add46e798f8238a78",
+          "second_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "185211a8748e0aac0b303317afa43780049241e5f7ba862dce1c25119cd90a9d",
+          "book_reply_sha256": "444880f96cc00dc92b3ee828a467d3cbea52edf33d2757523f2329e1017ab915",
+          "correct": 1,
+          "second_prompt_sha256": "b6fa3675c1acb89bb4861f61648ecd87823d1d496d664256108f9e8149b517a8",
+          "second_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "44e97924960202f9da7939bef849e85678b6c896c0f84ee1a973a2c8c8915b50",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "bb6de50a77c5af3dd64e25ee5c6e30fcbef2db78e702351cc840540cec880d56",
+      "same_second_day": true,
+      "trial_uuid": "7334d56a-1723-4146-993f-bab228579e7c",
+      "world": "w30"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "09914b424ad201019f272f51999e25244fbdada041ae9a95b63914ceb1c415a0",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "4b4ca103b2e3289bce0abedd91e4b97d1f3a508057799fe892f7dca065a2226d",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "09914b424ad201019f272f51999e25244fbdada041ae9a95b63914ceb1c415a0",
+          "book_reply_sha256": "61e51f60e5f7fb0ca0904a16548609da8c0ead7efa3c8888e46ba686e03cbd76",
+          "correct": 0,
+          "second_prompt_sha256": "fb94587e5725427d70ef10e64735c7e8c7ed7e4d80a7326b2ecd9f4b0a3dff9e",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "a978c738024bb92e26b9904fd108d688c30c450125f74b3072f73164b5538214",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "662b0dd9947637e9a105aede5490c3590fc1f2932ec10e70bbf2c0d1e4f2e71b",
+      "same_second_day": true,
+      "trial_uuid": "65a03bba-6c4d-4d6b-8be0-aa2c3c7e0e5a",
+      "world": "w31"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "09914b424ad201019f272f51999e25244fbdada041ae9a95b63914ceb1c415a0",
+          "book_reply_sha256": "428c55ba86a4e03eab62aa162ee5804251d97834c41da997b6f50a196aa7bbd2",
+          "correct": 0,
+          "second_prompt_sha256": "4b4ca103b2e3289bce0abedd91e4b97d1f3a508057799fe892f7dca065a2226d",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "09914b424ad201019f272f51999e25244fbdada041ae9a95b63914ceb1c415a0",
+          "book_reply_sha256": "428c55ba86a4e03eab62aa162ee5804251d97834c41da997b6f50a196aa7bbd2",
+          "correct": 0,
+          "second_prompt_sha256": "fb94587e5725427d70ef10e64735c7e8c7ed7e4d80a7326b2ecd9f4b0a3dff9e",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "a978c738024bb92e26b9904fd108d688c30c450125f74b3072f73164b5538214",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "dd817eb923714ee629701893c566922ec37a63a065a8388aadfe38251f577941",
+      "same_second_day": true,
+      "trial_uuid": "7a9d5459-4d60-45ef-b846-86fbee78e689",
+      "world": "w31"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "dd0661c12b43b75cf415625e0d53bd3defd0a40a277c7e61678c36ed865f5c17",
+          "book_reply_sha256": "15043757ba1e544e06c664032a688d923f0013e3913dc071c6a3ddc16d4fdf2e",
+          "correct": 0,
+          "second_prompt_sha256": "daac18b22d75e84ef7fddd967ba299b6248e4def5745334dca1518326fce0fff",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "dd0661c12b43b75cf415625e0d53bd3defd0a40a277c7e61678c36ed865f5c17",
+          "book_reply_sha256": "15043757ba1e544e06c664032a688d923f0013e3913dc071c6a3ddc16d4fdf2e",
+          "correct": 0,
+          "second_prompt_sha256": "4144334a87c87aabb7f988542effbab3c22a6330982ae43968b834a61b31a174",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "7542ac41f0461391afd77d7a44f5e6f82329830bb9eb77ef827bdafe40cfc2cd",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "548771d147d8f52562efab744b7471113ec211a7071f2d7628cddd85f784ef1c",
+      "same_second_day": true,
+      "trial_uuid": "360c4c43-92b7-4459-b2cd-531b06d8e684",
+      "world": "w32"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c959657aeef233cdc7138007cc3355e4b47bcb46449a2880dfffbd1021b644f6",
+          "book_reply_sha256": "428c55ba86a4e03eab62aa162ee5804251d97834c41da997b6f50a196aa7bbd2",
+          "correct": 0,
+          "second_prompt_sha256": "2c90bd04694411a9d05124c870f2be8307a8b5af31e9134cf8f8a4803be6b6ee",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "c959657aeef233cdc7138007cc3355e4b47bcb46449a2880dfffbd1021b644f6",
+          "book_reply_sha256": "428c55ba86a4e03eab62aa162ee5804251d97834c41da997b6f50a196aa7bbd2",
+          "correct": 0,
+          "second_prompt_sha256": "4b28af55dd8e6012759a303557d9cf6bae2f6befbd6f191211a1ffe6b1beed36",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "7542ac41f0461391afd77d7a44f5e6f82329830bb9eb77ef827bdafe40cfc2cd",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "fc1718dca3836194222021438ccfbb706ecaba4ac79232e518eb63f330d4593f",
+      "same_second_day": true,
+      "trial_uuid": "2afd6b24-54de-432f-b5c8-413677a4a09b",
+      "world": "w32"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "61047c159b19982ab6c29ac331af1ec5b5830f3757a58c3c9f375e7bd3525453",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "583811cf9cef2ed0bec9cc5a6845cad7f59671c93a336e94a0748003dde3683b",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "61047c159b19982ab6c29ac331af1ec5b5830f3757a58c3c9f375e7bd3525453",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "e489a01dbeedea77b2b7257d0bcc08e4f5470fe01da266f915ebeaf5bae6afef",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "baa6956c286ec67fe5df69f2273c32daef4d0a9076b19a99885aeb1844c01e57",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "c5d437606281ff6e183d63be9c55c92b369c657f7f540f42b913085acf202a36",
+      "same_second_day": true,
+      "trial_uuid": "efd3a1e3-b6ec-4f03-9fc1-ad026a65cba4",
+      "world": "w33"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "61047c159b19982ab6c29ac331af1ec5b5830f3757a58c3c9f375e7bd3525453",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "583811cf9cef2ed0bec9cc5a6845cad7f59671c93a336e94a0748003dde3683b",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "61047c159b19982ab6c29ac331af1ec5b5830f3757a58c3c9f375e7bd3525453",
+          "book_reply_sha256": "c06433c945852e735ed2ed5d351ba2f8c5eb9d8baa3c9c80da833ac12dcb12bc",
+          "correct": 1,
+          "second_prompt_sha256": "e489a01dbeedea77b2b7257d0bcc08e4f5470fe01da266f915ebeaf5bae6afef",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "baa6956c286ec67fe5df69f2273c32daef4d0a9076b19a99885aeb1844c01e57",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "f96855ddc8ce3215fa85195c2aafc6fd342c06730371feb5e880438b0c1a1c57",
+      "same_second_day": true,
+      "trial_uuid": "92bac1bb-6212-4060-a3fe-ed780b4e4e5e",
+      "world": "w33"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "2f1696ebc27a55a748ed6346c1085dcc0d1b0e3fceeb94b767b0c8ea65bc977b",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 1,
+          "second_prompt_sha256": "18fb1dad6748ce95d97f51cdec0f780548d770f4aef0d832fcfef7fecfed7ba8",
+          "second_reply_sha256": "9f2155a2496c657a05c410cc5797700facb82c4337bfba18959eceae394b5418",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "2f1696ebc27a55a748ed6346c1085dcc0d1b0e3fceeb94b767b0c8ea65bc977b",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 1,
+          "second_prompt_sha256": "5ec012f110f7214e6386b4cc607b8318810d31329d1efd2516254dded4f3d9c2",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "9a7cb454bb885d2744bf49d2d1097401b828af0b5b0c0130a15c6988ff0aa218",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "55cad199c3002959abad1f6310ddbeed4c2d700fa5f6727a22f40d61e25ccdd7",
+      "same_second_day": true,
+      "trial_uuid": "b7c9302e-9cf7-4874-b023-bfe892af8922",
+      "world": "w34"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "9647f69ebe121c4d52d2f202b7264e3099ac702744916354ef50834560182fd7",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 1,
+          "second_prompt_sha256": "3505a4116f4880ac71f375616a4061af62da61d028e96b596a4997408c456a20",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "2f1696ebc27a55a748ed6346c1085dcc0d1b0e3fceeb94b767b0c8ea65bc977b",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 1,
+          "second_prompt_sha256": "0b47fd2db3ac202755b34d1484607b0a45e919b5dfa4208776a1f1e14cafa2de",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "c82ac2432a2f199cde57ed6e28d2ecc7f3acfaec4e718036d75b8cad53d48039",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "6a20599ff80a437e6de9e95efe0d2d625f06438447777bf3d1f287da67e853f7",
+      "same_second_day": false,
+      "trial_uuid": "6ce8a20f-c287-488a-9089-51dd382c4c5e",
+      "world": "w34"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "0750f3a1f5889e5788ffe9d7e7e3549e0824554170fb06fdfebc722f0e7d30be",
+          "book_reply_sha256": "ea087165bcaa2f3babd3464fa4ae0235fc44edb1acc0568dde63c869aba785a0",
+          "correct": 1,
+          "second_prompt_sha256": "e03e659851563375f156a595da4f56fd597d483e6d6198730291d45b7c75c2ba",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "3305006adefda7200cd5fa1b27f9e7201855049c63e9c226b5955514dc833fcd",
+          "book_reply_sha256": "ea087165bcaa2f3babd3464fa4ae0235fc44edb1acc0568dde63c869aba785a0",
+          "correct": 1,
+          "second_prompt_sha256": "6632791e5bc0baf3ecbbeb2be539719cb9cb04d0db70dc04cefe7f3fd5cba6ca",
+          "second_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "13796227f6951e66f200a6ebc1ab235cd9914ab21a4d18006be1b1481b8aa0d5",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "c5ba1236a48ed4aed1112ad47212f99a6eafdad998d7c1ba071fab57492336e1",
+      "same_second_day": false,
+      "trial_uuid": "29ed8a82-f713-4848-bb3c-880d48600a8b",
+      "world": "w35"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "34f1b8c9d6dd151402e417ec464108d54c91aec6909a5c2bc1f6048b0bf2c8e9",
+          "book_reply_sha256": "ea087165bcaa2f3babd3464fa4ae0235fc44edb1acc0568dde63c869aba785a0",
+          "correct": 1,
+          "second_prompt_sha256": "3037074403e41cf52f085910ccf31fc7d1070d22f60ecba46b447060dfabf510",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "34f1b8c9d6dd151402e417ec464108d54c91aec6909a5c2bc1f6048b0bf2c8e9",
+          "book_reply_sha256": "ea087165bcaa2f3babd3464fa4ae0235fc44edb1acc0568dde63c869aba785a0",
+          "correct": 1,
+          "second_prompt_sha256": "0e24860843250fc5ed4c99817948921eea67a46420b7a3278021975cec33d7aa",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "13796227f6951e66f200a6ebc1ab235cd9914ab21a4d18006be1b1481b8aa0d5",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "b7db7ba2033c9b9dc52b7987e81c859ec1c3260769b05ecc216134cf33d429b2",
+      "same_second_day": true,
+      "trial_uuid": "74877f8b-131b-4868-bdf6-a033b6d290e6",
+      "world": "w35"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "2b16682819bc969899e9f984d2676389eab5f161c011edb60510230a81386738",
+          "book_reply_sha256": "bd93f7c23f5577d0a88cecd6a2bea604fe3ec6cefa90ba591ffaf6da91e8076d",
+          "correct": 0,
+          "second_prompt_sha256": "70067b6987c6251d0d8a6b2ffd1f2d4985591dd5e97b36a6f8a85634e0eb41b3",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "2b16682819bc969899e9f984d2676389eab5f161c011edb60510230a81386738",
+          "book_reply_sha256": "bd93f7c23f5577d0a88cecd6a2bea604fe3ec6cefa90ba591ffaf6da91e8076d",
+          "correct": 0,
+          "second_prompt_sha256": "c77526aec0ef82c5900355dff67e050acaa04083bdeb5addc543e48082846e75",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "d54ad54a3304c62bc37b4dcb44c852a1af4c39d45073825dd749f4582594ab6d",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "ba803c6252dd22edbcaba9ec1e54f4e3e4b79820a833a336d8c4c90d39c9c6a1",
+      "same_second_day": true,
+      "trial_uuid": "a5758f09-52d3-4396-8a3a-e6905b8728df",
+      "world": "w36"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "8a9ae2088556d74eff9070c19a1ebcfebd0f3fafec3f6713a7e8f32392c337cd",
+          "book_reply_sha256": "d11c6b0688cc069a2fb873b56c5ed3bca03a73c7f499928982629dfe843facb6",
+          "correct": 1,
+          "second_prompt_sha256": "31952ff00184b80d482e139eef35264499a6f7cc318a076d12a38189c2126a0c",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "8a9ae2088556d74eff9070c19a1ebcfebd0f3fafec3f6713a7e8f32392c337cd",
+          "book_reply_sha256": "d11c6b0688cc069a2fb873b56c5ed3bca03a73c7f499928982629dfe843facb6",
+          "correct": 1,
+          "second_prompt_sha256": "22e3445171a8e234c45f4950b7af629ee1a27b1956dc97c9a832e99de79dae39",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "e301a5dc7e2a248174fbebf3e0345dfb89d8868ef035ff4613227d04412cc622",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "1cb8e988158e6da50924905c7773807c36b032cd187e005e96045f57ea47dd7a",
+      "same_second_day": true,
+      "trial_uuid": "970cc80e-a488-4848-bcea-75823d20b8d7",
+      "world": "w36"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "aa183493eef52409f70b341e265c79d72351239dc0a868df7cf1d8b73a4bbbca",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "7816759b4742e84744f4393f14225951d97b8f7592586ace083000541e935c6d",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "aa183493eef52409f70b341e265c79d72351239dc0a868df7cf1d8b73a4bbbca",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "a76902ce7064b18c9a62e04e4605819e4996044ddfd43bac846d5b9e97cc035f",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "7270f6457616649df9c0a25d487afd943ec091a3c5a2ba32721d7bbcbc7e6ff7",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "bd39bc22982b2282491b40587aec699fa0c226677267f7384cad17d34a54d074",
+      "same_second_day": true,
+      "trial_uuid": "25f834d9-ff39-4e97-8598-31f8b8813f1e",
+      "world": "w37"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c0016e745de99649b2f033057df71e3c73612637918e4e31270c53f53105560f",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "cfa1ae16399d9d15c0c21f8fe2336ae46c4d579b0a49017c7a76312755c5b141",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "c0016e745de99649b2f033057df71e3c73612637918e4e31270c53f53105560f",
+          "book_reply_sha256": "f7e4191a4f895217f91ff2a071a2961afc576739e7c824abffac8054438d860f",
+          "correct": 1,
+          "second_prompt_sha256": "220b2d78e76eb62bf8f116499304dc39490f7dea8ab4fbfdc13677abaa903439",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "8e4feda78febf1ea285bc102f6cc81f09dbcaecdb22e1d679fa8d7a6fd4f04b0",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "e99e3affcae25c6ea310f5c7ef30e191e24b0b4b9cc61294364d0b377faa19b6",
+      "same_second_day": true,
+      "trial_uuid": "cd3383de-efa1-43ec-922c-5f256fa52701",
+      "world": "w37"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c91af69d9bbad8f7d20f89f61a97f25b397ee5f7519e89495182d61eb2a7433a",
+          "book_reply_sha256": "c12c7b72aa569211b98eb9f1111dc837199a1d90cdcfe3e4d147bb8c09031b8a",
+          "correct": 1,
+          "second_prompt_sha256": "1df53e2cfe785ac75a0842b7c2275a30d937ba6da8cfe0fb582ce27c2ba68383",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "27e3514450c352eb85e4f4733d77e3f00955550583eea603d78776cab2f04a4d",
+          "book_reply_sha256": "c12c7b72aa569211b98eb9f1111dc837199a1d90cdcfe3e4d147bb8c09031b8a",
+          "correct": 1,
+          "second_prompt_sha256": "8bc7ed8aecaa2b902089d1a5b72c912ce2b8bcdab23bd6c2d1fc27a731295189",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "8035c17a443829bccd3330a341fb5a69222061dabaa511d32a01644a459f819a",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "027a9fb107fd7da2fc35e985b8a62f4e57b1a35693e0ab8ed5896a964236c590",
+      "same_second_day": false,
+      "trial_uuid": "84354117-374e-403e-b13a-23d87922f6ee",
+      "world": "w38"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "1ebf5b6b5ac871ca5f7d718ffea55ec59c38340274f1197668f74d7d4bee40bd",
+          "book_reply_sha256": "c12c7b72aa569211b98eb9f1111dc837199a1d90cdcfe3e4d147bb8c09031b8a",
+          "correct": 1,
+          "second_prompt_sha256": "b8925de9ba42df9f535ec1b22ed957b5a39aa6d33844a4ee7e6397c2328c585c",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "bc2a92c77cca59c22695256105def5ffc78c4f02c6c561cebf7f738f2188e535",
+          "book_reply_sha256": "af67cec6577cddd53b7867a1e74ab2f87aef62e86680fb4c5e80ef674d8de167",
+          "correct": 0,
+          "second_prompt_sha256": "4cea9a5e05233b5c5172f9e89a207c16b5fb4699ba8c2300a3301614977a1d4c",
+          "second_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "8035c17a443829bccd3330a341fb5a69222061dabaa511d32a01644a459f819a",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "61dbf29589e1d0000084bdc0f23e7c507a496cc2625b03db8cff61a301a9a842",
+      "same_second_day": false,
+      "trial_uuid": "6cddeb7a-68e9-4ce9-b1c6-0d8a5977fd4a",
+      "world": "w38"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "0df121a84de5c541fa49a28b3b26334f3f16aaa769d4d0658793c872c7b06171",
+          "book_reply_sha256": "bd93f7c23f5577d0a88cecd6a2bea604fe3ec6cefa90ba591ffaf6da91e8076d",
+          "correct": 1,
+          "second_prompt_sha256": "1bef84808f66e11a85381502ebf0c18dec06aaabe6758ad52a680b04bc94330c",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "2863d4ee204fd33b268b0050ca2004661e79e7390f8026c84c69ddaf3b8dcaa4",
+          "book_reply_sha256": "bd93f7c23f5577d0a88cecd6a2bea604fe3ec6cefa90ba591ffaf6da91e8076d",
+          "correct": 1,
+          "second_prompt_sha256": "62f1289249d80f9c87a8832f8b5eedb1c5b799e1ca4d5979bbb9746d77b812bf",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "c269d4279350354b551e12eccb8489decab98162b8e01c33a07e3636a0c21853",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "b4ebf5651e0d40c46da38b6f7574a6c6206e579b224f353e397afb1a73ac952a",
+      "same_second_day": false,
+      "trial_uuid": "c06837d3-97ce-4e14-8095-a2b18a6c9053",
+      "world": "w39"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "4b8aacc786995edb63d51d70f24811e8d391cdcf85d89f61ce36be2d5d4a895a",
+          "book_reply_sha256": "bd93f7c23f5577d0a88cecd6a2bea604fe3ec6cefa90ba591ffaf6da91e8076d",
+          "correct": 1,
+          "second_prompt_sha256": "e4c10fb897901bd02dd98b36469acc6510603f092b19e61e1859a8eddca77270",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "4b8aacc786995edb63d51d70f24811e8d391cdcf85d89f61ce36be2d5d4a895a",
+          "book_reply_sha256": "bd93f7c23f5577d0a88cecd6a2bea604fe3ec6cefa90ba591ffaf6da91e8076d",
+          "correct": 1,
+          "second_prompt_sha256": "d738d03d87d5c503c17cabe9eda8338be5f08aa4b9e97e95a9f838b747156ed2",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "36120f059d37ed2a7b06fc50eaeb624889150e7a3b88c417a56760d0683a7827",
+      "first_reply_sha256": "b77d38f311cfd6746407b8e1b6fc476a816db986a1f73e34f1342b8354a2e435",
+      "result_sha256": "7d25cb3ebda5ea4d0ca90a9eaece9187a1838569d006af77a70064344983c3e6",
+      "same_second_day": true,
+      "trial_uuid": "d2f0c9af-4eb2-4af1-b9ba-7e5ba2edcace",
+      "world": "w39"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c73455506b178fa89ea3f76276b2806d0daa0ed312b915adce36f2a626465f60",
+          "book_reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+          "correct": 1,
+          "second_prompt_sha256": "17e03fc1c02d13cb53635c61a7d244a60dd0b3a64984b1c387db7e7855acf421",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "c73455506b178fa89ea3f76276b2806d0daa0ed312b915adce36f2a626465f60",
+          "book_reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+          "correct": 1,
+          "second_prompt_sha256": "ed6ae18abc2f0f74f572061ef85e83632a39524a0d11e6cb622badcf9577e9b4",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "a40a5564ed583fdd0f93ef660ddd793a0583c8b9c13960eefe8af91e71e8fd94",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "f3bc256013303488fb7a3ed9f480ddd68c79634e7252d621c48114d5c8dd06a5",
+      "same_second_day": true,
+      "trial_uuid": "533090e0-0395-40ab-b391-c8804c911ce6",
+      "world": "w40"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "5f0d22045e3863de9ec509681b44b7e9cb521bf2b4cf43d2133106040c7bb10b",
+          "book_reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+          "correct": 1,
+          "second_prompt_sha256": "4bdd0f56d92ab0ec7bd3dec9024ac68c4c3d1a8dfda54c084addbb9e1dc44d0f",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "5f0d22045e3863de9ec509681b44b7e9cb521bf2b4cf43d2133106040c7bb10b",
+          "book_reply_sha256": "bc993799b811256e755b445a4fd0f570079d4f67be5032f6d0cccc08312e8d57",
+          "correct": 1,
+          "second_prompt_sha256": "5996ed0acc054aa0309a2e27e58c0cc6fdf6ab3be0e08b579bf9af1b98ec72b1",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "d35902236a73987b5057e3cc36846a11858279288ad395c13d443939796e4c20",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "9273a118b1443a06fa6353165212e638cb47c12202e8aca2c14eeb530ffe6ffc",
+      "same_second_day": true,
+      "trial_uuid": "86f7c373-52c4-423b-8eba-68da66781f21",
+      "world": "w40"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "c3d5df9e69da3509bafeb4641bfac7855b2beb6ae654b67b0702edde8bacb4c1",
+          "book_reply_sha256": "cac9d26e5395acf3c1f954947353ee3533deb116a273e574f7e0ddc0a611697e",
+          "correct": 0,
+          "second_prompt_sha256": "91a2a313e4824fc7c7be466d2510ecfa75cd4b105db2626189dd7a1d3d009ff4",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "c3d5df9e69da3509bafeb4641bfac7855b2beb6ae654b67b0702edde8bacb4c1",
+          "book_reply_sha256": "cac9d26e5395acf3c1f954947353ee3533deb116a273e574f7e0ddc0a611697e",
+          "correct": 0,
+          "second_prompt_sha256": "52d34d679877811ebfdb8980ac02bc990a1e48ef1d1ccf831822e970e8be27ec",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "93ec803fa04586b93dccaeef67e75d9d9edb5620ed73665a527fdd9dc63d279b",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "7351fb510a2c83bf59556b448b040b41ec38d46ff4f24c5015e40193a3b1b8a8",
+      "same_second_day": true,
+      "trial_uuid": "15fdd5ac-7f88-4a8b-8f92-d9a43c93c5e8",
+      "world": "w41"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "bab5114424f671c25be6e548583630d804890f6cf1c2127d0f5c3388657e319e",
+          "book_reply_sha256": "7120f9f2657ceb6025587ade0c694f8cad2faf162277bf1020ce9f88c7361614",
+          "correct": 0,
+          "second_prompt_sha256": "e639d2ea76241b286cd74d6c8e4ff2b72d68f320be7970947f6dc57bf2860071",
+          "second_reply_sha256": "ae7add2ed1d7421d0f2413717c270aa28236a46f48285e03f59f6244d7917645",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "bab5114424f671c25be6e548583630d804890f6cf1c2127d0f5c3388657e319e",
+          "book_reply_sha256": "7120f9f2657ceb6025587ade0c694f8cad2faf162277bf1020ce9f88c7361614",
+          "correct": 0,
+          "second_prompt_sha256": "dc07cdbd7487ae32a23400a294d602291df6828c11fcf9fc2a1c860979e76e8a",
+          "second_reply_sha256": "ae7add2ed1d7421d0f2413717c270aa28236a46f48285e03f59f6244d7917645",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "d8a63b359d422e8c3158ee1c155757e62ea201703e12f9ae62e7c691ee375aa2",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "935b3eab1521bdeda618df830eafff8cc1bdf4220a0926cc3b0c10d956e8348c",
+      "same_second_day": true,
+      "trial_uuid": "d850d5d5-34e9-4934-81d9-232bc93054d9",
+      "world": "w41"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "09d140b8cc537f4236c9712c83034c08dc2e338a8b28a75b8309ae6842d110f6",
+          "book_reply_sha256": "d49b5b8836af603d0ae99c8fad83b5c8caf0f68d4bdb7e52b619837ce97f9ee7",
+          "correct": 1,
+          "second_prompt_sha256": "0a40561071e24be7fb32dbb583ab2c8d01caca0b92dca762236de06b4dcf5220",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "1256c07ee0b8a9093806adefc2bf839281809821b07c3f0915c52a8c32076040",
+          "book_reply_sha256": "d49b5b8836af603d0ae99c8fad83b5c8caf0f68d4bdb7e52b619837ce97f9ee7",
+          "correct": 1,
+          "second_prompt_sha256": "2bc78ff1c0dfdf0df8239e42c8369bcc91d246778a285180a67a314cede9d23d",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "a27d99f35e17d6ca3b0394dec702cd9f747c465e403fc06d7fe62d94083e3b08",
+      "first_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+      "result_sha256": "b00cb8c10ef32b3c5f102f63ce4ff687f771a73a1a5a7ae58f6d84b9130dcc67",
+      "same_second_day": false,
+      "trial_uuid": "6352cd28-c697-4376-bc70-61dae0047f19",
+      "world": "w42"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "09d140b8cc537f4236c9712c83034c08dc2e338a8b28a75b8309ae6842d110f6",
+          "book_reply_sha256": "d49b5b8836af603d0ae99c8fad83b5c8caf0f68d4bdb7e52b619837ce97f9ee7",
+          "correct": 1,
+          "second_prompt_sha256": "0a40561071e24be7fb32dbb583ab2c8d01caca0b92dca762236de06b4dcf5220",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "09d140b8cc537f4236c9712c83034c08dc2e338a8b28a75b8309ae6842d110f6",
+          "book_reply_sha256": "d49b5b8836af603d0ae99c8fad83b5c8caf0f68d4bdb7e52b619837ce97f9ee7",
+          "correct": 1,
+          "second_prompt_sha256": "2bc78ff1c0dfdf0df8239e42c8369bcc91d246778a285180a67a314cede9d23d",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "a27d99f35e17d6ca3b0394dec702cd9f747c465e403fc06d7fe62d94083e3b08",
+      "first_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+      "result_sha256": "9ad87d4b28a8e3e95d92fb3289b7b6986c2d958277da4e08d80f19e082f6e9c7",
+      "same_second_day": true,
+      "trial_uuid": "57554cac-d787-480b-a5f0-b3ed8bbf29cf",
+      "world": "w42"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "424fef060e4c0fe15481b8f9ae28c56fa274067ad52b418fe6b4e843bd52305c",
+          "book_reply_sha256": "726a02054d39b2000882a00a4587718e8fd38935ab1b8bf1667be027c4045cad",
+          "correct": 0,
+          "second_prompt_sha256": "b34eb241e23b87697d8150598afc2fad1a06319d65673cd2632c843105dbec2e",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "424fef060e4c0fe15481b8f9ae28c56fa274067ad52b418fe6b4e843bd52305c",
+          "book_reply_sha256": "726a02054d39b2000882a00a4587718e8fd38935ab1b8bf1667be027c4045cad",
+          "correct": 0,
+          "second_prompt_sha256": "9bdcd2c97a168b9f4199d8c9cfbad0469956e77afb4efe84d976500e313f0dca",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "84d23dc5f8385aaefd73e1dfa2865a25695aa3bcc4fd4cf92f4360ddce1017ea",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "b47a1897b8b5759f40cbc42110db10095a6d112d8c7b79c0baf24e99f9aa65d5",
+      "same_second_day": true,
+      "trial_uuid": "2a64cd3a-d5fb-499a-a094-24109c95f8cf",
+      "world": "w43"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "7225f8233dec52312604b374f5fd786b146a7b9c5647a001e94b3c76803eca94",
+          "book_reply_sha256": "326759747851516b01421f62dc8a10ab1ea0f93e03932de1f5b899b9cb271ae8",
+          "correct": 1,
+          "second_prompt_sha256": "f404d12388a4dbc75e8c4d02836a060ff7fdc5f8f4721046107e63062a08fc86",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "dc6d4b6ff42e2b6a93f7f0f2e83faf8f2a88ff62d6a3f43f2359dc47953d5015",
+          "book_reply_sha256": "326759747851516b01421f62dc8a10ab1ea0f93e03932de1f5b899b9cb271ae8",
+          "correct": 1,
+          "second_prompt_sha256": "38ffa29018e1eac793443c2bf47634ddd677dd97b1e6fbf82d967f8833596e2f",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "8225f981a2866b5713d8537c0b86928ed0d88255507b562cc952be00c555000f",
+      "first_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+      "result_sha256": "612446cce21e852f3c49fff86c9e14da8523afb824da60bdea1e7f33bcc7170e",
+      "same_second_day": false,
+      "trial_uuid": "623407f7-02cd-472f-a53a-31844be8ded9",
+      "world": "w43"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "1361215f6f11a320bd02843b937933f54f94376f9b5be8686cb6a8a992ace961",
+          "book_reply_sha256": "85306a09dd3ace733915d3c0ac7209dc8259e6382520e3b714dcd0b9313bf41f",
+          "correct": 1,
+          "second_prompt_sha256": "e17ef8a06d9bd54fbd48e9efee10c7e096c5a4ea00577a6559edf21fc6a8bf32",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "20d1b4af597b51cf18fe32299b7a9e4c513a3ef6992eb51c1c4cbba706f03afb",
+          "book_reply_sha256": "85306a09dd3ace733915d3c0ac7209dc8259e6382520e3b714dcd0b9313bf41f",
+          "correct": 1,
+          "second_prompt_sha256": "0c79f0e70f5f2a82dfb5a451843923ce564666fae86b7857a17619a2cf89c06a",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "f3649d4de5e6bd6c2fa396778c590cc67651813af6505e36753d38d1f0c2251e",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "17ed1946c1136fadd9a8c82ae773a910373c50320147180690bb36d0bf0bed07",
+      "same_second_day": false,
+      "trial_uuid": "0315d74a-6a48-4ce6-9b56-e3b0b538061c",
+      "world": "w44"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "e506dbf772e3f5922451cd7d2c5bf117a869230f7370883c9de1d3ad8f373304",
+          "book_reply_sha256": "85306a09dd3ace733915d3c0ac7209dc8259e6382520e3b714dcd0b9313bf41f",
+          "correct": 1,
+          "second_prompt_sha256": "21b0bb7687bd81c1e76513667552c2294df4a172cf7b857f6693dc2ad26b8ead",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "cca9347bbf930a73632aa49fa879162d7f3f16b20f04d8c00c686b5eac223ad7",
+          "book_reply_sha256": "85306a09dd3ace733915d3c0ac7209dc8259e6382520e3b714dcd0b9313bf41f",
+          "correct": 1,
+          "second_prompt_sha256": "c2b6ad7ca74eec42c4b30b795a41a60af63c33e5bf98eca95ec868af73f0252f",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "40d7e1edeb6f688ef1eaeb5914b6f588428af5b01064eaaf66afca8595cb0ec1",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "c60d1a7b53f6e87bab409e58846209e27247b37c43a677abcdc2b5a26fbf5dc4",
+      "same_second_day": false,
+      "trial_uuid": "177f921e-0e59-4d8b-bd94-2037f16f89ce",
+      "world": "w44"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "d7e7408625a7326eb0d44c25d9db4ded3f22cd4e4df30f6e21fa54fdadf1a6c5",
+          "book_reply_sha256": "291b7bc78085506f10f168141bbba0b542df2ee8576540decb966bfedf8f25a0",
+          "correct": 1,
+          "second_prompt_sha256": "172750b62fe635b065d319e1866ad54c4db1987d53c96a6794c341bad9721b61",
+          "second_reply_sha256": "5fa671ada70a44cdf19480560b0d6f8d15b2174a196eae39d09216e04a43140c",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "b8688b253b234bfdebb9ffd6d7f9a88c3fdc1c7437746bb59d516c1ba725655c",
+          "book_reply_sha256": "291b7bc78085506f10f168141bbba0b542df2ee8576540decb966bfedf8f25a0",
+          "correct": 1,
+          "second_prompt_sha256": "ea053cda652b6e181a8c6f60795c937d332cc50e3dff0634262181f4134da6bc",
+          "second_reply_sha256": "ec9dfc6700ec4231eaf18907e4778494dab518aff64715a1f0ba4022ee896bd8",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "e44403c35f340ba02e254913b0276dd424d7b4305ec5893b26c9bb12cd24f3d9",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "1683cf55fbc9f93c4b8e7db56d1938e4e367d2b2c07bafc3a5b152b4793fa6f4",
+      "same_second_day": false,
+      "trial_uuid": "d6ed5abd-0c8d-4146-9cee-85f52d540edd",
+      "world": "w45"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "ffe087b0d0fe87ed3598d8cdd42a43148c973afc5c41cf4347282519a98adcb4",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 0,
+          "second_prompt_sha256": "dd4dcb2af9ace312b03c285af5424b505ccf6a2ce71102f4b67f4dac8fdb3fae",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "ffe087b0d0fe87ed3598d8cdd42a43148c973afc5c41cf4347282519a98adcb4",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 0,
+          "second_prompt_sha256": "76cd3925cae2a72343000f62e2b72cc220bfedb2ee94aeef16ceb72c8e9de4f3",
+          "second_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "ff350d4325a3e8b8ef4d52003f3139afb9673b2e7dc30062340fbc0960e4e6f7",
+      "first_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+      "result_sha256": "fb5f1ed750d374d94436b788dea541183c5de143ea813900f62990cf2298d427",
+      "same_second_day": true,
+      "trial_uuid": "de1cf166-193b-429b-a343-08b92dd2d69e",
+      "world": "w45"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "184c4ea1ead5b973b019bbfe0a558ee26e30410082c5b5575f18b7cd8c9d3662",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 0,
+          "second_prompt_sha256": "d1e30143b720c9f887c1e062dacff22e437316a0303543639a7ce65642c2296d",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "184c4ea1ead5b973b019bbfe0a558ee26e30410082c5b5575f18b7cd8c9d3662",
+          "book_reply_sha256": "7f0cc113a817e592a7a14de9329b290aa6007f1e685ebc13e3f92ffe5b849f2a",
+          "correct": 0,
+          "second_prompt_sha256": "2accdcf145d29d4c2f236a94487ccf37331f6ad70d416162858e66ed9e869b20",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "c98d88b2605a8ae038ccdb14b5842424a338f657e5d9546775853462ea72a3e7",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "8093b96af24de683bf3d29aef5ede3573852e115f290b9c9a42a941d4ccad47f",
+      "same_second_day": true,
+      "trial_uuid": "666c39f3-808c-4561-a602-73f35c2ca5d2",
+      "world": "w46"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "503b60db56746b28cebfd6f6b3170a6cc62b371c5aab811d268128a80deda972",
+          "book_reply_sha256": "7cad0589755d12e466a0b352adc3250c5fdf3f5e7e55a7de6b48aa871827d65a",
+          "correct": 1,
+          "second_prompt_sha256": "e2109d0ac0017ec18faba2b22681c72549d5c5847ad8085a5dd698ab0b702d44",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        },
+        "immediate": {
+          "book_prompt_sha256": "503b60db56746b28cebfd6f6b3170a6cc62b371c5aab811d268128a80deda972",
+          "book_reply_sha256": "7cad0589755d12e466a0b352adc3250c5fdf3f5e7e55a7de6b48aa871827d65a",
+          "correct": 1,
+          "second_prompt_sha256": "563dd44742944e533e6bd3becf8a6a12b2a401e0d078fa0ff91ab0bfb2330c7f",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": true
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "ca4ac184b1570c548862c0fdcaa6d70beaf26332ce55ddd04874e58afd74dcb4",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "f715b6ea68660984ea0551fe768c4891d93e0bf3a6b3aea5eec56c649a378b4b",
+      "same_second_day": true,
+      "trial_uuid": "d10248db-c687-4a3b-a2d8-95b59a4247ba",
+      "world": "w46"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "abe93e9582371844f0fe4d910b61626c649dcf2c4e59df84f26dbe75232d3d54",
+          "book_reply_sha256": "726a02054d39b2000882a00a4587718e8fd38935ab1b8bf1667be027c4045cad",
+          "correct": 0,
+          "second_prompt_sha256": "447eedc655cdd23baa71eb579cc33fd6656436e3f42401f37729789e75b909ce",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "abe93e9582371844f0fe4d910b61626c649dcf2c4e59df84f26dbe75232d3d54",
+          "book_reply_sha256": "726a02054d39b2000882a00a4587718e8fd38935ab1b8bf1667be027c4045cad",
+          "correct": 0,
+          "second_prompt_sha256": "fb149f1b7d992e4e76df901c82f708a1c94a5e7af62b5a13658559d995dc614b",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "checked",
+      "first_prompt_sha256": "8097ce3ae7a2e5313302c8e3d748ec285b35352550874ec365f9596854a8c926",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "95005531345bc3e88eb1e5e7a0c6c96abef7a7d5db5c34b346c40637eb00a207",
+      "same_second_day": true,
+      "trial_uuid": "7e213989-2a9e-4a27-8319-51a0ae884a24",
+      "world": "w47"
+    },
+    {
+      "arms": {
+        "delayed": {
+          "book_prompt_sha256": "9a808d205296533b886d2901fbec1d6736a38c2216c66c5ee36026e44cb4feb3",
+          "book_reply_sha256": "726a02054d39b2000882a00a4587718e8fd38935ab1b8bf1667be027c4045cad",
+          "correct": 0,
+          "second_prompt_sha256": "5be48b9d7028e60e030640dd913ed5c8a58430913d2e080f72f8c7135969f75f",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        },
+        "immediate": {
+          "book_prompt_sha256": "9a808d205296533b886d2901fbec1d6736a38c2216c66c5ee36026e44cb4feb3",
+          "book_reply_sha256": "726a02054d39b2000882a00a4587718e8fd38935ab1b8bf1667be027c4045cad",
+          "correct": 0,
+          "second_prompt_sha256": "1577cfbd34fa41d3491fced8231b46b7b645b06e236980c29fa4e339258f4589",
+          "second_reply_sha256": "7b5b2264bf08ef14ede4abeaba97b133c623e8221a953a8a6453833c777a8ee4",
+          "stage": "book",
+          "status": "scored",
+          "target_visible": false
+        }
+      },
+      "donor_arm": "lists",
+      "first_prompt_sha256": "43cbd39aee6f96500ee05e25c6f314bb9de19da244c0fd739f29e02154fae075",
+      "first_reply_sha256": "8cf91d5a851b6e259cc84ea992c4dcbeea766336785080ceaca8c365007badcd",
+      "result_sha256": "a96efd7c38b557f750446b98e7a240d55d8c900661f2794a2b87620440bae322",
+      "same_second_day": true,
+      "trial_uuid": "c30bd2c4-2119-4bc6-8891-08faadfc788f",
+      "world": "w47"
+    }
+  ]
+}
