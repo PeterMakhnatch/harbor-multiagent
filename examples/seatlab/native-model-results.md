@@ -14,6 +14,30 @@ The [first-attempt report](results/attention-direct-live.json) contains all 12 m
 
 The [subscription panel](results/attention-subscription-live.json) contains 24 fresh native teams, not rescores of direct-model teams. [Stock Eval Lab](results/attention-subscription-stock.json) agreed on all 144 actions and 24 rewards. The native results reported no model usage for command seats. Separate [service receipts](results/attention-subscription-receipts.json) matched 24 inventory and 48 dispatch calls to `openai-codex/gpt-6.2-sol`. No direct API call was made for this panel. We do not assign the subscription a cash price.
 
+## Does ranking the peer’s reported options improve team reward?
+
+**No gain on the registered measure.** Both groups made 70 stock-optimal choices out of 96. Ranking helped in 8 worlds, hurt in 5 and tied in 3. The net difference was 0; the exact two-sided world test gave p = 1. The registered test required at least 10 more optimal choices and p ≤ 0.05.
+
+| First attempt on each of 16 new worlds | Plain reports | Ranked reports |
+|---|---:|---:|
+| Native teams with a verified reward | 16/16 | 16/16 |
+| Stock-optimal shipments | 70/96 | 70/96 |
+| Feasible shipments | 78/96 | 83/96 |
+
+Each native team used two fresh DeepSeek seats. Inventory sent two revisions per shipment. Dispatch saw the names of the changed reports and could open two. Only the final ranked prompt added a line. It listed the bays in each latest **visible** report, in decreasing order of the dispatcher's own utility. It did not reveal the four unopened updates. Each team made its own inventory and lookup decisions.
+
+The 16 six-shipment problems differ from each other and from all 30 reference problems after normalizing the bay names. Individual shipment patterns recur. Rank alone is not a proven default for a Harbor harness. The 5 extra feasible choices are descriptive, not a second positive result. Equal totals do not prove equivalence.
+
+To reproduce the reported world test, run this from the fork checkout with Python 3.12 or later. No Harbor install, API key or Docker is needed.
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.ranked_result examples/seatlab/results/dispatch-ranked-native.json
+```
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062979540) · [No-key controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063076441) · [First-attempt native receipt](results/dispatch-ranked-native.json) · [96 token-priced calls: $0.009406080, no open holds](results/dispatch-ranked-cost.json).
+
+The stock Harbor grades, an independent shipment scorer and Eval Lab's read-only trial importer agreed for all 32 teams. The receipt binds each row to a native trial UUID and a digest of the whole result. It does not independently authenticate the model provider.
+
 ## Does a revised record help a replacement agent find the right context?
 
 The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.
