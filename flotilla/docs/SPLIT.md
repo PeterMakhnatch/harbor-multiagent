@@ -404,3 +404,42 @@ the accepted split.
 **Budget.** At most $0.40 of real cost from tokens. DeepSeek's peak price (double) applies 01:00-04:00 and
 06:00-10:00 UTC Monday to Friday; this run is on Saturday, so the off-peak price applies. No new trial starts when
 the spend plus $0.10 passes $0.40, or when the balance is below $3.50 (balance before: $4.69).
+
+## 14. Propose arm (sp5): result
+
+The run went from 10:53 AM to 11:55 AM ET (2026-11-21), off-peak. `split_trials.py <jobs> 'sp5-??????' sp5`. A
+separate agent re-derived every number from the raw files ($0); all match.
+
+- **The budget guard stopped the run after 5 of 6 trials** (spend $0.3504 + $0.10 > $0.40). The failed propose
+  trials cost $0.07 to $0.13 each, more than the $0.05 that the plan assumed.
+- **Primary test: INCONCLUSIVE** (5 complete pairs; 6 needed). Propose made a deal in 2 of 5 instances, sp3
+  silent in 0: b = 2, c = 0, p = 0.5. A PASS was out of reach: a deal in instance 5 would have given p = 0.25.
+- **Validity test: FAIL** (5 of 6 planned trials). The 5 trials are valid; missed 4 of 40 seat-rounds (10%).
+- Real cost $0.3504 from tokens (1,388,160 cached input, 159,043 other input, 537,273 output tokens). Balance
+  $4.69 before, $3.76 after (this includes other agents).
+
+| Instance | Pot | Outside options (p1, p2) | propose | silent | talk |
+|---|---|---|---|---|---|
+| 0 | 67 | 9, 44 | deal in round 1 by proposal (23, 44), 1.000 | no deal, 0.791 | deal in round 2, 0.791 |
+| 1 | 140 | 96, 13 | no deal (7 proposals, 0 accepted), 0.779 | no deal, 0.779 | deal in round 1, 1.000 |
+| 2 | 133 | 19, 78 | no deal (9 proposals, 0 accepted), 0.729 | no deal, 0.729 | deal in round 1, 1.000 |
+| 3 | 96 | 7, 57 | deal in round 1 by proposal (38, 58), 1.000 | no deal, 0.667 | deal in round 2, 0.792 |
+| 4 | 68 | 12, 44 | no deal (9 proposals, 0 accepted), 0.824 | no deal, 0.824 | deal in round 1, 1.000 |
+
+Observed (a subagent read all 31 proposals and the seats' reasoning, `docs/results/split-propose-why.md`; all
+quotes checked):
+
+- In both deals, the strong seat proposed its outside option or 1 point more, and the weak seat, after a counter,
+  accepted rather than risk a smaller pot. The weak seat got the surplus, as in talk.
+- The 3 failures were mostly not disagreements about price. 5 proposals in those trials paid both seats at least
+  their outside options (in instance 1, the strong seat proposed (96, 44), the split of the talk deal). 4 of them
+  expired at the end of their round before the other seat read them, and 1 drew an acceptance 9 seconds late. In
+  instance 4, a claim closed round 1 before the counteroffers were posted.
+- No proposal stated an outside option in words; some asked for exactly that amount.
+
+Inferred: a binding proposal can carry the same split that talk found (2 deals, both at efficiency 1.000), but in
+this design proposals expire when the round closes, and a round closes as soon as every seat has claimed or
+passed. The seats lost feasible proposals to that timing. Talk did not have this problem in sp3, because the
+seats agreed on the split in messages before anyone claimed. A next version should keep proposals open until the
+round's time ends (a claim should not close the round early in `propose`), and report how many feasible proposals
+expired unread. Limits: 5 instances, 1 model, not randomized in time.
