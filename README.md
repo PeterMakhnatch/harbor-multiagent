@@ -8,6 +8,20 @@ support.
 
 By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
+## Replay an agent handoff without installing Harbor
+
+SeatLab is a fork-only experiment. It lets you change what a replacement agent sees without changing the world or rerunning the departing agent. Start with two service desks and a revised opening time:
+
+```sh
+python -m examples.seatlab.handoff plan \
+  --packet examples/seatlab/handoff/rota.json \
+  --sha256 "$(shasum -a 256 examples/seatlab/handoff/rota.json | cut -d' ' -f1)"
+```
+
+Run this command from this branch with Python 3.12 or later. It needs no account or Docker. The [working example](examples/seatlab/replication.md#run-a-handoff-on-your-own-records) shows how to run two programs, capture their first answers, and score them. It also accepts your own records.
+
+To start from real Harbor data, use the [saved trial packet](examples/seatlab/replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials). No private archive is needed. From your own completed handoff, you can compare [shorter notes](examples/seatlab/replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) or [one worker per answer](examples/seatlab/replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs). Each worker claims a separate first attempt. The [results](examples/seatlab/native-model-results.md#does-a-revised-record-help-a-replacement-agent-find-the-right-context) distinguish a better lookup from a better final decision.
+
 ## Install
 
 ```bash
@@ -64,6 +78,8 @@ verifier, and the limitations.
 To compare two agent programs, start with [Run your own reviewer and decision maker](examples/seatlab/replication.md#run-your-own-reviewer-and-decision-maker). The included packet and demo need only Python. Give the reviewer and coordinator separate executables to run real agents. The [delegation experiment](examples/seatlab/native-model-results.md#does-identifying-a-reviewers-track-record-improve-delegation) shows when a small piece of shared history changed which teammate the model asked.
 
 To test feedback rather than fixed history, [run your own team through a stock change](examples/seatlab/replication.md#run-different-agent-programs-on-the-same-stock-changes). Give each role a separate executable. The next request uses only what that team learned from its previous decisions. The included stock checker needs no model or Docker.
+
+To test how one agent hands work to its replacement, [run a handoff on your own records](examples/seatlab/replication.md#run-a-handoff-on-your-own-records). Bring two agent programs and a small JSON file. The runner gives each program only its part. It keeps the first attempt and scores the replacement's choices.
 
 ## Toward Harbor
 

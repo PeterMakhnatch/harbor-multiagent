@@ -97,6 +97,173 @@ python -m examples.seatlab.visibility.route_cli report --workflow delegate --stu
 
 Use `demo` instead of `commands` and omit `--config` for a no-model transport check. Use a new private directory for a new run. A registered block has one claim, even if a process fails. The report distinguishes unclaimed blocks, known unselected branches, missing replies, and identical selections that share one actual final response.
 
+## Which record should a replacement agent read?
+
+**Registered before the first handoff call.** A new agent inherits a short note from a departing agent. It can open only one current record before it must make its decisions. Does identifying the record whose revision changed improve its choices? This tests a context-handoff interface. It does not simulate an EVE mission or resume a model session.
+
+- Use 12 new Dispatch Handoff seeds, `5801` through `5812`. From the first 8 native shipments, use IDs `1, 3, 5, 7`, named `P, Q, R, S`. Keep their actual old and current stock and utility ranks. Do not select by difficulty.
+- Construct 5 handoffs per seed. In 4 of them, one different record changes at turnover. The writer sees its old stock. For the other 3 records, the writer sees current stock. In the fifth handoff, no record changes. The timing of these publications is an intervention, not an observed native event.
+- Use 2 repetitions per case: 120 matched blocks, including 96 with a change. Each block starts with a new direct DeepSeek Flash writer. It sees only the old record contents and writes one note of at most 256 UTF-8 bytes. Both successor policies receive that same actual note. The writer sees neither utility ranks nor revision receipts.
+- Both selectors see the record questions and the same number of changed and unchanged receipts. `bound` identifies the record for each receipt. `anonymous` gives only their sorted statuses. A selector chooses exactly one record to read. Alternate which policy goes first by case index and repetition. The final dispatcher receives the note, its selected current record, and the questions, but not the revision receipts.
+- If both policies select the same record, deliver the same final prompt and use **one actual final response** for both. Otherwise request two independent final responses. Record each selected record and each returned choice. Never infer a missing answer or retry any stage. Each block uses at most 5 first calls, for at most 600 calls total.
+- Primary: `bound − anonymous` in current optimal choices **for the changed record**. Match within case and repetition. Average within seed, then across all 12 seeds. Report complete coverage and sharp missing-data bounds over the fixed register. If a seed has no complete pair, omit the full-register point estimate. Secondary: selecting the changed record, all-record accuracy, unchanged controls, and cases where the old and current best choices differ.
+- Use an independent copy of the unchanged stock scoring rule for observed final choices. These are host-side decisions on native worlds, not Harbor trial rewards. Share no private note or unrequested record in public evidence. Report direct usage separately from external harnesses.
+
+### Run a handoff on your own records
+
+Use Python 3.12 or later from the root of this fork. Start with the [two-desk rota](handoff/rota.json). Its revised opening hours change one answer. Neither Harbor, Docker, nor a model account is required for this first check.
+
+```sh
+module=examples.seatlab.handoff
+packet=examples/seatlab/handoff/rota.json
+digest=$(shasum -a 256 "$packet" | cut -d' ' -f1)
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+mkdir -m 700 "$private/study"
+python -m "$module" plan --packet "$packet" --sha256 "$digest"
+python -m "$module" demo --packet "$packet" --sha256 "$digest" --study "$private/study" --start 0 --stop 2
+python -m "$module" report --packet "$packet" --sha256 "$digest" --study "$private/study" > "$private/report.json"
+```
+
+`demo` uses a fixed answer. It checks the interface, not model skill. To test two real harnesses, create a new study directory. Use `commands` instead of `demo`. Add `--config seats.json` using the [two-program protocol](#run-your-own-reviewer-and-decision-maker). `reviewer` writes the note. `decider` selects a record and answers the questions. Each invocation receives only its turn. Never pass the packet path, current rubric, or private journal to an agent. These programs are trusted local code, not a security sandbox.
+
+To add a domain, copy the rota packet. Give each case 2 to 8 named records. Give each record an old body, a current body, revision IDs, one question, and its old and current correct choice. Revise at most one record per case. Group related cases under the same cluster. Pin the exact original SHA-256 before a study. Read reports with that same packet and digest.
+
+Parallel workers can claim different indices in one private directory. `pending` lists untouched indices. Specify `--spend-dir` when continuing a direct study so an existing ledger entry also blocks a repeat. `report` never contacts a provider. Save reports **outside** the study directory.
+
+To use Dispatch Handoff instead, omit `--packet` and `--sha256`. `packet` prints its exact input bytes. `stock "$private/report.json"` checks each observed Dispatch decision against the original native scorer. It cannot score a custom domain. `direct` uses only the registered Dispatch worlds and the existing DeepSeek spend ledger. An external agent program can have its own charges.
+
+### Can a model pack an actual outgoing note better than a byte prefix?
+
+**Separate experiment, registered before collecting any packing responses.** The original pilot showed that a valid JSON response can exceed a note budget. This study does not repair that trial or change its result. It asks whether a replacement can use a smaller transfer when the departing agent is no longer available.
+
+- Enroll all 120 original writer slots above, in order. After the original run stops, seal the exact first response for each slot by hash. Never call the original writer again. Accept a nonempty, printable note from an exact `{"note":"..."}` response even if it exceeded the old limit. Keep missing and malformed sources on the register. The source note is the only input to either packer.
+- The new limit is 96 UTF-8 bytes. `prefix` takes the longest complete prefix within the limit. `rewrite` makes one stateless model call on the original note, asking for a compact note that preserves identifiers and values. Apply the same byte limit to its answer. A malformed answer does not get a replacement. If the original already fits, both policies use it and neither starts a packing call.
+- Give the successor the packed note, the questions and options, and the current body of the single revised record, if present. Give no body on a stable case. Do not reveal the strategy, budget, unrequested facts, or correct choices. If the two packed notes are identical, share one actual successor call. Otherwise alternate the first successor by case index plus repetition. Preserve first attempts and count missing transport separately.
+- Primary: `rewrite − prefix` in correct choices on **unchanged** records. Compute the fraction within each block, then the mean within each native world, then the mean across 12 worlds. A correct answer to a disclosed revised record cannot improve this measure. Report complete pairs and missing-choice bounds. Do not present a 12-world estimate when any world lacks a complete pair. Report revised-record accuracy, shared answers, invalid sources, byte use, and actual call costs separately.
+- Use the existing direct DeepSeek Flash settings and ledger. Each block can start 1 packing call and 2 successor calls at most: 360 total. The prefix policy has no packing-call charge. The experiment tests this cost tradeoff, not equal compute. Check observed default-domain decisions against the original native scorer. These are new decisions on fixed records, not new Harbor trials.
+
+**Try it with your own completed handoff.** Keep the original private directory. Do not run its writer again. Use the same packet and exact digest as before. Omit `--packet` and `--sha256` only for the included Dispatch worlds.
+
+```sh
+packing=examples.seatlab.packing
+original="$private/study"
+python -m "$packing" seal --packet "$packet" --sha256 "$digest" --original "$original" > "$private/seal.json"
+seal=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_sha256"])' "$private/seal.json")
+mkdir -m 700 "$private/packing"
+python -m "$packing" commands --packet "$packet" --sha256 "$digest" --source-sha256 "$seal" \
+  --original "$original" --study "$private/packing" --config packing-seats.json --start 0 --stop 2
+python -m "$packing" report --packet "$packet" --sha256 "$digest" --source-sha256 "$seal" \
+  --original "$original" --study "$private/packing" > "$private/packing-report.json"
+```
+
+Use the same two-program configuration format as `handoff commands`. The `reviewer` now rewrites notes. It sees no questions, records, or answer key. The `decider` receives one packed note per decision. You may replace either executable. Give parallel workers disjoint indices. A changed source digest stops the run. The public report contains response hashes and choices, not raw notes.
+
+### Repeat the handoff comparison on saved native Harbor trials
+
+**Recorded-source replication, registered before new model responses.** For each of the 4 registered mixed-roster seeds, select the first scored `reordered` trial in the published register. This selects seeds `4001`, `4003`, and `4007`. Seed `4013` has no eligible trial. Use every shipment ID, `0` through `5`. Do not select on score, disagreement, or whether a shipment changed.
+
+The writer receives the **accepted native inventory reports**, not reports regenerated from world truth. One case per shipment exposes its revision 1 report at turnover. All other reports come from revision 2. Include a stable case and 2 repetitions. The 3 original trials yield 42 new handoffs, including 36 with one revised record. Their timing is a replay intervention. Original dispatch choices are not inputs. Retain incorrect sender reports if present. Score against true current stock, not what the sender said.
+
+Repeat the same `bound` versus `anonymous` comparison and primary measure above. Use new DeepSeek writers and successors, the same note limit, and the same sharing rule for identical final requests. Report exact support, cost, and missing bounds across the 3 observed worlds. Do not extrapolate to the missing fourth world. Do not combine this result with the 12 newly generated worlds. No original model, native trial, or Docker container needs to restart.
+
+**Use a completed Harbor trial.** `trial` is a Dispatch Handoff trial directory with `result.json` and its world artifact. Repeat `--trial` for more sources. Keep their order fixed. `--ids` gives the 2 to 8 shipments you want to replay. A pooled trial has no sender messages and cannot be a source.
+
+```sh
+native=examples.seatlab.handoff.native
+module=examples.seatlab.handoff
+python -m "$native" packet --trial "$trial" --ids 0 1 > "$private/recorded.json"
+python -m "$native" receipt --trial "$trial" --ids 0 1 > "$private/source.json"
+digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["packet_sha256"])' "$private/source.json")
+mkdir -m 700 "$private/recorded-study"
+python -m "$module" commands --packet "$private/recorded.json" --sha256 "$digest" \
+  --study "$private/recorded-study" --config seats.json --start 0 --stop 2
+python -m "$module" report --packet "$private/recorded.json" --sha256 "$digest" \
+  --study "$private/recorded-study" > "$private/recorded-report.json"
+python -m "$native" stock --trial "$trial" --ids 0 1 --sha256 "$digest" --report "$private/recorded-report.json"
+```
+
+The [published 3-trial packet](results/handoff-recorded-packet.json) also works with `plan`, `demo`, `commands`, and `report` without the originals. Use the digest from its [source receipt](results/handoff-recorded-sources.json). Do not give the packet to a model: it contains the scoring answers. Give the agent only the role prompt. Local stock verification requires the original trial directories. A reconstructed input is not proof that the original agent acknowledged it. Paid direct mode requires both original acknowledgments.
+
+### Does assigning answer ownership prevent incomplete handoffs?
+
+**Registered before new calls.** All 48 invalid final replies in the 12-world handoff run answered only for the record the agent opened. They contained a valid option for that record. This experiment tests a change to the work assignment, not a new parser for old answers.
+
+- Enroll the original 120 slots. Freeze the exact final request made after the named-receipt policy chose its record. Include shared finals once. There are 99 such requests and 21 slots without one. Do not select on what the original final answer contained. Never restart a writer, selector, or original decision.
+- Give each policy the same actual note, questions, options, and opened record. `batch` repeats the original user prompt verbatim. `checklist` also names all required answer IDs and says that opening one record does not remove the others. `owners` assigns one independent worker to each ID. Each owner sees the same facts and all questions, but must submit only its assigned answer. Combine only valid submissions. No worker sees another worker's answer.
+- Rotate the order of the 3 policies by case index and repetition. Rotate the owner order by the same index. Each eligible request starts 1 batch call, 1 checklist call, and 4 owner calls. This permits 594 direct calls. There are no retries. Keep transport failures and missing responses distinct from received invalid answers. Owners use more compute. The first comparison does not.
+- Primary: difference in complete, contract-valid team delivery, `checklist − batch`. Secondary: `owners − checklist`. A malformed received submission is a known delivery failure. An unobserved submission is unknown unless another component already makes completion impossible. Compare the policies within each eligible request. Weight each of the 12 source worlds equally. Report eligible counts, paired coverage, and sharp bounds. These are not confidence intervals.
+- Also report how many records each valid submission answered, native stock accuracy on completed deliveries, and correct delivered choices per eligible record. Count no choice from a rejected whole-map answer. Count valid owner submissions separately even if another owner fails. The stock check must flag any disagreement on an observed choice. Report actual distinct model calls and costs per strategy. No team receives a truth value, an original final answer, or other unopened stock.
+- A work index identifies one physical call. Different local workers can claim disjoint indices. The immutable source digest and the original spend ledger block repeat charges after an interruption. Reports never publish role prompts or private notes.
+
+To compare output strategies on your own handoff, use the same packet, digest, and original private study. The following commands use no built-in provider:
+
+```sh
+coverage=examples.seatlab.coverage
+original="$private/study"
+source_args=(--packet "$packet" --sha256 "$digest" --original "$original")
+python -m "$coverage" seal "${source_args[@]}" > "$private/coverage-source.json"
+seal=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_sha256"])' "$private/coverage-source.json")
+source_args+=(--source-sha256 "$seal")
+python -m "$coverage" plan "${source_args[@]}"
+mkdir -m 700 "$private/coverage"
+study_args=(--study "$private/coverage")
+python -m "$coverage" commands "${source_args[@]}" "${study_args[@]}" --config seats.json --start 0 --stop 2
+python -m "$coverage" pending "${source_args[@]}" "${study_args[@]}"
+python -m "$coverage" report "${source_args[@]}" "${study_args[@]}" > "$private/coverage-report.json"
+```
+
+Use Bash for this example. Set `decider` to your batch and checklist program. Set `reviewer` to the program that answers for one record. Each `plan` index represents one real process call, not one whole team. Start a second worker on a disjoint range. A claim remains occupied after an interrupted call. For paid direct runs, always give `pending` and `report` the original `--spend-dir`. `stock` checks the included Dispatch domain, not custom packets. The [source seal](results/coverage-source.json) lists the 99 observed requests and the 21 slots without one; it contains no raw notes or answers.
+
+### Can a different subscription harness use the same recorded trial packet?
+
+**Registered before collecting subscription teams.** Use the [recorded packet](results/handoff-recorded-packet.json) without modifying its rubric or its role prompts. In each of its 3 worlds, test the first revised case and the stable control, with both registered repetitions. This gives 12 handoffs and at most 60 new first calls. Do not select cases by the previous teams' answers.
+
+Use the same explicitly named subscription model for both new roles through a trusted external command. Give it no tool, earlier conversation, API key, packet, or private journal. Reject a reply when the served model differs. Retain a missing call; do not retry or switch providers within the cohort. Record prompt and response commitments and service-reported tokens separately from the original Harbor trial. Primary: how many of 12 writer turns yield a valid note, then how many named and anonymous successors deliver a complete decision. Check accepted choices against the stock scorer. This small replication tests portability and contract completion, not relative model quality.
+
+The optional `visibility/omp_seat.py` command uses the signed-in OMP subscription gateway. Each process sends one new text request. It rejects tools, truncated replies, and a different served model. It needs no API key. The executable is trusted local code, not a sandbox. Set `model` to a concrete `openai-codex/...` model included in your account. Do not enable a paid fallback.
+
+```sh
+umask 077
+mkdir -m 700 "$private/writer" "$private/successor" "$private/subscription-study"
+adapter="$PWD/examples/seatlab/visibility/omp_seat.py"
+jq -n --arg python "$(command -v python)" --arg adapter "$adapter" \
+  --arg omp "$(command -v omp)" --arg home "$HOME" --arg model "$model" --arg dir "$private" \
+  'def seat($r): {argv:[$python,"-I",$adapter,"--omp",$omp,"--home",$home,
+    "--model",$model,"--receipts",($dir+"/"+$r)],env:[]};
+    {reviewer:seat("writer"),decider:seat("successor")}' > "$private/seats.json"
+python -m examples.seatlab.handoff commands --packet "$packet" --sha256 "$digest" \
+  --study "$private/subscription-study" --config "$private/seats.json" --start 0 --stop 1
+```
+
+Use absolute physical paths. Each receipt contains the request and reply hashes, served model, and reported token counts. It does not contain the text or credentials. The study journal is private and **does** contain the actual replies. Do not publish the journal. The run shown above starts one real team, not the full registered cohort. It does not report a cash price for a subscription.
+
+After `handoff report`, verify calls without reading any reply text:
+
+```sh
+python -m examples.seatlab.handoff.external_audit "$private/report.json" \
+  --writer-receipts "$private/writer" --successor-receipts "$private/successor" \
+  --model "$model" --indices 0
+```
+
+Give the exact block indices for your run. The auditor rejects missing or surplus success receipts, a different served model, and attempted blocks outside that selection. It counts repeated identical requests and replies as separate calls only when there are separate receipts.
+
+#### Does the reader use named receipts when the first record is not revised?
+
+**Registered after the 12-block portability test, before collecting this extension.** Both policies opened the first record in every portability block. Its 6 revisions all left the correct bay unchanged. Enroll all 30 remaining blocks in the same public packet, not just blocks with favorable earlier outcomes. Every revision in this set affects a record outside the first position. Keep the 12 previous blocks out of the new cohort. Use a fresh private journal, the same explicitly named subscription model, and the same role prompts. Do not retry. Stop if the subscription cannot serve that model.
+
+Primary: difference between the 2 policies in how often they open the revised record, paired within a valid writer note. Give each of the 3 original worlds equal weight. Report coverage and bounds for missing selections. Secondary: how often the resulting decision gets that record right when the revision changes the best bay. Identify these cases from the frozen scoring packet, not from either agent's choice. Report each policy's first-record selections and the number of shared final draws. The anonymous reader does not have the record identity. A first-record choice alone is not proof that it ignored available evidence.
+
+To reproduce the held-out estimate without a model, use these released files from the fork root. The index list covers all 30 selected blocks and excludes all 12 earlier ones:
+
+```sh
+files=examples/seatlab/results
+python -m examples.seatlab.handoff.lookup_cohort \
+  --packet "$files/handoff-recorded-packet.json" \
+  --sha256 77e1af8cec3b3a18142cfc2085332c69c447a9bc89c04b34f036920378f8eb57 \
+  --report "$files/handoff-nonfirst-live.json" \
+  --indices 2 3 4 5 6 7 8 9 10 11 16 17 18 19 20 21 22 23 24 25 30 31 32 33 34 35 36 37 38 39
+```
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.

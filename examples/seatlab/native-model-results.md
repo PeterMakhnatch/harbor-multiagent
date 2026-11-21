@@ -2,6 +2,60 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Does a revised record help a replacement agent find the right context?
+
+The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.
+
+The first DeepSeek writer returned a 337-byte note against the 256-byte limit. It returned valid JSON, but neither replacement received a note. The host ledger matched the one call at **$0.000072300 USD**. No decision or native score exists for it. The experiment retains this block and does not retry the writer.
+
+Two independent local programs also ran a non-shipping example with 18 subprocess calls. The replacement answered questions about opening hours. Two changed cases used separate final answers, and two unchanged cases shared one actual answer each. No private note or opening time appeared in the report. This checks the portable interface, not a model.
+
+**Naming the revised record improved lookup, but many final answers were invalid.** On changed cases, the named policy selected the revised record on **77 of 77** valid selections. The anonymous policy selected it on **17 of 70**. The changed record had an optimal final choice in 39 of 50 observed named decisions and 20 of 45 anonymous decisions. These last two denominators differ.
+
+The [complete decision record](results/handoff-live.json) has all 120 claimed blocks. Of the 96 changed blocks, both decisions were valid in only **38**. Across those pairs, the named policy improved 13, worsened 1, and tied 24. The registered equal-world difference was **+32.64 percentage points** on complete pairs. Across all 96 scheduled comparisons, the missing-data bounds are **−27.08 to +61.46 points**. These are not confidence intervals. The study does not establish an improvement across the full register. The 20 complete stable controls tied.
+
+The [stock check](results/handoff-stock.json) confirmed 416 choices in 104 distinct final decisions across 12 worlds. Both policies shared 31 complete decisions after opening the same record. All [470 first calls](results/handoff-cost.json) matched the host ledger at **$0.025455102 USD** including the first block. The final ledger has no open hold. No new Harbor trial ran for this comparison.
+
+The [96-byte follow-up](replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) preserves all 120 actual writer responses, including the 21 that failed the first study's note contract. The [source seal](results/packing-source.json) pins them without publishing the notes. As a separate interface check, two desk programs compared clipping with extracting the hours from four 166-byte notes. All 12 packing and decision processes completed at no cost. This checks the harness only.
+
+The first packing block reused the original 337-byte note. Each policy produced a complete new decision. All 3 model calls matched the ledger at **$0.000180150 USD**. The original block still has no decision.
+
+Across [all 120 notes](results/packing-live.json), the rewrite and the byte prefix produced identical text 27 times. Among the 66 blocks with two complete decisions, rewriting improved unchanged-record accuracy in 16 blocks, reduced it in 6, and tied in 44. The equal-world difference was **+9.25 percentage points** among complete pairs. Bounds across all 120 blocks span **−24.03 to +37.64 points**. Rewriting required one extra model call per note. This result does not justify a general switch from clipping to rewriting.
+
+The [stock check](results/packing-stock.json) confirmed 592 choices in 148 distinct decisions. The [ledger](results/packing-cost.json) matched all 333 calls at **$0.018413250 USD**, including the first block. No hold remains.
+
+An offline inspection also identified why the original final answers were incomplete. Of 152 distinct received final answers, 104 met the contract. All other **48** returned a well-formed `choices` object for exactly one registered ID: the record the agent just opened. Each returned a valid option for that ID. The contract required all 4 IDs. We did not infer the other choices or change any score.
+
+The [output ownership follow-up](replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs) froze 99 actual final prompts before collecting new decisions. In the first eligible block, the batch, checklist, and 4 independent answer owners all submitted complete choices. Stock confirmed all 12 choices. All 6 direct calls matched at **$0.000343434 USD**. This single block does not distinguish the strategies.
+
+**Listing every required ID improved delivery without adding a model call.** We replayed the same 99 saved requests under each policy. The other 21 of 120 registered blocks had no valid writer note and no receiver request. No receiver failure was retried.
+
+| Policy | Complete answers / 99 requests | Correct choices / 396 requested | Direct calls | Estimated USD |
+| --- | ---: | ---: | ---: | ---: |
+| Original batch instruction | 66 | 219 | 99 | $0.004326366 |
+| Explicit ID checklist | 99 | 321 | 99 | $0.007002900 |
+| One reader per record | 55 | 304 | 396 | $0.023193600 |
+
+The checklist completed 33 answers that the batch instruction missed and lost none. The equal-world delivery difference was **+32.29 percentage points** across 12 worlds. Giving 4 independent readers one record each reduced complete delivery by **44.45 points** against the checklist. Partial owner answers still count toward correct choices. Among complete answers alone, batch accuracy was 219/264 and checklist accuracy was 321/396. The result supports a delivery contract, not higher accuracy on every answer.
+
+The [first-attempt decisions](results/coverage-live.json) retain all 594 received calls. The [stock check](results/coverage-stock.json) verified 1,003 submitted choices with no score differences. The [cost ledger](results/coverage-cost.json) matched every call at **$0.034522866 USD**, including the pilot. No hold remains. This compares new receivers on saved prompts; it is not a change in a native team reward.
+
+The [saved-trial replication](replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials) uses the accepted sender messages from 3 actual native teams. All 6 source seats acknowledged their input. Both replacement policies in the first block chose the same record and shared a complete new decision. All 4 direct calls matched at **$0.000276468 USD**. The saved Harbor scores did not change.
+
+The first registered subscription block used the same saved native packet. Its writer produced a valid note. Both policies opened the same record and shared a complete decision. All 4 service responses matched the writer or successor journal by both text hashes. The gateway reported `openai-codex/gpt-6.2-sol`, 1,493 input tokens, 148 output tokens, and 0 cached tokens. This measures a host-side replay, not a new Harbor reward or a cash price.
+
+All [12 registered subscription handoffs](results/handoff-subscription-live.json) produced a valid note and a complete decision under both receipt policies. Both policies opened `S0` on all 12 blocks. Every block therefore shared its final decision. The [native scorer](results/handoff-subscription-stock.json) confirmed **72 correct choices out of 72** across 12 distinct decisions. On the 6 changed blocks, `S0` was the revised record by design. None of those revisions changed the best bay. This cohort verifies that another harness works; it cannot measure a benefit from naming revisions or rank the models.
+
+The [role audit](results/handoff-subscription-usage.json) matched all 12 writer responses and all 36 successor responses to the requested subscription model. It found 17,841 input tokens, 1,791 output tokens, and no cached tokens. The other 30 blocks in the generic 42-block report were not registered for this test. They are not failed teams.
+
+**When the revised record was not first, naming it changed every lookup.** The [held-out cohort](results/handoff-nonfirst-selected.json) contains the other 30 blocks from the same 3 native worlds. The named reader opened the revised record **30/30** times. The anonymous reader opened the first record **30/30** times and never opened the revised record. Each world contributed 10 matched pairs. All 30 writers supplied usable notes. No final draw was shared.
+
+In 16 blocks, the revision changed which bay was best. The named reader chose the new best bay **16/16** times. The anonymous reader chose it **0/16** times. Across all records, the 2 arms made 180/180 and 164/180 correct choices, respectively. The [stock scorer](results/handoff-nonfirst-stock.json) checked all 360 choices in 60 distinct final answers. The [call audit](results/handoff-nonfirst-usage.json) matched 30 writer replies and 120 reader replies to the exact subscription model. It found 56,652 input tokens and 6,128 output tokens with no cache hits. The [full register](results/handoff-nonfirst-live.json) leaves the 12 earlier blocks unclaimed. These repeated decisions on 3 sources are not 30 independent Harbor worlds or new native rewards.
+
+On the [42 recorded-source handoffs](results/handoff-recorded-live.json), naming the record selected the revised record **19/19** times, versus **4/19** without names. Only 8 of 36 changed blocks had two complete final decisions. The named policy improved 2, worsened 0, and tied 6. The equal-world difference was **+19.44 points** among complete pairs. The full missing-data bounds span **−47.22 to +75.00 points**. No stable control yielded two valid final decisions. This supports the lookup observation, not a general dispatch-score gain.
+
+Half the new writers returned an invalid note: 21 of 42. The [native stock check](results/handoff-recorded-stock.json) confirmed 132 observed choices in 22 distinct final decisions. They came from all 3 eligible source worlds. The [host ledger](results/handoff-recorded-cost.json) matched all 120 calls at **$0.007863198 USD**, including the first block. No hold remains.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.
