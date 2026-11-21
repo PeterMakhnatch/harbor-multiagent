@@ -152,6 +152,8 @@ python3.12 -BS -m examples.seatlab.dispatch_peer_case score --world 6801 < "$wor
 
 The reader checks the [public source commitments](results/dispatch-peer-sources.json) before it releases a prompt. For these 8 worlds, the public generator reproduces the inventory seat’s **actual submitted rows**, not just a plausible inventory. Both prompt hashes must also match. The score evaluates a new receiver against the stock task. It does not create a native team trial.
 
+**Use this evidence to decide whether another model call is worth buying.** A [16-world follow-up on Peter’s fork](https://github.com/PeterMakhnatch/harbor-multiagent/blob/42b686c7dd4b379da9c3503f5f8e511bac61c0ed/examples/seatlab/native-model-results.md#does-ranking-the-peers-reported-options-improve-team-reward) separates native teams, fixed-input receivers, and selective correction. Ranking reports left native reward unchanged at 70/96 optimal choices in both groups. A second receiver kept all six disputed choices; the free rule recovered five optimal choices on these proposals. [Run the comparison on one public input or your own native trial.](https://github.com/PeterMakhnatch/harbor-multiagent/blob/42b686c7dd4b379da9c3503f5f8e511bac61c0ed/examples/seatlab/replication.md#compare-receivers-on-one-real-dispatch-decision)
+
 ## Reproduce the comparison without a model
 
 The [native receipt](results/live-confirmation.json) covers 48 distinct teams, 96 live seats, and 160 settled calls. The total token-priced cost was **$0.012457179**. The [process receipt](results/live-confirmation-process.json) gives question, answer, read, and action counts. Both files exclude private prompts and trial paths.
