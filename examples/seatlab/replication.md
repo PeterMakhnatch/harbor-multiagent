@@ -56,6 +56,23 @@ Run `python -m "$module" commands --config seats.json --study "$private" --start
 
 Use only trusted executables. The runner starts each in an empty working directory and passes only the environment variables named for that role. This is not an operating-system sandbox. An executable can still use the network and read files available to its user. The offline report verifies the selected role inputs and observed replies. It makes no claim about model identity or billing for external commands. For Python callbacks, use `route_run.play_block(..., reviewer=my_reviewer, decider=my_decider)`; both callbacks take one prompt string.
 
+### Continue a study without repeating a model call
+
+Keep the original packet, private study, and spend directory. `pending` makes no requests. It lists untouched block indices and half-open `start`/`stop` ranges. A claimed block stays closed even when its last reply is missing.
+
+```sh
+module=examples.seatlab.visibility.route_cli
+python -m "$module" pending --workflow review --study "$private"
+python -m "$module" commands --workflow review --study "$private" \
+  --config seats.json --start 0 --stop 20 --only-unclaimed
+```
+
+Give each worker a different range. If ranges overlap, the first claim owns the block. Other workers skip it. Rerunning a range with `--only-unclaimed` does not repair interrupted blocks. A block directory without a complete claim is occupied, not available.
+
+For `direct`, give `pending` the original `--spend-dir "$SEATLAB_SPEND_DIR"`. Set that same absolute directory in the worker environment. A recorded reservation closes a block even if the study directory no longer contains the claim. A new spend directory cannot detect an old payment. External command costs are not recorded by this ledger.
+
+On the 2 published studies, all 216 review blocks and all 144 delegation blocks were closed. In empty replacement directories, the original ledger still closed every block. An independent local transport check used 2 overlapping workers, 1 interrupted block, and 1 unbound claim. It reached 38 stages once each. A second pass made no calls and did not change the evidence. The transport check used executable fixtures, not models.
+
 ## Can a coordinator use team memory to choose one reviewer?
 
 **Separate registration, before the first delegation run.** The preceding packet has 3 sources but only 6 distinct sets of true route scores. A second report can add incorrect numbers. This study gives a live coordinator one reviewer request. Both conditions receive the same prior accuracy counts. Only one identifies which count belongs to which candidate.

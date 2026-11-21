@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 from collections.abc import Callable, Sequence
@@ -16,6 +17,7 @@ from . import (
     route_protocol as protocol,
     route_run,
 )
+from .clarify_run import StudyError
 
 _RESULTS = Path(__file__).resolve().parent.parent / "results"
 _PUBLIC = _RESULTS / "crucible-routed-packet.json"
@@ -71,20 +73,134 @@ def _identity(args: argparse.Namespace) -> tuple[Path, str]:
     return _PUBLIC, _COMMITMENT.read_text(encoding="ascii").strip()
 
 
+def _continuation_spend_dir(mode: str) -> Path | None:
+    if mode != "direct":
+        return None
+    path = Path(os.environ.get("SEATLAB_SPEND_DIR", ""))
+    if not path.is_absolute():
+        raise ValueError("direct continuation requires an absolute SEATLAB_SPEND_DIR")
+    return path
+
+
+def _seats(
+    args: argparse.Namespace,
+) -> tuple[Callable[[str], str], Callable[[str], str]] | None:
+    if args.mode == "demo":
+
+        def reviewer(_: str) -> str:
+            return '{"vote":"B","a":[0,0],"b":[0,0]}'
+
+        def decider(prompt: str) -> str:
+            if args.workflow == "delegate" and '"ask"' in prompt:
+                return '{"ask":"X"}'
+            return '{"choice":"A"}'
+
+        return reviewer, decider
+    if args.mode == "commands":
+        from .seat_command import load_commands
+
+        if args.config is None:
+            raise ValueError("ready command blocks require --config")
+        return load_commands(args.config)
+    if args.mode != "direct":
+        raise ValueError("unregistered transport")
+    _admit()
+    return None
+
+
+def _run(
+    args: argparse.Namespace,
+    packet: Path,
+    digest: str,
+    blocks: tuple[protocol.Block, ...],
+) -> int:
+    from . import route_memory_run, route_pending
+
+    delegated = args.workflow == "delegate"
+    runner = route_memory_run if delegated else route_run
+    if not 0 <= args.start < len(blocks):
+        raise ValueError("unregistered start index")
+    stop = args.start + 1 if args.stop is None else args.stop
+    if not args.start < stop <= len(blocks):
+        raise ValueError("unregistered stop index")
+    indices = range(args.start, stop)
+    spend_dir = None
+    ready = None
+    if args.only_unclaimed:
+        spend_dir = _continuation_spend_dir(args.mode)
+        ready = set(
+            route_pending.snapshot(
+                packet,
+                digest,
+                args.study,
+                workflow=args.workflow,
+                spend_dir=spend_dir,
+            )["ready"]
+        )
+    seats = _seats(args) if ready is None or not ready.isdisjoint(indices) else None
+    for i in indices:
+        block = blocks[i]
+        if ready is not None and i not in ready:
+            status = "skipped_not_ready"
+        else:
+            try:
+                if seats is None:
+                    status = runner._play(packet, digest, args.study, block, _direct)
+                else:
+                    status = runner.play_block(
+                        packet,
+                        digest,
+                        args.study,
+                        block,
+                        reviewer=seats[0],
+                        decider=seats[1],
+                    )
+            except StudyError as error:
+                if (
+                    ready is None
+                    or type(error) is not StudyError
+                    or error.args != ("block_already_claimed",)
+                ):
+                    raise
+                latest = route_pending.snapshot(
+                    packet,
+                    digest,
+                    args.study,
+                    workflow=args.workflow,
+                    spend_dir=spend_dir,
+                )
+                if i in latest["ready"]:
+                    raise
+                ready.intersection_update(latest["ready"])
+                status = "skipped_already_claimed"
+        key = route_memory.key(block) if delegated else block.id
+        _print({"index": i, "block": key, "mode": args.mode, "status": status})
+    return 0
+
+
 def _execute(args: argparse.Namespace) -> int:
     packet, digest = _identity(args)
+    if args.mode == "pending":
+        from . import route_pending
+
+        _print(
+            route_pending.snapshot(
+                packet,
+                digest,
+                args.study,
+                workflow=args.workflow,
+                spend_dir=args.spend_dir,
+            )
+        )
+        return 0
     delegated = args.workflow == "delegate"
     if delegated:
-        from . import route_memory_audit, route_memory_run
+        from . import route_memory_audit
 
         collect = route_memory_audit.collect
-        play_external = route_memory_run.play_block
-        play_direct = route_memory_run._play
         blocks = route_memory.blocks()
     else:
         collect = route_audit.collect
-        play_external = route_run.play_block
-        play_direct = route_run._play
         blocks = protocol.blocks()
     if args.mode == "report":
         _print(collect(packet, digest, args.study, spend_dir=args.spend_dir))
@@ -126,54 +242,20 @@ def _execute(args: argparse.Namespace) -> int:
             }
         )
         return 0
-    if not 0 <= args.start < len(blocks):
-        raise ValueError("unregistered start index")
-    stop = args.start + 1 if args.stop is None else args.stop
-    if not args.start < stop <= len(blocks):
-        raise ValueError("unregistered stop index")
-    seats: tuple[Callable[[str], str], Callable[[str], str]] | None = None
-    if args.mode == "demo":
-
-        def reviewer(_: str) -> str:
-            return '{"vote":"B","a":[0,0],"b":[0,0]}'
-
-        def decider(prompt: str) -> str:
-            if delegated and '"ask"' in prompt:
-                return '{"ask":"X"}'
-            return '{"choice":"A"}'
-
-        seats = (reviewer, decider)
-    elif args.mode == "commands":
-        from .seat_command import load_commands
-
-        seats = load_commands(args.config)
-    else:
-        if args.mode != "direct":
-            raise ValueError("unregistered transport")
-        _admit()
-    for i in range(args.start, stop):
-        block = blocks[i]
-        if seats is not None:
-            status = play_external(
-                packet, digest, args.study, block, reviewer=seats[0], decider=seats[1]
-            )
-        else:
-            status = play_direct(packet, digest, args.study, block, _direct)
-        key = route_memory.key(block) if delegated else block.id
-        _print({"index": i, "block": key, "mode": args.mode, "status": status})
-    return 0
+    return _run(args, packet, digest, blocks)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     modes = parser.add_subparsers(dest="mode", required=True)
-    for mode in ("plan", "report", "demo", "commands", "direct"):
+    for mode in ("plan", "report", "pending", "demo", "commands", "direct"):
         sub = modes.add_parser(mode, allow_abbrev=False)
         _scope(sub)
         sub.add_argument(
             "--workflow",
             choices=("review", "delegate"),
             default="review",
+            required=mode == "pending",
             help="Compare two context views, or let the coordinator choose a reviewer.",
         )
         if mode != "plan":
@@ -183,7 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 required=True,
                 help="An owner-only directory outside the checkout.",
             )
-        if mode == "report":
+        if mode in ("report", "pending"):
             sub.add_argument(
                 "--spend-dir",
                 type=Path,
@@ -201,15 +283,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 type=int,
                 help="Exclusive block index. The default runs one block.",
             )
+            sub.add_argument(
+                "--only-unclaimed",
+                action="store_true",
+                help=(
+                    "Skip blocks that are not ready. For direct mode, set "
+                    "SEATLAB_SPEND_DIR to the absolute path of the original ledger directory."
+                ),
+            )
         if mode == "commands":
             sub.add_argument(
                 "--config",
                 type=Path,
-                required=True,
-                help="Trusted reviewer and decider commands.",
+                help="Trusted reviewer and decider commands. Required for ready blocks.",
             )
+    args = parser.parse_args(argv)
+    if args.mode == "commands" and args.config is None and not args.only_unclaimed:
+        modes.choices["commands"].error("the following arguments are required: --config")
     try:
-        return _execute(parser.parse_args(argv))
+        return _execute(args)
     except (OSError, ValueError, RuntimeError, sqlite3.Error):
         # External programs, providers, and paths can carry private content.
         print(
