@@ -1,6 +1,6 @@
 # What helps two agents find a meeting?
 
-**Show the receiver which reported times fit its own calendar.** In 96 new native teams on the same 24 scheduling worlds, this check raised bookings from 21/48 to 36/48. It added no calendar information.
+**The local calendar check helped on the first 24 worlds. The transfer test did not establish that gain on 24 new worlds.** The check added no calendar information. Keep this distinction when choosing a default for a new workload.
 
 ## Does checking the received reports help a live team?
 
@@ -37,6 +37,23 @@ The check gained **31.25 percentage points**. Across the 24 worlds, 11 improved,
 The stock Eval Lab reader matched all 96 native rewards. Independent checks matched 288 message deliveries and 384 model turns. All 384 direct DeepSeek calls settled for **$0.014291868**. There were no missing grades, replacements, or outstanding charges.
 
 [All first attempts](results/calendar-native-repeatability.json) · [Matched turns, without message text or action hashes](results/calendar-native-repeatability-turns.json) · [Per-call tokens and costs](results/calendar-native-repeatability-cost.json) · [Run the experiment or inspect your own reruns](replication.md#repeat-a-native-team-without-replacing-its-first-attempt).
+
+### Does the booking gain transfer to new calendars?
+
+**Not established.** On 24 new worlds, 15/24 teams booked with the original lists and 18/24 booked with the local check. The gain was **12.5 percentage points**. Six worlds improved, 3 declined, and 15 tied. The exact two-sided sign test gave **p = 65/128 (0.508)**. The [registered rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062759338) required at least 20 points and p ≤ 0.05. Neither condition passed.
+
+These were 48 new two-seat teams, not receiver replays. The [stock admission check](results/calendar-transfer-48-71-intake.json) excluded role-specific calendar problems equivalent to the earlier worlds. The true meeting appeared in the final reports for 22/24 lists teams and 18/24 checked teams. Each sender made its own decisions. Do not use these unequal report counts to infer a receiver-only effect.
+
+All 48 first attempts completed. The stock Eval Lab reader matched every native grade. Independent checks matched 144 message deliveries and 192 model turns. All 192 direct calls settled for **$0.008763804**. No replacement or outstanding charge.
+
+[Run this on your own task block](replication.md#run-two-native-teams-on-each-world-in-your-own-calendar-block) · [48 first attempts](results/calendar-native-transfer-48-71.json) · [Costs by call](results/calendar-native-transfer-48-71-cost.json). The public reader recomputes the comparison without an API key:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.transfer_result summarize \
+  examples/seatlab/results/calendar-native-transfer-48-71.json \
+  --manifest examples/seatlab/results/flotilla-schedule-transfer-48-71.json \
+  --sha256 8995d5311e9627989a1a35065902ef89a39f72eb693409532a95513b22a4a61a
+```
 
 ### What if the receivers get exactly the same reports?
 
