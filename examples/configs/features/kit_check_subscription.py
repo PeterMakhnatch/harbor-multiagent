@@ -9,7 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from kit_check_codex_agent import CodexKitAgent, ScriptedKitReviewer, check_subscription
+from codex_text_turn import PROVIDER, check_subscription
+from kit_check_codex_agent import CodexKitAgent, ScriptedKitReviewer
 from kit_check_controls import ARTIFACT, HERE, ROLES, TASK
 
 
@@ -177,7 +178,7 @@ async def _run(
         if scripted_reviewers and not under_test
         else Participant(
             seat=seat,
-            model_name=f"openai-codex/{model}",
+            model_name=f"{PROVIDER}/{model}",
             import_path=CodexKitAgent.import_path(),
             kwargs={"role": seat},
         )

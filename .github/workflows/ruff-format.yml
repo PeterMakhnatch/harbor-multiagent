@@ -2,7 +2,7 @@ name: Ruff
 
 on:
   pull_request:
-    branches: ["main"]
+    branches: ["main", "pm/kit-check-subscription"]
   workflow_dispatch:
 
 permissions:
