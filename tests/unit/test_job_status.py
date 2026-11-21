@@ -11,6 +11,7 @@ import pytest
 
 from harbor.job import Job
 from harbor.metrics.mean import Mean
+from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import VerifierLock, TaskLock, TrialLock
 from harbor.models.job.result import JobResult, JobStats
@@ -322,6 +323,58 @@ async def test_job_progress_retry_replaces_previous_attempt_counts(
     assert completed_result.stats.n_running_trials == 0
     assert completed_result.stats.n_errored_trials == 0
     assert completed_result.stats.n_retries == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "zero_field",
+    [None, "n_input_tokens", "n_cache_tokens", "n_output_tokens", "cost_usd"],
+)
+async def test_job_progress_retry_preserves_nullable_usage(
+    tmp_path: Path, zero_field: str | None
+) -> None:
+    job = _make_job(
+        tmp_path, [TaskConfig(path=tmp_path / name) for name in ("retry", "retained")]
+    )
+    retry_config, retained_config = job._trial_configs
+    started_at = datetime(2026, 4, 28, 8, 0, tzinfo=timezone.utc)
+    job._job_result = JobResult(
+        id=job.id,
+        started_at=started_at,
+        updated_at=started_at,
+        n_total_trials=2,
+        stats=JobStats.from_counts(n_total_trials=2),
+    )
+    measured_usage = {
+        "n_input_tokens": 19,
+        "n_cache_tokens": 7,
+        "n_output_tokens": 11,
+        "cost_usd": 0.125,
+    }
+    retained_usage = {
+        field: (0 if field == zero_field else None) for field in measured_usage
+    }
+    failed_attempt = _trial_result(retry_config, exception_type="RuntimeError")
+    failed_attempt.agent_result = AgentContext(**measured_usage)
+    retained_attempt = _trial_result(retained_config)
+    retained_attempt.agent_result = AgentContext(**retained_usage)
+    result_path = job.job_dir / "result.json"
+
+    try:
+        for attempt in (retained_attempt, failed_attempt):
+            await job._on_trial_started(_hook_event(TrialEvent.START, attempt.config))
+            await job._on_trial_completed(
+                _hook_event(TrialEvent.END, attempt.config, result=attempt)
+            )
+
+        stats = json.loads(result_path.read_text())["stats"]
+        assert {field: stats[field] for field in measured_usage} == measured_usage
+
+        await job._on_trial_started(_hook_event(TrialEvent.START, retry_config))
+        stats = json.loads(result_path.read_text())["stats"]
+        assert {field: stats[field] for field in measured_usage} == retained_usage
+    finally:
+        job._close_logger_handlers()
 
 
 @pytest.mark.unit

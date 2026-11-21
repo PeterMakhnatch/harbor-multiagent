@@ -57,6 +57,27 @@ harbor run -c examples/configs/features/seats-job.yaml
 covers the task format, participants, how a run starts and ends, logs, the
 verifier, and the limitations.
 
+## Usage and elapsed time
+
+Native trials store each seat's usage and timestamps in `result.json.seat_results`.
+A null trial-level `agent_result` does not mean zero seat usage.
+Cache tokens are part of input tokens; do not add them again.
+
+Each seat's `agent_execution` timestamps give its wall time.
+The trial's execution interval gives team wall time, not the sum of seat times.
+Neither measures provider latency.
+
+Job usage sums the reported fields from retained attempts, including supporting
+seats. Each field is a known subtotal, not a complete bill.
+If no retained result reports a field, its value is null.
+A reported zero remains zero, including during live retry bookkeeping.
+Harbor does not infer missing prices from token counts or price unknown calls.
+
+Retries inside an agent count only when that agent reports their usage.
+A queue retry replaces the previous attempt and deletes its directory.
+Retained seat records therefore omit discarded attempts and unreported calls.
+Job wall time includes discarded work and backoff but cannot assign them to seats.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a
