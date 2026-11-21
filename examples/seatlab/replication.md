@@ -359,6 +359,36 @@ These commands run 1 pair, not the whole study. Keep both cells of a world on th
 
 The full comparison uses 8 matched worlds. Independent inventory and read decisions can differ between arms. Missing native evidence makes the registered result inconclusive. With all pairs, the pass rule requires 6 extra optimal shipments, an exact one-sided world test at p ≤ 0.05, and no decrease in feasible shipments.
 
+### Compare 2 receiver programs on your own completed Dispatch trial
+
+Use this when you have a completed native `dispatch-handoff` trial and want to change the receiver harness without restarting Harbor. It accepts your trial, not just the 8 published examples. The source must contain the native `result.json` and `artifacts/logs/world/handoff.json`.
+
+Run from the fork root with Python 3.12 or later. The comparison itself needs no Docker, model, account, or installed Python package. Your receiver programs can have their own dependencies and costs.
+
+1. Create a command config for 2 trusted programs. Use absolute executable paths. The existing config names `reviewer` and `decider` now identify 2 alternatives for the **same** dispatch seat.
+
+   ```json
+   {
+     "reviewer": {"argv": ["/absolute/path/to/current-receiver"], "env": []},
+     "decider": {"argv": ["/absolute/path/to/candidate-receiver"], "env": []}
+   }
+   ```
+
+2. Read one `seatlab.seat-turn/v1` JSON line from stdin in each program. Send its `prompt` to your harness. Return one JSON line with a `text` field. Inside `text`, return `{"rows":[{"id":0,"bay":"A"}]}` with one row per actual shipment. Do not print logs to stdout.
+3. Set `trial` and `config` to your input paths. Set `out` to a new directory path. Run the comparison:
+
+   ```sh
+   python3.12 -BS -m examples.seatlab.receiver_compare \
+     --trial "$trial" --config "$config" --out "$out"
+   cat "$out/result.json"
+   ```
+
+Both programs get identical input and run concurrently. The scorer compares their decisions with native stock **after** both turns. `difference_optimal` is the candidate’s optimal count minus the current receiver’s count. A failed or invalid turn gets no score. Its valid partner keeps its score. An existing output directory cannot be reused. Use one new directory per source trial when you divide work among workers.
+
+The receipt records prompt, view, config, and response hashes. It contains no raw replies or executable paths. The config hash identifies the declared command config, not a binary or a model version. Use only trusted programs: the process runner is not a sandbox.
+
+**What the comparison measures:** a new receiver decision on the authorized dispatch `/view`. A `bound` view has a matching acknowledgment; a `reconstructed` view does not. Neither is a capture of the original model prompt. If the original harness exposed only 2 reports, this comparison does **not** preserve that extra restriction. A receiver score does not replace the native team reward.
+
 ### Replay the original server evidence
 
 Run these commands from the fork root with Python 3.12 or later. No model, SQL service, Docker, or Harbor installation is needed for the stored projections.

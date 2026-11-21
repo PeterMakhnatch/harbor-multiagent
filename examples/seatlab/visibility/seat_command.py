@@ -235,16 +235,25 @@ def _configured_seat(spec: object) -> CommandSeat:
     return CommandSeat(argv, environ=environ)
 
 
-def load_commands(path: Path) -> tuple[CommandSeat, CommandSeat]:
-    """Read reviewer and decider commands; only explicitly named host variables pass through."""
+def parse_commands(raw: bytes | str) -> tuple[CommandSeat, CommandSeat]:
+    """Parse a UTF-8 command config; only explicitly named host variables pass through."""
     try:
         config = json.loads(
-            path.read_text(encoding="utf-8"),
+            raw.decode("utf-8") if isinstance(raw, bytes) else raw,
             object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
         )
-    except (OSError, ValueError, RecursionError):
+    except (ValueError, RecursionError):
         raise ValueError("invalid seat command config") from None
     if not isinstance(config, dict) or set(config) != {"reviewer", "decider"}:
         raise ValueError("invalid seat command config")
     return _configured_seat(config["reviewer"]), _configured_seat(config["decider"])
+
+
+def load_commands(path: Path) -> tuple[CommandSeat, CommandSeat]:
+    """Read reviewer and decider commands; only explicitly named host variables pass through."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, ValueError, RecursionError):
+        raise ValueError("invalid seat command config") from None
+    return parse_commands(raw)

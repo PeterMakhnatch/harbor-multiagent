@@ -22,6 +22,8 @@ Run this command from this branch with Python 3.12 or later. It needs no account
 
 To start from real Harbor data, use the [saved trial packet](examples/seatlab/replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials). No private archive is needed. From your own completed handoff, you can compare [shorter notes](examples/seatlab/replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) or [one worker per answer](examples/seatlab/replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs). Each worker claims a separate first attempt. The [results](examples/seatlab/native-model-results.md#does-a-revised-record-help-a-replacement-agent-find-the-right-context) distinguish a better lookup from a better final decision.
 
+Already have a completed `dispatch-handoff` trial? [Compare two receiver programs on its native view](examples/seatlab/replication.md#compare-2-receiver-programs-on-your-own-completed-dispatch-trial). Both programs get the same input. The stock scorer grades their decisions without starting Harbor or Docker.
+
 ## Install
 
 ```bash
