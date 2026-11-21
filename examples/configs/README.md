@@ -49,3 +49,12 @@ stopped or that the verifier is isolated.
 The models get only fixed game instructions and observations. The host
 validates game actions before submission. These controls apply to this
 example and do not make the game endpoints an access boundary.
+
+## Kit Check with three model seats
+
+The [Kit Check subscription runner](features/kit_check_subscription.py) uses
+3 real Codex seats by default: `left`, `right`, and `builder`.
+Use `--scripted-reviewers` for a comparison with 2 scripted reviewers and the
+same Codex builder. The builder waits up to 150 seconds for both reviews.
+The subscription cost in USD is unknown. The receipt records `cost_usd` as
+`null`, not `0`.

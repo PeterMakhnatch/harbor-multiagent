@@ -24,7 +24,7 @@ _ROLE_URLS = {
 _KITS = ("K1", "K2", "K3", "K4")
 _CASES = 24
 _WORLD_TIMEOUT_SEC = 8
-_BUILDER_WAIT_SEC = 60
+_BUILDER_WAIT_SEC = 150
 
 # Use a direct request to the fixed endpoint, without environment proxies or
 # redirects. Only GET results need a body; POST reports only the status.
@@ -258,7 +258,7 @@ class CodexKitAgent(BaseAgent):
 
     @override
     def version(self) -> str | None:
-        return "1"
+        return "2"
 
     @override
     async def setup(self, environment: BaseEnvironment) -> None:
