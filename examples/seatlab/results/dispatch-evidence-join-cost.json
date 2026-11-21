@@ -1,0 +1,501 @@
+{
+  "basis": "per-call provider token usage at the listed rate, not an invoice",
+  "calls": [
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14521-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14521-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14521-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14521-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14521-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14521-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14522-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14522-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14522-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14522-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14522-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14522-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14523-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14523-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14523-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14523-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14523-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14523-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14524-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14524-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14524-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14524-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14524-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14524-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14525-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14525-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14525-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14525-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14525-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14525-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14526-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14526-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14526-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14526-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14526-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14526-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14527-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14527-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14527-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14527-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14527-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14527-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 334,
+      "cost_usd": "0.000179100",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14528-r0-joined-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 360,
+      "cost_usd": "0.000060600",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14528-r0-joined-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 386,
+      "cost_usd": "0.000078300",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14528-r0-joined-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 206,
+      "cost_usd": "0.000160284",
+      "output_tokens": 215,
+      "role": "inventory",
+      "run": "dvj-s14528-r0-nested-inventory",
+      "served_model": "deepseek-flash",
+      "stage": "inventory"
+    },
+    {
+      "cache_hit_tokens": 128,
+      "cache_miss_tokens": 232,
+      "cost_usd": "0.000041784",
+      "output_tokens": 11,
+      "role": "dispatch",
+      "run": "dvj-s14528-r0-nested-select",
+      "served_model": "deepseek-flash",
+      "stage": "select"
+    },
+    {
+      "cache_hit_tokens": 0,
+      "cache_miss_tokens": 368,
+      "cost_usd": "0.000075600",
+      "output_tokens": 34,
+      "role": "dispatch",
+      "run": "dvj-s14528-r0-nested-decide",
+      "served_model": "deepseek-flash",
+      "stage": "decide"
+    }
+  ],
+  "currency": "USD",
+  "provider": "DeepSeek direct",
+  "rate_usd_per_million_tokens": {
+    "cache_hit": "0.003",
+    "cache_miss": "0.15",
+    "output": "0.60"
+  },
+  "schema": "seatlab.dispatch-evidence-join-cost/v1",
+  "total": {
+    "cache_hit_tokens": 2048,
+    "cache_miss_tokens": 15088,
+    "cost_usd": "0.004765344",
+    "output_tokens": 4160,
+    "settled_calls": 48,
+    "unsettled_calls": 0
+  }
+}

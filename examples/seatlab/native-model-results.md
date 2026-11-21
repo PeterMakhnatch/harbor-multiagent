@@ -254,3 +254,65 @@ Stock Eval Lab read 23 native team rewards and 46 submitted seat actions. None o
 The model spent 15 of its 24 selections on an update it already had. With equal weight per world, its optimal-choice rate was 10.4 percentage points below the queue in this window. The requests ran from 4:10 PM ET to 4:12 PM ET on November 20. This is not the 3-window result. These are new receivers acting on frozen sender reports, not new native team scores.
 
 The [first-window choices](results/clarification-window0.json), [cost ledger](results/clarification-window0-cost.json), and [timing reconciliation](results/clarification-window0-meter.json) are public. All 96 calls started inside the registered window and settled. The price estimate is **$0.005385600 USD**, not an invoice. The [protocol](replication.md#can-a-receiver-choose-which-missing-update-to-request) explains how to repeat the study.
+
+### Does a table of the same report data help a live Dispatch team?
+
+**No improvement in this panel. Keep the original lists as the default.** Both formats show each bay’s utility and the same kinds of reports. The new table puts each utility next to that bay’s position in the reports. It does not add a new report or choose a bay.
+
+| Native result on 8 matched worlds | Original lists | Joined table |
+|---|---:|---:|
+| Optimal shipments | 32 / 48 | 25 / 48 |
+| Feasible shipments | 36 / 48 | 25 / 48 |
+| Completed teams | 8 / 8 | 8 / 8 |
+| Input tokens for the final decision | 2,944 | 3,088 |
+
+The table gained optimal shipments in 1 world, tied in 1, and lost them in 6. The registered one-sided test for **improvement** gave p = 246/256. It did not establish harm. Stock Eval Lab matched all 16 native team rewards and all 96 accepted choices.
+
+Both teams made their own read requests. Inventory sent identical first replies in all 8 pairs. In 4 pairs the dispatchers opened the same reports. Restoring the table reproduced the other dispatcher’s input byte for byte in those pairs. Their net change was 0 optimal shipments. The other 4 pairs accounted for the full difference of −7. This last comparison is descriptive; the study did not assign teams to open the same reports.
+
+The 48 direct `deepseek-flash` calls cost **$0.004765344 USD** at the listed token rates. No call remained unsettled. The estimate includes inventory, read selection, and the final decision.
+
+[Native receipt](results/dispatch-evidence-join-live.json) · [Per-call costs](results/dispatch-evidence-join-cost.json) · [Registered pass rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060774408) · [Run both formats with your own seats](replication.md#test-a-lossless-format-change-with-2-native-seats)
+
+To verify the public receipt, run this command from the fork root in its Python environment. It makes no model or Docker calls.
+
+```sh
+PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab" \
+  python -m examples.seatlab.attention verify examples/seatlab/results/dispatch-evidence-join-live.json
+```
+
+#### What if both receivers open exactly the same reports?
+
+The original lists again produced more optimal choices, but the registered test did not establish a difference. We froze the inventory reports and the 2 actual reads from each of the 8 original-list teams. Each format got 2 fresh `deepseek-flash` replies per source. No sender or selector ran again.
+
+| Fixed-read outcome | Original lists | Joined table |
+|---|---:|---:|
+| Optimal shipment decisions | 67 / 96 | 53 / 96 |
+| Feasible shipment decisions | 73 / 96 | 53 / 96 |
+
+The original lists led in 7 of 8 worlds. The table’s optimal-count changes were −1, −1, −3, −3, −1, −5, +3, and −3. The two-sided world-level test gave p = 24/256 = 0.09375. The 96 choices in each format were **not** 96 independent samples. The result does not establish equivalence either.
+
+All 32 calls returned valid first replies. The cost was **$0.001679184 USD**. These are conditional receiver scores on reused worlds. They do not change the original Harbor rewards.
+
+[Fixed-read receipt](results/dispatch-frozen-final.json) · [Call costs](results/dispatch-frozen-final-cost.json) · [Registered decision rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061034423)
+
+Verify the fixed-read result from the fork root with Python 3.12 or later. This check does not need Docker, site packages, or the private trials:
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.frozen_result verify \
+  examples/seatlab/results/dispatch-frozen-final.json
+```
+
+If you have a completed native `evidence-join` study, you can also replay one final decision. In the fork’s Harbor Python environment, run:
+
+```sh
+cell=dvj-s14521-r0-nested
+export PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab"
+python -m examples.seatlab.attention.final_receiver prompt \
+  --study "$study" --cell "$cell" --format nested > receiver-input.txt
+your-receiver < receiver-input.txt > first-reply.json
+python -m examples.seatlab.attention.final_receiver score \
+  --study "$study" --cell "$cell" < first-reply.json
+```
+
+Use a receiver that reads one prompt from stdin and writes one JSON reply to stdout. Send it only `receiver-input.txt`. Do not give it the trial directory. Use `--format joined` for the alternate layout. Neither command calls a model or needs the original spend ledger.
