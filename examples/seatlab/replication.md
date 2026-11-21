@@ -348,6 +348,32 @@ done < "$queue"
 rm "$queue"
 ```
 
+##### Compare a model sender reply with a local check
+
+Use [the stock Flotilla task generator](#native-replication-with-an-external-harness) and the fork's locked Python environment. This comparison uses worlds `w00` through `w07`. Both real seats see only their own original busy-hour tables. The sender drafts an answer to the receiver's 2 proposals in both arms. The `local-report` arm then replaces the draft with the sender's actual availability for those 2 starts. The receiver may still book a different start.
+
+Run both no-key controls for one world before any paid replication. Use the same private job and physical task directory for both. Wrap each native run in the shared Docker slot command on a shared host:
+
+```sh
+umask 077
+job=$(realpath "$(mktemp -d)")
+python="$PWD/.venv/bin/python"
+harbor="$PWD/.venv/bin/harbor"
+module=examples.seatlab.live_answers
+for arm in model-report local-report; do
+  /tmp/crucible-docker-slot.sh "$python" -m "$module" control-repair \
+    --world w00 --arm "$arm" --job "$job" \
+    --tasks "$private/tasks/schedule" --harbor "$harbor" || exit 1
+done
+"$python" -m "$module" collect-repair --job "$job" --controls
+```
+
+The controls intentionally draft false sender facts. Expect `delivered_matches_sender` to be false for `model-report` and true for `local-report`. Do not treat an unattempted world as a verified loss.
+
+**Paid replication:** use a new private job. Check your direct DeepSeek balance and set an explicit budget first. Use `run-repair` instead of `control-repair` and pass `--spend-dir "$SEATLAB_SPEND_DIR"`. Supply only the direct DeepSeek key to the model process. Start `model-report` first on worlds 00, 01, 06, and 07. Start `local-report` first on the other 4. Give parallel workers different worlds; each world must finish its first native attempt before its second starts.
+
+Use `collect-repair --job "$job" --spend-dir "$SEATLAB_SPEND_DIR"` for the private audit. It checks the original sender draft, the actual message delivered to the other seat, and the stock grade separately. It reports a paired probability only after all 8 matched worlds have complete evidence. [Observed native result](calendar-notice-result.md#does-the-local-sender-check-help-a-whole-team).
+
 ##### Read the same native teams with stock Eval Lab
 
 Eval Lab stays a consumer. Use a Python environment with Eval Lab installed. Point `$study` at your **private native run directory**, not the public result files. Use the archive exported from that directory. This reads every scored arm through `evallab.results.load_trial`. It checks the trial UUID and team reward against the archive. Unknown scores stay unknown. No API call, ingestion, catalog, or Eval Lab write is needed.
@@ -829,6 +855,34 @@ python3.12 -BS -m "$ns.clarify_repair_result" \
   --parent "$results/calendar-bounded-clarification.json" \
   --cost "$results/calendar-clarification-repair-cost.json"
 ```
+
+##### Ask again only when the first pair is rejected
+
+Start with the original nomination envelope, admitted proposals, and locally checked subset from above. Give each worker only its emitted request. Keep the owner capsule and sender table away from the receiver. Use Bash:
+
+```bash
+set -eo pipefail
+second="$ns.second_question"
+first=(--checked "$private/checked.jsonl" --prior "$private/proposals.json" --verified "$private/checked-subset.json")
+score=(--sender "$private/sender.json" --prior "$private/nomination.reply" --stop "$private/stop.reply")
+python3.12 -BS -m "$second" book "${first[@]}" | "$RECEIVER" > "$private/stop.reply"
+count=$(python3.12 -BS -m "$second" opportunity "${first[@]}" | jq -er '.count')
+if ((count > 0)); then
+  python3.12 -BS -m "$second" ask "${first[@]}" | "$RECEIVER" > "$private/extra.reply"
+  jq -ej '.reply | select(type == "string")' "$private/extra.reply" > "$private/extra.raw"
+  score+=(--extra "$private/extra.reply")
+  if python3.12 -BS -m "$second" admit "${first[@]}" --extra "$private/extra.raw" > "$private/extra.json"; then
+    python3.12 -BS -m "$second" verify-local --sender "$private/sender.json" \
+      --extra "$private/extra.json" > "$private/extra-verified.json"
+    python3.12 -BS -m "$second" book "${first[@]}" --extra "$private/extra.json" \
+      --extra-verified "$private/extra-verified.json" | "$RECEIVER" > "$private/long.reply"
+    score+=(--long "$private/long.reply")
+  fi
+fi
+python3.12 -BS -m "$ns.second_question_case" "$private/case" "${score[@]}"
+```
+
+Run `verify-local` on the sender host and the last command on the owner host. When `count` is zero, the scorer shares the single `stop.reply` between both policies. When a second nomination is invalid, the scorer still grades `stop.reply`. It does not invent a final answer for the longer policy. Give different native cases to different workers. [Observed results and token costs](calendar-notice-result.md#should-the-receiver-stop-after-a-verified-rejection).
 
 #### Let a receiver choose which report to read next
 

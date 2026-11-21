@@ -1,0 +1,547 @@
+{
+  "schema": "seatlab.calendar-second-question/v1",
+  "registration": "https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064104027",
+  "sources": [
+    {
+      "world": "w12",
+      "arm": "exact",
+      "trial_uuid": "c65c41c1-24e0-4b53-b59b-dca5741084d4",
+      "result_sha256": "73ac91f52bbee2209c510a35877b3809e3ae62f87dd068f031b235b6083df6d6",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 5,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": false,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 0
+      }
+    },
+    {
+      "world": "w12",
+      "arm": "sender-exact",
+      "trial_uuid": "6d229790-9d40-4fe9-9bbf-a21b9d045b91",
+      "result_sha256": "610df77d4b765ef0f1d5fd905cccdd5d6aef25eff426406da5630ba8db08b9ce",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 5,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": false,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 0
+      }
+    },
+    {
+      "world": "w13",
+      "arm": "raw",
+      "trial_uuid": "0072390d-ab67-4f7a-8cf6-5e764ecc92e0",
+      "result_sha256": "ed5f7fef49ee006df78be8066a968eced2fac1087b5faf7466ed62640ed94103",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 5,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w13",
+      "arm": "receiver-exact",
+      "trial_uuid": "fdfc1a1d-7171-474b-ad0b-282fb41dd254",
+      "result_sha256": "33d015f0bf288910a610d82c25d1bbf873cb8dd77d4f04c53f6e5f1d7504af43",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 5,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w13",
+      "arm": "sender-exact",
+      "trial_uuid": "b4114a46-96fe-4fbb-8532-f0c444eabc28",
+      "result_sha256": "d0abbf9a08bf6a085394ed6399b1da7af41fd3652310fb2adcf6bb3499345256",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 5,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w13",
+      "arm": "exact",
+      "trial_uuid": "bc54c429-e204-44ef-8b51-8555305b4c20",
+      "result_sha256": "9e068abfeb2ee8be15a9aa12c7c14293f7592f23897fcf7aa2cefbba56dc09fa",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 5,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w14",
+      "arm": "receiver-exact",
+      "trial_uuid": "b7c307c8-8121-461e-a03d-09e7647c3ca8",
+      "result_sha256": "b2b29244f113fba1b26845fb3dc2a85235551f85a3dc06bddf2c37c029201530",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 2,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w14",
+      "arm": "raw",
+      "trial_uuid": "9a9d04c4-d54f-4057-bc4e-49f69454c284",
+      "result_sha256": "df479a9d20bd6d9cccf004d756fd0bf8a0bb79ffd096ea1f0ebf5ea4654e9ae7",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 2,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w15",
+      "arm": "receiver-exact",
+      "trial_uuid": "7de9fd53-6184-4649-8dd1-4d6a922cfa21",
+      "result_sha256": "4e29838c8acae2c0ca34117f9f337b400d455793ba686941ea3bb8ed62353177",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 4,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w16",
+      "arm": "raw",
+      "trial_uuid": "fda36f86-ffce-4398-9736-99cf51b56842",
+      "result_sha256": "8be2a016e0c59ce5e696f49963353d3232230d10435694f25f258a32386194f0",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 4,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w16",
+      "arm": "receiver-exact",
+      "trial_uuid": "e5fab02b-292e-4faf-b494-272075911040",
+      "result_sha256": "0eea73d246d3ba98c0f619892d0bd7f912a0801efb94ffed9637dc803da0588b",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 4,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w17",
+      "arm": "raw",
+      "trial_uuid": "20496871-ee52-4811-8773-d726d5e9daf7",
+      "result_sha256": "af4bb67154ab327c88c77a69b98beb507f7e5fb2e806d148013db7bb12b3031d",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 3,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w17",
+      "arm": "receiver-exact",
+      "trial_uuid": "456466e2-7642-4d54-a710-5b7456ad2b4a",
+      "result_sha256": "c16bcbd4cf9357ac7782d0ad49f5d3ac490fedfc164fc928519e32534f35f006",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 3,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w17",
+      "arm": "sender-exact",
+      "trial_uuid": "bf4fb9ed-8390-421e-a687-c7a9046b92f1",
+      "result_sha256": "b39622c589672c2bbcbe940ca80233c67f0ba0c2b5528261cdbe600ff86ddd71",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 3,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": false,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w18",
+      "arm": "receiver-exact",
+      "trial_uuid": "7b206aa9-f395-4d8c-b5e8-eced0ab1a27f",
+      "result_sha256": "a8ce06864d9dbf747c5cc8b2fe1516586411e9adca0770da2f7638b3b67f3f1b",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 7,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": false,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 0
+      }
+    },
+    {
+      "world": "w18",
+      "arm": "exact",
+      "trial_uuid": "8c55c716-94fd-4735-b51c-5efc4b81a0c3",
+      "result_sha256": "a8dcedf43371787fe2213e5ea5851385fd6c2484fd6361b1e96ad98f710e8cfd",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 7,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w19",
+      "arm": "sender-exact",
+      "trial_uuid": "d8d3eded-1855-4bfe-894a-d20ea4388868",
+      "result_sha256": "c0d50291d40841a63926478bf206a359d13ad91c3d246da0d5b65302edb0d3ce",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 2,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w19",
+      "arm": "receiver-exact",
+      "trial_uuid": "d0fd12fc-c4ec-4d15-8762-33cfe5b5abac",
+      "result_sha256": "9eb828e709714eeecfd2d24c715b8b3d4b2f0b975c3a590b6938157f9b362aa1",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 2,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w20",
+      "arm": "receiver-exact",
+      "trial_uuid": "d1eaca44-c49e-4856-8026-22be0a734b6c",
+      "result_sha256": "b68908ef4caffaeb7fda755fca62a18cde7f3c575f82ac9b483cd18a1f401544",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 8,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w20",
+      "arm": "sender-exact",
+      "trial_uuid": "f4f7f353-32dd-469e-8bff-7f77f8344138",
+      "result_sha256": "94ffdf24ed934942f921f5094f8835f06f8a1965f726f78728de0ebc61e46280",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 8,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w21",
+      "arm": "sender-exact",
+      "trial_uuid": "19b3a049-2c7c-4557-9c71-618b4c6a6681",
+      "result_sha256": "bd6e483a4434139696077687a13c69a7385dc737ca4cdc3c9706988a1a393f13",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 4,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w21",
+      "arm": "exact",
+      "trial_uuid": "4ab66d0e-277b-4fb1-a1c5-536b1ad5a3b3",
+      "result_sha256": "a037688944cf7b395e10d9cc5d2d83d19f89fdfbddbe369f741f034e1633c3ec",
+      "prior_status": "accepted",
+      "prior_target": false,
+      "remaining": 4,
+      "opportunity": 2,
+      "extra_status": "accepted",
+      "extra_target": true,
+      "stop": {
+        "status": "scored",
+        "correct": 0
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w22",
+      "arm": "receiver-exact",
+      "trial_uuid": "8efcf407-de83-4a19-b4d3-47d884efa9fa",
+      "result_sha256": "f0682e4b878b6d592dfc701a2e1e8b271f08cec940a95123e092f887e4cfff9e",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 2,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w23",
+      "arm": "raw",
+      "trial_uuid": "c75b7c54-52a9-493e-a2e6-16ccb69437fd",
+      "result_sha256": "5e6e1ff33e3dceca586cddb43e8fe94541f92a109a21054b01cca2bdac21ffda",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 2,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    },
+    {
+      "world": "w23",
+      "arm": "receiver-exact",
+      "trial_uuid": "54e6ce79-0ea1-45e6-84b5-272cbbc32c28",
+      "result_sha256": "cd87fd51d4032fa15d05a55654f8776fb509c8d19adfceeaf5fe9a2719efe3cb",
+      "prior_status": "accepted",
+      "prior_target": true,
+      "remaining": 2,
+      "opportunity": 0,
+      "extra_status": "not_attempted",
+      "extra_target": null,
+      "stop": {
+        "status": "scored",
+        "correct": 1
+      },
+      "long": {
+        "status": "scored",
+        "correct": 1
+      }
+    }
+  ],
+  "summary": {
+    "stop_correct": 9,
+    "ask_again_correct": 22,
+    "matched_sources": 25,
+    "worlds": 12,
+    "registered_minimum_gain": 5,
+    "registered_maximum_p": "1/20",
+    "world_differences": {
+      "w12": 0,
+      "w13": 3,
+      "w14": 1,
+      "w15": 1,
+      "w16": 1,
+      "w17": 3,
+      "w18": 0,
+      "w19": 2,
+      "w20": 1,
+      "w21": 1,
+      "w22": 0,
+      "w23": 0
+    },
+    "two_sided_sign_flip_p": {
+      "numerator": 1,
+      "denominator": 128
+    },
+    "worlds_helped": 8,
+    "worlds_harmed": 0,
+    "verdict": "passed",
+    "triggered": 17,
+    "new_target_confirmations": 13,
+    "physical_calls": 59,
+    "total_usd": "0.002236236",
+    "reused_shared_finals": 8,
+    "estimated_usd_by_physical_stage": {
+      "question": "0.000879012",
+      "same": "0.000304512",
+      "stop": "0.000566712",
+      "long": "0.000486000"
+    }
+  },
+  "scope": "Fresh receiver decisions on fixed native source states. The longer policy can ask an extra question. These are not new full-team rewards."
+}

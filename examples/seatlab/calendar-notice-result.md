@@ -20,6 +20,17 @@ Replace `w72` with `w73`, `w74`, or `w75` to replay another checked team. All 4 
 
 The scorer and original reply intentionally contain answers. Keep both away from any worker you evaluate. To send only the checked role input, use `python3.12 -BS -m examples.seatlab.calendar_case emit "$case_dir" --view checked`. Do not give an untrusted worker filesystem access to the scorer. An external executable is not a sandbox.
 
+To test your own receiver even when the booking policy would skip it, bypass the policy. Run the first command on the scorer host. Send only `input.jsonl` to the receiver host:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_case emit "$case_dir" --view checked > input.jsonl
+"$RECEIVER" < input.jsonl > reply.jsonl
+python3.12 -BS -m examples.seatlab.calendar_case compare \
+  "$case_dir" "$case_dir/first.jsonl" reply.jsonl
+```
+
+Run the last command on the scorer host. `views.checked.left` is the original native decision. `views.checked.right` is your receiver’s decision. The other views are missing, not failed. Assign one world directory per worker to run all 4 independently.
+
 [Open cases](results/open-booking/) · [Pinned stock manifest](results/flotilla-schedule-open-72-75.json) · [8 native outcomes](results/calendar-open-native-72-75.json) · [32 physical charges: $0.001530534](results/calendar-open-native-72-75-cost.json) · [Study and cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063995977).
 
 ## Does checking the received reports help a live team?
@@ -161,6 +172,41 @@ The local check gained 24 percentage points. It improved 12 paired decisions and
 Both arms shared one new first reply when their messages were identical. The 100 scored decisions needed 80 actual calls. They cost **$0.002262828**. No full team reran in this comparison.
 
 [Run the sender-local check](replication.md#ask-a-peer-to-check-2-starts) · [Paired outcomes](results/calendar-clarification-repair.json) · [80 physical charges](results/calendar-clarification-repair-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063833042) · [Individual cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063930207).
+
+### Does the local sender check help a whole team?
+
+**It corrected the transmitted facts. It did not establish a gain in team reward.** We ran 16 new native teams on 8 matched scheduling worlds. The receiver proposed 2 starts from its original busy-hour table. The sender drafted an answer in both arms. One arm sent that draft. The other sent the result of checking the same 2 starts against the sender's own table.
+
+| Outcome | Send the draft | Send the local check |
+|---|---:|---:|
+| Correct sender drafts | 6/8 | 5/8 |
+| Correct replies delivered | 6/8 | 8/8 |
+| Receiver questions that included the true meeting | 0/8 | 0/8 |
+| Correct final bookings (native reward) | 0/8 | 1/8 |
+
+The local check won on 1 world and tied on 7. The paired two-sided sign test gave **p = 1**. The gain did not pass the registered test. None of the 16 proposed pairs contained 2 starts that both fit the receiver's own calendar. The one successful team booked a start it had not asked about.
+
+These were new teams, not replays of the same questions. Unlike the fixed-input comparison above, this receiver had to find possible starts from raw busy hours. On this panel, the immediate problem was what the receiver asked, not whether the sender could answer accurately.
+
+All 16 teams made stock submissions. We checked 32 delivered messages and 48 first model replies against the native artifacts and direct bill. They cost **$0.001895529**. [Native outcomes](results/calendar-native-sender-repair.json) · [48 charges](results/calendar-native-sender-repair-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063977930) · [Individual cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064118509) · [Run a native comparison](replication.md#compare-a-model-sender-reply-with-a-local-check).
+
+### Should the receiver stop after a verified rejection?
+
+**On these 25 recorded receiver states, asking once more raised correct bookings from 9 to 22.** Both policies started with the same real receiver's first 2 nominations. The sender checked those starts against its own calendar. If either fit, both policies used the same final reply. Otherwise, the longer policy could ask about 2 different starts before booking.
+
+| What the sender confirmed | Sources | Stop after the first reply: correct | Allow a second question: correct |
+|---|---:|---:|---:|
+| The true meeting in the first pair | 8 | 8 | 8 |
+| The true meeting only in the second pair | 13 | 1 | 13 |
+| Neither pair contained the true meeting | 4 | 0 | 1 |
+
+The longer policy helped on 13 sources and hurt on none. Eight of the 12 original worlds improved; 4 tied. The exact two-sided test gave **p = 1/128**, which passed the registered test. All 50 final decisions received stock grades.
+
+The extra question changed the communication budget. The receiver had 2 to 8 untested starts. In 3 cases, testing 2 meant testing every remaining start. These results show that another exchange can help. They do not show superior reasoning at equal cost, or a new full-team reward.
+
+The 17 second questions and 42 physical final calls cost **$0.002236236**. On these draws, the longer policy alone cost **$0.000798300 more** than stopping. Both amounts exclude the original shared history.
+
+[Run the second question on your own case](replication.md#ask-again-only-when-the-first-pair-is-rejected) · [25 source pairs](results/calendar-second-question.json) · [59 charges](results/calendar-second-question-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064104027) · [Individual cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7064210654).
 
 ### Should the receiver wait for the first report before requesting a second one?
 
