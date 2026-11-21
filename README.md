@@ -81,12 +81,20 @@ Job wall time includes discarded work and backoff but cannot assign them to seat
 Before a selected queue retry deletes that directory, Harbor saves its final
 scrubbed `result.json` as `retry-attempt-<UUID>.json` in the Job root.
 The UUID identifies the discarded attempt even when the Trial name is reused.
-An existing destination or a copy failure stops the retry before deletion.
+Harbor publishes the complete file without replacing an existing destination.
+A copy or publication failure stops the retry before deletion.
 
 These files do not change retained scoring, usage totals, or retry policy.
 They preserve only result bytes, not old logs or trajectories.
 The saved `trial_uri` still points to the reused directory.
-Batch Hub uploads and Job archives do not include these local sidecars.
+Job archives include canonical regular retry outcome files.
+Their names and raw bytes are part of the archive revision.
+Changed outcomes cannot reuse stale finalized pointers or resumable archives.
+Batch metadata still lists retained Trials only.
+Legacy Jobs without retry outcomes keep their archive names and members.
+
+Local extraction preserves these files. It does not refresh existing restore
+directories or `.sources` caches automatically.
 
 ## Toward Harbor
 

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Discarded retry outcomes:** Selected queue retries save the final scrubbed result as `retry-attempt-<UUID>.json` in the Job root before deleting the Trial directory. Existing destinations and copy errors stop the retry before deletion. Retained scores and usage totals stay unchanged. These local sidecars exclude old logs and are not included in batch Hub uploads or Job archives.
+- **Discarded retry outcomes:** Selected queue retries publish the final scrubbed result as `retry-attempt-<UUID>.json` before deleting the Trial directory. Job archives include canonical regular outcome files and bind their names and raw bytes to the archive revision. Existing destinations and copy or publication errors stop the retry before deletion. Retained scores, usage totals, and Trial metadata stay unchanged. Outcome files do not preserve old logs or trajectories.
 
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.
 
