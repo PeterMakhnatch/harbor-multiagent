@@ -315,6 +315,27 @@ The budget allows at most 48 calls for 24 fresh native trials and 36 calls for 6
 - Primary: the paired difference in **native Harbor reward**, `named − count`. Average over complete repetitions within each world, then give all 6 worlds equal weight. Omit the full-register point estimate if any world has no complete pair. Compute finite bounds over all 12 pairs, using each observed reward and allowing an unknown reward in `[0,1]`. These are not confidence intervals.
 - Secondary: which of the 2 reads covered a changed **submitted** report, which opened shipments had a different true optimum, the number of optimal and feasible decisions, and actual sender transcription errors. Check final actions against native stock. Independent senders can disagree within a pair: this estimates a team policy, not a contrast on one frozen note.
 
+**Separate external replication.** After one direct native team, register the same complete grid for two keyless subscription seats. Use `openai-codex/gpt-6.2-sol` for each role. Start each turn with an empty conversation, no tools, and no paid fallback. Use separate receipt directories for inventory and dispatch. Do not pool the 2 transports. Report the within-transport native reward difference, first-attempt coverage, service-reported model and usage, and stock agreement. Do not give a subscription a cash price. Repeating worlds does not create new independent worlds.
+
+#### Run two real seat programs
+
+Use Python 3.12 or later in the fork environment. Use an executable from this fork with native `participants` support. The stock task, not either model, decides the reward. Each external seat accepts the [one-line JSON program interface](#run-your-own-reviewer-and-decision-maker). Set `reviewer` to the inventory program and `decider` to the dispatch program. Configure both programs yourself; they can incur provider costs. For included subscription use, follow the [keyless command example](#can-a-different-subscription-harness-use-the-same-recorded-trial-packet).
+
+```sh
+export PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab"
+module=examples.seatlab.attention
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+python -m "$module" plan
+python -m "$module" seal --study "$private/team" --transport commands --config "$config"
+python -m "$module" pending --study "$private/team"
+python -m "$module" run --study "$private/team" --harbor "$harbor" --cell attn-s6401-r0-named
+python -m "$module" collect --study "$private/team" --cell attn-s6401-r0-named
+python -m "$module" report --study "$private/team" > "$private/report.json"
+python -m "$module" verify "$private/report.json"
+```
+
+Set `$harbor` and `$config` to physical absolute paths. `seal` creates the study directory. One `run` starts one real Docker trial. Assign both arms of a pair to one worker to preserve their registered order. Give separate pairs to different workers. Each worker claims its trial before launch. After interruption, `pending` excludes occupied trials. `report` checks native evidence again and leaves unknown rewards out of the point estimate. Never publish the private native directories: they contain the model replies. The public report contains shipment decisions and text hashes, not the text or credentials.
+
 ### Replay the original server evidence
 
 Run these commands from the fork root with Python 3.12 or later. No model, SQL service, Docker, or Harbor installation is needed for the stored projections.

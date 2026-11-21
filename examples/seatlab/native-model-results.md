@@ -2,6 +2,10 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can a native dispatcher use revision notices to allocate two reads?
+
+The [native attention experiment](replication.md#can-a-change-notice-help-a-live-team-spend-two-reads) starts an inventory agent and a dispatch agent in each native trial. Both arms may open 2 of 6 current reports. The `named` arm also tells the dispatcher which of the sender's reports changed. The first named team earned 0.5 native reward. Its 2 reads covered changed reports. One changed the optimal bay. All 3 direct calls settled at **$0.000315300 USD**. This first team does not measure the treatment difference.
+
 ## Does a revised record help a replacement agent find the right context?
 
 The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.
