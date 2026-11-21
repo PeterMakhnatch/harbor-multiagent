@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 from uuid import UUID
 
@@ -54,10 +55,18 @@ def _exact_rows(report: audit.Row) -> dict[str, audit.Row]:
     return rows
 
 
+def _load_receipt(
+    receipt: Path, expected_sha256: str
+) -> tuple[str, dict[str, audit.Row]]:
+    expected_sha256 = calendar_packet._check_digest(expected_sha256)
+    data = audit.raw(receipt.expanduser().absolute())
+    sha256 = p.digest(data)
+    audit.require(sha256 == expected_sha256, "peer_payload_source_digest")
+    return sha256, _exact_rows(audit._object(data))
+
+
 def originals() -> dict[str, audit.Row]:
-    data = audit.raw(_SOURCE)
-    audit.require(p.digest(data) == SOURCE_SHA256, "peer_payload_source_digest")
-    return _exact_rows(audit._object(data))
+    return _load_receipt(_SOURCE, SOURCE_SHA256)[1]
 
 
 def project(
@@ -133,16 +142,76 @@ def _context(native: Path, world: str, row: audit.Row) -> tuple[str, str]:
     )
 
 
-def contexts(native: Path, spend_dir: Path) -> dict[str, tuple[str, str]]:
-    frozen = originals()
-    native = native.expanduser().absolute()
+def _bound_receipt(
+    native: Path, spend_dir: Path, receipt: Path, expected_sha256: str
+) -> tuple[str, dict[str, audit.Row]]:
+    sha256, rows = _load_receipt(receipt, expected_sha256)
     audited = _exact_rows(audit.report(native, spend_dir, private_views=True))
-    result = {}
-    for world in team_views.WORLDS:
-        row = frozen[world]
+    for world, row in rows.items():
         audit.require(
             all(audited[world][key] == row[key] for key in _BINDING),
             "peer_payload_audit_binding",
         )
-        result[world] = _context(native, world, row)
-    return result
+    return sha256, rows
+
+
+def contexts_for_receipt(
+    native: Path, spend_dir: Path, *, receipt: Path, expected_sha256: str
+) -> dict[str, tuple[str, str]]:
+    native = native.expanduser().absolute()
+    _, rows = _bound_receipt(native, spend_dir, receipt, expected_sha256)
+    return {world: _context(native, world, rows[world]) for world in team_views.WORLDS}
+
+
+def contexts(native: Path, spend_dir: Path) -> dict[str, tuple[str, str]]:
+    return contexts_for_receipt(
+        native, spend_dir, receipt=_SOURCE, expected_sha256=SOURCE_SHA256
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Plan peer payload inputs from a verified native cohort.",
+        allow_abbrev=False,
+    )
+    parser.add_argument("native", type=Path)
+    parser.add_argument("--spend-dir", type=Path, required=True)
+    parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument("--expect-sha256", required=True)
+    parser.add_argument("--world", choices=team_views.WORLDS)
+    args = parser.parse_args(argv)
+    worlds = team_views.WORLDS if args.world is None else (args.world,)
+    cells = []
+    try:
+        native = args.native.expanduser().absolute()
+        sha256, rows = _bound_receipt(
+            native, args.spend_dir, args.receipt, args.expect_sha256
+        )
+        for world in worlds:
+            row = rows[world]
+            shown, masked = _context(native, world, row)
+            cells.append(
+                {
+                    "world": world,
+                    "source_uuid": row["trial_uuid"],
+                    "source_result_sha256": row["result_sha256"],
+                    "shown_prompt_sha256": p.digest(shown),
+                    "masked_prompt_sha256": p.digest(masked),
+                }
+            )
+    except (OSError, ValueError, KeyError, TypeError, IndexError, RuntimeError):
+        parser.exit(1, "peer payload: receipt or native cohort failed authentication\n")
+    print(
+        p.wire(
+            {
+                "schema": "seatlab.peer-input-plan/v1",
+                "source_receipt_sha256": sha256,
+                "cells": cells,
+            }
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

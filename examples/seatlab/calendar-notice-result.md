@@ -92,4 +92,4 @@ python3 examples/seatlab/calendar_notices/peer_payload_score.py --receipt exampl
 
 [Redacted per-team evidence and direct token charges](results/calendar-notice-live.json) · [Frozen harness](https://github.com/PeterMakhnatch/harbor-multiagent/tree/0bd4b5563ea6df03d277cdc81c5e013bb33d2f34/examples/seatlab/calendar_notices) · [Native control evidence](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059482347) · [Fixture checks](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059394292).
 
-Both the study reader and stock Eval Lab matched the IDs and rewards of 24 live teams. Four native controls returned 1, 0, 1, 0 without any model calls. Direct DeepSeek served 96 metered calls: 25,344 cached input, 27,194 uncached input, and 1,118 output tokens. Metered cost: **$0.004825932**. Unsettled reservations: 0.
+For the original weekday-notice study, the study reader and stock Eval Lab matched all 24 native IDs and scores. Four no-key controls returned 1, 0, 1, 0. That study used 96 direct DeepSeek calls and cost **$0.004825932**. Its charges are separate from the two studies above.

@@ -372,11 +372,11 @@ python3.12 -BS -m examples.seatlab.calendar_notices.heldout "$private/tasks/sche
   --expect examples/seatlab/results/flotilla-schedule-heldout-12-23.json
 ```
 
-The manifest separates calendar identity from task identity. Reordering attendees or swapping seats cannot turn an old calendar into a new one. Fresh credentials do not change either published fingerprint. This panel contains no model outcomes.
+The manifest separates calendar identity from task identity. Reordering attendees or swapping seats cannot turn an old calendar into a new one. Fresh credentials do not change either fingerprint. The manifest itself contains no model outcomes.
 
 For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_briefing(own_briefing))` returns only that seat’s feasible starts. Do not use the full briefing in a phase that shows only 2 attendees. Keep the peer’s table and the verifier key outside the model context.
 
-The [native oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without a native trial receipt. Neither world has an observed team reward from that check. The manifest verifies the task files, not a completed native run.
+The first [stock oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without trial receipts. Later, the [four private-view controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060200350) on these worlds produced the expected native scores. These were separate attempts.
 
 #### Test private calendar views with 2 live seats
 
@@ -425,6 +425,25 @@ On the original private job, the no-key plan prints source UUIDs and prompt hash
 ```
 
 Regenerating a world does not recreate its trial UUID. For another scheduling harness, use `peer_payload.project(own_table, initial, opened, masked=...)` with its actual delivered data. Send just one resulting string to each fresh receiver. Do not send the native task or the entire transcript.
+
+For a **different completed private-view cohort**, pin its own audit instead of editing the frozen one. Keep the native job and ledger private:
+
+```bash
+receipt="$private/private-views.audit.json"
+"$python" -m examples.seatlab.calendar_notices.audit "$private/teams" \
+  --private-views --spend-dir "$SEATLAB_SPEND_DIR" > "$receipt"
+shasum -a 256 "$receipt"
+```
+
+Record that digest before assigning workers. Set `SOURCE_SHA256` from that record, not from a file supplied by a worker. Give each worker a different `--world`:
+
+```bash
+"$python" -m examples.seatlab.calendar_notices.peer_payload "$private/teams" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --receipt "$receipt" \
+  --expect-sha256 "${SOURCE_SHA256:?use the recorded audit digest}" --world w12
+```
+
+One worker receives one row with a native UUID, native result hash, and 2 prompt hashes. Omit `--world` for all 12 rows. The reader checks the entire exact-view cohort even when it prints just one row. It makes no model calls. To get the actual prompt pair privately, use `peer_payload.contexts_for_receipt(native, ledger, receipt=receipt, expected_sha256=digest)[world]`. The original paid runner remains bound to its historical inputs.
 
 #### Native replication with an external harness
 
