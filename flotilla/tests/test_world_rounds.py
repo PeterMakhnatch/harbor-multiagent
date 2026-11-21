@@ -26,6 +26,15 @@ def game_world(start_world, tmp_path, condition="silent", rounds=3, **env):
     return start_world(condition, ("p1", "p2"), **(settings | env))
 
 
+def split_world(start_world, tmp_path, condition="propose", seats=("p1", "p2")):
+    params = SPLIT._params(100, Fraction(4, 5), {seat: 55 if seat == "p1" else 20 for seat in seats}, regime="b")
+    path = tmp_path / "split.json"
+    path.write_text(json.dumps(params))
+    world = start_world(condition, seats, FLOTILLA_GAME=str(FLOTILLA / "games" / "split.py"),
+                        FLOTILLA_GAME_PARAMS=str(path), FLOTILLA_ROUND_SECONDS="30")
+    return world, params
+
+
 def everyone_calls(world):
     for seat in ("p1", "p2"):
         assert world.seat(seat, "GET", "/state")[0] == 200
@@ -67,18 +76,19 @@ def test_one_request_per_round_and_only_whole_numbers(start_world, tmp_path):
         assert world.seat("p2", "POST", "/harvest", {"amount": bad})[0] == 400, bad
     assert world.seat("p2", "POST", "/harvest", {"pass": True})[0] == 400
     assert world.seat("p2", "POST", "/submit", {"answer": {}})[0] == 404  # no answer slot in a game
+    assert world.seat("p2", "POST", "/propose", {"split": {"p1": 24, "p2": 24}})[0] == 404
+    assert world.seat("p2", "POST", "/accept", {"id": "1-1"})[0] == 404
     assert "repeat" in world.kinds()
 
 
 def test_split_pass_blocks_the_deal_and_only_the_first_action_in_a_round_counts(start_world, tmp_path, monkeypatch):
-    params = SPLIT._params(100, Fraction(4, 5), {"p1": 55, "p2": 20}, regime="b")
-    path = tmp_path / "split.json"
-    path.write_text(json.dumps(params))
-    world = start_world("silent", FLOTILLA_GAME=str(FLOTILLA / "games" / "split.py"),
-                        FLOTILLA_GAME_PARAMS=str(path), FLOTILLA_ROUND_SECONDS="30")
+    world, params = split_world(start_world, tmp_path, condition="silent")
     clock = 0.0
     monkeypatch.setattr(world.module, "now", lambda: clock)
     everyone_calls(world)
+    assert "proposals" not in world.seat("p1", "GET", "/state")[1]
+    assert world.seat("p1", "POST", "/propose", {"split": {"p1": 60, "p2": 40}})[0] == 404
+    assert world.seat("p2", "POST", "/accept", {"id": "1-1"})[0] == 404
 
     for bad in ({"pass": False}, {"pass": 1}, {"pass": "true"}, {"pass": True, "amount": 0}):
         assert world.seat("p1", "POST", "/claim", bad)[0] == 400
@@ -116,6 +126,114 @@ def test_split_pass_blocks_the_deal_and_only_the_first_action_in_a_round_counts(
     assert [e["data"]["passed"] for e in world.events() if e["kind"] == "close"] == [["p1"], [], []]
 
 
+def test_an_accepted_split_proposal_settles_immediately_and_scores_as_one_deal(start_world, tmp_path, monkeypatch):
+    world, params = split_world(start_world, tmp_path)
+    monkeypatch.setattr(world.module, "now", lambda: 0.0)
+    split = {"p1": 0, "p2": 72}
+    assert world.seat("p1", "POST", "/propose", {"split": split})[0] == 409
+    everyone_calls(world)
+    assert world.seat("p1", "GET", "/messages")[0] == 403
+    assert world.seat("p1", "POST", "/messages", {"to": "all", "text": "test"})[0] == 403
+    status, proposal = world.seat("p1", "POST", "/propose", {"split": split})
+    assert status == 201 and proposal == {"id": proposal["id"], "proposer": "p1", "split": split, "time": 0.0}
+    for seat in params["seats"]:
+        assert world.seat(seat, "GET", "/state")[1]["proposals"] == [proposal]
+    accept = {"id": proposal["id"]}
+    assert world.seat("p1", "POST", "/accept", accept)[0] == 409
+    assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 201
+    assert world.seat("p2", "POST", "/accept", accept) == (201, {**accept, "accepted": True})
+    for seat in params["seats"]:
+        view = world.seat(seat, "GET", "/state")[1]
+        assert view["season_over"] and view["your_total"] == split[seat] and view["proposals"] == []
+    assert world.seat("p2", "POST", "/propose", {"split": split})[0] == 409
+    assert world.seat("p2", "POST", "/accept", accept)[0] == 409
+    assert world.seat("p2", "POST", "/claim", {"amount": 72})[0] == 409
+
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    deal, = log
+    assert deal["via"] == "proposal" and deal["proposal_id"] == proposal["id"]
+    assert deal["closed"] == deal["opened"] == 0.0 and deal["missed"] == deal["passed"] == []
+    assert deal["agreed"] and deal["requests"] == deal["catch"] == split and deal["remaining"] == 28
+    score = SPLIT.score_game(params, log)
+    assert score["via"] == "proposal" and score["proposals"] == score["acceptances"] == 1
+    assert score["reward"] == 0.72 and score["totals"] == split and score["deal_round"] == 1
+    events = [event for event in world.events() if event["kind"] in {"propose", "accept", "close"}]
+    assert [event["kind"] for event in events] == ["propose", "accept", "close"]
+    assert events[-1]["data"]["proposal_id"] == proposal["id"]
+
+
+def test_split_proposals_validate_each_amount_and_expire_at_the_round_deadline(start_world, tmp_path, monkeypatch):
+    world, params = split_world(start_world, tmp_path)
+    clock = 0.0
+    monkeypatch.setattr(world.module, "now", lambda: clock)
+    everyone_calls(world)
+    for bad in ({"p1": 61, "p2": 40}, {"p1": -1, "p2": 1}, {"p1": 1, "p2": 1.0},
+                {"p1": True, "p2": 10}, {"p1": 10, "p3": 10}, {"p1": 10}, {"p1": 0, "p2": 0, "p3": 1}):
+        assert world.seat("p1", "POST", "/propose", {"split": bad})[0] == 400, bad
+    for bad in (None, 1, [], "", {}):
+        assert world.seat("p2", "POST", "/accept", {"id": bad})[0] == 400, bad
+    assert world.seat("p2", "GET", "/state")[1]["proposals"] == []
+
+    split = {"split": {"p1": 60, "p2": 40}}
+    first = world.seat("p1", "POST", "/propose", split)[1]
+    assert world.seat("p1", "POST", "/propose", split)[0] == 201
+    assert world.seat("p1", "POST", "/propose", split)[0] == 429
+    assert world.seat("p2", "POST", "/propose", split)[0] == 201
+    assert len(world.seat("p2", "GET", "/state")[1]["proposals"]) == 3
+    clock = 30.0
+    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 409
+    view = world.seat("p1", "GET", "/state")[1]
+    assert view["round"] == 2 and view["stock"] == 80 and view["proposals"] == []
+    assert world.seat("p1", "POST", "/propose", split)[0] == 400
+    status, next_proposal = world.seat("p1", "POST", "/propose", {"split": {"p1": 60, "p2": 20}})
+    assert status == 201 and next_proposal["id"] != first["id"]
+    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 409
+    assert world.seat("p2", "POST", "/accept", {"id": next_proposal["id"]})[0] == 201
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    score = SPLIT.score_game(params, log)
+    assert score["deal_round"] == 2 and score["proposals"] == 4 and score["acceptances"] == 1
+    assert any(event["kind"] == "denied" and event["data"]["status"] == 429 for event in world.events())
+
+
+def test_every_other_seat_must_accept_the_same_split_proposal(start_world, tmp_path):
+    seats = ("p1", "p2", "p3")
+    world, params = split_world(start_world, tmp_path, seats=seats)
+    for seat in seats:
+        assert world.seat(seat, "GET", "/state")[0] == 200
+    split = {"p1": 46, "p2": 28, "p3": 26}
+    status, first = world.seat("p1", "POST", "/propose", {"split": split})
+    assert status == 201
+    status, second = world.seat("p1", "POST", "/propose", {"split": {"p1": 43, "p2": 29, "p3": 28}})
+    assert status == 201
+    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 201
+    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 409
+    assert world.seat("p3", "POST", "/accept", {"id": second["id"]})[0] == 201
+    assert not world.seat("p1", "GET", "/state")[1]["season_over"]
+    assert world.seat("p3", "POST", "/accept", {"id": first["id"]})[0] == 201
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    assert log[-1]["proposal_id"] == first["id"] and log[-1]["catch"] == split
+    assert SPLIT.score_game(params, log)["acceptances"] == 3
+
+
+def test_a_claim_deal_can_end_the_propose_game(start_world, tmp_path):
+    world, params = split_world(start_world, tmp_path)
+    everyone_calls(world)
+    split = {"p1": 70, "p2": 10}
+    assert world.seat("p1", "POST", "/propose", {"split": split})[0] == 201
+    assert world.seat("p2", "POST", "/claim", {"pass": True})[0] == 201
+    assert world.seat("p1", "POST", "/claim", {"amount": 60})[0] == 201
+    assert world.seat("p2", "GET", "/state")[1]["round"] == 2
+    assert world.seat("p2", "POST", "/propose", {"split": split})[0] == 201
+    assert world.seat("p1", "POST", "/claim", {"amount": 20})[0] == 201
+    assert world.seat("p2", "POST", "/claim", {"amount": 60})[0] == 201
+    assert world.seat("p2", "GET", "/state")[1]["season_over"]
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    score = SPLIT.score_game(params, log)
+    assert log[0]["passed"] == ["p2"] and not log[0]["agreed"]
+    assert score["via"] == "claim" and score["deal_round"] == 2 and score["totals"] == {"p1": 20, "p2": 60}
+    assert score["proposals"] == 2 and score["acceptances"] == 0
+
+
 def test_a_collapse_ends_the_season(start_world, tmp_path):
     world = game_world(start_world, tmp_path)
     everyone_calls(world)
@@ -145,7 +263,7 @@ def test_the_season_ends_after_its_secret_length_and_no_reply_states_it(start_wo
         else:
             assert set(reply) == {"round", "amount"}
     admin = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert admin["world_version"] == 7 and len(admin["game"]["log"]) == 3
+    assert admin["world_version"] == 8 and len(admin["game"]["log"]) == 3
 
 
 def test_wait_returns_when_the_round_closes(start_world, tmp_path):

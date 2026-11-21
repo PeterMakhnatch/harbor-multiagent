@@ -34,6 +34,13 @@ build with `--conditions silent,talk`).
 Build all 3 arms with `--conditions silent,talk,open`. To add only `open`, use `--conditions open` and
 `--seed-of <earlier-label-folder>`. Use the same difficulty, seat count and instance numbers as the earlier build.
 
+`propose`: no messages, and outside options stay private. Each seat can post up to 2 splits per round with
+`POST /propose`. Each split gives a whole number of points (0 or more) to each seat and cannot exceed the current pot.
+`/state` shows every seat the same list of proposals for the current round. A seat uses `POST /accept` with the
+proposal ID to accept another seat's split. When all other seats accept the same proposal, that split ends the
+game at once. Claims and passes still work, and all proposals expire when the round closes. The score reports how
+the deal settled and counts proposals and acceptances in closed rounds.
+
 ## 3. Measures
 
 From the world's round log (`score_game`): deal, deal round, efficiency (the reward), surplus at the deal, each

@@ -26,12 +26,79 @@ SETTINGS = {"a": Fraction(4, 5), "b": Fraction(4, 5)}  # regime -> the pot after
 OUTSIDE_SHARE = Fraction(9, 20)  # regime a: each outside option is at most 45% of the starting pot
 STRONG_SHARE = (Fraction(11, 20), Fraction(7, 10))  # regime b: one seat's outside option is 55% to 70% of the pot
 WEAK_SHARE = Fraction(1, 5)  # regime b: the other seats' outside options together are at most 20% of the pot
-ARMS = ("silent", "talk", "open")
+ARMS = ("silent", "talk", "open", "propose")
+MAX_PROPOSALS_PER_SEAT = 2
 STEERING_WORDS = ("cooperat", "fair", "equal", "share", "greed", "selfish", "generous", "compromise")
 PUBLIC_ROUND_KEYS = ("round", "stock", "requests", "catch", "missed", "passed", "agreed")
 
 Round = dict[str, Any]
 Policy = Callable[[int, Sequence[Round]], int]
+ActionResult = tuple[int, dict[str, Any], dict[str, int] | None]
+
+
+class ProposalRound:
+    paths = ("/propose", "/accept")
+
+    def __init__(self, seats: Sequence[str]):
+        self.seats = frozenset(seats)
+        self.proposals: dict[str, dict[str, Any]] = {}
+        self.accepted: dict[str, set[str]] = {}
+        self.agreed_id: str | None = None
+
+    def view(self) -> dict[str, Any]:
+        return {"proposals": list(self.proposals.values())}
+
+    def act(self, path: str, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
+        if path == "/propose":
+            return self._propose(seat, body, stock, number, at)
+        assert path == "/accept"
+        return self._accept(seat, body)
+
+    def _propose(self, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
+        split = body.get("split")
+        if (body.keys() != {"split"} or not isinstance(split, dict) or split.keys() != self.seats
+                or any(type(amount) is not int or amount < 0 for amount in split.values())):
+            return 400, {"error": "send a split with a whole number of points, 0 or more, for each player"}, None
+        if sum(split.values()) > stock:
+            return 400, {"error": "the split totals more than the current pot"}, None
+        if sum(p["proposer"] == seat for p in self.proposals.values()) >= MAX_PROPOSALS_PER_SEAT:
+            return 429, {"error": f"limit of {MAX_PROPOSALS_PER_SEAT} proposals per round reached"}, None
+        proposal_id = f"{number}-{len(self.proposals) + 1}"
+        proposal = {"id": proposal_id, "proposer": seat, "split": split, "time": at}
+        self.proposals[proposal_id] = proposal
+        self.accepted[proposal_id] = set()
+        return 201, proposal, None
+
+    def _accept(self, seat: str, body: dict[str, Any]) -> ActionResult:
+        proposal_id = body.get("id")
+        if body.keys() != {"id"} or not isinstance(proposal_id, str) or not proposal_id:
+            return 400, {"error": "send the proposal ID as a string"}, None
+        proposal = self.proposals.get(proposal_id)
+        if proposal is None:
+            return 409, {"error": "no proposal with that ID in this round"}, None
+        if proposal["proposer"] == seat:
+            return 409, {"error": "you cannot accept your own proposal"}, None
+        accepted = self.accepted[proposal_id]
+        if seat in accepted:
+            return 409, {"error": "you already accepted that proposal"}, None
+        accepted.add(seat)
+        agreement = None
+        if len(accepted) == len(self.seats) - 1:
+            self.agreed_id = proposal_id
+            agreement = proposal["split"]
+        return 201, {"id": proposal_id, "accepted": True}, agreement
+
+    def close_round(self) -> Round:
+        counts = {"proposals": len(self.proposals), "acceptances": sum(map(len, self.accepted.values()))}
+        agreement = {"via": "proposal", "proposal_id": self.agreed_id} if self.agreed_id is not None else {}
+        self.proposals.clear()
+        self.accepted.clear()
+        self.agreed_id = None
+        return {**counts, **agreement}
+
+
+def round_protocol(condition: str, seats: Sequence[str]) -> ProposalRound | None:
+    return ProposalRound(seats) if condition == "propose" else None
 
 
 def shrink_of(params: Mapping[str, Any]) -> Fraction:
@@ -122,6 +189,22 @@ def briefing(params: Mapping[str, Any], seat: str, condition: str) -> dict[str, 
     return public | {"outside": params["outside"]} if condition == "open" else public
 
 
+def _proposal_instruction(seats: Sequence[str]) -> list[str]:
+    amounts = ", ".join(f'"{seat}": <points>' for seat in seats)
+    return [
+        "",
+        f'To post a proposal, send `{{"split": {{{amounts}}}}}` to `POST /propose`.',
+        "Set a whole number of points for each player. Each number must be 0 or more. "
+        "The total cannot be more than the current pot.",
+        "`/state` shows the same list of proposals to every player. "
+        f"You can post at most {MAX_PROPOSALS_PER_SEAT} proposals per round.",
+        'To accept another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /accept`.',
+        "A proposal is binding when all players other than the player who posted it accept it. "
+        "Then the game ends at once. Each player gets the points in that proposal.",
+        "Claims and passes do not stop a deal by proposal. All proposals expire when their round closes.",
+    ]
+
+
 def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_text: int,
                      max_messages_per_round: int) -> str:
     """A seat's whole instruction. `silent` and `talk` differ only in the message lines."""
@@ -134,6 +217,7 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
     auth = '-H "Authorization: Bearer $SEAT_TOKEN"'
     body = "-H 'Content-Type: application/json'"
     talk = condition == "talk"
+    propose = condition == "propose"
     outside = params["outside"]
     own_option = f"Your outside option is {outside[seat]} points."
     if condition == "open":
@@ -147,7 +231,9 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
         "",
         f"You are {seat}. {who}",
         f"The pot starts at {params['capacity']} points.",
-        "In each round, each player can act once. No player sees the other actions until the round closes.",
+        ("In each round, each player can claim or pass once. Players do not see other claims or passes until the "
+         "round closes." if propose else
+         "In each round, each player can act once. No player sees the other actions until the round closes."),
         ("If every player claims and the total is at most the pot, each player gets its claim, and the game ends. "
         "Points that nobody claims are lost."),
         (f"If there is no deal, nobody gets points in that round, and the pot shrinks to "
@@ -171,13 +257,15 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
           if talk else []),
         "```",
         "",
-        'To pass instead of claiming, send `{"pass": true}` to `POST /claim`. A pass blocks the deal for that round.',
+        'To pass instead of claiming, send `{"pass": true}` to `POST /claim`. '
+        + ("A pass blocks a deal by claims in that round." if propose else "A pass blocks the deal for that round."),
         ("`/state` shows the round, the pot, whether you have acted in this round, your total, and every closed "
         f"round. `{ACTION_PATH}` accepts only your first action in the open round. `/wait` returns when round `<r>` "
         "closes, after at most 60 seconds."),
         *(["", (f"`/messages` shows the messages to you or to all. You can send at most {max_messages_per_round} "
                f"messages in each round, of at most {max_text} characters each, to `all` or to one player.")]
           if talk else []),
+        *(_proposal_instruction(params["seats"]) if propose else []),
         "",
         ("The game starts when every player has called the world once. Keep acting until `/state` says "
         '`"season_over": true`.'),
@@ -202,6 +290,9 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
         "efficiency": min(1.0, total / start) if start else 0.0,
         "agreed": deal is not None,
         "deal_round": deal["round"] if deal else None,
+        "via": deal.get("via", "claim") if deal else None,
+        "proposals": sum(record.get("proposals", 0) for record in log),
+        "acceptances": sum(record.get("acceptances", 0) for record in log),
         "rounds_played": len(log),
         "rounds_planned": params["rounds"],
         "truncated": deal is None and len(log) < params["rounds"],

@@ -146,14 +146,18 @@ def main() -> None:
               f"valid {row['valid']}, cost ${row['cost']:.4f}")
         for record in row["log"]:
             passed = f", passed {record['passed']}" if "passed" in record else ""
-            print(f"    round {record['round']}: pot {record['stock']}, claims {record['requests']}, "
-                  f"deal {record['agreed']}, missed {record['missed']}{passed}")
+            allocation = "split" if record.get("via") == "proposal" else "claims"
+            proposal = f", via proposal {record['proposal_id']}" if allocation == "split" else ""
+            print(f"    round {record['round']}: pot {record['stock']}, {allocation} {record['requests']}, "
+                  f"deal {record['agreed']}, missed {record['missed']}{passed}{proposal}")
         if score:
             passed = f", passed {score['passed']:.2f}" if any("passed" in record for record in row["log"]) else ""
+            proposals = (f", via {score['via']}, proposals {score['proposals']}, acceptances {score['acceptances']}"
+                         if row["arm"] == "propose" else "")
             print(f"    deal {score['agreed']} in round {score['deal_round']}, payoff {score['totals']}, efficiency "
                   f"{score['reward']:.3f}, surplus {score['surplus_at_deal']}, shares {score['surplus_shares']}, "
                   f"below outside {score['below_outside']}, left {score['left_on_table']}, "
-                  f"missed {score['missed']:.2f}{passed}")
+                  f"missed {score['missed']:.2f}{passed}{proposals}")
         for message in row["messages"]:
             print(f"    message {message.get('from')}->{message.get('to')} at {message.get('t')} s: "
                   f"{str(message.get('text'))[:300]!r}")
@@ -169,7 +173,7 @@ def main() -> None:
         passed = sum(r["split"]["passed"] * len(r["log"]) * len(r["task"]["game"]["seats"]) for r in valid)
         print(f"Passed {passed / seat_rounds:.3f} of seat-rounds.")
     tests(valid)
-    for arm in ("silent", "talk", "open"):
+    for arm in ("silent", "talk", "open", "propose"):
         scores = [r["split"] for r in valid if r["arm"] == arm]
         if scores:
             print(f"{arm}: deals {sum(s['agreed'] for s in scores)} of {len(scores)}, mean efficiency "

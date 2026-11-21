@@ -39,7 +39,7 @@ from urllib.parse import parse_qs, urlsplit
 # act as the wrong seat; message ids are random (a counter showed the number of hidden direct messages).
 # Version 6: bound submission history and sample unattributed errors; record HTTP parser refusals.
 # Version 7: rounds games can allow a pass as an explicit action, separate from a missed round.
-WORLD_VERSION = 7
+WORLD_VERSION = 8
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -89,11 +89,15 @@ def _load_game() -> tuple[Any, dict[str, Any]]:
 GAME, PARAMS = _load_game()
 GAME_ACTION = getattr(GAME, "ACTION_PATH", "/harvest")  # a game names its action: /harvest, /claim
 GAME_ALLOWS_PASS = getattr(GAME, "ALLOW_PASS", False)
+_protocol_factory = getattr(GAME, "round_protocol", None)
+ROUND_PROTOCOL = _protocol_factory(CONDITION, SEATS) if _protocol_factory is not None else None
 ROUND_KEYS = getattr(GAME, "PUBLIC_ROUND_KEYS",  # what a seat sees of each closed round
                      ("round", "stock", "requests", "catch", "missed", "remaining", "collapsed"))
 if GAME is not None:
     ROUTES = {path: methods for path, methods in ROUTES.items() if path != "/submit"} | {
         "/state": ("GET",), GAME_ACTION: ("POST",), "/wait": ("GET",)}
+if ROUND_PROTOCOL is not None:
+    ROUTES.update(dict.fromkeys(ROUND_PROTOCOL.paths, ("POST",)))
 
 START = time.monotonic()
 LOCK = threading.Lock()
@@ -178,13 +182,13 @@ def expire() -> None:
         record("freeze", None, {"reason": "play time is over", "after_s": PLAY_SECONDS})
 
 
-def tick() -> None:
+def tick(at: float | None = None) -> None:
     """Start the season when every seat has called once (or START_GRACE after the first call), and close
     every round whose time is up. Lazy: each request calls it, so no thread runs the clock. Callers hold LOCK."""
     game = STATE["game"]
     if STATE["frozen"] or game["over"]:
         return
-    t = now()
+    t = now() if at is None else at
     if game["opened"] is None:
         first, everyone = game["first_seen"], len(game["seen"]) == len(SEATS)
         if first is None or (not everyone and t < first + START_GRACE):
@@ -195,19 +199,21 @@ def tick() -> None:
         close_round(game["opened"] + ROUND_SECONDS)
 
 
-def close_round(at: float) -> None:
+def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
     """Settle the open round; a seat that did not act catches 0 and is `missed`. Callers hold LOCK."""
     game = STATE["game"]
-    actions = game["requests"]
+    actions = game["requests"] if agreement is None else agreement
     requests = {seat: actions.get(seat) or 0 for seat in SEATS}
     missed = [seat for seat in SEATS if seat not in actions]
     pass_data = {}
     if GAME_ALLOWS_PASS:
         pass_data["passed"] = [seat for seat in SEATS if seat in actions and actions[seat] is None]
     result = GAME.settle(game["stock"], requests, PARAMS, missed=missed, **pass_data)
+    extra = ROUND_PROTOCOL.close_round() if ROUND_PROTOCOL is not None else {}
     game["log"].append({"round": game["round"], "missed": missed, "opened": game["opened"], "closed": round(at, 3),
-                        **pass_data, **result})
-    record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"], **pass_data})
+                        **pass_data, **result, **extra})
+    record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"],
+                           **pass_data, **extra})
     if result["collapsed"] or result.get("ends") or game["round"] >= PARAMS["rounds"]:  # ends: e.g. a deal
         game["over"], game["stock"] = True, result["next_stock"]  # the state shows the lake after the season
         record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
@@ -232,6 +238,7 @@ def game_view(seat: str) -> dict[str, Any]:
         "you_requested": seat in game["requests"],
         "your_total": sum(entry["catch"].get(seat, 0) for entry in game["log"]),
         "closed_rounds": [{key: entry[key] for key in ROUND_KEYS} for entry in game["log"]],
+        **(ROUND_PROTOCOL.view() if ROUND_PROTOCOL is not None else {}),
     }
 
 
@@ -407,6 +414,8 @@ class World(BaseHTTPRequestHandler):
             self._submit(seat, body)
         elif path == GAME_ACTION:
             self._harvest(seat, body)
+        elif ROUND_PROTOCOL is not None and path in ROUND_PROTOCOL.paths:
+            self._round_action(path, seat, body)
         else:  # /admin/freeze
             with LOCK:
                 STATE["frozen"] = True
@@ -541,6 +550,32 @@ class World(BaseHTTPRequestHandler):
                 close_round(now())
         # The reply must not say how many seats have requested: in `silent` that count is a channel.
         self._reply(201, {"round": number, **action})
+
+    def _round_action(self, path: str, seat: str, body: dict[str, Any]) -> None:
+        assert ROUND_PROTOCOL is not None
+        with LOCK:
+            expire()
+            at = now()
+            tick(at)
+            game = STATE["game"]
+            if STATE["frozen"] or game["over"]:
+                record("late", seat, {"path": path})
+                self._reply(409, {"error": "the season is over"})
+                return
+            if game["opened"] is None:
+                record("early", seat, {"path": path})
+                self._reply(409, {"error": "the season has not started; it starts when every player has called once"})
+                return
+            number = game["round"]
+            status, reply, agreement = ROUND_PROTOCOL.act(path, seat, body, game["stock"], number, at)
+            if status == 201:
+                record(path.removeprefix("/"), seat, {"round": number, **reply})
+            else:
+                record("invalid" if status == 400 else "denied", seat,
+                       {"method": "POST", "path": path, "status": status, "reason": reply["error"]})
+            if agreement is not None:
+                close_round(at, agreement=agreement)
+        self._reply(status, reply)
 
     def _wait(self, seat: str) -> None:
         query = parse_qs(urlsplit(self.path).query).get("round", [""])[0]

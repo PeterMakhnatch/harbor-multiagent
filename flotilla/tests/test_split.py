@@ -60,6 +60,7 @@ def test_scores_with_a_deal_without_one_and_the_oracle():
     fair = SPLIT.play(params, {seat: SPLIT.half_policy(2) for seat in params["seats"]})
     score = SPLIT.score_game(params, fair)
     assert score["agreed"] and score["deal_round"] == 1 and score["reward"] == 1.0
+    assert score["via"] == "claim" and score["proposals"] == score["acceptances"] == 0
     assert score["surplus_at_deal"] == 50 and score["surplus_shares"] == {"p1": 20 / 50, "p2": 30 / 50}
     assert score["below_outside"] == []
     greedy = SPLIT.play(params, {seat: SPLIT.fixed_policy(70) for seat in params["seats"]})
@@ -83,6 +84,7 @@ def test_old_round_logs_keep_their_scores_and_misses():
     ]
     assert SPLIT.score_game(params, log) == {
         "reward": 0.75, "efficiency": 0.75, "agreed": False, "deal_round": None, "rounds_played": 6,
+        "via": None, "proposals": 0, "acceptances": 0,
         "rounds_planned": 6, "truncated": False, "totals": {"p1": 55, "p2": 20}, "outside": {"p1": 55, "p2": 20},
         "surplus_at_deal": 0, "surplus_shares": None, "below_outside": [], "left_on_table": None,
         "missed": 5 / 12, "passed": 0.0, "over_claim_rounds": 1,
@@ -91,7 +93,7 @@ def test_old_round_logs_keep_their_scores_and_misses():
 
 def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     params = example()
-    for arm in ("silent", "talk"):
+    for arm in ("silent", "talk", "propose"):
         text = SPLIT.instruction_text(params, "p1", arm, 400, 2)
         assert text == SPLIT.instruction_text(example({"p1": 30, "p2": 44}), "p1", arm, 400, 2)
         assert "Your outside option is 30 points." in text and "20 points" not in text
@@ -103,6 +105,10 @@ def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     silent, talk = (SPLIT.instruction_text(params, "p2", arm, 400, 2).splitlines() for arm in ("silent", "talk"))
     assert [line for line in talk if line not in silent] and all(
         "messages" in line or line == "" for line in talk if line not in silent)
+    propose = SPLIT.instruction_text(params, "p2", "propose", 400, 2)
+    assert '`{"split": {"p1": <points>, "p2": <points>}}` to `POST /propose`' in propose
+    assert '`{"id": "<id>"}` to `POST /accept`' in propose
+    assert "/messages" not in propose
 
 
 @pytest.mark.parametrize("outside", [{"p1": 30, "p2": 20}, {"p1": 30, "p2": 20, "p3": 11}])
@@ -131,10 +137,10 @@ def task_data(task):
 
 
 def test_a_split_build_passes_qa_and_exposes_outside_options_only_in_open(tmp_path):
-    run_builder("--instances", "0-1", "--difficulty", "a", "--conditions", "silent,talk,open", "--out", tmp_path)
+    run_builder("--instances", "0-1", "--difficulty", "a", "--conditions", "silent,talk,open,propose", "--out", tmp_path)
     tasks = sorted((tmp_path / "split").iterdir())
-    assert len(tasks) == 6
-    assert {task_data(task)["condition"] for task in tasks} == {"silent", "talk", "open"}
+    assert len(tasks) == 8
+    assert {task_data(task)["condition"] for task in tasks} == {"silent", "talk", "open", "propose"}
     for task in tasks:
         data = task_data(task)
         assert data["mode"] == "rounds" and set(data["game"]["outside"]) == {"p1", "p2"}
@@ -160,7 +166,7 @@ def test_a_split_build_passes_qa_and_exposes_outside_options_only_in_open(tmp_pa
     assert not [f for f in findings if f.level == "FAIL"], findings
 
 
-@pytest.mark.parametrize("arm", ["silent", "talk"])
+@pytest.mark.parametrize("arm", ["silent", "talk", "propose"])
 def test_qa_catches_outside_options_leaked_in_an_instruction_or_briefing(tmp_path, arm):
     task, = BUILD.build("split", [0], 2, "b", 98765432101, (arm,), tmp_path)
     outside = task_data(task)["game"]["outside"]
@@ -176,19 +182,22 @@ def test_qa_catches_outside_options_leaked_in_an_instruction_or_briefing(tmp_pat
     assert [(f.seat, f.level) for f in findings if f.rule == "game-secret"] == [("p1", "FAIL"), ("p2", "FAIL")], findings
 
 
-def test_open_only_build_keeps_and_pairs_with_the_earlier_arms_in_a_variant(tmp_path):
+@pytest.mark.parametrize("new_arms", [("open",), ("open", "propose")])
+def test_new_arms_keep_and_pair_with_the_earlier_arms_in_a_variant(tmp_path, new_arms):
     settings = ("--instances", "0,2,4", "--difficulty", "b", "--seats", "3", "--variant", "paired", "--out", tmp_path)
     run_builder(*settings, "--conditions", "silent,talk")
     label = tmp_path / "split.paired"
     original = {task: task_data(task) for task in label.iterdir()}
     assert len(original) == 6
-    run_builder(*settings, "--conditions", "open", "--seed-of", label)
+    run_builder(*settings, "--conditions", ",".join(new_arms), "--seed-of", label)
     added = set(label.iterdir()) - original.keys()
-    assert {task_data(task)["instance"] for task in added} == {0, 2, 4} and len(added) == 3
+    assert {(task_data(task)["instance"], task_data(task)["condition"]) for task in added} == {
+        (instance, arm) for instance in (0, 2, 4) for arm in new_arms
+    }
+    assert len(added) == 3 * len(new_arms)
     assert {task: task_data(task) for task in original} == original
     for task in added:
         data = task_data(task)
-        assert data["condition"] == "open"
         twins = [earlier for earlier in original.values() if earlier["instance"] == data["instance"]]
         assert {earlier["condition"] for earlier in twins} == {"silent", "talk"}
         assert all(earlier["seed"] == data["seed"] and earlier["game"] == data["game"] for earlier in twins)

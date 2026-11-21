@@ -590,6 +590,9 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
                 text = f"{name.removeprefix('env.')}\n{decoded(text)}"  # the variable's name is visible too
             if task.family_name == "split" and task.condition == "open" and name == "instruction":
                 text = text.replace("in the open round.", "in the      round.")
+            if task.family_name == "split" and task.condition == "propose" and name == "instruction":
+                endpoint = "`POST /propose`"
+                text = text.replace(endpoint, " " * len(endpoint), 1)
             if WARNING in text and not warned:
                 yield Finding("condition-leak", task.name, seat,
                               f"{name} has the warning sentence, but {task.condition} is not a warned condition")
