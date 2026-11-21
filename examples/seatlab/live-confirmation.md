@@ -20,6 +20,14 @@ An absent bay is not always infeasible: an unopened report can be stale. The sto
 
 [Runnable comparison](replication.md#test-whether-a-receiver-uses-a-visible-conflict) · [All first replies scored, without reply text](results/dispatch-claim-conflicts.json) · [Every charge](results/dispatch-claim-conflicts-cost.json).
 
+### Did the flag make every favorite more attractive?
+
+No general increase was established. When the peer already listed the favorite, the original receiver chose it **94/96** times. The flagged receiver chose it **96/96** times. That left little room for a gain. The 8-world test gave **p = 1** for that difference.
+
+When the report excluded the favorite, choices of that favorite rose from **21/96 to 76/96**. Choices of the best bay the report *did* list fell from **58/96 to 17/96**. These are decisions from the same 64 replies, not another sample. The counts locate the change; they do not identify its cause.
+
+[Follow-up rule, recorded before the breakdown](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062915556) · [Counts by world and report status](results/dispatch-favorite-strata.json). Two independent decoders agreed on all 384 choices. No new model or container ran.
+
 ## Can a third agent choose between two proposed answers?
 
 **Check whether either proposal can succeed before adding a reviewer.** On scheduling, not one of the 48 proposed times booked the meeting. On Dispatch, the reviewer recovered most of the available gain, but it did not reliably select the same proposal after we reversed their order.

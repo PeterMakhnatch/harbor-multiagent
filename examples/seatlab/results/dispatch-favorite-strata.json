@@ -1,0 +1,331 @@
+{
+  "arms": {
+    "flagged": {
+      "excluded": {
+        "any_reported": 20,
+        "best_reported": 17,
+        "favorite": 76,
+        "shipments": 96
+      },
+      "listed": {
+        "any_reported": 96,
+        "best_reported": 96,
+        "favorite": 96,
+        "shipments": 96
+      }
+    },
+    "shown": {
+      "excluded": {
+        "any_reported": 75,
+        "best_reported": 58,
+        "favorite": 21,
+        "shipments": 96
+      },
+      "listed": {
+        "any_reported": 96,
+        "best_reported": 94,
+        "favorite": 94,
+        "shipments": 96
+      }
+    }
+  },
+  "both_strata_meet_rule": false,
+  "evidence": "64_existing_first_receiver_replies",
+  "new_calls": 0,
+  "new_cost_usd": "0.000000000",
+  "original_result": "https://github.com/PeterMakhnatch/harbor-multiagent/blob/beb2bab65db5621e14ef35954ea6a02862cb98c5/examples/seatlab/live-confirmation.md#does-a-flag-help-the-dispatcher-avoid-an-unsupported-choice",
+  "registration": "https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062915556",
+  "schema": "seatlab.dispatch.favorite-strata.v1",
+  "strata": {
+    "excluded": {
+      "difference_count": 55,
+      "meets_rule": true,
+      "opportunities_per_arm": 96,
+      "two_sided_world_signflip": [
+        1,
+        128
+      ],
+      "world_differences": [
+        3,
+        5,
+        15,
+        6,
+        2,
+        6,
+        2,
+        16
+      ]
+    },
+    "listed": {
+      "difference_count": 2,
+      "meets_rule": false,
+      "opportunities_per_arm": 96,
+      "two_sided_world_signflip": [
+        1,
+        1
+      ],
+      "world_differences": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2
+      ]
+    }
+  },
+  "world_order": [
+    6801,
+    6802,
+    6803,
+    6804,
+    6805,
+    6806,
+    6807,
+    6808
+  ],
+  "worlds": {
+    "6801": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 0,
+          "best_reported": 0,
+          "favorite": 4,
+          "shipments": 4
+        },
+        "listed": {
+          "any_reported": 20,
+          "best_reported": 20,
+          "favorite": 20,
+          "shipments": 20
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 3,
+          "best_reported": 3,
+          "favorite": 1,
+          "shipments": 4
+        },
+        "listed": {
+          "any_reported": 20,
+          "best_reported": 20,
+          "favorite": 20,
+          "shipments": 20
+        }
+      }
+    },
+    "6802": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 4,
+          "best_reported": 4,
+          "favorite": 8,
+          "shipments": 12
+        },
+        "listed": {
+          "any_reported": 12,
+          "best_reported": 12,
+          "favorite": 12,
+          "shipments": 12
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 9,
+          "best_reported": 9,
+          "favorite": 3,
+          "shipments": 12
+        },
+        "listed": {
+          "any_reported": 12,
+          "best_reported": 12,
+          "favorite": 12,
+          "shipments": 12
+        }
+      }
+    },
+    "6803": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 4,
+          "best_reported": 3,
+          "favorite": 16,
+          "shipments": 20
+        },
+        "listed": {
+          "any_reported": 4,
+          "best_reported": 4,
+          "favorite": 4,
+          "shipments": 4
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 19,
+          "best_reported": 14,
+          "favorite": 1,
+          "shipments": 20
+        },
+        "listed": {
+          "any_reported": 4,
+          "best_reported": 4,
+          "favorite": 4,
+          "shipments": 4
+        }
+      }
+    },
+    "6804": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 4,
+          "best_reported": 3,
+          "favorite": 8,
+          "shipments": 12
+        },
+        "listed": {
+          "any_reported": 12,
+          "best_reported": 12,
+          "favorite": 12,
+          "shipments": 12
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 10,
+          "best_reported": 7,
+          "favorite": 2,
+          "shipments": 12
+        },
+        "listed": {
+          "any_reported": 12,
+          "best_reported": 12,
+          "favorite": 12,
+          "shipments": 12
+        }
+      }
+    },
+    "6805": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 0,
+          "best_reported": 0,
+          "favorite": 8,
+          "shipments": 8
+        },
+        "listed": {
+          "any_reported": 16,
+          "best_reported": 16,
+          "favorite": 16,
+          "shipments": 16
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 2,
+          "best_reported": 2,
+          "favorite": 6,
+          "shipments": 8
+        },
+        "listed": {
+          "any_reported": 16,
+          "best_reported": 16,
+          "favorite": 16,
+          "shipments": 16
+        }
+      }
+    },
+    "6806": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 2,
+          "best_reported": 2,
+          "favorite": 14,
+          "shipments": 16
+        },
+        "listed": {
+          "any_reported": 8,
+          "best_reported": 8,
+          "favorite": 8,
+          "shipments": 8
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 8,
+          "best_reported": 7,
+          "favorite": 8,
+          "shipments": 16
+        },
+        "listed": {
+          "any_reported": 8,
+          "best_reported": 8,
+          "favorite": 8,
+          "shipments": 8
+        }
+      }
+    },
+    "6807": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 6,
+          "best_reported": 5,
+          "favorite": 2,
+          "shipments": 8
+        },
+        "listed": {
+          "any_reported": 16,
+          "best_reported": 16,
+          "favorite": 16,
+          "shipments": 16
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 8,
+          "best_reported": 8,
+          "favorite": 0,
+          "shipments": 8
+        },
+        "listed": {
+          "any_reported": 16,
+          "best_reported": 16,
+          "favorite": 16,
+          "shipments": 16
+        }
+      }
+    },
+    "6808": {
+      "flagged": {
+        "excluded": {
+          "any_reported": 0,
+          "best_reported": 0,
+          "favorite": 16,
+          "shipments": 16
+        },
+        "listed": {
+          "any_reported": 8,
+          "best_reported": 8,
+          "favorite": 8,
+          "shipments": 8
+        }
+      },
+      "shown": {
+        "excluded": {
+          "any_reported": 16,
+          "best_reported": 8,
+          "favorite": 0,
+          "shipments": 16
+        },
+        "listed": {
+          "any_reported": 8,
+          "best_reported": 6,
+          "favorite": 6,
+          "shipments": 8
+        }
+      }
+    }
+  }
+}
