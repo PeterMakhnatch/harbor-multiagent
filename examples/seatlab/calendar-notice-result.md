@@ -1,6 +1,6 @@
 # What helps two agents find a meeting?
 
-**The local calendar check helped on the first 24 worlds. The transfer test did not establish that gain on 24 new worlds.** The check added no calendar information. Keep this distinction when choosing a default for a new workload.
+**Showing the local calendar check helped the receiver on both sets of 24 worlds. It did not establish a live team reward gain on the second set.** When the whole team runs again, the sender can change what the receiver sees.
 
 ## Does checking the received reports help a live team?
 
@@ -72,6 +72,24 @@ Equal inputs did not guarantee equal decisions. Across 2 replies, the selected s
 **Practical use:** show the receiver which peer claims fit its own constraints. Preserve the source of each claim, especially when an unopened report can be stale. This result measures one model on scheduling. These 96 replies are not another 96 teams.
 
 [Source and first-reply evidence](results/calendar-visible-fixed-replay.json) · [96 direct charges: $0.003303618](results/calendar-visible-fixed-replay-cost.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061830775).
+
+### Does the receiver effect transfer when the reports stay fixed?
+
+**Yes, on these 24 new source worlds.** We froze the local calendar and all 3 messages from each original `lists` team. Both formats showed the same initial list and opened reports. Only `checked` showed which reported starts fit that local calendar. We drew 2 fresh first replies per format.
+
+| Correct bookings | Lists | Checked |
+|---|---:|---:|
+| All 24 worlds | 30/48 | 42/48 |
+| True meeting appeared in the reports (22 worlds) | 28/44 | 42/44 |
+| True meeting did not appear (2 worlds) | 2/4 | 0/4 |
+
+The gain was **25 percentage points**. Ten worlds improved, 12 tied, and 2 declined. The exact two-sided test by world gave **p = 41/2048 (0.0200)**. Both [registered thresholds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063339028) passed. Across repetitions, the slot changed on 10/24 lists inputs and 2/24 checked inputs. The grade changed on 8/24 and 0/24, respectively.
+
+Use this result when the receiver already has the reports. It does **not** establish that the check improves the full team's reward on a new workload. With a fresh sender, the native test on these same worlds gave 15/24 versus 18/24. Only 2 frozen sources omitted the true meeting; that group cannot establish a separate effect.
+
+All 96 first replies scored. The private owner scorer and a separate stock calculation agreed on every grade. The direct calls cost **$0.003108090**. None remained unsettled. The public reader verifies source identity and arithmetic; it cannot authenticate the private prompts or replies.
+
+[24 native sources and 96 decisions](results/calendar-fixed-transfer-48-71.json) · [96 token charges](results/calendar-fixed-transfer-48-71-cost.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063538303) · [Check either receiver study without a model](replication.md#compare-2-workers-on-your-own-completed-scheduling-trial).
 
 ### Should the receiver wait for the first report before requesting a second one?
 

@@ -699,6 +699,8 @@ case_module=examples.seatlab.calendar_case
   --spend-dir "$SEATLAB_SPEND_DIR" --out "$private/case"
 ```
 
+For a native transfer trial (`cvt-…`), append `--cohort-sha256 "$COHORT_SHA256"` to the export command. Use the full SHA-256 from your registration, not the prefix in the trial name. The exporter checks the original job's cohort snapshot. It refuses command controls, a missing or different seal, and a seal on an older study.
+
 **Keep `owner.json` and the stock task on the scorer host.** Send only `requests.jsonl` to each worker. It contains the native receiver's factual input, a view without the computed intersections (`lists`), and a view with them (`checked`). The factual view can match another view. If you want only one view, select it **on the scorer host**:
 
 ```sh
@@ -725,6 +727,17 @@ To check the published comparison instead, run the command below. It reads the 2
 ```sh
 python3.12 -BS -m examples.seatlab.calendar_notices.visible_replay_summary \
   examples/seatlab/results/calendar-visible-fixed-replay.json
+```
+
+For the transfer cohort, give the reader the native receipt and the full manifest seal. It checks each source ID and returns no verdict if a first decision is missing:
+
+```sh
+results=examples/seatlab/results
+python3.12 -BS -m examples.seatlab.calendar_notices.transfer_fixed_result \
+  "$results/calendar-fixed-transfer-48-71.json" \
+  --native "$results/calendar-native-transfer-48-71.json" \
+  --manifest "$results/flotilla-schedule-transfer-48-71.json" \
+  --sha256 8995d5311e9627989a1a35065902ef89a39f72eb693409532a95513b22a4a61a
 ```
 
 #### Let a receiver choose which report to read next
