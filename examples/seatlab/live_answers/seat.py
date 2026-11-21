@@ -150,17 +150,20 @@ class AnswerSeat(BaseAgent):
         metadata["received"] = incoming
         slots = p.decode(incoming["text"], "question")
         metadata["stage"] = "answer_turn"
-        bits = await self._measure(
+        raw_bits = await self._measure(
             "answer",
             p.answer_prompt(table, incoming["text"]),
             context,
-            control_text=p.control_reply("answer", table, slots, None)
-            if self._cell.control
-            else None,
+            control_text=(
+                p.answer_wire(self._cell.draft_control_bits(table, slots))
+                if self._cell.control
+                else None
+            ),
         )
-        if bits is None:
+        if raw_bits is None:
             metadata["stage"] = "answer_failed"
             return
+        bits = self._cell.sent_bits(table, slots, raw_bits)
         metadata["sent"] = await _send(
             environment, "m2", self._cell.receiver, p.answer_wire(bits)
         )
@@ -190,7 +193,7 @@ class AnswerSeat(BaseAgent):
         incoming = await _receive(environment, self._cell.peer, sent=sent)
         metadata["received"] = incoming
         bits = p.decode(incoming["text"], "answer")
-        supplied = bits if self._cell.arm == "visible" else None
+        supplied = bits if self._cell.shows_answer else None
         metadata["stage"] = "choice_turn"
         choice = await self._measure(
             "choice",

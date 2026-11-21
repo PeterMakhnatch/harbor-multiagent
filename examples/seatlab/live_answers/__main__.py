@@ -5,6 +5,8 @@ import runpy
 import signal
 import subprocess
 import sys
+from fractions import Fraction
+from math import comb
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +16,13 @@ from . import protocol as p
 
 MODULE = "examples.seatlab.live_answers"
 SCHEMA = "seatlab.native-calendar-answers/v1"
+REPAIR_SCHEMA = "seatlab.native-calendar-answer-repair/v1"
+REPAIR_POLICY = "directed-flotilla-messages; sender-report-treatment; same-final-prompt"
 BINDINGS = ("DEEPSEEK_API_KEY", "SEATLAB_SPEND_DIR")
+
+
+def _schema(cell: p.Cell) -> str:
+    return REPAIR_SCHEMA if cell.arm in p.REPAIR_ARMS else SCHEMA
 
 
 def _team():
@@ -106,7 +114,7 @@ def _host_trial(directory: Path, harbor: Path) -> int:
     config = json.loads(config_bytes)
     task = Path(config["task"]["path"])
     audit.require(
-        attempt["schema"] == SCHEMA
+        attempt["schema"] == _schema(cell)
         and attempt["run"] == cell.run
         and _directory(directory.parent.parent, cell) == directory
         and attempt["config_sha256"] == p.digest(config_bytes)
@@ -186,15 +194,22 @@ def _launch(
 
 
 def _previous(job: Path, cell: p.Cell) -> dict[str, str] | None:
-    if cell.arm == cell.first:
+    first_arm = cell.first
+    if cell.arm == first_arm:
         return None
-    first = p.Cell(cell.world, cell.first, cell.control)
+    first = p.Cell(cell.world, first_arm, cell.control)
     directory = _directory(job, first)
     audit.require(
         (directory / "outcome.json").is_file(), "enrolled_first_arm_not_terminal"
     )
     attempt = _sealed(directory / "attempt.json")
-    audit.require(attempt.get("run") == first.run, "first_arm_binding")
+    outcome = _sealed(directory / "outcome.json")
+    binding = (_schema(first), first.run)
+    audit.require(
+        (attempt.get("schema"), attempt.get("run")) == binding
+        and (outcome.get("schema"), outcome.get("run")) == binding,
+        "first_arm_binding",
+    )
     return attempt.get("source")
 
 
@@ -216,7 +231,7 @@ def _run(
     except FileExistsError:
         raise ValueError("attempt_already_claimed_do_not_retry") from None
     attempt: dict[str, Any] = {
-        "schema": SCHEMA,
+        "schema": _schema(cell),
         "world": cell.world,
         "arm": cell.arm,
         "control": cell.control,
@@ -225,7 +240,7 @@ def _run(
         "config_sha256": None,
     }
     outcome: dict[str, Any] = {
-        "schema": SCHEMA,
+        "schema": _schema(cell),
         "run": cell.run,
         "returncode": None,
         "error": "source_setup_failed",
@@ -267,8 +282,9 @@ def _run(
 def _empty(
     cell: p.Cell, attempted: bool, ledger: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    schema = _schema(cell)
     return {
-        "schema": SCHEMA,
+        "schema": schema,
         "world": cell.world,
         "arm": cell.arm,
         "control": cell.control,
@@ -276,7 +292,7 @@ def _empty(
         "peer": cell.peer,
         "first_arm": cell.first,
         "run": cell.run,
-        "message_policy": p.POLICY,
+        "message_policy": REPAIR_POLICY if schema == REPAIR_SCHEMA else p.POLICY,
         "attempted": attempted,
         "status": "incomplete_attempt" if attempted else "not_attempted",
         "launch": None,
@@ -301,6 +317,13 @@ def _empty(
         "seats": {},
         "artifact_sha256": {},
         "ledger_calls": [row for row in ledger if row["run"] == cell.run],
+        **(
+            dict.fromkeys(
+                ("draft_matches_sender", "delivered_matches_sender", "target_nominated")
+            )
+            if schema == REPAIR_SCHEMA
+            else {}
+        ),
     }
 
 
@@ -322,7 +345,7 @@ def collect_cell(
                 attempt["control"],
                 attempt["run"],
             )
-            == (SCHEMA, cell.world, cell.arm, cell.control, cell.run),
+            == (row["schema"], cell.world, cell.arm, cell.control, cell.run),
             "attempt_binding",
         )
         row["source"] = attempt["source"]
@@ -332,7 +355,7 @@ def collect_cell(
         if (directory / "outcome.json").exists():
             outcome = _sealed(directory / "outcome.json")
             audit.require(
-                (outcome["schema"], outcome["run"]) == (SCHEMA, cell.run),
+                (outcome["schema"], outcome["run"]) == (row["schema"], cell.run),
                 "outcome_binding",
             )
             row["launch"] = {key: outcome[key] for key in ("error", "returncode")}
@@ -366,15 +389,94 @@ def collect_cell(
     return row
 
 
+def _verified_stock_reward(row: dict[str, Any]) -> bool:
+    return (
+        row["attempted"]
+        and row["protocol_bound"]
+        and row["native_reward_valid"]
+        and row["native_reward"] in (0, 1)
+    )
+
+
+def _repair_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    attempted = sum(row["attempted"] for row in rows)
+    verified = [row["native_reward"] for row in rows if _verified_stock_reward(row)]
+    return {
+        "enrolled": len(rows),
+        "attempted": attempted,
+        "unattempted": len(rows) - attempted,
+        "verified_stock_wins": verified.count(1),
+        "verified_stock_losses": verified.count(0),
+        "missing_or_unverified_reward": attempted - len(verified),
+        "protocol_complete": sum(row["protocol_complete"] for row in rows),
+    }
+
+
+def _repair_pair_eligible(row: dict[str, Any]) -> bool:
+    if not (row["protocol_complete"] and _verified_stock_reward(row)):
+        return False
+    turns = row["turns"]
+    if turns.keys() != set(p.PHASES):
+        return False
+    calls = row["ledger_calls"]
+    if row["control"]:
+        return not calls and all(
+            turn[key] is None
+            for turn in turns.values()
+            for key in ("ledger", "ledger_role", "usage", "served_model")
+        )
+    return len(calls) == len(p.PHASES) and all(
+        (call := turns[phase]["ledger"]) is not None
+        and call["role"] == role
+        and call["run"] == row["run"]
+        and call["estimated_usd_high"] is not None
+        and call in calls
+        for phase, role in p.LEDGER_ROLES.items()
+    )
+
+
+def _paired_repair(
+    worlds_enrolled: int, differences: list[int], *, control: bool
+) -> dict[str, Any]:
+    local_wins = differences.count(1)
+    model_wins = differences.count(-1)
+    probability = None
+    if len(differences) == worlds_enrolled == len(p.WORLDS):
+        discordant = local_wins + model_wins
+        tail = sum(comb(discordant, k) for k in range(min(local_wins, model_wins) + 1))
+        exact = min(Fraction(1), Fraction(2 * tail, 2**discordant))
+        probability = {"numerator": exact.numerator, "denominator": exact.denominator}
+    return {
+        "control": control,
+        "worlds_enrolled": worlds_enrolled,
+        "matched": len(differences),
+        "local_wins": local_wins,
+        "model_wins": model_wins,
+        "ties": differences.count(0),
+        "two_sided_sign_p": probability,
+    }
+
+
 def _report(
     job: Path, cells: tuple[p.Cell, ...], ledger: list[dict[str, Any]]
 ) -> dict[str, Any]:
     rows = [collect_cell(job, cell, ledger) for cell in cells]
     uuids = [row["trial_uuid"] for row in rows if row["trial_uuid"] is not None]
     audit.require(len(uuids) == len(set(uuids)), "duplicate_native_trial_uuid")
+    schema = rows[0]["schema"]
+    repair = schema == REPAIR_SCHEMA
+    if repair:
+        audit.require(
+            all(row["control"] == rows[0]["control"] for row in rows),
+            "mixed_repair_controls",
+        )
+    arms = p.REPAIR_ARMS if repair else p.ARMS
     results = {}
-    for arm in p.ARMS:
+    for arm in arms:
         selected = [row for row in rows if row["arm"] == arm]
+        if repair:
+            results[arm] = _repair_counts(selected)
+            continue
         attempted = sum(row["attempted"] for row in selected)
         successes = sum(row["success"] for row in selected)
         results[arm] = {
@@ -385,19 +487,48 @@ def _report(
             "not_attempted": len(selected) - attempted,
         }
     worlds = {}
+    differences: list[int] = []
     for world in p.WORLDS:
         pair = {row["arm"]: row for row in rows if row["world"] == world}
-        if set(pair) != set(p.ARMS):
+        if pair.keys() != set(arms):
             continue
-        visible, withheld = (pair[arm] for arm in p.ARMS)
-        worlds[world] = {
-            "matched_source": visible["source"] is not None
-            and visible["source"] == withheld["source"],
-            "both_attempted": visible["attempted"] and withheld["attempted"],
-            "visible_success": visible["success"],
-            "withheld_success": withheld["success"],
+        left, right = (pair[arm] for arm in arms)
+        matched: dict[str, Any] = {
+            "matched_source": left["source"] is not None
+            and left["source"] == right["source"],
+            "both_attempted": left["attempted"] and right["attempted"],
         }
-    return {"schema": SCHEMA, "counts": results, "worlds": worlds, "cells": rows}
+        if repair:
+            matched["arms"] = {
+                arm: {
+                    field: row[field]
+                    for field in ("native_reward", "protocol_complete", "success")
+                }
+                for arm, row in pair.items()
+            }
+            model, local = pair["model-report"], pair["local-report"]
+            if (
+                matched["matched_source"]
+                and _repair_pair_eligible(model)
+                and _repair_pair_eligible(local)
+            ):
+                difference = local["native_reward"] - model["native_reward"]
+                differences.append(int(difference))
+        else:
+            matched["visible_success"] = left["success"]
+            matched["withheld_success"] = right["success"]
+        worlds[world] = matched
+    report: dict[str, Any] = {
+        "schema": schema,
+        "counts": results,
+        "worlds": worlds,
+        "cells": rows,
+    }
+    if repair:
+        report["paired"] = _paired_repair(
+            len(worlds), differences, control=rows[0]["control"]
+        )
+    return report
 
 
 def _arguments(argv: list[str]) -> argparse.Namespace:
@@ -405,14 +536,27 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         description="Run or read native live calendar answer cells."
     )
     sub = parser.add_subparsers(dest="mode", required=True)
-    for mode in ("run", "control", "read"):
+    for mode in (
+        "run",
+        "control",
+        "read",
+        "run-repair",
+        "control-repair",
+        "collect-repair",
+    ):
+        collect = mode in ("read", "collect-repair")
+        control = mode in ("control", "control-repair")
+        repair = mode.endswith("-repair")
         cmd = sub.add_parser(mode)
+        cmd.set_defaults(collect=collect, controls=control, repair=repair)
         cmd.add_argument("--job", type=Path, required=True)
-        cmd.add_argument("--world", choices=p.WORLDS, required=mode != "read")
-        cmd.add_argument("--arm", choices=p.ARMS, required=mode != "read")
-        if mode != "control":
+        cmd.add_argument("--world", choices=p.WORLDS, required=not collect)
+        cmd.add_argument(
+            "--arm", choices=p.REPAIR_ARMS if repair else p.ARMS, required=not collect
+        )
+        if not control:
             cmd.add_argument("--spend-dir", type=Path)
-        if mode != "read":
+        if not collect:
             cmd.add_argument("--tasks", type=Path, required=True)
             cmd.add_argument(
                 "--harbor", type=Path, default=Path(sys.executable).with_name("harbor")
@@ -420,11 +564,9 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         else:
             cmd.add_argument("--controls", action="store_true")
     args = parser.parse_args(argv)
-    if args.mode == "read" and (args.world is None) != (args.arm is None):
+    if args.collect and (args.world is None) != (args.arm is None):
         parser.error("provide both --world and --arm, or neither")
-    if (
-        args.mode == "run" or (args.mode == "read" and not args.controls)
-    ) and args.spend_dir is None:
+    if not args.controls and args.spend_dir is None:
         parser.error("--spend-dir is required for enrolled cells")
     return args
 
@@ -436,26 +578,36 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return _host_trial(Path(argv[1]), Path(argv[2]))
     args = _arguments(argv)
-    control = args.mode == "control" or getattr(args, "controls", False)
     try:
         job = _private_dir(args.job)
+        grids = p.repair_grids if args.repair else p.grids
         cells = (
-            (p.Cell(args.world, args.arm, control),)
+            (p.Cell(args.world, args.arm, args.controls),)
             if args.world
-            else p.grids(control=control)
+            else grids(control=args.controls)
         )
-        spend_dir = None if control else _private_dir(args.spend_dir)
-        if args.mode != "read":
+        spend_dir = None if args.controls else _private_dir(args.spend_dir)
+        if not args.collect:
             _run(job, args.tasks, args.harbor, cells[0], spend_dir)
-        ledger = (
-            spend.report(spend_dir, run_prefix="nanswer-")["calls"] if spend_dir else []
-        )
+        ledger = []
+        if spend_dir is not None:
+            prefix = "narepair-" if args.repair else "nanswer-"
+            runs = {cell.run for cell in cells}
+            if len(cells) == 1:
+                prefix = cells[0].run
+            ledger = [
+                row
+                for row in spend.report(spend_dir, run_prefix=prefix)["calls"]
+                if row["run"] in runs
+            ]
         report = _report(job, cells, ledger)
         print(json.dumps(report, sort_keys=True))
-        return int(args.mode != "read" and not report["cells"][0]["protocol_complete"])
+        return int(not args.collect and not report["cells"][0]["protocol_complete"])
     except (ValueError, OSError, KeyError, TypeError, IndexError):
+        command = "collect-repair" if args.repair else "read"
         print(
-            "Native answer command rejected. Preserve the first attempt and use read.",
+            "Native answer command rejected. "
+            f"Preserve the first attempt and use {command}.",
             file=sys.stderr,
         )
         return 1

@@ -3,7 +3,12 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from ..visibility import calendar_packet, calendar_protocol, deepseek
+from ..visibility import (
+    calendar_packet,
+    calendar_protocol,
+    calendar_replica_source,
+    deepseek,
+)
 from . import protocol as p
 
 MAX_RECORD_BYTES = 1024 * 1024
@@ -139,6 +144,16 @@ def _message_proof(
             "wire_sha256": p.digest(canonical),
         }
         actual[phase] = value
+    if cell.arm in p.REPAIR_ARMS:
+        allowed = [[], *([proof["message"]["id"]] for proof in out.values())]
+        require(
+            all(
+                row["data"]["ids"] in allowed
+                for row in events
+                if row["kind"] == "deliver"
+            ),
+            "unexpected_world_delivery",
+        )
     return out, actual
 
 
@@ -284,12 +299,12 @@ def _prompts(
         if answer and answer["receive"]:
             bits = p.decode(answer["message"]["text"], "answer")
             prompts["choice"] = p.choice_prompt(
-                table, q, bits if cell.arm == "visible" else None
+                table, q, bits if cell.shows_answer else None
             )
     return prompts
 
 
-def _turns(directory, identifier, tables, transport, actual, ledger, cell):
+def _turns(directory, identifier, tables, transport, actual, ledger, cell, sender_bits):
     turns = {}
     prompts = _prompts(tables, transport, cell)
     role_calls = {row["role"]: row for row in ledger if row["run"] == cell.run}
@@ -305,9 +320,22 @@ def _turns(directory, identifier, tables, transport, actual, ledger, cell):
         _turn_proof(
             receipt, phase, prompts[phase], identifier, cell, role_calls.get(role)
         )
+        value = receipt["value"]
+        if (
+            phase == "answer"
+            and value is not None
+            and cell.control
+            and sender_bits is not None
+        ):
+            require(value == [not bit for bit in sender_bits], "control_draft_binding")
         if phase in actual:
+            expected = (
+                sender_bits
+                if phase == "answer" and cell.arm == "local-report"
+                else value
+            )
             require(
-                receipt["status"] == "accepted" and receipt["value"] == actual[phase],
+                receipt["status"] == "accepted" and expected == actual[phase],
                 "native_turn_message_mismatch",
             )
         turns[phase] = {
@@ -349,7 +377,7 @@ def _context_usage(turns: dict[str, Any], contexts: dict[str, Any]) -> None:
         )
 
 
-def _score(trial, result, cell, messages, events, transport, choice):
+def _score(trial, result, cell, messages, events, transport, choice, target):
     checked = result.get("verifier_result")
     if checked is None:
         return None
@@ -387,6 +415,8 @@ def _score(trial, result, cell, messages, events, transport, choice):
         and score["submitted_by"] == cell.receiver,
         "native_submission_binding",
     )
+    if target is not None:
+        require(reward == int(choice == target), "stock_booking_reward")
     submit = _one_event(events, "submit", cell.receiver, {"n": 1, "answer": answer})
     require(
         submit["seq"] > transport["answer"]["receive"]["seq"], "premature_submission"
@@ -394,56 +424,19 @@ def _score(trial, result, cell, messages, events, transport, choice):
     return {"reward": reward, "submit": submit, "submitted": answer}
 
 
-def inspect(trial, config, cell, checksum, ledger, row) -> None:
-    result_data = raw(trial / "result.json")
-    result = json.loads(result_data)
-    row["artifact_sha256"]["result"] = p.digest(result_data)
-    identifier = _native_binding(result, config, cell.task_name, checksum)
-    row["trial_uuid"] = identifier
-    result_reward = (
-        (result.get("verifier_result") or {}).get("rewards", {}).get("reward")
+def _repair_metrics(row, turns, actual, sender_bits, target) -> None:
+    question = turns.get("question", {}).get("value")
+    draft = turns.get("answer", {}).get("value")
+    row.update(
+        target_nominated=(target in question if question is not None else None),
+        draft_matches_sender=(draft == sender_bits if draft is not None else None),
+        delivered_matches_sender=(
+            actual["answer"] == sender_bits if row["answer_received_by_seat"] else None
+        ),
     )
-    if type(result_reward) in (int, float) and result_reward in (0, 1):
-        row["native_reward"] = result_reward
-    row["native_reward_valid"] = result["reward_valid"] is True
-    world = calendar_packet.load(calendar_packet.PACKET, calendar_packet.PACKET_SHA256)[
-        cell.index
-    ]
-    tables = dict(zip(p.SEATS, world.tables, strict=True))
-    world_dir = trial / "artifacts/logs/world"
-    messages_data, events_data = (
-        raw(world_dir / f"{n}.jsonl") for n in ("messages", "events")
-    )
-    row["artifact_sha256"].update(
-        messages=p.digest(messages_data), events=p.digest(events_data)
-    )
-    messages = _log(messages_data)
-    events = _log(events_data)
-    transport, actual = _message_proof(messages, events, cell)
-    row["messages"] = transport
-    if "question" in actual:
-        row["question"] = [
-            {"slot": slot, **calendar_protocol.answer(slot)}
-            for slot in actual["question"]
-        ]
-    row["answer"] = actual.get("answer")
-    receiver_got_answer = bool(transport.get("answer", {}).get("receive"))
-    row["answer_received_by_seat"] = receiver_got_answer
-    states, contexts = _seat_proof(result["seat_results"], transport, tables, cell)
-    row["seats"] = states
-    turns = _turns(trial, identifier, tables, transport, actual, ledger, cell)
-    row["turns"] = turns
-    _context_usage(turns, contexts)
-    for phase in transport:
-        require(phase in turns, "world_message_without_turn")
-    choice = turns.get("choice", {}).get("value")
-    if choice is not None:
-        row["choice"] = {"slot": choice, **calendar_protocol.answer(choice)}
-    row["answer_at_final_prompt"] = cell.arm if "choice" in turns else "not_rendered"
-    row["final_prompt_answers"] = (
-        actual.get("answer") if row["answer_at_final_prompt"] == "visible" else None
-    )
-    score = _score(trial, result, cell, messages, events, transport, choice)
+
+
+def _artifact_hashes(trial: Path, hashes: dict[str, str]) -> None:
     for name in (
         "lock.json",
         "config.json",
@@ -453,11 +446,11 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
     ):
         path = trial / name
         if path.exists():
-            row["artifact_sha256"][name] = p.digest(raw(path))
-    row["submitted"] = score.get("submitted") if score is not None else None
-    row["submit_event"] = score.get("submit") if score is not None else None
-    row["protocol_bound"] = True
-    complete = bool(
+            hashes[name] = p.digest(raw(path))
+
+
+def _complete(result, states, turns, receiver_got_answer, score) -> bool:
+    return bool(
         result["finished_at"]
         and result["exception_info"] is None
         and result["reward_valid"] is True
@@ -473,5 +466,103 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
         and score is not None
         and score["submit"] is not None
     )
+
+
+def _transport(trial, cell, hashes):
+    world_dir = trial / "artifacts/logs/world"
+    messages_data, events_data = (
+        raw(world_dir / f"{n}.jsonl") for n in ("messages", "events")
+    )
+    hashes.update(messages=p.digest(messages_data), events=p.digest(events_data))
+    messages = _log(messages_data)
+    events = _log(events_data)
+    transport, actual = _message_proof(messages, events, cell)
+    return messages, events, transport, actual
+
+
+def inspect(trial, config, cell, checksum, ledger, row) -> None:
+    result_data = raw(trial / "result.json")
+    result = json.loads(result_data)
+    row["artifact_sha256"]["result"] = p.digest(result_data)
+    identifier = _native_binding(result, config, cell.task_name, checksum)
+    row["trial_uuid"] = identifier
+    result_reward = (
+        (result.get("verifier_result") or {}).get("rewards", {}).get("reward")
+    )
+    if type(result_reward) in (int, float) and result_reward in (0, 1):
+        row["native_reward"] = result_reward
+    row["native_reward_valid"] = result["reward_valid"] is True
+    repair = cell.arm in p.REPAIR_ARMS
+    if repair:
+        task = Path(config["task"]["path"])
+        source = calendar_replica_source.verify(task, cell.index)
+        require(source.native_sha256 == checksum, "stock_source_binding")
+    world = calendar_packet.load(calendar_packet.PACKET, calendar_packet.PACKET_SHA256)[
+        cell.index
+    ]
+    tables = dict(zip(p.SEATS, world.tables, strict=True))
+    messages, events, transport, actual = _transport(
+        trial, cell, row["artifact_sha256"]
+    )
+    row["messages"] = (
+        {
+            phase: proof | {"message": proof["message"] | {"text": None}}
+            for phase, proof in transport.items()
+        }
+        if repair
+        else transport
+    )
+    if not repair and "question" in actual:
+        row["question"] = [
+            {"slot": slot, **calendar_protocol.answer(slot)}
+            for slot in actual["question"]
+        ]
+    row["answer"] = actual.get("answer")
+    receiver_got_answer = bool(transport.get("answer", {}).get("receive"))
+    row["answer_received_by_seat"] = receiver_got_answer
+    states, contexts = _seat_proof(result["seat_results"], transport, tables, cell)
+    row["seats"] = states
+    sender_bits = None
+    if repair and "question" in actual:
+        sender_starts = calendar_packet.starts(tables[cell.peer])
+        sender_bits = [slot in sender_starts for slot in actual["question"]]
+    target = calendar_packet._shared(world.tables) if repair else None
+    turns = _turns(
+        trial, identifier, tables, transport, actual, ledger, cell, sender_bits
+    )
+    row["turns"] = (
+        {
+            phase: turn if phase == "answer" else turn | {"value": None}
+            for phase, turn in turns.items()
+        }
+        if repair
+        else turns
+    )
+    _context_usage(turns, contexts)
+    for phase in transport:
+        require(phase in turns, "world_message_without_turn")
+    choice = turns.get("choice", {}).get("value")
+    if choice is not None and not repair:
+        row["choice"] = {"slot": choice, **calendar_protocol.answer(choice)}
+    rendered = "choice" in turns
+    row["answer_at_final_prompt"] = (
+        ("visible" if cell.shows_answer else "withheld") if rendered else "not_rendered"
+    )
+    row["final_prompt_answers"] = (
+        actual["answer"] if rendered and cell.shows_answer else None
+    )
+    if repair:
+        _repair_metrics(row, turns, actual, sender_bits, target)
+    score = _score(trial, result, cell, messages, events, transport, choice, target)
+    _artifact_hashes(trial, row["artifact_sha256"])
+    row["submitted"] = (
+        score.get("submitted") if score is not None and not repair else None
+    )
+    submit = score["submit"] if score is not None else None
+    if repair and submit is not None:
+        submit = submit | {"data": {"n": submit["data"]["n"]}}
+    row["submit_event"] = submit
+    row["protocol_bound"] = True
+    complete = _complete(result, states, turns, receiver_got_answer, score)
     row["protocol_complete"] = complete
     row["success"] = complete and row["native_reward"] == 1

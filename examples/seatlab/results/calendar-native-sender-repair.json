@@ -1,0 +1,256 @@
+{
+  "schema": "seatlab.native-sender-policy-observations/v1",
+  "registration": "https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063977930",
+  "complete": true,
+  "teams": [
+    {
+      "run": "narepair-w00-model-report",
+      "uuid": "44623c19-e592-4685-9006-6e22a04e7567",
+      "world": "w00",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "9daf01597b499c4fdfdb35b18a4592673e93cacdfc34933422fb32b35fa03be3"
+    },
+    {
+      "run": "narepair-w00-local-report",
+      "uuid": "b9a4bab4-ac09-4f1d-b7f7-c362c33e6364",
+      "world": "w00",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "70396033810098ce65c27dc374c556cbd5560fc08a9e49edbb9ee2fe3aaf69fa"
+    },
+    {
+      "run": "narepair-w01-model-report",
+      "uuid": "8df27c59-b11e-41d6-92be-13a8b432031d",
+      "world": "w01",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "da894ccdb6b6803242d72d898400b2d7c27bad8e7ae4542c1b88f57124ce2e94"
+    },
+    {
+      "run": "narepair-w01-local-report",
+      "uuid": "b7b77697-c320-43fe-98b0-e27f96d900a3",
+      "world": "w01",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "c7693a1d11d0dfc8551793eb7034328949e9e3e9502cf3e9abb713f3fbf19c0f"
+    },
+    {
+      "run": "narepair-w02-local-report",
+      "uuid": "21390d1c-61ed-44f0-9125-4d8550458a80",
+      "world": "w02",
+      "arm": "local-report",
+      "reward": 1,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "f35d82569b6912a96b8ba303d422fc6b70a372cca7f44dac70700491ef00f860"
+    },
+    {
+      "run": "narepair-w02-model-report",
+      "uuid": "02a2c99a-fc53-45f2-9e75-10b27f6f7731",
+      "world": "w02",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "4a196e68b89cd67566aab3cfec4b86b523ede6cf7d36def168bd2c7be9262aef"
+    },
+    {
+      "run": "narepair-w03-local-report",
+      "uuid": "bd90c8ec-e106-47f9-9f76-f529fe9f5e53",
+      "world": "w03",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "4db8816e69af06d3f81e78a699c9f43aba8816fd0cdeca0df19712876c0fadd3"
+    },
+    {
+      "run": "narepair-w03-model-report",
+      "uuid": "74335a0b-70a1-4ed5-abeb-61495e9329d1",
+      "world": "w03",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": false,
+      "delivered_exact": false,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "1deb123f2c041162801b609fffa19e350cf46f28727f8d26fde0119be65e0414"
+    },
+    {
+      "run": "narepair-w04-local-report",
+      "uuid": "b977bd9f-0510-4744-8ed8-fa84d2085757",
+      "world": "w04",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "f9145707fcf5910f2a336d714f7b7bec46e91568d4fb079c02f3a6c2c96b10fb"
+    },
+    {
+      "run": "narepair-w04-model-report",
+      "uuid": "989d1f09-5c88-4819-a2d0-caad4a3544ec",
+      "world": "w04",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "db32fde361e43e61cf44371412d5daf080fafdc650f17f7f7e40c6a745a59e3c"
+    },
+    {
+      "run": "narepair-w05-local-report",
+      "uuid": "9a54489a-d3fa-4dec-bdf8-1fd8b411c927",
+      "world": "w05",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "5827902bcf699091ac448c1357d525119a9a60f9122c83f944fce78f124e1e73"
+    },
+    {
+      "run": "narepair-w05-model-report",
+      "uuid": "59ee64d4-3672-4a96-a479-99c542dd1824",
+      "world": "w05",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "d45c72ae09cd6c3737527f3314318a4f9938e766cb89243dcf234dcafbd7f2a4"
+    },
+    {
+      "run": "narepair-w06-model-report",
+      "uuid": "6d1c4269-9ba6-43e5-95ce-ebe120f48a2b",
+      "world": "w06",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "c7b20d9a980b4de45c980aea215818bec9b846c5b29a846b7c6599ccb273f247"
+    },
+    {
+      "run": "narepair-w06-local-report",
+      "uuid": "b10e8af3-fb32-44fc-b347-e6c46e46c7c4",
+      "world": "w06",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": true,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "a33ae493fed3af275422f224db0532b4d81516a2295be887736e1968c248934f"
+    },
+    {
+      "run": "narepair-w07-model-report",
+      "uuid": "a25bc041-8e54-420e-bd87-d63a2934c788",
+      "world": "w07",
+      "arm": "model-report",
+      "reward": 0,
+      "draft_exact": false,
+      "delivered_exact": false,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "0e17751fea11d41ca551b355d278347af90024b8c4d9e92c9d4e0019cf3d4839"
+    },
+    {
+      "run": "narepair-w07-local-report",
+      "uuid": "f920267d-0fd8-4ee9-8424-319df09fe232",
+      "world": "w07",
+      "arm": "local-report",
+      "reward": 0,
+      "draft_exact": false,
+      "delivered_exact": true,
+      "target_nominated": false,
+      "question_both_locally_valid": false,
+      "result_sha256": "fcd371bb2d07633676bf242709b0ff88b43d40b1d9bf4786dcf6ee5184f6c6c3"
+    }
+  ],
+  "stock": {
+    "local-report": {
+      "attempted": 8,
+      "enrolled": 8,
+      "missing_or_unverified_reward": 0,
+      "protocol_complete": 8,
+      "unattempted": 0,
+      "verified_stock_losses": 7,
+      "verified_stock_wins": 1
+    },
+    "model-report": {
+      "attempted": 8,
+      "enrolled": 8,
+      "missing_or_unverified_reward": 0,
+      "protocol_complete": 8,
+      "unattempted": 0,
+      "verified_stock_losses": 8,
+      "verified_stock_wins": 0
+    }
+  },
+  "paired": {
+    "control": false,
+    "local_wins": 1,
+    "matched": 8,
+    "model_wins": 0,
+    "ties": 7,
+    "two_sided_sign_p": {
+      "denominator": 1,
+      "numerator": 1
+    },
+    "worlds_enrolled": 8
+  },
+  "behavior": {
+    "model-report": {
+      "draft_exact": 6,
+      "delivered_exact": 6,
+      "target_nominated": 0,
+      "reward": 0,
+      "question_both_locally_valid": 0
+    },
+    "local-report": {
+      "draft_exact": 5,
+      "delivered_exact": 8,
+      "target_nominated": 0,
+      "reward": 1,
+      "question_both_locally_valid": 0
+    }
+  },
+  "verified_deliveries": 32,
+  "verified_turns": 48,
+  "verdict": "did_not_pass",
+  "minimum_net_gain": 2,
+  "maximum_two_sided_p": {
+    "numerator": 1,
+    "denominator": 20
+  },
+  "source_scope": "W00\u201307; real whole teams; different generated questions; unchanged final template"
+}

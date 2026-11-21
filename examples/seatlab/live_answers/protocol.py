@@ -8,6 +8,8 @@ from ..visibility import calendar_packet, calendar_protocol
 WORLDS = tuple(f"w{i:02d}" for i in range(8))
 SEATS = ("p1", "p2")
 ARMS = ("visible", "withheld")
+REPAIR_ARMS = ("model-report", "local-report")
+_REPAIR_FIRST = (0, 0, 1, 1, 1, 1, 0, 0)
 PHASES = ("question", "answer", "choice")
 LEDGER_ROLES = dict(
     zip(PHASES, ("cal_tool_pick", "cal_tool_reply", "cal_decide"), strict=True)
@@ -30,7 +32,7 @@ class Cell:
     def __post_init__(self) -> None:
         if (
             self.world not in WORLDS
-            or self.arm not in ARMS
+            or (self.arm not in ARMS and self.arm not in REPAIR_ARMS)
             or type(self.control) is not bool
         ):
             raise ValueError("invalid_cell")
@@ -49,12 +51,15 @@ class Cell:
 
     @property
     def first(self) -> str:
+        if self.arm in REPAIR_ARMS:
+            return REPAIR_ARMS[_REPAIR_FIRST[self.index]]
         return ARMS[self.index % 2]
 
     @property
     def run(self) -> str:
         mode = "control-" if self.control else ""
-        return f"nanswer-{mode}{self.world}-{self.arm}"
+        family = "narepair" if self.arm in REPAIR_ARMS else "nanswer"
+        return f"{family}-{mode}{self.world}-{self.arm}"
 
     @property
     def task_name(self) -> str:
@@ -63,12 +68,37 @@ class Cell:
     def actor(self, phase: str) -> str:
         return self.peer if phase == "answer" else self.receiver
 
+    @property
+    def shows_answer(self) -> bool:
+        return self.arm != "withheld"
+
+    def sent_bits(
+        self, table: calendar_packet.Table, slots: list[int], raw_bits: list[bool]
+    ) -> list[bool]:
+        return _local_bits(table, slots) if self.arm == "local-report" else raw_bits
+
+    def draft_control_bits(
+        self, table: calendar_packet.Table, slots: list[int]
+    ) -> list[bool]:
+        if not self.control:
+            raise ValueError("invalid_control_input")
+        bits = _local_bits(table, slots)
+        return [not bit for bit in bits] if self.arm in REPAIR_ARMS else bits
+
 
 def grids(*, control: bool = False) -> tuple[Cell, ...]:
     return tuple(
         Cell(world, ARMS[(i + offset) % 2], control)
         for i, world in enumerate(WORLDS)
         for offset in range(len(ARMS))
+    )
+
+
+def repair_grids(*, control: bool = False) -> tuple[Cell, ...]:
+    return tuple(
+        Cell(world, REPAIR_ARMS[(first + offset) % len(REPAIR_ARMS)], control)
+        for world, first in zip(WORLDS, _REPAIR_FIRST, strict=True)
+        for offset in range(len(REPAIR_ARMS))
     )
 
 
@@ -140,18 +170,23 @@ def choice_prompt(
     )
 
 
+def _local_bits(table: calendar_packet.Table, slots: list[int]) -> list[bool]:
+    own = calendar_packet.starts(table)
+    return [slot in own for slot in slots]
+
+
 def control_reply(
     phase: str,
     table: calendar_packet.Table,
     slots: list[int] | None,
     bits: list[bool] | None,
 ) -> str:
+    if phase == "answer" and slots is not None:
+        return answer_wire(_local_bits(table, slots))
     own = calendar_packet.starts(table)
     if phase == "question":
         candidates = (*own, *(slot for slot in range(35) if slot not in own))
         return question_wire(list(candidates[:2]))
-    if phase == "answer" and slots is not None:
-        return answer_wire([slot in own for slot in slots])
     if phase == "choice" and slots is not None:
         if bits is not None:
             for slot, available in zip(slots, bits, strict=True):
