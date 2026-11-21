@@ -10,7 +10,7 @@ several Harbor agents in one environment, each in its own Compose service
 | File | Why |
 |---|---|
 | `.github/workflows/*.yml` | Harbor runs its CI on Blacksmith runners (`blacksmith-<n>vcpu-<os>` labels), which only a repository with the Blacksmith GitHub App installed can use; this repository does not have it, so those jobs would wait in the queue and never start. Each job runs on the GitHub-hosted runner of the same OS instead (`ubuntu-26.04`, `ubuntu-24.04`, `windows-2025`); the steps are Harbor's. The `agents` runtime suite's test VM gets 4 CPUs and 12 GB, as Harbor's other two runtime suites do, where Harbor gives it 8 and 24: a GitHub-hosted Linux runner has 4 CPUs and 16 GB, and QEMU fails to start a VM larger than its host. The non-runtime suites run one pytest worker per CPU (`-n auto`) where Harbor runs eight: eight workers on four CPUs made the relay tests' 2 to 5 s waits time out; with half the CPUs the Windows suite takes 13 to 16 minutes, so both non-runtime jobs get 30 minutes where Harbor gives 15. Tradeoff: the suites run slower than on the Blacksmith sizes Harbor picked. |
-| `README.md` | Describes this fork, installation, native seat usage and elapsed time, and portable retry outcome files. Harbor's README is at [harbor-framework/harbor](https://github.com/harbor-framework/harbor). |
+| `README.md` | Describes this fork, installation, native seat usage, elapsed time, portable retry outcomes, and retained seat logs. Harbor's README is at [harbor-framework/harbor](https://github.com/harbor-framework/harbor). |
 | `src/harbor/models/task/config.py` | `SeatConfig` and `TaskConfig.agents` (`[agents.<service>]`), with the seat refusals at task load. |
 | `src/harbor/models/task/paths.py` | `seat_instruction_path`: `instructions/<seat>.md`. |
 | `src/harbor/models/task/task.py` | Reads each seat's instruction and does not require `instruction.md` for a seat task. |
@@ -20,8 +20,9 @@ several Harbor agents in one environment, each in its own Compose service
 | `tests/unit/test_job_status.py` | Checks persisted retry snapshots for unknown usage and an explicit zero in each of the 4 usage fields. |
 | `src/harbor/trial/queue.py` | Atomically publishes the complete scrubbed native result before an eligible retry deletes its directory. UUID-named Job-root files do not enter retained scoring or usage. Copy and publication failures stop deletion and replacement. |
 | `tests/unit/test_trial_queue.py` | Checks exact bytes, fresh attempt IDs, retry eligibility, conflicts, partial-write invisibility, publication failures, and owned temporary-file cleanup. |
-| `src/harbor/upload/uploader.py` | Carries canonical regular retry outcome files in Job archives. One raw snapshot binds names and bytes to archive revisions and cache keys without adding Trial metadata rows. Sidecar-free Jobs retain legacy keys and members. |
-| `tests/unit/test_uploader.py` | Checks portable outcome bytes, stale finalized pointers and TUS caches, unchanged legacy behavior and metadata, and rejection of unsafe file types. |
+| `src/harbor/upload/uploader.py` | Carries regular retry outcomes and declared seat agent logs. One capture supplies fresh archive naming and packing. Seat logs use `-seats-v1`; no-payload keys and legacy members stay unchanged. |
+| `src/harbor/upload/db_client.py` | Publishes an archive-only Trial migration without reading or clearing its stored direct trajectory pointer. |
+| `tests/unit/test_uploader.py` | Checks raw retry and seat logs, pointer and cache migration, trajectory preservation, unsafe files, and unchanged legacy archives. |
 | `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. |
 | `src/harbor/models/job/lock.py` | Records participants in `lock.json` and its equality, so a changed roster is a changed run. |
 | `src/harbor/models/trial/result.py` | `SeatResult` and `TrialResult.seat_results`; seat errors count as recorded errors and seat usage counts in the token and cost totals. |

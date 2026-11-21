@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Native seat archives:** Trial and Job archives retain regular agent logs from declared seats, including supporting seats. Eligible payload uses the `-seats-v1` format and migrates old finalized pointers and legacy resumable names. No-seat keys stay unchanged. Trial migration preserves the stored direct trajectory pointer. Unsafe links and special files do not enter the selected payload.
+
 - **Discarded retry outcomes:** Selected queue retries publish the final scrubbed result as `retry-attempt-<UUID>.json` before deleting the Trial directory. Job archives include canonical regular outcome files and bind their names and raw bytes to the archive revision. Existing destinations and copy or publication errors stop the retry before deletion. Retained scores, usage totals, and Trial metadata stay unchanged. Outcome files do not preserve old logs or trajectories.
 
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.

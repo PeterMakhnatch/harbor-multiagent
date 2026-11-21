@@ -599,6 +599,26 @@ class UploadDB:
             )
 
     @_retry
+    async def finalize_trial_archive_migration(
+        self,
+        trial_id: UUID,
+        *,
+        archive_path: str,
+    ) -> None:
+        client = await create_authenticated_client()
+        response = await (
+            client.table("trial")
+            .update({"archive_path": archive_path})
+            .eq("id", str(trial_id))
+            .execute()
+        )
+        rows = cast(list[dict[str, Any]], response.data or [])
+        if len(rows) != 1 or rows[0].get("id") != str(trial_id):
+            raise RuntimeError(
+                f"Failed to migrate trial archive {trial_id}: update was not confirmed"
+            )
+
+    @_retry
     async def insert_trial_model(
         self,
         *,
