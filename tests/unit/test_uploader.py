@@ -1,13 +1,15 @@
 import asyncio
 import errno
+import gzip
 import hashlib
 import json
 import os
+import socket
 import tarfile
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,6 +21,7 @@ from harbor.models.job.result import JobResult, JobStats
 from harbor.models.trial.config import (
     AgentConfig,
     EnvironmentConfig,
+    Participant,
     TaskConfig,
     TrialConfig,
 )
@@ -26,15 +29,18 @@ from harbor.models.trial.result import (
     AgentInfo,
     ExceptionInfo,
     ModelInfo,
+    SeatResult,
     TimingInfo,
     TrialResult,
 )
 from harbor.models.verifier.result import VerifierResult
-from harbor.upload.db_client import OwnerOrgError
+from harbor.upload.db_client import OwnerOrgError, UploadDB
 from harbor.upload.uploader import (
+    TrialUploadResult,
     Uploader,
     _create_job_archive_file,
     _create_trial_archive,
+    _create_trial_archive_file,
     _extract_primary_reward,
     _read_trial_lock_for_upload,
     _timing_field,
@@ -588,11 +594,11 @@ def mock_uploader() -> Uploader:
 
 
 @pytest.fixture
-def job_archive_uploads(mock_uploader: Uploader) -> dict[str, tuple[bytes, str | None]]:
+def archive_uploads(mock_uploader: Uploader) -> dict[str, tuple[bytes, str | None]]:
     uploads: dict[str, tuple[bytes, str | None]] = {}
 
     async def upload_archive(path: Path, key: str) -> None:
-        if key.startswith("jobs/"):
+        if key.endswith(".tar.gz"):
             assert path.parent.name == ".harbor-upload"
             assert path.name == Path(key).name
             upload_url = path.with_suffix(".gz.tus-url")
@@ -1121,7 +1127,7 @@ class TestUploadJob:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("mode", ["batch", "direct", "explicit"])
     async def test_retry_sidecar_refreshes_finalized_and_cached_archive(
-        self, tmp_path, mock_uploader, job_archive_uploads, mode
+        self, tmp_path, mock_uploader, archive_uploads, mode
     ) -> None:
         trial = _make_trial_result(rewards={"reward": 1.0})
         job_dir, job_result, job_config = _write_job_dir(tmp_path, [trial])
@@ -1185,7 +1191,7 @@ class TestUploadJob:
             assert key not in seen_keys
             seen_keys.add(key)
             assert stale_path.read_bytes() == data
-            data, upload_url = job_archive_uploads[key]
+            data, upload_url = archive_uploads[key]
             assert upload_url is None
             member_name = f"{job_dir.name}/{sidecar.name}"
             with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
@@ -1210,13 +1216,13 @@ class TestUploadJob:
         await upload()
         assert mock_uploader.db.finalize_job.await_count == 4
         assert mock_uploader.db.finalize_job.await_args.kwargs["archive_path"] == key
-        assert job_archive_uploads[key] == (data, "https://uploads.example/upload-id")
+        assert archive_uploads[key] == (data, "https://uploads.example/upload-id")
         assert not cached_path.exists()
         assert not cached_path.with_suffix(".gz.tus-url").exists()
 
     @pytest.mark.asyncio
     async def test_job_revision_and_archive_share_snapshot_across_log_upload(
-        self, tmp_path, mock_uploader, job_archive_uploads
+        self, tmp_path, mock_uploader, archive_uploads
     ) -> None:
         job_dir, _, _ = _write_job_dir(tmp_path, [])
         first = job_dir / f"retry-attempt-{UUID(int=1)}.json"
@@ -1240,7 +1246,7 @@ class TestUploadJob:
             (first_key, first, second, b'{"old": null}\n'),
             (second_key, second, first, b'{"new": null}\n'),
         ):
-            data, _ = job_archive_uploads[key]
+            data, _ = archive_uploads[key]
             with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
                 assert f"{job_dir.name}/{excluded.name}" not in tar.getnames()
                 member = tar.extractfile(f"{job_dir.name}/{included.name}")
@@ -1809,3 +1815,509 @@ def test_archives_keep_both_conversation_roles_and_uploaded_inputs(
             assert member is not None
             assert member.read() == contents.encode("utf-8")
         assert prefix + "unrelated-secret.txt" not in tar.getnames()
+
+
+@pytest.fixture
+def native_archive_job(tmp_path: Path) -> tuple[Path, JobResult, TrialResult]:
+    trial = _make_trial_result(rewards={"reward": 1.0})
+    trial.config.participants = [
+        Participant(seat="solver", name="nop"),
+        Participant(seat="support", name="nop"),
+    ]
+    trial.seat_results = [
+        SeatResult(seat="solver", under_test=True),
+        SeatResult(seat="support", under_test=False),
+    ]
+    job_dir, job_result, _ = _write_job_dir(tmp_path, [trial])
+    return job_dir, job_result, trial
+
+
+def _write_test_files(root: Path, files: dict[str, bytes]) -> None:
+    for name, data in files.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+
+def _pack_archive(
+    tmp_path: Path, job_dir: Path, trial_dir: Path, kind: str
+) -> tuple[bytes, str]:
+    if kind == "trial-memory":
+        return _create_trial_archive(trial_dir), ""
+    output = tmp_path / "test-archive.tar.gz"
+    if kind == "trial-file":
+        _create_trial_archive_file(trial_dir, output)
+        return output.read_bytes(), ""
+    assert kind == "job"
+    _create_job_archive_file(job_dir, output)
+    return output.read_bytes(), f"{job_dir.name}/{trial_dir.name}/"
+
+
+def _read_regular_member(tar: tarfile.TarFile, name: str) -> bytes:
+    assert tar.getmember(name).isreg()
+    member = tar.extractfile(name)
+    assert member is not None
+    with member:
+        return member.read()
+
+
+@pytest.mark.parametrize("kind", ["trial-memory", "trial-file", "job"])
+@pytest.mark.parametrize("have_seat_results", [True, False])
+def test_archives_include_declared_seat_logs_with_original_paths_and_bytes(
+    tmp_path: Path, native_archive_job, kind: str, have_seat_results: bool
+) -> None:
+    job_dir, _, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    if not have_seat_results:
+        trial.seat_results = None
+    result_bytes = trial.model_dump_json(indent=2).encode() + b"\r\n"
+    (trial_dir / "result.json").write_bytes(result_bytes)
+    _write_multi_step_outputs(trial_dir)
+    seat_logs = {
+        "seats/support/agent/deepseek.jsonl": b'{"usage":null,"future":{"x":1}}\r\n',
+        "seats/solver/agent/nested/empty.jsonl": b"",
+        "seats/solver/agent/nested-raw.jsonl": b'{ "usage": {"tokens": 0} }\n',
+    }
+    _write_test_files(trial_dir, seat_logs)
+    _write_test_files(
+        trial_dir,
+        {
+            "seats/solver/environment/workspace": b"not an agent log",
+            "seats/solver/world/private": b"not an agent log",
+            "seats/support/verifier/reward.txt": b"not the root verifier result",
+            "seats/undeclared/agent/log.jsonl": b"not a participant",
+        },
+    )
+    retry_name = f"retry-attempt-{UUID(int=1)}.json"
+    retry_bytes = b'{ "cost_usd": null, "unknown": 0 }\r\n'
+    (job_dir / retry_name).write_bytes(retry_bytes)
+
+    archive, prefix = _pack_archive(tmp_path, job_dir, trial_dir, kind)
+
+    with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+        assert [
+            name for name in tar.getnames() if name.startswith(prefix + "seats/")
+        ] == [prefix + name for name in sorted(seat_logs)]
+        for name, data in seat_logs.items():
+            assert _read_regular_member(tar, prefix + name) == data
+        assert _read_regular_member(tar, prefix + "result.json") == result_bytes
+        for name in (
+            "agent/trajectory.json",
+            "verifier/reward.txt",
+            "artifacts/output.log",
+            "steps/implement/agent/trajectory.json",
+        ):
+            assert (
+                _read_regular_member(tar, prefix + name)
+                == (trial_dir / name).read_bytes()
+            )
+        if kind == "job":
+            assert _read_regular_member(tar, f"{job_dir.name}/{retry_name}") == (
+                retry_bytes
+            )
+
+
+@pytest.mark.parametrize("kind", ["trial-memory", "trial-file", "job"])
+def test_legacy_archives_ignore_unconfigured_seat_tree(
+    tmp_path: Path, kind: str
+) -> None:
+    trial = _make_trial_result()
+    trial.seat_results = [SeatResult(seat="solver", under_test=True)]
+    job_dir, _, _ = _write_job_dir(tmp_path, [trial])
+    trial_dir = job_dir / trial.trial_name
+    legacy, _ = _pack_archive(tmp_path, job_dir, trial_dir, kind)
+    _write_test_files(trial_dir, {"seats/solver/agent/trace.jsonl": b"undeclared\n"})
+
+    actual, _ = _pack_archive(tmp_path, job_dir, trial_dir, kind)
+
+    assert gzip.decompress(actual) == gzip.decompress(legacy)
+
+
+@pytest.mark.parametrize("kind", ["trial-file", "job"])
+@pytest.mark.parametrize(
+    "relative",
+    [
+        ".",
+        "seats",
+        "seats/solver",
+        "seats/solver/agent",
+        "seats/solver/agent/nested",
+        "seats/solver/agent/nested/trace.jsonl",
+    ],
+)
+def test_archives_do_not_follow_symlinks_in_seat_log_paths(
+    tmp_path: Path, native_archive_job, kind: str, relative: str
+) -> None:
+    job_dir, _, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    _write_test_files(
+        trial_dir, {"seats/solver/agent/nested/trace.jsonl": b"external bytes"}
+    )
+    path = trial_dir / relative
+    outside = tmp_path / "outside-seat-tree"
+    is_directory = path.is_dir()
+    path.rename(outside)
+    path.symlink_to(outside, target_is_directory=is_directory)
+
+    archive, prefix = _pack_archive(tmp_path, job_dir, trial_dir, kind)
+
+    with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+        assert all(
+            name != prefix + "seats" and not name.startswith(prefix + "seats/")
+            for name in tar.getnames()
+        )
+        assert (
+            _read_regular_member(tar, prefix + "result.json")
+            == (trial_dir / "result.json").read_bytes()
+        )
+
+
+def test_job_archive_omits_seat_payload_below_symlinked_job_root(
+    tmp_path: Path, native_archive_job
+) -> None:
+    job_dir, _, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    _write_test_files(trial_dir, {"seats/solver/agent/trace.jsonl": b"external bytes"})
+    alias = tmp_path / "linked-job"
+    alias.symlink_to(job_dir, target_is_directory=True)
+
+    archive, prefix = _pack_archive(tmp_path, alias, alias / trial.trial_name, "job")
+
+    with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+        assert all(
+            name != prefix + "seats" and not name.startswith(prefix + "seats/")
+            for name in tar.getnames()
+        )
+        assert (
+            _read_regular_member(tar, prefix + "result.json")
+            == (trial_dir / "result.json").read_bytes()
+        )
+
+
+@pytest.mark.parametrize("kind", ["trial-file", "job"])
+@pytest.mark.parametrize("replacement", ["symlink", "fifo"])
+def test_archives_omit_seat_leaf_swapped_before_open(
+    tmp_path: Path,
+    native_archive_job,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    replacement: str,
+) -> None:
+    job_dir, _, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    relative = "seats/solver/agent/swap.jsonl"
+    _write_test_files(
+        trial_dir,
+        {relative: b"old bytes", "seats/support/agent/keep.jsonl": b"keep"},
+    )
+    leaf = trial_dir / relative
+    outside = tmp_path / "outside.jsonl"
+    outside.write_bytes(b"do not follow")
+    open_file = os.open
+    swapped = False
+
+    def swap_before_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if path in (leaf.name, leaf):
+            assert flags & os.O_NONBLOCK
+            if not swapped:
+                leaf.unlink()
+                if replacement == "symlink":
+                    leaf.symlink_to(outside)
+                else:
+                    os.mkfifo(leaf)
+                swapped = True
+        return open_file(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap_before_open)
+    archive, prefix = _pack_archive(tmp_path, job_dir, trial_dir, kind)
+
+    assert swapped
+    with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+        assert prefix + relative not in tar.getnames()
+        assert _read_regular_member(tar, prefix + "seats/support/agent/keep.jsonl") == (
+            b"keep"
+        )
+
+
+@pytest.mark.parametrize("kind", ["trial-file", "job"])
+def test_archives_propagate_seat_log_io_errors(
+    tmp_path: Path, native_archive_job, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    job_dir, _, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    relative = "seats/support/agent/unreadable.jsonl"
+    _write_test_files(trial_dir, {relative: b"cannot read this"})
+    leaf = trial_dir / relative
+    open_file = os.open
+
+    def fail_seat_open(path, flags, *args, **kwargs):
+        if path in (leaf.name, leaf):
+            raise OSError(errno.EIO, "seat log read failed")
+        return open_file(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", fail_seat_open)
+
+    with pytest.raises(OSError, match="seat log read failed"):
+        _pack_archive(tmp_path, job_dir, trial_dir, kind)
+
+
+@pytest.mark.asyncio
+async def test_unsafe_only_seat_data_keeps_legacy_keys(
+    native_archive_job, mock_uploader, archive_uploads, monkeypatch
+) -> None:
+    job_dir, job_result, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    agent_dir = trial_dir / "seats" / "solver" / "agent"
+    agent_dir.mkdir(parents=True)
+    fifo = agent_dir / "trace-fifo"
+    os.mkfifo(fifo)
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+        with monkeypatch.context() as cwd:
+            cwd.chdir(agent_dir)
+            listener.bind("trace.sock")
+    open_file = os.open
+    open_path = Path.open
+
+    def guard_fifo_open(path, flags, *args, **kwargs):
+        if path in (fifo.name, fifo):
+            assert flags & os.O_NONBLOCK
+        return open_file(path, flags, *args, **kwargs)
+
+    def guard_fifo_path_open(path, *args, **kwargs):
+        assert path != fifo
+        return open_path(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", guard_fifo_open)
+    monkeypatch.setattr(Path, "open", guard_fifo_path_open)
+
+    result = await mock_uploader.upload_job(job_dir)
+
+    assert (result.n_trials_uploaded, result.n_trials_failed) == (1, 0)
+    revision = hashlib.sha256(str(trial.id).encode()).hexdigest()
+    trial_key = f"trials/{trial.id}/trial.tar.gz"
+    job_key = f"jobs/{job_result.id}/job-{revision}.tar.gz"
+    assert set(archive_uploads) == {trial_key, job_key}
+    assert (
+        mock_uploader.db.finalize_trial_artifacts.await_args.kwargs["archive_path"]
+        == trial_key
+    )
+    assert mock_uploader.db.finalize_job.await_args.kwargs["archive_path"] == job_key
+    for data, _ in archive_uploads.values():
+        with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
+            assert not any("seats" in Path(name).parts for name in tar.getnames())
+
+
+async def _stream_trial(
+    uploader: Uploader, job_dir: Path, job_result: JobResult, trial: TrialResult
+) -> TrialUploadResult:
+    trial_dir = job_dir / trial.trial_name
+    return await uploader.upload_single_trial(
+        trial_result=trial,
+        trial_dir=trial_dir,
+        trial_lock=_read_trial_lock_for_upload(trial_dir),
+        job_id=job_result.id,
+        agent_cache={},
+        model_cache={},
+    )
+
+
+@pytest.fixture
+def finalized_trial_row(native_archive_job, mock_uploader, monkeypatch):
+    _, _, trial = native_archive_job
+    row = {
+        "id": str(trial.id),
+        "archive_path": f"trials/{trial.id}/trial.tar.gz",
+        "trajectory_path": f"trials/{trial.id}/trajectory.json",
+    }
+
+    def archive_state() -> dict[str, str]:
+        return {"id": row["id"], "archive_path": row["archive_path"]}
+
+    mock_uploader.db.get_trial.side_effect = lambda _: archive_state()
+    mock_uploader.db.list_trials_for_job.side_effect = lambda _: [archive_state()]
+    mock_uploader.db.get_job_visibility.return_value = "private"
+    client = MagicMock()
+    table = client.table.return_value
+    update = table.update.return_value
+
+    async def execute() -> MagicMock:
+        assert client.table.call_args.args == ("trial",)
+        assert update.eq.call_args.args == ("id", row["id"])
+        row.update(table.update.call_args.args[0])
+        return MagicMock(data=[{"id": row["id"]}])
+
+    update.eq.return_value.execute = AsyncMock(side_effect=execute)
+    monkeypatch.setattr(
+        "harbor.upload.db_client.create_authenticated_client",
+        AsyncMock(return_value=client),
+    )
+    mock_uploader.db.finalize_trial_archive_migration.side_effect = (
+        UploadDB().finalize_trial_archive_migration
+    )
+    return row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["batch", "stream"])
+async def test_finalized_trial_upgrades_after_success_without_touching_trajectory(
+    native_archive_job, mock_uploader, finalized_trial_row, mode: str
+) -> None:
+    job_dir, job_result, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    old = dict(finalized_trial_row)
+    old_cache = trial_dir / ".harbor-upload" / "trial.tar.gz"
+    old_bytes = _create_trial_archive(trial_dir)
+    _seed_archive_cache(old_cache, old_bytes)
+    (trial_dir / "agent" / "trajectory.json").unlink()
+    relative = "seats/support/agent/trace.jsonl"
+    log_bytes = b'{"usage":null}\r\n'
+    _write_test_files(trial_dir, {relative: log_bytes})
+    key = f"trials/{trial.id}/trial-seats-v1.tar.gz"
+    local = old_cache.with_name("trial-seats-v1.tar.gz")
+    sidecar = local.with_suffix(".gz.tus-url")
+    revision = hashlib.sha256(str(trial.id).encode()).hexdigest()
+    mock_uploader.db.get_job.return_value = {
+        "archive_path": f"jobs/{job_result.id}/job-{revision}-seats-v1.tar.gz"
+    }
+    uploads: list[bytes] = []
+
+    async def upload_archive(path: Path, archive_key: str) -> None:
+        assert finalized_trial_row == old
+        assert (path, archive_key) == (local, key)
+        uploads.append(path.read_bytes())
+        if len(uploads) == 1:
+            assert not sidecar.exists()
+            sidecar.write_text("https://uploads.example/new-trial")
+            raise RuntimeError("seat archive upload failed")
+        assert sidecar.read_text() == "https://uploads.example/new-trial"
+
+    async def upload() -> TrialUploadResult:
+        if mode == "batch":
+            result = await mock_uploader.upload_job(job_dir)
+            (trial_upload,) = result.trial_results
+            return trial_upload
+        return await _stream_trial(mock_uploader, job_dir, job_result, trial)
+
+    mock_uploader.storage.upload_resumable_file.side_effect = upload_archive
+    failure = await upload()
+
+    assert failure.error == "RuntimeError: seat archive upload failed"
+    assert finalized_trial_row == old
+    assert local.exists() and sidecar.exists()
+
+    success = await upload()
+
+    assert success.error is None and not success.skipped
+    assert finalized_trial_row == {**old, "archive_path": key}
+    already_current = await upload()
+    assert already_current.skipped and already_current.error is None
+    assert len(uploads) == 2
+    assert uploads[0] == uploads[1]
+    with tarfile.open(fileobj=BytesIO(uploads[1]), mode="r:gz") as tar:
+        assert _read_regular_member(tar, relative) == log_bytes
+    assert old_cache.read_bytes() == old_bytes
+    assert old_cache.with_suffix(".gz.tus-url").read_text() == (
+        "https://uploads.example/upload-id"
+    )
+    assert not local.exists() and not sidecar.exists()
+    mock_uploader.db.insert_trial.assert_not_awaited()
+    mock_uploader.db.finalize_trial_artifacts.assert_not_awaited()
+    mock_uploader.db.finalize_trial_archive_migration.assert_awaited_once()
+    mock_uploader.db.finalize_job.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_job_sweep_upgrades_retry_archive_without_reusing_legacy_cache(
+    native_archive_job, mock_uploader, finalized_trial_row, archive_uploads
+) -> None:
+    job_dir, _, trial = native_archive_job
+    trial_dir = job_dir / trial.trial_name
+    finalized_trial_row["archive_path"] = f"trials/{trial.id}/trial-seats-v1.tar.gz"
+    retry_name = f"retry-attempt-{UUID(int=1)}.json"
+    retry_bytes = b'{ "cost_usd": null, "unknown": 0 }\r\n'
+    (job_dir / retry_name).write_bytes(retry_bytes)
+    await mock_uploader.upload_job(job_dir)
+    legacy_key = mock_uploader.db.finalize_job.await_args.kwargs["archive_path"]
+    key = legacy_key.removesuffix(".tar.gz") + "-seats-v1.tar.gz"
+    legacy_bytes, _ = archive_uploads.pop(legacy_key)
+    legacy = job_dir / ".harbor-upload" / Path(legacy_key).name
+    _seed_archive_cache(legacy, legacy_bytes)
+    mock_uploader.db.get_job.return_value = {"archive_path": legacy_key}
+    mock_uploader.db.finalize_job.reset_mock()
+    relative = "seats/support/agent/empty.jsonl"
+    _write_test_files(trial_dir, {relative: b""})
+
+    failed_upload = AsyncMock(side_effect=RuntimeError("job archive upload failed"))
+    with (
+        patch.object(mock_uploader.storage, "upload_resumable_file", failed_upload),
+        pytest.raises(RuntimeError, match="job archive upload failed"),
+    ):
+        await mock_uploader.upload_job(job_dir)
+
+    failed_upload.assert_awaited_once_with(legacy.with_name(Path(key).name), key)
+    mock_uploader.db.finalize_job.assert_not_awaited()
+
+    async def replace_seat_log(*args, **kwargs) -> None:
+        (trial_dir / relative).unlink()
+        _write_test_files(trial_dir, {"seats/support/agent/replacement": b"new bytes"})
+
+    mock_uploader.storage.upload_large_file.side_effect = replace_seat_log
+    result = await mock_uploader.upload_job(job_dir)
+
+    assert (result.n_trials_skipped, result.n_trials_failed) == (1, 0)
+    mock_uploader.db.finalize_job.assert_awaited_once()
+    assert mock_uploader.db.finalize_job.await_args.kwargs["archive_path"] == key
+    assert set(archive_uploads) == {key}
+    archive, url = archive_uploads[key]
+    assert url is None
+    prefix = f"{job_dir.name}/{trial_dir.name}/"
+    with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+        assert _read_regular_member(tar, prefix + relative) == b""
+        assert prefix + "seats/support/agent/replacement" not in tar.getnames()
+        assert _read_regular_member(tar, f"{job_dir.name}/{retry_name}") == retry_bytes
+    assert legacy.read_bytes() == legacy_bytes
+    assert legacy.with_suffix(".gz.tus-url").read_text() == (
+        "https://uploads.example/upload-id"
+    )
+
+    mock_uploader.db.get_job.return_value = {"archive_path": key}
+    mock_uploader.db.finalize_job.reset_mock()
+    mock_uploader.storage.upload_resumable_file.reset_mock()
+    mock_uploader.storage.upload_large_file.side_effect = None
+    await mock_uploader.upload_job(job_dir)
+    mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+    mock_uploader.db.finalize_job.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finalized_seat_archives_do_not_downgrade_without_local_payload(
+    native_archive_job, mock_uploader, finalized_trial_row
+) -> None:
+    job_dir, job_result, trial = native_archive_job
+    finalized_trial_row["archive_path"] = f"trials/{trial.id}/trial-seats-v1.tar.gz"
+    old = dict(finalized_trial_row)
+    old_revision = "a" * 64
+    mock_uploader.db.get_job.return_value = {
+        "archive_path": f"jobs/{job_result.id}/job-{old_revision}-seats-v1.tar.gz"
+    }
+
+    single = await _stream_trial(mock_uploader, job_dir, job_result, trial)
+    job = await mock_uploader.upload_job(job_dir)
+    await mock_uploader.finalize_job(
+        job_dir,
+        job_result=job_result,
+        job_config=JobConfig.model_validate_json((job_dir / "config.json").read_text()),
+    )
+
+    assert single.skipped and single.error is None
+    assert (job.n_trials_uploaded, job.n_trials_skipped, job.n_trials_failed) == (
+        0,
+        1,
+        0,
+    )
+    assert finalized_trial_row == old
+    mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+    mock_uploader.db.finalize_trial_artifacts.assert_not_awaited()
+    mock_uploader.db.finalize_trial_archive_migration.assert_not_awaited()
+    mock_uploader.db.finalize_job.assert_not_awaited()

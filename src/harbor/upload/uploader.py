@@ -3,15 +3,18 @@
 import asyncio
 import errno
 import hashlib
+import json
 import logging
 import os
 import stat
 import tarfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import UUID
 
@@ -121,8 +124,12 @@ _JOB_ARCHIVE_INCLUDES: tuple[str, ...] = (
 )
 _RETRY_ATTEMPT_PREFIX = "retry-attempt-"
 _RETRY_ATTEMPT_SUFFIX = ".json"
+_SEAT_ARCHIVE_SUFFIX = "-seats-v1.tar.gz"
+_SEAT_LOG_COPY_CHUNK_BYTES = 1024 * 1024
 
 type _RetryAttemptSnapshot = tuple[tuple[str, bytes], ...]
+type _SeatLogSnapshot = dict[str, tuple[Path, int]]
+type _JobSeatLogSnapshot = dict[str, _SeatLogSnapshot]
 
 
 class Uploader:
@@ -328,12 +335,13 @@ class Uploader:
         calls this for incomplete jobs or when new attempts were uploaded.
         A revision preserves immutable storage objects on re-upload.
         """
-        retry_attempts = _snapshot_retry_attempts(job_dir)
+        remote = await self.db.get_job(job_result.id)
         await self._finalize_job_archive(
             job_dir,
             job_result=job_result,
-            archive_name=_job_archive_name(revision, retry_attempts),
-            retry_attempts=retry_attempts,
+            revision=revision,
+            existing_archive_path=remote.get("archive_path") if remote else None,
+            skip_existing_archive=False,
         )
 
     async def _finalize_job_archive(
@@ -341,29 +349,47 @@ class Uploader:
         job_dir: Path,
         *,
         job_result: JobResult,
-        archive_name: str,
-        retry_attempts: _RetryAttemptSnapshot,
+        revision: str | None,
+        existing_archive_path: str | None,
+        skip_existing_archive: bool,
     ) -> None:
-        log_path: str | None = None
-        job_log = job_dir / "job.log"
-        if job_log.exists():
-            log_path = f"jobs/{job_result.id}/job.log"
-            await self.storage.upload_large_file(
-                job_log,
-                log_path,
-                content_type="text/plain",
+        retry_attempts = _snapshot_retry_attempts(job_dir)
+        with TemporaryDirectory() as staging_dir:
+            seat_logs = _snapshot_job_seat_logs(job_dir, Path(staging_dir))
+            archive_name = _job_archive_name(
+                revision, retry_attempts, has_seat_logs=bool(seat_logs)
             )
+            archive_path = f"jobs/{job_result.id}/{archive_name}"
+            if (skip_existing_archive and existing_archive_path == archive_path) or (
+                not seat_logs
+                and existing_archive_path is not None
+                and existing_archive_path.endswith(_SEAT_ARCHIVE_SUFFIX)
+            ):
+                return
 
-        archive_path = f"jobs/{job_result.id}/{archive_name}"
-        local_archive_path = job_dir / ".harbor-upload" / archive_name
-        upload_url_path = local_archive_path.with_suffix(
-            local_archive_path.suffix + ".tus-url"
-        )
-        if not (local_archive_path.exists() and upload_url_path.exists()):
-            upload_url_path.unlink(missing_ok=True)
-            _create_job_archive_file(
-                job_dir, local_archive_path, retry_attempts=retry_attempts
+            log_path: str | None = None
+            job_log = job_dir / "job.log"
+            if job_log.exists():
+                log_path = f"jobs/{job_result.id}/job.log"
+                await self.storage.upload_large_file(
+                    job_log,
+                    log_path,
+                    content_type="text/plain",
+                )
+
+            local_archive_path = job_dir / ".harbor-upload" / archive_name
+            upload_url_path = local_archive_path.with_suffix(
+                local_archive_path.suffix + ".tus-url"
             )
+            if not (local_archive_path.exists() and upload_url_path.exists()):
+                upload_url_path.unlink(missing_ok=True)
+                _create_job_archive_file(
+                    job_dir,
+                    local_archive_path,
+                    retry_attempts=retry_attempts,
+                    seat_logs=seat_logs,
+                )
+
         await self.storage.upload_resumable_file(local_archive_path, archive_path)
 
         await self.db.finalize_job(
@@ -442,11 +468,11 @@ class Uploader:
         # Resume path: a trial row is complete only once its archive path has
         # been finalized. Rows with a NULL archive path are upload reservations
         # left by an interrupted attempt and must be resumed.
-        completed_trial_ids: set[UUID] = set()
+        completed_archives: dict[UUID, str] = {}
         if start.already_existed:
             remote_trials = await self.db.list_trials_for_job(start.job_id)
-            completed_trial_ids = {
-                UUID(row["id"])
+            completed_archives = {
+                UUID(row["id"]): row["archive_path"]
                 for row in remote_trials
                 if row.get("archive_path") is not None
             }
@@ -460,36 +486,29 @@ class Uploader:
             async with sem:
                 if on_trial_start:
                     on_trial_start(tr)
-                if tr.id in completed_trial_ids:
-                    result = TrialUploadResult(
-                        trial_name=tr.trial_name,
-                        task_name=tr.task_name,
-                        reward=_extract_primary_reward(tr),
-                        skipped=True,
+                try:
+                    trial_dir = trial_dirs.get(tr.id)
+                    if trial_dir is None:
+                        raise FileNotFoundError(
+                            f"Trial directory is required for upload: {tr.trial_name}"
+                        )
+                    result = await self._upload_single_trial(
+                        trial_result=tr,
+                        trial_dir=trial_dir,
+                        trial_lock=None,
+                        job_id=start.job_id,
+                        agent_cache=start.agent_cache,
+                        model_cache=start.model_cache,
+                        listed_archive_path=completed_archives.get(tr.id),
+                        job_dir=job_dir,
                     )
-                else:
-                    try:
-                        trial_dir = trial_dirs.get(tr.id)
-                        if trial_dir is None:
-                            raise FileNotFoundError(
-                                "Trial directory is required for upload: "
-                                f"{tr.trial_name}"
-                            )
-                        result = await self._upload_single_trial(
-                            trial_result=tr,
-                            trial_dir=trial_dir,
-                            trial_lock=_read_trial_lock_for_upload(trial_dir),
-                            job_id=start.job_id,
-                            agent_cache=start.agent_cache,
-                            model_cache=start.model_cache,
-                        )
-                    except Exception as exc:
-                        logger.debug(
-                            "Failed to prepare trial %s for upload: %s",
-                            tr.trial_name,
-                            exc,
-                        )
-                        result = _trial_upload_error_result(tr, exc)
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to prepare trial %s for upload: %s",
+                        tr.trial_name,
+                        exc,
+                    )
+                    result = _trial_upload_error_result(tr, exc)
                 if on_trial_complete:
                     on_trial_complete(tr, result)
                 return result
@@ -503,18 +522,16 @@ class Uploader:
         if remote is not None and not any(
             r.error is not None for r in trial_upload_results
         ):
-            retry_attempts = _snapshot_retry_attempts(job_dir)
             revision = hashlib.sha256(
                 ",".join(sorted(str(tr.id) for tr in trial_results)).encode()
             ).hexdigest()
-            archive_name = _job_archive_name(revision, retry_attempts)
-            if remote.get("archive_path") != f"jobs/{start.job_id}/{archive_name}":
-                await self._finalize_job_archive(
-                    job_dir,
-                    job_result=job_result,
-                    archive_name=archive_name,
-                    retry_attempts=retry_attempts,
-                )
+            await self._finalize_job_archive(
+                job_dir,
+                job_result=job_result,
+                revision=revision,
+                existing_archive_path=remote.get("archive_path"),
+                skip_existing_archive=True,
+            )
 
         elapsed = time.monotonic() - t0
         return JobUploadResult(
@@ -571,38 +588,67 @@ class Uploader:
         *,
         trial_result: TrialResult,
         trial_dir: Path,
-        trial_lock: TrialLock,
+        trial_lock: TrialLock | None,
         job_id: UUID,
         agent_cache: dict[tuple[str, str], str],
         model_cache: dict[tuple[str, str | None], str],
+        listed_archive_path: str | None = None,
+        job_dir: Path | None = None,
     ) -> TrialUploadResult:
         primary_reward = _extract_primary_reward(trial_result)
 
         try:
-            # A row is only complete once the required archive path has been
-            # finalized. A row with a NULL path is an interrupted reservation.
-            remote = await self.db.get_trial(trial_result.id)
-            if remote is not None and remote.get("archive_path") is not None:
-                return TrialUploadResult(
-                    trial_name=trial_result.trial_name,
-                    task_name=trial_result.task_name,
-                    reward=primary_reward,
-                    skipped=True,
+            t0 = time.monotonic()
+            with TemporaryDirectory() as staging_dir:
+                seat_logs = _snapshot_trial_seat_logs(
+                    trial_dir, Path(staging_dir) / "trial", job_dir=job_dir
+                )
+                archive_name = _trial_archive_name(bool(seat_logs))
+                archive_path = f"trials/{trial_result.id}/{archive_name}"
+                existing_archive_path = listed_archive_path
+                if not _trial_archive_is_current(
+                    existing_archive_path, archive_path, has_seat_logs=bool(seat_logs)
+                ):
+                    remote = await self.db.get_trial(trial_result.id)
+                    if remote is not None and remote.get("archive_path") is not None:
+                        existing_archive_path = remote["archive_path"]
+                if _trial_archive_is_current(
+                    existing_archive_path, archive_path, has_seat_logs=bool(seat_logs)
+                ):
+                    return TrialUploadResult(
+                        trial_name=trial_result.trial_name,
+                        task_name=trial_result.task_name,
+                        reward=primary_reward,
+                        skipped=True,
+                    )
+
+                if existing_archive_path is None and trial_lock is None:
+                    trial_lock = _read_trial_lock_for_upload(trial_dir)
+                local_archive_path = trial_dir / ".harbor-upload" / archive_name
+                upload_url_path = local_archive_path.with_suffix(
+                    local_archive_path.suffix + ".tus-url"
+                )
+                if not (local_archive_path.exists() and upload_url_path.exists()):
+                    upload_url_path.unlink(missing_ok=True)
+                    _create_trial_archive_file(
+                        trial_dir, local_archive_path, seat_logs=seat_logs
+                    )
+                archive_size = local_archive_path.stat().st_size
+
+            if existing_archive_path is not None:
+                await self.storage.upload_resumable_file(
+                    local_archive_path, archive_path
+                )
+                await self.db.finalize_trial_archive_migration(
+                    trial_result.id, archive_path=archive_path
+                )
+                return _complete_trial_upload(
+                    trial_result, primary_reward, archive_size, t0, local_archive_path
                 )
 
-            t0 = time.monotonic()
+            if trial_lock is None:
+                raise ValueError("Trial lock is required for upload")
             trajectory_path: str | None = None
-
-            archive_path = f"trials/{trial_result.id}/trial.tar.gz"
-            local_archive_path = trial_dir / ".harbor-upload" / "trial.tar.gz"
-            upload_url_path = local_archive_path.with_suffix(
-                local_archive_path.suffix + ".tus-url"
-            )
-            if not (local_archive_path.exists() and upload_url_path.exists()):
-                upload_url_path.unlink(missing_ok=True)
-                _create_trial_archive_file(trial_dir, local_archive_path)
-            archive_size = local_archive_path.stat().st_size
-
             # Upsert the agent if we haven't seen this (name, version) pair
             # yet. This lazy path matters for the streaming flow — hooks see
             # trials one at a time and the cache is initially empty; the
@@ -741,22 +787,8 @@ class Uploader:
                 trajectory_path=trajectory_path,
             )
 
-            # Keep the local archive and resumable-upload state until the DB
-            # commit succeeds so a later sweep can safely resume finalization.
-            local_archive_path.unlink(missing_ok=True)
-            upload_url_path.unlink(missing_ok=True)
-            try:
-                local_archive_path.parent.rmdir()
-            except OSError:
-                pass
-
-            elapsed = time.monotonic() - t0
-            return TrialUploadResult(
-                trial_name=trial_result.trial_name,
-                task_name=trial_result.task_name,
-                reward=primary_reward,
-                archive_size_bytes=archive_size,
-                upload_time_sec=elapsed,
+            return _complete_trial_upload(
+                trial_result, primary_reward, archive_size, t0, local_archive_path
             )
 
         except Exception as exc:
@@ -828,6 +860,31 @@ def _trial_upload_error_result(
     )
 
 
+def _complete_trial_upload(
+    trial_result: TrialResult,
+    reward: float | int | None,
+    archive_size: int,
+    started_at: float,
+    local_archive_path: Path,
+) -> TrialUploadResult:
+    local_archive_path.unlink(missing_ok=True)
+    upload_url_path = local_archive_path.with_suffix(
+        local_archive_path.suffix + ".tus-url"
+    )
+    upload_url_path.unlink(missing_ok=True)
+    try:
+        local_archive_path.parent.rmdir()
+    except OSError:
+        pass
+    return TrialUploadResult(
+        trial_name=trial_result.trial_name,
+        task_name=trial_result.task_name,
+        reward=reward,
+        archive_size_bytes=archive_size,
+        upload_time_sec=time.monotonic() - started_at,
+    )
+
+
 def _read_trial_lock_for_upload(trial_dir: Path) -> TrialLock:
     lock_path = trial_dir / "lock.json"
     if not lock_path.exists():
@@ -835,30 +892,244 @@ def _read_trial_lock_for_upload(trial_dir: Path) -> TrialLock:
     return TrialLock.model_validate_json(lock_path.read_text())
 
 
-def _create_trial_archive(trial_dir: Path) -> bytes:
-    """Create a tar.gz archive of the allowlisted entries in a trial dir.
+@contextmanager
+def _open_seat_directory(
+    name: str | Path, *, dir_fd: int | None = None
+) -> Iterator[int | None]:
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    except OSError as exc:
+        if exc.errno not in (errno.ENOENT, errno.ENOTDIR, errno.ELOOP, errno.EMLINK):
+            raise
+        yield None
+        return
+    try:
+        yield fd if stat.S_ISDIR(os.fstat(fd).st_mode) else None
+    finally:
+        os.close(fd)
 
-    Only entries in ``_TRIAL_ARCHIVE_INCLUDES`` are included. ``lock.json`` is
-    required; missing optional entries (e.g. ``exception.txt`` when the trial
-    didn't fail, ``analysis.md`` when no analysis was written) are skipped.
-    Entries live at the root of the archive so extraction into an empty
-    ``trial_dir`` restores the original layout.
-    """
+
+def _seat_file_mode(dir_fd: int, name: str) -> int:
+    try:
+        return os.stat(name, dir_fd=dir_fd, follow_symlinks=False).st_mode
+    except FileNotFoundError:
+        return 0
+
+
+def _open_seat_file_fd(dir_fd: int, name: str) -> int | None:
+    if not stat.S_ISREG(_seat_file_mode(dir_fd, name)):
+        return None
+    try:
+        return os.open(
+            name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOCTTY,
+            dir_fd=dir_fd,
+        )
+    except OSError as exc:
+        if exc.errno in (errno.ENOENT, errno.ELOOP, errno.EMLINK):
+            return None
+        if exc.errno in (errno.EISDIR, errno.ENXIO, errno.ENODEV) and not stat.S_ISREG(
+            _seat_file_mode(dir_fd, name)
+        ):
+            return None
+        raise
+
+
+@contextmanager
+def _open_seat_file(dir_fd: int, name: str) -> Iterator[tuple[int, int] | None]:
+    fd = _open_seat_file_fd(dir_fd, name)
+    if fd is None:
+        yield None
+        return
+    try:
+        metadata = os.fstat(fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            yield None
+            return
+        yield fd, metadata.st_size
+    finally:
+        os.close(fd)
+
+
+def _declared_seats(trial_fd: int) -> set[str]:
+    with _open_seat_file(trial_fd, "config.json") as config_file:
+        if config_file is None:
+            return set()
+        try:
+            with os.fdopen(config_file[0], "rb", closefd=False) as source:
+                config = json.load(source)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return set()
+    participants = config.get("participants") if isinstance(config, dict) else None
+    if not isinstance(participants, list):
+        return set()
+    return {
+        seat
+        for participant in participants
+        if isinstance(participant, dict)
+        and isinstance(seat := participant.get("seat"), str)
+        and seat
+        and seat not in (".", "..")
+        and not any(character in seat for character in "/\\\0")
+    }
+
+
+def _capture_seat_file(
+    dir_fd: int,
+    name: str,
+    relative_name: str,
+    staging_dir: Path,
+    logs: _SeatLogSnapshot,
+) -> None:
+    with _open_seat_file(dir_fd, name) as opened:
+        if opened is None:
+            return
+        fd, size = opened
+        if not logs:
+            staging_dir.mkdir()
+        staged = staging_dir / str(len(logs))
+        with os.fdopen(fd, "rb", closefd=False) as source, staged.open("xb") as sink:
+            for offset in range(0, size, _SEAT_LOG_COPY_CHUNK_BYTES):
+                chunk_size = min(_SEAT_LOG_COPY_CHUNK_BYTES, size - offset)
+                data = source.read(chunk_size)
+                if len(data) != chunk_size:
+                    raise OSError(f"Seat log ended during capture: {relative_name}")
+                sink.write(data)
+    logs[relative_name] = (staged, size)
+
+
+def _capture_seat_agent_logs(
+    agent_fd: int, prefix: str, staging_dir: Path, logs: _SeatLogSnapshot
+) -> None:
+    with ExitStack() as root:
+        stack = [(agent_fd, prefix, root.enter_context(os.scandir(agent_fd)), root)]
+        try:
+            while stack:
+                dir_fd, parent, entries, scope = stack[-1]
+                entry = next(entries, None)
+                if entry is None:
+                    stack.pop()
+                    scope.close()
+                    continue
+                relative_name = f"{parent}/{entry.name}"
+                if entry.is_dir(follow_symlinks=False):
+                    with ExitStack() as child:
+                        child_fd = child.enter_context(
+                            _open_seat_directory(entry.name, dir_fd=dir_fd)
+                        )
+                        if child_fd is not None:
+                            child_entries = child.enter_context(os.scandir(child_fd))
+                            stack.append(
+                                (
+                                    child_fd,
+                                    relative_name,
+                                    child_entries,
+                                    child.pop_all(),
+                                )
+                            )
+                elif entry.is_file(follow_symlinks=False):
+                    _capture_seat_file(
+                        dir_fd, entry.name, relative_name, staging_dir, logs
+                    )
+        finally:
+            for _, _, _, scope in reversed(stack):
+                scope.close()
+
+
+def _snapshot_seat_logs_at(trial_fd: int, staging_dir: Path) -> _SeatLogSnapshot:
+    logs: _SeatLogSnapshot = {}
+    with _open_seat_directory("seats", dir_fd=trial_fd) as seats_fd:
+        if seats_fd is None:
+            return logs
+        for seat in sorted(_declared_seats(trial_fd)):
+            with _open_seat_directory(seat, dir_fd=seats_fd) as seat_fd:
+                if seat_fd is None:
+                    continue
+                with _open_seat_directory("agent", dir_fd=seat_fd) as agent_fd:
+                    if agent_fd is not None:
+                        _capture_seat_agent_logs(
+                            agent_fd, f"seats/{seat}/agent", staging_dir, logs
+                        )
+    return logs
+
+
+def _snapshot_trial_seat_logs(
+    trial_dir: Path, staging_dir: Path, *, job_dir: Path | None = None
+) -> _SeatLogSnapshot:
+    with ExitStack() as scope:
+        job_fd = None
+        trial_name: str | Path = trial_dir
+        if job_dir is not None:
+            job_fd = scope.enter_context(_open_seat_directory(job_dir))
+            if job_fd is None:
+                return {}
+            trial_name = trial_dir.name
+        trial_fd = scope.enter_context(_open_seat_directory(trial_name, dir_fd=job_fd))
+        if trial_fd is None:
+            return {}
+        return _snapshot_seat_logs_at(trial_fd, staging_dir)
+
+
+def _snapshot_job_seat_logs(job_dir: Path, staging_dir: Path) -> _JobSeatLogSnapshot:
+    snapshots: _JobSeatLogSnapshot = {}
+    with _open_seat_directory(job_dir) as job_fd:
+        if job_fd is None:
+            return snapshots
+        with os.scandir(job_fd) as entries:
+            for entry in entries:
+                if not entry.is_dir(follow_symlinks=False):
+                    continue
+                with _open_seat_directory(entry.name, dir_fd=job_fd) as trial_fd:
+                    if trial_fd is None or not stat.S_ISREG(
+                        _seat_file_mode(trial_fd, "result.json")
+                    ):
+                        continue
+                    logs = _snapshot_seat_logs_at(trial_fd, staging_dir / entry.name)
+                    if logs:
+                        snapshots[entry.name] = logs
+    return snapshots
+
+
+def _trial_archive_name(has_seat_logs: bool) -> str:
+    return f"trial{_SEAT_ARCHIVE_SUFFIX}" if has_seat_logs else "trial.tar.gz"
+
+
+def _trial_archive_is_current(
+    existing_archive_path: str | None, archive_path: str, *, has_seat_logs: bool
+) -> bool:
+    return existing_archive_path is not None and (
+        not has_seat_logs or existing_archive_path == archive_path
+    )
+
+
+def _create_trial_archive(trial_dir: Path) -> bytes:
     buf = BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        _add_trial_archive_entries(tar, trial_dir)
+    with TemporaryDirectory() as staging_dir:
+        seat_logs = _snapshot_trial_seat_logs(trial_dir, Path(staging_dir) / "trial")
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            _add_trial_archive_entries(tar, trial_dir, seat_logs=seat_logs)
     return buf.getvalue()
 
 
-def _create_trial_archive_file(trial_dir: Path, archive_path: Path) -> None:
+def _create_trial_archive_file(
+    trial_dir: Path, archive_path: Path, *, seat_logs: _SeatLogSnapshot | None = None
+) -> None:
     """Create a trial archive on disk for resumable upload."""
-    archive_path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_trial_archive_entries(tar, trial_dir)
+    with ExitStack() as scope:
+        if seat_logs is None:
+            staging_dir = Path(scope.enter_context(TemporaryDirectory()))
+            seat_logs = _snapshot_trial_seat_logs(trial_dir, staging_dir / "trial")
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive_path, mode="w:gz") as tar:
+            _add_trial_archive_entries(tar, trial_dir, seat_logs=seat_logs)
 
 
 def _add_trial_archive_entries(
-    tar: tarfile.TarFile, trial_dir: Path, *, arcname_prefix: str = ""
+    tar: tarfile.TarFile,
+    trial_dir: Path,
+    *,
+    seat_logs: _SeatLogSnapshot | None,
+    arcname_prefix: str = "",
 ) -> None:
     """Add allowlisted trial entries to an open tar archive."""
     if not (trial_dir / "lock.json").exists():
@@ -870,6 +1141,14 @@ def _add_trial_archive_entries(
         path = trial_dir / name
         if path.exists():
             tar.add(path, arcname=f"{arcname_prefix}{name}")
+
+    if seat_logs:
+        for name, (staged, size) in sorted(seat_logs.items()):
+            member = tarfile.TarInfo(f"{arcname_prefix}{name}")
+            member.mode = 0o600
+            member.size = size
+            with staged.open("rb") as source:
+                tar.addfile(member, source)
 
     steps_dir = trial_dir / "steps"
     if not steps_dir.exists():
@@ -939,7 +1218,10 @@ def _snapshot_retry_attempts(job_dir: Path) -> _RetryAttemptSnapshot:
 
 
 def _job_archive_name(
-    revision: str | None, retry_attempts: _RetryAttemptSnapshot
+    revision: str | None,
+    retry_attempts: _RetryAttemptSnapshot,
+    *,
+    has_seat_logs: bool = False,
 ) -> str:
     if retry_attempts:
         revision_digest = hashlib.sha256((revision or "").encode()).digest()
@@ -948,7 +1230,8 @@ def _job_archive_name(
             digest.update(name.encode("ascii"))
             digest.update(hashlib.sha256(data).digest())
         revision = digest.hexdigest()
-    return f"job-{revision}.tar.gz" if revision else "job.tar.gz"
+    stem = f"job-{revision}" if revision else "job"
+    return stem + (_SEAT_ARCHIVE_SUFFIX if has_seat_logs else ".tar.gz")
 
 
 def _create_job_archive_file(
@@ -956,30 +1239,47 @@ def _create_job_archive_file(
     archive_path: Path,
     *,
     retry_attempts: _RetryAttemptSnapshot | None = None,
+    seat_logs: _JobSeatLogSnapshot | None = None,
 ) -> None:
     """Create the job archive on disk to avoid holding large jobs in memory."""
     if retry_attempts is None:
         retry_attempts = _snapshot_retry_attempts(job_dir)
-    archive_path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_job_archive_entries(tar, job_dir, retry_attempts)
+    with ExitStack() as scope:
+        if seat_logs is None:
+            staging_dir = Path(scope.enter_context(TemporaryDirectory()))
+            seat_logs = _snapshot_job_seat_logs(job_dir, staging_dir)
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive_path, mode="w:gz") as tar:
+            _add_job_archive_entries(tar, job_dir, retry_attempts, seat_logs)
 
 
 def _add_job_archive_entries(
-    tar: tarfile.TarFile, job_dir: Path, retry_attempts: _RetryAttemptSnapshot
+    tar: tarfile.TarFile,
+    job_dir: Path,
+    retry_attempts: _RetryAttemptSnapshot,
+    seat_logs: _JobSeatLogSnapshot,
 ) -> None:
     root = job_dir.name
     for name in _JOB_ARCHIVE_INCLUDES:
         path = job_dir / name
         if path.exists():
             tar.add(path, arcname=f"{root}/{name}")
+    archived_seat_trials = 0
     for child in sorted(job_dir.iterdir()):
         if not (child.is_dir() and (child / "result.json").exists()):
             continue
+        trial_seat_logs = seat_logs.get(child.name)
+        if trial_seat_logs is not None:
+            archived_seat_trials += 1
         _add_trial_archive_entries(
             tar,
             child,
+            seat_logs=trial_seat_logs,
             arcname_prefix=f"{root}/{child.name}/",
+        )
+    if archived_seat_trials != len(seat_logs):
+        raise FileNotFoundError(
+            f"A trial with captured seat logs vanished from {job_dir}"
         )
     for name, data in retry_attempts:
         member = tarfile.TarInfo(f"{root}/{name}")
