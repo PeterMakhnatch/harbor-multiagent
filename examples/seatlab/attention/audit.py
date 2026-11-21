@@ -10,7 +10,7 @@ from uuid import NAMESPACE_URL, uuid5
 from .. import evidence, run_panel, seat_agent, team_report
 from ..export_capsules import reconstructed_capsules
 from ..visibility import native_pairs
-from . import confirmation, protocol
+from . import confirmation, protocol, ranking
 
 _EPISODES = 6
 _ROLES = ("inventory", "dispatch")
@@ -30,6 +30,8 @@ _METRICS = (
 def _agent_import(cell_id: str) -> str:
     if cell_id.startswith(confirmation.RUN_PREFIX):
         return confirmation.AGENT_IMPORT
+    if cell_id.startswith(ranking.RUN_PREFIX):
+        return ranking.AGENT_IMPORT
     return _AGENT_IMPORT
 
 
@@ -165,6 +167,7 @@ def _reconcile_turns(
     transport: str,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     cell_id, seed, rep = cell["cell_id"], cell["seed"], cell["repetition"]
+    ranked_cohort = cell_id.startswith(ranking.RUN_PREFIX)
     capsules = reconstructed_capsules(world)
     inventory_rows = [
         {"id": case["id"], "reports": case["reports"]} for case in world["cases"]
@@ -216,7 +219,8 @@ def _reconcile_turns(
     select_text, select_turn = _turn(
         dispatch["turns"][0], "select", "dispatch", cell_id, transport
     )
-    _check_prompt(select_turn, protocol.select_prompt(cases, seed, rep, cell["arm"]))
+    select_arm = "named" if ranked_cohort else cell["arm"]
+    _check_prompt(select_turn, protocol.select_prompt(cases, seed, rep, select_arm))
     opened = protocol.select(select_text)
     if list(opened) != dispatch["opened"]:
         raise ValueError("selector response differs from the recorded lookups")
@@ -224,7 +228,10 @@ def _reconcile_turns(
     decide_text, decide_turn = _turn(
         dispatch["turns"][1], "decide", "dispatch", cell_id, transport
     )
-    _check_prompt(decide_turn, protocol.decide_prompt(cases, seed, rep, opened))
+    prompt = protocol.decide_prompt(cases, seed, rep, opened)
+    if ranked_cohort:
+        prompt = ranking.final_prompt(prompt, cell["arm"])
+    _check_prompt(decide_turn, prompt)
     submitted = protocol.decide(decide_text, cases, seed, rep)
     seat_agent._checked_submission(submitted, "dispatch", _EPISODES)
     if (
@@ -269,7 +276,12 @@ def inspect_trial(
     if not isinstance(cell_id, str):
         raise TypeError("attention cell id must be a string")
     confirmation_cohort = cell_id.startswith(confirmation.RUN_PREFIX)
-    cells = confirmation.grid() if confirmation_cohort else protocol.grid()
+    if confirmation_cohort:
+        cells = confirmation.grid()
+    elif cell_id.startswith(ranking.RUN_PREFIX):
+        cells = ranking.grid()
+    else:
+        cells = protocol.grid()
     transports = ("direct",) if confirmation_cohort else ("direct", "commands")
     if transport not in transports or not any(
         run_panel._config_matches(registered, cell) and registered.keys() == cell.keys()
@@ -368,7 +380,10 @@ def _index(
 
 
 def _score_index(
-    rows: dict[str, dict[str, Any]], *, confirmation_cohort: bool
+    rows: dict[str, dict[str, Any]],
+    *,
+    confirmation_cohort: bool,
+    ranked_cohort: bool = False,
 ) -> dict[tuple[int, int, str], float | None]:
     scores: dict[tuple[int, int, str], float | None] = {}
     fingerprints: dict[int, str] = {}
@@ -382,8 +397,8 @@ def _score_index(
             score = outcome["native_score"]
             trial_id = evidence._trial_id({"id": outcome[identity_key]})
             fingerprint = outcome["fingerprint"]
-            if confirmation_cohort and (
-                "trial_id" in outcome
+            if (confirmation_cohort or ranked_cohort) and (
+                ("trial_id" if confirmation_cohort else "trial_alias") in outcome
                 or fingerprint != team_report._registered_fingerprint(seed, _EPISODES)
             ):
                 raise ValueError("outcome does not identify the registered world")
@@ -477,16 +492,100 @@ def _secondary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _ranked_counts(outcome: dict[str, Any]) -> tuple[int, int]:
+    actions = outcome.get("actions")
+    if not isinstance(actions, list) or len(actions) != _EPISODES:
+        raise ValueError("ranked outcome requires six stock-scored shipments")
+    feasible = optimal = 0
+    for index, action in enumerate(actions):
+        if (
+            not isinstance(action, dict)
+            or not run_panel._config_matches(action, {"id": index})
+            or action.get("choice") not in ("A", "B", "C", "D")
+            or type(action.get("feasible")) is not bool
+            or type(action.get("optimal")) is not bool
+            or (action["optimal"] and not action["feasible"])
+        ):
+            raise ValueError("invalid ranked stock-scored shipment")
+        feasible += action["feasible"]
+        optimal += action["optimal"]
+    if outcome["native_score"] != optimal / _EPISODES:
+        raise ValueError("ranked stock-optimal count differs from the native score")
+    return feasible, optimal
+
+
+def _ranked_descriptive(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    counts: dict[tuple[int, str], tuple[int, int] | None] = {}
+    for row in rows.values():
+        outcome = row["outcome"]
+        if (row["state"] == "complete") != (outcome is not None):
+            raise ValueError("ranked row state does not match its outcome")
+        counts[row["seed"], row["arm"]] = (
+            None if outcome is None else _ranked_counts(outcome)
+        )
+
+    seeds = sorted({seed for seed, _ in counts})
+    per_arm = {}
+    for arm in ("shown", "ranked"):
+        observed = [value for seed in seeds if (value := counts[seed, arm]) is not None]
+        per_arm[arm] = {
+            "registered_cells": len(seeds),
+            "observed_cells": len(observed),
+            "missing_cells": len(seeds) - len(observed),
+            "observed_shipments": len(observed) * _EPISODES,
+            "observed_feasible": sum(feasible for feasible, _ in observed)
+            if observed
+            else None,
+            "observed_optimal": sum(optimal for _, optimal in observed)
+            if observed
+            else None,
+        }
+
+    worlds = []
+    matched = []
+    for seed in seeds:
+        shown, ranked = counts[seed, "shown"], counts[seed, "ranked"]
+        effect = None
+        if shown is not None and ranked is not None:
+            effect = (ranked[1] - shown[1]) / _EPISODES
+            matched.append(effect)
+        worlds.append({"seed": seed, "effect": effect})
+    return {
+        "per_arm": per_arm,
+        "paired_world_native_score_descriptive": {
+            "contrast": "ranked_minus_shown_native_score",
+            "registered_worlds": len(seeds),
+            "matched_worlds": len(matched),
+            "matched_world_mean": fsum(matched) / len(matched) if matched else None,
+            "worlds": worlds,
+        },
+    }
+
+
 def summarize(
     cells: list[dict[str, Any]],
     rows: list[dict[str, Any]],
     *,
     confirmation_cohort: bool = False,
+    ranked_cohort: bool = False,
 ) -> dict[str, Any]:
-    grid = confirmation.grid() if confirmation_cohort else protocol.grid()
+    if confirmation_cohort and ranked_cohort:
+        raise ValueError("attention cohort flags are mutually exclusive")
+    if ranked_cohort:
+        grid = ranking.grid()
+    elif confirmation_cohort:
+        grid = confirmation.grid()
+    else:
+        grid = protocol.grid()
     registered = {cell["cell_id"]: cell for cell in grid}
     _index(registered, cells, outcomes=False)
     indexed = _index(registered, rows, outcomes=True)
+    if ranked_cohort:
+        try:
+            _score_index(indexed, confirmation_cohort=False, ranked_cohort=True)
+        except (KeyError, TypeError):
+            raise ValueError("invalid ranked native outcome") from None
+        return _ranked_descriptive(indexed)
     scores = _score_index(indexed, confirmation_cohort=confirmation_cohort)
     observed = sum(score is not None for score in scores.values())
     return {
