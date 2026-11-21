@@ -652,6 +652,16 @@ python -S -m examples.seatlab.rolepack show --pack my-pack.json --sha256 "$diges
 
 The importer records hashes of the original archive and exact original reply. It records a legal but wrong choice as a real peer action. A recorded invalid reply is unavailable, not replaced. If the archive does not contain a selected observation, the importer cannot know its input and refuses the export. Use `seal` and `run` with the same `--pack` and `--sha256` parameters to measure a new receiver. This does not create a new native Harbor reward.
 
+To try the exact published import without private archives, start from this branch:
+
+```sh
+pack=examples/seatlab/results/rolepack-from-inspect.json
+report=examples/seatlab/results/rolepack-import-review-live.json
+python3.12 -S -m examples.seatlab.rolepack summary --pack "$pack" --sha256 0697a31f1e2961168d189fab6f77843483fcc08fb5587d3374b8c7c4da833f12 "$report"
+```
+
+Use the [results](native-model-results.md#can-i-move-real-teammate-decisions-from-inspect-into-a-new-harbor-role-study) to compare behavior. Private source archives are not published. The hashes let their owners verify the public export. Both string and integer Inspect sample IDs are supported. Use the original JSON type in the source index.
+
 ### Bring another Harbor task
 
 Export the role's **original model input**. Do not reconstruct a private observation from the answer key. A record needs a source ID, a task name, a world ID, the original input and its UTF-8 SHA-256. Store an authentic parsed peer proposal with the source run and source report hash. Leave `peer` null if the first peer reply is missing. Supply the role's rubric: the response field, scalar or per-item shape, legal choices, and all equally optimal choices. Do not export private credentials or user data. See [the complete mixed pack](results/rolepack-observations.json) for both supported shapes.

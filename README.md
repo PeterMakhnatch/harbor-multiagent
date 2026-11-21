@@ -21,6 +21,7 @@ python3.12 -S -m examples.seatlab.rolepack compare
 The command uses only standard Python. It needs no installation, Docker, model account, or private trials. The supplied pack contains original prompts from **Flotilla meeting schedulers** and **shipment dispatch teams**. Two independently identified Inspect AI receivers handle both. The two task scorers stay separate.
 
 - [Run your own receiver or add a task](examples/seatlab/replication.md#use-a-role-pack-with-your-own-receiver). Export user-only messages to Inspect AI or run your trusted role program. Parallel workers share a study and do not retry a claimed call.
+- [Import an existing Inspect archive](examples/seatlab/replication.md#build-your-first-pack-from-native-inspect-logs). Keep the real role input and first reply. Test another teammate without exporting the full trace.
 - [Check the mixed-task results](examples/seatlab/native-model-results.md#does-showing-a-real-peer-proposal-help-the-same-receiver-on-two-tasks). The report distinguishes copied actions, corrected actions, incomplete attempts, and same-input repeats.
 - [Diagnose a sender versus a receiver](examples/seatlab/replication.md#compare-your-receiver-with-the-recorded-receiver), [change a single visible report](examples/seatlab/replication.md#run-the-reviewer-through-inspect-ai), or [continue both seats from a native checkpoint](examples/seatlab/replication.md#start-from-the-published-team-checkpoint). To start with your own team notes, use the [handoff replay](examples/seatlab/replication.md#run-a-handoff-on-your-own-records).
 

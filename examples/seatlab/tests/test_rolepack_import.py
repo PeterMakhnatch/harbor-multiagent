@@ -183,6 +183,19 @@ def test_unusable_first_attempt_retains_the_original_prompt(native, reply, optio
         import_source.build(index, [source, later])
 
 
+def test_default_numeric_inspect_id_is_not_the_same_as_a_text_id(native):
+    sample, archive = native
+    numeric = archive("number", sample(1, '{"seat":0}'))
+    textual = archive("text", sample("1", '{"seat":1}'))
+    pack = import_source.build(
+        _index(_entry(1, record_id="a"), _entry("1", record_id="b")),
+        [numeric, textual],
+    )
+    assert [
+        (r["peer"]["run"], r["peer"]["answer"]["seat"]) for r in pack["records"]
+    ] == [("inspect-number:1", 0), ("1", 1)]
+
+
 def test_relogged_archive_member_cannot_replace_the_first_attempt(native):
     sample, archive = native
     source = archive("first", sample("selected"), sample("other", '{"seat":0}'))

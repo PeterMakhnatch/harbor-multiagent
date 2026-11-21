@@ -2,6 +2,21 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can I move real teammate decisions from Inspect into a new Harbor role study?
+
+Yes, for a one-turn role with a finite action rubric. The [source index](results/rolepack-inspect-index.json) selects the first registered observation in each of 9 task/world groups, without using its score. The importer recovered each role prompt and the **first actual Sol reply** from a private native Inspect archive. The [public pack](results/rolepack-from-inspect.json) binds those replies to their archive and reply hashes. The input bytes and grading rules match the corresponding original Harbor observations.
+
+A separately served Astra receiver completed all **36/36** registered attempts without retries or paid API calls. Holding the source observation fixed, showing Sol's prior choice did not change any individual decision in this panel. Astra selected the same action even when it could not see Sol's answer. That agreement does **not** prove peer copying.
+
+| Original task | Original prompt: optimal | Original prompt + Sol's proposal: optimal | Original worlds |
+|---|---:|---:|---:|
+| Flotilla calendar | 0/6 | 0/6 | 3 |
+| Shipment dispatch | 66/72 | 66/72 | 6 |
+
+In the earlier service window, the same 9 sources with a direct DeepSeek proposal had the same 4 aggregate scores. That is a descriptive comparison, not a causal comparison between senders. The 36 calls contain **156 choices**, not 156 independent worlds or new native team rewards.
+
+[Import your own archive](replication.md#build-your-first-pack-from-native-inspect-logs) · [36 first attempts](results/rolepack-import-review-live.json) · [independent service receipts](results/rolepack-import-review-service.json) · [world-level effects and repeatability](results/rolepack-import-review-effects.json).
+
 ## Which receiver changes an actual role decision?
 
 Both receivers took the same 96 registered samples. They ran in different service windows. [Astra's receipts](results/rolepack-astra-service.json) and [Sol's receipts](results/rolepack-inspect-service.json) each matched 96 actual first replies. Neither cohort used a paid API. Both original task scorers checked all 336 decisions per receiver.
