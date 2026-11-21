@@ -342,3 +342,59 @@ the team trials and $0.51 for the solo trials. So the budget can stop the last s
 
 **Pilot cost, corrected.** The same token method gives $0.40 for the 9 pilot trials (off-peak), and the
 balance fell by $0.43, which includes other agents. Harbor's estimate ($0.80) uses the peak price.
+
+## 15. Wave 1: result
+
+The wave ran from 10:15 PM ET (2026-11-20) to 2:27 AM ET, all off-peak. All 48 trials are valid (a verifier score,
+no error, no exception), and no trial needed a rerun. The numbers come from `commons_wave.py` on the 48 wave jobs
+(`'w1-??????'`). The registered example pattern `'w1-*'` also matches 2 older schedule jobs of 2026-11-19, so
+the pattern is narrower, but the method is the same.
+
+**Primary test: PASS.** 16 complete pairs. Only talk survived in b = 10 instances; only silent survived in c = 1.
+Exact McNemar two-sided p = 0.0117. Talk kept the lake alive more often than silent.
+
+| Arm | Trials | Survived | Mean sustained share | Mean collapse round | Over-use | Missed | Response |
+|---|---|---|---|---|---|---|---|
+| solo | 16 | 16 | 0.994 | - | 0.062 | 0.006 | - |
+| silent | 16 | 6 | 0.475 | 2.5 | 0.315 | 0.042 | 0.71 (7 trials) |
+| talk | 16 | 15 | 0.938 | 1.0 | 0.021 | 0.000 | - |
+
+Paired differences of the sustained share (95% bootstrap interval, exact sign-flip p):
+
+- talk - silent: +0.462 [+0.185, +0.714], p = 0.0117.
+- solo - silent: +0.519 [+0.311, +0.725], p = 0.0020.
+- solo - talk: +0.056 [-0.019, +0.187], p = 1.0 (talk equals solo in 15 instances).
+- Conflict cost (solo - silent) +0.519; talk gain (talk - silent) +0.462; recovery 0.89.
+
+Each instance (sustained share; X n = the lake collapsed in round n):
+
+| Instance | solo | silent | talk |
+|---|---|---|---|
+| 0, 1 | 1.00 | 0.14 X 2 | 1.00 |
+| 2, 3 | 1.00 | 0.21 and 0.24, X 3 | 1.00 |
+| 4 | 1.00 | 1.00 | 0.00 X 1 |
+| 5, 14 | 1.00 | 0.00 X 1 | 1.00 |
+| 6 | 0.90 | 1.00 | 1.00 |
+| 7, 9, 10, 12 | 1.00 | 1.00 | 1.00 |
+| 8, 15 | 1.00 | 0.11 and 0.12, X 2 | 1.00 |
+| 11 | 1.00 | 0.46 X 6 | 1.00 |
+| 13 | 1.00 | 0.17 X 3 | 1.00 |
+
+Observed:
+
+- Without talk, 10 of 16 lakes collapsed, 8 of them by round 3. In 7 silent trials with an over-use event and a
+  next round, another seat raised its request after the over-use in 71% of the events (`response`).
+- With talk, 15 of 16 lakes survived, and over-use fell from 31.5% to 2.1% of the seat-rounds.
+- The one talk collapse (instance 4) is a broken pledge. p2 wrote "let us all request 0 this round as a trust
+  test ... I will also request 0", and 22 s later it requested 109, the whole lake. The other seats requested
+  12 each, and the lake emptied in round 1. Talk does not stop a seat that lies.
+- The 240 s rounds kept missed rounds at 4.2% in silent and 0% in talk (the pilot's 120 s rounds: up to 24%).
+
+Cost: $2.1910 from tokens (solo $0.43, silent $1.09, talk $0.67; 7.43 M cached input, 1.27 M other input and
+3.30 M output tokens), under the $2.50 cap. The account balance fell from $9.91 to $7.00; that difference also
+holds other agents' spend and the first split pilot trial. The leak scan of the 48 job folders found no key.
+
+Limits: 1 model (DeepSeek-V4.1-Flash), 1 harness (terminus-2), 3 seats, regime B only. The team trials ran one at
+a time in instance order; the solo trials ran in a second lane during the first 2 hours. Inferred, not tested:
+the effect is the message channel and not the extra time, because both arms had the same round length and turn
+budget.
