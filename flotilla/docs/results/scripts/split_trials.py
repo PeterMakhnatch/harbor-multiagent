@@ -1,7 +1,8 @@
-"""Split pilot analysis (docs/SPLIT.md section 4, pre-registered): each trial round by round, the validity test,
-the behavior prediction and the real cost from tokens.
+"""Split pilot analysis (docs/SPLIT.md sections 4 and 6, pre-registered): each trial round by round, the validity
+test, the pilot's pass or fail tests and the real cost from tokens.
 
-    python3 flotilla/docs/results/scripts/split_trials.py .flotilla-local/jobs 'sp1-*'
+    python3 flotilla/docs/results/scripts/split_trials.py .flotilla-local/jobs 'sp1-??????' sp1
+    python3 flotilla/docs/results/scripts/split_trials.py .flotilla-local/jobs 'sp2-??????' sp2
 
 Recomputes every measure from the frozen round log with games/split.py score_game. Host-side output (it prints the
 private outside options). Standard library only.
@@ -26,11 +27,48 @@ def _load(name: str, path: Path):
 
 SPLIT = _load("split", HERE.parents[3] / "games" / "split.py")
 WAVE = _load("wave", HERE.parent / "commons_wave.py")  # trial reading and the token price
-MAX_MISSED, MAX_COST = 0.10, 0.50
+MAX_MISSED = 0.10
+PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40)}  # pilot -> (trials planned, cost cap in dollars)
+
+
+def equal_first_round_deal(row: dict) -> bool:
+    """A deal in round 1 whose claims differ by at most 1 point: the focal equal split of pilot sp1."""
+    score = row["split"]
+    claims = list(row["log"][0]["requests"].values()) if row["log"] else []
+    return bool(score["agreed"] and score["deal_round"] == 1 and claims and max(claims) - min(claims) <= 1)
+
+
+def sp1_tests(valid: list[dict]) -> None:
+    fast = [r for r in valid if r["arm"] == "talk"]
+    slow = [r for r in valid if r["arm"] == "silent"]
+    talk_ok = len(fast) == 3 and all(r["split"]["agreed"] and r["split"]["deal_round"] <= 2 for r in fast)
+    silent_ok = any(not r["split"]["agreed"] or r["split"]["deal_round"] > 2 for r in slow)
+    print(f"Behavior prediction: every talk trial deals by round 2: {talk_ok}; at least 1 silent trial does not: "
+          f"{silent_ok}: {'PASS' if talk_ok and silent_ok else 'FAIL'}")
+
+
+def sp2_tests(valid: list[dict]) -> None:
+    unequal = [r for r in valid if not equal_first_round_deal(r)]
+    print(f"Ceiling test: {len(unequal)} of {len(valid)} valid trials do not end in an equal split in round 1 "
+          f"(PASS needs at least 3 of 8): {'PASS' if len(valid) == 8 and len(unequal) >= 3 else 'FAIL'}")
+    by_instance: dict[int, dict[str, float]] = {}
+    for r in valid:
+        by_instance.setdefault(r["instance"], {})[r["arm"]] = r["split"]["reward"]
+    pairs = {i: arms for i, arms in by_instance.items() if set(arms) == {"silent", "talk"}}
+    better = sum(arms["talk"] >= arms["silent"] for arms in pairs.values())
+    print(f"Talk observation: talk efficiency >= silent in {better} of {len(pairs)} instances (predicted: at least "
+          f"3 of 4): {'HOLDS' if len(pairs) == 4 and better >= 3 else 'DOES NOT HOLD'}")
+    for r in valid:
+        game = r["task"]["game"]
+        strong = max(game["outside"], key=game["outside"].get)
+        print(f"instance {r['instance']} {r['arm']}: strong seat {strong} (outside {game['outside'][strong]} of "
+              f"{game['capacity']}) got {r['split']['totals'][strong]}; below outside: {r['split']['below_outside']}")
 
 
 def main() -> None:
     jobs, pattern = Path(sys.argv[1]), sys.argv[2]
+    plan = sys.argv[3] if len(sys.argv) > 3 else "sp1"
+    planned, max_cost = PLANS[plan]
     rows = []
     for row in WAVE.trials(jobs, pattern, scorer=SPLIT.score_game):  # valid: a score, no error, no exception
         trial = jobs / row["job"] / row["trial"]
@@ -59,15 +97,10 @@ def main() -> None:
     missed = sum(r["split"]["missed"] * len(r["log"]) * len(r["task"]["game"]["seats"]) for r in valid)
     cost = sum(r["cost"] for r in rows)
     missed_share = missed / seat_rounds if seat_rounds else 1.0
-    validity = len(rows) == 6 and len(valid) == 6 and missed_share <= MAX_MISSED and cost <= MAX_COST
-    print(f"\nValidity test: {len(valid)} of {len(rows)} trials valid (6 planned), missed {missed_share:.3f} of "
-          f"seat-rounds, real cost ${cost:.4f}: {'PASS' if validity else 'FAIL'}")
-    fast = [r for r in valid if r["arm"] == "talk"]
-    slow = [r for r in valid if r["arm"] == "silent"]
-    talk_ok = len(fast) == 3 and all(r["split"]["agreed"] and r["split"]["deal_round"] <= 2 for r in fast)
-    silent_ok = any(not r["split"]["agreed"] or r["split"]["deal_round"] > 2 for r in slow)
-    print(f"Behavior prediction: every talk trial deals by round 2: {talk_ok}; at least 1 silent trial does not: "
-          f"{silent_ok}: {'PASS' if talk_ok and silent_ok else 'FAIL'}")
+    validity = len(rows) == planned and len(valid) == planned and missed_share <= MAX_MISSED and cost <= max_cost
+    print(f"\nValidity test: {len(valid)} of {len(rows)} trials valid ({planned} planned), missed {missed_share:.3f} "
+          f"of seat-rounds, real cost ${cost:.4f} (cap ${max_cost:.2f}): {'PASS' if validity else 'FAIL'}")
+    (sp1_tests if plan == "sp1" else sp2_tests)(valid)
     for arm in ("silent", "talk"):
         scores = [r["split"] for r in valid if r["arm"] == arm]
         if scores:

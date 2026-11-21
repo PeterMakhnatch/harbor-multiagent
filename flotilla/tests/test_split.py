@@ -25,7 +25,20 @@ def test_generation_is_deterministic_and_outside_options_are_private_and_bounded
         assert params["capacity"] in SPLIT.POT and params["rounds"] == 6
         assert all(0 <= value <= 0.45 * params["capacity"] for value in params["outside"].values())
     with pytest.raises(ValueError):
-        SPLIT.generate(1, 0, 2, "b")
+        SPLIT.generate(1, 0, 2, "c")
+
+
+def test_regime_b_gives_one_seat_an_outside_option_above_half_the_pot_and_keeps_a_surplus():
+    strong_seats = set()
+    for i in range(60):
+        params = SPLIT.generate(1, i, 2, "b")
+        pot, outside = params["capacity"], params["outside"]
+        assert params == SPLIT.generate(1, i, 2, "b") and params["regime"] == "b"
+        strong = [seat for seat, value in outside.items() if 2 * value > pot]
+        assert len(strong) == 1 and 0.55 * pot - 1 < outside[strong[0]] <= 0.7 * pot
+        assert sum(outside.values()) < pot and sum(outside.values()) - outside[strong[0]] <= 0.2 * pot
+        strong_seats.add(strong[0])
+    assert strong_seats == {"p1", "p2"}
 
 
 def test_a_deal_ends_the_game_and_a_failed_round_shrinks_the_pot():

@@ -25,8 +25,9 @@ to misstate its outside option in talk, and a reason to claim too much in silenc
 
 ## 2. Arms
 
-`silent`: no messages. `talk`: messages, at most 2 per seat in each round, of at most 400 characters. Both arms
-use the same instances (one build with `--conditions silent,talk`).
+`silent`: no messages. `talk`: messages, at most 2 per seat in each round, of at most 4000 characters (the build
+default; this section said 400 before 2026-11-21, but both pilots used 4000). Both arms use the same instances (one
+build with `--conditions silent,talk`).
 
 ## 3. Measures
 
@@ -89,3 +90,41 @@ because both outside options are below half of the pot. So the game has no confl
 cannot differ: a ceiling, like commons regime A. A next version needs an outside option above half of the pot
 for one seat (then the equal split is worse than no deal for that seat), or 3 seats with unequal outside options.
 Draw them as a regime `b` and pre-register again.
+
+## 6. Regime b pilot: pre-registration
+
+Written and committed before the first paid trial of this pilot (2026-11-21). The analysis is
+`docs/results/scripts/split_trials.py <jobs> 'sp2-??????' sp2`, committed with this section.
+
+**Regime b** (`build_tasks.py --family split --difficulty b`): the pot and the shrink are as in regime a. One seat,
+drawn per instance, has an outside option of 55% to 70% of the pot; the other seat's is 0% to 20%. So the equal
+split is worse than no deal for the strong seat, and the outside options together are below the pot: a deal in
+round 1 still beats no deal for the pair. After 1 or 2 failed rounds the pot can fall below the two outside
+options together, and then no deal leaves both seats at least as well off.
+
+**Question.** When the equal split is worse than no deal for one seat, do the seats still take the equal split,
+and does talk change how much of the pot they keep?
+
+**Design.** 4 new instances (a secret seed) in the arms silent and talk: 8 trials, 1 attempt each, 1 at a time,
+the 2 arms of each instance in a random order (seed 20261122). Seats, harness and settings as in the sp1 pilot:
+terminus-2 on DeepSeek direct `deepseek-flash`, 40 turns per seat, rounds of 240 s. Before the pilot: `qa.py`
+with 0 FAIL (done: PASS), and an oracle check of instance 0 in both arms (each oracle seat claims half the pot:
+a deal in round 1, reward at least (P - 1) / P).
+
+**Budget.** At most $0.40 of real cost from tokens at DeepSeek's off-peak price (Saturday). No new trial starts
+when the spend plus $0.06 passes $0.40, or when the account balance is below $1.50.
+
+**Validity test (pass or fail).** PASS: all 8 trials end with a verifier score and no error, missed rounds are at
+most 10% of seat-rounds, and the real cost is at most $0.40.
+
+**Ceiling test (pass or fail).** In pilot sp1, 6 of 6 trials ended in an equal split in round 1 (a deal in round
+1 whose claims differ by at most 1 point). PASS: at least 3 of the 8 trials do not end that way. FAIL: otherwise;
+then the equal split is a focal point that seats take even below their outside option, and the report says so.
+
+**Talk observation (no test; 4 pairs).** Predicted: talk efficiency is at least the silent efficiency in at
+least 3 of 4 instances, because a strong seat can say its outside option in talk, and in silence the other seat
+learns it only from a failed round's claims.
+
+**Reported, no test.** For each trial: the claims in each round, the deal round, the efficiency, what the strong
+seat got against its outside option, seats below their outside option, and what each talk seat says about its
+outside option (true, false or not stated; read by hand).

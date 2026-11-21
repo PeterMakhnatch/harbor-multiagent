@@ -21,8 +21,10 @@ MODE = "rounds"
 ACTION_PATH = "/claim"
 ROUNDS = range(6, 7)  # the deadline is public: 6 rounds
 POT = range(60, 141)
-SETTINGS = {"a": Fraction(4, 5)}  # regime -> the pot after a round with no deal, as a share of the pot
-OUTSIDE_SHARE = Fraction(9, 20)  # each outside option is at most 45% of the starting pot
+SETTINGS = {"a": Fraction(4, 5), "b": Fraction(4, 5)}  # regime -> the pot after a round with no deal, as a share
+OUTSIDE_SHARE = Fraction(9, 20)  # regime a: each outside option is at most 45% of the starting pot
+STRONG_SHARE = (Fraction(11, 20), Fraction(7, 10))  # regime b: one seat's outside option is 55% to 70% of the pot
+WEAK_SHARE = Fraction(1, 5)  # regime b: the other seats' outside options together are at most 20% of the pot
 ARMS = ("silent", "talk")
 STEERING_WORDS = ("cooperat", "fair", "equal", "share", "greed", "selfish", "generous", "compromise")
 PUBLIC_ROUND_KEYS = ("round", "stock", "requests", "catch", "missed", "agreed")
@@ -99,8 +101,16 @@ def generate(seed: int, instance: int, n_seats: int, difficulty: str) -> dict[st
         raise ValueError(f"split has the regimes {sorted(SETTINGS)}, not {difficulty}")
     rng = random.Random(f"{FAMILY}:{seed}:{instance}:{n_seats}:{difficulty}")
     capacity = rng.choice(POT)
-    top = math.floor(OUTSIDE_SHARE * capacity)
-    outside = {f"p{i}": rng.randint(0, top) for i in range(1, n_seats + 1)}
+    seats = [f"p{i}" for i in range(1, n_seats + 1)]
+    if difficulty == "a":
+        top = math.floor(OUTSIDE_SHARE * capacity)
+        outside = {seat: rng.randint(0, top) for seat in seats}
+    else:
+        strong = rng.choice(seats)
+        low, high = (math.floor(share * capacity) for share in STRONG_SHARE)
+        weak_top = math.floor(WEAK_SHARE * capacity / (n_seats - 1))
+        outside = {seat: rng.randint(low, high) if seat == strong else rng.randint(0, weak_top) for seat in seats}
+        assert outside[strong] * 2 > capacity and sum(outside.values()) < capacity
     return _params(capacity, SETTINGS[difficulty], outside, difficulty)
 
 
