@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 TOKENS_DIR = Path("/tokens")
+ISSUED_SECRETS = Path("/logs/artifacts/.harbor-secrets")  # read and deleted by Harbor
 NOTES_URL = "http://127.0.0.1:8080/notes"
 MAX_BODY_BYTES = 64 * 1024
 NOTES: list[dict[str, str | None]] = []
@@ -45,6 +46,11 @@ def start_session() -> None:
             if seat_dir.is_dir():
                 TOKENS[seat_dir.name] = secrets.token_hex(16)
                 write_whole(seat_dir / "token", TOKENS[seat_dir.name])
+        # Harbor reads this file, removes these tokens from every saved file, and deletes it. Appended, so
+        # that the tokens of an earlier session (before a restart) are removed too.
+        if ISSUED_SECRETS.parent.is_dir():
+            with ISSUED_SECRETS.open("a") as issued:
+                issued.write("".join(f"{token}\n" for token in TOKENS.values()))
 
 
 def seat_of(authorization: str) -> str | None:

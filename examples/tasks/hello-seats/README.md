@@ -117,3 +117,11 @@ The trial folder is under `./trials/` and is named `hello-seats__<id>`.
 - `result.json`: `agent_info` is p1's agent. `seat_results` lists `p1`
   (`under_test: true`) and `p2` (`under_test: false`), each with its own
   `agent_result` (tokens and cost), timings and `exception_info`.
+
+## Issued tokens and saved output
+
+Harbor's scrubber knows host-side secrets only, so the world lists the tokens that it issues in
+`/logs/artifacts/.harbor-secrets`, one per line. After the trial, Harbor reads every `.harbor-secrets`
+file under the trial's `artifacts/` and `verifier/` folders, removes those values from every saved
+file, and deletes the file. A seat's own folder is not read, so a seat cannot make Harbor erase other
+text. Values shorter than 8 characters are ignored.
