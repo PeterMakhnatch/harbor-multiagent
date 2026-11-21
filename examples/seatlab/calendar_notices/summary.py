@@ -87,6 +87,35 @@ def _paired(
     }
 
 
+def _single_candidate_replay(teams: list[dict[str, Any]]) -> dict[str, int]:
+    seen = singles = correct = recorded = gains = losses = 0
+    for team in teams:
+        count = team.get("final_candidate_count")
+        contains_target = team.get("joint_slot_in_final_report")
+        if count is None or contains_target is None:
+            continue
+        if type(count) is not int or not 0 <= count <= 35:
+            raise ValueError("invalid receiver candidate count")
+        if type(contains_target) is not bool or (count == 0 and contains_target):
+            raise ValueError("invalid receiver candidate membership")
+        before = int(team["reward"])
+        after = int(contains_target) if count == 1 else before
+        seen += 1
+        singles += count == 1
+        correct += after
+        recorded += before
+        gains += after > before
+        losses += after < before
+    return {
+        "audited_teams": seen,
+        "teams_with_one_candidate": singles,
+        "recorded_successes": recorded,
+        "offline_successes": correct,
+        "improved": gains,
+        "worsened": losses,
+    }
+
+
 def summarize(receipt: dict[str, Any]) -> dict[str, Any]:
     grid = _grid(receipt)
     arms = {}
@@ -104,6 +133,7 @@ def summarize(receipt: dict[str, Any]) -> dict[str, Any]:
             "maximum_changed_reads_given_actual_revisions": sum(
                 min(2, r["changed_days"]) for r in complete
             ),
+            "offline_single_candidate_replay": _single_candidate_replay(complete),
         }
     return {
         "arms": arms,
