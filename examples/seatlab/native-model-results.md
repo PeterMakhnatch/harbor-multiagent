@@ -16,9 +16,7 @@ Astra asked 12 questions. Sol answered all 24 slot checks correctly, using only 
 
 Verify the result from this fork with `python3.12 -S -m examples.seatlab.calendar_questions summary`. No model, Docker or API key is needed. Use `--json` for the result by world. The [protocol and run instructions](replication.md#can-a-question-about-two-slots-help-a-real-scheduler) show how to replace the questioner, responder or final scheduler. The [72 service-matched first replies](results/calendar-question-effects.json) include 12 questions, 12 answers, and 48 finals (see [question](results/calendar-question-ask-service.json), [answer](results/calendar-question-answer-service.json), and [final](results/calendar-question-final-service.json) receipts). The [original scorer](results/calendar-question-stock.json) checked all 48 final choices and counted 19 joint slots. This study used subscriptions and spent $0 on paid models.
 
-### First-stage coverage
-
-The [independent questioner receipts](results/calendar-question-ask-service.json) matched all 12 real Astra requests. All [12 question pairs](results/calendar-question-ask-live.json) were valid first replies. The responder receives only these ordered slot IDs and its own calendar; it does not receive the scheduler's candidate list. The 12 repeated requests in the underlying role schema were not registered for this stage and are not counted as failures.
+For a live two-seat comparison, see [the separate native experiment](https://github.com/PeterMakhnatch/harbor-multiagent/pull/73). It tests **whether the responder receives the scheduler's proposals** on 9 other worlds. That is a different intervention from showing the final scheduler a fixed real reply.
 
 ## Can I move real teammate decisions from Inspect into a new Harbor role study?
 
