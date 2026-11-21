@@ -2,6 +2,12 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can two receivers act differently on exactly the same teammate reports?
+
+The [protocol](replication.md#which-role-accounts-for-a-difference-between-two-agent-teams) fixes the two real sender cohorts and 28 distinct receiver observations. We selected all 48 original sender choices, not just those that performed well. Each independent program gets 2 first attempts per exact prompt. The [observation register](results/decision-cross-board.json) commits to the prompt and the accepted sender reply, not a reconstructed sender policy. The first direct DeepSeek draw cost **$0.000075600**. Its reply settled in the direct ledger. An independent service receipt matched the first keyless Sol draw. Neither pilot was repeated.
+
+**Direct cohort complete.** All 56 registered receiver calls settled. The [direct meter](results/decision-cross-direct-meter.json) matches all 56 calls: **$0.003292800** including the pilot. The other 55 calls cost $0.003217200. The [independent stock check](results/decision-cross-direct-stock.json) matched 336 actual decisions against the original native worlds.
+
 ## What changes when an agent sees the same preferences on different records?
 
 All 12 direct source teams passed the original native audit. The [portable packet](results/turn-fork-packet.json) fixes the 2 real upstream messages for each team. Under the aligned policy it reproduces all 24 original downstream prompt hashes and the scores for all 72 original actions. These new runs start at the sender's selection, not in a new Harbor world.
