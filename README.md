@@ -65,6 +65,8 @@ To compare two agent programs, start with [Run your own reviewer and decision ma
 
 To test feedback rather than fixed history, [run your own team through a stock change](examples/seatlab/replication.md#run-different-agent-programs-on-the-same-stock-changes). Give each role a separate executable. The next request uses only what that team learned from its previous decisions. The included stock checker needs no model or Docker.
 
+To test how one agent hands work to its replacement, [run a handoff on your own records](examples/seatlab/replication.md#run-a-handoff-on-your-own-records). Bring two agent programs and a small JSON file. The runner gives each program only its part. It keeps the first attempt and scores the replacement's choices.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a

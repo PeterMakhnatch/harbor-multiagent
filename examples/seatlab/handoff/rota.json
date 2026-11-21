@@ -1,0 +1,9 @@
+{
+  "schema": "seatlab.handoff-input/v1",
+  "brief": "You hand over the opening hours of two service desks. Keep enough information for the next shift to route visitors.",
+  "choices": ["open", "closed"],
+  "cases": [{"id": "evening", "cluster": "week-one", "records": [
+    {"id": "East", "before": "Hours: 09:00 to 20:00.", "after": "Hours: 09:00 to 17:00.", "old_version": "v1", "new_version": "v2", "question": "Can a visitor enter at 19:00?", "old_best": "open", "best": "closed"},
+    {"id": "West", "before": "Hours: 13:00 to 21:00.", "after": "Hours: 13:00 to 21:00.", "old_version": "v4", "new_version": "v4", "question": "Can a visitor enter at 20:00?", "old_best": "open", "best": "open"}
+  ]}]
+}

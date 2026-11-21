@@ -109,6 +109,29 @@ Use `demo` instead of `commands` and omit `--config` for a no-model transport ch
 - Primary: `bound − anonymous` in current optimal choices **for the changed record**. Match within case and repetition. Average within seed, then across all 12 seeds. Report complete coverage and sharp missing-data bounds over the fixed register. If a seed has no complete pair, omit the full-register point estimate. Secondary: selecting the changed record, all-record accuracy, unchanged controls, and cases where the old and current best choices differ.
 - Use an independent copy of the unchanged stock scoring rule for observed final choices. These are host-side decisions on native worlds, not Harbor trial rewards. Share no private note or unrequested record in public evidence. Report direct usage separately from external harnesses.
 
+### Run a handoff on your own records
+
+Use Python 3.12 or later from the root of this fork. Start with the [two-desk rota](handoff/rota.json). Its revised opening hours change one answer. Neither Harbor, Docker, nor a model account is required for this first check.
+
+```sh
+module=examples.seatlab.handoff
+packet=examples/seatlab/handoff/rota.json
+digest=$(shasum -a 256 "$packet" | cut -d' ' -f1)
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+mkdir -m 700 "$private/study"
+python -m "$module" plan --packet "$packet" --sha256 "$digest"
+python -m "$module" demo --packet "$packet" --sha256 "$digest" --study "$private/study" --start 0 --stop 2
+python -m "$module" report --packet "$packet" --sha256 "$digest" --study "$private/study" > "$private/report.json"
+```
+
+`demo` uses a fixed answer. It checks the interface, not model skill. To test two real harnesses, create a new study directory. Use `commands` instead of `demo`. Add `--config seats.json` using the [two-program protocol](#run-your-own-reviewer-and-decision-maker). `reviewer` writes the note. `decider` selects a record and answers the questions. Each invocation receives only its turn. Never pass the packet path, current rubric, or private journal to an agent. These programs are trusted local code, not a security sandbox.
+
+To add a domain, copy the rota packet. Give each case 2 to 8 named records. Give each record an old body, a current body, revision IDs, one question, and its old and current correct choice. Revise at most one record per case. Group related cases under the same cluster. Pin the exact original SHA-256 before a study. Read reports with that same packet and digest.
+
+Parallel workers can claim different indices in one private directory. `pending` lists untouched indices. Specify `--spend-dir` when continuing a direct study so an existing ledger entry also blocks a repeat. `report` never contacts a provider. Save reports **outside** the study directory.
+
+To use Dispatch Handoff instead, omit `--packet` and `--sha256`. `packet` prints its exact input bytes. `stock "$private/report.json"` checks each observed Dispatch decision against the original native scorer. It cannot score a custom domain. `direct` uses only the registered Dispatch worlds and the existing DeepSeek spend ledger. An external agent program can have its own charges.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
