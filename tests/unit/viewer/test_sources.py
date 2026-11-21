@@ -2,6 +2,7 @@
 
 import gzip
 import json
+from asyncio import CancelledError
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -16,7 +17,8 @@ from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import TaskLock, TrialLock, VerifierLock
 from harbor.models.job.result import JobResult, JobStats
 from harbor.models.trial.config import AgentConfig, TaskConfig, TrialConfig
-from harbor.models.trial.result import AgentInfo, TrialResult
+from harbor.models.trial.error_policy import ErrorPolicyOverride
+from harbor.models.trial.result import AgentInfo, ExceptionInfo, SeatResult, TrialResult
 from harbor.models.verifier.result import VerifierResult
 from harbor.server.app import create_app as create_server_app
 from harbor.server.models import JobDetail, RolloutCounts
@@ -130,6 +132,101 @@ def test_folder_contract_and_legacy_routes(tmp_path):
             == 0
         )
         require(not (tmp_path / "harbor.sqlite3").exists())
+
+
+def test_folder_rollout_states_follow_saved_trial_results(tmp_path):
+    job, trial, directory = write_job(tmp_path)
+    job.finished_at = None
+    job.n_total_trials = 5
+    job.stats = JobStats.from_counts(
+        n_total_trials=5,
+        n_completed_trials=3,
+        n_running_trials=1,
+        n_errored_trials=2,
+        n_cancelled_trials=1,
+    )
+    (directory.parent / "result.json").write_text(job.model_dump_json())
+    cancel = ExceptionInfo.from_exception(CancelledError())
+    trial.exception_info = cancel
+    trial.verifier_result = None
+    (directory / "result.json").write_text(trial.model_dump_json())
+    supporting_seat = SeatResult(
+        seat="peer",
+        under_test=False,
+        exception_info=cancel.model_copy(
+            update={"policy_override": ErrorPolicyOverride(has_valid_reward=True)}
+        ),
+    )
+    variants = {
+        "zero": {
+            "exception_info": None,
+            "seat_results": [supporting_seat],
+            "verifier_result": VerifierResult(rewards={"reward": 0}),
+        },
+        "failed": {"exception_info": ExceptionInfo.from_exception(RuntimeError())},
+        "incomplete": {"finished_at": None},
+        "missing": None,
+    }
+    lock = (directory / "lock.json").read_bytes()
+    for name, updates in variants.items():
+        path = directory.parent / name
+        path.mkdir()
+        (path / "lock.json").write_bytes(lock)
+        if updates is None:
+            (path / "config.json").write_text(trial.config.model_dump_json())
+        else:
+            result = trial.model_copy(
+                update={"id": uuid4(), "trial_name": name, "trial_uri": path.as_uri()}
+                | updates
+            )
+            (path / "result.json").write_text(result.model_dump_json())
+
+    route = "/api/source/rollouts"
+    with TestClient(create_app(tmp_path), client=("127.0.0.1", 50000)) as client:
+        params = {"job_ids": str(job.id)}
+        items = client.get(route, params=params).json()["items"]
+        rows = {item["name"]: item for item in items}
+        assert {name: row["state"] for name, row in rows.items()} == {
+            "trial": "cancelled",
+            "zero": "finished",
+            "failed": "finished",
+            "incomplete": "running",
+            "missing": "queued",
+        }
+        assert rows["trial"]["error_type"] == "CancelledError"
+        assert rows["zero"]["error_type"] == "CancelledError"
+        assert rows["failed"]["error_type"] == "RuntimeError"
+        assert rows["zero"]["rewards"] == {"reward": 0}
+        filtered = client.get(route, params={**params, "states": "cancelled"}).json()
+        assert filtered["items"] == [rows["trial"]]
+        facets = client.get(f"{route}/filters", params={**params, "field": "state"})
+        assert facets.json()["values"] == [
+            {"value": "cancelled", "count": 1},
+            {"value": "finished", "count": 2},
+            {"value": "queued", "count": 1},
+            {"value": "running", "count": 1},
+        ]
+        errors = client.get(
+            f"{route}/filters",
+            params={**params, "field": "error_type", "states": "cancelled"},
+        )
+        assert errors.json()["values"] == [{"value": "CancelledError", "count": 1}]
+        for row in rows.values():
+            detail = client.get(f"{route}/{row['id']}").json()["rollout"]
+            assert detail["state"] == row["state"]
+            assert detail["rewards"] == row["rewards"]
+            assert detail["error_type"] == row["error_type"]
+        saved_job = client.get(f"/api/source/jobs/{job.id}").json()["job"]
+        assert saved_job["state"] == "running"
+        assert saved_job["finished_at"] is None
+        assert (
+            saved_job["rollouts"]
+            == RolloutCounts(
+                n_total=5, n_cancelled=1, n_finished=2, n_running=1, n_queued=1
+            ).model_dump()
+        )
+        assert saved_job["n_errors"] == 1
+        assert saved_job["rewards"] == {"reward": {"mean": 0, "count": 1}}
 
 
 def test_folder_jobs_use_declared_agent_roster(tmp_path):

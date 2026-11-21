@@ -94,6 +94,9 @@ recorded runtime names. Empty rosters keep the legacy agent list. Single-agent
 Trials keep the existing Tokens and Timing cards.
 
 Folder state comes from saved progress, not a process liveness check.
+The shared API marks a saved Trial as `cancelled` only if it has a finish
+time and a Trial-level `CancelledError`. A cancellation recorded only on a
+seat or step does not change the Trial state. The saved Job state is unchanged.
 
 ## Toward Harbor
 

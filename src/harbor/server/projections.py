@@ -42,6 +42,13 @@ def input_projection(config: TrialConfig, lock: TrialLock) -> dict[str, Any]:
     }
 
 
+def is_trial_cancelled(result: TrialResult) -> bool:
+    return (
+        result.exception_info is not None
+        and result.exception_info.exception_type == "CancelledError"
+    )
+
+
 def result_projection(result: TrialResult) -> dict[str, Any]:
     errors = result.recorded_exceptions()
     n_input, n_cached, n_output, cost = result.compute_token_cost_totals()

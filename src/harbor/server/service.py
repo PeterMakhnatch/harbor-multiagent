@@ -49,7 +49,7 @@ from harbor.server.models import (
     UploadJobRequest,
     UploadJobResponse,
 )
-from harbor.server.projections import result_projection
+from harbor.server.projections import is_trial_cancelled, result_projection
 from harbor.server.relay import Relay
 from harbor.server.resolution import (
     ResolvedJob,
@@ -853,10 +853,7 @@ class Service:
             def finish() -> None:
                 # Controls may have changed while uploads were in progress.
                 rollout = self.database.get_rollout(rollout_id)
-                cancelled = rollout.cancel_mode == "hard" or (
-                    result.exception_info
-                    and result.exception_info.exception_type == "CancelledError"
-                )
+                cancelled = rollout.cancel_mode == "hard" or is_trial_cancelled(result)
                 with self.database.transaction():
                     self.database.save_result(rollout_id, result)
                     self.database.update(
