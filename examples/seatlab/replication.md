@@ -247,6 +247,36 @@ done < "$queue"
 rm "$queue"
 ```
 
+##### Read the same native teams with stock Eval Lab
+
+Eval Lab stays a consumer. Use a Python environment with Eval Lab installed. Point `$study` at your **private native run directory**, not the public result files. Use the archive exported from that directory. This reads every scored arm through `evallab.results.load_trial`. It checks the trial UUID and team reward against the archive. Unknown scores stay unknown. No API call, ingestion, catalog, or Eval Lab write is needed.
+
+```bash
+"$EVALLAB_PYTHON" -B - "$study" native-archive.json <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+from evallab.results import load_trial
+
+study, archive = map(Path, sys.argv[1:])
+seen = set()
+successes = 0
+for row in json.loads(archive.read_text())["rows"]:
+    key = "rx-w{world:02d}-d{direction}-r{repetition}".format(**row)
+    for arm, cell in row["arms"].items():
+        if cell["reward"] is None:
+            continue
+        trial = load_trial(study / key / "block" / "native" / f"{key}-{arm}")
+        digest = hashlib.sha256(str(trial.id).encode()).hexdigest()
+        if digest in seen or digest != cell["trial_id_sha256"] or trial.primary_reward != cell["reward"]:
+            raise ValueError("trial identity or native team reward differs")
+        seen.add(digest)
+        successes += int(trial.primary_reward)
+print(f"Matched {len(seen)} native team rewards; {successes} successes.")
+PY
+```
+
+The pilot printed `Matched 2 native team rewards; 2 successes.` These are team rewards, not two independent seat rewards per team. A standalone native trial need not have an Eval Lab job UUID.
+
 ### Can the receiver help its teammate recheck a calendar?
 
 **Registered before the first calendar generation.** The 12 retained Flotilla `c1` talk worlds split 6 synthetic calendars evenly between 2 seats. Each world has exactly 1 common two-hour meeting. Earlier talk-versus-silent results do not say whether a receiver can help its sender correct a report. This study compares a peer-informed recheck with a blind recheck. It starts new teams; it does not replay the old free-text conversations.
