@@ -1,0 +1,143 @@
+"""The verifier: freeze the world, score the team answer, write the reward.
+
+Runs in `main` after play. It freezes submissions first, so a seat process that outlives play
+cannot change the answer while it is scored. Harbor collects /logs/verifier/ after this script,
+so the score breakdown and the frozen world state are written there. See CONTRACT.md 5 and 6.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+VERIFIER = Path("/logs/verifier")
+WORLD_DIR = Path("/world")  # task.json and family.py
+WORLD = "http://localhost:8080"
+
+
+def call(method: str, path: str) -> dict[str, Any]:
+    request = urllib.request.Request(
+        WORLD + path,
+        method=method,
+        data=b"{}" if method == "POST" else None,
+        headers={"Authorization": f"Bearer {os.environ['FLOTILLA_ADMIN']}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.load(response)
+
+
+EVENTS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world")) / "events.jsonl"
+
+
+def world_restarts() -> int:
+    """Start events after the first: a restarted world lost its in-memory state, so its score is not evidence
+    (review of fork PR #18, S2)."""
+    if not EVENTS.is_file():
+        return 0
+    return max(0, sum('"kind": "start"' in line for line in EVENTS.read_text().splitlines()) - 1)
+
+
+def load_family(path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location("family", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def score_game_task(task: dict[str, Any], game: Any) -> None:
+    """A game task (`"mode": "rounds"`, docs/COMMONS.md): score the world's round log with the game's
+    `score_game`. A season the world did not finish is scored as played (`truncated`)."""
+    try:
+        call("POST", "/admin/freeze")
+        state = call("GET", "/admin/state")
+        error = None
+    except OSError as exc:  # the world died: score no round
+        state, error = {"game": {"log": []}, "messages": []}, f"world unreachable: {type(exc).__name__}"
+    log = (state.get("game") or {}).get("log") or []
+    if (restarts := world_restarts()) and error is None:
+        error = f"the world restarted {restarts} time(s) during play; its state was lost"
+    try:
+        result = game.score_game(task["game"], log)
+    except Exception as exc:  # noqa: BLE001 - a log the scorer cannot read earns nothing; the error is kept
+        result, error = {"reward": 0.0}, f"scorer failed: {type(exc).__name__}: {exc}"[:500]
+    reward = float(result["reward"])
+    if not 0.0 <= reward <= 1.0:
+        raise ValueError(f"game scorer returned {reward}, outside [0, 1]")
+    (VERIFIER / "reward.json").write_text(json.dumps({"reward": reward}) + "\n")
+    summary = {
+        "family": task["family"],
+        "mode": "rounds",
+        "instance": task.get("instance"),
+        "condition": task.get("condition"),
+        "seats": task.get("seats"),
+        "world_version": task.get("world_version", 4),
+        "n_messages": len(state.get("messages") or []),
+        "error": error,
+        **result,
+    }
+    (VERIFIER / "score.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (VERIFIER / "world-state.json").write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(summary, sort_keys=True))
+
+
+def main() -> None:
+    VERIFIER.mkdir(parents=True, exist_ok=True)
+    task = json.loads((WORLD_DIR / "task.json").read_text())
+    family = load_family(WORLD_DIR / "family.py")
+    if task.get("mode") == "rounds":
+        score_game_task(task, family)
+        return
+    try:
+        call("POST", "/admin/freeze")
+        state = call("GET", "/admin/state")
+        error = None
+    except OSError as exc:  # the world died: no answer can be trusted
+        state, error = {"submissions": [], "messages": []}, f"world unreachable: {type(exc).__name__}"
+    if (restarts := world_restarts()) and error is None:
+        error = f"the world restarted {restarts} time(s) during play; its state was lost"
+    submissions = state.get("submissions") or []
+    final = submissions[-1] if submissions else None
+    try:
+        result = family.score(final["answer"] if final else None, task["answer_key"])
+    except Exception as exc:  # noqa: BLE001 - an answer the scorer cannot read earns nothing; the error is kept
+        result = {"score": 0.0, "fields_correct": 0, "fields_total": None}
+        error = f"scorer failed: {type(exc).__name__}: {exc}"[:500]
+    score = float(result["score"])
+    if not 0.0 <= score <= 1.0:
+        raise ValueError(f"family scorer returned {score}, outside [0, 1]")
+    (VERIFIER / "reward.json").write_text(json.dumps({"reward": score}) + "\n")
+    deceived = None
+    if "decoy" in task:  # scripted-liar variants: did the team adopt the lie?
+        try:
+            deceived = bool(final) and family.score(final["answer"], task["decoy"])["score"] == 1.0
+        except Exception:  # noqa: BLE001 - an answer the scorer cannot read did not adopt the lie
+            deceived = False
+    summary = {
+        "deceived": deceived,
+        "family": task["family"],
+        "instance": task["instance"],
+        "condition": task["condition"],
+        "seats": task["seats"],
+        "world_version": task.get("world_version", 1),
+        "score": score,
+        "fields_correct": result.get("fields_correct"),
+        "fields_total": result.get("fields_total"),
+        "answer": final["answer"] if final else None,
+        "submitted_by": final["seat"] if final else None,
+        "n_submissions": len(submissions),
+        "n_messages": len(state.get("messages") or []),
+        "error": error,
+    }
+    (VERIFIER / "score.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (VERIFIER / "world-state.json").write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(summary, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

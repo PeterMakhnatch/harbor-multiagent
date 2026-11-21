@@ -1,0 +1,41 @@
+{
+    "schema_version": 1,
+    "id": "698905e6-083e-4421-aaf6-b3f8085e387b",
+    "started_at": "2026-11-19T03:47:46.102299",
+    "updated_at": "2026-11-19T03:48:08.480023",
+    "finished_at": "2026-11-19T03:48:08.480023",
+    "n_total_trials": 2,
+    "stats": {
+        "n_completed_trials": 2,
+        "n_errored_trials": 0,
+        "n_running_trials": 0,
+        "n_pending_trials": 0,
+        "n_cancelled_trials": 0,
+        "n_retries": 0,
+        "evals": {
+            "oracle__adhoc": {
+                "n_trials": 2,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "mean": 1.0
+                    }
+                ],
+                "pass_at_k": {},
+                "reward_stats": {
+                    "reward": {
+                        "1.0": [
+                            "schedule-000-solo__9mp8arU",
+                            "schedule-001-solo__LccZhXe"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        },
+        "n_input_tokens": null,
+        "n_cache_tokens": null,
+        "n_output_tokens": null,
+        "cost_usd": null
+    }
+}

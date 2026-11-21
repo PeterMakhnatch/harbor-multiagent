@@ -1,0 +1,5 @@
+{"data": {"condition": "silent", "seats": ["p1", "p2"]}, "kind": "start", "seat": null, "seq": 1, "t": 0.001}
+{"data": {}, "kind": "whoami", "seat": "p2", "seq": 2, "t": 4.034}
+{"data": {"answer": {"day": "Mon", "start": "11:00"}, "n": 1}, "kind": "submit", "seat": "p2", "seq": 3, "t": 4.035}
+{"data": {}, "kind": "whoami", "seat": "p1", "seq": 4, "t": 4.134}
+{"data": {"answer": {"day": "Mon", "start": "09:00"}, "n": 2}, "kind": "submit", "seat": "p1", "seq": 5, "t": 4.135}
