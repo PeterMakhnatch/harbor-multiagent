@@ -24,6 +24,8 @@ The [native receipt](https://github.com/PeterMakhnatch/harbor-multiagent/blob/0c
 
 An [earlier shipment study](https://github.com/PeterMakhnatch/harbor-multiagent/pull/66) also favored names: 38/72 versus 49/72 optimal decisions. It used six other worlds, with two repetitions each. We did not pool those results with the new worlds.
 
+For the same changed-report notice on a second native task, see [Flotilla scheduling](calendar-notice-result.md).
+
 The earlier [2/24 → 17/24 result](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72) tested a different intervention. A scheduler saw or did not see two actual answers from its teammate. Those were replay decisions, not native team rewards.
 
 ## Two answers about meeting times
