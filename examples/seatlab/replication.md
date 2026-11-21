@@ -199,6 +199,20 @@ python -m "$module" score "$packet" fresh "$(cat choices.json)" --expect-sha256 
 
 Run `export "$NATIVE_STUDY" --pair 3101 1` with the original native interpreter to produce those exact packet bytes. `verify` checks consistency. An external SHA-256 binds the bytes to a published version. Neither check independently authenticates a provider. Scoring a new receiver does not turn its choices into original Harbor actions.
 
+### Does sending two proposed slots improve a native schedule?
+
+**Registered before any new model or native trial.** On three retained worlds, a scheduler selected a joint slot more often when it saw a real answer to two slot questions. That earlier test changed the last input to the receiver. This experiment changes something different: **whether the responder gets the scheduler's first proposals through the real Harbor mailbox**. The native task checks the submitted meeting. Use all 9 public worlds not used in the linked-role study: 01, 02, 03, 05, 06, 07, 09, 10, and 11. These worlds are held out from the linked-role study only, not from other SeatLab experiments or model training.
+
+Use one pair per world and assignment direction, repetition 0. This registers 18 pairs, 36 native two-seat teams, and at most 108 first model calls. Both teams in a pair share the same actual first lists. Each seat sees only its own three private calendars. Ask each to propose up to two locally viable starts. Sol is the responder and Astra the final scheduler, regardless of native seat. The label and verifier answer never enter a model prompt. Use fresh subscription sessions and no paid keys. Do not filter proposals by their accuracy, length or overlap. Preserve every response, including invalid ones. Stop on a system or service identity failure; do not repeat an attempted block.
+
+| Native step | No proposals sent (`blind`) | Proposals sent (`peer`) |
+| --- | --- | --- |
+| Scheduler → responder | The stock mailbox carries its ready marker. | The mailbox carries the scheduler's actual first list. |
+| Responder → scheduler | See own private calendar and first list. Recommend up to two feasible starts. | Same instruction, plus the received list. Check suggested starts first; alternatives are allowed. |
+| Scheduler → task | See own private calendar, own first list, and the actual responder recommendation. Submit one slot. | Same final instruction. The native verifier scores the submission. |
+
+Use the stock counterbalanced arm order and both directions in every world. Make no replacement when a seed, arm, native reward, or service receipt is missing. Distinguish an unscored team from a verified zero. Primary: native success with proposals minus success without proposals. Average complete direction pairs within each world. Report this estimate only if every registered world has a pair. Also report worst/best bounds on the full register, numbers of improvements and harms, recommendation overlap, and query length adherence. The 18 pairs share 9 worlds. This is not a replication of the earlier +62.5-point role-input contrast: it tests a different message in a live system.
+
 ### Can the receiver help its teammate recheck a calendar?
 
 **Registered before the first calendar generation.** The 12 retained Flotilla `c1` talk worlds split 6 synthetic calendars evenly between 2 seats. Each world has exactly 1 common two-hour meeting. Earlier talk-versus-silent results do not say whether a receiver can help its sender correct a report. This study compares a peer-informed recheck with a blind recheck. It starts new teams; it does not replay the old free-text conversations.
