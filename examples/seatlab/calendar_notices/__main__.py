@@ -13,6 +13,7 @@ from ..live_answers import __main__ as live
 from ..visibility import calendar_driver, calendar_packet, calendar_replica_source
 from . import protocol as p
 from . import team_source, team_views
+from . import transfer_registration as tr
 
 MODULE = "examples.seatlab.calendar_notices"
 SCHEMA = "seatlab.native-calendar-notices/v1"
@@ -40,6 +41,8 @@ def _directory(job: Path, cell: _Cell) -> Path:
 
 
 def _schema(cell: _Cell) -> str:
+    if isinstance(cell, tr.TransferCell):
+        return tr.ATTEMPT_SCHEMA
     if isinstance(cell, team_views.RepeatJoinCell):
         return team_views.REPEAT_SCHEMA
     if isinstance(cell, team_views.JoinCell):
@@ -51,6 +54,15 @@ def _schema(cell: _Cell) -> str:
 
 def _cell_from_attempt(attempt: dict[str, Any]) -> _Cell:
     schema = attempt["schema"]
+    if schema == tr.ATTEMPT_SCHEMA:
+        _require("repetition" not in attempt, "invalid_attempt_selector")
+        return tr.TransferCell(
+            attempt["world"],
+            attempt["arm"],
+            attempt["control"],
+            calendar_packet._check_digest(attempt["cohort_sha256"]),
+        )
+    _require("cohort_sha256" not in attempt, "invalid_attempt_selector")
     if schema == SCHEMA:
         cell_type = p.Cell
     elif schema == team_views.SCHEMA:
@@ -71,9 +83,13 @@ def _cell_from_attempt(attempt: dict[str, Any]) -> _Cell:
     return cell_type(attempt["world"], attempt["arm"], attempt["control"])
 
 
-def _source(task: Path, cell: _Cell) -> tuple[dict[str, str], _Tables | None]:
+def _source(
+    job: Path, task: Path, cell: _Cell
+) -> tuple[dict[str, str], _Tables | None]:
     tables = None
-    if isinstance(cell, team_views.Cell):
+    if isinstance(cell, tr.TransferCell):
+        identity, tables = tr.checked(job, task, cell)
+    elif isinstance(cell, team_views.Cell):
         identity, tables = team_source._checked(task, cell)
     else:
         identity = calendar_replica_source.verify(task, cell.index)
@@ -90,7 +106,10 @@ def _seat_kwargs(cell: _Cell, seat: str, tables: _Tables | None) -> dict[str, An
     if isinstance(cell, team_views.Cell):
         if tables is None:
             raise ValueError("missing_private_tables")
-        return team_source._seat_kwargs(tables, cell, seat)
+        kwargs = team_source._seat_kwargs(tables, cell, seat)
+        if isinstance(cell, tr.TransferCell):
+            kwargs["cohort_sha256"] = cell.cohort_sha256
+        return kwargs
     return {
         "world": cell.world,
         "arm": cell.arm,
@@ -140,6 +159,8 @@ def _attempt(
         "source": source,
         "config_sha256": config_sha256,
     }
+    if isinstance(cell, tr.TransferCell):
+        attempt["cohort_sha256"] = cell.cohort_sha256
     if isinstance(cell, team_views.RepeatJoinCell):
         attempt["repetition"] = cell.repetition
     return attempt
@@ -218,7 +239,8 @@ def _bind_host(cell: _Cell) -> None:
 
 def _host_trial(directory: Path, harbor: Path) -> int:
     try:
-        for path in (directory.parent.parent, directory.parent, directory):
+        job = directory.parent.parent
+        for path in (job, directory.parent, directory):
             _private_dir(path)
         _require(Path.cwd() == directory, "host_working_directory_mismatch")
         _require(not os.path.lexists(directory / "outcome.json"), "attempt_is_terminal")
@@ -229,9 +251,9 @@ def _host_trial(directory: Path, harbor: Path) -> int:
         team = calendar_driver._team_helpers()
         config = team._read_sealed(config_path)
         task = Path(json.loads(config)["task"]["path"])
-        source, tables = _source(task, cell)
+        source, tables = _source(job, task, cell)
         _check_binding(directory, cell, task, source, tables, attempt, config)
-        _check_first(directory.parent.parent, cell, task, source, tables)
+        _check_first(job, cell, task, source, tables)
         (directory / "trials").mkdir(mode=0o700)
         harbor = calendar_driver._entrypoint(harbor)
         team.run_panel._check_native(harbor, dict(os.environ))
@@ -320,7 +342,7 @@ def _run(
             "job_overlaps_tasks",
         )
         task = tasks / cell.task_name
-        source, tables = _source(task, cell)
+        source, tables = _source(job, task, cell)
         attempt["source"] = source
         outcome["error"] = "native_config_failed"
         attempt["config_sha256"] = live._seal(
@@ -378,20 +400,36 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         command.set_defaults(cell_type=cell_type)
         command.add_argument("--job", type=Path, required=True)
         command.add_argument("--tasks", type=Path, required=True)
-        command.add_argument("--world", choices=worlds, required=True)
+        command.add_argument(
+            "--world",
+            choices=None if cell_type is team_views.JoinCell else worlds,
+            required=True,
+        )
         command.add_argument("--arm", choices=arms, required=True)
         command.add_argument(
             "--harbor", type=Path, default=Path(sys.executable).with_name("harbor")
         )
         if cell_type is team_views.JoinCell:
-            command.add_argument(
+            selector = command.add_mutually_exclusive_group()
+            selector.add_argument(
                 "--repeat", type=int, choices=range(1, 33), metavar="N"
             )
+            selector.add_argument("--cohort-sha256", metavar="SHA256")
         if mode in ("run", "views-run", "role-views-run", "run-visible"):
             command.add_argument("--spend-dir", type=Path, required=True)
         else:
             command.add_argument("--policy", choices=POLICIES, required=True)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if (
+        args.cell_type is team_views.JoinCell
+        and args.cohort_sha256 is None
+        and args.world not in join_worlds
+    ):
+        sub.choices[args.mode].error(
+            f"argument --world: invalid choice: {args.world!r} "
+            f"(choose from {', '.join(map(repr, join_worlds))})"
+        )
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -402,7 +440,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         control = getattr(args, "policy", "live")
         repetition = getattr(args, "repeat", None)
-        if repetition is None:
+        cohort_sha256 = getattr(args, "cohort_sha256", None)
+        if cohort_sha256 is not None:
+            cell = tr.TransferCell(args.world, args.arm, control, cohort_sha256)
+        elif repetition is None:
             cell = args.cell_type(args.world, args.arm, control)
         else:
             cell = team_views.RepeatJoinCell(

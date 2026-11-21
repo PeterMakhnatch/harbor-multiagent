@@ -476,6 +476,49 @@ You can substitute another consecutive candidate block and its seed. The command
 
 **Observed:** all 24 new worlds passed. None of their 48 role-specific decision patterns matched the 96 patterns from the reference worlds. This admits the worlds for a transfer test. It does not show that a model can solve them or that a workflow transfers. [Registered question](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062637751) · [Public counts and seed commitment](results/calendar-transfer-48-71-intake.json).
 
+#### Run two native teams on each world in your own calendar block
+
+Use the existing `run-visible` workflow with new stock tasks. You do not have to add world IDs to the source. Freeze the task commitments once. Assign **whole worlds**, not single arms, to workers. Each worker runs the 2 arms in the listed order.
+
+Use only tasks you trust. The manifest checks that the task still matches the one you approved. It does not establish who wrote the task. Keep the generated task directory private.
+
+```sh
+umask 077
+job=$(realpath "$(mktemp -d)")
+module=examples.seatlab.calendar_notices
+python3.12 -BS -m "$module.transfer_registration" freeze "$CANDIDATE/schedule" \
+  --start 48 --count 24 --seed 1062988520 > "$job/calendar-cohort.json"
+chmod 400 "$job/calendar-cohort.json"
+sha=8995d5311e9627989a1a35065902ef89a39f72eb693409532a95513b22a4a61a
+python3.12 -BS -m "$module.transfer_registration" plan "$job/calendar-cohort.json" \
+  --sha256 "$sha" --shard 0/4
+```
+
+The SHA above selects the [published stock manifest](results/flotilla-schedule-transfer-48-71.json). For your own block, record your manifest's SHA-256 before running any team. Use a starting instance divisible by 4 and at least 48. Choose 4–32 consecutive instances, in multiples of 4. The public plan needs no Harbor installation, Docker, or key. Four workers can read shards `0/4` through `3/4`.
+
+First test the real verifier without a key. Set `TRIAL_SLOT` to the shared Docker trial-slot wrapper. Set `python` and `harbor` to the fork's executables.
+
+```sh
+"$TRIAL_SLOT" "$python" -m "$module" control-visible --job "$job" \
+  --tasks "$CANDIDATE/schedule" --world w48 --arm checked \
+  --policy oracle --cohort-sha256 "$sha" --harbor "$harbor"
+```
+
+Use `wrong` for the negative control. For live teams, use `run-visible` with an approved direct model budget. Replace `--policy` with `--spend-dir "$meter"`. Keep the same job, manifest, physical task directory and SHA within each world. Each run claims one attempt and refuses a replacement. Workers on one host must use the shared Docker limit.
+
+After the run, create a shareable receipt. Keep the owner audit private. The commands below make no model calls:
+
+```sh
+"$python" -m "$module.audit" "$job" --visible-check --cohort-sha256 "$sha" \
+  --spend-dir "$meter" > "$job/audit.json"
+python3.12 -BS -m "$module.transfer_result" receipt "$job/audit.json" \
+  --manifest "$job/calendar-cohort.json" --sha256 "$sha" > "$job/receipt.json"
+python3.12 -BS -m "$module.transfer_result" summarize "$job/receipt.json" \
+  --manifest "$job/calendar-cohort.json" --sha256 "$sha"
+```
+
+The summary separates missing evidence from a verified loss. It measures a gain only when both teams in every world have complete native evidence and 4 settled calls each. The public summary checks the supplied receipt against the manifest. Only the owner audit checks the underlying native artifacts.
+
 For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_briefing(own_briefing))` returns only that seat’s feasible starts. Do not use the full briefing in a phase that shows only 2 attendees. Keep the peer’s table and the verifier key outside the model context.
 
 The first [stock oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without trial receipts. Later, the [four private-view controls](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060200350) on these worlds produced the expected native scores. These were separate attempts.

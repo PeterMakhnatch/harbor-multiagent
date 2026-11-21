@@ -23,6 +23,7 @@ from ..visibility.calendar_seat import (
 )
 from . import protocol as p
 from . import team_views
+from . import transfer_registration as tr
 
 _INBOX_TIMEOUT_SEC = 180
 _POLL_INTERVAL_SEC = 1
@@ -30,6 +31,7 @@ _DAY_COUNT = len(calendar_protocol._DAYS)
 _CONTROL_DAYS = (0, 1)
 _MISSING_CONTROL_SLOT = object()
 _MISSING_REPETITION = object()
+_MISSING_COHORT_SHA256 = object()
 
 
 async def _receive(
@@ -464,6 +466,7 @@ class PrivateViewSeat(NoticeSeat):
         control: str = "live",
         control_slot: object = _MISSING_CONTROL_SLOT,
         repetition: object = _MISSING_REPETITION,
+        cohort_sha256: object = _MISSING_COHORT_SHA256,
         logger: logging.Logger | None = None,
         extra_env: dict[str, str] | None = None,
         override_setup_timeout_sec: float | None = None,
@@ -480,7 +483,7 @@ class PrivateViewSeat(NoticeSeat):
         self._initialize(
             logs_dir=logs_dir,
             model_name=model_name,
-            cell=self._make_cell(world, arm, control, repetition),
+            cell=self._make_cell(world, arm, control, repetition, cohort_sha256),
             seat=seat,
             logger=logger,
             extra_env=extra_env,
@@ -498,8 +501,14 @@ class PrivateViewSeat(NoticeSeat):
 
     @staticmethod
     def _make_cell(
-        world: str, arm: str, control: str, repetition: object
+        world: str, arm: str, control: str, repetition: object, cohort_sha256: object
     ) -> team_views.Cell:
+        if cohort_sha256 is not _MISSING_COHORT_SHA256:
+            if repetition is not _MISSING_REPETITION:
+                raise ValueError("invalid_calendar_notice_selector")
+            return tr.TransferCell(
+                world, arm, control, calendar_packet._check_digest(cohort_sha256)
+            )
         if repetition is not _MISSING_REPETITION:
             if not isinstance(repetition, int):
                 raise ValueError("invalid_repetition")

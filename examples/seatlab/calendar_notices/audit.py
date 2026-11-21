@@ -26,6 +26,7 @@ from ..visibility import (
 )
 from . import protocol as p
 from . import team_source, team_views
+from . import transfer_registration as tr
 
 SCHEMA = "seatlab.calendar-notice-audit/v1"
 PRIVATE_VIEWS_SCHEMA = "seatlab.calendar-private-view-audit/v1"
@@ -77,6 +78,8 @@ def _sealed(path: Path) -> bytes:
 
 
 def _schema(cell: Cell) -> str:
+    if isinstance(cell, tr.TransferCell):
+        return tr.ATTEMPT_SCHEMA
     if isinstance(cell, team_views.RepeatJoinCell):
         return team_views.REPEAT_SCHEMA
     if isinstance(cell, team_views.JoinCell):
@@ -93,12 +96,12 @@ def _target(tables: Tables) -> int:
     return shared.pop()
 
 
-def _repeat_fields(cell: Cell) -> dict[str, int]:
-    return (
-        {"repetition": cell.repetition}
-        if isinstance(cell, team_views.RepeatJoinCell)
-        else {}
-    )
+def _selector_fields(cell: Cell) -> dict[str, int | str]:
+    if isinstance(cell, tr.TransferCell):
+        return {"cohort_sha256": cell.cohort_sha256}
+    if isinstance(cell, team_views.RepeatJoinCell):
+        return {"repetition": cell.repetition}
+    return {}
 
 
 def _participants(cell: Cell, tables: Tables) -> list[Row]:
@@ -108,7 +111,7 @@ def _participants(cell: Cell, tables: Tables) -> list[Row]:
     if private_views and cell.control != "live":
         target = _target(tables)
         control_slot = target if cell.control == "oracle" else int(target == 0)
-    repeat = _repeat_fields(cell)
+    selector = _selector_fields(cell)
     return [
         {
             "seat": seat,
@@ -125,7 +128,7 @@ def _participants(cell: Cell, tables: Tables) -> list[Row]:
                     else {}
                 ),
                 **({"control_slot": control_slot} if control_slot is not None else {}),
-                **repeat,
+                **selector,
             },
         }
         for seat, table in zip(p.SEATS, tables, strict=True)
@@ -147,6 +150,12 @@ def _attempt(directory: Path, cell: Cell) -> Row:
     )
     if isinstance(cell, team_views.Cell):
         fields = {"schema", "world", "arm", "control", "run", "config_sha256", "source"}
+        if isinstance(cell, tr.TransferCell):
+            fields.add("cohort_sha256")
+            require(
+                attempt.get("cohort_sha256") == cell.cohort_sha256,
+                "attempt_binding",
+            )
         if isinstance(cell, team_views.RepeatJoinCell):
             fields.add("repetition")
             repetition = attempt.get("repetition")
@@ -172,7 +181,11 @@ def _registration(
     require(p.digest(config_data) == attempt["config_sha256"], "config_hash")
     config = _object(config_data)
     task = Path(config["task"]["path"])
-    if isinstance(cell, team_views.Cell):
+    verified = None
+    if isinstance(cell, tr.TransferCell):
+        require(task.is_absolute(), "config_binding")
+        verified, tables = tr.checked(directory.parent.parent, task, cell)
+    elif isinstance(cell, team_views.Cell):
         require(task.is_absolute(), "config_binding")
         tables = team_source.tables(task, cell)
     if tables is None:
@@ -200,11 +213,12 @@ def _registration(
         and task.is_absolute(),
         "config_binding",
     )
-    verified = (
-        team_source.identity(task, cell)
-        if isinstance(cell, team_views.Cell)
-        else calendar_replica_source.verify(task, cell.index)
-    )
+    if verified is None:
+        verified = (
+            team_source.identity(task, cell)
+            if isinstance(cell, team_views.Cell)
+            else calendar_replica_source.verify(task, cell.index)
+        )
     source = {
         "task_sha256": verified.native_sha256,
         "semantics_sha256": verified.semantics_sha256,
@@ -940,7 +954,7 @@ def _cell(
         "world": cell.world,
         "arm": cell.arm,
         "control": cell.control,
-        **_repeat_fields(cell),
+        **_selector_fields(cell),
         "attempted": _present(directory),
         "trial_uuid": None,
         "result_sha256": None,
@@ -1094,19 +1108,25 @@ def report(
     role_views: bool = False,
     visible_check: bool = False,
     repetition: int | None = None,
+    cohort_sha256: str | None = None,
 ) -> Row:
     if sum((private_views, role_views, visible_check)) > 1:
         raise ValueError("conflicting_view_modes")
     if repetition is not None and not visible_check:
         raise ValueError("repeat_requires_visible_check")
+    if cohort_sha256 is not None and not visible_check:
+        raise ValueError("cohort_requires_visible_check")
+    if cohort_sha256 is not None and repetition is not None:
+        raise ValueError("conflicting_visible_check_selectors")
     job = job.expanduser().absolute()
     if visible_check:
-        cell_type, world_ids, arms = (
-            team_views.JoinCell,
-            team_views.JOIN_WORLDS,
-            team_views.JOIN_ARMS,
-        )
-        prefix, schema = "cvj-", VISIBLE_CHECK_SCHEMA
+        cell_type, arms = team_views.JoinCell, team_views.JOIN_ARMS
+        if cohort_sha256 is None:
+            world_ids = team_views.JOIN_WORLDS
+            prefix, schema = "cvj-", VISIBLE_CHECK_SCHEMA
+        else:
+            world_ids = tr.worlds(job, cohort_sha256)
+            prefix, schema = tr.prefix(cohort_sha256), tr.AUDIT_SCHEMA
     elif role_views:
         cell_type, world_ids, arms = (
             team_views.RoleCell,
@@ -1127,7 +1147,9 @@ def report(
     )
     control_types = ("oracle", "wrong") if controls else ("live",)
     cells = [
-        team_views.RepeatJoinCell(world, arm, control, repetition)
+        tr.TransferCell(world, arm, control, cohort_sha256)
+        if cohort_sha256 is not None
+        else team_views.RepeatJoinCell(world, arm, control, repetition)
         if repetition is not None
         else cell_type(world, arm, control)
         for world in world_ids
@@ -1169,6 +1191,7 @@ def report(
         "schema": schema,
         "mode": "controls" if controls else "live",
         **({"repetition": repetition} if repetition is not None else {}),
+        **({"cohort_sha256": cohort_sha256} if cohort_sha256 is not None else {}),
         "cells": rows,
         "counts": {
             arm: _counts([row for row in rows if row["arm"] == arm]) for arm in arms
@@ -1190,10 +1213,18 @@ def main(argv: list[str] | None = None) -> int:
     views.add_argument("--private-views", action="store_true")
     views.add_argument("--role-views", action="store_true")
     views.add_argument("--visible-check", action="store_true")
-    parser.add_argument("--repeat", type=int, choices=range(1, 33), metavar="N")
+    selectors = parser.add_mutually_exclusive_group()
+    selectors.add_argument("--repeat", type=int, choices=range(1, 33), metavar="N")
+    selectors.add_argument(
+        "--cohort-sha256",
+        metavar="SHA",
+        help="require the sealed job/calendar-cohort.json with this SHA-256",
+    )
     args = parser.parse_args(argv)
     if args.repeat is not None and not args.visible_check:
         parser.error("--repeat requires --visible-check")
+    if args.cohort_sha256 is not None and not args.visible_check:
+        parser.error("--cohort-sha256 requires --visible-check")
     print(
         json.dumps(
             report(
@@ -1204,6 +1235,7 @@ def main(argv: list[str] | None = None) -> int:
                 role_views=args.role_views,
                 visible_check=args.visible_check,
                 repetition=args.repeat,
+                cohort_sha256=args.cohort_sha256,
             ),
             sort_keys=True,
         )
