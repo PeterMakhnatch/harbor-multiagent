@@ -7,6 +7,12 @@ concurrently by two agents communicating via Redis.
 Both agents run as symmetric sidecars (agent1, agent2). The main container
 runs a lightweight coordinator that waits for both to finish.
 
+With ``seats=True`` the adapter writes seat tasks instead: agent1 and agent2
+are ``[agents.<service>]`` seats, so any Harbor harness can fill each one.
+Each seat has its own workspace volume, the seats message each other through
+an authenticated service in main, and the verifier in main merges both
+seats' patches and runs both features' tests, as in the sidecar tasks.
+
 Uses pre-built Docker images from DockerHub (akhatua/cooperbench-*) and
 the runner.sh protocol from the CooperBench evaluation framework.
 
@@ -19,6 +25,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
@@ -32,6 +39,8 @@ from typing import Iterable
 
 REGISTRY = "akhatua"
 IMAGE_PREFIX = "cooperbench"
+SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC = 120
+SEAT_ATTRIBUTION_OVERHEAD_SEC = 30
 
 # Mapping from HuggingFace repo slug to GitHub dataset directory name.
 # See https://github.com/cooperbench/CooperBench/tree/main/dataset
@@ -93,6 +102,28 @@ def _fetch_combined_patch(repo: str, task_id: str) -> str:
 
     _combined_patch_cache[key] = patch
     return patch
+
+
+def _reference_patch_paths(patch: str) -> list[str] | None:
+    """Get paths without the base repo or any gold implementation in tests/."""
+    if not patch.strip():
+        return []
+
+    raw = patch.encode("utf-8")
+    paths = set()
+    for direction in ((), ("--reverse",)) if b"\nrename from " in raw else ((),):
+        result = subprocess.run(
+            ["git", "apply", "--numstat", "-z", "--recount", *direction],
+            cwd=Path.cwd().anchor,
+            input=raw,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            return None
+        for record in result.stdout.split(b"\0"):
+            if record:
+                paths.add(record.split(b"\t", 2)[2].decode("utf-8", "surrogateescape"))
+    return sorted(paths)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +297,28 @@ class HarborTaskPaths:
             d.mkdir(parents=True, exist_ok=True)
 
 
+class SeatTaskPaths:
+    """Layout of a seat task: instructions/<seat>.md, no instruction.md, and
+    one seat image in environment/seat/ for both seats."""
+
+    def __init__(self, task_dir: Path):
+        self.task_dir = Path(task_dir)
+        self.instructions_dir = self.task_dir / "instructions"
+        self.environment_dir = self.task_dir / "environment"
+        self.seat_dir = self.environment_dir / "seat"
+        self.tests_dir = self.task_dir / "tests"
+        self.solution_dir = self.task_dir / "solution"
+        self.task_toml_path = self.task_dir / "task.toml"
+
+        for d in (
+            self.instructions_dir,
+            self.seat_dir,
+            self.tests_dir,
+            self.solution_dir,
+        ):
+            d.mkdir(parents=True, exist_ok=True)
+
+
 # ---------------------------------------------------------------------------
 # Adapter
 # ---------------------------------------------------------------------------
@@ -285,6 +338,8 @@ class CooperBenchAdapter:
     """
 
     AGENT_HARNESSES = ("mini-swe-agent", "openhands-sdk")
+    # Seat names in seat mode: agent1 implements feature A, agent2 feature B.
+    SEATS = ("agent1", "agent2")
 
     def __init__(
         self,
@@ -299,6 +354,7 @@ class CooperBenchAdapter:
         agent_harness: str = "mini-swe-agent",
         subset: str | None = None,
         instance_ids: list[str] | None = None,
+        seats: bool = False,
     ):
         """Initialize the adapter.
 
@@ -314,6 +370,8 @@ class CooperBenchAdapter:
             subset: Subset name (lite, flash) or path to subset JSON.
             instance_ids: CooperBench instance_ids to filter to
                 (e.g., dottxt-ai__outlines-1371-1).
+            seats: Write seat tasks (agent1 and agent2 as [agents.<service>]
+                seats) instead of sidecar tasks; agent_harness does not apply.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -327,12 +385,13 @@ class CooperBenchAdapter:
         )
         self.agent_timeout_sec = agent_timeout_sec
         self.verifier_timeout_sec = verifier_timeout_sec
-        if agent_harness not in self.AGENT_HARNESSES:
+        if not seats and agent_harness not in self.AGENT_HARNESSES:
             raise ValueError(
                 f"Unknown agent harness: {agent_harness}. "
                 f"Choose from: {', '.join(self.AGENT_HARNESSES)}"
             )
         self.agent_harness = agent_harness
+        self.seats = seats
 
     def run(self) -> tuple[list[Path], list[tuple[str, str]]]:
         """Load the dataset, apply filters, and generate tasks.
@@ -481,6 +540,36 @@ class CooperBenchAdapter:
     # at runtime so the pre-existing test_tool_calls_format_basic passes.
     _DSPY_T8563_TESTFIX = Path(__file__).parent / "fixes" / "dspy-t8563-testfix.patch"
 
+    # Text fixes for two known bugs in gold patches: (old, new).
+    # dspy task 8635: min_instr_chars=30 rejects short mock responses in
+    # pre-existing tests.  Change default to 0.
+    _DSPY_T8635_FIX = (
+        "+        min_instr_chars=30,",
+        "+        min_instr_chars=0,",
+    )
+    # react-hook-form task 153, implementation: detect function vs options
+    # object (the test patch passes onFinally as a bare function).
+    _RHF_T153_IMPLEMENTATION_FIX = (
+        "+    (onValid, onInvalid, options) => async (e?, context?) => {\n"
+        "+      let onValidError: Error | undefined = undefined;",
+        "+    (onValid, onInvalid, optionsOrOnFinally) => async (e?, context?) => {\n"
+        "+      // Accept onFinally as a bare function (3rd positional arg) or as\n"
+        "+      // options.onFinally for backward compatibility with both call styles.\n"
+        "+      const options = typeof optionsOrOnFinally === 'function'\n"
+        "+        ? { onFinally: optionsOrOnFinally }\n"
+        "+        : optionsOrOnFinally;\n"
+        "+      let onValidError: Error | undefined = undefined;",
+    )
+    # react-hook-form task 153, type definition: accept function | options
+    # object.
+    _RHF_T153_TYPE_FIX = (
+        "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
+        "+  options?: {",
+        "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
+        "+  optionsOrOnFinally?: "
+        "((formState: FormState<TFieldValues>) => void | Promise<void>) | {",
+    )
+
     def _apply_upstream_fixes(
         self,
         pair: CooperBenchPair,
@@ -495,10 +584,7 @@ class CooperBenchAdapter:
         if task_key == ("stanfordnlp/dspy", "8635"):
             patch_path = paths.solution_dir / "combined.patch"
             content = patch_path.read_text(encoding="utf-8")
-            content = content.replace(
-                "+        min_instr_chars=30,",
-                "+        min_instr_chars=0,",
-            )
+            content = content.replace(*self._DSPY_T8635_FIX)
             patch_path.write_text(content, encoding="utf-8")
 
         # -- react-hook-form task 153 --------------------------------------
@@ -510,26 +596,10 @@ class CooperBenchAdapter:
             content = patch_path.read_text(encoding="utf-8")
 
             # Fix implementation: detect function vs options object
-            content = content.replace(
-                "+    (onValid, onInvalid, options) => async (e?, context?) => {\n"
-                "+      let onValidError: Error | undefined = undefined;",
-                "+    (onValid, onInvalid, optionsOrOnFinally) => async (e?, context?) => {\n"
-                "+      // Accept onFinally as a bare function (3rd positional arg) or as\n"
-                "+      // options.onFinally for backward compatibility with both call styles.\n"
-                "+      const options = typeof optionsOrOnFinally === 'function'\n"
-                "+        ? { onFinally: optionsOrOnFinally }\n"
-                "+        : optionsOrOnFinally;\n"
-                "+      let onValidError: Error | undefined = undefined;",
-            )
+            content = content.replace(*self._RHF_T153_IMPLEMENTATION_FIX)
 
             # Fix type definition: accept function | options object
-            content = content.replace(
-                "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
-                "+  options?: {",
-                "+  onInvalid?: SubmitErrorHandler<TFieldValues, TSubmitContext>,\n"
-                "+  optionsOrOnFinally?: "
-                "((formState: FormState<TFieldValues>) => void | Promise<void>) | {",
-            )
+            content = content.replace(*self._RHF_T153_TYPE_FIX)
 
             patch_path.write_text(content, encoding="utf-8")
 
@@ -567,48 +637,100 @@ class CooperBenchAdapter:
                 test_sh.write_text(content, encoding="utf-8")
 
         # -- huggingface/datasets task 7309 ----------------------------------
-        # Pre-existing test_parquet_read_geoparquet expects dtype "string" but
-        # pyarrow >=20 returns "large_string".  Inject a fix hunk into both
-        # test patches so runner.sh (inside the Docker image) applies it.
         if task_key == ("huggingface/datasets", "7309"):
-            fix_hunk = (
-                "@@ -77,7 +77,7 @@ def test_parquet_read_geoparquet"
-                "(geoparquet_path, tmp_path):\n"
-                "     expected_features = {\n"
-                '         "pop_est": "float64",\n'
-                '-        "continent": "string",\n'
-                '-        "name": "string",\n'
-                '+        "continent": "large_string",\n'
-                '+        "name": "large_string",\n'
-                '         "gdp_md_est": "int64",\n'
-                '         "geometry": "binary",\n'
-                "     }\n"
+            self._fix_datasets_t7309_test_patches(paths.tests_dir)
+
+    def _apply_seat_upstream_fixes(
+        self,
+        pair: CooperBenchPair,
+        paths: SeatTaskPaths,
+        seat_patches: list[Path],
+    ) -> None:
+        """The upstream fixes for a seat task, whose gold patches are the
+        pair's own two features, not combined.patch. A gold-patch fix changes
+        a seat patch only if the patch holds all the text the fix replaces:
+        react-hook-form 153's two halves must change together, since the type
+        half alone leaves code that does not compile, and no single feature
+        patch holds both, so its feature patches stay as they are. dspy 8635's
+        fix applies to feature 6, the one feature patch that has the bug."""
+        task_key = (pair.repo, pair.task_id)
+        fixes: tuple[tuple[str, str], ...] = ()
+        if task_key == ("stanfordnlp/dspy", "8635"):
+            fixes = (self._DSPY_T8635_FIX,)
+        elif task_key == ("react-hook-form/react-hook-form", "153"):
+            fixes = (self._RHF_T153_IMPLEMENTATION_FIX, self._RHF_T153_TYPE_FIX)
+        for patch_path in seat_patches:
+            content = patch_path.read_text(encoding="utf-8")
+            if not fixes or not all(old in content for old, _ in fixes):
+                continue
+            for old, new in fixes:
+                content = content.replace(old, new)
+            patch_path.write_text(content, encoding="utf-8")
+            if task_key == ("react-hook-form/react-hook-form", "153"):
+                self._fix_patch_hunk_headers(patch_path)
+
+        # dspy 8563: the new format() return type is feature 1's. With
+        # feature 1 in the pair, the verifier appends testfix.patch to the
+        # other feature's test patch (seats/tests/test.sh does this itself);
+        # without it, the pre-existing expectation is the right one.
+        features = {
+            pair.feature_a.cooperbench_feature_id,
+            pair.feature_b.cooperbench_feature_id,
+        }
+        if (
+            task_key == ("stanfordnlp/dspy", "8563")
+            and "1" in features
+            and self._DSPY_T8563_TESTFIX.exists()
+        ):
+            (paths.tests_dir / "testfix.patch").write_text(
+                self._DSPY_T8563_TESTFIX.read_text(encoding="utf-8"), encoding="utf-8"
             )
-            for patch_name in ("tests1.patch", "tests2.patch"):
-                patch_path = paths.tests_dir / patch_name
-                content = patch_path.read_text(encoding="utf-8")
-                # Insert fix hunk in sorted position among existing hunks.
-                # Hunks must be in ascending old-file line order, with no
-                # blank lines between hunks (git would lose file context).
-                hunk_positions = [
-                    (m.start(), int(m.group(1)))
-                    for m in re.finditer(r"^@@ -(\d+)", content, re.MULTILINE)
-                ]
-                insert_before = None
-                for pos, line_num in hunk_positions:
-                    if line_num > 77:
-                        insert_before = pos
-                        break
-                if insert_before is not None:
-                    content = (
-                        content[:insert_before] + fix_hunk + content[insert_before:]
-                    )
-                else:
-                    # Append after all existing hunks
-                    if not content.endswith("\n"):
-                        content += "\n"
-                    content += fix_hunk
-                patch_path.write_text(content, encoding="utf-8")
+
+        if task_key == ("huggingface/datasets", "7309"):
+            self._fix_datasets_t7309_test_patches(paths.tests_dir)
+
+    @staticmethod
+    def _fix_datasets_t7309_test_patches(tests_dir: Path) -> None:
+        """huggingface/datasets task 7309: pre-existing
+        test_parquet_read_geoparquet expects dtype "string" but pyarrow >=20
+        returns "large_string".  Inject a fix hunk into both test patches so
+        runner.sh (inside the Docker image) applies it."""
+        fix_hunk = (
+            "@@ -77,7 +77,7 @@ def test_parquet_read_geoparquet"
+            "(geoparquet_path, tmp_path):\n"
+            "     expected_features = {\n"
+            '         "pop_est": "float64",\n'
+            '-        "continent": "string",\n'
+            '-        "name": "string",\n'
+            '+        "continent": "large_string",\n'
+            '+        "name": "large_string",\n'
+            '         "gdp_md_est": "int64",\n'
+            '         "geometry": "binary",\n'
+            "     }\n"
+        )
+        for patch_name in ("tests1.patch", "tests2.patch"):
+            patch_path = tests_dir / patch_name
+            content = patch_path.read_text(encoding="utf-8")
+            # Insert fix hunk in sorted position among existing hunks.
+            # Hunks must be in ascending old-file line order, with no
+            # blank lines between hunks (git would lose file context).
+            hunk_positions = [
+                (m.start(), int(m.group(1)))
+                for m in re.finditer(r"^@@ -(\d+)", content, re.MULTILINE)
+            ]
+            insert_before = None
+            for pos, line_num in hunk_positions:
+                if line_num > 77:
+                    insert_before = pos
+                    break
+            if insert_before is not None:
+                content = content[:insert_before] + fix_hunk + content[insert_before:]
+            else:
+                # Append after all existing hunks
+                if not content.endswith("\n"):
+                    content += "\n"
+                content += fix_hunk
+            patch_path.write_text(content, encoding="utf-8")
 
     @staticmethod
     def _fix_patch_hunk_headers(patch_path: Path) -> None:
@@ -659,6 +781,9 @@ class CooperBenchAdapter:
             if not overwrite:
                 raise FileExistsError(f"Target already exists: {task_dir}")
             shutil.rmtree(task_dir)
+
+        if self.seats:
+            return self._generate_seat_task(pair, task_dir)
 
         paths = HarborTaskPaths(task_dir)
         gh_dir = GITHUB_DIR_FOR_REPO[pair.repo]
@@ -749,6 +874,106 @@ class CooperBenchAdapter:
 
         # -- upstream bug fixes ------------------------------------------------
         self._apply_upstream_fixes(pair, paths)
+
+        return task_dir
+
+    def _generate_seat_task(self, pair: CooperBenchPair, task_dir: Path) -> Path:
+        """Write a seat task: agent1 (feature A) and agent2 (feature B) are
+        [agents.<service>] seats, both under test, each with its own
+        instruction, container and workspace volume. main holds the base
+        commit, serves the seats' messages, and runs the verifier."""
+        paths = SeatTaskPaths(task_dir)
+        template = self.template_dir / "seats"
+        image_name = get_image_name(GITHUB_DIR_FOR_REPO[pair.repo], pair.task_id)
+        features = dict(zip(self.SEATS, (pair.feature_a, pair.feature_b)))
+        verifier_timeout = (
+            self.verifier_timeout_sec
+            + 3 * SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC
+            + SEAT_ATTRIBUTION_OVERHEAD_SEC
+        )
+
+        # -- task.toml -----------------------------------------------------
+        task_toml = _render(
+            (template / "task.toml").read_text(encoding="utf-8"),
+            pair_id=pair.pair_id,
+            agent_timeout_sec=f"{self.agent_timeout_sec:.1f}",
+            verifier_timeout_sec=f"{verifier_timeout:.1f}",
+            seat_attribution_run_timeout_sec=str(SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC),
+            repo=pair.repo,
+            task_id=pair.task_id,
+            feature_a=pair.feature_a.cooperbench_feature_id,
+            feature_b=pair.feature_b.cooperbench_feature_id,
+        )
+        paths.task_toml_path.write_text(task_toml, encoding="utf-8")
+
+        # -- instructions/<seat>.md: the seat's feature, then the team setup
+        # and the cooperation protocol (feature text last, so it is not
+        # scanned for placeholders) --------------------------------------
+        instruction = (template / "instruction.md").read_text(encoding="utf-8")
+        for seat, feature in features.items():
+            (teammate,) = (other for other in self.SEATS if other != seat)
+            (paths.instructions_dir / f"{seat}.md").write_text(
+                _render(
+                    instruction,
+                    agent_id=seat,
+                    teammate=teammate,
+                    feature_description=feature.problem_statement,
+                ),
+                encoding="utf-8",
+            )
+
+        # -- environment/: main, the seat image, and the compose file -------
+        for dockerfile_dir, out_dir in (
+            (template / "environment", paths.environment_dir),
+            (template / "environment" / "seat", paths.seat_dir),
+        ):
+            (out_dir / "Dockerfile").write_text(
+                _render(
+                    (dockerfile_dir / "Dockerfile").read_text(encoding="utf-8"),
+                    image_name=image_name,
+                ),
+                encoding="utf-8",
+            )
+        for src, dst in (
+            ("docker-compose.yaml", paths.environment_dir),
+            ("coop_server.py", paths.environment_dir),
+            ("seat/coop_msg.py", paths.seat_dir),
+        ):
+            shutil.copy2(template / "environment" / src, dst)
+
+        # -- tests/ --------------------------------------------------------
+        (paths.tests_dir / "tests1.patch").write_text(
+            pair.feature_a.test_patch, encoding="utf-8"
+        )
+        (paths.tests_dir / "tests2.patch").write_text(
+            pair.feature_b.test_patch, encoding="utf-8"
+        )
+        test_sh_path = paths.tests_dir / "test.sh"
+        shutil.copy2(template / "tests" / "test.sh", test_sh_path)
+        test_sh_path.chmod(0o755)
+
+        # -- solution/: each seat's own feature's gold patch ----------------
+        seat_patches = []
+        for seat, feature in features.items():
+            patch_path = paths.solution_dir / f"{seat}.patch"
+            patch_path.write_text(feature.patch, encoding="utf-8")
+            seat_patches.append(patch_path)
+        solve_sh_path = paths.solution_dir / "solve.sh"
+        shutil.copy2(template / "solution" / "solve.sh", solve_sh_path)
+        solve_sh_path.chmod(0o755)
+
+        # -- upstream bug fixes ------------------------------------------------
+        self._apply_seat_upstream_fixes(pair, paths, seat_patches)
+        (paths.tests_dir / "feature-files.json").write_text(
+            json.dumps(
+                {
+                    seat: _reference_patch_paths(patch_path.read_text(encoding="utf-8"))
+                    for seat, patch_path in zip(self.SEATS, seat_patches, strict=True)
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
         return task_dir
 
