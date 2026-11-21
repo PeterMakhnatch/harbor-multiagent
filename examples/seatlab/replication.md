@@ -97,6 +97,39 @@ python -m examples.seatlab.visibility.route_cli report --workflow delegate --stu
 
 Use `demo` instead of `commands` and omit `--config` for a no-model transport check. Use a new private directory for a new run. A registered block has one claim, even if a process fails. The report distinguishes unclaimed blocks, known unselected branches, missing replies, and identical selections that share one actual final response.
 
+## How quickly does a team stop trusting a stale source?
+
+**Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
+
+- Use all 12 seeds `5201` through `5212`, both source regimes, and 2 repetitions. This gives 48 paired blocks. Use all 10 odd shipment IDs among the first 20 shipments. These are exactly the shipments on which the native stock changes. Do not filter by payoff or by model output.
+- Name the two inventory desks X and Y. One desk sees current stock. The other sees the previous stock for the same shipment. X starts with current stock if `seed + repetition` is even. Otherwise Y starts with it. In `stable`, this assignment never changes. In `switch`, it reverses on step 6, counting from 0. Do not announce the reversal.
+- Calibrate at steps 0 and 1. Request each desk once. X goes first when `floor((seed − 5201) / 2) + repetition` is even. Both policies receive the same two actual audits. The reviewer transmits its observed pair of available bays. A separate dispatch call chooses a bay using the reported pair and the native utility ranks.
+- From steps 2 through 9, a selector chooses one desk. Both policies receive the same form of named audit counts. `lifetime` counts all previous completed decisions in that policy. `recent` counts only its last 2 completed decisions, across both desks. An audit is exact when the actual reported pair matches current stock. Record it only after the decision. Do not show current stock, the other desk's report, or future feedback. A desk with no observations gets a denominator of 0.
+- Contact only the selected desk. Give the final decision maker the actual returned pair and the utility ranks, without any audit counts. Accept a valid bay even when the desk did not report it. Each policy gets independent generations after calibration. Start `lifetime` first when `seed + repetition + step` is even. An invalid stage ends that policy's remaining decisions. A shared calibration failure ends both. Keep incomplete blocks; never retry a requested turn.
+- Primary: percentage-point difference in optimal choices, `recent − lifetime`, over steps 6–9 in the `switch` regime. Match within seed, repetition, and step. Average complete differences per seed and weight all 12 seeds equally. Report no full-register point estimate if any seed has no complete pairs. Also report sharp missing-decision bounds over the fixed register. These are not confidence intervals.
+- Secondary: the same contrast in `stable`; selection of the now-current desk at each post-switch step; accuracy where the changed stock also changes the best bay; pre-switch differences; and report copying errors. Each regime has at most 96 final choices per policy after the cutoff. These are 12 native seed worlds, not 96 independent tasks.
+- Use direct DeepSeek Flash with the existing spend directory, at most 52 first calls per block and 2,496 in total. The private runner commits to the exact prompts and first replies. An independent stock check scores only observed model choices. Its fixed-bay reference probes are not agent actions or native trial rewards.
+
+### Run different agent programs on the same stock changes
+
+This command uses the checked-in native world. It needs Python 3.12 or later. It does not need Docker, the private archive, or an API key. Use the same absolute `reviewer` and `decider` programs as in [the two-program example](#run-your-own-reviewer-and-decision-maker).
+
+```sh
+module=examples.seatlab.visibility.feedback_cli
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+mkdir -m 700 "$private/study"
+python -m "$module" plan --seed 7001
+python -m "$module" commands --seed 7001 --study "$private/study" --config seats.json --start 0 --stop 1
+python -m "$module" report --seed 7001 --study "$private/study" > "$private/report.json"
+python -m examples.seatlab.visibility.feedback_stock "$private/report.json"
+```
+
+Your executables can incur their own provider costs. For a free transport check, use `demo` instead of `commands` and omit `--config`. For the registered study, omit `--seed`. Repeat `--seed` for a custom set of worlds. Use the same seeds and order when reading the study.
+
+Separate workers can use disjoint block ranges in one private directory. Keep an interrupted block closed. Use `report` to find untouched blocks. The built-in `direct` mode uses only the registered seed set and requires the original spend directory.
+
+For a direct run, add `--spend-dir "$SEATLAB_SPEND_DIR"` to `report`. This compares the role, model, and token counts with the original host ledger. Do not use that ledger to price an external executable or a subscription. Save report files outside the private study directory.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.

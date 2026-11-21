@@ -2,6 +2,25 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can a new dispatcher learn which stock source to trust?
+
+The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.
+
+The first registered block produced 18 decisions. All 52 direct DeepSeek calls matched the host ledger at **$0.000924900 USD**, with no open hold. An independent stock check agreed on all 18 decisions. Only 1 of 12 native worlds had observations at this point. There is no full-study estimate from this block.
+
+**Keeping the last 2 audits helped after a source reversal.** The table shows the 4 decisions after the cutoff. All paired decisions were observed. The registered comparison gives each of the 12 worlds equal weight.
+
+| Source regime after the cutoff | Lifetime: optimal choices | Recent: optimal choices | Recent minus lifetime |
+| --- | ---: | ---: | ---: |
+| Source reversed | 26 / 96 | 43 / 96 | +17.71 points |
+| Source stayed the same | 94 / 96 | 92 / 96 | −2.08 points |
+
+On the last step after reversal, recent memory selected the current desk in 11 of 24 teams. Lifetime memory selected it in 0 of 24. The inventory agents accurately copied their assigned reports in both policies. Correct copying did not make an old report current.
+
+The [full study](results/feedback-horizon-live.json) contains all 48 first-attempt blocks and their observed histories. The [native stock check](results/feedback-horizon-stock.json) confirmed all 864 decisions. The [host ledger](results/feedback-horizon-cost.json) matched 2,496 direct DeepSeek calls at **$0.044395800 USD**. These are host-side teams on 12 native worlds, not 864 independent Harbor trials or an estimate for other models.
+
+The [two-program command](replication.md#run-different-agent-programs-on-the-same-stock-changes) also ran with separate, non-model programs on a custom seed. It produced 72 decisions over 4 blocks, with no differences from the stock scorer. This checks the interface. It is not model evidence.
+
 ## What happens when a second agent sees different evidence?
 
 **The complementary reviewer helped on the clean source and hurt on the noisiest one.** Both agents used direct DeepSeek Flash. The reviewer saw either the decision maker's own fields or a different pair of fields. The decision maker received either the reviewer's vote alone or the same vote plus its transcribed numbers. Both delivery arms used the same actual review. These are new model decisions using stored observations, not new native rewards.
