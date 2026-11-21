@@ -20,6 +20,24 @@ The stock Eval Lab reader matched all 48 native scores. Independent checks match
 
 [Native results and every charge](results/calendar-visible-check-live.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061789256) · [Run both arms](replication.md#check-a-receivers-own-availability-against-delivered-reports) · [Reuse one of your own completed native trials](replication.md#compare-2-workers-on-your-own-completed-scheduling-trial).
 
+### What if the receivers get exactly the same reports?
+
+The check still helped. We used the 24 original `lists` teams. For each team, we matched its exact final receiver input, including the reports it actually received. We collected 2 fresh first replies per arm on each world. The check changed no underlying fact.
+
+| Correct receiver decisions | Original input | Same input plus check |
+|---|---:|---:|
+| All 24 source worlds | 19/48 | 32/48 |
+| True meeting appeared in the reports (14 worlds) | 18/28 | 27/28 |
+| True meeting did not appear in the reports (10 worlds) | 1/20 | 5/20 |
+
+The gain was 27.1 percentage points. Eleven worlds improved, 13 tied, and none declined. The exact two-sided sign-flip test by **world**, not by reply, gave **p = 1/1024**. This passed the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061629963). The two report-visibility groups are descriptive.
+
+Equal inputs did not guarantee equal decisions. Across 2 replies, the selected slot changed on 10/24 original inputs and 8/24 checked inputs. The grade changed on 5/24 and 4/24, respectively. The stock key and the [single-trial scorer](replication.md#compare-2-workers-on-your-own-completed-scheduling-trial) agreed on all 96 grades.
+
+**Practical use:** show the receiver which peer claims fit its own constraints. Preserve the source of each claim, especially when an unopened report can be stale. This result measures one model on scheduling. These 96 replies are not another 96 teams.
+
+[Source and first-reply evidence](results/calendar-visible-fixed-replay.json) · [96 direct charges: $0.003303618](results/calendar-visible-fixed-replay-cost.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061830775).
+
 ## Held-out test: change both private calendar views
 
 We ran 2 fresh teams on each world. Both teams got the same game, the same weekday notices, and the same 2-report limit. Only the calendar view changed. The first sender turn saw 2 attendees. Its revision and the receiver saw all 3 attendees at their own seat.

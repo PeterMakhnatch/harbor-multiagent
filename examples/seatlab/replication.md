@@ -566,6 +566,13 @@ python3.12 -BS -m "$case_module" compare "$private/case" \
 
 The scorer needs neither Docker nor an API key. It accepts replies in any order. A missing or invalid answer is not a zero. A valid wrong answer is a zero. A changed input hash or duplicate reply rejects the comparison. The output compares receiver choices, not new team rewards.
 
+To check the published comparison instead, run the command below. It reads the 24 source identities and all 96 first-reply grades. It recomputes the exact two-sided test by world:
+
+```sh
+python3.12 -BS -m examples.seatlab.calendar_notices.visible_replay_summary \
+  examples/seatlab/results/calendar-visible-fixed-replay.json
+```
+
 #### Could a different report request have helped?
 
 Use the native job you already ran. This diagnostic makes no model calls and starts no containers:
