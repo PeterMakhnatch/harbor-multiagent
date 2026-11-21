@@ -103,9 +103,12 @@ def _register(root: Path, args: argparse.Namespace) -> None:
         None if body is None else sha256(body).hexdigest(),
         confirmation_cohort=confirmation_cohort,
     )
-    if directory is not None and _ledger(
-        directory, plan["cells"], confirmation_cohort=confirmation_cohort
-    )["calls"]:
+    if (
+        directory is not None
+        and _ledger(directory, plan["cells"], confirmation_cohort=confirmation_cohort)[
+            "calls"
+        ]
+    ):
         raise ValueError("a prior registered direct run already occupies this ledger")
     root.mkdir(mode=0o700)
     teams._check_path(root, 0o700, directory=True)
@@ -344,7 +347,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.mode == "plan":
             cells = (
-                confirmation.grid() if args.cohort == "confirmation" else protocol.grid()
+                confirmation.grid()
+                if args.cohort == "confirmation"
+                else protocol.grid()
             )
             _print(
                 {

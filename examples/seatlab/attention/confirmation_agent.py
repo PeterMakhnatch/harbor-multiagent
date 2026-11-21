@@ -30,7 +30,9 @@ class ConfirmationSeat(AttentionSeat):
             or extra_env
         ):
             raise ValueError("Confirmation seat requires the registered direct model")
-        BaseAgent.__init__(self, logs_dir=logs_dir, model_name=model_name, logger=logger)
+        BaseAgent.__init__(
+            self, logs_dir=logs_dir, model_name=model_name, logger=logger
+        )
         self._cell = _CELLS[cell_id]
         self._command_config = None
         self._command = None
