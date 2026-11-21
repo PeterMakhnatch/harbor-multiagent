@@ -144,11 +144,30 @@ def _dispatch(args: argparse.Namespace) -> int:
             stop = args.start + 1 if args.stop is None else args.stop
             if not 0 <= args.start < stop <= 36:
                 raise ValueError("invalid registered range")
-            rows = run.run_cells(packet, digest, args.study, range(args.start, stop))
+            rows = run.run_cells(
+                packet,
+                digest,
+                args.study,
+                range(args.start, stop),
+                packet_path=args.packet or _RESULTS / "turn-fork-packet.json",
+            )
             _print(rows)
             return int(any(row["state"] == "incomplete" for row in rows))
-    elif args.mode == "report":
-        _print(_collect(packet, digest, args.study))
+    elif args.mode in ("report", "pending"):
+        report = _collect(packet, digest, args.study)
+        if args.mode == "report":
+            _print(report)
+        else:
+            from .run import reserved_indices
+
+            reserved = reserved_indices(args.study, digest)
+            _print(
+                [
+                    {"index": index, "source_id": row["source_id"], "arm": row["arm"]}
+                    for index, row in enumerate(report["rows"])
+                    if row["state"] == "unclaimed" and index not in reserved
+                ]
+            )
     else:
         report = verified(packet, digest, args.report)
         if args.mode == "verify":
@@ -189,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         "show",
         "export",
         "seal",
+        "pending",
         "run",
         "report",
         "verify",
@@ -207,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             help="Use a different exported packet; requires --sha256.",
         )
         parser.add_argument("--sha256", help="Exact SHA-256 of the packet bytes.")
-        if name in ("seal", "run", "report"):
+        if name in ("seal", "run", "pending", "report"):
             parser.add_argument("--study", type=Path, required=True)
         if name == "seal":
             parser.add_argument(

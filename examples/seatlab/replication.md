@@ -497,3 +497,29 @@ Freeze those two upstream messages. Start independent inventory and dispatch cal
 Run 36 continuations per transport. Use direct DeepSeek Flash and separate keyless `openai-codex/gpt-6.2-sol` programs. Do not pool transports. Each has at most 72 first attempts. There are 6 source worlds, not 36. Register failures as missing, without retries. Capture each direct call's cost in the existing results log. Do not rerun native teams. New decisions receive a stock score, not a new native Harbor reward.
 
 Primary: the equal-world difference in optimal choices per 6 shipments, `aligned − shifted`. Within each world, pair by original source and average observed repetitions. Do not report a full-register estimate when a world has no matched repetition. Bound unknown scores over all 12 enrolled sources. Report `aligned − repeat` separately as variation under identical sender inputs. Also report agreement on opened report sets and final actions, changes in the best bay under the two reports, and coverage. These bounds are not confidence intervals.
+
+### Start from the published team checkpoint
+
+Use Python 3.12 or later from this branch. These commands need no Harbor, Docker, model account, or private trial archive. The second and third commands print the exact role prompts, not a description of them.
+
+```sh
+module=examples.seatlab.turn_fork
+python -S -m "$module" plan
+python -S -m "$module" show --source s6501-r0 --arm shifted
+python -S -m "$module" show --source s6501-r0 --opened Q1 Q3
+```
+
+**To run fresh agents:** configure 2 trusted [seat programs](#run-your-own-reviewer-and-decision-maker). Set `reviewer` to the inventory program and `decider` to the dispatch program. The launcher passes each program its own prompt, not the world, answer key, other program's reply, or treatment label. Use a separate receipt directory for each role. Programs can incur costs. This interface does not isolate untrusted programs from your computer.
+
+```sh
+private=$(python -c 'from pathlib import Path; import tempfile; print(Path(tempfile.mkdtemp()).resolve())')
+python -m "$module" seal --study "$private/team" --transport commands --config "$config"
+python -m "$module" run --study "$private/team" --start 0 --stop 3
+python -m "$module" pending --study "$private/team"
+python -m "$module" report --study "$private/team" > "$private/report.json"
+python -S -m "$module" verify "$private/report.json"
+```
+
+`$config` is the absolute path to your command configuration. One source has 3 consecutive cells. Give each worker a separate range of complete sources, such as `0:18` and `18:36`. The stop index is exclusive. At most 2 model turns run per cell. If work stops, `pending` lists only untouched cells. Preserve failed first attempts. The public report identifies separately the measured difference, disagreement with the same sender input, and bounds from missing first attempts.
+
+**To export your own source:** `export --native-study DIR --native-report REPORT` reads an existing native briefing study with its original configurations. It emits only the accepted synthetic fields. Pin the exact bytes with SHA-256. Supply the pair to readers with `--packet PATH --sha256 DIGEST`. The direct transport accepts only the registered public packet; custom packets can use command programs. Do not publish raw private native folders.
