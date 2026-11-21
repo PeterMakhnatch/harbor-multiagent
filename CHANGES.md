@@ -40,7 +40,7 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/server/listing.py`, `src/harbor/server/database.py` | Restore the known UTC contract at REST boundaries when the SQLite codec drops the offset. Keep stored and raw SQL values unchanged. |
 | `apps/viewer/app/lib/pareto.ts`, `apps/viewer/app/lib/server-controls.ts`, `apps/viewer/app/routes/home.tsx`, `apps/viewer/app/routes/trial.tsx`, `apps/viewer/app/components/rollout-columns.tsx`, `apps/viewer/app/components/interaction-viewer.tsx` | Show unknown absolute times explicitly. Keep date filters, ordering, and durations consistent across Job and Trial views. |
 | `tests/unit/test_job_status.py`, `tests/unit/test_job_plan.py`, `tests/unit/test_cli_run_upload.py`, `tests/unit/test_cli_resume_upload.py`, `tests/unit/cli/test_utils.py`, `tests/unit/test_trial_queue_integration.py`, `tests/unit/test_uploader.py` | Exercise UTC lifecycle boundaries, safe resume, native and Hub start equality, and legacy upload behavior. |
-| `tests/unit/viewer/test_sources.py`, `tests/unit/test_server_filters.py` | Cover mixed-offset ordering, unknown date filters, and server REST UTC without changing stored values. |
+| `tests/unit/viewer/test_sources.py`, `tests/unit/viewer/test_job_status.py`, `tests/unit/test_server_filters.py` | Cover mixed-offset ordering, unknown date filters, preserved historical bytes, and server REST UTC without changing stored values. |
 
 Readers of `agent_info` are untouched: a seat trial fills it with its first
 agent under test. Readers of `exception_info` are untouched too: a seat
