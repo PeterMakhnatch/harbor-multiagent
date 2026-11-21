@@ -116,7 +116,9 @@ def _write(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
-def _trial(tmp_path: Path, transport: str) -> tuple[Path, dict, dict, dict, dict]:
+def _trial(
+    tmp_path: Path, transport: str
+) -> tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
     cell = next(cell for cell in protocol.grid() if cell["arm"] == "named")
     cell_id, seed, rep = cell["cell_id"], cell["seed"], cell["repetition"]
     world_type = run_path(str(native.run_panel.TASK_DIR / "environment/seatworld.py"))[
@@ -176,7 +178,7 @@ def _trial(tmp_path: Path, transport: str) -> tuple[Path, dict, dict, dict, dict
     final = _turn(
         cell_id,
         "decide",
-        protocol.decide_prompt(cases, seed, rep, tuple(opened)),
+        protocol.decide_prompt(cases, seed, rep, (opened[0], opened[1])),
         {"choices": {alias: choices[i]["bay"] for alias, i in aliases.items()}},
         direct,
     )
