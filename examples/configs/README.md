@@ -29,18 +29,19 @@ asking for 4 final actions per seat. Neither mode reuses a saved plan.
 Keep the operating system, model, task, and runtime fixed and alternate
 which mode runs first.
 
-Both modes read the live board at ticks 12 and 14. At each tick, the seat
-agent checks whether `chef0` is about to leave a full, unlit pot that it can start.
-`observe` keeps its plan. `repair` adds at most 1 model turn, at the first
-eligible tick. This turn replaces the last 4 opening actions at tick 12 or
-the last 2 at tick 14. If neither tick is eligible, there is no repair turn.
+Both modes read the live board at 3 consecutive ticks: 12, 13, and 14.
+At each tick, the seat agent checks whether `chef0`'s current plan would
+leave a full, unlit pot that `chef0` can start. `observe` keeps its plan.
+In `repair` mode, the first eligible tick triggers 1 model turn to replace
+the remaining opening actions: 4 at tick 12, 3 at tick 13, or 2 at tick 14.
+Both modes make all 3 observations, even after a repair. There is at most
+1 repair turn per trial, and there is none if no tick is eligible.
 
 `receipt.json` uses schema `harbor-cramped-room-subscription/v2`. The `chef0`
-`checkpoints` list records `tick`, `eligible`, and `repair_called` for both
-observations. The `chef1` list is empty. The receipt also shows play time,
+`checkpoints` list records `tick`, `eligible`, and `repair_called` for all
+3 observations. The `chef1` list is empty. The receipt also shows play time,
 seat execution time, and time and tokens for each model turn and seat.
-Cached input tokens are part of the input count. `cost_usd` is `null`
-because the subscription does not report a dollar price for the trial.
+Cached input tokens are part of the input count. `cost_usd` is `null`.
 Each valid result must include both native freeze stamps, after play and
 before the verifier starts. This does not attest that the shared world
 stopped or that the verifier is isolated.

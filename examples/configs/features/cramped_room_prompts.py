@@ -55,18 +55,18 @@ def phase_prompt(
             "pot access. Return only your own actions and prepare for the idle transitions."
         )
     elif stage == "repair":
-        count = 4 if tick == 12 else 2
+        count = 16 - tick
         if (
             role != "chef0"
-            or tick not in (12, 14)
+            or tick not in (12, 13, 14)
             or not isinstance(own_plan, list)
             or len(own_plan) != count
             or not isinstance(peer_plan, list)
             or len(peer_plan) != count
         ):
             raise ValueError(
-                "Repair requires chef0 and two plans of 4 actions at state tick 12 "
-                "or 2 actions at state tick 14"
+                "Repair requires chef0 and two plans of 4, 3, or 2 actions "
+                "at state ticks 12, 13, or 14, respectively"
             )
         phase = (
             "Recover the opening from the observed state. "

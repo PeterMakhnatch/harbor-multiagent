@@ -31,7 +31,7 @@ _ACTIONS = {
     "WAIT": (0, 0),
     "USE": "interact",
 }
-_CHECKPOINT_TICKS = (12, 14)
+_CHECKPOINT_TICKS = (12, 13, 14)
 _FIRST_COUNT = 16
 _IDLE_COUNT = 18
 _SECOND_TICK = _FIRST_COUNT + _IDLE_COUNT
@@ -281,7 +281,7 @@ class KitchenPilotAgent(BaseAgent):
 
     @override
     def version(self) -> str:
-        return "7"
+        return "8"
 
     @override
     async def setup(self, environment: BaseEnvironment) -> None:
