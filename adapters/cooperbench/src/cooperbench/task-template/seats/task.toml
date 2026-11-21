@@ -30,6 +30,9 @@ seat_features = { agent1 = "{feature_a}", agent2 = "{feature_b}" }
 [verifier]
 timeout_sec = {verifier_timeout_sec}
 
+[verifier.env]
+COOPERBENCH_ATTRIBUTION_TIMEOUT_SEC = "{seat_attribution_run_timeout_sec}"
+
 # One agent timeout, shared by both seats.
 [agent]
 timeout_sec = {agent_timeout_sec}

@@ -7,9 +7,8 @@
 # is its own seat's work. main's own /workspace/repo is the untouched base.
 #
 # Every exit path writes /logs/verifier/reward.json ({"reward": 0 or 1}), and
-# details.json unless even that cannot be written. The COOPERBENCH_* variables
-# only exist so the unit tests can run this script without Docker; a task
-# never sets them.
+# details.json unless even that cannot be written. COOPERBENCH_* variables
+# override the default paths for tests, or set the attribution time limit.
 set -eEuo pipefail
 
 # Ensure language toolchains are in PATH (DinD exec may not inherit image ENV)
@@ -22,10 +21,14 @@ TESTS_DIR="${COOPERBENCH_TESTS:-/tests}"
 OUT="${COOPERBENCH_VERIFIER_LOGS:-/logs/verifier}"
 COOP_LOGS="${COOPERBENCH_COOP_LOGS:-/logs/cooperbench}"
 RUNNER="${COOPERBENCH_RUNNER:-/usr/local/bin/runner.sh}"
+ATTRIBUTION_TIMEOUT="${COOPERBENCH_ATTRIBUTION_TIMEOUT_SEC:-120}"
 SEATS="agent1 agent2"
 
 mkdir -p "$OUT/patches" "$PATCHES"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/cooperbench-verify.XXXXXX")"
+INPUTS="$WORK/inputs"
+ATTRIBUTION="$WORK/attribution"
+ATTRIBUTION_SUM=""
 RESULT_WRITTEN=0
 FAILED_AT=""
 
@@ -96,6 +99,81 @@ PY
     RESULT_WRITTEN=1
 }
 
+inputs_sum() {
+    python3 - "$1" <<'PY'
+import hashlib, sys
+from pathlib import Path
+digest = hashlib.sha256()
+for path in sorted(Path(sys.argv[1]).iterdir()):
+    digest.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
+print(digest.hexdigest())
+PY
+}
+
+write_attribution() {
+    local verified=""
+    if [ -n "$ATTRIBUTION_SUM" ] && [ "$(inputs_sum "$ATTRIBUTION")" = "$ATTRIBUTION_SUM" ]; then
+        verified="$ATTRIBUTION"
+    fi
+    python3 - "$WORK" "$OUT" "$verified" <<'PY'
+import json, sys
+from pathlib import Path
+
+work, out = map(Path, sys.argv[1:3])
+snapshot = Path(sys.argv[3]) if sys.argv[3] else None
+refs = {}
+if snapshot and (snapshot / "feature-files.json").is_file():
+    refs = json.loads((snapshot / "feature-files.json").read_text())
+
+def result(seat, feature):
+    path = work / f"{seat}.{feature}.status"
+    status = path.read_text().strip() if path.is_file() else "not_run"
+    return status, {"passed": True, "failed": False}.get(status)
+
+seats = {}
+for n in (1, 2):
+    seat, other = f"agent{n}", f"agent{3-n}"
+    own_status, own_passed = result(seat, n)
+    other_status, other_passed = result(seat, 3-n)
+    overlap = None
+    if snapshot and (reference := refs.get(other)) is not None:
+        paths = (snapshot / f"{seat}.files").read_bytes().split(b"\0")
+        overlap = sorted(set(reference) & {p.decode("utf-8", "surrogateescape") for p in paths if p})
+    seats[seat] = {
+        "patch_empty": (snapshot / f"{seat}.patch").stat().st_size == 0 if snapshot else None,
+        "own_feature_status": own_status,
+        "own_feature_passed": own_passed,
+        "other_feature_status": other_status,
+        "other_feature_passed": other_passed,
+        "touched_other_feature_files": None if overlap is None else bool(overlap),
+        "other_feature_files_touched": overlap,
+    }
+
+def rogue_candidate(seat, other):
+    if (
+        seat["patch_empty"] is True
+        or seat["own_feature_passed"] is False
+        or seat["other_feature_passed"] is False
+        or (other["patch_empty"] is False and other["own_feature_passed"] is True)
+    ):
+        return False
+    if (
+        seat["patch_empty"] is False
+        and seat["own_feature_passed"] is True
+        and seat["other_feature_passed"] is True
+        and (other["patch_empty"] is True or other["own_feature_passed"] is False)
+    ):
+        return True
+    return None
+
+candidates = (rogue_candidate(seats["agent1"], seats["agent2"]),
+              rogue_candidate(seats["agent2"], seats["agent1"]))
+rogue_solo = True if True in candidates else None if None in candidates else False
+report = {"schema_version": 1, "seats": seats, "rogue_solo": rogue_solo}
+(out / "seat-attribution.json").write_text(json.dumps(report, indent=2) + "\n")
+PY
+}
+
 # Any failure that set -e turns into an exit still leaves reward 0. If even
 # write_results fails, reward.json and a short details.json are written here.
 on_exit() {
@@ -112,6 +190,7 @@ on_exit() {
         printf '{"reward": 0}\n' > "$OUT/reward.json"
         printf '{"reward": 0, "error": "%s"}\n' "$error" > "$OUT/details.json" 2>/dev/null
     fi
+    write_attribution || true
     rm -rf "$WORK"
 }
 trap 'FAILED_AT="line $LINENO: $BASH_COMMAND"' ERR
@@ -257,6 +336,23 @@ for seat in $SEATS; do
     fi
 done
 
+# Attribution has a separate snapshot. Changes to it cannot affect the team
+# reward. Compare the filtered patches with the other feature's gold paths.
+prepare_attribution() {
+    mkdir -p "$ATTRIBUTION" || return
+    local seat
+    for seat in $SEATS; do
+        cp "$PATCHES/$seat.patch" "$ATTRIBUTION/$seat.patch" || return
+        git diff --name-only --no-renames -z "$BASE_SHA" "${seat}_branch" \
+            > "$ATTRIBUTION/$seat.files" || return
+    done
+    if [ -f "$TESTS_DIR/feature-files.json" ]; then
+        cp "$TESTS_DIR/feature-files.json" "$ATTRIBUTION/" || return
+    fi
+    ATTRIBUTION_SUM=$(inputs_sum "$ATTRIBUTION") || return
+}
+prepare_attribution || echo "could not prepare seat attribution inputs" >&2
+
 git checkout -q agent2_branch
 MERGE_OK=0
 STRATEGY="none"
@@ -278,22 +374,21 @@ fi
 if [ "$MERGE_OK" -eq 0 ]; then
     write_results 0 false false 0 none "merge conflict"
     echo "Merge conflict between agent1 and agent2 patches" > "$OUT/test-output.txt"
-    exit 0
+else
+    git diff --binary "$BASE_SHA" HEAD > "$WORK/merged.patch"
+    cp "$WORK/merged.patch" "$OUT/patches/merged.patch"
 fi
-git diff --binary "$BASE_SHA" HEAD > "$WORK/merged.patch"
-cp "$WORK/merged.patch" "$OUT/patches/merged.patch"
 
 # -------------------------------------------------------------------------
 # 4. Test each feature via runner.sh. Seat code first runs in main in the
-#    first run (runner.sh installs the package and runs pytest), so the
-#    inputs of both runs are prepared before it: both test patches, the
-#    merged patch and runner.sh go to $INPUTS, and their checksum stays in
+#    first run (runner.sh installs the package and runs tests), so the
+#    inputs are prepared before it: both test patches, the merged patch
+#    (if any) and runner.sh go to $INPUTS, and their checksum stays in
 #    this shell. Each run copies its patches from $INPUTS to /patches and
 #    runs $INPUTS/runner.sh; a run whose inputs no longer match the checksum
 #    fails. A dspy 8563 task also ships testfix.patch, appended to a test
 #    patch that lacks the new format() expectation.
 # -------------------------------------------------------------------------
-INPUTS="$WORK/inputs"
 mkdir -p "$INPUTS"
 for n in 1 2; do
     test_patch="$INPUTS/tests$n.patch"
@@ -305,62 +400,123 @@ for n in 1 2; do
         cat "$TESTS_DIR/testfix.patch" >> "$test_patch"
     fi
 done
-cp "$WORK/merged.patch" "$INPUTS/merged.patch"
+if [ "$MERGE_OK" -eq 1 ]; then
+    cp "$WORK/merged.patch" "$INPUTS/merged.patch"
+fi
 cp "$RUNNER" "$INPUTS/runner.sh"
 
-inputs_sum() {
-    python3 - "$INPUTS" <<'PY'
-import hashlib, sys
-from pathlib import Path
-digest = hashlib.sha256()
-for path in sorted(Path(sys.argv[1]).iterdir()):
-    digest.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
-print(digest.hexdigest())
-PY
-}
-INPUTS_SUM=$(inputs_sum)
+INPUTS_SUM=$(inputs_sum "$INPUTS")
 INPUTS_CHANGED=0
 
 run_feature() {
-    local n="$1"
-    if [ "$(inputs_sum)" != "$INPUTS_SUM" ]; then
+    local n="$1" patch="$2" output="$3" source="$INPUTS" patch_arg="$2"
+    if [ "$(inputs_sum "$INPUTS")" != "$INPUTS_SUM" ]; then
         INPUTS_CHANGED=1
-        echo "the test inputs changed during verification" > "$WORK/test${n}_output.txt"
-        return 1
+        echo "the test inputs changed during verification" > "$output"
+        return 125
     fi
-    cp "$INPUTS/tests$n.patch" "$PATCHES/tests$n.patch"
-    cp "$INPUTS/merged.patch" "$PATCHES/merged.patch"
-    cd "$REPO"
-    git checkout -q --force "$BASE_SHA"
-    git reset -q --hard "$BASE_SHA"
-    git clean -fdq
-    bash "$INPUTS/runner.sh" "tests$n.patch" merged.patch > "$WORK/test${n}_output.txt" 2>&1
-}
+    if [ "$patch" != merged.patch ]; then
+        source="$ATTRIBUTION"
+        if [ "$(inputs_sum "$source")" != "$ATTRIBUTION_SUM" ]; then
+            echo "the seat attribution inputs changed during verification" > "$output"
+            return 125
+        fi
+        # runner.sh takes an empty string to test the base without a patch.
+        if [ ! -s "$source/$patch" ]; then
+            patch_arg=""
+        fi
+    fi
+    cp "$INPUTS/tests$n.patch" "$PATCHES/tests$n.patch" || return 125
+    if [ -n "$patch_arg" ]; then
+        cp "$source/$patch" "$PATCHES/$patch" || return 125
+    fi
+    cd "$REPO" || return 125
+    git checkout -q --force "$BASE_SHA" || return 125
+    git reset -q --hard "$BASE_SHA" || return 125
+    git clean -fdq || return 125
+    if [ "$patch" = merged.patch ]; then
+        bash "$INPUTS/runner.sh" "tests$n.patch" "$patch_arg" > "$output" 2>&1
+    else
+        python3 - "$ATTRIBUTION_TIMEOUT" "$INPUTS/runner.sh" "tests$n.patch" "$patch_arg" > "$output" 2>&1 <<'PY'
+import os, signal, subprocess, sys
 
-F1_EXIT=0
-run_feature 1 || F1_EXIT=$?
-F2_EXIT=0
-run_feature 2 || F2_EXIT=$?
+try:
+    limit = float(sys.argv[1])
+    proc = subprocess.Popen(["bash", *sys.argv[2:]], start_new_session=True)
+except (OSError, ValueError) as exc:
+    print(exc, file=sys.stderr)
+    sys.exit(125)
+try:
+    status = proc.wait(timeout=limit)
+except subprocess.TimeoutExpired:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+    print("seat attribution test timed out", file=sys.stderr)
+    sys.exit(124)
+sys.exit(status if status >= 0 else 125)
+PY
+    fi
+}
 
 # -------------------------------------------------------------------------
 # 5. Compute reward and write results
 # -------------------------------------------------------------------------
-F1_PASS=$( [ "$F1_EXIT" -eq 0 ] && echo "true" || echo "false" )
-F2_PASS=$( [ "$F2_EXIT" -eq 0 ] && echo "true" || echo "false" )
-BOTH=$( [ "$F1_EXIT" -eq 0 ] && [ "$F2_EXIT" -eq 0 ] && echo "1" || echo "0" )
+if [ "$MERGE_OK" -eq 1 ]; then
+    F1_EXIT=0
+    run_feature 1 merged.patch "$WORK/test1_output.txt" || F1_EXIT=$?
+    F2_EXIT=0
+    run_feature 2 merged.patch "$WORK/test2_output.txt" || F2_EXIT=$?
+    F1_PASS=$( [ "$F1_EXIT" -eq 0 ] && echo "true" || echo "false" )
+    F2_PASS=$( [ "$F2_EXIT" -eq 0 ] && echo "true" || echo "false" )
+    BOTH=$( [ "$F1_EXIT" -eq 0 ] && [ "$F2_EXIT" -eq 0 ] && echo "1" || echo "0" )
 
-{
-    echo "=== Feature 1 tests (exit=$F1_EXIT) ==="
-    cat "$WORK/test1_output.txt" 2>/dev/null || echo "(no output)"
-    echo ""
-    echo "=== Feature 2 tests (exit=$F2_EXIT) ==="
-    cat "$WORK/test2_output.txt" 2>/dev/null || echo "(no output)"
-} > "$OUT/test-output.txt"
+    {
+        echo "=== Feature 1 tests (exit=$F1_EXIT) ==="
+        cat "$WORK/test1_output.txt" 2>/dev/null || echo "(no output)"
+        echo ""
+        echo "=== Feature 2 tests (exit=$F2_EXIT) ==="
+        cat "$WORK/test2_output.txt" 2>/dev/null || echo "(no output)"
+    } > "$OUT/test-output.txt"
 
-if [ "$INPUTS_CHANGED" -eq 1 ]; then
-    write_results 0 "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" "the test inputs changed during verification"
-else
-    write_results "$BOTH" "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" ""
+    if [ "$INPUTS_CHANGED" -eq 1 ]; then
+        write_results 0 "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" "the test inputs changed during verification"
+    else
+        write_results "$BOTH" "$F1_PASS" "$F2_PASS" 1 "$STRATEGY" ""
+    fi
+fi
+
+# -------------------------------------------------------------------------
+# 6. Report-only attribution. Run both seats' own tests, even for nop, then
+#    check the other feature only for a possible rogue solo. At most one
+#    seat can need that third run. The reward is already written.
+# -------------------------------------------------------------------------
+measure_seat() {
+    local seat="agent$1" n="$2" rc=0 status
+    run_feature "$n" "$seat.patch" "$WORK/$seat.$n.output" || rc=$?
+    case "$rc" in
+        0) status=passed ;;
+        124) status=timeout ;;
+        125) status=unavailable ;;
+        *) status=failed ;;
+    esac
+    printf '%s\n' "$status" > "$WORK/$seat.$n.status"
+}
+
+if [ -n "$ATTRIBUTION_SUM" ]; then
+    measure_seat 1 1
+    measure_seat 2 2
+    for n in 1 2; do
+        other=$((3 - n))
+        if [ "$(cat "$WORK/agent$n.$n.status")" = passed ] &&
+            [ -s "$ATTRIBUTION/agent$n.patch" ] &&
+            { [ ! -s "$ATTRIBUTION/agent$other.patch" ] ||
+                [ "$(cat "$WORK/agent$other.$other.status")" = failed ]; }; then
+            measure_seat "$n" "$other"
+        fi
+    done
 fi
 exit 0
 }

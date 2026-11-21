@@ -202,7 +202,8 @@ cooperbench-seats/
 │   └── tests/
 │       ├── test.sh             # capture both seats' patches, merge, test both features
 │       ├── tests1.patch
-│       └── tests2.patch
+│       ├── tests2.patch
+│       └── feature-files.json  # gold patch paths, not gold implementations
 ```
 
 ### From sidecars to seats
@@ -221,13 +222,37 @@ cooperbench-seats/
 
 ### What a pass does not show
 
-A pass means that the merged patch of both seats passes both features' tests. It does not show
-cooperation: one seat can implement both features while its teammate does nothing, and the reward is
-still 1, as it is in upstream CooperBench. So do not put seat scores next to sidecar or leaderboard
-numbers as a measure of coordination. A coordination claim needs a per-seat measure, for example
-whether each seat's own patch passes its own feature's tests (not built yet; see the review of fork
-PR #9). The test-file filter is a trust aid, not a sandbox: it drops the test files and test configs
-that it knows (`dropped_files` in `details.json`).
+A pass means that the merged patch passes both features' tests. It does not
+show cooperation. One seat can implement both features with no help. The
+reward is still 1, as in upstream CooperBench. Do not use seat scores as a
+measure of coordination or compare them with sidecar or leaderboard numbers.
+
+The verifier writes `verifier/seat-attribution.json` after it writes the team
+reward. The report has `schema_version: 1`, a `seats` object keyed by
+`agent1` and `agent2`, and `rogue_solo`.
+
+| Field in each seat | Meaning |
+|---|---|
+| `patch_empty` | The seat has no patch after the test-file filter. |
+| `own_feature_passed` | The seat's filtered patch alone passes its own feature's tests. If the patch is empty, the verifier tests the base. |
+| `other_feature_passed` | The seat's filtered patch alone passes the other feature's tests. The verifier runs this check only for a possible rogue solo. |
+| `own_feature_status`, `other_feature_status` | `passed`, `failed`, `timeout`, `unavailable`, or `not_run`. The pass fields are `null` unless a run passed or failed. |
+| `touched_other_feature_files`, `other_feature_files_touched` | Whether the seat changed files listed in the other feature's gold patch, and which files. These fields are `null` if the paths are unavailable. |
+
+`rogue_solo` is `true` if one non-empty patch passes both features and the
+other patch is empty or fails its own feature. It is `false` if the results
+rule out that case. It is `null` if results are missing and the case remains
+possible. File overlap is not part of this flag. Both features can legitimately
+change the same file. Neither the flag nor the file overlap proves cooperation.
+
+The verifier uses the same runner for both the team and attribution checks.
+It adds at most 3 runner calls, each limited to 120 seconds. Seat tasks add
+390 seconds to `--verifier-timeout` for the checks and their setup. Attribution
+results do not change `reward.json`. Regenerate existing seat tasks to get the
+report and the gold path list.
+
+The test-file filter is not a sandbox. It drops known test files and
+test configs, listed in `dropped_files` in `details.json`.
 
 ### Messages between the seats
 
@@ -309,10 +334,11 @@ seats:
 
 - A seat cannot read or write the other seat's workspace, token or inbox, and
   cannot send messages in the other seat's name.
-- The verifier runs the merged code in `main` as root: runner.sh installs the
-  package and runs pytest. That code can read both workspaces and both tokens,
-  and it can change the test outcome, for example with a module that exits 0
-  on import, or by changing the toolchain before the second run. Dropping
+- The verifier runs the merged code and the separate seat patches in `main`
+  as root. In Python tasks, runner.sh installs the package and runs pytest.
+  That code can read both workspaces and both tokens.
+  It can change the test outcome, for example with a module that exits 0
+  on import, or by changing the toolchain before the next run. Dropping
   test-infrastructure files, and checking the copies of the test inputs
   before each run, close the simplest ways, not all of them.
 

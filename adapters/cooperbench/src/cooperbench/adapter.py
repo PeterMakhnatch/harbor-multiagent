@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
@@ -38,6 +39,8 @@ from typing import Iterable
 
 REGISTRY = "akhatua"
 IMAGE_PREFIX = "cooperbench"
+SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC = 120
+SEAT_ATTRIBUTION_OVERHEAD_SEC = 30
 
 # Mapping from HuggingFace repo slug to GitHub dataset directory name.
 # See https://github.com/cooperbench/CooperBench/tree/main/dataset
@@ -99,6 +102,28 @@ def _fetch_combined_patch(repo: str, task_id: str) -> str:
 
     _combined_patch_cache[key] = patch
     return patch
+
+
+def _reference_patch_paths(patch: str) -> list[str] | None:
+    """Get paths without the base repo or any gold implementation in tests/."""
+    if not patch.strip():
+        return []
+
+    raw = patch.encode("utf-8")
+    paths = set()
+    for direction in ((), ("--reverse",)) if b"\nrename from " in raw else ((),):
+        result = subprocess.run(
+            ["git", "apply", "--numstat", "-z", "--recount", *direction],
+            cwd=Path.cwd().anchor,
+            input=raw,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            return None
+        for record in result.stdout.split(b"\0"):
+            if record:
+                paths.add(record.split(b"\t", 2)[2].decode("utf-8", "surrogateescape"))
+    return sorted(paths)
 
 
 # ---------------------------------------------------------------------------
@@ -861,13 +886,19 @@ class CooperBenchAdapter:
         template = self.template_dir / "seats"
         image_name = get_image_name(GITHUB_DIR_FOR_REPO[pair.repo], pair.task_id)
         features = dict(zip(self.SEATS, (pair.feature_a, pair.feature_b)))
+        verifier_timeout = (
+            self.verifier_timeout_sec
+            + 3 * SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC
+            + SEAT_ATTRIBUTION_OVERHEAD_SEC
+        )
 
         # -- task.toml -----------------------------------------------------
         task_toml = _render(
             (template / "task.toml").read_text(encoding="utf-8"),
             pair_id=pair.pair_id,
             agent_timeout_sec=f"{self.agent_timeout_sec:.1f}",
-            verifier_timeout_sec=f"{self.verifier_timeout_sec:.1f}",
+            verifier_timeout_sec=f"{verifier_timeout:.1f}",
+            seat_attribution_run_timeout_sec=str(SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC),
             repo=pair.repo,
             task_id=pair.task_id,
             feature_a=pair.feature_a.cooperbench_feature_id,
@@ -933,6 +964,16 @@ class CooperBenchAdapter:
 
         # -- upstream bug fixes ------------------------------------------------
         self._apply_seat_upstream_fixes(pair, paths, seat_patches)
+        (paths.tests_dir / "feature-files.json").write_text(
+            json.dumps(
+                {
+                    seat: _reference_patch_paths(patch_path.read_text(encoding="utf-8"))
+                    for seat, patch_path in zip(self.SEATS, seat_patches, strict=True)
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
         return task_dir
 
