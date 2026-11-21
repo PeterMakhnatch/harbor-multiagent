@@ -288,3 +288,57 @@ often in `silent`, so the next wave needs longer rounds (240 s).
 Next wave (needs a budget): regime B, 3 seats, 16 instances x 3 arms, paired with `--seed-of`, rounds
 of 240 s. From the pilot, Harbor estimates about $0.13 per 3-seat trial and $0.06 per solo trial,
 so about $5 for the wave (in this pilot the balance fell by about half of Harbor's estimate).
+
+## 14. Wave 1: pre-registration
+
+Written and committed before the first paid trial of the wave (2026-11-20, about 10:20 PM ET). The
+analysis is `docs/results/scripts/commons_wave.py`, committed with this section. Peter approved the
+wave with a cap of $2.50.
+
+**Question.** In regime B (growth 1.5) with 3 seats, does a message channel keep the lake alive more
+often than no channel?
+
+**Design.**
+
+- 16 new instances (0 to 15, a secret seed: `build_tasks.py --family commons --difficulty b --seats 3
+  --instances 0-15`), each in the arms solo, silent and talk: 48 trials, 1 attempt each.
+- Seats as in pilot lk2: terminus-2 on DeepSeek direct `deepseek-flash`, 40 turns per seat. One change
+  from the pilot: rounds of 240 s (at 120 s, pilot seats missed up to 24% of rounds).
+- Order: the 32 team trials (silent and talk) run first, one at a time, instance 0 to 15, with the 2
+  arms of each instance in a random order (seed 20261120). The 16 solo trials run in a second lane,
+  one at a time, and a solo trial starts only while the budget still covers the remaining team trials.
+- Before the wave: `qa.py` with 0 FAIL, and an oracle check of instance 0 in all 3 arms (reward 1).
+  Both pass. After the wave: a leak scan.
+
+**Primary measure.** `survived`: the lake did not collapse within the season.
+
+**Primary test (pass or fail).** The exact McNemar test on `survived`, talk against silent, over the
+instances where both trials finished without a Harbor, world or verifier error. b = instances where
+only talk survived; c = instances where only silent survived; the two-sided exact p is the
+binomial(b + c, 1/2) probability of a split at least as uneven as b : c.
+
+- PASS: b > c and p <= 0.05, with at least 10 complete pairs.
+- FAIL: at least 10 complete pairs, and not PASS. If c > b with p <= 0.05, the report says that silent
+  kept the lake alive more often.
+- INCONCLUSIVE: fewer than 10 complete pairs (for example, if the budget stops the wave).
+
+**Secondary measures (reported, no pass or fail).** For each arm: the survival count, mean sustained
+share, mean collapse round, over-use, missed rounds and response. Paired differences of the
+sustained share (talk - silent, solo - silent, solo - talk): mean, exact sign-flip p, and a 95%
+bootstrap interval over instances (10,000 resamples, seed 1). Conflict cost (solo - silent), talk gain
+(talk - silent) and recovery. Every measure is recomputed from the frozen round log with
+`score_game`.
+
+**Errors.** A trial with no verifier score, a verifier error or a Harbor exception runs once more if
+the budget allows; the first valid run counts. A missed round is a measure, not an error.
+
+**Budget and cost.** The real cost is the tokens at DeepSeek's published price for the hour (off-peak:
+$0.003 per million cached input tokens, $0.15 per million other input tokens, $0.60 per million output
+tokens; peak is double, 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday). The wave starts on Saturday
+UTC, which is off-peak. No new trial starts when the spend plus the estimate for the running trials
+reaches $2.50, or when the account balance is below $1.50. The balance before ($9.91) and after is
+reported too; it includes other agents' spend. Estimate from the pilot's real cost: about $2.05 for
+the team trials and $0.51 for the solo trials. So the budget can stop the last solo trials.
+
+**Pilot cost, corrected.** The same token method gives $0.40 for the 9 pilot trials (off-peak), and the
+balance fell by $0.43, which includes other agents. Harbor's estimate ($0.80) uses the peak price.
