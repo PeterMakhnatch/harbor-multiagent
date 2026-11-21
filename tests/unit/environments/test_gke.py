@@ -8,6 +8,7 @@ task_env_config.gpus > 0 or task_env_config.tpu is not None.
 
 import json
 import re
+import shlex
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -282,6 +283,36 @@ class TestGKEExecStream:
         assert result.return_code == 23
         assert result.stdout == "stdout"
         assert result.stderr == "stderr"
+        response.close.assert_called_once_with()
+
+    @pytest.mark.parametrize("compose", [False, True])
+    async def test_exec_sends_values_over_stdin(self, gke_env, monkeypatch, compose):
+        response = MagicMock(returncode=19)
+        stream = MagicMock(return_value=response)
+        monkeypatch.setattr(gke_module, "stream", stream)
+        gke_env._ensure_client = AsyncMock()
+        gke_env._core_api = MagicMock(spec=k8s_client.CoreV1Api)
+        gke_env._read_exec_output = MagicMock(return_value=("", ""))
+        if compose:
+            gke_env._compose_mode = True
+            gke_env._dind = gke_module._GKEDinDCompose(gke_env)
+
+        literal = "synthetic 'quote' \"double\"\n$literal"
+        result = await gke_env.exec("exit 19", env={"VALUE": literal, "EMPTY": ""})
+
+        assert result.return_code == 19
+        assert stream.call_args.kwargs["command"] == ["sh", "-s"]
+        assert stream.call_args.kwargs["stdin"] is True
+        script = shlex.split(response.write_stdin.call_args.args[0])
+        assert f"VALUE={literal}" in script
+        assert "EMPTY=" in script
+        if compose:
+            assert script[script.index("-e") : script.index("-e") + 4] == [
+                "-e",
+                "VALUE",
+                "-e",
+                "EMPTY",
+            ]
         response.close.assert_called_once_with()
 
     async def test_exec_rejects_stream_without_command_status(
@@ -1428,7 +1459,7 @@ def _capture_compose_exec(dind) -> list[list[str]]:
     """Patch the DinD helper's compose runner and capture subcommands."""
     calls: list[list[str]] = []
 
-    async def _fake_compose_exec(subcommand, timeout_sec=None):
+    async def _fake_compose_exec(subcommand, timeout_sec=None, *, env=None):
         calls.append(list(subcommand))
         return _exec_result()
 
@@ -1496,7 +1527,7 @@ class TestGKEServiceOperationsCompose:
                 "-w",
                 "/data",
                 "-e",
-                "FOO=bar",
+                "FOO",
                 "-u",
                 "root",
                 "sidecar",

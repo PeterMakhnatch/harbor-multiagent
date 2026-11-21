@@ -448,7 +448,8 @@ async def test_exec_routes_through_docker_when_container_set(temp_dir, monkeypat
     env._sandbox_name = _SERVER_NAME
     env._docker_container = "task-env"
 
-    await env.exec("echo hello", cwd="/app", env={"FOO": "bar"})
+    command_env = {"FOO": "synthetic='value'\n", "EMPTY": ""}
+    await env.exec("echo hello", cwd="/app", env=command_env)
 
     call_args = sandboxes.exec_in_sandbox.await_args
     command = call_args.kwargs.get("command", [])
@@ -459,7 +460,9 @@ async def test_exec_routes_through_docker_when_container_set(temp_dir, monkeypat
     assert "task-env" in cmd_str
     assert "-w" in cmd_str
     assert "/app" in cmd_str
-    assert "FOO=bar" in cmd_str
+    assert "-e FOO -e EMPTY" in cmd_str
+    assert command_env["FOO"] not in cmd_str
+    assert call_args.kwargs["env"] == command_env
 
 
 @pytest.mark.asyncio
@@ -1845,8 +1848,9 @@ class TestComposeExecRouting:
 
         captured: list[list[str]] = []
 
-        async def fake_compose_exec(subcommand, timeout_sec=None):
+        async def fake_compose_exec(subcommand, timeout_sec=None, *, env=None):
             captured.append(subcommand)
+            assert env == {"K": "V"}
             return SimpleNamespace(stdout="", stderr="", return_code=0)
 
         with patch.object(env, "_compose_exec", new=fake_compose_exec):
@@ -1859,7 +1863,7 @@ class TestComposeExecRouting:
         # workdir flag
         assert "-w" in sub and sub[sub.index("-w") + 1] == "/work"
         # env var
-        assert "-e" in sub and "K=V" in sub
+        assert sub[sub.index("-e") + 1] == "K"
         # user flag
         assert "-u" in sub and "42" in sub
         # service + bash
@@ -2023,8 +2027,9 @@ class TestServiceOperations:
 
         captured: list[list[str]] = []
 
-        async def fake_compose_exec(subcommand, timeout_sec=None):
+        async def fake_compose_exec(subcommand, timeout_sec=None, *, env=None):
             captured.append(subcommand)
+            assert env == {"K": "V"}
             return SimpleNamespace(stdout="", stderr="", return_code=0)
 
         with patch.object(env, "_compose_exec", new=fake_compose_exec):
@@ -2034,7 +2039,7 @@ class TestServiceOperations:
 
         sub = captured[0]
         assert "-w" in sub and sub[sub.index("-w") + 1] == "/data"
-        assert "-e" in sub and "K=V" in sub
+        assert sub[sub.index("-e") + 1] == "K"
         assert "-u" in sub and "42" in sub
         assert "db" in sub
 
@@ -2494,11 +2499,14 @@ class TestComposeWaitForMainContainer:
 
 class TestComposeAttach:
     @pytest.mark.asyncio
-    async def test_attach_compose_invokes_islo_use_with_bash_lc(
+    async def test_attach_compose_invokes_islo_use_with_main_container_id(
         self, temp_dir, monkeypatch
     ):
         env = _make_compose_env(temp_dir, monkeypatch)
         env._sandbox_name = _SERVER_NAME
+        env._compose_exec = AsyncMock(
+            return_value=SimpleNamespace(return_code=0, stdout="container-id\n")
+        )
 
         captured: list[list[str]] = []
 
@@ -2511,14 +2519,17 @@ class TestComposeAttach:
         with pytest.raises(SystemExit):
             await env.attach()
 
-        assert captured
-        args = captured[0]
-        assert args[:3] == ["islo", "use", _SERVER_NAME]
-        # The remainder should be ['--', 'bash', '-lc', '<env-prefix> docker compose ...']
-        assert "--" in args
-        dash_idx = args.index("--")
-        assert args[dash_idx + 1 : dash_idx + 3] == ["bash", "-lc"]
-        remote_cmd = args[dash_idx + 3]
-        assert "docker compose" in remote_cmd
-        assert "exec" in remote_cmd
-        assert "main" in remote_cmd
+        env._compose_exec.assert_awaited_once_with(["ps", "-q", "main"])
+        assert captured == [
+            [
+                "islo",
+                "use",
+                _SERVER_NAME,
+                "--",
+                "docker",
+                "exec",
+                "-it",
+                "container-id",
+                "bash",
+            ]
+        ]

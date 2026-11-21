@@ -29,7 +29,7 @@ from harbor.environments.compose_service_ops import (
     ComposeServiceOpsMixin,
     ComposeServiceTransport,
 )
-from harbor.environments.dind_compose import DinDComposeOps
+from harbor.environments.dind_compose import DinDComposeOps, shell_env_stdin
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_NO_NETWORK_PATH,
@@ -1108,14 +1108,14 @@ class GKEEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         await self._ensure_client()
 
         full_command = f"bash -c {shlex.quote(command)}"
-
-        if env:
-            for key, value in env.items():
-                full_command = f"{key}={shlex.quote(value)} {full_command}"
-
         effective_cwd = cwd or self.task_env_config.workdir
         if effective_cwd:
             full_command = f"cd {effective_cwd} && {full_command}"
+
+        stdin = None
+        if env:
+            stdin = shell_env_stdin(full_command, env)
+            full_command = "sh -s"
 
         if user is not None:
             # su requires a username; resolve numeric UIDs via getent
@@ -1126,7 +1126,9 @@ class GKEEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             # Use su (not su -) to preserve the working directory
             full_command = f"su {user_arg} -s /bin/bash -c {shlex.quote(full_command)}"
 
-        exec_command = ["sh", "-c", full_command]
+        exec_command = (
+            ["sh", "-s"] if env and user is None else ["sh", "-c", full_command]
+        )
 
         resp = None
         try:
@@ -1137,12 +1139,14 @@ class GKEEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
                 self.namespace,
                 command=exec_command,
                 stderr=True,
-                stdin=False,
+                stdin=stdin is not None,
                 stdout=True,
                 tty=False,
                 _preload_content=False,
             )
 
+            if stdin is not None:
+                await asyncio.to_thread(resp.write_stdin, stdin)
             if timeout_sec:
                 stdout, stderr = await asyncio.wait_for(
                     asyncio.to_thread(self._read_exec_output, resp),
@@ -1722,12 +1726,16 @@ class _GKEDinDCompose(DinDComposeOps):
     # ── Low-level pod exec / tar transfer against the dind container ──────
 
     async def _pod_exec(
-        self, command: str, timeout_sec: int | None = None
+        self,
+        command: str,
+        timeout_sec: int | None = None,
+        *,
+        stdin: str | None = None,
     ) -> ExecResult:
         """Run ``sh -c command`` in the dind (Alpine) container of the pod."""
         env = self._env
         await env._ensure_client()
-        exec_command = ["sh", "-c", command]
+        exec_command = ["sh", "-s"] if stdin is not None else ["sh", "-c", command]
         resp = None
         try:
             resp = await asyncio.to_thread(
@@ -1738,11 +1746,13 @@ class _GKEDinDCompose(DinDComposeOps):
                 container=self._DIND_CONTAINER,
                 command=exec_command,
                 stderr=True,
-                stdin=False,
+                stdin=stdin is not None,
                 stdout=True,
                 tty=False,
                 _preload_content=False,
             )
+            if stdin is not None:
+                await asyncio.to_thread(resp.write_stdin, stdin)
             if timeout_sec:
                 stdout, stderr = await asyncio.wait_for(
                     asyncio.to_thread(env._read_exec_output, resp),
@@ -1975,14 +1985,22 @@ class _GKEDinDCompose(DinDComposeOps):
 
     @override
     async def _compose_exec(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a ``docker compose`` subcommand inside the dind container."""
-        env_vars = self._compose_env_vars()
-        prefix = " ".join(f"{k}={shlex.quote(v)}" for k, v in env_vars.items())
+        env_vars = {**self._compose_env_vars(), **(env or {})}
         command = self._compose_cmd(subcommand)
-        full = f"{prefix} {command}" if prefix else command
-        return await self._pod_exec(full, timeout_sec=timeout_sec)
+        if env_vars:
+            return await self._pod_exec(
+                command,
+                timeout_sec=timeout_sec,
+                stdin=shell_env_stdin(command, env_vars),
+            )
+        return await self._pod_exec(command, timeout_sec=timeout_sec)
 
     async def _stage_resources_compose_file(self) -> None:
         """Write the resources override locally and upload it to the pod.

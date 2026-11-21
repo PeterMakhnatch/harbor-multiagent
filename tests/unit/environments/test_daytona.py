@@ -208,7 +208,13 @@ def _install_fake_session(env: DaytonaEnvironment) -> AsyncMock:
     env._sandbox = cast(
         Any,
         SimpleNamespace(
-            process=SimpleNamespace(execute_session_command=execute_command)
+            process=SimpleNamespace(execute_session_command=execute_command),
+            fs=SimpleNamespace(
+                create_folder=AsyncMock(),
+                upload_file=AsyncMock(),
+                set_file_permissions=AsyncMock(),
+                delete_file=AsyncMock(),
+            ),
         ),
     )
     env._create_process_session_with_retry = AsyncMock()  # type: ignore[method-assign]
@@ -426,28 +432,6 @@ class TestWindowsSupport:
                 auto_snapshot=True,
             )
 
-    def test_compose_windows_command_uses_plain_cmd_chain(self):
-        assert (
-            DaytonaEnvironment._compose_windows_command(
-                "echo hi",
-                cwd="C:/w",
-                env={"A": "1"},
-            )
-            == r"set A=1&& cd /d C:\w&& echo hi"
-        )
-
-    @pytest.mark.parametrize(
-        ("env", "match"),
-        [
-            ({"1BAD": "ok"}, r"1BAD.*keys must match"),
-            ({"A": "100%"}, r"A.*%"),
-            ({"A": 'bad"quote'}, r"A.*double quote"),
-        ],
-    )
-    def test_compose_windows_command_rejects_unsafe_env(self, env, match):
-        with pytest.raises(ValueError, match=match):
-            DaytonaEnvironment._compose_windows_command("echo hi", cwd=None, env=env)
-
     async def test_windows_exec_uses_process_exec_without_posix_wrappers(
         self, temp_dir
     ):
@@ -463,10 +447,16 @@ class TestWindowsSupport:
             exit_code=2,
         )
 
-        result = await env.exec("echo hi", timeout_sec=5)
+        literal = 'synthetic "quote" % &\n'
+        result = await env.exec(
+            "echo hi", env={"VALUE": literal, "EMPTY": ""}, timeout_sec=5
+        )
 
-        expected = r"set LOGS_DIR=C:\logs&& cd /d C:\w&& echo hi"
-        process_exec.assert_awaited_once_with(expected, timeout=5)
+        process_exec.assert_awaited_once_with(
+            r"cd /d C:\w&& echo hi",
+            timeout=5,
+            env={"LOGS_DIR": r"C:\logs", "VALUE": literal, "EMPTY": ""},
+        )
         assert result == ExecResult(stdout="done", stderr="", return_code=2)
         execute_command.assert_not_awaited()
         create_session.assert_not_awaited()
@@ -577,19 +567,41 @@ class TestWindowsSupport:
         with pytest.raises(RuntimeError, match="Access is denied."):
             await env._sdk_upload_dir(source, "C:/dest")
 
-    async def test_linux_exec_composition_regression(self, temp_dir):
-        env = _make_env(temp_dir)
+    @pytest.mark.parametrize("compose", [False, True])
+    async def test_linux_exec_composition_regression(self, temp_dir, compose):
+        env = _make_env(temp_dir, compose=compose)
         execute_command = _install_fake_session(env)
 
-        await env._sandbox_exec(
+        literal = "synthetic 'quote'\n$literal"
+        await env.exec(
             "echo hi",
             cwd="/work",
-            env={"A": "1"},
+            env={"VALUE": literal, "EMPTY": ""},
             timeout_sec=7,
+            user="agent",
         )
 
         request = execute_command.call_args.args[1]
-        assert request.command == "cd /work && timeout 7 env A=1 bash -c 'echo hi'"
+        assert env._sandbox is not None
+        fs = env._sandbox.fs
+        (directory, mode) = fs.create_folder.await_args.args
+        data, path = fs.upload_file.await_args.args
+        assert mode == "700"
+        assert path == f"{directory}/env.sh"
+        assert request.command.endswith(f" < {path}")
+        assert "synthetic" not in request.command
+        assert "timeout 7" in request.command
+        if compose:
+            assert "sh -s" in request.command
+            assert " -e VALUE -e EMPTY " in data.decode()
+            assert " -u agent " in data.decode()
+        else:
+            assert "su agent" in request.command
+            assert "cd /work" in request.command
+        assert f"VALUE={literal}" in shlex.split(data.decode())
+        assert "EMPTY=" in shlex.split(data.decode())
+        fs.set_file_permissions.assert_awaited_once_with(path, mode="600")
+        fs.delete_file.assert_awaited_once_with(directory, recursive=True)
 
 
 class TestGpuSupport:
@@ -1901,13 +1913,14 @@ class TestDinDServiceOperations:
         )
 
         parts = dind._compose_exec.call_args.args[0]
+        assert dind._compose_exec.call_args.kwargs["env"] == {"A": "1"}
         assert parts[: parts.index("db")] == [
             "exec",
             "-T",
             "-w",
             "/data",
             "-e",
-            "A=1",
+            "A",
             "-u",
             "postgres",
         ]

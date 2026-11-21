@@ -77,12 +77,16 @@ async def test_exec_passes_explicit_user_cwd_and_scoped_env(project, seat):
         "-w",
         "/home/maya",
         "-e",
-        "A=1",
+        "A",
         "-e",
-        "INVOCATION_ID=tok",
+        "INVOCATION_ID",
         "-u",
         "root",
     ]
+    assert project._run_docker_compose_command.call_args.kwargs["exec_env"] == {
+        "A": "1",
+        "INVOCATION_ID": "tok",
+    }
 
 
 async def test_compose_identity_applies_in_full_and_main_settings_do_not(project, seat):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import codecs
 import logging
+import os
 import shlex
 import shutil
 from collections.abc import AsyncIterator, Callable
@@ -69,6 +70,7 @@ class CommandRunner(Protocol):
         output_callback: OutputCallback | None = None,
         termination_timeout: float = 5,
         exec_cleanup: ExecCleanup | None = None,
+        env: dict[str, str] | None = None,
     ) -> CommandResult: ...
 
 
@@ -87,10 +89,12 @@ class SbxCli:
         output_callback: OutputCallback | None = None,
         termination_timeout: float = 5,
         exec_cleanup: ExecCleanup | None = None,
+        env: dict[str, str] | None = None,
     ) -> CommandResult:
         command = (self.executable, *args)
         process = await asyncio.create_subprocess_exec(
             *command,
+            env={**os.environ, **env} if env is not None else None,
             stdin=(
                 asyncio.subprocess.PIPE
                 if exec_cleanup is not None
@@ -410,8 +414,8 @@ class LocalSandbox:
         )
         if cleanup is not None:
             args.append("--interactive")
-        for key, value in (env or {}).items():
-            args.extend(["--env", f"{key}={value}"])
+        for key in env or {}:
+            args.extend(["--env", key])
         if user is not None:
             args.extend(["--user", str(user)])
         args.extend([self.sandbox_name, "bash", "-c", command])
@@ -428,6 +432,7 @@ class LocalSandbox:
                 if self._deleting
                 else 5,
                 exec_cleanup=cleanup,
+                env=env,
             )
         except BaseException as error:
             needs_stop = cleanup is not None and not cleanup.confirmed

@@ -1063,17 +1063,34 @@ class TestDinDStart:
 
 
 class TestDinDExecRouting:
-    async def test_exec_runs_in_the_main_service(self, temp_dir):
+    async def test_exec_runs_in_the_main_service(self, temp_dir, sdk):
         env = _make_env(temp_dir, compose=True, workdir="/app")
         env.default_user = "agent"
-        calls = _capture_compose_exec(_dind(env))
+        env._sailbox = sdk.sailbox
 
-        await env.exec("id", env={"FOO": "bar"})
+        literal = "synthetic 'quote'\n$literal"
+        await env.exec("id", env={"FOO": literal, "EMPTY": ""})
 
-        assert calls == [
-            ["exec", "-T", "-w", "/app", "-e", "FOO=bar", "-u", "agent"]
-            + ["main", "bash", "-c", "id"]
+        call = sdk.sailbox.run.aio.await_args
+        argv = call.args[0]
+        assert argv[argv.index("exec") :] == [
+            "exec",
+            "-T",
+            "-w",
+            "/app",
+            "-e",
+            "FOO",
+            "-e",
+            "EMPTY",
+            "-u",
+            "agent",
+            "main",
+            "bash",
+            "-c",
+            "id",
         ]
+        assert call.kwargs["env"]["FOO"] == literal
+        assert call.kwargs["env"]["EMPTY"] == ""
 
     async def test_service_exec_targets_sidecar(self, temp_dir):
         env = _make_env(temp_dir, compose=True)

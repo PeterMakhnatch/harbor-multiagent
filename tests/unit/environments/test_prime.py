@@ -37,6 +37,20 @@ def environment(tmp_path, monkeypatch):
     return env, client
 
 
+async def test_exec_passes_home_override_as_native_env(environment):
+    env, client = environment
+    env._sandbox_id = "sandbox-1"
+    env._client = client
+    await env.exec("pwd", user="agent", env={"HOME": "/private/synthetic"})
+
+    call = client.execute_command.await_args
+    command = call.args[1]
+    assert "/private/synthetic" not in command
+    key = next(key for key in call.kwargs["env"] if key.startswith("_HARBOR_HOME_"))
+    assert call.kwargs["env"][key] == "/private/synthetic"
+    assert key in command
+
+
 async def test_failed_start_preserves_error_and_cleanup_can_be_retried(environment):
     env, client = environment
     error = RuntimeError("startup failed")
