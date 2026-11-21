@@ -443,17 +443,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = analyze(rows)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
-    if args.export:
-        print(
-            json.dumps(
-                {"schema": _SCHEMA, "rows": rows},
-                sort_keys=True,
-                separators=(",", ":"),
-                allow_nan=False,
-            )
-        )
-    elif args.json:
-        print(json.dumps(result, indent=2))
+    if args.export or args.json:
+        value = {"schema": _SCHEMA, "rows": rows} if args.export else result
+        print(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False))
     else:
         _print_summary(result)
     return 0

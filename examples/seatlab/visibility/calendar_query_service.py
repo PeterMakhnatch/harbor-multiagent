@@ -37,6 +37,7 @@ def verify(
         raise ValueError("give both expected service models")
     wanted: Counter[tuple[int, int, str, str, str]] = Counter()
     seen: set[tuple[int, int]] = set()
+    blocks_with_turns = 0
     for row in rows:
         world, direction = _coordinates(row)
         if (
@@ -46,6 +47,7 @@ def verify(
         ):
             raise ValueError("duplicate or unregistered native block")
         seen.add((world, direction))
+        blocks_with_turns += bool(row["turns"])
         for turn in row["turns"]:
             role = turn["role"]
             if role not in _ROLES:
@@ -104,7 +106,8 @@ def verify(
         raise ValueError("native model turns are missing service receipts")
     return {
         "schema": "seatlab.calendar-query-service/v1",
-        "blocks": len(seen),
+        "registered_blocks": len(seen),
+        "blocks_with_matched_turns": blocks_with_turns,
         "roles": result,
     }
 

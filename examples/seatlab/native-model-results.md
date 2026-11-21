@@ -2,6 +2,12 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Does sending a short proposal change the native team reward?
+
+**Pilot snapshot, before enrolling the remaining pairs.** Both native teams in world 01, direction 0, submitted slot 11 and earned 1. The scheduler first proposed slots 2 and 3. With the ready marker, the responder returned `[0,11,19,34]`. With the real proposals, it returned `[0,11]`. Neither reply repeated the scheduler's first proposals. The scheduler could still use the recommendations. The host preserved the four-item response despite asking for at most two.
+
+This is 1/18 registered pairs, not an estimate for all 9 worlds. The two stock native timelines and all 6 model replies passed the independent checks. Sol made 3 calls and Astra made 3. Paid API spend was $0. Run `python3.12 -S -m examples.seatlab.visibility.calendar_query_summary` to check the captured rewards. Run `python3.12 -S -m examples.seatlab.visibility.calendar_query_service` to match service use to the native turns. See the [registered experiment and instructions](replication.md#does-sending-two-proposed-slots-improve-a-native-schedule).
+
 ## Does it matter which role gets the calendar tool?
 
 In the first [registered block](replication.md#which-teammate-should-receive-a-local-tool), 4 native teams completed. When only the sender had access, the blind room scored 1 and the peer room scored 0. When only the receiver had access, both rooms scored 0. The host reconciled 24 direct calls at **$0.001151628 USD**. This is one world, direction, and repetition. It does not establish which role should receive the tool.
