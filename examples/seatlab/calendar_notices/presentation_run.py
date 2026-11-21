@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +60,7 @@ def _collect(
     run_prefix: str = _PREFIX,
     schema: str = "seatlab.calendar-presentation/v1",
     original_receipt_sha256: str = _SOURCE_SHA256,
+    decode_dispatch: Callable[[str], dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     import re
     from contextlib import ExitStack
@@ -70,6 +72,7 @@ def _collect(
         raise ValueError("spend_directory_mismatch")
     ledger = Path(bound)
     runs = [row.get("run") for row, _ in plan]
+    role = "cal_decide" if decode_dispatch is None else "dispatch"
     if (
         not re.fullmatch(r"[a-z0-9][a-z0-9_-]*-", run_prefix)
         or any(
@@ -121,7 +124,7 @@ def _collect(
                 attempts.flush()
                 os.fsync(attempts.fileno())
                 try:
-                    turn = deepseek.turn(prompt, run_id=row["run"], role="cal_decide")
+                    turn = deepseek.turn(prompt, run_id=row["run"], role=role)
                 except deepseek.SeatUnavailable as exc:
                     stopped = exc.category
                     break
@@ -132,7 +135,10 @@ def _collect(
                     served_model=turn.served_model, response_sha256=p.digest(turn.text)
                 )
                 try:
-                    row["slot"] = p.decode(turn.text, "choice")
+                    if decode_dispatch is None:
+                        row["slot"] = p.decode(turn.text, "choice")
+                    else:
+                        row["choices"] = decode_dispatch(turn.text)
                     row["status"] = "accepted"
                 except (ValueError, RecursionError):
                     row["status"] = "invalid"
