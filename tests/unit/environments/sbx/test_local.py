@@ -115,13 +115,13 @@ async def test_cli_passes_values_in_environment_not_argv(monkeypatch):
     secret = "sentinel-'\"$=\nsecret"
     result = await SbxCli(sys.executable).run(
         "-c",
-        "import os; print(os.environ['SEAT_KEY']); print(os.environ['EMPTY'])",
+        "import json, os, sys; sys.stdout.buffer.write(json.dumps({key: os.environ[key] for key in ('SEAT_KEY', 'EMPTY')}).encode())",
         timeout=10,
         env={"SEAT_KEY": secret, "EMPTY": ""},
     )
 
-    assert result.stdout.decode() == secret + "\n\n"
-    assert secret not in repr(calls[0][0])
+    assert json.loads(result.stdout) == {"SEAT_KEY": secret, "EMPTY": ""}
+    assert all(secret not in arg for arg in calls[0][0])
     assert calls[0][1]["env"]["SEAT_KEY"] == secret
     assert calls[0][1]["env"]["EMPTY"] == ""
 

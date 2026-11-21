@@ -307,7 +307,7 @@ class TestExecPersistentEnv:
         assert spawn.call_args.args[:4] == (
             "docker",
             "--config",
-            "/host/config",
+            str(Path("/host/config").absolute()),
             "compose",
         )
         assert "/seat/config" not in spawn.call_args.args

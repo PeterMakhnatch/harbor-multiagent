@@ -750,6 +750,7 @@ async def test_exec_maps_result_and_honors_env_cwd_user(tmp_path, fake_backend):
     assert call["timeout_seconds"] == 12
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
 async def test_exec_stdin_does_not_restart_bash_with_command_env(
     tmp_path, fake_backend
 ):

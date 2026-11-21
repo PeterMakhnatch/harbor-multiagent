@@ -9,6 +9,7 @@ calls mocked).
 import asyncio
 import json
 import os
+import shlex
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -647,6 +648,21 @@ class TestOpenshiftExec:
         cmd = call.args[0]
         assert "-i" in cmd
         assert "not-a-command" not in " ".join(cmd)
+        assert shlex.split(call.kwargs["stdin_data"].decode())[:3] == [
+            "export",
+            f"FOO={value}",
+            "EMPTY=",
+        ]
+
+    @pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
+    async def test_exec_stdin_preserves_literal_values(self, oc_env):
+        oc_env._run_oc_command = AsyncMock(return_value=ExecResult(return_code=0))
+        value = "synthetic='value' $(not-a-command)\n"
+        await oc_env.exec(
+            """printf '%s=%s' "$FOO" "$EMPTY" """, env={"FOO": value, "EMPTY": ""}
+        )
+        call = oc_env._run_oc_command.call_args
+        cmd = call.args[0]
         process = await asyncio.create_subprocess_exec(
             *cmd[cmd.index("--") + 1 :],
             stdin=asyncio.subprocess.PIPE,
@@ -678,6 +694,7 @@ class TestOpenshiftExec:
         assert argv[-3:] == ["bash", "-c", "su agent -s /bin/bash -c 'bash -s'"]
         assert b"synthetic" in call.kwargs["stdin_data"]
 
+    @pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
     async def test_exec_stdin_does_not_restart_bash_with_command_env(
         self, oc_env, tmp_path
     ):

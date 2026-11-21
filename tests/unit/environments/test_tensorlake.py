@@ -721,6 +721,9 @@ class TestRunCommandAsync:
         assert result.exit_code == 0
         assert result.stdout == "hello"
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Executes a POSIX shell locally"
+    )
     async def test_direct_exec_forwards_env_after_bash_startup(
         self, ubuntu_env, tmp_path
     ):

@@ -1,3 +1,4 @@
+import os
 import subprocess
 from unittest.mock import AsyncMock
 
@@ -7,6 +8,7 @@ from harbor.environments.base import ExecResult
 from harbor.environments.desktop_exec import posix_exec_files, staged_exec_files
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
 def test_posix_environment_is_exported_without_restarting_bash(tmp_path):
     startup = tmp_path / "startup.sh"
     startup.write_text("echo unexpected-startup\n")
@@ -20,6 +22,7 @@ def test_posix_environment_is_exported_without_restarting_bash(tmp_path):
 @pytest.mark.parametrize(
     "command,output", [("printf 'task\\n'", b"task\n"), ("# empty command", b"")]
 )
+@pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
 def test_password_only_staging_does_not_print_inherited_environment(
     monkeypatch, command, output
 ):
