@@ -6,6 +6,19 @@ The run measured **12 of 16 registered native Harbor trials**. In the 3 complete
 
 The [registered comparison](replication.md#can-live-teammates-choose-and-use-a-tool-that-reads-only-their-own-calendar) started with world 0, direction 0, repetition 0. All 4 native teams completed. Both rooms scored 0 without tool access. Both also scored 0 with tool access. The host reconciled 24 direct calls at **$0.001421316 USD**. This is a single block, not the 12-world estimate.
 
+**Final result: local tool access raised scheduling success from 2/96 to 44/96.** Both policies used the same model and the same number of calls. Across all 96 matched comparisons, tool access improved 44 results, worsened 2, and tied 50. The registered difference was **+43.75 percentage points**, with equal weight for each of 12 calendars. One no-tool team submitted no valid slot. The native verifier awarded zero. Among the other 95 pairs, the difference was +43.01 points.
+
+| Native rooms | No tool | Local tool |
+| --- | ---: | ---: |
+| Blind recheck | 2/48 | 24/48 |
+| Peer message at recheck | 0/48 | 20/48 |
+
+The 9 calendars outside the earlier cohort gained 47.22 points. The 3 earlier calendars gained 33.33 points. The two rooms shared opening messages within each policy. The 192 teams are not 192 independent calendars.
+
+The tool returned only the requesting seat's feasible starts. With it, the model copied its full local list on 57/96 openings and 30/96 rechecks. Without it, no complete local list was exact. A tool return was not the same as a correct message or a successful team.
+
+The [full first-attempt results](results/calendar-tools-final.json) include every native reward. [Stock Eval Lab](results/calendar-tools-stock.json) verified all 192 and both seat records in each. The native results did not report tokens for any of the 384 seat records. The separate [host ledger](results/calendar-tools-cost.json) matched all 1,152 direct calls. Estimated cost: **$0.055000989 USD**, with no open hold.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
