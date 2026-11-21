@@ -69,6 +69,7 @@ def _location(trial: Path) -> tuple[Path, Path, team_views.Cell]:
         audit.require(wave.startswith("r"), "unsupported_native_source_cell")
         cell = team_views.RepeatJoinCell(world, arm, repetition=int(wave[1:]))
     else:
+        audit.require(prefix in _CELL_TYPES, "unsupported_native_source_cell")
         world, arm = suffix.split("-", 1)
         cell = _CELL_TYPES[prefix](world, arm)
     audit.require(trial.name == cell.run, "unsupported_native_source_cell")
