@@ -336,6 +336,29 @@ python -m "$module" verify "$private/report.json"
 
 Set `$harbor` and `$config` to physical absolute paths. `seal` creates the study directory. One `run` starts one real Docker trial. Assign both arms of a pair to one worker to preserve their registered order. Give separate pairs to different workers. Each worker claims its trial before launch. After interruption, `pending` excludes occupied trials. `report` checks native evidence again and leaves unknown rewards out of the point estimate. Never publish the private native directories: they contain the model replies. The public report contains shipment decisions and text hashes, not the text or credentials.
 
+### Test a lossless format change with 2 native seats
+
+The [registered comparison](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060774408) gives both dispatchers the same kinds of information. `nested` keeps the original report lists and utility map. `joined` puts each bay’s utility beside its position in each visible report. `null` means the bay is absent. Neither representation sorts by utility or supplies the correct bay.
+
+Inventory still has its own native seat. Dispatch still selects 2 reports before the final call. The transformer accepts only the text already available to Dispatch. It cannot access the world, the verifier, or an unopened revision. Call `project(nested_prompt, "joined")` from `examples.seatlab.attention.evidence_join` in a Python harness. `unjoin(joined_prompt)` restores the original bytes when encoded as UTF-8.
+
+Start with the environment, `$config`, `$private`, and `$harbor` from [Run two real seat programs](#run-two-real-seat-programs). Use commands that you control. A model-backed command can incur charges.
+
+```sh
+python -m examples.seatlab.attention plan --cohort evidence-join
+python -m examples.seatlab.attention seal --cohort evidence-join \
+  --transport commands --config "$config" --study "$private/join"
+python -m examples.seatlab.attention run --study "$private/join" \
+  --cell dvj-s14521-r0-nested --harbor "$harbor"
+python -m examples.seatlab.attention run --study "$private/join" \
+  --cell dvj-s14521-r0-joined --harbor "$harbor"
+python -m examples.seatlab.attention report --study "$private/join" > "$private/join-report.json"
+```
+
+These commands run 1 pair, not the whole study. Keep both cells of a world on the same worker. Give each other worker a different world from the plan. The second cell cannot start until the first ends. Never reuse a claimed cell. The verifier counts 1 team reward per trial, not 2 rewards for its 2 seats.
+
+The full comparison uses 8 matched worlds. Independent inventory and read decisions can differ between arms. Missing native evidence makes the registered result inconclusive. With all pairs, the pass rule requires 6 extra optimal shipments, an exact one-sided world test at p ≤ 0.05, and no decrease in feasible shipments.
+
 ### Replay the original server evidence
 
 Run these commands from the fork root with Python 3.12 or later. No model, SQL service, Docker, or Harbor installation is needed for the stored projections.

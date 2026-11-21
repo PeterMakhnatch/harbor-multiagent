@@ -4,13 +4,16 @@ from collections import Counter
 from hashlib import sha256
 from math import fsum
 from pathlib import Path
-from typing import Any
+from re import fullmatch
+from runpy import run_path
+from typing import Any, cast
 from uuid import NAMESPACE_URL, uuid5
 
 from .. import evidence, run_panel, seat_agent, team_report
+from ..capsule import Capsule, view_hash
 from ..export_capsules import reconstructed_capsules
 from ..visibility import native_pairs
-from . import confirmation, protocol
+from . import confirmation, evidence_join, join_summary, protocol
 
 _EPISODES = 6
 _ROLES = ("inventory", "dispatch")
@@ -18,6 +21,11 @@ _ARMS = ("named", "count")
 _AGENT_IMPORT = "examples.seatlab.attention.agent:AttentionSeat"
 _SEAT_SCHEMA = "seatlab.native-attention-seat/v1"
 _TOKENS = ("input_tokens", "cache_tokens", "output_tokens")
+_TURN_STAGES = (
+    ("inventory", "inventory"),
+    ("select", "dispatch"),
+    ("decide", "dispatch"),
+)
 _METRICS = (
     "opened_report_changes",
     "total_report_changes",
@@ -25,9 +33,37 @@ _METRICS = (
     "opened_sensitive",
     "source_copy_errors",
 )
+_JOIN_STATES = {
+    "unclaimed",
+    "reserved_without_trial",
+    "claimed",
+    "native_failed",
+    "unverified",
+    "complete",
+}
+_JOIN_OUTCOME_FIELDS = {
+    "trial_id",
+    "fingerprint",
+    "native_score",
+    "actions",
+    "opened",
+    "turns",
+    *_METRICS,
+}
+_TURN_FIELDS = {
+    "stage",
+    "run",
+    "role",
+    "status",
+    "prompt_sha256",
+    "response_sha256",
+    "usage",
+}
 
 
 def _agent_import(cell_id: str) -> str:
+    if cell_id.startswith(evidence_join.RUN_PREFIX):
+        return evidence_join.AGENT_IMPORT
     if cell_id.startswith(confirmation.RUN_PREFIX):
         return confirmation.AGENT_IMPORT
     return _AGENT_IMPORT
@@ -86,34 +122,28 @@ def _read_native(
     return native
 
 
-def _turn(
-    record: object, stage: str, role: str, cell_id: str, transport: str
-) -> tuple[str, dict[str, Any]]:
-    identity = {
+def _turn_identity(stage: str, role: str, cell_id: str) -> dict[str, str]:
+    return {
         "stage": stage,
         "run": f"{cell_id}-{stage}",
         "role": role,
         "status": "received",
     }
-    if not run_panel._config_matches(record, identity):
+
+
+def _turn(
+    record: object, stage: str, role: str, cell_id: str, transport: str
+) -> tuple[str, dict[str, Any]]:
+    identity = _turn_identity(stage, role, cell_id)
+    if not isinstance(record, dict) or not run_panel._config_matches(record, identity):
         raise ValueError("native model turn identity or stage mismatch")
+    record = cast(dict[str, Any], record)
     text = record["text"]
     response_hash = record["response_sha256"]
     if not isinstance(text, str) or response_hash != _digest(text):
         raise ValueError("native model response hash mismatch")
     usage = record["usage"]
-    if transport == "direct":
-        if (
-            not isinstance(usage, dict)
-            or usage.keys() != {"served_model", *_TOKENS}
-            or not isinstance(usage["served_model"], str)
-            or usage["served_model"].casefold() not in native_pairs._SERVED_ENGINES
-            or any(type(usage[key]) is not int or usage[key] < 0 for key in _TOKENS)
-            or usage["cache_tokens"] > usage["input_tokens"]
-        ):
-            raise ValueError("invalid direct model usage")
-    elif usage is not None:
-        raise ValueError("command model usage is not attested")
+    _check_usage(usage, transport)
     return text, {
         **identity,
         "prompt_sha256": record["prompt_sha256"],
@@ -122,9 +152,31 @@ def _turn(
     }
 
 
+def _check_usage(usage: object, transport: str) -> None:
+    if transport != "direct":
+        if usage is not None:
+            raise ValueError("command model usage is not attested")
+        return
+    if not isinstance(usage, dict) or usage.keys() != {"served_model", *_TOKENS}:
+        raise ValueError("invalid direct model usage")
+    usage = cast(dict[str, Any], usage)
+    served_model = usage["served_model"]
+    input_tokens, cache_tokens, output_tokens = (usage[key] for key in _TOKENS)
+    if (
+        not isinstance(served_model, str)
+        or served_model.casefold() not in native_pairs._SERVED_ENGINES
+        or type(input_tokens) is not int
+        or type(cache_tokens) is not int
+        or type(output_tokens) is not int
+        or not 0 <= cache_tokens <= input_tokens
+        or output_tokens < 0
+    ):
+        raise ValueError("invalid direct model usage")
+
+
 def _seat_metadata(
     record: dict[str, Any],
-    capsule: dict[str, Any],
+    capsule: Capsule,
     role: str,
     cell_id: str,
     rows: list[dict[str, Any]],
@@ -151,6 +203,10 @@ def _seat_metadata(
     ):
         raise ValueError("native seat did not attest a complete bound submission")
     return metadata
+
+
+def _capsule_cases(capsule: Capsule) -> list[dict[str, Any]]:
+    return cast(dict[str, Any], capsule["view"])["cases"]
 
 
 def _check_prompt(turn: dict[str, Any], prompt: str) -> None:
@@ -202,7 +258,7 @@ def _reconcile_turns(
     )
     _check_prompt(
         inv_turn,
-        native_pairs._prompt("inventory", capsules["inventory"]["view"]["cases"]),
+        native_pairs._prompt("inventory", _capsule_cases(capsules["inventory"])),
     )
     submitted = seat_agent._json_object(inventory_text, "inventory model")
     seat_agent._checked_submission(submitted, "inventory", _EPISODES)
@@ -212,11 +268,13 @@ def _reconcile_turns(
     ):
         raise ValueError("inventory model response differs from accepted reports")
 
-    cases = capsules["dispatch"]["view"]["cases"]
+    cases = _capsule_cases(capsules["dispatch"])
     select_text, select_turn = _turn(
         dispatch["turns"][0], "select", "dispatch", cell_id, transport
     )
-    _check_prompt(select_turn, protocol.select_prompt(cases, seed, rep, cell["arm"]))
+    join_cohort = cell_id.startswith(evidence_join.RUN_PREFIX)
+    selector_arm = "named" if join_cohort else cell["arm"]
+    _check_prompt(select_turn, protocol.select_prompt(cases, seed, rep, selector_arm))
     opened = protocol.select(select_text)
     if list(opened) != dispatch["opened"]:
         raise ValueError("selector response differs from the recorded lookups")
@@ -224,7 +282,10 @@ def _reconcile_turns(
     decide_text, decide_turn = _turn(
         dispatch["turns"][1], "decide", "dispatch", cell_id, transport
     )
-    _check_prompt(decide_turn, protocol.decide_prompt(cases, seed, rep, opened))
+    prompt = protocol.decide_prompt(cases, seed, rep, opened)
+    if join_cohort:
+        prompt = evidence_join.project(prompt, cell["arm"])
+    _check_prompt(decide_turn, prompt)
     submitted = protocol.decide(decide_text, cases, seed, rep)
     seat_agent._checked_submission(submitted, "dispatch", _EPISODES)
     if (
@@ -269,7 +330,10 @@ def inspect_trial(
     if not isinstance(cell_id, str):
         raise TypeError("attention cell id must be a string")
     confirmation_cohort = cell_id.startswith(confirmation.RUN_PREFIX)
-    cells = confirmation.grid() if confirmation_cohort else protocol.grid()
+    if cell_id.startswith(evidence_join.RUN_PREFIX):
+        cells = evidence_join.grid()
+    else:
+        cells = confirmation.grid() if confirmation_cohort else protocol.grid()
     transports = ("direct",) if confirmation_cohort else ("direct", "commands")
     if transport not in transports or not any(
         run_panel._config_matches(registered, cell) and registered.keys() == cell.keys()
@@ -316,7 +380,7 @@ def inspect_trial(
             "opened": opened,
             **_observation_metrics(
                 world,
-                reconstructed_capsules(world)["dispatch"]["view"]["cases"],
+                _capsule_cases(reconstructed_capsules(world)["dispatch"]),
                 cell,
                 opened,
             ),
@@ -482,7 +546,13 @@ def summarize(
     rows: list[dict[str, Any]],
     *,
     confirmation_cohort: bool = False,
+    evidence_join_cohort: bool = False,
 ) -> dict[str, Any]:
+    if evidence_join_cohort:
+        if confirmation_cohort:
+            raise ValueError("cannot combine registered attention cohorts")
+        return _summarize_join(cells, rows)
+
     grid = confirmation.grid() if confirmation_cohort else protocol.grid()
     registered = {cell["cell_id"]: cell for cell in grid}
     _index(registered, cells, outcomes=False)
