@@ -2,6 +2,21 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Is one new inventory report more useful to a reviewer than a real peer draft?
+
+A separate Inspect AI program reviewed 12 previous direct dispatch decisions from 6 native worlds. The [protocol](replication.md#does-a-real-peer-draft-help-a-new-reviewer-use-one-additional-inventory-update) fixed the peer, the source observation and the extra report before inference. Only 1 of 12 selected records changed its best available bay between revisions.
+
+| Input to the fresh reviewer | Optimal target shipments | Optimal across all shipments |
+|---|---:|---:|
+| Earlier report, no draft | 11/12 | 64/72 |
+| Earlier report, observed peer draft | 11/12 | 64/72 |
+| Newer report, no draft | 12/12 | 65/72 |
+| Newer report, observed peer draft | 12/12 | 65/72 |
+
+**The newer report corrected the one changed target in both arms. Showing the peer draft made no difference to the scores on this panel.** Neither result estimates a general reviewer effect. A higher count of corrections relative to the peer is not evidence that displaying the peer helped: the no-draft reviewers got the same scores. The [source-paired effects](results/peer-update-effects.json) separate the other 5 shipments per source.
+
+Inspect AI 0.3.276 ran all 48 registered first attempts with no retries. The [service receipts](results/peer-update-inspect-service.json) matched 48 actual `openai-codex/gpt-6.2-sol` calls to the [sanitized first attempts](results/peer-update-inspect-live.json). The [independent stock scorer](results/peer-update-original-stock.json) matched all 288 choices on the 12 original teams. No new paid model call, Docker run, or native reward. The original paid peer decisions are already counted in the [preceding direct meter](results/decision-cross-direct-meter.json). Raw Inspect archives stay private.
+
 ## Can two receivers act differently on exactly the same teammate reports?
 
 The [protocol](replication.md#which-role-accounts-for-a-difference-between-two-agent-teams) fixes the two real sender cohorts and 28 distinct receiver observations. We selected all 48 original sender choices, not just those that performed well. Each independent program gets 2 first attempts per exact prompt. The [observation register](results/decision-cross-board.json) commits to the prompt and the accepted sender reply, not a reconstructed sender policy. The first direct DeepSeek draw cost **$0.000075600**. Its reply settled in the direct ledger. An independent service receipt matched the first keyless Sol draw. Neither pilot was repeated.
