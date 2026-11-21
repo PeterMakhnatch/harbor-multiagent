@@ -102,6 +102,30 @@ def subprocesses(monkeypatch):
     return spawned, started
 
 
+async def test_cli_passes_values_in_environment_not_argv(monkeypatch):
+    spawn = asyncio.create_subprocess_exec
+    calls = []
+
+    async def record(*args, **kwargs):
+        calls.append((args, kwargs))
+        return await spawn(*args, **kwargs)
+
+    monkeypatch.setenv("SEAT_KEY", "ambient")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", record)
+    secret = "sentinel-'\"$=\nsecret"
+    result = await SbxCli(sys.executable).run(
+        "-c",
+        "import os; print(os.environ['SEAT_KEY']); print(os.environ['EMPTY'])",
+        timeout=10,
+        env={"SEAT_KEY": secret, "EMPTY": ""},
+    )
+
+    assert result.stdout.decode() == secret + "\n\n"
+    assert secret not in repr(calls[0][0])
+    assert calls[0][1]["env"]["SEAT_KEY"] == secret
+    assert calls[0][1]["env"]["EMPTY"] == ""
+
+
 @pytest.mark.parametrize("stdout,stderr", [(9, 0), (0, 9), (5, 5), (9, 9), (262144, 0)])
 async def test_cli_enforces_combined_output_limit_before_exit(
     subprocesses, stdout, stderr
@@ -418,9 +442,9 @@ async def test_exec_passes_workdir_environment_user_and_command(tmp_path: Path) 
         "-w",
         "/workspace",
         "-e",
-        "TASK=value",
+        "TASK",
         "-e",
-        "EXEC=yes",
+        "EXEC",
         "-u",
         "1000",
         "main",

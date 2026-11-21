@@ -695,8 +695,8 @@ class LangSmithEnvironment(BaseEnvironment):
         parts = ["exec", "-T"]
         if cwd:
             parts.extend(["-w", cwd])
-        for key, value in (env or {}).items():
-            parts.extend(["-e", f"{key}={value}"])
+        for key in env or {}:
+            parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         if service == MAIN_SERVICE_NAME:
@@ -708,7 +708,7 @@ class LangSmithEnvironment(BaseEnvironment):
             # absent (e.g. *-alpine); POSIX sh is universal. Authors needing
             # bash can invoke it explicitly inside the command.
             parts.extend([service, "sh", "-c", command])
-        return await self._compose_exec(parts, timeout_sec=timeout_sec)
+        return await self._compose_exec(parts, timeout_sec=timeout_sec, env=env)
 
     # ------------------------------------------------------------------
     # Per-service compose operations (sidecar artifact collection +
@@ -1054,11 +1054,13 @@ class LangSmithEnvironment(BaseEnvironment):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         return await self._exec_sandbox(
             self._compose_cmd(subcommand),
             cwd="/",
-            env=self._compose_env_vars(),
+            env={**self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
         )
 

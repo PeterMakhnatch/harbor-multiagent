@@ -560,6 +560,7 @@ class ACASandboxEnvironment(BaseEnvironment):
         user: str | int | None,
     ) -> str:
         """Shell script that runs *command* and records its output and status."""
+        post_su_env = {}
         if user is None or str(user) in {"root", "0"}:
             runner = f'"$shell" -c {shlex.quote(command)}'
         else:
@@ -567,7 +568,9 @@ class ACASandboxEnvironment(BaseEnvironment):
             # overrides inside the command.
             for key in ("HOME", "PATH"):
                 if env and key in env:
-                    command = f"export {key}={shlex.quote(env[key])}; {command}"
+                    saved = f"_HARBOR_{key}_{uuid.uuid4().hex}"
+                    post_su_env[saved] = key
+                    command = f'export {key}="${{{saved}}}"; unset {saved}; {command}'
             account = (
                 f'"$(id -nu {user} 2>/dev/null || '
                 f"awk -F: '$3 == {user} {{ print $1; exit }}' /etc/passwd)\""
@@ -587,6 +590,9 @@ class ACASandboxEnvironment(BaseEnvironment):
             lines.append(f"cd {shlex.quote(cwd)} || exit 1")
         lines.extend(
             f"export {key}={shlex.quote(value)}" for key, value in (env or {}).items()
+        )
+        lines.extend(
+            f'export {saved}="${{{key}}}"' for saved, key in post_su_env.items()
         )
         lines += [
             f"exec {runner}",

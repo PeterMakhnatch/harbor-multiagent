@@ -23,6 +23,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from harbor.environments.base import BaseEnvironment, ExecResult, transfer_tar_filter
 from harbor.environments.capabilities import EnvironmentCapabilities
+from harbor.environments.dind_compose import shell_env_stdin
 from harbor.environments.options import EnvironmentOptions
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.trial.paths import EnvironmentPaths
@@ -1669,14 +1670,14 @@ class ACKEnvironment(BaseEnvironment):
         # Build command string
         full_command = f"bash -ic {shlex.quote(command)}"
 
-        if env:
-            for key, value in env.items():
-                full_command = f"{key}={shlex.quote(value)} {full_command}"
-
         # Use cwd if provided, otherwise fall back to task_env_config.workdir
         effective_cwd = cwd or self.task_env_config.workdir
         if effective_cwd:
-            full_command = f"cd {effective_cwd} && {full_command}"
+            full_command = f"cd {shlex.quote(effective_cwd)} && {full_command}"
+
+        stdin = shell_env_stdin(full_command, env) if env else None
+        if stdin is not None:
+            full_command = "sh -s"
 
         if user is not None:
             # su requires a username; resolve numeric UIDs via getent
@@ -1687,7 +1688,11 @@ class ACKEnvironment(BaseEnvironment):
             # Use su (not su -) to preserve the working directory
             full_command = f"su {user_arg} -s /bin/bash -c {shlex.quote(full_command)}"
 
-        exec_command = ["sh", "-c", full_command]
+        exec_command = (
+            ["sh", "-s"]
+            if stdin is not None and user is None
+            else ["sh", "-c", full_command]
+        )
 
         logger.debug(f"Executing command in pod {self.pod_name}: {full_command}")
         resp = None
@@ -1699,11 +1704,14 @@ class ACKEnvironment(BaseEnvironment):
                 self.namespace,
                 command=exec_command,
                 stderr=True,
-                stdin=False,
+                stdin=stdin is not None,
                 stdout=True,
                 tty=False,
                 _preload_content=False,
             )
+
+            if stdin is not None:
+                await asyncio.to_thread(resp.write_stdin, stdin)
 
             if timeout_sec:
                 stdout, stderr = await asyncio.wait_for(

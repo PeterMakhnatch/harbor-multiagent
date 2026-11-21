@@ -4,7 +4,9 @@ import asyncio
 import inspect
 import io
 import logging
+import os
 import re
+import shlex
 import tarfile
 import tomllib
 from dataclasses import dataclass
@@ -55,23 +57,22 @@ class _StartedEnvironment:
 
 
 def _script_of(call: dict[str, Any]) -> str:
-    """Extract the shell script from an ``exec_calls`` entry.
-
-    Centralises the assumption that ``CWSandboxEnvironment.exec`` wraps
-    every command as ``["bash", "-lc", <script>]``. If that ever
-    changes, this is the only site to update instead of the ~20
-    individual ``call["command"][2]`` reads spread across this file.
-    """
+    """Extract the task script from stdin or argv, checking the launch shape."""
     command = call["command"]
-    if (
-        not isinstance(command, list)
-        or len(command) != 3
-        or command[:2] != ["bash", "-lc"]
-    ):
-        raise AssertionError(
-            f"unexpected exec command shape: {command!r} "
-            f'(expected ["bash", "-lc", <script>])'
+    if call["stdin"]:
+        if command != ["bash", "-ls"]:
+            assert len(command) == 3 and command[:2] == ["bash", "-lc"]
+            user_switch = shlex.split(command[2])
+            assert len(user_switch) == 6 and user_switch[0] == "su"
+            assert user_switch[2:] == ["-s", "/bin/bash", "-c", "bash -s"]
+        exports, separator, script = (
+            call["stdin_payload"].decode().partition("\n{\n:\n")
         )
+        assert exports.startswith("export ") and separator
+        assert script.endswith("\n} </dev/null\n")
+        return script.removesuffix("\n} </dev/null\n")
+    assert len(command) == 3 and command[:2] == ["bash", "-lc"]
+    assert "stdin_payload" not in call
     return command[2]
 
 
@@ -740,12 +741,37 @@ async def test_exec_maps_result_and_honors_env_cwd_user(tmp_path, fake_backend):
     assert result.stderr == "err"
     assert result.return_code == 7
     call = sandbox.exec_calls[-1]
-    script = _script_of(call)
-    assert "PERSISTENT=yes" in script
-    assert "LOCAL=value" in script
-    assert "su agent -s /bin/bash" in script
+    assert _script_of(call) == "echo hi"
+    assert call["command"] == ["bash", "-lc", "su agent -s /bin/bash -c 'bash -s'"]
+    assert call["stdin"] is True
+    assert b"PERSISTENT=yes" in call["stdin_payload"]
+    assert b"LOCAL=value" in call["stdin_payload"]
     assert call["cwd"] == "/workspace"
     assert call["timeout_seconds"] == 12
+
+
+async def test_exec_stdin_does_not_restart_bash_with_command_env(
+    tmp_path, fake_backend
+):
+    started = await _start_env(tmp_path, fake_backend)
+    startup = tmp_path / "startup.sh"
+    startup.write_text("printf 'unexpected startup' >&2\n")
+    command = 'printf "%s\\n" "$BASH_ENV"; set -e; false; echo not-reached'
+    await started.env.exec(command, env={"BASH_ENV": str(startup)})
+
+    call = started.sandbox.exec_calls[-1]
+    assert _script_of(call) == command
+    process = await asyncio.create_subprocess_exec(
+        *call["command"],
+        env={key: value for key, value in os.environ.items() if key != "BASH_ENV"},
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate(call["stdin_payload"])
+    assert process.returncode == 1
+    assert stdout.decode() == f"{startup}\n"
+    assert stderr == b""
 
 
 async def test_exec_rejects_invalid_per_exec_env_name(tmp_path, fake_backend):
@@ -797,8 +823,9 @@ async def test_exec_skips_su_wrap_for_root(tmp_path, fake_backend):
 
     await started.env.exec("echo hi", user="root")
 
-    script = _last_exec_script(started.sandbox)
-    assert "su -" not in script
+    call = started.sandbox.exec_calls[-1]
+    assert call["command"] == ["bash", "-ls"]
+    assert _script_of(call) == "echo hi"
 
 
 async def test_exec_resolves_numeric_user_via_getent(tmp_path, fake_backend):
@@ -813,8 +840,12 @@ async def test_exec_resolves_numeric_user_via_getent(tmp_path, fake_backend):
     assert len(new_calls) == 2
     assert "getent passwd 1000 | cut -d: -f1" in _script_of(new_calls[0])
     assert new_calls[0]["timeout_seconds"] == 30
-    script = _script_of(new_calls[1])
-    assert "su agent -s /bin/bash" in script
+    assert new_calls[1]["command"] == [
+        "bash",
+        "-lc",
+        "su agent -s /bin/bash -c 'bash -s'",
+    ]
+    assert _script_of(new_calls[1]) == "echo hi"
 
 
 async def test_exec_rejects_unresolvable_numeric_user(tmp_path, fake_backend):

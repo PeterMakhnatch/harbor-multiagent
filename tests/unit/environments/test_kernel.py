@@ -1299,16 +1299,15 @@ async def test_container_exec_forwards_user_workdir_and_env(fake_kernel, temp_di
     await env.start(force_build=False)
     await env.exec("whoami", user="app", cwd="/app", env={"ROLE": "agent"})
 
-    host_commands = [
-        kwargs["args"][1] for _, kwargs in env._client.browsers.process.exec_calls
-    ]
-    command = next(
-        command
-        for command in host_commands
-        if " exec -T " in command and "whoami" in command
+    request = next(
+        kwargs
+        for _, kwargs in env._client.browsers.process.exec_calls
+        if " exec -T " in kwargs["args"][1] and "whoami" in kwargs["args"][1]
     )
+    command = request["args"][1]
     assert "-w /app" in command
-    assert "-e ROLE=agent" in command
+    assert "-e ROLE " in command
+    assert request["env"]["ROLE"] == "agent"
     assert "-u app" in command
     assert "main bash -c whoami" in command
 

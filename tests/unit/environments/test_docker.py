@@ -238,10 +238,11 @@ class TestExecPersistentEnv:
 
         call_args = docker_env_with_persistent_env._run_docker_compose_command.call_args
         cmd = call_args[0][0]
-        # Check that the env vars are passed as -e flags
         assert "-e" in cmd
-        assert "FOO=bar" in cmd
-        assert "BAZ=qux" in cmd
+        assert "FOO" in cmd
+        assert "BAZ" in cmd
+        assert call_args.kwargs["exec_env"] == {"FOO": "bar", "BAZ": "qux"}
+        assert all("bar" not in arg and "qux" not in arg for arg in cmd)
 
     async def test_exec_per_exec_env_overrides_persistent(
         self, docker_env_with_persistent_env
@@ -255,8 +256,62 @@ class TestExecPersistentEnv:
 
         call_args = docker_env_with_persistent_env._run_docker_compose_command.call_args
         cmd = call_args[0][0]
-        assert "FOO=override" in cmd
-        assert "BAZ=qux" in cmd
+        assert "FOO" in cmd
+        assert "BAZ" in cmd
+        assert call_args.kwargs["exec_env"] == {"FOO": "override", "BAZ": "qux"}
+
+    async def test_exec_values_reach_subprocess_environment_only(
+        self, docker_env, monkeypatch
+    ):
+        values = {"OPENAI_API_KEY": "sentinel-'\"$=\nsecret", "EMPTY": ""}
+        monkeypatch.setenv("OPENAI_API_KEY", "ambient-value")
+        process = AsyncMock()
+        process.communicate.return_value = (b"", None)
+        process.returncode = 0
+        with patch(
+            "harbor.environments.docker.docker.asyncio.create_subprocess_exec",
+            return_value=process,
+        ) as spawn:
+            await docker_env.exec("true", env=values)
+
+        argv = spawn.call_args.args
+        child_env = spawn.call_args.kwargs["env"]
+        assert argv[argv.index("-e") + 1] == "OPENAI_API_KEY"
+        assert values["OPENAI_API_KEY"] not in " ".join(argv)
+        assert "ambient-value" not in " ".join(argv)
+        assert {name: child_env[name] for name in values} == values
+        assert "PATH" in child_env
+        assert "OPENAI_API_KEY" not in docker_env._persistent_env
+
+    async def test_attach_values_reach_process_environment_only(self, docker_env):
+        secret = "attach-test-secret"
+        docker_env._persistent_env = {"OPENAI_API_KEY": secret}
+        with patch("harbor.environments.docker.docker.os.execvpe") as execute:
+            await docker_env.attach()
+
+        assert secret not in " ".join(execute.call_args.args[1])
+        assert execute.call_args.args[2]["OPENAI_API_KEY"] == secret
+        assert "PATH" in execute.call_args.args[2]
+
+    async def test_exec_keeps_host_docker_config(self, docker_env, monkeypatch):
+        monkeypatch.setenv("DOCKER_CONFIG", "/host/config")
+        process = AsyncMock()
+        process.communicate.return_value = (b"", None)
+        process.returncode = 0
+        with patch(
+            "harbor.environments.docker.docker.asyncio.create_subprocess_exec",
+            return_value=process,
+        ) as spawn:
+            await docker_env.exec("true", env={"DOCKER_CONFIG": "/seat/config"})
+
+        assert spawn.call_args.args[:4] == (
+            "docker",
+            "--config",
+            "/host/config",
+            "compose",
+        )
+        assert "/seat/config" not in spawn.call_args.args
+        assert spawn.call_args.kwargs["env"]["DOCKER_CONFIG"] == "/seat/config"
 
 
 class TestExecOutputCallback:

@@ -925,12 +925,14 @@ async def test_compose_exec_routes_through_main_service(tmp_path: Path) -> None:
         user=1000,
     )
 
-    command = environment.seen_commands[0]["command"]
+    request = environment.seen_commands[0]
+    command = request["command"]
     assert "docker compose " in command
     assert (
-        " exec -T -w /work -e BASE=1 -e STEP=2 -u 1000 main bash -lc 'echo hi'"
-        in command
+        " exec -T -w /work -e BASE -e STEP -u 1000 main bash -lc 'echo hi'" in command
     )
+    assert request["env"]["BASE"] == "1"
+    assert request["env"]["STEP"] == "2"
 
 
 async def test_compose_upload_file_uses_docker_compose_cp(tmp_path: Path) -> None:
@@ -1446,10 +1448,12 @@ async def test_service_exec_main_delegates_to_main_container(tmp_path: Path) -> 
     # workdir and persistent env.
     await environment.service_exec("echo hi", service=None)
 
-    command = environment.seen_commands[0]["command"]
+    request = environment.seen_commands[0]
+    command = request["command"]
     assert " -w /workspace " in command
-    assert "-e BASE=1" in command
+    assert "-e BASE " in command
     assert " main bash -lc 'echo hi'" in command
+    assert request["env"]["BASE"] == "1"
 
 
 async def test_service_download_file_targets_sidecar_service(tmp_path: Path) -> None:

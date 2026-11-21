@@ -42,7 +42,7 @@ from harbor.environments.definition import (
     require_agent_environment_definition,
     should_use_prebuilt_docker_image,
 )
-from harbor.environments.dind_compose import DinDComposeOps
+from harbor.environments.dind_compose import DinDComposeOps, shell_env_exports
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_PREBUILT_PATH,
@@ -110,12 +110,6 @@ _PROCESS_KILL_TIMEOUT_SEC = 10
 _PROCESS_STATUS_TIMEOUT_SEC = 10
 _STREAM_READ_TIMEOUT_SEC = 10
 _STREAM_READ_ATTEMPTS = 3
-_SHELL_DEFAULT_EXPORTS = (
-    f'export HOME="${{HOME:-{_DEFAULT_EXEC_HOME}}}" '
-    f'PATH="${{PATH:-{_DEFAULT_EXEC_PATH}}}"; '
-    "umask 022"
-)
-
 _BEAM_GPU_TYPES = {
     "any",
     "T4",
@@ -179,15 +173,14 @@ def _is_root_user(user: str | int | None) -> bool:
     return user == 0 or user == "0" or user == "root"
 
 
-def _with_env_exports(command: str, env: dict[str, str] | None) -> str:
-    if not env:
-        return command
-    exports = " ".join(f"{key}={shlex.quote(value)}" for key, value in env.items())
-    return f"export {exports}; {command}"
-
-
-def _with_shell_defaults(command: str) -> str:
-    return f"{_SHELL_DEFAULT_EXPORTS}; {command}"
+def _with_shell_defaults(command: str, env: dict[str, str] | None = None) -> str:
+    exports = " ".join(
+        f'{key}="${{{key}:-{default}}}"'
+        for key, default in (("HOME", _DEFAULT_EXEC_HOME), ("PATH", _DEFAULT_EXEC_PATH))
+        if not env or key not in env
+    )
+    defaults = f"export {exports}; " if exports else ""
+    return f"{defaults}umask 022; {command}"
 
 
 def _ip_address_cidr(value: str) -> str:
@@ -579,11 +572,13 @@ class _BeamCompose(DinDComposeOps):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         return await self._env._sandbox_exec(
             self._compose_cmd(subcommand),
             cwd="/",
-            env=self._compose_env_vars(),
+            env={**self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
             user="root",
         )
@@ -1332,18 +1327,29 @@ class BeamEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         user: str | int | None = None,
     ) -> ExecResult:
         sandbox = self._assert_sandbox()
-        command = _with_shell_defaults(_with_env_exports(command, env))
-
+        exec_kwargs: dict[str, Any] = {}
         if user is not None and not _is_root_user(user):
             if isinstance(user, int):
                 user_arg = f"$(getent passwd {user} | cut -d: -f1)"
             else:
                 user_arg = shlex.quote(str(user))
+            if env:
+                exec_kwargs["stdin"] = (
+                    f"{_with_shell_defaults(shell_env_exports(env), env)} || exit $?\n"
+                    f"{{\n{command}\n}} </dev/null\n"
+                ).encode()
+                command = f"exec {_SANDBOX_BASH} -s"
+                env = None
+            else:
+                command = _with_shell_defaults(command)
             command = f"su {user_arg} -s /bin/bash -c {shlex.quote(command)}"
+        else:
+            command = _with_shell_defaults(command, env)
 
-        exec_kwargs: dict[str, Any] = {}
         if cwd is not None:
             exec_kwargs["cwd"] = cwd
+        if env:
+            exec_kwargs["env"] = env
 
         submission = asyncio.create_task(
             asyncio.to_thread(
@@ -1415,10 +1421,19 @@ class BeamEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         )
 
         if self._compose_mode:
-            command = _with_shell_defaults(_with_env_exports(command, merged_env))
+            compose_env = dict(merged_env or {})
+            for key in ("HOME", "PATH"):
+                if key not in compose_env:
+                    continue
+                alias = f"HARBOR_BEAM_EXEC_{key}"
+                while alias in compose_env:
+                    alias = f"_{alias}"
+                compose_env[alias] = compose_env.pop(key)
+                command = f'export {key}="${{{alias}}}"; unset {alias}; {command}'
             return await self._assert_compose().exec(
-                command,
+                _with_shell_defaults(command, merged_env),
                 cwd=effective_cwd,
+                env=compose_env,
                 timeout_sec=timeout_sec,
                 user=user,
             )

@@ -31,6 +31,7 @@ from harbor.environments.definition import (
     require_agent_environment_definition,
     should_use_prebuilt_docker_image,
 )
+from harbor.environments.dind_compose import shell_env_stdin
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_PREBUILT_PATH,
@@ -198,8 +199,10 @@ class _RuntaDockerStrategy(_RuntaStrategy):
             f"docker rm -f {shlex.quote(self._container_name)} >/dev/null 2>&1 || true",
             timeout_sec=30,
         )
+        startup_env = env._startup_env()
         create = await env._runtime_exec_raw(
-            self._docker_create_command(image),
+            self._docker_create_command(image, env=startup_env),
+            env=startup_env,
             timeout_sec=60,
         )
         env._check(create, "docker create")
@@ -230,8 +233,10 @@ class _RuntaDockerStrategy(_RuntaStrategy):
         timeout_sec: int | None = None,
         user: str | int | None = None,
     ) -> ExecResult:
+        command_env = _with_runta_container_ca_env(env)
         return await self._env._runtime_exec_raw(
-            self._docker_exec_command(command, cwd=cwd, env=env, user=user),
+            self._docker_exec_command(command, cwd=cwd, env=command_env, user=user),
+            env=command_env,
             timeout_sec=timeout_sec,
         )
 
@@ -300,10 +305,10 @@ class _RuntaDockerStrategy(_RuntaStrategy):
                 f"rm -rf {shlex.quote(remote)}", timeout_sec=10
             )
 
-    def _docker_create_command(self, image: str) -> str:
+    def _docker_create_command(self, image: str, *, env: dict[str, str]) -> str:
         parts = ["docker", "create", "--name", self._container_name]
-        for key, value in self._env._startup_env().items():
-            parts.extend(["-e", f"{key}={value}"])
+        for key in env:
+            parts.extend(["-e", key])
         for mount in self._env._mounts:
             parts.extend(["--mount", self._docker_mount_spec(mount)])
         if self._env.task_env_config.workdir:
@@ -344,15 +349,15 @@ class _RuntaDockerStrategy(_RuntaStrategy):
         command: str,
         *,
         cwd: str | None,
-        env: dict[str, str] | None,
+        env: dict[str, str],
         user: str | int | None,
     ) -> str:
         parts = ["docker", "exec"]
         effective_cwd = effective_exec_cwd(cwd, self._env.task_env_config.workdir, None)
         if effective_cwd:
             parts.extend(["-w", effective_cwd])
-        for key, value in _with_runta_container_ca_env(env).items():
-            parts.extend(["-e", f"{key}={value}"])
+        for key in env:
+            parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         # Match Harbor's Docker main-container exec semantics. Existing task
@@ -449,15 +454,16 @@ class _RuntaComposeStrategy(_RuntaStrategy):
         timeout_sec: int | None = None,
         user: str | int | None = None,
     ) -> ExecResult:
+        command_env = _with_runta_container_ca_env(env)
         parts = self._compose_exec_parts(
             command,
             service=MAIN_SERVICE_NAME,
             cwd=effective_exec_cwd(cwd, self._env.task_env_config.workdir, None),
-            env=env,
+            env=command_env,
             user=user,
             login_shell=True,
         )
-        return await self._compose(parts, timeout_sec=timeout_sec)
+        return await self._compose(parts, timeout_sec=timeout_sec, env=command_env)
 
     async def service_exec(
         self,
@@ -469,15 +475,16 @@ class _RuntaComposeStrategy(_RuntaStrategy):
         timeout_sec: int | None = None,
         user: str | int | None = None,
     ) -> ExecResult:
+        command_env = _with_runta_container_ca_env(env)
         parts = self._compose_exec_parts(
             command,
             service=service,
             cwd=cwd,
-            env=env,
+            env=command_env,
             user=user,
             login_shell=False,
         )
-        return await self._compose(parts, timeout_sec=timeout_sec)
+        return await self._compose(parts, timeout_sec=timeout_sec, env=command_env)
 
     @override
     async def upload_file(self, source_path: Path | str, target_path: str) -> None:
@@ -604,11 +611,15 @@ class _RuntaComposeStrategy(_RuntaStrategy):
             )
 
     async def _compose(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         return await self._env._runtime_exec_raw(
             self._compose_command(subcommand),
-            env=self._compose_env(),
+            env={**self._compose_env(), **(env or {})},
             timeout_sec=timeout_sec,
         )
 
@@ -630,15 +641,15 @@ class _RuntaComposeStrategy(_RuntaStrategy):
         *,
         service: str,
         cwd: str | None,
-        env: dict[str, str] | None,
+        env: dict[str, str],
         user: str | int | None,
         login_shell: bool,
     ) -> list[str]:
         parts = ["exec", "-T"]
         if cwd:
             parts.extend(["-w", cwd])
-        for key, value in _with_runta_container_ca_env(env).items():
-            parts.extend(["-e", f"{key}={value}"])
+        for key in env:
+            parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         parts.append(service)
@@ -1168,9 +1179,9 @@ class RuntaEnvironment(BaseEnvironment):
     ) -> ExecResult:
         runtime = self._require_runtime()
         result = await runtime.exec(
-            command,
+            "sh -s" if env else command,
             cwd=cwd,
-            env=env,
+            stdin=shell_env_stdin(command, env) if env else None,
             timeout=timeout_sec,
             max_output_bytes=1024 * 1024,
         )

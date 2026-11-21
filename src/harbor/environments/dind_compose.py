@@ -23,8 +23,11 @@ enable a fast path that skips ``docker compose cp`` for downloads from
 
 from __future__ import annotations
 
+import re
 import shlex
 import tempfile
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, ClassVar
 from uuid import uuid4
@@ -32,6 +35,25 @@ from uuid import uuid4
 from harbor.constants import MAIN_SERVICE_NAME
 from harbor.environments.base import ExecResult
 from harbor.environments.docker import ENV_COMPOSE_NAME, write_env_compose_file
+
+
+def shell_env_exports(env: Mapping[str, str]) -> str:
+    invalid = sorted(
+        key for key in env if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
+    )
+    if invalid:
+        raise ValueError(
+            f"Environment variable names are not shell identifiers: {invalid}"
+        )
+    return "export " + " ".join(
+        shlex.quote(f"{key}={value}") for key, value in env.items()
+    )
+
+
+def shell_env_stdin(command: str, env: dict[str, str]) -> str:
+    if env:
+        command = f"{shell_env_exports(env)} && {command}"
+    return f"{command} </dev/null\nexit $?\n"
 
 
 class DinDComposeOps:
@@ -47,7 +69,11 @@ class DinDComposeOps:
     # ── Primitives each provider implements ─────────────────────────────
 
     async def _compose_exec(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a ``docker compose`` subcommand on the DinD host."""
         raise NotImplementedError
@@ -85,6 +111,33 @@ class DinDComposeOps:
                 local_path, f"{compose_dir}/{ENV_COMPOSE_NAME}"
             )
 
+    @asynccontextmanager
+    async def _staged_compose_command(
+        self, command: str, env: dict[str, str]
+    ) -> AsyncIterator[str]:
+        if not env:
+            yield command
+            return
+        host_dir = f"/tmp/harbor_{uuid4().hex}"
+        made = await self._host_exec(f"mkdir -m 700 {host_dir}")
+        if made.return_code != 0:
+            raise RuntimeError(f"Failed to create {host_dir}: {made.stderr}")
+        try:
+            host_path = f"{host_dir}/env.sh"
+            with tempfile.TemporaryDirectory() as temp_dir:
+                local_path = Path(temp_dir) / "env.sh"
+                local_path.write_text(
+                    shell_env_exports(env) + "\n", encoding="utf-8", newline="\n"
+                )
+                local_path.chmod(0o600)
+                await self._stage_file_to_host(local_path, host_path)
+            yield (
+                f"chmod 600 {host_path} && . {host_path} && "
+                f"command -p rm -f {host_path} && exec {command}"
+            )
+        finally:
+            await self._remove_host_path(host_dir, directory=True)
+
     async def exec(
         self,
         command: str,
@@ -101,8 +154,8 @@ class DinDComposeOps:
         if cwd:
             parts.extend(["-w", cwd])
         if env:
-            for k, v in env.items():
-                parts.extend(["-e", f"{k}={v}"])
+            for key in env:
+                parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         parts.append(service)
@@ -119,6 +172,8 @@ class DinDComposeOps:
             # `bash -c '...'`, on images that provide it.
             parts.extend(["sh", "-c", command])
 
+        if env:
+            return await self._compose_exec(parts, timeout_sec=timeout_sec, env=env)
         return await self._compose_exec(parts, timeout_sec=timeout_sec)
 
     async def _remove_host_path(self, path: str, *, directory: bool) -> None:
