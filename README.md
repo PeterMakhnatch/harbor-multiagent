@@ -81,6 +81,8 @@ To test feedback rather than fixed history, [run your own team through a stock c
 
 To test how one agent hands work to its replacement, [run a handoff on your own records](examples/seatlab/replication.md#run-a-handoff-on-your-own-records). Bring two agent programs and a small JSON file. The runner gives each program only its part. It keeps the first attempt and scores the replacement's choices.
 
+To separate a writer's note from a reader's choices, [exchange saved notes between two readers](examples/seatlab/replication.md#can-another-reader-use-the-same-writers-note). Each reader gets the same current record. The report keeps missing notes and separates choices copied from that record from choices that needed the note.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a

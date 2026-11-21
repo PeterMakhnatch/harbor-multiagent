@@ -17,6 +17,13 @@ _POLICIES = ("batch", "checklist", "owners")
 _MAX_PROMPT_BYTES = 8192
 
 
+def checklist_instruction(ids: tuple[str, ...]) -> str:
+    return (
+        f"{_BATCH} Required answer IDs: {json.dumps(ids)}. "
+        "Opening one record does not change the required answer IDs."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class Request:
     key: str
@@ -101,17 +108,13 @@ def _slot_jobs(entry: Entry, slot: int, prefix: str) -> list[Request]:
                 Request(f"{key}-batch", slot, policy, None, prompt, ids, options)
             )
         elif policy == "checklist":
-            instruction = (
-                f"{_BATCH} Required answer IDs: {json.dumps(ids)}. "
-                "Opening one record does not change the required answer IDs."
-            )
             requests.append(
                 Request(
                     f"{key}-checklist",
                     slot,
                     policy,
                     None,
-                    instruction + data,
+                    checklist_instruction(ids) + data,
                     ids,
                     options,
                 )

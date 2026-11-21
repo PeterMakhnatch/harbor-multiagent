@@ -253,6 +253,43 @@ Give the exact block indices for your run. The auditor rejects missing or surplu
 
 Primary: difference between the 2 policies in how often they open the revised record, paired within a valid writer note. Give each of the 3 original worlds equal weight. Report coverage and bounds for missing selections. Secondary: how often the resulting decision gets that record right when the revision changes the best bay. Identify these cases from the frozen scoring packet, not from either agent's choice. Report each policy's first-record selections and the number of shared final draws. The anonymous reader does not have the record identity. A first-record choice alone is not proof that it ignored available evidence.
 
+### Can another reader use the same writer's note?
+
+**Registered before new reader calls.** A handoff can fail because the writer lost a fact or because a reader did not use it. Exchange the **actual notes**, not summaries reconstructed from world truth.
+
+- Enroll the same 12 original blocks as the subscription portability test. Use the first changed case and stable control, with both repetitions, in each of the 3 recorded Harbor worlds. Do not filter on either writer's success.
+- `W0` is the original direct DeepSeek writer. `W1` is the original `openai-codex/gpt-6.2-sol` subscription writer. Restore each valid note byte for byte. Leave a missing or invalid note absent; do not repair it or start the original team.
+- `R0` is a fresh direct DeepSeek Flash reader. `R1` is a fresh subscriber on the same concrete subscription route as `W1`. Each reader gets the same brief, checklist, questions, options, and **one** current record. Open the first revised record, or the first record on a stable case. Neither reader selects it. Neither sees the other writer's note, the original decision, or the scoring answers.
+- Start each eligible writer–reader combination once. An identical prompt in different reader slots is still 2 physical calls. Alternate the writer order across blocks within each reader. Keep failures without retry. This is at most 24 paid calls and 24 subscription calls. Existing writer calls are not part of the new cost.
+- Primary: correct choices on the **5 unopened records**. For each reader, compare the 2 writers within the same enrolled block. For each writer, also compare the 2 readers. Average paired differences within a world, then give each observed world equal weight. Report the number of complete pairs and contributing worlds. Bound the difference over all 12 enrolled blocks with missing scores in `[0,1]`. The bounds are not confidence intervals.
+- Report the opened-record score separately. Also report complete deliveries and correct unopened choices per enrolled opportunity. Use an independent stock scorer on accepted choices only. Do not generalize the result to other tasks or claim a model ranking. The original writers and new readers ran in different service windows.
+
+The [source register](results/writer-exchange-source.json) contains note hashes and statuses, not the notes. Two archived writers must have seen the same original packet. You can create both journals with the handoff `commands` interface above. Reader programs use that same configuration format: `reviewer` runs R0, and `decider` runs R1. Give each program only its role prompt. Do not give it the packet, journal, or a scoring report.
+
+```bash
+module=examples.seatlab.exchange
+packet=examples/seatlab/results/handoff-recorded-packet.json
+sha=77e1af8cec3b3a18142cfc2085332c69c447a9bc89c04b34f036920378f8eb57
+args=(--packet "$packet" --sha256 "$sha" --writer "$WRITER0" --writer "$WRITER1"
+      --indices 0 1 12 13 14 15 26 27 28 29 40 41)
+seal=$(python -m "$module" seal "${args[@]}" | jq -er .source_sha256)
+args+=(--source-sha256 "$seal")
+python -m "$module" plan "${args[@]}"
+study=$(realpath "$(mktemp -d)")
+for reader in R0 R1; do
+  n=$(python -m "$module" plan "${args[@]}" | jq -r --arg r "$reader" '.readers[$r] | length')
+  if ((n)); then
+    python -m "$module" commands "${args[@]}" --study "$study" \
+      --config "$SEATS" --reader "$reader" --start 0 --stop "$n" || break
+  fi
+done
+python -m "$module" pending "${args[@]}" --study "$study"
+python -m "$module" report "${args[@]}" --study "$study" > exchange.json
+python -m "$module" verify --packet "$packet" --sha256 "$sha" exchange.json
+```
+
+`plan` lists physical calls, not complete teams. The reader indices are independent: two workers can run R0 and R1 at the same time. An interrupted call stays occupied. With a direct reader, pass the original `--spend-dir` to `pending`; a reservation also closes the slot. Report its cost with `report --spend-dir "$SEATLAB_SPEND_DIR" --direct-reader R0`. To verify the subscription reader, add `--subscription-reader R1 --model "$model" --receipts "$READER_RECEIPTS"`. The optional `stock` command takes the same native `--trial`, `--ids`, and `--sha256` arguments as the native handoff check above. It scores submitted choices only.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.

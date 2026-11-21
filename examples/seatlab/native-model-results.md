@@ -52,6 +52,23 @@ On the [42 recorded-source handoffs](results/handoff-recorded-live.json), naming
 
 Half the new writers returned an invalid note: 21 of 42. The [native stock check](results/handoff-recorded-stock.json) confirmed 132 observed choices in 22 distinct final decisions. They came from all 3 eligible source worlds. The [host ledger](results/handoff-recorded-cost.json) matched all 120 calls at **$0.007863198 USD**, including the first block. No hold remains.
 
+## Can a second reader use an archived writer's note?
+
+We gave both readers the [same opened record and the same checklist](replication.md#can-another-reader-use-the-same-writers-note). Neither reader saw the other 5 records. Across the 12 registered blocks, the original direct writer produced 6 valid notes. The original subscription writer produced 12. We did not rerun either writer.
+
+| Archived writer → fresh reader | Complete decisions / 12 | Correct unopened choices / delivered | Correct opened choices / delivered |
+| --- | ---: | ---: | ---: |
+| Direct → direct | 6 | 24/30 | 5/6 |
+| Direct → subscription | 5 | 19/25 | 5/5 |
+| Subscription → direct | 12 | 55/60 | 12/12 |
+| Subscription → subscription | 12 | 60/60 | 12/12 |
+
+With the subscription writer fixed, the subscription reader improved 5 blocks and tied 7 against the direct reader. Its equal-world difference was **+8.33 percentage points** on unopened records. With the direct writer fixed, only 5 blocks had two complete decisions. Its reader difference was −20.00 points among those pairs, and the bounds over all 12 blocks span −58.33 to +50.00 points. The 2 reader comparisons do not support a general model ranking.
+
+Changing writers also changed delivery. Among complete pairs, the writer change gave −3.33 points for the direct reader (6 pairs) and +26.67 points for the subscription reader (5 pairs). These conditional differences do not describe the 6 absent notes. The [public first attempts](results/writer-exchange-live.json) give separate, finite bounds for every comparison, and keep 60 unopened opportunities in each cell. The cases came from only 3 source teams.
+
+The [native stock check](results/writer-exchange-stock.json) confirmed 192 correct choices out of 210 across 35 distinct decisions. One of 36 reader replies was invalid. The [new direct run](results/writer-exchange-cost.json) matched all 18 calls at **$0.001668900 USD** with no open hold. The subscription audit matched 18 replies from `openai-codex/gpt-6.2-sol`: 8,140 input tokens, 1,423 output tokens, and no cached tokens. Original writer costs are not new reader costs.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.
