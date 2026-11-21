@@ -610,3 +610,20 @@ def test_global_facets_include_values_beyond_one_sql_page(tmp_path):
             rows = client.get("/api/rollouts", params={"task": task})
             assert rows.status_code == 200, rows.text
             assert rows.json()["total"] == 1
+
+
+@pytest.mark.parametrize("route", ["trajectory", "agent-logs"])
+def test_server_mode_refuses_seat(tmp_path, route):
+    """Server mode cannot read one seat's agent yet. It refuses ?seat= with
+    400 rather than answer with the trial's root agent/."""
+    job, trial, _ = write_job(tmp_path)
+    with TestClient(
+        create_app(tmp_path, source=RemoteFixture(tmp_path)),
+        client=("127.0.0.1", 50000),
+    ) as client:
+        path = f"/api/jobs/{job.id}/trials/{trial.id}/{route}"
+        without_seat = client.get(path)
+        with_seat = client.get(path, params={"seat": "p1"})
+    require(without_seat.status_code == 200, without_seat.text)
+    require(with_seat.status_code == 400, with_seat.text)
+    require(with_seat.json()["detail"] == "seat is not supported in server mode")

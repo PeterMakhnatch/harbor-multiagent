@@ -257,6 +257,10 @@ The job summary reports each key.
   - Token and cost totals sum every agent.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
 
+### View seat trials
+
+The viewer API's `trajectory` and `agent-logs` endpoints take `?seat=<service>` and read that agent's `seats/<service>/agent/`. In server mode they refuse `?seat=` (400) for now. The trial's `seat_results` names the seats. The trial list labels a seat trial by its first agent under test (agent, model and reasoning effort), and by its first participant while it runs. The viewer page has no seat selector yet.
+
 ## Limitations
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.

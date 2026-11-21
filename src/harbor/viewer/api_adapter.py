@@ -110,6 +110,14 @@ class ViewerApiAdapter:
         return json.loads(text) if text else None
 
     @staticmethod
+    def refuse_seat(seat: str | None) -> None:
+        """Folder mode reads one seat's agent with ``?seat=``. Server mode
+        cannot yet, so it refuses the parameter rather than answer for the
+        trial's root ``agent/``."""
+        if seat is not None:
+            raise HTTPException(400, "seat is not supported in server mode")
+
+    @staticmethod
     def prefix(step: str | None) -> str:
         if step is None:
             return ""
@@ -404,7 +412,13 @@ def register_api_adapter(app: FastAPI, source: ViewerSource):
         }
 
     @app.get("/api/jobs/{job_id}/trials/{rollout_id}/trajectory")
-    async def trajectory(job_id: UUID, rollout_id: UUID, step: str | None = None):
+    async def trajectory(
+        job_id: UUID,
+        rollout_id: UUID,
+        step: str | None = None,
+        seat: str | None = None,
+    ):
+        adapter.refuse_seat(seat)
         return await adapter.object(
             await adapter.rollout(job_id, rollout_id),
             adapter.prefix(step) + "agent/trajectory.json",
@@ -500,7 +514,13 @@ def register_api_adapter(app: FastAPI, source: ViewerSource):
         }
 
     @app.get("/api/jobs/{job_id}/trials/{rollout_id}/agent-logs")
-    async def logs(job_id: UUID, rollout_id: UUID, step: str | None = None):
+    async def logs(
+        job_id: UUID,
+        rollout_id: UUID,
+        step: str | None = None,
+        seat: str | None = None,
+    ):
+        adapter.refuse_seat(seat)
         r = await adapter.rollout(job_id, rollout_id)
         prefix = adapter.prefix(step) + "agent/"
         commands = []
