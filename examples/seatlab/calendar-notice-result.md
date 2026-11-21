@@ -108,6 +108,40 @@ The 31 live fallback calls cost **$0.001556772**. The 16 comparison calls cost *
 
 [Run the booking worker](replication.md#route-a-booking-before-calling-a-receiver) · [Transfer decisions](results/calendar-booking-route-transfer-fixed.json) · [Operational decisions](results/calendar-booking-route-role-stress.json) · [47 charges](results/calendar-booking-route-role-stress-cost.json) · [Registered comparison and result](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063694662).
 
+### Can one more question rescue a booking?
+
+**Not with this sender.** We took all 25 earlier cases where no reported start fit the receiver. A real receiver proposed 2 starts from its own calendar. A real sender checked those 2 against its own busy hours. Two fresh receivers saw the same proposals: one got the reply, and one did not.
+
+| Outcome | Result |
+|---|---:|
+| Receiver proposed the true meeting | 8/25 |
+| Sender confirmed the true meeting when proposed | 0/8 |
+| Sender's entire reply matched its own calendar | 10/25 |
+| Correct bookings without the reply | 4/25 |
+| Correct bookings with the reply | 2/25 |
+
+The reply helped on 1 source and hurt on 3. The other 21 tied. Across the 12 original worlds, the exact two-sided test gave **p = 5/8**. The study did not establish a benefit or prove that all peer questions hurt. It shows where this protocol failed: the reply never confirmed a proposed true meeting.
+
+All 100 first replies were valid. They cost **$0.004058868** in total. This added one exchange after the recorded team stopped communicating. These are new decisions against real native states, not new full-team rewards.
+
+[Use the same private two-seat workflow](replication.md#ask-a-peer-to-check-2-starts) · [25 source comparisons](results/calendar-bounded-clarification.json) · [100 token charges](results/calendar-bounded-clarification-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063663752) · [Per-call cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063832801).
+
+### Does checking the sender's answer locally help?
+
+**Yes, on the same 25 nominations.** We changed only the sender's reply. One arm used its original model answer. The other checked the 2 proposed starts against that sender's own calendar. Neither branch saw the stock answer. Two new receivers per arm could still book any locally feasible start.
+
+| Did the nomination include the true meeting? | Model's reply: correct bookings | Locally checked reply: correct bookings |
+|---|---:|---:|
+| Yes | 4/16 | 16/16 |
+| No | 2/34 | 2/34 |
+| All decisions | 6/50 | 18/50 |
+
+The local check gained 24 percentage points. It improved 12 paired decisions and hurt none. Of 12 native worlds, 6 improved and 6 tied. The exact two-sided test gave **p = 1/32**, which passed the registered test. The result supports checking facts the sender already has. It does not show that the receiver chose good questions: 17 of the 25 nominations missed the true meeting.
+
+Both arms shared one new first reply when their messages were identical. The 100 scored decisions needed 80 actual calls. They cost **$0.002262828**. No full team reran in this comparison.
+
+[Run the sender-local check](replication.md#ask-a-peer-to-check-2-starts) · [Paired outcomes](results/calendar-clarification-repair.json) · [80 physical charges](results/calendar-clarification-repair-cost.json) · [Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063833042) · [Individual cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063930207).
+
 ### Should the receiver wait for the first report before requesting a second one?
 
 **Waiting did not improve bookings on these senders.** We reused all 48 native senders from the 24-world test above. Each pair of fresh receiver branches shared its first requested day. The `immediate` receiver saw that report before choosing its second day. The `delayed` receiver did not. Both could read exactly 2 reports and used the same final booking format.

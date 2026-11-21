@@ -61,9 +61,7 @@ def _nomination_reply(raw: str) -> tuple[int, int]:
     return _proposals(tuple(_reply_array(raw, "proposals")))
 
 
-def _local_proposals(
-    receiver: _Receiver, proposed: tuple[int, int]
-) -> tuple[int, int]:
+def _local_proposals(receiver: _Receiver, proposed: tuple[int, int]) -> tuple[int, int]:
     proposed = _proposals(proposed)
     if any(slot not in receiver.own for slot in proposed):
         raise ValueError("proposed start is not locally feasible")
@@ -101,15 +99,35 @@ def nominees(checked: bytes, raw: str) -> tuple[int, int]:
     return _local_proposals(_receiver(checked), _nomination_reply(raw))
 
 
-def verification(sender_table: calendar_packet.Table, proposed: tuple[int, int]) -> str:
-    proposed = _proposals(proposed)
+def _check_sender_table(sender_table: calendar_packet.Table) -> None:
     if not isinstance(sender_table, (list, tuple)) or len(sender_table) != 3:
         raise ValueError("expected three attendee rows")
     for row in sender_table:
-        if not isinstance(row, (list, tuple)) or len(row) != len(calendar_protocol._DAYS):
+        if not isinstance(row, (list, tuple)) or len(row) != len(
+            calendar_protocol._DAYS
+        ):
             raise ValueError("expected five weekday masks per attendee")
         for mask in row:
             calendar_protocol._checked_mask(mask)
+
+
+def verified_subset(
+    sender_table: calendar_packet.Table, proposed: tuple[int, int]
+) -> tuple[int, ...]:
+    proposed = _proposals(proposed)
+    _check_sender_table(sender_table)
+    fits: list[int] = []
+    for slot in proposed:
+        day, offset = divmod(slot, calendar_protocol._STARTS_PER_DAY)
+        meeting = 0b11 << offset
+        if not any(row[day] & meeting for row in sender_table):
+            fits.append(slot)
+    return tuple(fits)
+
+
+def verification(sender_table: calendar_packet.Table, proposed: tuple[int, int]) -> str:
+    proposed = _proposals(proposed)
+    _check_sender_table(sender_table)
     return (
         team_views._view(sender_table, "raw")
         + f"Nominated slot IDs: {p.wire(proposed)}\n"
@@ -163,6 +181,10 @@ def _sender(data: bytes) -> tuple[str, calendar_packet.Table]:
     return trial_uuid, calendar_packet._table(sender["table"])
 
 
+def _read_sender(path: Path) -> tuple[str, calendar_packet.Table]:
+    return _sender(calendar_packet._read(path, _MAX_SENDER_BYTES))
+
+
 def _read_reply(path: Path) -> str:
     return calendar_packet._read(path, _MAX_TRANSFER_BYTES).decode("utf-8")
 
@@ -177,7 +199,7 @@ def _request(args: argparse.Namespace) -> calendar_case._Request:
         )
     proposed = _nomination_reply(_read_reply(args.nomination))
     if args.phase == "ask":
-        trial_uuid, table = _sender(calendar_packet._read(args.sender, _MAX_SENDER_BYTES))
+        trial_uuid, table = _read_sender(args.sender)
         return calendar_case._request(
             f"{trial_uuid}/sender-verification", verification(table, proposed)
         )
@@ -190,7 +212,8 @@ def _request(args: argparse.Namespace) -> calendar_case._Request:
         else confirmation(proposed, _read_reply(args.confirmation))
     )
     return calendar_case._request(
-        f"{receiver.trial_uuid}/receiver-booking", _booking(receiver, proposed, confirmed)
+        f"{receiver.trial_uuid}/receiver-booking",
+        _booking(receiver, proposed, confirmed),
     )
 
 
@@ -198,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = calendar_case._Parser(
         allow_abbrev=False,
         description=(
-            "Prepare a calendar clarification request or admit a nomination. "
+            "Prepare a clarification request or check a role-local transfer. "
             "No model calls."
         ),
     )
@@ -217,10 +240,14 @@ def main(argv: list[str] | None = None) -> int:
     ask = phases.add_parser(
         "ask", allow_abbrev=False, help="Check only the 2 nominations."
     )
-    ask.add_argument(
-        "--sender", type=Path, required=True, help=f"{_SENDER_SCHEMA} JSON file."
-    )
+    sender_help = f"{_SENDER_SCHEMA} JSON file."
+    ask.add_argument("--sender", type=Path, required=True, help=sender_help)
     ask.add_argument("--nomination", type=Path, required=True, help=nomination_help)
+    verify = phases.add_parser(
+        "verify-local", allow_abbrev=False, help="Compute which nominees fit locally."
+    )
+    verify.add_argument("--sender", type=Path, required=True, help=sender_help)
+    verify.add_argument("--nomination", type=Path, required=True, help=nomination_help)
     book = phases.add_parser("book", allow_abbrev=False, help="Choose one local start.")
     book.add_argument("--checked", type=Path, required=True, help=checked_help)
     book.add_argument("--nomination", type=Path, required=True, help=nomination_help)
@@ -235,6 +262,10 @@ def main(argv: list[str] | None = None) -> int:
             checked = calendar_packet._read(args.checked, calendar_case._MAX_LINE_BYTES)
             proposed = nominees(checked, _read_reply(args.nomination))
             result: object = {"proposals": proposed}
+        elif args.phase == "verify-local":
+            _, table = _read_sender(args.sender)
+            proposed = _nomination_reply(_read_reply(args.nomination))
+            result = {"fits": verified_subset(table, proposed)}
         else:
             result = _request(args)
         sys.stdout.buffer.write(calendar_case._wire(result))

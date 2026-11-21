@@ -765,6 +765,71 @@ python3.12 -BS -m "$reader" "$results/calendar-booking-route-role-stress.json" \
   --cost "$results/calendar-booking-route-role-stress-cost.json"
 ```
 
+#### Ask a peer to check 2 starts
+
+Use this optional exchange when the checked request contains no compatible start. It adds a question and an answer; it does not preserve the original message budget. The receiver proposes 2 locally feasible starts. The sender can confirm both, 1, or neither.
+
+Start with `checked.jsonl` and the owner capsule from the commands above. On the scorer host, export the original sender's local calendar. Keep that file off the receiver host:
+
+```sh
+ns=examples.seatlab.calendar_notices
+"$PWD/.venv/bin/python" -B -m "$ns.clarify_source" "$TRIAL" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --out "$private/sender.json"
+```
+
+Append `--cohort-sha256 "$COHORT_SHA256"` for a transfer trial. The export fails if the source did not finish, the evidence is not empty, or the output file exists.
+
+Set `RECEIVER` and `SENDER` to trusted worker executables. Each reads one request on stdin. It returns `id`, `prompt_sha256`, and the original `reply` string as one JSON line. Give only the emitted request to its named worker. Keep all reply files private.
+
+```sh
+set -eo pipefail
+codec="$ns.clarify"
+python3.12 -BS -m "$codec" propose --checked "$private/checked.jsonl" \
+  | "$RECEIVER" > "$private/nomination.reply"
+jq -ej '.reply | select(type == "string")' "$private/nomination.reply" \
+  > "$private/nomination.raw"
+python3.12 -BS -m "$codec" admit --checked "$private/checked.jsonl" \
+  --nomination "$private/nomination.raw" > "$private/proposals.json"
+python3.12 -BS -m "$codec" ask --sender "$private/sender.json" \
+  --nomination "$private/proposals.json" | "$SENDER" > "$private/confirmation.reply"
+jq -ej '.reply | select(type == "string")' "$private/confirmation.reply" \
+  > "$private/confirmation.raw"
+python3.12 -BS -m "$codec" book --checked "$private/checked.jsonl" \
+  --nomination "$private/proposals.json" | "$RECEIVER" > "$private/blind.reply"
+python3.12 -BS -m "$codec" book --checked "$private/checked.jsonl" \
+  --nomination "$private/proposals.json" --confirmation "$private/confirmation.raw" \
+  | "$RECEIVER" > "$private/peer.reply"
+```
+
+Start a fresh receiver for each final request. Both may book any locally feasible slot. A valid `{"fits":[]}` says the sender rejected both proposed starts. It is not the same as no reply. Score the original first envelopes on the owner host:
+
+```sh
+results=examples/seatlab/results
+python3.12 -BS -m "$ns.clarify_case" "$private/case" --sender "$private/sender.json" \
+  --nomination "$private/nomination.reply" --confirmation "$private/confirmation.reply" \
+  --blind "$private/blind.reply" --peer "$private/peer.reply"
+python3.12 -BS -m "$ns.clarify_result" "$results/calendar-bounded-clarification.json" \
+  --routing "$results/calendar-booking-route-role-stress.json"
+```
+
+Omit a missing reply file. The owner scorer distinguishes a missing reply from an invalid reply and a wrong booking. It rejects a final reply for a different source, prompt, or unreachable stage. The public result reader does not need any private files or an API key.
+
+To check the same 2 proposals without calling a sender model, run this on the sender host:
+
+```sh
+python3.12 -BS -m "$codec" verify-local --sender "$private/sender.json" \
+  --nomination "$private/proposals.json" > "$private/checked-subset.json"
+```
+
+Use `checked-subset.json` instead of `confirmation.raw` in `book --confirmation`. It contains only the proposed IDs that fit the sender's own calendar. Do not send `sender.json` to the receiver. The public before-and-after comparison runs without any worker:
+
+```sh
+python3.12 -BS -m "$ns.clarify_repair_result" \
+  "$results/calendar-clarification-repair.json" \
+  --parent "$results/calendar-bounded-clarification.json" \
+  --cost "$results/calendar-clarification-repair-cost.json"
+```
+
 #### Let a receiver choose which report to read next
 
 Use this when the receiver can ask for 2 reports and you want to test **when to deliver the first one**. Use one completed SeatLab calendar trial with private views. Run the export in the fork environment on the scorer host:

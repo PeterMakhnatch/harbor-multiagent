@@ -1,0 +1,855 @@
+{
+  "schema": "seatlab.calendar-clarification-repair/v1",
+  "sources": [
+    {
+      "world": "w12",
+      "arm": "exact",
+      "trial_uuid": "c65c41c1-24e0-4b53-b59b-dca5741084d4",
+      "result_sha256": "73ac91f52bbee2209c510a35877b3809e3ae62f87dd068f031b235b6083df6d6",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w12-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w12-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w12-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w12-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w12",
+      "arm": "sender-exact",
+      "trial_uuid": "6d229790-9d40-4fe9-9bbf-a21b9d045b91",
+      "result_sha256": "610df77d4b765ef0f1d5fd905cccdd5d6aef25eff426406da5630ba8db08b9ce",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w12-sender-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w12-sender-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w12-sender-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w12-sender-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w13",
+      "arm": "raw",
+      "trial_uuid": "0072390d-ab67-4f7a-8cf6-5e764ecc92e0",
+      "result_sha256": "ed5f7fef49ee006df78be8066a968eced2fac1087b5faf7466ed62640ed94103",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w13-raw-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-raw-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w13-raw-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-raw-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w13",
+      "arm": "receiver-exact",
+      "trial_uuid": "fdfc1a1d-7171-474b-ad0b-282fb41dd254",
+      "result_sha256": "33d015f0bf288910a610d82c25d1bbf873cb8dd77d4f04c53f6e5f1d7504af43",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w13-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w13-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w13",
+      "arm": "sender-exact",
+      "trial_uuid": "b4114a46-96fe-4fbb-8532-f0c444eabc28",
+      "result_sha256": "d0abbf9a08bf6a085394ed6399b1da7af41fd3652310fb2adcf6bb3499345256",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w13-sender-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-sender-exact-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w13-sender-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-sender-exact-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w13",
+      "arm": "exact",
+      "trial_uuid": "bc54c429-e204-44ef-8b51-8555305b4c20",
+      "result_sha256": "9e068abfeb2ee8be15a9aa12c7c14293f7592f23897fcf7aa2cefbba56dc09fa",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w13-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w13-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w13-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w14",
+      "arm": "receiver-exact",
+      "trial_uuid": "b7c307c8-8121-461e-a03d-09e7647c3ca8",
+      "result_sha256": "b2b29244f113fba1b26845fb3dc2a85235551f85a3dc06bddf2c37c029201530",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w14-receiver-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w14-receiver-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w14-receiver-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w14-receiver-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w14",
+      "arm": "raw",
+      "trial_uuid": "9a9d04c4-d54f-4057-bc4e-49f69454c284",
+      "result_sha256": "df479a9d20bd6d9cccf004d756fd0bf8a0bb79ffd096ea1f0ebf5ea4654e9ae7",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w14-raw-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w14-raw-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w14-raw-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w14-raw-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w15",
+      "arm": "receiver-exact",
+      "trial_uuid": "7de9fd53-6184-4649-8dd1-4d6a922cfa21",
+      "result_sha256": "4e29838c8acae2c0ca34117f9f337b400d455793ba686941ea3bb8ed62353177",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w15-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w15-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w15-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w15-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w16",
+      "arm": "raw",
+      "trial_uuid": "fda36f86-ffce-4398-9736-99cf51b56842",
+      "result_sha256": "8be2a016e0c59ce5e696f49963353d3232230d10435694f25f258a32386194f0",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w16-raw-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w16-raw-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w16-raw-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w16-raw-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w16",
+      "arm": "receiver-exact",
+      "trial_uuid": "e5fab02b-292e-4faf-b494-272075911040",
+      "result_sha256": "0eea73d246d3ba98c0f619892d0bd7f912a0801efb94ffed9637dc803da0588b",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w16-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w16-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w16-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w16-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w17",
+      "arm": "raw",
+      "trial_uuid": "20496871-ee52-4811-8773-d726d5e9daf7",
+      "result_sha256": "af4bb67154ab327c88c77a69b98beb507f7e5fb2e806d148013db7bb12b3031d",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w17-raw-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w17-raw-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w17-raw-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w17-raw-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w17",
+      "arm": "receiver-exact",
+      "trial_uuid": "456466e2-7642-4d54-a710-5b7456ad2b4a",
+      "result_sha256": "c16bcbd4cf9357ac7782d0ad49f5d3ac490fedfc164fc928519e32534f35f006",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w17-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w17-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w17-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w17-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w17",
+      "arm": "sender-exact",
+      "trial_uuid": "bf4fb9ed-8390-421e-a687-c7a9046b92f1",
+      "result_sha256": "b39622c589672c2bbcbe940ca80233c67f0ba0c2b5528261cdbe600ff86ddd71",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w17-sender-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w17-sender-exact-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w17-sender-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w17-sender-exact-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w18",
+      "arm": "receiver-exact",
+      "trial_uuid": "7b206aa9-f395-4d8c-b5e8-eced0ab1a27f",
+      "result_sha256": "a8ce06864d9dbf747c5cc8b2fe1516586411e9adca0770da2f7638b3b67f3f1b",
+      "nominated": false,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w18-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w18-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w18-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w18-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w18",
+      "arm": "exact",
+      "trial_uuid": "8c55c716-94fd-4735-b51c-5efc4b81a0c3",
+      "result_sha256": "a8dcedf43371787fe2213e5ea5851385fd6c2484fd6361b1e96ad98f710e8cfd",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w18-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w18-exact-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w18-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w18-exact-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w19",
+      "arm": "sender-exact",
+      "trial_uuid": "d8d3eded-1855-4bfe-894a-d20ea4388868",
+      "result_sha256": "c0d50291d40841a63926478bf206a359d13ad91c3d246da0d5b65302edb0d3ce",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w19-sender-exact-r0-same",
+            "status": "scored",
+            "correct": 1
+          },
+          "local": {
+            "run": "csfix-w19-sender-exact-r0-same",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w19-sender-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w19-sender-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w19",
+      "arm": "receiver-exact",
+      "trial_uuid": "d0fd12fc-c4ec-4d15-8762-33cfe5b5abac",
+      "result_sha256": "9eb828e709714eeecfd2d24c715b8b3d4b2f0b975c3a590b6938157f9b362aa1",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w19-receiver-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w19-receiver-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w19-receiver-exact-r1-same",
+            "status": "scored",
+            "correct": 1
+          },
+          "local": {
+            "run": "csfix-w19-receiver-exact-r1-same",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w20",
+      "arm": "receiver-exact",
+      "trial_uuid": "d1eaca44-c49e-4856-8026-22be0a734b6c",
+      "result_sha256": "b68908ef4caffaeb7fda755fca62a18cde7f3c575f82ac9b483cd18a1f401544",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w20-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 1
+          },
+          "local": {
+            "run": "csfix-w20-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w20-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 1
+          },
+          "local": {
+            "run": "csfix-w20-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w20",
+      "arm": "sender-exact",
+      "trial_uuid": "f4f7f353-32dd-469e-8bff-7f77f8344138",
+      "result_sha256": "94ffdf24ed934942f921f5094f8835f06f8a1965f726f78728de0ebc61e46280",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w20-sender-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w20-sender-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w20-sender-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w20-sender-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w21",
+      "arm": "sender-exact",
+      "trial_uuid": "19b3a049-2c7c-4557-9c71-618b4c6a6681",
+      "result_sha256": "bd6e483a4434139696077687a13c69a7385dc737ca4cdc3c9706988a1a393f13",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w21-sender-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w21-sender-exact-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w21-sender-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w21-sender-exact-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w21",
+      "arm": "exact",
+      "trial_uuid": "4ab66d0e-277b-4fb1-a1c5-536b1ad5a3b3",
+      "result_sha256": "a037688944cf7b395e10d9cc5d2d83d19f89fdfbddbe369f741f034e1633c3ec",
+      "nominated": false,
+      "same_reply": true,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w21-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w21-exact-r0-same",
+            "status": "scored",
+            "correct": 0
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w21-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w21-exact-r1-same",
+            "status": "scored",
+            "correct": 0
+          }
+        }
+      ]
+    },
+    {
+      "world": "w22",
+      "arm": "receiver-exact",
+      "trial_uuid": "8efcf407-de83-4a19-b4d3-47d884efa9fa",
+      "result_sha256": "f0682e4b878b6d592dfc701a2e1e8b271f08cec940a95123e092f887e4cfff9e",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w22-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w22-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w22-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w22-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w23",
+      "arm": "raw",
+      "trial_uuid": "c75b7c54-52a9-493e-a2e6-16ccb69437fd",
+      "result_sha256": "5e6e1ff33e3dceca586cddb43e8fe94541f92a109a21054b01cca2bdac21ffda",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w23-raw-r0-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w23-raw-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w23-raw-r1-model",
+            "status": "scored",
+            "correct": 1
+          },
+          "local": {
+            "run": "csfix-w23-raw-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    },
+    {
+      "world": "w23",
+      "arm": "receiver-exact",
+      "trial_uuid": "54e6ce79-0ea1-45e6-84b5-272cbbc32c28",
+      "result_sha256": "cd87fd51d4032fa15d05a55654f8776fb509c8d19adfceeaf5fe9a2719efe3cb",
+      "nominated": true,
+      "same_reply": false,
+      "repeats": [
+        {
+          "model": {
+            "run": "csfix-w23-receiver-exact-r0-model",
+            "status": "scored",
+            "correct": 1
+          },
+          "local": {
+            "run": "csfix-w23-receiver-exact-r0-local",
+            "status": "scored",
+            "correct": 1
+          }
+        },
+        {
+          "model": {
+            "run": "csfix-w23-receiver-exact-r1-model",
+            "status": "scored",
+            "correct": 0
+          },
+          "local": {
+            "run": "csfix-w23-receiver-exact-r1-local",
+            "status": "scored",
+            "correct": 1
+          }
+        }
+      ]
+    }
+  ]
+}
