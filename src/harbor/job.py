@@ -2,6 +2,7 @@ import asyncio
 import logging
 import shutil
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -145,7 +146,7 @@ class Job:
         self._trial_queue.add_hook(TrialEvent.END, self._on_trial_completed)
 
     @staticmethod
-    def _preflight_agents(config: JobConfig, agents: list[AgentConfig]) -> None:
+    def _preflight_agents(config: JobConfig, agents: Sequence[AgentConfig]) -> None:
         for agent in agents:
             if config.user_agent is not None:
                 AgentFactory.run_preflight(
@@ -179,7 +180,7 @@ class Job:
         EnvironmentFactory.validate_options(config.environment)
         cls._resolve_agent_skills(config)
         if not config.source_jobs:
-            cls._preflight_agents(config, config.agents)
+            cls._preflight_agents(config, config.participants or config.agents)
         task_configs = await cls._resolve_task_configs(config)
         EnvironmentFactory.validate_resource_policies(config.environment)
         metrics, datasets = await cls._resolve_metrics(config, task_configs)
