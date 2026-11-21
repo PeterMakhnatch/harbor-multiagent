@@ -1,0 +1,44 @@
+{
+  "benchmark": "AgentsNet Coloring",
+  "paper": "https://arxiv.org/html/2507.08616v1#S5.SS1",
+  "source": {
+    "repository": "https://github.com/floriangroetschla/AgentsNet",
+    "commit": "269f576e966f441e54ba72a653769663a4f4322c",
+    "sha256": {
+      "LiteralMessagePassing.py": "969f7504d6b52d544833244f8eb52f791a00f12078230ac7787203f50ade68ae",
+      "utils.py": "095ab613cfba9afbe4d18e96186d02892183b751fff55fb1a1ac0084309669dd",
+      "main.py": "2c38990c2913b66193bd926f11d3c8d7c81932b53972c0d27fe5b4b51a203548",
+      "main.sh": "5c872cf6b422f89e982a36971376452b1f268717d0baf3f6e1aa82dcc54d33e3",
+      "LICENSE": "83b5208e7b309e87f188506d292a53cd272f0423047436a9a79566fdfbb51c13"
+    },
+    "license": "MIT",
+    "vendored_license": "environment/world/LICENSE",
+    "adaptation": "The task-local agentsnet_protocol.py ports the source prompts, name allowlist, parsers and CLI score. It does not vendor the source runner or its dependencies."
+  },
+  "dataset": {
+    "repository": "https://huggingface.co/datasets/disco-eth/AgentsNet",
+    "revision": "0e56e15cb7fc8fbea89c952f8053ccedf46c4a8e",
+    "license": "MIT",
+    "license_note": "The pinned dataset card declares MIT. The pinned dataset tree contains no separate license file.",
+    "pinned_card": "https://huggingface.co/datasets/disco-eth/AgentsNet/raw/0e56e15cb7fc8fbea89c952f8053ccedf46c4a8e/README.md",
+    "pinned_tree": "https://huggingface.co/api/datasets/disco-eth/AgentsNet/tree/0e56e15cb7fc8fbea89c952f8053ccedf46c4a8e?recursive=true&expand=false",
+    "pinned_parquet": "https://huggingface.co/datasets/disco-eth/AgentsNet/resolve/0e56e15cb7fc8fbea89c952f8053ccedf46c4a8e/data/train-00000-of-00001.parquet",
+    "parquet_lfs_sha256": "1d951f37b439d64f1b7fcc7a53ebea1974943768fa7a2740e150cbfa4e9528e5",
+    "row_api": "https://datasets-server.huggingface.co/rows?dataset=disco-eth%2FAgentsNet&config=default&split=train&offset=3&length=1",
+    "row_filter_api": "https://datasets-server.huggingface.co/filter?dataset=disco-eth%2FAgentsNet&config=default&split=train&where=%22num_nodes%22%3D4&length=10",
+    "split": "train",
+    "row_offset": 3,
+    "graph_generator": "ba",
+    "num_nodes": 4,
+    "index": 0,
+    "vendored_row": "environment/world/ba4-row.json",
+    "vendored_row_sha256": "381d38758384e2e49c1f788d567faad89ecd8cdd8238b5e3e032fe1476cfd138",
+    "digest_note": "Both row endpoints returned the same untruncated train row. Their responses do not include a revision or row checksum. The local digest covers the vendored JSON bytes; the LFS digest covers the pinned Parquet file, not the row."
+  },
+  "protocol": {
+    "message_rounds": 4,
+    "colors": 4,
+    "final_round": 5,
+    "history_note": "This task ports the released input and protocol, not a historical paper run."
+  }
+}

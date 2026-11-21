@@ -1,0 +1,19 @@
+task:
+  path: examples/tasks/agentsnet-coloring
+environment:
+  type: docker
+  force_build: true
+  delete: true
+participants:
+  - seat: n0
+    import_path: agentsnet_agent:AgentsNetAgent
+    model_name: deepseek/deepseek-flash
+  - seat: n1
+    import_path: agentsnet_agent:AgentsNetAgent
+    model_name: deepseek/deepseek-flash
+  - seat: n2
+    import_path: agentsnet_agent:AgentsNetAgent
+    model_name: deepseek/deepseek-flash
+  - seat: n3
+    import_path: agentsnet_agent:AgentsNetAgent
+    model_name: deepseek/deepseek-flash

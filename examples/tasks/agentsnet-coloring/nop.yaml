@@ -1,0 +1,15 @@
+task:
+  path: examples/tasks/agentsnet-coloring
+environment:
+  type: docker
+  force_build: true
+  delete: true
+participants:
+  - seat: n0
+    name: nop
+  - seat: n1
+    name: nop
+  - seat: n2
+    name: nop
+  - seat: n3
+    name: nop

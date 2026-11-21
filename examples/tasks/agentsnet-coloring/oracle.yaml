@@ -1,0 +1,15 @@
+task:
+  path: examples/tasks/agentsnet-coloring
+environment:
+  type: docker
+  force_build: true
+  delete: true
+participants:
+  - seat: n0
+    name: oracle
+  - seat: n1
+    name: oracle
+  - seat: n2
+    name: oracle
+  - seat: n3
+    name: oracle
