@@ -581,6 +581,19 @@ For each source choose the lexicographically first *unopened* alias, without con
 Primary outcome: direct difference in target-shipment optimality, changing only the report revision. Report that difference separately with and without a peer draft. Secondary: change due to showing a draft at fixed revision, accuracy over all 6 shipments, and changes from a wrong to a right peer action or the reverse. Report how often the target's best feasible bay actually changes between revisions. Give the number of source teams, worlds, fresh calls, and missing first answers. Use paired source-world contrasts and distinguish the other 5 shipments from the intervention target. This is a conditional role experiment on 6 worlds, not a new native team reward or a population-level estimate.
 
 
+## Can a question about two slots help a real scheduler?
+
+**Registered before the new seat calls.** A displayed peer decision did not improve scores on the selected original calendars. This experiment gives the reviewer a different role: check two named meeting times using its **own private schedule**. Showing the reviewer's reply is the only change between final conditions. This extends the earlier whole-list studies; it does not rerun Harbor.
+
+Use all 12 original `blind` calendar observations in the [mixed role pack](results/rolepack-observations.json). These are 3 original Flotilla worlds, both role directions, and both source repetitions. No selection by the prior score. Keep the receiver's original calendar, its candidate list and its real teammate's revised candidate list. Use the original opposite seat's private calendar for the responder. The public source is synthetic. Each actual model gets only its own prompt. No program supplies the optimal slot to either seat.
+
+1. A fresh subscription Astra scheduler names 2 integer slot IDs for a teammate to check. A repeated ID is legal and uses both chances. Keep the first reply, including an invalid reply.
+2. A separate subscription Sol teammate gets its original private calendar and only those IDs. It says `yes` or `no` for each. Use its actual first reply, even if wrong. The teammate does not see the receiver's original lists, private calendar or final decision. Share this one question and reply across the two final conditions.
+3. A fresh Astra scheduler gets the original receiver observation and its two question IDs. In `visible`, it also sees the actual teammate reply. In `withheld`, it sees no availability answer. It can choose any legal slot. Run 2 independent draws of each condition; finish the first draw before the second. Each complete source uses 6 real calls: 1 question, 1 reply, 4 final decisions. No later draw replaces a missing dependency. The final contrast measures delivery given the new teammate's work; it does not estimate the cost of running an extra teammate.
+4. Register all 12 sources and the full 24 source/draw comparisons. Count which questions include a true joint slot; compare each reply against the responder's private calendar. Then compare the visible and withheld decisions against the original joint scorer. Report world-level differences, coverage, actions changed, improvements, harms and worst/best missingness bounds. Distinguish inability to ask for a useful time from an erroneous reply or final choice. Do not call 24 pairs independent worlds. The estimated change applies to these 3 worlds only.
+
+Use the common RolePack runner and independent service receipts. The preserved enrollment, role input and score do not establish a new native team reward. No paid API calls, local inference or Docker.
+
 ## Use a role pack with your own receiver
 
 A role pack describes what a real seat saw, the peer decision it could receive, and how the task grades a new decision. It does not need a live Harbor environment. Start with two recorded Harbor tasks in the shipped pack:
