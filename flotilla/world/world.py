@@ -81,9 +81,12 @@ def _load_game() -> tuple[Any, dict[str, Any]]:
 
 
 GAME, PARAMS = _load_game()
+GAME_ACTION = getattr(GAME, "ACTION_PATH", "/harvest")  # a game names its action: /harvest, /claim
+ROUND_KEYS = getattr(GAME, "PUBLIC_ROUND_KEYS",  # what a seat sees of each closed round
+                     ("round", "stock", "requests", "catch", "missed", "remaining", "collapsed"))
 if GAME is not None:
     ROUTES = {path: methods for path, methods in ROUTES.items() if path != "/submit"} | {
-        "/state": ("GET",), "/harvest": ("POST",), "/wait": ("GET",)}
+        "/state": ("GET",), GAME_ACTION: ("POST",), "/wait": ("GET",)}
 
 START = time.monotonic()
 LOCK = threading.Lock()
@@ -170,11 +173,11 @@ def close_round(at: float) -> None:
     game = STATE["game"]
     requests = {seat: game["requests"].get(seat, 0) for seat in SEATS}
     missed = [seat for seat in SEATS if seat not in game["requests"]]
-    result = GAME.settle(game["stock"], requests, PARAMS)
+    result = GAME.settle(game["stock"], requests, PARAMS, missed=missed)
     game["log"].append({"round": game["round"], "missed": missed, "opened": game["opened"], "closed": round(at, 3),
                         **result})
     record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"]})
-    if result["collapsed"] or game["round"] >= PARAMS["rounds"]:
+    if result["collapsed"] or result.get("ends") or game["round"] >= PARAMS["rounds"]:  # ends: e.g. a deal
         game["over"], game["stock"] = True, result["next_stock"]  # the state shows the lake after the season
         record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
     else:
@@ -197,8 +200,7 @@ def game_view(seat: str) -> dict[str, Any]:
         "closes_in": round(max(0.0, game["opened"] + ROUND_SECONDS - now()), 1) if started and not over else None,
         "you_requested": seat in game["requests"],
         "your_total": sum(entry["catch"].get(seat, 0) for entry in game["log"]),
-        "closed_rounds": [{key: entry[key] for key in ("round", "stock", "requests", "catch", "missed", "remaining",
-                                                       "collapsed")} for entry in game["log"]],
+        "closed_rounds": [{key: entry[key] for key in ROUND_KEYS} for entry in game["log"]],
     }
 
 
@@ -354,7 +356,7 @@ class World(BaseHTTPRequestHandler):
             self._send(seat, body)
         elif path == "/submit":
             self._submit(seat, body)
-        elif path == "/harvest":
+        elif path == GAME_ACTION:
             self._harvest(seat, body)
         else:  # /admin/freeze
             with LOCK:
@@ -444,7 +446,7 @@ class World(BaseHTTPRequestHandler):
     def _harvest(self, seat: str, body: dict[str, Any]) -> None:
         amount = body.get("amount")
         if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 10**6:
-            self._invalid(seat, "POST", "/harvest", 400, "bad amount", 'send {"amount": <a whole number, 0 or more>}')
+            self._invalid(seat, "POST", GAME_ACTION, 400, "bad amount", 'send {"amount": <a whole number, 0 or more>}')
             return
         with LOCK:
             tick()

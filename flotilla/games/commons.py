@@ -41,8 +41,9 @@ def sustainable_catch(stock: int, growth: Fraction) -> int:
     return max(0, stock - math.ceil(stock / growth))
 
 
-def settle(stock: int, requests: Mapping[str, int], params: Mapping[str, Any]) -> Round:
-    """One round. `requests` has every seat; a seat that did not request counts as 0."""
+def settle(stock: int, requests: Mapping[str, int], params: Mapping[str, Any],
+           missed: Sequence[str] | None = None) -> Round:
+    """One round. `requests` has every seat; a seat that did not request (`missed`) counts as 0."""
     total = sum(requests.values())
     if total > stock:
         catch = {seat: amount * stock // total for seat, amount in requests.items()}

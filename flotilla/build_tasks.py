@@ -205,7 +205,9 @@ def instruction(family: Any, inst: dict[str, Any], seat: str, seats: list[str], 
 def game_instruction(game: Any, params: dict[str, Any], seat: str, condition: str, max_text: int,
                      max_messages_per_round: int) -> str:
     """A game seat's text: the game's rules (never a secret parameter) and the rounds API. `silent` and
-    `talk` differ only in the message lines."""
+    `talk` differ only in the message lines. A game with its own `instruction_text` writes the whole text."""
+    if hasattr(game, "instruction_text"):
+        return game.instruction_text(params, seat, condition, max_text, max_messages_per_round)
     auth = '-H "Authorization: Bearer $SEAT_TOKEN"'
     body = "-H 'Content-Type: application/json'"
     talk = condition == "talk"
@@ -435,10 +437,13 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
-            if game:  # the public rules only: never the season length
+            if game:  # the public rules only: never the season length, never another seat's private value
                 arm = inst | ({"players": ["p1"]} if condition == "solo" else {})
-                public = {key: arm[key] for key in ("capacity", "growth", "collapse_below", "seats")}
-                briefings = {s: public | {"players": seats} for s in seats}
+                if hasattr(family, "briefing"):
+                    briefings = {s: family.briefing(arm, s) for s in seats}
+                else:
+                    public = {key: arm[key] for key in ("capacity", "growth", "collapse_below", "seats")}
+                    briefings = {s: public | {"players": seats} for s in seats}
             else:
                 briefings = (
                     {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}

@@ -1,4 +1,5 @@
-"""The oracle seat of a game task: request the fair share of the current stock until the season ends.
+"""The oracle seat of a game task: the game's oracle request in every round until the season ends (commons: the
+fair share of the current stock; split: the pot divided by the seats).
 
 Runs in a seat under Harbor's `oracle` agent (`solution/solve.sh`). The public rules come from
 `SEAT_BRIEFING`; the game module is `family.py` next to this file. Expected reward with every seat
@@ -40,7 +41,15 @@ def main() -> None:
     game = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(game)
     rules = json.loads(os.environ["SEAT_BRIEFING"])
-    growth, players = game.growth_of(rules), len(rules["players"])
+    action = getattr(game, "ACTION_PATH", "/harvest")
+    if hasattr(game, "oracle_request"):  # a game with its own oracle rule (split: the pot / the seats)
+        def request(view: dict) -> int:
+            return game.oracle_request(view, rules)
+    else:  # commons: the seat's part of the sustainable catch
+        growth, players = game.growth_of(rules), len(rules["players"])
+
+        def request(view: dict) -> int:
+            return game.sustainable_catch(view["stock"], growth) // players
     deadline = time.monotonic() + float(os.environ.get("ORACLE_MAX_SECONDS") or 3000)
     while time.monotonic() < deadline:
         _status, view = call("GET", "/state")
@@ -50,7 +59,7 @@ def main() -> None:
             time.sleep(1)
             continue
         if not view["you_requested"]:
-            call("POST", "/harvest", {"amount": game.sustainable_catch(view["stock"], growth) // players})
+            call("POST", action, {"amount": request(view)})
         call("GET", f"/wait?round={view['round']}")
 
 

@@ -18,6 +18,8 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/flotilla-check.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 uvx --quiet --python "$PY" python flotilla/build_tasks.py --family commons --difficulty a --seats 3 --instances 0-1 \
     --out "$tmp" >/dev/null  # a game family (docs/COMMONS.md)
+uvx --quiet --python "$PY" python flotilla/build_tasks.py --family split --difficulty a --seats 2 --instances 0-1 \
+    --conditions silent,talk --out "$tmp" >/dev/null  # a game family (docs/SPLIT.md)
 for family in schedule ledger puzzle; do
     uvx --quiet --python "$PY" python flotilla/build_tasks.py --family "$family" --instances 0-1 --out "$tmp" >/dev/null
 done
