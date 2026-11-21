@@ -9,8 +9,6 @@ from decimal import Decimal, InvalidOperation
 from http.client import HTTPException, HTTPSConnection
 from typing import Any
 
-import certifi
-
 MODEL = "deepseek-flash"
 REVISION = "DeepSeek-V4.1-Flash-1017"
 _ACCEPTED_MODELS = frozenset({MODEL, "deepseek-v4.1-flash-1017"})
@@ -77,6 +75,8 @@ def _key() -> str:
 
 
 def _request(path: str, body: bytes | None, timeout: int) -> dict[str, Any]:
+    import certifi
+
     if path not in {"/user/balance", "/chat/completions"}:
         raise SeatUnavailable("route_unverified")
     connection = HTTPSConnection(
