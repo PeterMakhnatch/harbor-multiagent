@@ -90,7 +90,12 @@ def _dispatch(args: argparse.Namespace) -> int:
         _print(panel)
     elif args.mode == "samples":
         for sample in _samples(
-            packet, board, peer, panel, args.start, args.stop or len(panel["rows"])
+            packet,
+            board,
+            peer,
+            panel,
+            args.start,
+            len(panel["rows"]) if args.stop is None else args.stop,
         ):
             _print(sample)
     elif args.mode == "run-inspect":
@@ -133,6 +138,25 @@ def _dispatch(args: argparse.Namespace) -> int:
         effects = analysis.summarize(packet, board, panel, peer, result)
         if args.mode == "effects":
             _print(effects)
+        elif args.mode == "summary":
+            coverage = effects["coverage"]
+            print(
+                f"{coverage['states']['complete']}/{coverage['scheduled_rows']} first attempts completed "
+                f"on {coverage['registered_sources']} teams in {coverage['registered_worlds']} worlds."
+            )
+            for arm, data in effects["arms"].items():
+                target = data["scopes"]["target"]
+                all_items = data["scopes"]["all_shipments"]
+                print(
+                    f"  {arm}: target {target['numerator']}/{target['denominator']}; "
+                    f"all shipments {all_items['numerator']}/{all_items['denominator']} optimal."
+                )
+            changed = effects["target_best_reported_bay"]
+            print(
+                f"The newer target report changed the best feasible bay for "
+                f"{changed['changed']}/{changed['compared_sources']} original teams."
+            )
+            print("The score uses original stock. It is not a new native reward.")
         elif args.mode == "stock":
             _print(_stock(packet, panel, result, args.native_study))
         elif args.mode == "receipts":
@@ -150,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         "samples",
         "run-inspect",
         "report",
+        "summary",
         "effects",
         "stock",
         "receipts",
@@ -187,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
                 type=Path,
                 help="Original first-attempt Inspect .eval logs; each sample must occur at most once.",
             )
-        elif name in ("effects", "stock", "receipts"):
+        elif name in ("summary", "effects", "stock", "receipts"):
             p.add_argument(
                 "report",
                 nargs="?",
