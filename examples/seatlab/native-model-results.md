@@ -28,6 +28,18 @@ An offline inspection also identified why the original final answers were incomp
 
 The [output ownership follow-up](replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs) froze 99 actual final prompts before collecting new decisions. In the first eligible block, the batch, checklist, and 4 independent answer owners all submitted complete choices. Stock confirmed all 12 choices. All 6 direct calls matched at **$0.000343434 USD**. This single block does not distinguish the strategies.
 
+**Listing every required ID improved delivery without adding a model call.** We replayed the same 99 saved requests under each policy. The other 21 of 120 registered blocks had no valid writer note and no receiver request. No receiver failure was retried.
+
+| Policy | Complete answers / 99 requests | Correct choices / 396 requested | Direct calls | Estimated USD |
+| --- | ---: | ---: | ---: | ---: |
+| Original batch instruction | 66 | 219 | 99 | $0.004326366 |
+| Explicit ID checklist | 99 | 321 | 99 | $0.007002900 |
+| One reader per record | 55 | 304 | 396 | $0.023193600 |
+
+The checklist completed 33 answers that the batch instruction missed and lost none. The equal-world delivery difference was **+32.29 percentage points** across 12 worlds. Giving 4 independent readers one record each reduced complete delivery by **44.45 points** against the checklist. Partial owner answers still count toward correct choices. Among complete answers alone, batch accuracy was 219/264 and checklist accuracy was 321/396. The result supports a delivery contract, not higher accuracy on every answer.
+
+The [first-attempt decisions](results/coverage-live.json) retain all 594 received calls. The [stock check](results/coverage-stock.json) verified 1,003 submitted choices with no score differences. The [cost ledger](results/coverage-cost.json) matched every call at **$0.034522866 USD**, including the pilot. No hold remains. This compares new receivers on saved prompts; it is not a change in a native team reward.
+
 The [saved-trial replication](replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials) uses the accepted sender messages from 3 actual native teams. All 6 source seats acknowledged their input. Both replacement policies in the first block chose the same record and shared a complete new decision. All 4 direct calls matched at **$0.000276468 USD**. The saved Harbor scores did not change.
 
 The first registered subscription block used the same saved native packet. Its writer produced a valid note. Both policies opened the same record and shared a complete decision. All 4 service responses matched the writer or successor journal by both text hashes. The gateway reported `openai-codex/gpt-6.2-sol`, 1,493 input tokens, 148 output tokens, and 0 cached tokens. This measures a host-side replay, not a new Harbor reward or a cash price.
