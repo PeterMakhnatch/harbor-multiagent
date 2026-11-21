@@ -332,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         data = repeat_receipt._read_audit(args.input)
         result = operation(data, args.manifest, args.sha256)
-    except (OSError, ValueError):
+    except (OSError, TypeError, ValueError):
         parser.error("invalid or unreadable calendar transfer evidence")
     print(json.dumps(result, separators=(",", ":"), allow_nan=False))
     return 0
