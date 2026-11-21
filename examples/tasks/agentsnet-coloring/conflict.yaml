@@ -1,0 +1,15 @@
+task:
+  path: examples/tasks/agentsnet-coloring
+environment:
+  type: docker
+  force_build: true
+  delete: true
+participants:
+  - seat: n0
+    import_path: control_agent:ConflictAgent
+  - seat: n1
+    import_path: control_agent:ConflictAgent
+  - seat: n2
+    import_path: control_agent:ConflictAgent
+  - seat: n3
+    import_path: control_agent:ConflictAgent

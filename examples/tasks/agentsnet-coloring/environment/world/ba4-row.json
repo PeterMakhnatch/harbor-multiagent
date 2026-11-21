@@ -1,0 +1,11 @@
+{
+  "row_idx": 3,
+  "row": {
+    "Unnamed: 0": 3,
+    "graph_generator": "ba",
+    "num_nodes": 4,
+    "index": 0,
+    "graph": "{\"graph\": {\"directed\": false, \"multigraph\": false, \"graph\": {}, \"nodes\": [{\"name\": \"Bradley\", \"id\": 0}, {\"name\": \"Sean\", \"id\": 1}, {\"name\": \"Hannah\", \"id\": 2}, {\"name\": \"Kathryn\", \"id\": 3}], \"links\": [{\"source\": 0, \"target\": 1}, {\"source\": 0, \"target\": 2}, {\"source\": 0, \"target\": 3}, {\"source\": 2, \"target\": 3}]}, \"num_nodes\": 4, \"diameter\": 2, \"max_degree\": 3, \"graph_seed\": 1825, \"seed\": 42}"
+  },
+  "truncated_cells": []
+}

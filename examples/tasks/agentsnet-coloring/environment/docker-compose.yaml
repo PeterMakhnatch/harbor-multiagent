@@ -1,0 +1,51 @@
+x-player: &player
+  build: ./player
+  user: player
+  working_dir: /home/player
+  command: ["sleep", "infinity"]
+  init: true
+  networks: [play]
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/world/agentsnet_world.py"]
+    environment:
+      AGENTSNET_N0_CAPABILITY: ${AGENTSNET_N0_CAPABILITY:?mint task capabilities before launch}
+      AGENTSNET_N1_CAPABILITY: ${AGENTSNET_N1_CAPABILITY:?mint task capabilities before launch}
+      AGENTSNET_N2_CAPABILITY: ${AGENTSNET_N2_CAPABILITY:?mint task capabilities before launch}
+      AGENTSNET_N3_CAPABILITY: ${AGENTSNET_N3_CAPABILITY:?mint task capabilities before launch}
+    networks:
+      play:
+        aliases: [world]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 2s
+  n0:
+    <<: *player
+    environment:
+      SEAT: n0
+      AGENTSNET_CAPABILITY: ${AGENTSNET_N0_CAPABILITY:?mint task capabilities before launch}
+  n1:
+    <<: *player
+    environment:
+      SEAT: n1
+      AGENTSNET_CAPABILITY: ${AGENTSNET_N1_CAPABILITY:?mint task capabilities before launch}
+  n2:
+    <<: *player
+    environment:
+      SEAT: n2
+      AGENTSNET_CAPABILITY: ${AGENTSNET_N2_CAPABILITY:?mint task capabilities before launch}
+  n3:
+    <<: *player
+    environment:
+      SEAT: n3
+      AGENTSNET_CAPABILITY: ${AGENTSNET_N3_CAPABILITY:?mint task capabilities before launch}
+
+networks:
+  play: {}
