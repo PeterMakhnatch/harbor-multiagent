@@ -291,7 +291,7 @@ so about $5 for the wave (in this pilot the balance fell by about half of Harbor
 
 ## 14. Wave 1: pre-registration
 
-Written and committed before the first paid trial of the wave (2026-11-20, about 10:20 PM ET). The
+Written and committed before the first paid trial of the wave (2026-11-20, commit 6b45c92a at 10:12 PM ET; this line said "about 10:20 PM" before 2026-11-21). The
 analysis is `docs/results/scripts/commons_wave.py`, committed with this section. Peter approved the
 wave with a cap of $2.50.
 
@@ -437,3 +437,21 @@ regrowth from the requests in the frozen round log, and checked them against the
 - Over-use is the mean of the per-trial rates, over the seat-rounds in which the seat acted (section 7 did not
   say which denominator). With missed seat-rounds in the denominator: solo 0.061, silent 0.292, talk 0.021. Pooled
   over trials: 0.061, 0.162, 0.003. The silent - talk gap holds under all 3 definitions.
+
+## 18. Related work
+
+Found on 2026-11-21 by a subagent search (Peter's library first, then web search); local copies are under
+`research-context/sources/links/`.
+
+Ostrom, Walker and Gardner found that repeated discussion raised group yields in human common-pool resource games
+without formal sanctions ([APSR 1992](https://doi.org/10.2307/1964229)). GovSim found that removing discussion
+increased overuse in its LLM resource-sharing games ([Piatti et al. 2024](https://arxiv.org/abs/2404.16698)).
+Kulshreshtha et al. showed that an agent instructed to defect can destabilize a GovSim group
+([EACL Industry 2026](https://aclanthology.org/2026.eacl-industry.44/)). Commons tests lake survival in a
+pre-registered, paired experiment with 3 DeepSeek V4.1 Flash agents that act through a shell in Harbor: 15 of 16
+talk lakes survived, and 6 of 16 silent lakes (exact McNemar p = 0.012); all 16 survived when 1 agent controlled
+all 3 boats. The only talk collapse followed a broken pledge, with no agent assigned to defect.
+
+Limits of the comparison: GovSim already removes communication, so this is not a first test of the effect. Do not
+compare GovSim's survival rates with ours directly: the models, group size, scenarios, growth and survival rules
+differ. The solo arm changes control and scoring; it is a reference, not a second estimate of the message effect.

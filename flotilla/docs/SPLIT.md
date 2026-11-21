@@ -267,3 +267,26 @@ weak seat anchors on half and the strong seat over-claims in the rounds where a 
 channel fixes this through one move: the strong seat states its true outside option, and the weak seat takes the
 rest. Talk produced almost no bargaining over the surplus (strong seats got 1 of 118 surplus points in 5 deals).
 Limits: 1 model, 1 harness, 2 seats, 10 pairs over 2 runs.
+
+## 10. Related work
+
+Found on 2026-11-21 by a subagent search (Peter's library first, then web search); local copies are under
+`research-context/sources/links/`.
+
+Feltovich and Swierzbinski found that chat helped people agree in a Nash demand game when a public outside option
+was above half of the pot ([EER 2011](https://doi.org/10.1016/j.euroecorev.2010.07.001)). Binmore, Shaked and
+Sutton found that an outside option changes the deal only when the player would otherwise use it
+([QJE 1989](https://researchonline.lse.ac.uk/id/eprint/1230/)); our regimes a and b fit that pattern. PieArena
+uses private fallback payoffs in LLM negotiation ([Zhu et al. 2026](https://arxiv.org/abs/2602.05302)), and Liang
+and Xu find only a small drop in agreements when LLM agents exchange numeric offers without chat
+([2026](https://arxiv.org/abs/2608.07538)); in Split, public claims alone gave no deal in 10 of 10 regime b pairs.
+Yao, Zou and Hawkins saw equal splits that missed better allocations in a repeated LLM allocation game
+([2026](https://arxiv.org/abs/2605.01750)). NegotiationArena found that LLM agents average recent offers
+([Bianchi et al. 2024](https://arxiv.org/abs/2402.05863)); silent weak seats in Split instead asked for half of
+the current pot. Miceli-Barone et al. report misleading claims about reservation prices
+([2026](https://arxiv.org/abs/2605.31445)); in Split, all 10 strong seats that stated their outside option told
+the truth, and they then took almost none of the surplus.
+
+Limits of the comparison: the pre-registered result is 6 of 6 against 0 of 6; 10 of 10 against 0 of 10 pools the
+pilot post hoc. The arms test whether a channel exists, not the effect of one message such as a disclosure. 1
+model, 1 harness. The search does not establish priority.
