@@ -1,10 +1,12 @@
 import argparse
 import json
 import sys
+from functools import cache
 from hashlib import sha256
+from importlib.util import module_from_spec, spec_from_file_location
 from io import TextIOWrapper
 from pathlib import Path
-from runpy import run_path
+from types import ModuleType
 from typing import Any, Never, override
 
 from . import dispatch_payload
@@ -21,7 +23,7 @@ _EPISODES = 6
 _REPLY_LIMIT = 64 * 1024
 
 
-class _CaseError(Exception):
+class _CaseError(ValueError):
     pass
 
 
@@ -45,6 +47,20 @@ def _pinned_json(name: str, pin: str, limit: int) -> dict[str, Any]:
         "Public source digest mismatch.",
     )
     return json.loads(data)
+
+
+@cache
+def _task_module(path: str) -> ModuleType:
+    spec = spec_from_file_location(f"_seatlab_dispatch_{Path(path).stem}", _TASK / path)
+    if spec is None or spec.loader is None:
+        raise ValueError("Cannot load the stock Dispatch task.")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _world_class() -> Any:
+    return _task_module("environment/seatworld.py").World
 
 
 def _sources() -> dict[int, dict[str, Any]]:
@@ -81,7 +97,7 @@ def _sources() -> dict[int, dict[str, Any]]:
     return {row["world"]: row for row in rows}
 
 
-def _case(world_class: Any, source: dict[str, Any]) -> tuple[Any, tuple[str, str]]:
+def _prepared_world(world_class: Any, source: dict[str, Any]) -> Any:
     seed = source["world"]
     world = world_class(
         {
@@ -96,8 +112,13 @@ def _case(world_class: Any, source: dict[str, Any]) -> tuple[Any, tuple[str, str
         view_hash(rows) == source["inventory_rows_sha256"], "Inventory digest mismatch."
     )
     world.submit("inventory", {"rows": rows})
+    return world
+
+
+def _case(world_class: Any, source: dict[str, Any]) -> tuple[Any, tuple[str, str]]:
+    world = _prepared_world(world_class, source)
     prompts = dispatch_payload.project(
-        world.view("dispatch")["cases"], seed, source["opened"]
+        world.view("dispatch")["cases"], source["world"], source["opened"]
     )
     for arm, prompt in zip(_ARMS, prompts, strict=True):
         _require(
@@ -108,8 +129,7 @@ def _case(world_class: Any, source: dict[str, Any]) -> tuple[Any, tuple[str, str
     return world, prompts
 
 
-def _score(world: Any, seed: int) -> dict[str, int | str]:
-    data = sys.stdin.buffer.read(_REPLY_LIMIT + 1)
+def _score_reply(world: Any, seed: int, data: bytes) -> dict[str, int]:
     _require(len(data) <= _REPLY_LIMIT, "Receiver reply exceeds 64 KiB.")
     try:
         choices = dispatch_payload.decode_choices(data.decode("utf-8"))
@@ -121,15 +141,17 @@ def _score(world: Any, seed: int) -> dict[str, int | str]:
         for alias, episode in dispatch_payload.aliases(seed).items()
     ]
     world.submit("dispatch", {"rows": rows})
-    stock_score = run_path(str(_TASK / "tests/score.py"))["score"]
-    result = stock_score(world.evidence())
+    result = _task_module("tests/score.py").score(world.evidence())
     return {
-        "mode": "receiver_replay",
-        "world": seed,
         "episodes": result["episodes"],
         "optimal": result["optimal"],
         "feasible": result["feasible"],
     }
+
+
+def _score_stdin(world: Any, seed: int) -> dict[str, int | str]:
+    data = sys.stdin.buffer.read(_REPLY_LIMIT + 1)
+    return {"mode": "receiver_replay", "world": seed, **_score_reply(world, seed, data)}
 
 
 def main() -> int:
@@ -156,7 +178,7 @@ def main() -> int:
 
     try:
         sources = _sources()
-        world_class = run_path(str(_TASK / "environment/seatworld.py"))["World"]
+        world_class = _world_class()
         if args.operation == "check":
             for source in sources.values():
                 _case(world_class, source)
@@ -176,7 +198,7 @@ def main() -> int:
                     sys.stdout.reconfigure(encoding="utf-8", newline="\n")
                 sys.stdout.write(prompts[_ARMS.index(args.arm)])
             else:
-                print(json.dumps(_score(world, args.world)))
+                print(json.dumps(_score_stdin(world, args.world)))
     except _CaseError as error:
         print(error, file=sys.stderr)
         return 1

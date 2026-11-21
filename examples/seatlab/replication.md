@@ -2,6 +2,42 @@
 
 This record is prospective. It is separate from the [primary experiment](protocol.md). The fixture describes an information handoff, not a real warehouse or a population of agents.
 
+## Run your receiver on 2 tasks without installing Harbor
+
+Use Python 3.12 or later. The panel needs no key, Docker, Harbor, or third-party package. It exports 32 factual receiver inputs: 24 scheduling decisions from 3 worlds and 8 Dispatch decisions from 8 worlds. Each Dispatch decision covers 6 shipments. This tests the receiver on fixed teammate reports. It does not run a new native team.
+
+Divide the sources into 4 disjoint shards. You can give each input file to a separate worker. Do not give a worker the scorer, the published outcomes, or another seat’s data.
+
+```sh
+work=$(mktemp -d)
+for i in 0 1 2 3; do
+  python3.12 -BS -m examples.seatlab.receiver_panel emit --shard "$i/4" > "$work/input-$i.jsonl"
+done
+```
+
+Send only `messages` to the receiver. Keep `id` and `prompt_sha256` outside the model. For each input, return one JSON line with these two fields and `reply`. Set `reply` to the **text** of the first return, not a parsed object. Do not repair or retry an invalid reply.
+
+This working example uses a constant receiver to check the transport. It does not call a model. Replace the `answer = ...` line with your receiver’s first return from `x["messages"]`.
+
+```sh
+for i in 0 1 2 3; do
+  python3.12 -BS -c '
+import json, sys
+for line in sys.stdin:
+    x = json.loads(line)
+    answer = "{\"slot\":0}" if x["task"] == "calendar" else json.dumps({"choices": {f"Q{i}": "A" for i in range(1, 7)}})
+    print(json.dumps({"id": x["id"], "prompt_sha256": x["prompt_sha256"], "reply": answer}))
+' < "$work/input-$i.jsonl" > "$work/reply-$i.jsonl" &
+done
+wait
+python3.12 -BS -m examples.seatlab.receiver_panel score "$work"/reply-*.jsonl > "$work/scores.json"
+python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["tasks"])' "$work/scores.json"
+```
+
+Each grade binds the reply digest to its original user prompt and native trial ID. An invalid reply is an observation with no grade. An absent reply is missing. Neither is a measured zero. A stale prompt digest, repeated case ID, or unknown case rejects the entire input with exit code `2` and no report. Valid files have exit code `0` even if some cases are missing. Compare coverage as well as grades.
+
+**Check against real teams:** We replayed the actual first returns from all 32 source trials through 4 separate worker processes. Every per-case grade matched its native grade. Reversing the worker files produced the same report byte for byte. The original receivers booked **0/24 meetings** and chose **36/48 optimal shipment bays**. These are two separate workloads, not one score. [Historical per-case scores and hashes](results/public-receiver-panel-native.json) · [Registered check](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061270837).
+
 ## Independent native replay
 
 Run 2 independent panels with the same scripted arrival policy, seeds `1001,1003`, conditions `fresh,reordered`, and 12 shipments per trial. Give every attempt a fresh native directory and UUID. Use the pinned [primary implementation](https://github.com/PeterMakhnatch/harbor-multiagent/commit/dc7722833f6d5d4d0726ccbc6755ddaa42faea9b). Compare ordered role inputs, submitted reports, final actions, fingerprints and score. A scalar match alone does not establish replay parity. These are 8 native trials and 2 independent latent seed blocks. Do not include them in the primary denominators. Replaying a hosted decision from a stored action is not a second model generation.

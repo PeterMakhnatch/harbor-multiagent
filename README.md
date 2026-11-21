@@ -21,6 +21,8 @@ python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm 
 
 The [Dispatch quickstart](examples/seatlab/live-confirmation.md#give-another-receiver-one-real-dispatch-input) shows how to score a reply and divide 8 worlds among workers. Use `masked` instead of `shown` to keep all utility values and report sizes but hide the peer’s bay IDs. Only the model input goes to the worker, not the scorer or answer key.
 
+To compare your own harness across tasks, [send 32 real receiver inputs to independent workers](examples/seatlab/replication.md#run-your-receiver-on-2-tasks-without-installing-harbor). Each worker receives one seat’s messages. The offline scorer accepts replies in any order. It reports meeting and shipment scores separately.
+
 In the [Dispatch replay](examples/seatlab/live-confirmation.md#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher), actual bay IDs increased optimal choices from 52/96 to 68/96. The [receipt](examples/seatlab/results/dispatch-peer-payload-replay.json) records every receiver call and its token-priced cost.
 
 For end-to-end behavior, [run both seats in native Harbor](examples/seatlab/replication.md#test-private-calendar-views-with-2-live-seats). In [24 native scheduling teams](examples/seatlab/calendar-notice-result.md), showing each seat its own feasible starts raised team success from 0/12 to 6/12. A separate fixed-transcript replay tests the contribution of the peer’s actual start IDs. Replays measure receiver decisions, not team reward.
