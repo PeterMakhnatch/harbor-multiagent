@@ -97,7 +97,7 @@ def test_the_season_ends_after_its_secret_length_and_no_reply_states_it(start_wo
         else:
             assert set(reply) == {"round", "amount"}
     admin = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert admin["world_version"] == 5 and len(admin["game"]["log"]) == 3
+    assert admin["world_version"] == 6 and len(admin["game"]["log"]) == 3
 
 
 def test_wait_returns_when_the_round_closes(start_world, tmp_path):

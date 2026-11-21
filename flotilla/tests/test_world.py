@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import socket
+import struct
+import threading
 import types
 
 import pytest
@@ -31,7 +34,7 @@ def test_start_event_reports_version_condition_seats_and_limits(start_world):
     world = start_world("silent", ("p1", "p2", "p3"))
     start = world.events()[0]
     assert start["kind"] == "start"
-    assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 5,
+    assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 6,
                              "limits": {"max_text": 4000, "max_messages": 200}}
 
 
@@ -43,6 +46,18 @@ def test_requests_without_a_valid_token_are_refused(start_world, header):
     assert "SEAT_TOKEN" in reply["error"]
     assert world.events()[-1]["kind"] == "bad_token"
     assert world.events()[-1]["seat"] is None
+
+
+def test_bad_token_attempts_are_counted_but_only_the_first_eight_are_logged(start_world):
+    world = start_world()
+    for n in range(40):
+        path = f"/probe/{n}/" + "x" * 2048
+        assert world.request("GET", path, token="wrong")[0] == 401
+    events = world.events()[1:]
+    assert [(event["kind"], event["seat"], event["data"]["path"]) for event in events] == [
+        ("bad_token", None, (f"/probe/{n}/" + "x" * 128)[:128]) for n in range(8)
+    ]
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["bad_token_requests"] == 40
 
 
 def test_the_seat_comes_from_the_token_not_from_the_request(start_world):
@@ -106,7 +121,7 @@ def test_submit_reply_carries_no_count_and_the_last_submission_wins(start_world)
     # In world v1 the reply carried the running count n, which told a silent seat that a teammate submitted.
     assert replies == [(200, {"accepted": True})] * 3
     state = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert state["world_version"] == 5
+    assert state["world_version"] == 6
     assert [(s["n"], s["seat"], s["answer"]) for s in state["submissions"]] == [
         (1, "p1", {"day": "Mon"}), (2, "p2", {"day": "Tue"}), (3, "p1", {"day": "Wed"})]
     assert [e["data"]["n"] for e in world.events() if e["kind"] == "submit"] == [1, 2, 3]
@@ -124,6 +139,49 @@ def test_freeze_refuses_later_submissions_and_logs_them_as_late(start_world):
     assert [s["answer"] for s in state["submissions"]] == [{"day": "Mon"}]
     late = [e for e in world.events() if e["kind"] == "late"]
     assert [(e["seat"], e["data"]["answer"]) for e in late] == [("p2", {"day": "Fri"})]
+
+
+def test_submit_attempts_are_bounded_per_seat_before_and_after_freeze(start_world):
+    world = start_world("silent")
+    assert world.seat("p1", "POST", "/submit", {"answer": False})[0] == 400
+    for n in range(99):
+        assert world.seat("p1", "POST", "/submit", {"answer": {"n": n}}) == (200, {"accepted": True})
+    for _ in range(4):
+        assert world.seat("p1", "POST", "/submit", {"answer": {"n": "refused"}})[0] == 429
+    assert world.seat("p2", "POST", "/submit", {"answer": {"n": "final"}})[0] == 200
+    assert world.request("POST", "/admin/freeze", token=world.admin)[0] == 200
+    for _ in range(3):
+        assert world.seat("p1", "POST", "/submit", {"answer": {}})[0] == 409
+    for _ in range(105):
+        assert world.seat("p2", "POST", "/submit", {"answer": {}})[0] == 409
+    events = world.events()
+    assert [event["seat"] for event in events if event["kind"] == "denied"] == ["p1", "p2"]
+    assert [event["seat"] for event in events if event["kind"] == "late"] == ["p2"] * 99
+    state = world.request("GET", "/admin/state", token=world.admin)[1]
+    assert state["submit_attempts"] == {"p1": 107, "p2": 106}
+    assert len(state["submissions"]) == 100
+    assert state["submissions"][-1]["answer"] == {"n": "final"}
+
+
+def test_large_submit_and_late_events_keep_only_a_hash_length_and_prefix(start_world):
+    world = start_world()
+    answer = {"tail": "complete", "payload": "é" + "x" * 63_000}
+    late = {**answer, "tail": "refused"}
+    assert world.seat("p1", "POST", "/submit", {"answer": answer})[0] == 200
+    assert world.request("POST", "/admin/freeze", token=world.admin)[0] == 200
+    assert world.seat("p2", "POST", "/submit", {"answer": late})[0] == 409
+    events = [event for event in world.events() if event["kind"] in ("submit", "late")]
+    assert [event["kind"] for event in events] == ["submit", "late"]
+    for event, original in zip(events, (answer, late), strict=True):
+        encoded = json.dumps(original, sort_keys=True, separators=(",", ":")).encode("ascii")
+        data = event["data"]
+        assert "answer" not in data
+        assert data["answer_prefix"] == encoded[:1024].decode("ascii")
+        assert data["answer_bytes"] == len(encoded)
+        assert data["answer_sha256"] == hashlib.sha256(encoded).hexdigest()
+    assert (world.logs / "events.jsonl").stat().st_size < 3500
+    state = world.request("GET", "/admin/state", token=world.admin)[1]
+    assert [entry["answer"] for entry in state["submissions"]] == [answer]
 
 
 def test_admin_endpoints_are_hidden_from_seats(start_world):
@@ -156,7 +214,7 @@ def test_unknown_paths_and_wrong_methods_are_logged_as_probes(start_world):
     ]
 
 
-def test_every_request_leaves_an_event(start_world):
+def test_each_ordinary_api_request_leaves_an_event(start_world):
     world = start_world("talk")
     calls = [
         ("GET", "/whoami", "p1", None), ("POST", "/messages", "p1", {"to": "all", "text": "x"}),
@@ -206,13 +264,72 @@ def test_a_parser_recursion_error_is_a_400_not_a_dropped_connection(start_world,
     assert world.events()[-1]["data"]["reason"] == "not JSON"
 
 
-def _raw(world, request: bytes) -> bytes:
+def _raw(world, request: bytes, *, close_write: bool = False) -> bytes:
     with socket.create_connection(("127.0.0.1", world.port), timeout=5) as connection:
         connection.sendall(request)
+        if close_write:
+            connection.shutdown(socket.SHUT_WR)
         reply = b""
         while chunk := connection.recv(4096):
             reply += chunk
     return reply
+
+
+@pytest.mark.parametrize(("data", "status"), [
+    (b"GET /" + b"a" * (65_537 - 5), 414),
+    (b"GET /whoami HTTP/1.1\r\nX-Long:" + b"z" * (65_537 - 7), 431),
+    (b"GET / HTTP/2.0\r\n", 505),
+])
+def test_http_parser_refusals_are_counted_and_sampled(start_world, data, status):
+    world = start_world()
+    for _ in range(12):
+        reply = _raw(world, data)
+        if status != 505 or reply.startswith(b"HTTP/"):
+            assert reply.startswith(f"HTTP/1.0 {status} ".encode())
+        else:  # Python 3.12 sends the HTTP/0.9 form for this error.
+            assert reply.startswith(b"<!DOCTYPE HTML>")
+    assert [(event["kind"], event["seat"], event["data"]) for event in world.events()[1:]] == [
+        ("invalid_http", None, {"status": status})
+    ] * 8
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["invalid_http_requests"] == 12
+
+
+def test_eof_before_content_length_is_logged_and_does_not_submit(start_world):
+    world = start_world()
+    token = world.tokens["p1"]
+    head = f"POST /submit HTTP/1.1\r\nAuthorization: Bearer {token}\r\nContent-Length: 32\r\n\r\n"
+    reply = _raw(world, head.encode() + b'{"answer":{}}', close_write=True)
+    assert reply.startswith(b"HTTP/1.0 400")
+    event = world.events()[-1]
+    assert (event["kind"], event["seat"], event["data"]["reason"]) == ("invalid", "p1", "incomplete body")
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["submissions"] == []
+
+
+def test_a_socket_reset_while_reading_a_body_is_logged(start_world, monkeypatch):
+    world = start_world()
+    before_body, logged = threading.Event(), threading.Event()
+    body, record = world.module.World._body, world.module.record
+
+    def watch_body(handler):
+        before_body.set()
+        return body(handler)
+
+    def watch_log(kind, seat, data=None):
+        record(kind, seat, data)
+        if kind == "invalid":
+            logged.set()
+
+    monkeypatch.setattr(world.module.World, "_body", watch_body)
+    monkeypatch.setattr(world.module, "record", watch_log)
+    with socket.create_connection(("127.0.0.1", world.port), timeout=5) as connection:
+        token = world.tokens["p1"]
+        head = f"POST /submit HTTP/1.1\r\nAuthorization: Bearer {token}\r\nContent-Length: 32\r\n\r\n"
+        connection.sendall(head.encode() + b"{")
+        assert before_body.wait(5)
+        connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    assert logged.wait(5)
+    event = world.events()[-1]
+    assert (event["kind"], event["seat"], event["data"]["reason"]) == ("invalid", "p1", "incomplete body")
 
 
 @pytest.mark.parametrize("length", [b"-1", b"abc", b"99999999"])
@@ -358,5 +475,5 @@ def test_no_reply_names_the_software_a_family_or_a_version(start_world, conditio
         assert set(headers) <= REPLY_HEADERS, headers  # no X- header, no other header
         assert headers["Server"] == world.module.SERVER == "world"
         assert not re.search(r"\d", headers["Server"])  # no version of the world or of Python
-    assert world.events()[0]["data"]["world_version"] == world.module.WORLD_VERSION == 5
-    assert world.request("GET", "/admin/state", token=world.admin)[1]["world_version"] == 5
+    assert world.events()[0]["data"]["world_version"] == world.module.WORLD_VERSION == 6
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["world_version"] == 6

@@ -149,7 +149,7 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 3`. Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 6`. Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
@@ -165,13 +165,17 @@ name). A reply has no header but `Server`, `Date`, `Content-Type`, `Content-Leng
 | `GET /whoami` | | `{"seat", "seats", "messaging": bool, "limits": {"max_text", "max_messages"}}` | |
 | `POST /messages` | `{"to": "<seat>" or "all", "text": str}` | 201 `{"id": "m<k>", ...}` | 403 when messaging is off (`solo`, `silent`); 413 above `max_text` characters; 429 after `max_messages` messages of this seat |
 | `GET /messages` | | `{"messages": [{"id","from","to","text","t"}]}` | every message to the caller or to `all`, plus its own; 403 when messaging is off |
-| `POST /submit` | `{"answer": {...}}` | 200 `{"accepted": true}` | the team answer is the **last accepted submission from any seat**; replies never reveal correctness or how many submissions exist (world version 1 returned the running count `n`, which a seat in `silent` read as a signal from its teammates) |
-| `POST /admin/freeze` | | 200 | admin token only; later submissions are refused (409) and logged as `late` |
+| `POST /submit` | `{"answer": {...}}` | 200 `{"accepted": true}` | the team answer is the **last accepted submission from any seat**; 429 past the seat's limit, or 409 if frozen; replies never reveal correctness or how many submissions exist (world version 1 returned the running count `n`, which a seat in `silent` read as a signal from its teammates) |
+| `POST /admin/freeze` | | 200 | admin token only; valid later submissions within the seat's limit are refused (409) and logged as `late` |
 | `GET /admin/state` | | full state, with `world_version`, `condition` and `limits` | admin token only; used by the verifier |
 
 Any other path is 404 and a known path with the wrong method is 405 (with `Allow`); a seat that asks
 for an `/admin/` path gets 404. A body that is not a JSON object of at most `max(64,000,
 8 × max_text)` bytes is 400; `NaN` and `Infinity` are not JSON here.
+
+Each seat can attempt `POST /submit` 100 times per trial, including invalid bodies and late requests.
+The oracle submits once per seat; no family requires repeated submissions. `schedule` has 35 possible
+windows, and `ledger` and `puzzle` ask for one final object.
 
 ## 5. Evidence the world writes (artifacts)
 
@@ -181,20 +185,32 @@ for an `/admin/` path gets 404. A body that is not a JSON object of at most `max
 {"seq": 12, "t": 31.402, "seat": "p2", "kind": "send", "data": {"id": "m3", "to": "all", "chars": 118}}
 ```
 
-`t` is seconds since the world started (monotonic clock). Every request leaves one event, except the
-Compose health check that `main` sends to itself. `kind` is one of:
+`t` is seconds since the world started (monotonic clock). A request that reaches the API or that the
+HTTP parser rejects with an error logs one request event, subject to the limits below. The local
+Compose health check and connections that close or fail before the world can parse a request can
+leave no event. Lifecycle events such as an automatic freeze are separate. `kind` is one of:
 
 - `start` (`data.condition`, `data.seats`, `data.world_version`, `data.limits`), written once;
 - `whoami`, `send` (`data.id`, `data.to`, `data.chars`), `deliver` (`data.ids`: message ids returned
-  to the caller by `GET /messages`), `submit` (`data.n`, `data.answer`), `late` (`data.answer`),
-  `freeze`, `state` (the verifier read the state);
-- `denied` (`data.path`, `data.reason`): messaging is off, or the seat's message limit is reached;
-- `bad_token` (`data.path`): a missing or unknown token (401);
+  to the caller by `GET /messages`), `submit` (`data.n` and answer evidence), `late` (for a
+  late submission, `data.path` and answer evidence), `freeze`, `state` (the verifier read the state);
+- `denied` (`data.path`, `data.reason`): messaging is off, or a seat reaches a message or submit limit;
+- `bad_token` (`data.path`, at most 128 characters): a missing or unknown token (401);
+- `invalid_http` (`data.status`): the HTTP parser rejects a request before authentication;
 - `probe` (`data.method`, `data.path`, `data.status`): an unknown path (404, including a seat that asks
   for an `/admin/` path) or a wrong method (405), so exploration is measured;
 - `invalid` (`data.method`, `data.path`, `data.status`, `data.reason`): a body the endpoint cannot use
-  (400, or 413 for a message above the text limit);
+  (400, including an interrupted or incomplete body read, or 413 for a message above the text limit);
 - `health`: `GET /health` from another container than `main`.
+
+The world logs only the first `bad_token` and `invalid_http` 8 times each. It logs one `denied`
+event per seat for its first submit attempt past the limit. The admin state counts all attempts in
+`submit_attempts` (by seat), `bad_token_requests` and `invalid_http_requests`.
+
+Answer evidence gives `data.answer_sha256` and `data.answer_bytes` for the answer serialized as
+sorted-key ASCII JSON without separator whitespace. If that JSON is at most 1,024 bytes, the event
+keeps `data.answer`. Otherwise, `data.answer_prefix` holds its first 1,024 bytes as a string.
+The frozen state keeps every accepted answer in full for scoring.
 
 Message texts are stored once, in `/logs/world/messages.jsonl` (`id, from, to, text, t`).
 

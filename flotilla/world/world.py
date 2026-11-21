@@ -9,6 +9,7 @@ Standard library only. See flotilla/CONTRACT.md, sections 3 to 5.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import math
@@ -36,7 +37,8 @@ from urllib.parse import parse_qs, urlsplit
 # first seat call (a seat process that outlives play cannot act); messages after a freeze get 409; the admin
 # token works on /admin/ only; JSON numbers must be finite; the world refuses a config that lets a request
 # act as the wrong seat; message ids are random (a counter showed the number of hidden direct messages).
-WORLD_VERSION = 5
+# Version 6: bound submission history and sample unattributed errors; record HTTP parser refusals.
+WORLD_VERSION = 6
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -51,6 +53,9 @@ DEFAULT_MAX_MESSAGES = 200
 MAX_TEXT = int(os.environ.get("FLOTILLA_MAX_TEXT") or DEFAULT_MAX_TEXT)  # characters per message
 MAX_MESSAGES_PER_SEAT = int(os.environ.get("FLOTILLA_MAX_MESSAGES") or DEFAULT_MAX_MESSAGES)
 MAX_BODY = max(64_000, 8 * MAX_TEXT)  # bytes; a message at the text limit always fits
+MAX_SUBMIT_ATTEMPTS = 100
+ANSWER_EVENT_BYTES = 1024
+UNATTRIBUTED_EVENT_LIMIT = 8
 ROUTES = {  # path -> methods
     "/health": ("GET",),
     "/whoami": ("GET",),
@@ -95,6 +100,9 @@ STATE: dict[str, Any] = {
     "submissions": [],  # {"n", "seat", "answer", "t"}
     "frozen": False,
     "sent": {seat: 0 for seat in SEATS},
+    "submit_attempts": dict.fromkeys(SEATS, 0),
+    "bad_token_requests": 0,
+    "invalid_http_requests": 0,
     "first_call": None,  # world time of the first authorized seat request
 }
 if GAME is not None:
@@ -115,6 +123,23 @@ def record(kind: str, seat: str | None, data: dict[str, Any] | None = None) -> N
     event = {"seq": _SEQ[0], "t": now(), "seat": seat, "kind": kind, "data": data or {}}
     with (LOGS / "events.jsonl").open("a") as events:
         events.write(json.dumps(event, sort_keys=True) + "\n")
+
+
+def record_unattributed(kind: str, data: dict[str, Any]) -> None:
+    """Count every request but write only a fixed sample of each kind."""
+    with LOCK:
+        counter = f"{kind}_requests"
+        STATE[counter] += 1
+        if STATE[counter] <= UNATTRIBUTED_EVENT_LIMIT:
+            record(kind, None, data)
+
+
+def answer_evidence(answer: dict[str, Any]) -> dict[str, Any]:
+    encoded = json.dumps(answer, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+    data = {"answer_sha256": hashlib.sha256(encoded).hexdigest(), "answer_bytes": len(encoded)}
+    if len(encoded) <= ANSWER_EVENT_BYTES:
+        return {**data, "answer": answer}
+    return {**data, "answer_prefix": encoded[:ANSWER_EVENT_BYTES].decode("ascii")}
 
 
 def limits() -> dict[str, int]:
@@ -223,6 +248,17 @@ class World(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         return
 
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        # The HTTP parser can reject a request before it has headers or an authenticated seat.
+        record_unattributed("invalid_http", {"status": code})
+        super().send_error(code, message, explain)
+
+    def handle_one_request(self) -> None:
+        try:
+            super().handle_one_request()
+        except ConnectionError:
+            self.close_connection = True
+
     def __getattr__(self, name: str) -> Callable[[], None]:
         # BaseHTTPRequestHandler looks up do_<METHOD>; answer (and log) every method, not only GET and POST
         if name.startswith("do_"):
@@ -265,7 +301,13 @@ class World(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             return None, "body too large"
         try:
-            body = json.loads(self.rfile.read(length) or b"{}", parse_constant=_no_constants, parse_float=_finite)
+            raw = self.rfile.read(length)
+        except (ConnectionError, TimeoutError):
+            return None, "incomplete body"
+        if len(raw) != length:
+            return None, "incomplete body"
+        try:
+            body = json.loads(raw or b"{}", parse_constant=_no_constants, parse_float=_finite)
         except (ValueError, RecursionError):  # includes JSONDecodeError and UnicodeDecodeError
             return None, "not JSON"
         return (body, "") if isinstance(body, dict) else (None, "not a JSON object")
@@ -273,8 +315,7 @@ class World(BaseHTTPRequestHandler):
     def _authorize(self) -> str | None:
         seat = self._caller()
         if seat is None:
-            with LOCK:
-                record("bad_token", None, {"path": self.path})
+            record_unattributed("bad_token", {"path": self.path[:128]})
             self._reply(401, {"error": "send your seat token: Authorization: Bearer $SEAT_TOKEN"})
         return seat
 
@@ -348,6 +389,8 @@ class World(BaseHTTPRequestHandler):
                     record("state", seat)
                     self._reply(200, {"world_version": WORLD_VERSION, "condition": CONDITION, "seats": SEATS,
                                       "limits": limits(), **STATE})
+            return
+        if path == "/submit" and not self._claim_submit(seat):
             return
         body, reason = self._body()
         if body is None:
@@ -425,20 +468,36 @@ class World(BaseHTTPRequestHandler):
             record("deliver", seat, {"ids": delivered})
         self._reply(200, {"messages": visible})
 
+    def _claim_submit(self, seat: str) -> bool:
+        with LOCK:
+            STATE["submit_attempts"][seat] += 1
+            count = STATE["submit_attempts"][seat]
+            if count <= MAX_SUBMIT_ATTEMPTS:
+                return True
+            frozen = STATE["frozen"]
+            if count == MAX_SUBMIT_ATTEMPTS + 1:
+                record("denied", seat, {"path": "/submit", "reason": "submit limit"})
+        if frozen:
+            self._reply(409, {"error": "play has ended; the answer is frozen"})
+        else:
+            self._reply(429, {"error": f"limit of {MAX_SUBMIT_ATTEMPTS} submit attempts per seat reached"})
+        return False
+
     def _submit(self, seat: str, body: dict[str, Any]) -> None:
         answer = body.get("answer")
         if not isinstance(answer, dict):
             self._invalid(seat, "POST", "/submit", 400, "answer is not an object",
                           'send {"answer": {...}} with a JSON object as the answer')
             return
+        evidence = answer_evidence(answer)
         with LOCK:
             if STATE["frozen"]:
-                record("late", seat, {"answer": answer})
+                record("late", seat, {"path": "/submit", **evidence})
                 self._reply(409, {"error": "play has ended; the answer is frozen"})
                 return
             n = len(STATE["submissions"]) + 1
             STATE["submissions"].append({"n": n, "seat": seat, "answer": answer, "t": now()})
-            record("submit", seat, {"n": n, "answer": answer})
+            record("submit", seat, {"n": n, **evidence})
         # The reply must not say how many submissions exist: in `silent` that count is a channel.
         self._reply(200, {"accepted": True})
 
