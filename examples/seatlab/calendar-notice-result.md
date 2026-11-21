@@ -25,9 +25,9 @@ No sender reported its full week correctly. Across 24 revisions, 43 of 146 repor
 
 The true meeting remained in the visible candidates for only 4/24 teams. Only 1/24 final choices fit the receiver’s own calendar. [Checking for a consistent 1-hour or 1-day shift](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059641483) raised that count to at most 4/24. This does not support a simple coordinate mismatch.
 
-Test a private-calendar lookup tool against raw calendars next. Keep the notice and the 2-read limit the same. The tool must not reveal the other seat’s calendar.
+Test a private-calendar lookup tool against raw calendars on the [12 fresh native worlds](replication.md#verify-12-held-out-scheduling-worlds). Keep the notice and the 2-read limit the same. Give each seat only its own lookup. In both arms, say an empty report means “the sender listed no start,” not “no start fits.”
 
-These are fixed, previously studied worlds and one model. With truthful reports, 7/12 worlds already have one candidate before either read. The result does not estimate performance on unseen calendars.
+The reported experiment used 1 model and the 12 previously studied worlds. With truthful reports, 7/12 already have one candidate before either read. The result does not estimate performance on unseen calendars.
 
 ## Verify without a model call
 

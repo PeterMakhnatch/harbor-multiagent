@@ -335,6 +335,29 @@ python -m "$packet" compare-tables "$private_tasks/schedule"
 
 We independently generated all 12 worlds. All 24 role prompts matched byte for byte. The fresh credentials change the native task hashes. `compare-tables` checks the model inputs, not task identity. The registered native experiment requires the original task hashes. Its [public packet](results/flotilla-calendar-packet.json) has SHA-256 `b7073bdb5c2bdd44e6e6b2445137b08d3856db6793bdf8d17ba2a0eb7af86de0`.
 
+#### Verify 12 held-out scheduling worlds
+
+Use this panel to test a new workflow without reusing worlds 0–11. The fixed coordinates are `schedule-012-talk` through `schedule-023-talk`, with seed `1`. This check needs Python 3.12 and a clone of the fork that contains the pinned generator. It needs no Docker, model, or API key.
+
+Keep the generated directory private. It contains service credentials and the verifier’s answers. Share only the [answer-free manifest](results/flotilla-schedule-heldout-12-23.json).
+
+```bash
+umask 077
+private=$(realpath "$(mktemp -d)")
+pin=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+mkdir "$private/generator"
+git archive "$pin" flotilla | tar -x -C "$private/generator"
+python3.12 -BS "$private/generator/flotilla/build_tasks.py" \
+  --family schedule --instances 12-23 --seats 2 --difficulty easy --seed 1 \
+  --conditions talk --play-timeout 600 --out "$private/tasks"
+python3.12 -BS -m examples.seatlab.calendar_notices.heldout "$private/tasks/schedule" \
+  --expect examples/seatlab/results/flotilla-schedule-heldout-12-23.json
+```
+
+The manifest separates calendar identity from task identity. Reordering attendees or swapping seats cannot turn an old calendar into a new one. Fresh credentials do not change either published fingerprint. This panel contains no model outcomes.
+
+For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_briefing(own_briefing))` returns only that seat’s feasible starts. Do not use the full briefing in a phase that shows only 2 attendees. Keep the peer’s table and the verifier key outside the model context.
+
 #### Native replication with an external harness
 
 The archived task hashes above cannot be recreated: each build makes fresh service credentials. This independent replication uses the public Flotilla generator and freshly built tasks. It does not add replacements to the original panel.
