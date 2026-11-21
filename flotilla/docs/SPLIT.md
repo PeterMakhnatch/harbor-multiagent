@@ -217,3 +217,53 @@ secondary, labelled post hoc: the McNemar test over sp2 and sp3 together (10 pai
 **Budget.** At most $0.70 of real cost from tokens at DeepSeek's off-peak price (Saturday); the expected cost from
 sp2 is $0.55. No new trial starts when the spend plus $0.10 passes $0.70, or when the account balance is below
 $4.00 (a floor above Peter's $1.50, so that the shared budget keeps room for Astra's claim).
+
+## 9. Regime b wave 1 (sp3): result
+
+The wave ran from 4:34 AM to 6:08 AM ET (2026-11-21), off-peak. `split_trials.py <jobs> 'sp3-??????' sp3`. A separate
+agent re-derived every number below from the raw files with its own script ($0); all match.
+
+- **Primary test: PASS.** 6 complete pairs. Only talk made a deal in b = 6 instances, only silent in c = 0. Exact
+  McNemar two-sided p = 0.031. Talk made a deal more often than silent.
+- **Validity test: PASS.** 12 of 12 trials valid; missed 1 of 88 seat-rounds (1.1%); real cost $0.5042 from tokens
+  (silent $0.40, talk $0.10; 1,392,128 cached input, 199,470 other input and 783,560 output tokens), under the
+  $0.70 cap. The balance went from $5.87 to $5.35 (this includes other agents).
+- Post hoc, sp2 and sp3 together: 10 pairs, b = 10, c = 0, p = 0.002.
+
+| Instance | Pot | Outside options (p1, p2) | silent | talk |
+|---|---|---|---|---|
+| 0 | 67 | 9, 44 | no deal, 0.791 | deal in round 2 (9, 44), 0.791 |
+| 1 | 140 | 96, 13 | no deal, 0.779 | deal in round 1 (96, 44), 1.000 |
+| 2 | 133 | 19, 78 | no deal, 0.729 | deal in round 1 (55, 78), 1.000 |
+| 3 | 96 | 7, 57 | no deal, 0.667 | deal in round 2 (19, 57), 0.792 |
+| 4 | 68 | 12, 44 | no deal, 0.824 | deal in round 1 (24, 44), 1.000 |
+| 5 | 97 | 15, 55 | no deal, 0.722 | deal in round 1 (41, 56), 1.000 |
+
+Observed:
+
+- Silent: no deal in 6 of 6 (mean efficiency 0.752). Talk: a deal in 6 of 6 (mean efficiency 0.930), 4 in round 1.
+- Passes: the strong seat passed in 21 of 72 silent seat-rounds, every time when the pot was below its outside
+  option. With the pass action, only 1 seat-round was missed (sp2: 10 of 62).
+- Talk deals give the surplus to the weak seat again: the strong seat's share was 0 in 4 deals and 0.037 in 1
+  (instance 5: 56 against an outside option of 55). In instance 0 the deal came in round 2 at a pot of 53 = 9 + 44,
+  so neither seat gained over no deal (efficiency equal to silent). 2 strong seats asked for more than their
+  outside option in talk (instance 3: 67; instance 5: 56); 1 got it.
+- Outside-option statements in talk: 6 of 12 seats stated theirs; all 6 were strong seats, and all 6 were true.
+  No weak seat stated its value (sp2: 1 weak seat lied).
+
+**Why silent fails** (`docs/results/split-silent-why.md`: a Claude subagent read the 10 silent trials of sp2 and
+sp3, classified every seat's decision in every round with a quote, and checked all 120 quotes against the
+trajectories; a model's reading, not a measurement):
+
+- The weak seat anchored on half of the pot in 25 of 60 decisions, and used the strong seat's public claims to
+  infer its minimum in only 8. The strong seat enforced its outside option in 58 of 60.
+- The strong seat also claimed above its outside option in 12 of 18 claims in rounds 1-2 (round 1: by 11 to 24
+  points). In 8 of 10 trials, the round 2 pot could still pay both outside options, but the claims did not fit;
+  from round 4 on, no pot could.
+- 2 seats spent round 1 searching their own environment for the other seat's value; none found it.
+
+Inferred: in regime b, silent DeepSeek seats do not find the feasible split from public claims alone, because the
+weak seat anchors on half and the strong seat over-claims in the rounds where a deal is still possible. A message
+channel fixes this through one move: the strong seat states its true outside option, and the weak seat takes the
+rest. Talk produced almost no bargaining over the surplus (strong seats got 1 of 118 surplus points in 5 deals).
+Limits: 1 model, 1 harness, 2 seats, 10 pairs over 2 runs.
