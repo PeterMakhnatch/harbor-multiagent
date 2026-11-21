@@ -1,5 +1,7 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -16,7 +18,7 @@ from harbor.models.trial.config import (
 from harbor.models.trial.paths import TrialPaths
 from harbor.models.trial.result import AgentInfo, ExceptionInfo, StepResult, TrialResult
 from harbor.trial.hooks import TrialEvent, TrialHookEvent
-from harbor.trial.queue import TrialQueue
+from harbor.trial.queue import TrialQueue, _archive_retry_attempt
 
 
 def _make_trial_result(config: TrialConfig, *, task_name: str = "task") -> TrialResult:
@@ -183,6 +185,44 @@ async def test_queue_archives_native_bytes_by_attempt_id(
     }
 
 
+def test_retry_archive_becomes_visible_only_after_copy(tmp_path):
+    trial_dir = tmp_path / "trial"
+    trial_dir.mkdir()
+    result_path = trial_dir / "result.json"
+    result_bytes = b'{\r\n  "unknown": null\r\n}\r\n'
+    result_path.write_bytes(result_bytes)
+    trial_id = uuid4()
+    archive_path = tmp_path / f"retry-attempt-{trial_id}.json"
+    copying = Event()
+    finish_copy = Event()
+
+    def pause_copy(source, destination):
+        assert destination.write(source.read(5)) == 5
+        destination.flush()
+        copying.set()
+        assert finish_copy.wait(timeout=5)
+        destination.write(source.read())
+
+    with (
+        patch("harbor.trial.queue.shutil.copyfileobj", side_effect=pause_copy),
+        ThreadPoolExecutor(max_workers=1) as executor,
+    ):
+        publication = executor.submit(_archive_retry_attempt, result_path, trial_id)
+        try:
+            assert copying.wait(timeout=5)
+            with pytest.raises(FileNotFoundError):
+                archive_path.read_bytes()
+            (partial,) = set(tmp_path.iterdir()) - {trial_dir}
+            assert partial.name.startswith(".")
+            assert partial.read_bytes() == result_bytes[:5]
+        finally:
+            finish_copy.set()
+        publication.result(timeout=5)
+
+    assert archive_path.read_bytes() == result_bytes
+    assert set(tmp_path.iterdir()) == {trial_dir, archive_path}
+
+
 @pytest.mark.parametrize("entry_type", ["file", "symlink", "directory"])
 async def test_queue_preserves_trial_when_retry_archive_exists(
     trial_config, retryable_trial_result, retrying_queue, tmp_path, entry_type
@@ -198,6 +238,7 @@ async def test_queue_preserves_trial_when_retry_archive_exists(
     else:
         existing = archive
     existing.write_bytes(b"previous archive")
+    existing_entries = set(tmp_path.iterdir())
     create = AsyncMock(return_value=trial)
 
     with (
@@ -213,6 +254,7 @@ async def test_queue_preserves_trial_when_retry_archive_exists(
     assert trial.paths.result_path.read_bytes() == (
         retryable_trial_result.model_dump_json().encode()
     )
+    assert set(tmp_path.iterdir()) == existing_entries | {trial.paths.trial_dir}
 
 
 async def test_queue_preserves_trial_when_retry_archive_write_fails(
@@ -224,6 +266,7 @@ async def test_queue_preserves_trial_when_retry_archive_write_fails(
 
     def fail_copy(source, destination):
         assert destination.write(source.read(5)) == 5
+        destination.flush()
         raise write_error
 
     with (
@@ -239,6 +282,37 @@ async def test_queue_preserves_trial_when_retry_archive_write_fails(
         retryable_trial_result.model_dump_json().encode()
     )
     assert not list(tmp_path.glob("retry-attempt-*.json"))
+    assert set(tmp_path.iterdir()) == {trial.paths.trial_dir}
+
+
+async def test_queue_preserves_trial_when_retry_archive_link_fails(
+    trial_config, retryable_trial_result, retrying_queue, tmp_path
+):
+    result_bytes = retryable_trial_result.model_dump_json().encode()
+    trial = _mock_trial_with_result_file(retryable_trial_result)
+    archive = tmp_path / f"retry-attempt-{retryable_trial_result.id}.json"
+    other_temp = tmp_path / ".retry-attempt-other"
+    other_temp.write_bytes(b"another writer")
+    create = AsyncMock(return_value=trial)
+    link_error = OSError("archive link failed")
+
+    def fail_link(source, destination):
+        assert Path(source).read_bytes() == result_bytes
+        assert destination == archive
+        raise link_error
+
+    with (
+        patch("harbor.trial.trial.Trial.create", create),
+        patch("harbor.trial.queue.os.link", side_effect=fail_link),
+        pytest.raises(OSError, match="archive link failed") as exc_info,
+    ):
+        await retrying_queue.submit(trial_config)
+
+    assert exc_info.value is link_error
+    create.assert_awaited_once_with(trial_config)
+    assert trial.paths.result_path.read_bytes() == result_bytes
+    assert other_temp.read_bytes() == b"another writer"
+    assert set(tmp_path.iterdir()) == {trial.paths.trial_dir, other_temp}
 
 
 async def test_queue_preserves_trial_when_retry_source_is_missing(
@@ -265,6 +339,7 @@ async def test_queue_preserves_trial_when_retry_source_is_missing(
     assert paths.log_path.read_bytes() == b"original trial log"
     assert not list(tmp_path.glob("retry-attempt-*.json"))
     assert not paths.result_path.exists()
+    assert set(tmp_path.iterdir()) == {paths.trial_dir}
 
 
 class TestTrialQueue:

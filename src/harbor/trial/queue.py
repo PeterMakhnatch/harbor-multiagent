@@ -1,5 +1,7 @@
 import asyncio
+import os
 import shutil
+import tempfile
 from collections.abc import Coroutine
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,13 +18,15 @@ from harbor.utils.logger import logger
 def _archive_retry_attempt(result_path: Path, trial_id: UUID) -> None:
     archive_path = result_path.parent.parent / f"retry-attempt-{trial_id}.json"
     with result_path.open("rb") as source:
-        destination = archive_path.open("xb")
+        temporary = tempfile.NamedTemporaryFile(
+            mode="wb", dir=archive_path.parent, prefix=".retry-attempt-", delete=False
+        )
         try:
-            with destination:
-                shutil.copyfileobj(source, destination)
-        except BaseException:
-            archive_path.unlink(missing_ok=True)
-            raise
+            with temporary:
+                shutil.copyfileobj(source, temporary)
+            os.link(temporary.name, archive_path)
+        finally:
+            Path(temporary.name).unlink(missing_ok=True)
 
 
 @dataclass(frozen=True)
