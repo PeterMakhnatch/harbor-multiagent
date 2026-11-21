@@ -1,6 +1,7 @@
 """examples/tasks/hello-seats on real Docker, with the oracle in both seats; no
 model APIs are used. A token is read only inside its own seat's container, by
-the scripts below, and nothing prints one."""
+the scripts below, and only the scrub test prints one (to check that Harbor
+removes it from the saved output)."""
 
 import asyncio
 import hashlib
@@ -232,3 +233,25 @@ async def test_p2_sending_p1s_note_earns_reward_zero(tmp_path: Path):
     assert (p2_note["author"], p2_note["text"]) == ("p2", "hello from p2")
     assert (copy["author"], copy["text"]) == ("p2", "hello from p1")
     assert copy["reply_to"] == p2_note["id"]
+
+
+PRINT_TOKEN = """#!/bin/bash
+echo "TOKEN=$(cat /run/seat/token)"
+"""
+
+
+async def test_a_printed_seat_token_is_scrubbed_from_saved_output(tmp_path: Path):
+    """Fork PR #2 review, P2: the world lists the tokens it issues in
+    /logs/artifacts/.harbor-secrets; Harbor removes them from every saved file
+    and deletes the list. Each seat prints its own token here."""
+    task = tmp_path / "hello-seats"
+    shutil.copytree(TASK, task)
+    (task / "solution" / "solve.sh").write_text(PRINT_TOKEN)
+
+    trial, result = await run_oracle_trial(task, tmp_path)
+
+    assert result.exception_info is None, result.exception_info
+    for seat in ("p1", "p2"):
+        log = trial.paths.trial_dir / "seats" / seat / "agent" / "oracle.txt"
+        assert log.read_text().split() == ["TOKEN=[REDACTED]"], seat
+    assert not list(trial.paths.trial_dir.rglob(".harbor-secrets"))

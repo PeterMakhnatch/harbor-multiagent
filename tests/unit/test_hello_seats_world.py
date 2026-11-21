@@ -39,6 +39,10 @@ def start_world(tokens_dir: Path) -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     setattr(module, "TOKENS_DIR", tokens_dir)
+    # Never the host's /logs: the issued-token list goes next to the tokens.
+    setattr(
+        module, "ISSUED_SECRETS", tokens_dir.parent / "artifacts" / ".harbor-secrets"
+    )
     module.start_session()
     return module
 
@@ -201,3 +205,16 @@ def test_saved_notes_do_not_change_when_a_note_arrives_later(world, tmp_path):
     assert post_note(port, reply, module.TOKENS["p1"])[0] == 201
     assert len(get_notes(port)) == 3
     assert saved.read_bytes() == before
+
+
+def test_the_world_lists_every_token_it_issues_for_harbor_to_scrub(tmp_path: Path):
+    """Fork PR #2 review, P2: Harbor removes these tokens from saved output."""
+    tokens_dir = tmp_path / "tokens"
+    for seat in SEATS:
+        (tokens_dir / seat).mkdir(parents=True)
+    world = start_world(tokens_dir)
+    first = {seat: (tokens_dir / seat / "token").read_text() for seat in SEATS}
+    world.start_session()  # a restart issues new tokens; the old ones stay listed
+    second = {seat: (tokens_dir / seat / "token").read_text() for seat in SEATS}
+    listed = (tmp_path / "artifacts" / ".harbor-secrets").read_text().split()
+    assert sorted(listed) == sorted([*first.values(), *second.values()])

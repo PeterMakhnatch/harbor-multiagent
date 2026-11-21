@@ -47,10 +47,17 @@ def start_session() -> None:
                 TOKENS[seat_dir.name] = secrets.token_hex(16)
                 write_whole(seat_dir / "token", TOKENS[seat_dir.name])
         # Harbor reads this file, removes these tokens from every saved file, and deletes it. Appended, so
-        # that the tokens of an earlier session (before a restart) are removed too.
-        if ISSUED_SECRETS.parent.is_dir():
+        # that the tokens of an earlier session (before a restart) are removed too. The world starts before
+        # Harbor creates /logs/artifacts, so it creates the folder itself.
+        try:
+            ISSUED_SECRETS.parent.mkdir(parents=True, exist_ok=True)
             with ISSUED_SECRETS.open("a") as issued:
                 issued.write("".join(f"{token}\n" for token in TOKENS.values()))
+        except OSError as error:
+            print(
+                f"world: cannot list the issued tokens in {ISSUED_SECRETS}: {error}",
+                file=sys.stderr,
+            )
 
 
 def seat_of(authorization: str) -> str | None:
