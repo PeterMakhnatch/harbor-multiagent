@@ -8,7 +8,11 @@ from ..rolepack import calendar_source, protocol
 SCHEMA = "seatlab.calendar-question-sources/v1"
 _WORLDS = (0, 4, 8)
 _IDS = {
-    (world, direction, repetition): f"cal-rx-w{world:02d}-d{direction}-r{repetition}-blind"
+    (
+        world,
+        direction,
+        repetition,
+    ): f"cal-rx-w{world:02d}-d{direction}-r{repetition}-blind"
     for world in _WORLDS
     for direction in range(2)
     for repetition in range(2)
@@ -181,7 +185,9 @@ def build(calendar_checkout: Path, mixed_pack: protocol.Document) -> protocol.Do
         sender = native[world][direction]
         optimum = _optimum(receiver, sender)
         if original["rubric"]["items"][0]["optimal"] != [optimum]:
-            raise ValueError("native calendar joint start differs from the RolePack grade")
+            raise ValueError(
+                "native calendar joint start differs from the RolePack grade"
+            )
         rows.append(
             {
                 "id": record_id,

@@ -70,7 +70,9 @@ def test_stages_do_not_replace_a_missing_or_failed_first_draw(sources: _Doc) -> 
         ],
     )
     assert stages.final(sources, first_attempt, failed) is None
-    assert stages.final(sources, first_attempt, evidence.from_samples(answers, [])) is None
+    assert (
+        stages.final(sources, first_attempt, evidence.from_samples(answers, [])) is None
+    )
     with pytest.raises(ValueError, match="no calendar answer pack"):
         stages.final(sources, later, failed)
 
@@ -97,7 +99,9 @@ def _assert_final_pair(
 
 
 def _assert_final_plan(finals: _Doc) -> None:
-    eligible = [row for row in protocol.plan(finals) if row["prompt_sha256"] is not None]
+    eligible = [
+        row for row in protocol.plan(finals) if row["prompt_sha256"] is not None
+    ]
     assert {(row["record_id"], row["draw"], row["arm"]) for row in eligible} == {
         (record["id"], draw, "original")
         for draw in (0, 1)
@@ -136,7 +140,9 @@ def test_stages_keep_real_ordered_values_and_private_views(sources: _Doc) -> Non
 
     answers = stages.answer(sources, question_report)
     assert answers is not None
-    assert [record["id"] for record in answers["records"]] == [row["id"] for row in rows]
+    assert [record["id"] for record in answers["records"]] == [
+        row["id"] for row in rows
+    ]
     for row, answer_record, slots in zip(
         rows, answers["records"], [(duplicate, duplicate), ordered, (0, 1)], strict=True
     ):
@@ -170,7 +176,9 @@ def test_stages_keep_real_ordered_values_and_private_views(sources: _Doc) -> Non
         second["id"] + "--visible",
     ]
     f0, f1, f2, f3 = finals["records"]
-    _assert_final_pair(rows[0], (duplicate, duplicate), f0, f1, "first=yes; second=yes.")
+    _assert_final_pair(
+        rows[0], (duplicate, duplicate), f0, f1, "first=yes; second=yes."
+    )
     _assert_final_pair(rows[1], ordered, f3, f2, "first=no; second=yes.")
     _assert_final_plan(finals)
 

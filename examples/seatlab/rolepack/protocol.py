@@ -284,7 +284,11 @@ def prompt(record: Document, arm: str) -> str:
 def plan(pack: Document) -> list[Document]:
     document, peer_hashes = _checked_pack(pack)
     single = document["schema"] == SINGLE_SCHEMA
-    records = document["records"] if single else sorted(document["records"], key=lambda r: (r["task"], r["id"]))
+    records = (
+        document["records"]
+        if single
+        else sorted(document["records"], key=lambda r: (r["task"], r["id"]))
+    )
     arms = ("original",) if single else _ARMS
     rows: list[Document] = []
     for draw in (0, 1):

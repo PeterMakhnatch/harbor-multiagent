@@ -311,7 +311,9 @@ def summarize(
                 fmean(observed) if observed else None
             ),
             "equal_world_visible_minus_withheld_bounds": [
-                fmean(r["visible_minus_withheld_bounds"][side] for r in by_world.values())
+                fmean(
+                    r["visible_minus_withheld_bounds"][side] for r in by_world.values()
+                )
                 for side in (0, 1)
             ],
         },

@@ -2,6 +2,10 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+### First-stage coverage
+
+The [independent questioner receipts](results/calendar-question-ask-service.json) matched all 12 real Astra requests. All [12 question pairs](results/calendar-question-ask-live.json) were valid first replies. The responder receives only these ordered slot IDs and its own calendar; it does not receive the scheduler's candidate list. The 12 repeated requests in the underlying role schema were not registered for this stage and are not counted as failures.
+
 ## Can I move real teammate decisions from Inspect into a new Harbor role study?
 
 Yes, for a one-turn role with a finite action rubric. The [source index](results/rolepack-inspect-index.json) selects the first registered observation in each of 9 task/world groups, without using its score. The importer recovered each role prompt and the **first actual Sol reply** from a private native Inspect archive. The [public pack](results/rolepack-from-inspect.json) binds those replies to their archive and reply hashes. The input bytes and grading rules match the corresponding original Harbor observations.

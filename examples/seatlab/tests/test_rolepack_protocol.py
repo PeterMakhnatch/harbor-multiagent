@@ -78,6 +78,24 @@ def test_rounds_are_stable_and_missing_proposals_remove_both_arms() -> None:
         protocol.prompt(c, "peer")
 
 
+def test_original_only_stage_preserves_order_without_inventing_a_peer() -> None:
+    late, early = _record("z"), _record("a")
+    stage = {"schema": protocol.SINGLE_SCHEMA, "records": [late, early]}
+    with pytest.raises(ValueError, match="cannot register a peer"):
+        protocol.plan(stage)
+    late["peer"] = early["peer"] = None
+    assert [
+        (row["sample_id"], row["prompt_sha256"]) for row in protocol.plan(stage)
+    ] == [
+        (f"{record['id']}:d{draw}:original", record["prompt_sha256"])
+        for draw in (0, 1)
+        for record in (late, early)
+    ]
+    assert all(
+        row["prompt_sha256"] is None for row in protocol.plan(_pack(late, early))
+    )
+
+
 def test_prompt_keeps_original_bytes_and_does_not_expose_changes_to_peer_score() -> (
     None
 ):

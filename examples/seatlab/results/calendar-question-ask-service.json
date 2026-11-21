@@ -1,0 +1,1 @@
+{"pack_sha256":"51ce4e9feeae9a5a4b43a62d7213863608e2cdf44aebca7e61d22de516660816","requested_model":"openai-codex/gpt-6.2-astra","roles":{"dispatch":{"cache_tokens":0,"incomplete_without_reply":0,"input_tokens":8349,"matched":12,"output_tokens":683}},"schema":"seatlab.rolepack-service/v1","verified_served_model":"openai-codex/gpt-6.2-astra"}

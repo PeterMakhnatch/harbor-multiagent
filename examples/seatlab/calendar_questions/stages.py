@@ -113,7 +113,11 @@ def _answer_pack(records: list[_Doc], requested: _Values) -> _Doc | None:
                 source["sender_view"] + _request(slots) + _ANSWER,
                 "availability",
                 [
-                    _item(key, _STATUSES, "yes" if slot in source["sender_starts"] else "no")
+                    _item(
+                        key,
+                        _STATUSES,
+                        "yes" if slot in source["sender_starts"] else "no",
+                    )
                     for key, slot in zip(_KEYS, slots, strict=True)
                 ],
                 scalar=False,
@@ -174,5 +178,7 @@ def final(
             scalar=True,
             suffix="--withheld",
         )
-        finals.extend((visible, withheld) if _visible_first(record_id) else (withheld, visible))
+        finals.extend(
+            (visible, withheld) if _visible_first(record_id) else (withheld, visible)
+        )
     return _pack(finals) if finals else None

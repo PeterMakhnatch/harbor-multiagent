@@ -27,7 +27,12 @@ def _sources(a: argparse.Namespace) -> _Doc:
     if (a.sources is None) != (a.sha256 is None):
         raise ValueError("a custom source needs both --sources and --sha256")
     path = a.sources or _RESULTS / _FILES["source"]
-    digest = a.sha256 or (_RESULTS / "calendar-question-sources.sha256").read_text(encoding="ascii").strip()
+    digest = (
+        a.sha256
+        or (_RESULTS / "calendar-question-sources.sha256")
+        .read_text(encoding="ascii")
+        .strip()
+    )
     raw = _read_bytes(path, 1024 * 1024)
     if sha256(raw).hexdigest() != digest:
         raise ValueError("the calendar source digest differs")
@@ -40,7 +45,9 @@ def _stage(doc: _Doc | None) -> None:
     _emit(doc)
 
 
-def _native(root: Path, src: _Doc, question: _Doc, answer: _Doc | None, decision: _Doc | None) -> _Doc:
+def _native(
+    root: Path, src: _Doc, question: _Doc, answer: _Doc | None, decision: _Doc | None
+) -> _Doc:
     from ..rolepack import calendar_source, evidence
     from . import source, stages
 
@@ -59,7 +66,9 @@ def _native(root: Path, src: _Doc, question: _Doc, answer: _Doc | None, decision
     actions: list[tuple[str, int, bool]] = []
     if decision is not None:
         if answer is None:
-            raise ValueError("cannot grade final decisions without their parent replies")
+            raise ValueError(
+                "cannot grade final decisions without their parent replies"
+            )
         pack = stages.final(src, question, answer)
         if pack is None:
             raise ValueError("final decisions have no eligible registered parents")
@@ -68,11 +77,27 @@ def _native(root: Path, src: _Doc, question: _Doc, answer: _Doc | None, decision
                 record_id, arm = row["record_id"].rsplit("--", 1)
                 if arm not in ("visible", "withheld") or row["arm"] != "original":
                     raise ValueError("invalid final condition")
-                actions.append((record_id, row["outcome"]["values"][0], row["outcome"]["correct"][0]))
+                actions.append(
+                    (
+                        record_id,
+                        row["outcome"]["values"][0],
+                        row["outcome"]["correct"][0],
+                    )
+                )
     result = calendar_source._worker(root, [(r, slot) for r, slot, _ in actions])
     if result["scores"] != [correct for _, _, correct in actions]:
         raise ValueError("a final decision disagrees with the original calendar scorer")
-    return {"schema":"seatlab.calendar-question-stock/v1", "measurement":"original_calendar_scorer_not_a_new_native_reward", "original_sources":len(src["records"]), "registered_worlds":len({r["world"] for r in src["records"]}), "actions_checked":len(actions), "optimal_actions":sum(result["scores"]), "final_report_sha256":protocol.digest(decision) if decision is not None else None}
+    return {
+        "schema": "seatlab.calendar-question-stock/v1",
+        "measurement": "original_calendar_scorer_not_a_new_native_reward",
+        "original_sources": len(src["records"]),
+        "registered_worlds": len({r["world"] for r in src["records"]}),
+        "actions_checked": len(actions),
+        "optimal_actions": sum(result["scores"]),
+        "final_report_sha256": protocol.digest(decision)
+        if decision is not None
+        else None,
+    }
 
 
 def _run(a: argparse.Namespace) -> None:
@@ -118,21 +143,35 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--sources", type=Path)
         p.add_argument("--sha256", help="Exact source bytes for --sources.")
         if name in ("answer", "decide", "summary", "stock"):
-            p.add_argument("--questions", type=Path, required=name in ("answer", "decide"), default=_RESULTS / _FILES["questions"])
+            p.add_argument(
+                "--questions",
+                type=Path,
+                required=name in ("answer", "decide"),
+                default=_RESULTS / _FILES["questions"],
+            )
         if name in ("decide", "summary", "stock"):
             g = p.add_mutually_exclusive_group(required=name == "decide")
             g.add_argument("--answers", type=Path, default=_RESULTS / _FILES["answers"])
             if name != "decide":
-                g.add_argument("--no-answers", action="store_const", dest="answers", const=None)
+                g.add_argument(
+                    "--no-answers", action="store_const", dest="answers", const=None
+                )
         if name in ("summary", "stock"):
             g = p.add_mutually_exclusive_group()
-            g.add_argument("--decisions", type=Path, default=_RESULTS / _FILES["decisions"])
-            g.add_argument("--no-decisions", action="store_const", dest="decisions", const=None)
+            g.add_argument(
+                "--decisions", type=Path, default=_RESULTS / _FILES["decisions"]
+            )
+            g.add_argument(
+                "--no-decisions", action="store_const", dest="decisions", const=None
+            )
     try:
         _run(cli.parse_args(argv))
         return 0
     except (OSError, ValueError, RuntimeError, KeyError, TypeError, RecursionError):
-        print("Invalid source, prior report, or inaccessible original calendar. See --help.", file=sys.stderr)
+        print(
+            "Invalid source, prior report, or inaccessible original calendar. See --help.",
+            file=sys.stderr,
+        )
         return 1
 
 

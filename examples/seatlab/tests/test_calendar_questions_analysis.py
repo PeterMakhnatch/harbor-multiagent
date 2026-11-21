@@ -15,7 +15,10 @@ def _view(free_monday: range) -> str:
     monday = ", ".join(f"{hour:02d}:00" for hour in hours if hour not in free_monday)
     closed = ", ".join(f"{hour:02d}:00" for hour in hours)
     group = "\n".join(
-        [f"Mon: {monday}", *(f"{day}: {closed}" for day in ("Tue", "Wed", "Thu", "Fri"))]
+        [
+            f"Mon: {monday}",
+            *(f"{day}: {closed}" for day in ("Tue", "Wed", "Thu", "Fri")),
+        ]
     )
     empty = "\n".join(f"{day}: -" for day in ("Mon", "Tue", "Wed", "Thu", "Fri"))
     return (
@@ -210,7 +213,9 @@ def test_summary_rejects_forged_grades_and_out_of_lineage_reports(
     for stage in range(3):
         tampered = list(deepcopy(reports))
         outcome = next(
-            row["outcome"] for row in tampered[stage]["rows"] if row["state"] == "complete"
+            row["outcome"]
+            for row in tampered[stage]["rows"]
+            if row["state"] == "complete"
         )
         outcome["correct"][0] = not outcome["correct"][0]
         with pytest.raises(ValueError, match="grade mismatch"):
