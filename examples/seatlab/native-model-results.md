@@ -2,6 +2,10 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Does it matter which model handles inventory?
+
+The [registered mixed-roster study](replication.md) swaps a direct DeepSeek seat and a Claude Max subscription seat in native Harbor. The first team used Claude for inventory and DeepSeek for dispatch. Both seats completed. The native score was 1.0 on 6 shipments. The direct call matched the host ledger at **$0.000098700 USD**, with no open hold. One team does not establish a model or role effect.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
