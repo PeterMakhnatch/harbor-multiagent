@@ -70,7 +70,9 @@ def _stock(
     teams._check_path(root, 0o700, directory=True)
     teams._check_path(root / "cells", 0o700, directory=True)
     saved = panel.files._object(teams._read_sealed(root / "register.json"))["plan"]
-    plan = panel._plan(spec, cells, "direct", None, source_revision=args.source_revision)
+    plan = panel._plan(
+        spec, cells, "direct", None, source_revision=args.source_revision
+    )
     if teams._bytes(saved) != teams._bytes(plan):
         raise ValueError("The study does not match its registered stock sources")
     published = _read_json(args.report)
@@ -141,7 +143,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         cell = cells[index]
         if mode == "run":
             if index % 2 and not _occupied(root, cells[index - 1], ledger):
-                raise ValueError("The first registered arm must start before the second")
+                raise ValueError(
+                    "The first registered arm must start before the second"
+                )
             row = panel._run(spec, root, cell, plan, ledger, args.harbor)
             ledger = panel._ledger(spec, Path(os.environ["SEATLAB_SPEND_DIR"]), cells)
         else:

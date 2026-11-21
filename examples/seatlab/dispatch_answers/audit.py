@@ -50,8 +50,12 @@ def _seat(
     )
     stages = [stage for stage, owner in protocol.STAGES if owner == role]
     raw = metadata["turns"]
-    if not isinstance(raw, list) or len(raw) != len(stages) or any(
-        not isinstance(turn, dict) or turn.keys() != _TURN_FIELDS for turn in raw
+    if (
+        not isinstance(raw, list)
+        or len(raw) != len(stages)
+        or any(
+            not isinstance(turn, dict) or turn.keys() != _TURN_FIELDS for turn in raw
+        )
     ):
         raise ValueError("Expected two complete model turns from each native seat")
     turns = {
@@ -89,7 +93,9 @@ def _reconcile(records: dict[str, Record], world: Record, cell: Record) -> Recor
         native_pairs._decision_hash("inventory", submission["rows"])
         != inventory["decision_sha256"]
     ):
-        raise ValueError("The inventory model response differs from stock world reports")
+        raise ValueError(
+            "The inventory model response differs from stock world reports"
+        )
 
     text, turn = dis_turns["question"]
     attention._check_prompt(turn, protocol.question_prompt(dis_cases, seed))
@@ -108,10 +114,9 @@ def _reconcile(records: dict[str, Record], world: Record, cell: Record) -> Recor
     answer_hash = view_hash((question, answers))
     visible = cell["arm"] == "visible"
     delivered = answers if visible else None
-    if (
-        inventory["answer_sha256"] != answer_hash
-        or dispatch["delivered_answer_sha256"] != (answer_hash if visible else None)
-    ):
+    if inventory["answer_sha256"] != answer_hash or dispatch[
+        "delivered_answer_sha256"
+    ] != (answer_hash if visible else None):
         raise ValueError("Inventory answers or dispatch delivery disagree")
 
     text, turn = dis_turns["decide"]
@@ -132,7 +137,10 @@ def _reconcile(records: dict[str, Record], world: Record, cell: Record) -> Recor
         "delivered_answer_sha256": answer_receipt if visible else None,
         "final_sha256": _receipt(nonce, "final", choices["rows"]),
         "turns": [
-            {key: turns[stage][1][key] for key in ("stage", "run", "role", "status", "usage")}
+            {
+                key: turns[stage][1][key]
+                for key in ("stage", "run", "role", "status", "usage")
+            }
             for stage, _ in protocol.STAGES
         ],
     }
@@ -198,7 +206,9 @@ def summarize(cells: list[Record], rows: list[Record]) -> Record:
         seed, arm = cell["seed"], cell["arm"]
         trial, fingerprint = result["trial_id"], result["fingerprint"]
         if trial in trials or worlds.setdefault(seed, fingerprint) != fingerprint:
-            raise ValueError("Expected fresh native trials and a matched world per seed")
+            raise ValueError(
+                "Expected fresh native trials and a matched world per seed"
+            )
         trials.add(trial)
         scores[seed, arm] = result["native_score"]
     if len(set(worlds.values())) != len(worlds):
@@ -220,6 +230,11 @@ def summarize(cells: list[Record], rows: list[Record]) -> Record:
         "observed_cells": len(trials),
         "registered_pairs": len(pairs),
         "matched_pairs": len(deltas),
-        "matched_mean_visible_minus_withheld": fsum(deltas) / len(deltas) if deltas else None,
-        "registered_mean_bounds": {"lower": lower / len(pairs), "upper": upper / len(pairs)},
+        "matched_mean_visible_minus_withheld": fsum(deltas) / len(deltas)
+        if deltas
+        else None,
+        "registered_mean_bounds": {
+            "lower": lower / len(pairs),
+            "upper": upper / len(pairs),
+        },
     }
