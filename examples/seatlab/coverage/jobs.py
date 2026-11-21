@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass, field
 from hashlib import sha256
+from typing import Any
 
 from ..capsule import _reject_constant, _unique_object
 from ..visibility.clarify_run import StudyError, _is_digest
@@ -27,10 +28,13 @@ class Request:
     options: tuple[str, ...]
 
 
-def _decode(text: str) -> object:
-    return json.loads(
+def _decode(text: str) -> dict[str, Any]:
+    value = json.loads(
         text, object_pairs_hook=_unique_object, parse_constant=_reject_constant
     )
+    if not isinstance(value, dict):
+        raise TypeError("expected a JSON object")
+    return value
 
 
 def _verified_data(entry: Entry, prompt: str) -> str:
@@ -47,10 +51,10 @@ def _verified_data(entry: Entry, prompt: str) -> str:
         ):
             raise ValueError("invalid prompt seal")
         data = _decode(payload)
-    except (ValueError, RecursionError):
+    except (TypeError, ValueError, RecursionError):
         raise StudyError("invalid_evidence") from None
 
-    if not isinstance(data, dict) or data.keys() != {
+    if data.keys() != {
         "brief",
         "note",
         "questions",
@@ -169,9 +173,9 @@ def answer(request: Request, text: str) -> dict[str, str] | None:
         if len(text.encode("utf-8")) > _MAX_REPLY_BYTES:
             return None
         value = _decode(text)
-    except (ValueError, RecursionError):
+    except (TypeError, ValueError, RecursionError):
         return None
-    if not isinstance(value, dict) or value.keys() != {"choices"}:
+    if value.keys() != {"choices"}:
         return None
     choices = value["choices"]
     if not isinstance(choices, dict) or choices.keys() != set(request.ids):

@@ -3,7 +3,7 @@ from collections import Counter
 from hashlib import sha256
 from runpy import run_path
 from statistics import fmean
-from typing import Any, TypeGuard
+from typing import Any, TypeGuard, cast
 
 from ..handoff import dispatch, packet
 from ..handoff.packet import Block
@@ -54,6 +54,10 @@ def _digest(value: object) -> TypeGuard[str]:
     return isinstance(value, str) and _HASH.fullmatch(value) is not None
 
 
+def _fields(value: object, fields: set[str]) -> TypeGuard[_Row]:
+    return isinstance(value, dict) and value.keys() == fields
+
+
 def _check_slots(
     blocks: tuple[Block, ...], source: object, slots: object
 ) -> list[_Row]:
@@ -68,8 +72,7 @@ def _check_slots(
         raise ValueError("invalid coverage source register")
     for block, slot in zip(blocks, slots, strict=True):
         if (
-            not isinstance(slot, dict)
-            or slot.keys() != _SLOT_FIELDS
+            not _fields(slot, _SLOT_FIELDS)
             or slot["block"] != block.key
             or (slot["case"], slot["cluster"]) != (block.case.id, block.case.cluster)
             or type(slot["rep"]) is not int
@@ -93,13 +96,13 @@ def _check_slots(
     ).hexdigest()
     if source != expected:
         raise ValueError("coverage source fingerprint mismatch")
-    return slots
+    return cast(list[_Row], slots)
 
 
 def _check_usage(usage: object) -> None:
     if usage is None:
         return
-    if not isinstance(usage, dict) or usage.keys() != _USAGE_FIELDS:
+    if not _fields(usage, _USAGE_FIELDS):
         raise ValueError("invalid coverage usage")
     _, parsed = _validate_answer(Answer("", **usage))
     if parsed is None:
@@ -150,7 +153,7 @@ def _evidence(
     if not isinstance(rows, list) or len(rows) != len(expected):
         raise ValueError("coverage physical row count mismatch")
     for row in rows:
-        if not isinstance(row, dict) or row.keys() != _ROW_FIELDS:
+        if not _fields(row, _ROW_FIELDS):
             raise ValueError("invalid coverage row fields")
         run = row["run"]
         binding = expected.pop(run, None) if isinstance(run, str) else None

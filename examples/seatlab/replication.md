@@ -220,6 +220,39 @@ Use Bash for this example. Set `decider` to your batch and checklist program. Se
 
 Use the same explicitly named subscription model for both new roles through a trusted external command. Give it no tool, earlier conversation, API key, packet, or private journal. Reject a reply when the served model differs. Retain a missing call; do not retry or switch providers within the cohort. Record prompt and response commitments and service-reported tokens separately from the original Harbor trial. Primary: how many of 12 writer turns yield a valid note, then how many named and anonymous successors deliver a complete decision. Check accepted choices against the stock scorer. This small replication tests portability and contract completion, not relative model quality.
 
+The optional `visibility/omp_seat.py` command uses the signed-in OMP subscription gateway. Each process sends one new text request. It rejects tools, truncated replies, and a different served model. It needs no API key. The executable is trusted local code, not a sandbox. Set `model` to a concrete `openai-codex/...` model included in your account. Do not enable a paid fallback.
+
+```sh
+umask 077
+mkdir -m 700 "$private/writer" "$private/successor" "$private/subscription-study"
+adapter="$PWD/examples/seatlab/visibility/omp_seat.py"
+jq -n --arg python "$(command -v python)" --arg adapter "$adapter" \
+  --arg omp "$(command -v omp)" --arg home "$HOME" --arg model "$model" --arg dir "$private" \
+  'def seat($r): {argv:[$python,"-I",$adapter,"--omp",$omp,"--home",$home,
+    "--model",$model,"--receipts",($dir+"/"+$r)],env:[]};
+    {reviewer:seat("writer"),decider:seat("successor")}' > "$private/seats.json"
+python -m examples.seatlab.handoff commands --packet "$packet" --sha256 "$digest" \
+  --study "$private/subscription-study" --config "$private/seats.json" --start 0 --stop 1
+```
+
+Use absolute physical paths. Each receipt contains the request and reply hashes, served model, and reported token counts. It does not contain the text or credentials. The study journal is private and **does** contain the actual replies. Do not publish the journal. The run shown above starts one real team, not the full registered cohort. It does not report a cash price for a subscription.
+
+After `handoff report`, verify calls without reading any reply text:
+
+```sh
+python -m examples.seatlab.handoff.external_audit "$private/report.json" \
+  --writer-receipts "$private/writer" --successor-receipts "$private/successor" \
+  --model "$model" --indices 0
+```
+
+Give the exact block indices for your run. The auditor rejects missing or surplus success receipts, a different served model, and attempted blocks outside that selection. It counts repeated identical requests and replies as separate calls only when there are separate receipts.
+
+#### Does the reader use named receipts when the first record is not revised?
+
+**Registered after the 12-block portability test, before collecting this extension.** Both policies opened the first record in every portability block. Its 6 revisions all left the correct bay unchanged. Enroll all 30 remaining blocks in the same public packet, not just blocks with favorable earlier outcomes. Every revision in this set affects a record outside the first position. Keep the 12 previous blocks out of the new cohort. Use a fresh private journal, the same explicitly named subscription model, and the same role prompts. Do not retry. Stop if the subscription cannot serve that model.
+
+Primary: difference between the 2 policies in how often they open the revised record, paired within a valid writer note. Give each of the 3 original worlds equal weight. Report coverage and bounds for missing selections. Secondary: how often the resulting decision gets that record right when the revision changes the best bay. Identify these cases from the frozen scoring packet, not from either agent's choice. Report each policy's first-record selections and the number of shared final draws. The anonymous reader does not have the record identity. A first-record choice alone is not proof that it ignored available evidence.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
