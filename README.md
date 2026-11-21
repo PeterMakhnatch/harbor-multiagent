@@ -38,6 +38,8 @@ python -S -m examples.seatlab.turn_fork summary
 
 Use the [published team checkpoint](examples/seatlab/replication.md#start-from-the-published-team-checkpoint) to run your own two agents on the same saved messages. You do not need to rerun the original Harbor teams. This interface scores new decisions against the original world. It does not create a new native reward.
 
+**Bring your own receiver.** Run `python -S -m examples.seatlab.decision_cross summary` to compare 2 real programs on identical teammate messages. The [receiver quickstart](examples/seatlab/replication.md#compare-your-receiver-with-the-recorded-receiver) shows how to run a different program or export prompt-only samples for Inspect AI. No model or Docker is needed to verify the published results.
+
 ## Install
 
 ```bash

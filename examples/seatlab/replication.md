@@ -523,3 +523,36 @@ python -S -m "$module" verify "$private/report.json"
 `$config` is the absolute path to your command configuration. One source has 3 consecutive cells. Give each worker a separate range of complete sources, such as `0:18` and `18:36`. The stop index is exclusive. At most 2 model turns run per cell. If work stops, `pending` lists only untouched cells. Preserve failed first attempts. The public report identifies separately the measured difference, disagreement with the same sender input, and bounds from missing first attempts.
 
 **To export your own source:** `export --native-study DIR --native-report REPORT` reads an existing native briefing study with its original configurations. It emits only the accepted synthetic fields. Pin the exact bytes with SHA-256. Supply the pair to readers with `--packet PATH --sha256 DIGEST`. The direct transport accepts only the registered public packet; custom packets can use command programs. Do not publish raw private native folders.
+
+
+## Compare your receiver with the recorded receiver
+
+Use this when a Harbor team loses points and you need to choose between changing its sender and changing its receiver. Start with `python -S -m examples.seatlab.decision_cross summary` from this fork branch. It reads the two published first-attempt cohorts. It does not call a provider.
+
+To try a new receiver, supply a trusted local executable. Give its absolute name in `dispatch.json`: `{"dispatch":{"argv":["/absolute/path/to/your-seat"],"env":[]}}`. The program reads one JSON line with `schema` and `prompt`. It writes one JSON line with `text`, the verbatim model answer. The runner does not pass stock, the source agent name, or an expected answer to that process. The command is not an operating system sandbox. Use only trusted programs.
+
+```sh
+# Use Python 3.12 or later. Keep first attempts in a new private directory.
+study=$(mktemp -d)/receiver
+python -m examples.seatlab.decision_cross seal --study "$study" --transport commands --config "$(pwd -P)/dispatch.json"
+python -m examples.seatlab.decision_cross run --study "$study" --start 0 --stop 1
+python -m examples.seatlab.decision_cross report --study "$study" > candidate.json
+python -S -m examples.seatlab.decision_cross compare examples/seatlab/results/decision-cross-direct-live.json candidate.json
+```
+
+The comparison lists missing decisions and gives bounds. It does not assume unattempted rows failed. Use `pending --study "$study"` to find untouched indices. Give different indices to different workers. Never rerun an occupied index. A full cohort has 56 calls, not 96. Sender comparisons reuse the original 48 selections; receiver agreement counts each distinct input only once. External providers may charge for calls; inspecting the register does not.
+
+If you use Inspect AI, run `python -S -m examples.seatlab.decision_cross inspect-samples > shipments.jsonl`. Load that file with `inspect_ai.dataset.json_dataset`. It contains 28 user prompts and no stock targets. Use 2 epochs for independent first draws. To score an external reply, send its exact UTF-8 text to `python -S -m examples.seatlab.decision_cross grade-external --obs-id "$sample_id"`. Do not add a newline that was absent in the model reply: the receipt hashes the original bytes. This grades the reply. It does not prove service identity or a bill.
+
+## Which role accounts for a difference between two agents?
+
+**Register before the first crossed receiver call.** Use the 12 native sources from the preceding checkpoint. Use only `aligned` and `repeat` from each of its 2 sender programs. Include all 48 registered selections. An incomplete preceding continuation contributes no selection because its public journal does not authenticate one. Do not choose sources by reward. Do not rerun any sender.
+
+Freeze the exact final dispatch prompt for each observed selection. Within each source, share a receiver draw only if the full prompt bytes match. Never share across source teams. Run 2 fresh receiver draws for each distinct observation with direct DeepSeek, and 2 with the keyless Sol program. The receiver sees no team label, prior score, or source selection history. Order the observations by a fixed hash within each draw. At most 96 first attempts per receiver; preserve invalid and missing replies without retries.
+
+Estimate the difference between the receiver programs with the sender fixed, and between the observed sender selections with the receiver fixed. Average over 6 worlds with equal weight, 2 native sources per world, 2 observed selections per sender program, and 2 new draws per receiver. Pair observations before estimating a contrast. Report matched coverage, finite bounds, within-receiver disagreement on the exact same prompt, and calls saved by sharing. A difference between rows is conditional on these sources and prompts. It is not a new native Harbor reward or a ranking of provider populations. The source cohort labels identify the observed selections, not who generated a new answer.
+
+
+**Secondary diagnosis, registered before the crossed receiver calls:** reconstruct the best bay under the latest report the dispatcher actually sees. Compare it with the true best bay. Separate agreement with visible evidence from agreement with hidden stock. A dispatcher can decide correctly from its messages and still receive a lower stock score. A visible disagreement is not proof that the true answer is unknowable. Report unique observations separately from their weighted reuse; do not call repeated draws new worlds.
+
+The [frozen observation register](results/decision-cross-board.json) binds all 48 real sender selections to 28 distinct dispatcher prompts within their source teams. The register SHA-256 is `60b976b6666acde139605d14a855b9d21b66da8d94343d05a029a585b49d4c7b`. Each receiver gets 56 independent first calls instead of 96. Reused observations count once in the repeatability analysis and retain their multiplicity in sender comparisons.

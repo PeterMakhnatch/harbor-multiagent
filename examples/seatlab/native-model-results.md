@@ -2,6 +2,25 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can two receivers act differently on exactly the same teammate reports?
+
+The [protocol](replication.md#which-role-accounts-for-a-difference-between-two-agent-teams) fixes the two real sender cohorts and 28 distinct receiver observations. We selected all 48 original sender choices, not just those that performed well. Each independent program gets 2 first attempts per exact prompt. The [observation register](results/decision-cross-board.json) commits to the prompt and the accepted sender reply, not a reconstructed sender policy. The first direct DeepSeek draw cost **$0.000075600**. Its reply settled in the direct ledger. An independent service receipt matched the first keyless Sol draw. Neither pilot was repeated.
+
+**Direct cohort complete.** All 56 registered receiver calls settled. The [direct meter](results/decision-cross-direct-meter.json) matches all 56 calls: **$0.003292800** including the pilot. The other 55 calls cost $0.003217200. The [independent stock check](results/decision-cross-direct-stock.json) matched 336 actual decisions against the original native worlds.
+
+**The receiver mattered more than the sender on this panel.** Each cell below holds the same 6 original worlds and 2 source teams per world. Each cell has 288 weighted shipment decisions. A recorded receiver reply can count in more than one cell.
+
+| Frozen sender selections | Direct DeepSeek receiver | Subscription Sol receiver | Sol minus DeepSeek |
+|---|---:|---:|---:|
+| Direct DeepSeek | 237/288 | 262/288 | +8.68 pp |
+| Subscription Sol | 241/288 | 258/288 | +5.90 pp |
+
+Changing only the frozen sender improved the direct receiver by 1.39 pp but reduced the subscription receiver by 1.39 pp. The [full effects](results/decision-cross-effects.json) show all 6 world contrasts. With identical incoming bytes, Sol repeated all 6 choices on **28/28** prompt pairs. DeepSeek repeated the whole answer on **23/28**; 162/168 individual choices matched.
+
+**Where the points went:** On 336 decisions from distinct prompt-draws, Sol chose the best bay under the latest *visible* report 336 times. It lost 32 stock points; on all 32, the visible and true best bays differed. DeepSeek followed the visible best 306/336 times. It missed the true best 25 times when the visible best was also the true best. See the [error partition](results/decision-cross-diagnosis.json). This does not establish that the true answers were unknowable. It does identify two different engineering changes to test: send one newer report, or change how the receiver uses good reports.
+
+The [subscription stock check](results/decision-cross-subscription-stock.json) matched all 336 actions. The [external service receipts](results/decision-cross-subscription-receipts.json) matched 56 calls to `openai-codex/gpt-6.2-sol`. Both first attempts finished for all 28 inputs on both transports. No new native Harbor rewards were generated. The original first-attempt runner is at `31b4e31e2a1bc333920f590e67e047978d836248`; the [receiver quickstart](replication.md#compare-your-receiver-with-the-recorded-receiver) runs on this branch.
+
 ## What changes when an agent sees the same preferences on different records?
 
 All 12 direct source teams passed the original native audit. The [portable packet](results/turn-fork-packet.json) fixes the 2 real upstream messages for each team. Under the aligned policy it reproduces all 24 original downstream prompt hashes and the scores for all 72 original actions. These new runs start at the sender's selection, not in a new Harbor world.
