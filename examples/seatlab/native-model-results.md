@@ -10,6 +10,14 @@ Both [briefing](replication.md#can-a-six-letter-brief-help-another-agent-priorit
 
 The [native attention experiment](replication.md#can-a-change-notice-help-a-live-team-spend-two-reads) starts an inventory agent and a dispatch agent in each native trial. Both arms may open 2 of 6 current reports. The `named` arm also tells the dispatcher which of the sender's reports changed. The first named team earned 0.5 native reward. Its 2 reads covered changed reports. One changed the optimal bay. All 3 direct calls settled at **$0.000315300 USD**. This first team does not measure the treatment difference.
 
+**Direct model: naming the revisions improved the native reward by 15.28 percentage points.** All 24 teams completed. The named dispatchers opened changed reports on 24 of 24 reads. Count-only dispatchers did so on 12 of 24. The named arm opened 17 reports that changed the best bay, versus 9. It made 49/72 optimal decisions, versus 38/72. Feasibility differed by only one decision: 54/72 versus 53/72. Neither group had a sender transcription error. Three worlds improved, 2 tied, and 1 declined.
+
+The [first-attempt report](results/attention-direct-live.json) contains all 12 matched pairs. [Stock Eval Lab](results/attention-direct-stock.json) agreed on every reward and all 144 native decisions. [All 72 direct turns](results/attention-direct-cost.json) matched the host ledger at **$0.006936288 USD**, including the first team. No hold remains. These 6 synthetic worlds do not establish a benefit for arbitrary tasks.
+
+**Subscription replication: the same change improved native reward by 12.50 percentage points.** The named dispatchers opened 24/24 changed reports, versus 8/24. They made 63/72 optimal choices, versus 54/72. They made 66/72 feasible choices, versus 62/72. Four worlds improved and 2 tied. Both inventory groups copied every report correctly. This is the same set of 6 worlds, not 6 new independent observations.
+
+The [subscription panel](results/attention-subscription-live.json) contains 24 fresh native teams, not rescores of direct-model teams. [Stock Eval Lab](results/attention-subscription-stock.json) agreed on all 144 actions and 24 rewards. The native results reported no model usage for command seats. Separate [service receipts](results/attention-subscription-receipts.json) matched 24 inventory and 48 dispatch calls to `openai-codex/gpt-6.2-sol`. No direct API call was made for this panel. We do not assign the subscription a cash price.
+
 ## Does a revised record help a replacement agent find the right context?
 
 The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.
