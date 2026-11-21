@@ -72,7 +72,7 @@ Use `--workflow delegate` on the same runnable commands. The 2 trusted programs 
 ```sh
 python -m examples.seatlab.visibility.route_cli plan --workflow delegate
 umask 077
-private=$(mktemp -d)
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
 python -m examples.seatlab.visibility.route_cli commands --workflow delegate \
   --config seats.json --study "$private" --start 0 --stop 1
 python -m examples.seatlab.visibility.route_cli report --workflow delegate --study "$private"

@@ -20,6 +20,24 @@ The 3 archived source trials contain 18 source-rounds but only **6 distinct true
 
 Use the [two-program CLI](replication.md#run-your-own-reviewer-and-decision-maker) to test other reviewer and decision programs against the same fixed packet.
 
+## Does identifying a reviewer's track record improve delegation?
+
+**Yes, in this packet.** The coordinator could ask only one of two reviewers. Both conditions showed the same two historical accuracy counts. Only the named condition said which reviewer earned each count. Neither condition showed the current answer. A separate live reviewer returned a recommendation and its numbers.
+
+| Measure | Named history | Anonymous history |
+| --- | ---: | ---: |
+| Selected the historically more accurate reviewer when the counts differed | 57/64 | 28/64 |
+| Selected a reviewer whose current numbers were all correct | 137/144 | 115/144 |
+| Made the correct final decision | 129/143 | 107/143 |
+
+The [registered comparison](replication.md#can-a-coordinator-use-team-memory-to-choose-one-reviewer) gives each of the 3 source policies equal weight. Naming the reviewer improved accuracy by **15.40 percentage points**. It improved 23 matched decisions, worsened 1, and tied 119. One interrupted block has no final decision in either condition. Across all 144 blocks, the missing-data bounds are **+14.58 to +15.97 points**. They are not confidence intervals.
+
+The difference was 0 points on the clean source, +17.02 on the intermediate source, and +29.17 on the noisiest source. The 12 target source-rounds contain **4 distinct true worlds** and 8 distinct combinations of reports and truth. Repeating a call or swapping labels does not add a world.
+
+The selectors agreed in 86 blocks. Those blocks shared one actual review and final answer, not two independent generations. The 286 scored policy decisions used 200 distinct final responses. The [decision record](results/crucible-delegation-live.json) preserves the interrupted claim. We continued only with untouched blocks. The [cost record](results/crucible-delegation-cost.json) contains 688 settled calls at **$0.022440900 USD** and no open hold. A callback without a ledger row does not prove that no network request occurred.
+
+This tests supplied, correctly attributed history. It does not show that the original Harbor agents learned those histories, or that trust remains useful when reviewer quality changes.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
