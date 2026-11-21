@@ -143,7 +143,10 @@ def _run(args: argparse.Namespace) -> None:
         if check.get("mismatches") != 0:
             raise ValueError("stock mismatch")
         return
-    subject = _load(args)
+    _run_subject(args, _load(args))
+
+
+def _run_subject(args: argparse.Namespace, subject: packet.Packet) -> None:
     blocks = packet.grid(subject)
     if args.mode == "plan":
         _print(

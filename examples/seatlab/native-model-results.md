@@ -18,6 +18,10 @@ The [stock check](results/handoff-stock.json) confirmed 416 choices in 104 disti
 
 The [96-byte follow-up](replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) preserves all 120 actual writer responses, including the 21 that failed the first study's note contract. The [source seal](results/packing-source.json) pins them without publishing the notes. As a separate interface check, two desk programs compared clipping with extracting the hours from four 166-byte notes. All 12 packing and decision processes completed at no cost. This checks the harness only.
 
+The first packing block reused the original 337-byte note. Each policy produced a complete new decision. All 3 model calls matched the ledger at **$0.000180150 USD**. The original block still has no decision.
+
+An offline inspection also identified why the original final answers were incomplete. Of 152 distinct received final answers, 104 met the contract. All other **48** returned a well-formed `choices` object for exactly one registered ID: the record the agent just opened. Each returned a valid option for that ID. The contract required all 4 IDs. We did not infer the other choices or change any score.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.

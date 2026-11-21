@@ -166,6 +166,24 @@ The writer receives the **accepted native inventory reports**, not reports regen
 
 Repeat the same `bound` versus `anonymous` comparison and primary measure above. Use new DeepSeek writers and successors, the same note limit, and the same sharing rule for identical final requests. Report exact support, cost, and missing bounds across the 3 observed worlds. Do not extrapolate to the missing fourth world. Do not combine this result with the 12 newly generated worlds. No original model, native trial, or Docker container needs to restart.
 
+**Use a completed Harbor trial.** `trial` is a Dispatch Handoff trial directory with `result.json` and its world artifact. Repeat `--trial` for more sources. Keep their order fixed. `--ids` gives the 2 to 8 shipments you want to replay. A pooled trial has no sender messages and cannot be a source.
+
+```sh
+native=examples.seatlab.handoff.native
+module=examples.seatlab.handoff
+python -m "$native" packet --trial "$trial" --ids 0 1 > "$private/recorded.json"
+python -m "$native" receipt --trial "$trial" --ids 0 1 > "$private/source.json"
+digest=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["packet_sha256"])' "$private/source.json")
+mkdir -m 700 "$private/recorded-study"
+python -m "$module" commands --packet "$private/recorded.json" --sha256 "$digest" \
+  --study "$private/recorded-study" --config seats.json --start 0 --stop 2
+python -m "$module" report --packet "$private/recorded.json" --sha256 "$digest" \
+  --study "$private/recorded-study" > "$private/recorded-report.json"
+python -m "$native" stock --trial "$trial" --ids 0 1 --sha256 "$digest" --report "$private/recorded-report.json"
+```
+
+The [published 3-trial packet](results/handoff-recorded-packet.json) also works with `plan`, `demo`, `commands`, and `report` without the originals. Use the digest from its [source receipt](results/handoff-recorded-sources.json). Do not give the packet to a model: it contains the scoring answers. Give the agent only the role prompt. Local stock verification requires the original trial directories. A reconstructed input is not proof that the original agent acknowledged it. Paid direct mode requires both original acknowledgments.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
