@@ -72,25 +72,26 @@ def test_messaging_works_in_every_talk_condition(start_world, condition):
     world = start_world(condition)
     status, message = world.seat("p1", "POST", "/messages", {"to": "all", "text": "my part"})
     assert status == 201
-    assert {k: message[k] for k in ("id", "from", "to", "text")} == {"id": "m1", "from": "p1", "to": "all",
-                                                                     "text": "my part"}
+    assert {k: message[k] for k in ("from", "to", "text")} == {"from": "p1", "to": "all", "text": "my part"}
+    assert re.fullmatch(r"m-[0-9a-f]{12}", message["id"])  # random: no count of hidden messages
     assert world.seat("p2", "GET", "/messages")[1]["messages"] == [message]
 
 
 def test_delivery_events_name_the_messages_each_seat_received(start_world):
     world = start_world("talk", ("p1", "p2", "p3"))
-    world.seat("p1", "POST", "/messages", {"to": "all", "text": "to everyone"})
-    world.seat("p1", "POST", "/messages", {"to": "p2", "text": "only for p2"})
+    m1 = world.seat("p1", "POST", "/messages", {"to": "all", "text": "to everyone"})[1]["id"]
+    m2 = world.seat("p1", "POST", "/messages", {"to": "p2", "text": "only for p2"})[1]["id"]
+    assert m1 != m2
     p2 = world.seat("p2", "GET", "/messages")[1]["messages"]
     p3 = world.seat("p3", "GET", "/messages")[1]["messages"]
     p1 = world.seat("p1", "GET", "/messages")[1]["messages"]
-    assert [m["id"] for m in p2] == ["m1", "m2"]
-    assert [m["id"] for m in p3] == ["m1"]  # a direct message reaches only its recipient
-    assert [m["id"] for m in p1] == ["m1", "m2"]  # a seat sees its own messages
+    assert [m["id"] for m in p2] == [m1, m2]
+    assert [m["id"] for m in p3] == [m1]  # a direct message reaches only its recipient
+    assert [m["id"] for m in p1] == [m1, m2]  # a seat sees its own messages
     deliveries = [(e["seat"], e["data"]["ids"]) for e in world.events() if e["kind"] == "deliver"]
-    assert deliveries == [("p2", ["m1", "m2"]), ("p3", ["m1"]), ("p1", [])]  # own messages are not deliveries
+    assert deliveries == [("p2", [m1, m2]), ("p3", [m1]), ("p1", [])]  # own messages are not deliveries
     sends = [e["data"] for e in world.events() if e["kind"] == "send"]
-    assert sends == [{"id": "m1", "to": "all", "chars": 11}, {"id": "m2", "to": "p2", "chars": 11}]
+    assert sends == [{"id": m1, "to": "all", "chars": 11}, {"id": m2, "to": "p2", "chars": 11}]
     logged = (world.logs / "messages.jsonl").read_text().splitlines()
     assert len(logged) == 2 and "only for p2" in logged[1]
 

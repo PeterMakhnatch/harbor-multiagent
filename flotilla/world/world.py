@@ -13,6 +13,7 @@ import importlib.util
 import json
 import math
 import os
+import secrets
 import threading
 import time
 from collections.abc import Callable
@@ -34,7 +35,7 @@ from urllib.parse import parse_qs, urlsplit
 # Version 5 (review of fork PR #18, world half): the world freezes itself FLOTILLA_PLAY_SECONDS after the
 # first seat call (a seat process that outlives play cannot act); messages after a freeze get 409; the admin
 # token works on /admin/ only; JSON numbers must be finite; the world refuses a config that lets a request
-# act as the wrong seat.
+# act as the wrong seat; message ids are random (a counter showed the number of hidden direct messages).
 WORLD_VERSION = 5
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
@@ -402,7 +403,9 @@ class World(BaseHTTPRequestHandler):
                 self._reply(429, {"error": f"limit of {MAX_MESSAGES_PER_SEAT} messages per seat reached"})
                 return
             STATE["sent"][seat] = STATE["sent"].get(seat, 0) + 1
-            message = {"id": f"m{len(STATE['messages']) + 1}", "from": seat, "to": to, "text": text, "t": now()}
+            # A random id: a global counter told a third seat how many direct messages it did not see
+            # (review of fork PR #18, M1). The order is in "t" and in the logs.
+            message = {"id": f"m-{secrets.token_hex(6)}", "from": seat, "to": to, "text": text, "t": now()}
             STATE["messages"].append(message)
             with (LOGS / "messages.jsonl").open("a") as log:
                 log.write(json.dumps(message, sort_keys=True) + "\n")

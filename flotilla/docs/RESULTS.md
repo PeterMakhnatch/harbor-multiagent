@@ -92,7 +92,8 @@ Talk condition of wave c1. "Found" means some seat submitted the right answer at
 | Qwen 3.6 35B-A3B | 12 of 12 | 9 | 3 |
 | GPT-OSS-120B | 12 of 12 | 9 | 3 |
 
-- In 35 of the 36 trials, the first right submitter had received the teammate's calendar data
+- In 35 of the 36 trials, the first right submitter had received the teammate's calendar data (the stricter
+  day-and-hour regex of `docs/results/scripts/breakdowns.py` counts 33 of 36)
   (manual reading and `flotilla-analyze`). In GPT-OSS `schedule-007`, the right answer was the first of 8 windows that p1
   submitted without any teammate data.
 - Of the 7 lost trials, 6 end with a wrong answer from the teammate after the right one; this never

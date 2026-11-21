@@ -8,7 +8,6 @@ artifacts/logs/world/{events,messages}.jsonl. Standard library only. Prints plai
 
 from __future__ import annotations
 
-import collections
 import json
 import re
 import sys
@@ -75,7 +74,8 @@ def r3(jobs: Path) -> None:
                 won += 1
                 announced_won += announced
         print(f"  {model}: {len(rows)} trials, found {found}, lost {lost}, lost with a later wrong write by the "
-              f"teammate {overwrote}, first right submitter had teammate data {had_data} of {found}, "
+              f"teammate {overwrote}, first right submitter had teammate data (day-and-hour regex) {had_data} of {found} "
+              f"(RESULTS' 35 of 36 uses flotilla-analyze's data hook and a manual reading), "
               f"solver announced the answer: won {announced_won}/{won}, lost {announced_lost}/{lost}")
 
 
