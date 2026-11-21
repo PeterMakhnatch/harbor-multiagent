@@ -2,6 +2,20 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## What happens when the scheduler can ask its teammate a specific question?
+
+**Showing the real reply raised joint-slot choices from 2/24 to 17/24.** The unchanged scoring rule checks whether one meeting slot fits both seats. It does not credit an explanation or a plausible local choice. The difference is **+62.5 percentage points** on 3 retained worlds. This is not a population estimate or a new Harbor team reward.
+
+| Original world | Questions containing the joint slot | Joint choice, reply withheld | Joint choice, reply visible |
+| --- | ---: | ---: | ---: |
+| w00 | 3/4 | 0/8 | 8/8 |
+| w04 | 2/4 | 2/8 | 5/8 |
+| w08 | 1/4 | 0/8 | 4/8 |
+
+Astra asked 12 questions. Sol answered all 24 slot checks correctly, using only its own calendar. A fresh Astra decided twice in each condition. Showing the same real reply changed 22/24 matched choices. It changed 15 incorrect choices to correct, and none in the opposite direction. All 7 remaining visible-condition errors followed a question that did not name the joint slot. A negative reply can also help by ruling out a candidate. These observations do not establish that two questions suffice outside this cohort.
+
+Verify the result from this fork with `python3.12 -S -m examples.seatlab.calendar_questions summary`. No model, Docker or API key is needed. Use `--json` for the result by world. The [protocol and run instructions](replication.md#can-a-question-about-two-slots-help-a-real-scheduler) show how to replace the questioner, responder or final scheduler. The [72 service-matched first replies](results/calendar-question-effects.json) include 12 questions, 12 answers, and 48 finals (see [question](results/calendar-question-ask-service.json), [answer](results/calendar-question-answer-service.json), and [final](results/calendar-question-final-service.json) receipts). The [original scorer](results/calendar-question-stock.json) checked all 48 final choices and counted 19 joint slots. This study used subscriptions and spent $0 on paid models.
+
 ### First-stage coverage
 
 The [independent questioner receipts](results/calendar-question-ask-service.json) matched all 12 real Astra requests. All [12 question pairs](results/calendar-question-ask-live.json) were valid first replies. The responder receives only these ordered slot IDs and its own calendar; it does not receive the scheduler's candidate list. The 12 repeated requests in the underlying role schema were not registered for this stage and are not counted as failures.

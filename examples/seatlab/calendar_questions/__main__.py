@@ -100,6 +100,44 @@ def _native(
     }
 
 
+def _display(report: _Doc) -> None:
+    data = report["overall"]
+    q, a, pair = data["question"], data["answer"], data["paired"]
+    print(
+        f"{data['registered_sources']} source conversations across {data['registered_worlds']} original calendar worlds."
+    )
+    if q["completed_sources"]:
+        print(
+            f"Questions containing a joint slot: {q['sources_with_joint_slot_queried']}/{q['completed_sources']} completed questions."
+        )
+    else:
+        print("No valid first question.")
+    if a["answered_query_occurrences"]:
+        print(
+            f"Correct peer availability replies: {a['matched_query_occurrences']}/{a['answered_query_occurrences']} answered slot checks."
+        )
+    else:
+        print("No valid availability reply.")
+    for arm in ("withheld", "visible"):
+        d = data["final"][arm]
+        result = (
+            f"{d['optimal_source_draws']}/{d['valid_source_draws']} valid decisions fit both seats"
+            if d["valid_source_draws"]
+            else "no valid decisions"
+        )
+        print(f"  Reply {arm}: {result}; {d['registered_source_draws']} registered.")
+    print(
+        f"Paired changes: {pair['incorrect_to_correct']} improved, {pair['correct_to_incorrect']} harmed; {pair['valid_matched_source_draws']} matched draws."
+    )
+    low, high = data["equal_world_visible_minus_withheld_bounds"]
+    print(
+        f"Equal-world difference bounds: [{100 * low:+.2f}, {100 * high:+.2f}] pp. These cover missing outcomes, not sampling uncertainty."
+    )
+    print(
+        "These are fresh role decisions on recorded observations, not new native team rewards."
+    )
+
+
 def _run(a: argparse.Namespace) -> None:
     from . import stages
 
@@ -128,7 +166,11 @@ def _run(a: argparse.Namespace) -> None:
     else:
         from . import analysis
 
-        _emit(analysis.summarize(src, question, answer, decision))
+        result = analysis.summarize(src, question, answer, decision)
+        if a.json:
+            _emit(result)
+        else:
+            _display(result)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,6 +178,12 @@ def main(argv: list[str] | None = None) -> int:
     modes = cli.add_subparsers(dest="mode", required=True)
     for name in ("build", "ask", "answer", "decide", "summary", "stock"):
         p = modes.add_parser(name, allow_abbrev=False)
+        if name == "summary":
+            p.add_argument(
+                "--json",
+                action="store_true",
+                help="Emit the full world-level evidence and missingness bounds.",
+            )
         if name in ("build", "stock"):
             p.add_argument("--calendar-checkout", type=Path, required=True)
         if name == "build":
