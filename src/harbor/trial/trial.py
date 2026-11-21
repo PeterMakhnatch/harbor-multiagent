@@ -3,6 +3,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import stat
 import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
@@ -102,6 +103,7 @@ TrialHookCallback = Callable[[TrialHookEvent], Awaitable[None]]
 
 _MAX_VERIFIER_ENV_SESSION_ID_LEN = 63
 _UNSET_BRIDGE_USER = object()
+SEAT_SCRUB_ERROR_FILENAME = ".harbor-seat-scrub-error"
 
 
 def check_trial_config(
@@ -1340,28 +1342,94 @@ class Trial(ABC):
             return
         ordered_secrets = sorted(secrets, key=len, reverse=True)
 
-        for path in self.paths.trial_dir.rglob("*"):
-            if not path.is_file() or path.is_symlink():
-                continue
+        trial_dir = self.paths.trial_dir
+        seats = {participant.seat for participant in self.config.participants}
+        marker = trial_dir / SEAT_SCRUB_ERROR_FILENAME
+
+        def seat_for(path: Path) -> str | None:
+            parts = path.relative_to(trial_dir).parts
+            if seats and parts in ((), ("seats",)):
+                return ", ".join(sorted(seats))
+            if (
+                len(parts) >= 2
+                and parts[0] == "seats"
+                and parts[1] in seats
+                and (len(parts) == 2 or parts[2] == "agent")
+            ):
+                return parts[1]
+            return None
+
+        def record_failure(path: Path, seat: str) -> None:
+            message = f"seat {seat}: could not scrub {path.relative_to(trial_dir)}"
+            for secret in ordered_secrets:
+                message = message.replace(secret, "[REDACTED]")
+            # Keep the block across both scrub passes and later upload commands.
             try:
-                with path.open("rb") as file:
-                    sample = file.read(8192)
-                if b"\0" in sample:
+                with marker.open("x", encoding="utf-8") as file:
+                    file.write(message)
+            except FileExistsError:
+                pass
+            except OSError:
+                raise RuntimeError(f"{message}; cannot record upload block") from None
+
+        def on_walk_error(error: OSError) -> None:
+            path = Path(error.filename) if error.filename else trial_dir
+            if (seat := seat_for(path)) is not None:
+                record_failure(path, seat)
+
+        for directory, _, names in trial_dir.walk(on_error=on_walk_error):
+            for name in names:
+                path = directory / name
+                if path == marker:
                     continue
+                seat = seat_for(path)
                 try:
-                    sample.decode("utf-8")
-                except UnicodeDecodeError:
-                    continue
-                text = path.read_text()
-                scrubbed = scrub_file_text(path, text, ordered_secrets)
-                if scrubbed != text:
-                    path.write_text(scrubbed)
-            except (OSError, UnicodeDecodeError) as exc:
-                # Leave unreadable/unscrubbable files alone; don't delete them.
-                self.logger.debug(
-                    "Skipping unscrubbable trial output %s: %s", path, exc
-                )
-                continue
+                    if not stat.S_ISREG(path.lstat().st_mode):
+                        continue
+                    if seat is not None:
+                        self._scrub_seat_file(path, ordered_secrets)
+                    else:
+                        self._scrub_trial_text_file(path, ordered_secrets)
+                except (OSError, ValueError) as exc:
+                    if seat is not None:
+                        record_failure(path, seat)
+                    else:
+                        self.logger.debug(
+                            "Skipping unscrubbable trial output %s: %s", path, exc
+                        )
+
+    @staticmethod
+    def _scrub_seat_file(path: Path, secrets: Sequence[str]) -> None:
+        data = path.read_bytes()
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            # Binary output can be scanned, but must not be rewritten as text.
+            if any(secret.encode("utf-8") in data for secret in secrets):
+                raise ValueError("Binary seat output contains a credential") from None
+            return
+        if "\0" in text:
+            if any(secret in text for secret in secrets):
+                raise ValueError("Binary seat output contains a credential")
+            return
+        scrubbed = scrub_file_text(path, text, secrets)
+        if scrubbed != text:
+            path.write_text(scrubbed, encoding="utf-8", newline="")
+
+    @staticmethod
+    def _scrub_trial_text_file(path: Path, secrets: Sequence[str]) -> None:
+        with path.open("rb") as file:
+            sample = file.read(8192)
+        if b"\0" in sample:
+            return
+        try:
+            sample.decode("utf-8")
+        except UnicodeDecodeError:
+            return
+        text = path.read_text()
+        scrubbed = scrub_file_text(path, text, secrets)
+        if scrubbed != text:
+            path.write_text(scrubbed)
 
     def _init_agent(self) -> None:
         extra_kwargs: dict[str, Any] = {}

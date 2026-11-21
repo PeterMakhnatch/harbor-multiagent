@@ -32,9 +32,11 @@ from harbor.models.trial.config import (
 )
 from harbor.models.trial.result import TrialResult
 from harbor.models.verifier.result import VerifierResult
+from harbor.trial.hooks import TrialEvent
 from harbor.trial.seats import SeatsTrial
 from harbor.trial.single_step import SingleStepTrial
 from harbor.trial.trial import Trial
+from harbor.upload.uploader import SeatCredentialError, _create_trial_archive
 
 EVENTS: list[tuple[str, ...]] = []
 WAITERS: dict[tuple[str, ...], asyncio.Event] = {}
@@ -565,6 +567,44 @@ async def test_secrets_of_every_seat_are_scrubbed_in_each_pass(
         log = trial.paths.trial_dir / "seats" / seat / "agent" / "log.txt"
         assert secret not in log.read_text()
         assert calls.count(log) == 2
+
+
+@pytest.mark.parametrize("failure", ["read", "write", "binary"])
+async def test_failed_seat_scrub_blocks_streaming_and_later_uploads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+):
+    secret = "a seat credential with no distinctive format"
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            {**_participant("maya"), "env": {"MAYA_API_KEY": secret}},
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    output = trial.paths.trial_dir / "seats" / "raj" / "agent" / "faulty.log"
+    output.write_bytes((b"\x00\xff" if failure == "binary" else b"") + secret.encode())
+    original_open = Path.open
+
+    def fail_open(path, mode="r", *args, **kwargs):
+        affected_mode = {"read": "rb", "write": "w"}.get(failure)
+        if path == output and mode == affected_mode:
+            raise PermissionError(secret)
+        return original_open(path, mode, *args, **kwargs)
+
+    async def archive_at_end(_):
+        with pytest.raises(SeatCredentialError, match="seat raj:.*faulty.log") as error:
+            _create_trial_archive(trial.paths.trial_dir)
+        assert secret not in str(error.value)
+
+    trial.add_hook(TrialEvent.END, archive_at_end)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(Path, "open", fail_open)
+        await trial.run()
+
+    assert secret.encode() in output.read_bytes()
+    await archive_at_end(None)
 
 
 def _native_key_participant(seat: str, api_key: str | None) -> dict[str, Any]:

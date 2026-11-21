@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 import re
+import stat
 import tarfile
 import time
 from collections.abc import Callable
@@ -20,7 +21,9 @@ from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import TrialLock
 from harbor.models.job.result import JobResult
+from harbor.models.trial.config import TrialConfig
 from harbor.models.trial.result import ModelInfo, TrialResult
+from harbor.trial.trial import SEAT_SCRUB_ERROR_FILENAME
 from harbor.upload.db_client import OwnerOrgError, UploadDB
 from harbor.upload.storage import UploadStorage
 
@@ -109,10 +112,8 @@ _STEP_ARCHIVE_INCLUDES: tuple[str, ...] = (
     "artifacts",
 )
 
-# Per-seat archive entries under ``seats/{seat}/``, for each seat in the
-# trial's ``seat_results``. A multi-agent trial keeps each agent's logs and
-# trajectory in ``seats/{seat}/agent``; its root ``agent/`` stays empty.
-_SEAT_ARCHIVE_INCLUDES: tuple[str, ...] = ("agent",)
+# Older resumable seat archives may contain unscanned files.
+_SEAT_ARCHIVE_CACHE_PREFIX = "seats-v1-"
 
 # Per-job archive: job-level allowlist + every trial subdir, each filtered
 # through `_TRIAL_ARCHIVE_INCLUDES`. Consumed by `harbor job download`.
@@ -328,6 +329,10 @@ class Uploader:
         calls this for incomplete jobs or when new attempts were uploaded.
         A revision preserves immutable storage objects on re-upload.
         """
+        seat_dirs_by_trial = {
+            child: _seat_archive_dirs(child)
+            for child in _job_archive_trial_dirs(job_dir)
+        }
         log_path: str | None = None
         job_log = job_dir / "job.log"
         if job_log.exists():
@@ -340,13 +345,18 @@ class Uploader:
 
         archive_name = f"job-{revision}.tar.gz" if revision else "job.tar.gz"
         archive_path = f"jobs/{job_result.id}/{archive_name}"
-        local_archive_path = job_dir / ".harbor-upload" / archive_name
+        local_archive_name = (
+            f"{_SEAT_ARCHIVE_CACHE_PREFIX}{archive_name}"
+            if any(seat_dirs_by_trial.values())
+            else archive_name
+        )
+        local_archive_path = job_dir / ".harbor-upload" / local_archive_name
         upload_url_path = local_archive_path.with_suffix(
             local_archive_path.suffix + ".tus-url"
         )
         if not (local_archive_path.exists() and upload_url_path.exists()):
             upload_url_path.unlink(missing_ok=True)
-            _create_job_archive_file(job_dir, local_archive_path)
+            _create_job_archive_file(job_dir, local_archive_path, seat_dirs_by_trial)
         await self.storage.upload_resumable_file(local_archive_path, archive_path)
 
         await self.db.finalize_job(
@@ -576,13 +586,19 @@ class Uploader:
             trajectory_path: str | None = None
 
             archive_path = f"trials/{trial_result.id}/trial.tar.gz"
-            local_archive_path = trial_dir / ".harbor-upload" / "trial.tar.gz"
+            seat_dirs = _seat_archive_dirs(trial_dir, expected_result=trial_result)
+            local_archive_name = (
+                f"{_SEAT_ARCHIVE_CACHE_PREFIX}trial.tar.gz"
+                if seat_dirs
+                else "trial.tar.gz"
+            )
+            local_archive_path = trial_dir / ".harbor-upload" / local_archive_name
             upload_url_path = local_archive_path.with_suffix(
                 local_archive_path.suffix + ".tus-url"
             )
             if not (local_archive_path.exists() and upload_url_path.exists()):
                 upload_url_path.unlink(missing_ok=True)
-                _create_trial_archive_file(trial_dir, local_archive_path)
+                _create_trial_archive_file(trial_dir, local_archive_path, seat_dirs)
             archive_size = local_archive_path.stat().st_size
 
             # Upsert the agent if we haven't seen this (name, version) pair
@@ -761,9 +777,7 @@ def _load_job_from_disk(
     trial_results: list[TrialResult] = []
     for child in sorted(job_dir.iterdir()):
         if child.is_dir() and (child / "result.json").exists():
-            result = TrialResult.model_validate_json(
-                (child / "result.json").read_text()
-            )
+            result = _read_trial_result_for_upload(child)
             trial_dirs[result.id] = child
             trial_results.append(result)
     return job_result, job_config, trial_results, trial_dirs
@@ -869,17 +883,25 @@ def _create_trial_archive(trial_dir: Path) -> bytes:
     return buf.getvalue()
 
 
-def _create_trial_archive_file(trial_dir: Path, archive_path: Path) -> None:
+def _create_trial_archive_file(
+    trial_dir: Path, archive_path: Path, seat_dirs: list[tuple[str, Path]]
+) -> None:
     """Create a trial archive on disk for resumable upload."""
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_trial_archive_entries(tar, trial_dir)
+        _add_trial_archive_entries(tar, trial_dir, seat_dirs=seat_dirs)
 
 
 def _add_trial_archive_entries(
-    tar: tarfile.TarFile, trial_dir: Path, *, arcname_prefix: str = ""
+    tar: tarfile.TarFile,
+    trial_dir: Path,
+    *,
+    arcname_prefix: str = "",
+    seat_dirs: list[tuple[str, Path]] | None = None,
 ) -> None:
     """Add allowlisted trial entries to an open tar archive."""
+    if seat_dirs is None:
+        seat_dirs = _seat_archive_dirs(trial_dir)
     if not (trial_dir / "lock.json").exists():
         raise FileNotFoundError(
             f"Trial lock file is required for upload: {trial_dir / 'lock.json'}"
@@ -890,7 +912,10 @@ def _add_trial_archive_entries(
         if path.exists():
             tar.add(path, arcname=f"{arcname_prefix}{name}")
 
-    _add_seat_archive_entries(tar, trial_dir, arcname_prefix=arcname_prefix)
+    for seat, agent_dir in seat_dirs:
+        _add_seat_archive_entries(
+            tar, agent_dir, seat, arcname=f"{arcname_prefix}seats/{seat}/agent"
+        )
 
     steps_dir = trial_dir / "steps"
     if not steps_dir.exists():
@@ -907,28 +932,47 @@ def _add_trial_archive_entries(
 
 
 def _add_seat_archive_entries(
-    tar: tarfile.TarFile, trial_dir: Path, *, arcname_prefix: str
+    tar: tarfile.TarFile, root: Path, seat: str, *, arcname: str
 ) -> None:
-    """Add ``seats/{seat}/agent`` for each seat in the trial's ``seat_results``.
+    """Archive only the bytes that pass the credential scan."""
 
-    Seat files come from the agents' containers, so other directories under
-    ``seats/`` are left out, and so is a seat whose path is a link or leaves
-    ``trial_dir/seats``. ``_keep_seat_member`` filters the files themselves.
-    """
-    seats_dir = trial_dir.resolve() / "seats"
-    for seat in _declared_seats(trial_dir):
-        if not _is_plain_name(seat):
-            continue
-        for name in _SEAT_ARCHIVE_INCLUDES:
-            path = trial_dir / "seats" / seat / name
-            if not path.exists() or path.resolve() != seats_dir / seat / name:
-                continue
-            _check_seat_credentials(path, seat)
-            tar.add(
-                path,
-                arcname=f"{arcname_prefix}seats/{seat}/{name}",
-                filter=_keep_seat_member,
+    def scan_error(path: Path) -> SeatCredentialError:
+        return SeatCredentialError(
+            f"seat {seat}: could not scan {path.relative_to(root.parent)}"
+        )
+
+    def on_walk_error(error: OSError) -> None:
+        raise scan_error(Path(error.filename) if error.filename else root) from None
+
+    for directory, dirs, files in root.walk(on_error=on_walk_error):
+        dirs.sort()
+        for path in (directory, *(directory / name for name in sorted(files))):
+            relative = path.relative_to(root)
+            if _is_credential_path(relative):
+                # Refuse rather than filter, since a second path can be a hard link.
+                raise SeatCredentialError(
+                    f"seat {seat}: {relative} is a known credential path; "
+                    "remove it from the seat's files before uploading this trial"
+                )
+            member_name = (
+                arcname if path == root else f"{arcname}/{relative.as_posix()}"
             )
+            try:
+                member = tar.gettarinfo(str(path), arcname=member_name)
+                if member is None or _keep_seat_member(member) is None:
+                    continue
+                if member.isfile() or member.islnk():
+                    with path.open("rb") as handle:
+                        data = handle.read(_CREDENTIAL_SCAN_LIMIT + 1)
+                    _check_seat_credentials(data, seat, relative)
+                    member.type = tarfile.REGTYPE
+                    member.linkname = ""
+                    member.size = len(data)
+                    tar.addfile(member, BytesIO(data))
+                else:
+                    tar.addfile(member)
+            except OSError:
+                raise scan_error(path) from None
 
 
 # Credential shapes that must never leave the machine in a seat's files. Seat
@@ -938,46 +982,133 @@ _CREDENTIAL_PATTERNS = re.compile(
     rb"|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})"
 )
 _CREDENTIAL_SCAN_LIMIT = 64 * 1024 * 1024  # bytes per file
+_CREDENTIAL_PATHS = (
+    (".codex", "auth.json"),
+    (".claude", ".credentials.json"),
+    (".config", "gh", "hosts.yml"),
+    (".netrc",),
+    ("_netrc",),
+    (".git-credentials",),
+    (".aws", "credentials"),
+    (".docker", "config.json"),
+    ("id_rsa",),
+    ("id_ed25519",),
+)
 
 
 class SeatCredentialError(ValueError):
-    """A seat's files hold a credential-shaped string; the trial is not uploaded."""
+    """A seat file could expose credentials; the trial is not uploaded."""
 
 
-def _check_seat_credentials(root: Path, seat: str) -> None:
-    """Refuse to archive seat files that look like they hold a credential.
-
-    Fails closed: the trial's upload stops with an error that names the file
-    (never the value), so it is not finalized and a later run can retry it
-    after the files are scrubbed.
-    """
-    paths = [root] if root.is_file() else sorted(root.rglob("*"))
-    for path in paths:
-        if path.is_symlink() or not path.is_file():
-            continue
-        try:
-            with path.open("rb") as handle:
-                data = handle.read(_CREDENTIAL_SCAN_LIMIT)
-        except OSError:
-            continue
-        if _CREDENTIAL_PATTERNS.search(data):
-            raise SeatCredentialError(
-                f"seat {seat}: {path.name} contains a credential-shaped string; "
-                "scrub the seat's files before uploading this trial"
-            )
+def _is_credential_path(path: Path) -> bool:
+    parts = tuple(part.lower() for part in path.parts)
+    return any(parts[-len(suffix) :] == suffix for suffix in _CREDENTIAL_PATHS)
 
 
-def _declared_seats(trial_dir: Path) -> list[str]:
-    """The seat names in the trial's ``result.json``; none if it has none."""
+def _check_seat_credentials(data: bytes, seat: str, path: Path) -> None:
+    if len(data) > _CREDENTIAL_SCAN_LIMIT:
+        raise SeatCredentialError(
+            f"seat {seat}: cannot fully scan {path}; "
+            f"file exceeds the {_CREDENTIAL_SCAN_LIMIT}-byte credential scan limit"
+        )
+    if _CREDENTIAL_PATTERNS.search(data):
+        raise SeatCredentialError(
+            f"seat {seat}: {path} contains a credential-shaped string; "
+            "scrub the seat's files before uploading this trial"
+        )
+
+
+class SeatArchiveError(ValueError):
+    """The trial's declared seats cannot be archived in full."""
+
+
+def _read_trial_result_for_upload(
+    trial_dir: Path, expected_seats: set[str] | None = None
+) -> TrialResult:
     result_path = trial_dir / "result.json"
-    if not result_path.is_file():
-        return []
     try:
-        result = TrialResult.model_validate_json(result_path.read_text())
-    except (OSError, ValueError) as exc:
-        logger.debug("Archiving no seats of %s: %s", trial_dir, exc)
+        if result_path.is_symlink():
+            raise ValueError
+        return TrialResult.model_validate_json(result_path.read_bytes())
+    except (OSError, ValueError):
+        if not expected_seats:
+            try:
+                config = TrialConfig.model_validate_json(
+                    (trial_dir / "config.json").read_bytes()
+                )
+                expected_seats = {
+                    participant.seat for participant in config.participants
+                }
+            except (OSError, ValueError):
+                pass
+        seats = (
+            f" (seats: {', '.join(sorted(expected_seats))})" if expected_seats else ""
+        )
+        raise SeatArchiveError(
+            f"trial {trial_dir.name}{seats}: could not read valid result.json"
+        ) from None
+
+
+def _check_seat_scrub_status(trial_dir: Path) -> None:
+    marker = trial_dir / SEAT_SCRUB_ERROR_FILENAME
+    try:
+        is_regular_file = stat.S_ISREG(marker.lstat().st_mode)
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise SeatCredentialError(
+            f"trial {trial_dir.name}: could not check {marker.name}"
+        ) from None
+    try:
+        message = marker.read_text(encoding="utf-8") if is_regular_file else ""
+    except (OSError, ValueError):
+        message = ""
+    if not message:
+        message = f"trial {trial_dir.name}: unable to verify the seat scrub"
+    raise SeatCredentialError(
+        f"{message}; scrub the seat's files before removing {marker.name} and retrying"
+    )
+
+
+def _seat_archive_dirs(
+    trial_dir: Path, *, expected_result: TrialResult | None = None
+) -> list[tuple[str, Path]]:
+    """Validate the seat layout before creating or resuming an archive."""
+    _check_seat_scrub_status(trial_dir)
+    expected_seats: set[str] = set()
+    if expected_result is not None:
+        expected_seats.update(p.seat for p in expected_result.config.participants)
+        expected_seats.update(seat.seat for seat in expected_result.seat_results or [])
+    if expected_result is None and not (trial_dir / "result.json").exists():
         return []
-    return [seat.seat for seat in result.seat_results or []]
+    result = _read_trial_result_for_upload(trial_dir, expected_seats)
+    expected_seats.update(
+        participant.seat for participant in result.config.participants
+    )
+    seats = [seat.seat for seat in result.seat_results or []]
+    for seat in seats:
+        if not _is_plain_name(seat):
+            raise SeatArchiveError(f"seat {seat!r}: invalid seat name in result.json")
+    if missing := expected_seats.difference(seats):
+        raise SeatArchiveError(
+            f"seats {', '.join(sorted(missing))}: missing from result.json"
+        )
+
+    seat_dirs = []
+    for seat in seats:
+        path = trial_dir
+        for name in ("seats", seat, "agent"):
+            path = path / name
+            try:
+                is_directory = stat.S_ISDIR(path.lstat().st_mode)
+            except OSError:
+                is_directory = False
+            if not is_directory:
+                raise SeatArchiveError(
+                    f"seat {seat}: {path.relative_to(trial_dir)} must be a real directory"
+                )
+        seat_dirs.append((seat, path))
+    return seat_dirs
 
 
 def _is_plain_name(name: str) -> bool:
@@ -1012,24 +1143,44 @@ def _keep_seat_member(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
     return member
 
 
-def _create_job_archive_file(job_dir: Path, archive_path: Path) -> None:
+def _create_job_archive_file(
+    job_dir: Path,
+    archive_path: Path,
+    seat_dirs_by_trial: dict[Path, list[tuple[str, Path]]] | None = None,
+) -> None:
     """Create the job archive on disk to avoid holding large jobs in memory."""
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_job_archive_entries(tar, job_dir)
+        _add_job_archive_entries(tar, job_dir, seat_dirs_by_trial)
 
 
-def _add_job_archive_entries(tar: tarfile.TarFile, job_dir: Path) -> None:
+def _job_archive_trial_dirs(job_dir: Path) -> list[Path]:
+    return [
+        child
+        for child in sorted(job_dir.iterdir())
+        if child.is_dir() and (child / "result.json").exists()
+    ]
+
+
+def _add_job_archive_entries(
+    tar: tarfile.TarFile,
+    job_dir: Path,
+    seat_dirs_by_trial: dict[Path, list[tuple[str, Path]]] | None,
+) -> None:
     root = job_dir.name
     for name in _JOB_ARCHIVE_INCLUDES:
         path = job_dir / name
         if path.exists():
             tar.add(path, arcname=f"{root}/{name}")
-    for child in sorted(job_dir.iterdir()):
-        if not (child.is_dir() and (child / "result.json").exists()):
-            continue
+    if seat_dirs_by_trial is None:
+        seat_dirs_by_trial = {
+            child: _seat_archive_dirs(child)
+            for child in _job_archive_trial_dirs(job_dir)
+        }
+    for child, seat_dirs in seat_dirs_by_trial.items():
         _add_trial_archive_entries(
             tar,
             child,
             arcname_prefix=f"{root}/{child.name}/",
+            seat_dirs=seat_dirs,
         )
