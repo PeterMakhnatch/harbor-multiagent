@@ -38,6 +38,29 @@ Each grade binds the reply digest to its original user prompt and native trial I
 
 **Check against real teams:** We replayed the actual first returns from all 32 source trials through 4 separate worker processes. Every per-case grade matched its native grade. Reversing the worker files produced the same report byte for byte. The original receivers booked **0/24 meetings** and chose **36/48 optimal shipment bays**. These are two separate workloads, not one score. [Historical per-case scores and hashes](results/public-receiver-panel-native.json) · [Registered check](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061270837).
 
+## Let a third agent select between two receivers
+
+Use the [public receiver panel](#run-your-receiver-on-2-tasks-without-installing-harbor) twice. Save a complete file of valid first replies from each receiver as `draft-a.jsonl` and `draft-b.jsonl`. Keep the files private. The selector never receives the source grade.
+
+```sh
+python3.12 -BS -m examples.seatlab.peer_choice draft-a.jsonl draft-b.jsonl > review-inputs.jsonl
+```
+
+Pass only `messages` from each line to the selector. Return one line with `id`, `prompt_sha256`, and the first raw `reply`. A valid reply is `{"pick":1}` or `{"pick":2}`. Each different pair appears 4 times: 2 calls in each order. Identical actions do not need a selector. Do not send the task scorer or earlier grades to the selector.
+
+```sh
+python3.12 -BS -m examples.seatlab.peer_choice_result draft-a.jsonl draft-b.jsonl review-replies.jsonl > review-result.json
+python3.12 -BS -m examples.seatlab.peer_choice_score review-result.json
+```
+
+Use an empty reply file if no requests were emitted. A missing or invalid selector reply leaves the task verdict inconclusive. An unknown, repeated, or stale request rejects the file. The summary separates variation across repeated calls from changes after reversing the two proposals. It also shows how many correct choices were attainable from either proposal.
+
+To check the [published DeepSeek result](live-confirmation.md#can-a-third-agent-choose-between-two-proposed-answers) without a model, run:
+
+```sh
+python3.12 -BS -m examples.seatlab.peer_choice_score examples/seatlab/results/public-peer-choice-live.json
+```
+
 ## Independent native replay
 
 Run 2 independent panels with the same scripted arrival policy, seeds `1001,1003`, conditions `fresh,reordered`, and 12 shipments per trial. Give every attempt a fresh native directory and UUID. Use the pinned [primary implementation](https://github.com/PeterMakhnatch/harbor-multiagent/commit/dc7722833f6d5d4d0726ccbc6755ddaa42faea9b). Compare ordered role inputs, submitted reports, final actions, fingerprints and score. A scalar match alone does not establish replay parity. These are 8 native trials and 2 independent latent seed blocks. Do not include them in the primary denominators. Replaying a hosted decision from a stored action is not a second model generation.

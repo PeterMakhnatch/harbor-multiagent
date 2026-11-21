@@ -2,6 +2,27 @@
 
 None of the 3 original comparisons below established higher native reward across 48 new teams. A later receiver replay isolated a different question: [does the dispatcher use the bay IDs in a peer’s reports?](#do-the-bay-ids-in-a-peers-reports-help-the-dispatcher) It did. This is not a new team reward.
 
+## Can a third agent choose between two proposed answers?
+
+**Check whether either proposal can succeed before adding a reviewer.** On scheduling, not one of the 48 proposed times booked the meeting. On Dispatch, the reviewer recovered most of the available gain, but it did not reliably select the same proposal after we reversed their order.
+
+Two real receivers had independently answered each of 32 original inputs. Where their answers differed, a fresh DeepSeek reviewer saw the same input and both proposals. We tested each display order twice. Identical proposals required no call. We scored the chosen proposal with the original task, not with a model judge.
+
+| Measure | Scheduling | Dispatch |
+|---|---:|---:|
+| Sources with different proposals | 17/24 | 3/8 |
+| Same proposal chosen with the same display order | 16/34 | 6/6 |
+| Same proposal chosen after reversing display order | 36/68 | 8/12 |
+| Correct units from a uniform choice, in expectation | 0/24 meetings | 34/48 shipments |
+| Correct units with the reviewer, averaged over 4 selections | 0/24 | 35.5/48 |
+| Highest possible grade from selecting whole proposals | 0/24 | 36/48 |
+
+Neither task passed the [registered rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061395832): 80% agreement after reversal and a grade no worse than a uniform choice. On Dispatch world `6804`, all 4 reviewers chose the second proposal on the screen. Reversing the order reversed the answer. The other 2 disputed Dispatch worlds always selected the better proposal. On scheduling, even repeated calls in the *same* order often disagreed. Variation alone does not establish an order bias.
+
+The 80 new reviewer calls cost **$0.004044552**. All returned valid first replies. The comparisons share calls and cover only 3 scheduling worlds and 8 Dispatch worlds. These are receiver decisions on fixed team evidence, not new Harbor team rewards.
+
+[Run the same check on your own two receivers](replication.md#let-a-third-agent-select-between-two-receivers) · [Per-source decisions, grades, and costs](results/public-peer-choice-live.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061479840).
+
 ## Naming changed shipment reports
 
 **The names changed what the team read. The native reward improvement did not pass the registered test.**
