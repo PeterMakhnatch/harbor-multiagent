@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Mapping
 from hashlib import sha256
-from math import fsum
 from pathlib import Path
 from typing import Any, cast
 
 from .. import evidence, run_panel, seat_agent, team_report
 from ..capsule import Capsule
 from ..export_capsules import reconstructed_capsules
+from ..native_report import summarize_attention as summarize
 from ..visibility import native_pairs
 from . import protocol
 
+__all__ = ["inspect_trial", "summarize"]
+
 _EPISODES = 6
 _ROLES = ("inventory", "dispatch")
-_ARMS = ("named", "count")
 _AGENT_IMPORT = "examples.seatlab.attention.agent:AttentionSeat"
 _SEAT_SCHEMA = "seatlab.native-attention-seat/v1"
 _TOKENS = ("input_tokens", "cache_tokens", "output_tokens")
@@ -340,169 +340,3 @@ def inspect_trial(
         raise ValueError(
             "native attention evidence is incomplete or inconsistent"
         ) from None
-
-
-def _index(
-    registered: dict[str, dict[str, Any]],
-    entries: list[dict[str, Any]],
-    *,
-    outcomes: bool,
-) -> dict[str, dict[str, Any]]:
-    if len(entries) != len(registered):
-        raise ValueError("expected exactly 24 registered attention cells")
-    indexed: dict[str, dict[str, Any]] = {}
-    for entry in entries:
-        cell_id = entry.get("cell_id") if isinstance(entry, dict) else None
-        if (
-            not isinstance(cell_id, str)
-            or cell_id not in registered
-            or cell_id in indexed
-            or not run_panel._config_matches(entry, registered[cell_id])
-        ):
-            raise ValueError("unknown, duplicate, or mislabelled attention cell")
-        if outcomes and (
-            not isinstance(entry.get("state"), str)
-            or not entry["state"]
-            or "outcome" not in entry
-            or (entry["outcome"] is not None and not isinstance(entry["outcome"], dict))
-        ):
-            raise ValueError(
-                "each cell requires a state and an explicit outcome or null"
-            )
-        indexed[cell_id] = entry
-    return indexed
-
-
-def _score_index(
-    rows: dict[str, dict[str, Any]],
-    *,
-    stages: tuple[str, ...] = ("inventory", "select", "decide"),
-) -> dict[tuple[int, int, str], float | None]:
-    scores: dict[tuple[int, int, str], float | None] = {}
-    fingerprints: dict[int, str] = {}
-    trial_ids: set[str] = set()
-    for cell_id, row in rows.items():
-        seed = row["seed"]
-        outcome = row["outcome"]
-        score = None
-        if outcome is not None:
-            score = outcome["native_score"]
-            trial_id = evidence._trial_id({"id": outcome["trial_id"]})
-            fingerprint = outcome["fingerprint"]
-            if (
-                type(score) not in (int, float)
-                or not 0 <= score <= 1
-                or trial_id in trial_ids
-                or fingerprints.setdefault(seed, fingerprint) != fingerprint
-                or [turn["run"] for turn in outcome["turns"]]
-                != [f"{cell_id}-{stage}" for stage in stages]
-            ):
-                raise ValueError(
-                    "outcome does not identify an independent registered trial"
-                )
-            trial_ids.add(trial_id)
-        scores[seed, row["repetition"], row["arm"]] = score
-    return scores
-
-
-def _primary(
-    scores: dict[tuple[int, int, str], float | None], *, arms: tuple[str, str] = _ARMS
-) -> dict[str, Any]:
-    seeds = sorted({seed for seed, _, _ in scores})
-    seed_blocks = []
-    lower, upper = [], []
-    for seed in seeds:
-        deltas = []
-        for rep in (0, 1):
-            treatment, control = (scores[seed, rep, arm] for arm in arms)
-            if treatment is not None and control is not None:
-                deltas.append(treatment - control)
-            lower.append(
-                (0.0 if treatment is None else treatment)
-                - (1.0 if control is None else control)
-            )
-            upper.append(
-                (1.0 if treatment is None else treatment)
-                - (0.0 if control is None else control)
-            )
-        seed_blocks.append(
-            {
-                "seed": seed,
-                "matched_pairs": len(deltas),
-                "mean": fsum(deltas) / len(deltas) if deltas else None,
-            }
-        )
-    means = [block["mean"] for block in seed_blocks if block["mean"] is not None]
-    pair_count = len(lower)
-    return {
-        "contrast": f"{arms[0]}_minus_{arms[1]}_native_score",
-        "estimate": fsum(means) / len(seeds) if len(means) == len(seeds) else None,
-        "matched_pairs": sum(block["matched_pairs"] for block in seed_blocks),
-        "registered_pairs": pair_count,
-        "registered_seeds": len(seeds),
-        "paired_seeds": [
-            block["seed"] for block in seed_blocks if block["matched_pairs"]
-        ],
-        "seed_blocks": seed_blocks,
-        "registered_bounds": {
-            "lower": fsum(lower) / pair_count,
-            "upper": fsum(upper) / pair_count,
-        },
-    }
-
-
-def _secondary(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    counts = dict.fromkeys(_METRICS, 0)
-    slots = optimal = feasible = cases = unreported = 0
-    source_models: Counter[str] = Counter()
-    for outcome in rows:
-        for field in counts:
-            counts[field] += outcome[field]
-        slots += len(outcome["opened"])
-        cases += len(outcome["actions"])
-        optimal += sum(action["optimal"] for action in outcome["actions"])
-        feasible += sum(action["feasible"] for action in outcome["actions"])
-        usage = outcome["turns"][0]["usage"]
-        if usage is None:
-            unreported += 1
-        else:
-            source_models[usage["served_model"]] += 1
-    return {
-        "observed_cells": len(rows),
-        "opened_slots": slots,
-        **counts,
-        "opened_report_change_rate": counts["opened_report_changes"] / slots
-        if slots
-        else None,
-        "cases": cases,
-        "optimal": optimal,
-        "feasible": feasible,
-        "inventory_served_models": dict(source_models),
-        "inventory_model_unreported": unreported,
-    }
-
-
-def summarize(
-    cells: list[dict[str, Any]], rows: list[dict[str, Any]]
-) -> dict[str, Any]:
-    registered = {cell["cell_id"]: cell for cell in protocol.grid()}
-    _index(registered, cells, outcomes=False)
-    indexed = _index(registered, rows, outcomes=True)
-    scores = _score_index(indexed)
-    observed = sum(score is not None for score in scores.values())
-    return {
-        "registered_cells": len(registered),
-        "observed_cells": observed,
-        "missing_cells": len(registered) - observed,
-        "primary": _primary(scores),
-        "secondary": {
-            arm: _secondary(
-                [
-                    row["outcome"]
-                    for row in indexed.values()
-                    if row["arm"] == arm and row["outcome"] is not None
-                ]
-            )
-            for arm in _ARMS
-        },
-    }

@@ -382,21 +382,6 @@ def _run(
     return _observed(spec, root, cell, plan, ledger)
 
 
-def _verify(spec: Experiment, cells: list[Record], path: Path) -> None:
-    from .handoff.external_audit import _report
-
-    report = _report(path)
-    if report["schema"] != spec.schema("report") or report["plan"]["cells"] != cells:
-        raise ValueError("unexpected public register")
-    rows = report["rows"]
-    if not isinstance(rows, list) or len(rows) != len(cells):
-        raise ValueError("unexpected public outcome count")
-    summary = spec.summarize(cells, rows)
-    if teams._bytes(summary) != teams._bytes(report["summary"]):
-        raise ValueError("published reward summary differs")
-    _print(summary)
-
-
 def _show_report(
     spec: Experiment,
     root: Path,
@@ -426,8 +411,9 @@ def _dispatch(spec: Experiment, args: argparse.Namespace) -> int:
         )
         return 0
     if args.mode == "verify":
-        _verify(spec, cells, args.report)
-        return 0
+        from .native_report import verified_main
+
+        return verified_main([str(args.report)], expected=spec.tag)
     root = _checked_study(args.study)
     if args.mode == "seal":
         _register(spec, cells, root, args)

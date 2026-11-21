@@ -376,7 +376,18 @@ def _outcome(cell: dict[str, Any], score: int) -> dict[str, Any]:
             {"id": i, "choice": "A", "optimal": bool(score), "feasible": True}
             for i in range(6)
         ],
-        "turns": [{"run": f"{cell_id}-{stage}", "usage": None} for stage in _STAGES],
+        "turns": [
+            {
+                "run": f"{cell_id}-{stage}",
+                "stage": stage,
+                "role": "inventory" if stage in ("inventory", "push") else "dispatch",
+                "status": "received",
+                "prompt_sha256": _sha(f"prompt-{stage}"),
+                "response_sha256": _sha(f"answer-{stage}"),
+                "usage": None,
+            }
+            for stage in _STAGES
+        ],
     }
 
 
@@ -391,7 +402,11 @@ def test_summary_weights_seeds_and_keeps_unpaired_native_scores() -> None:
         elif (seed, rep, arm) == (6502, 1, "brief"):
             outcome = _outcome(cell, 1)
         rows.append(
-            {**cell, "state": "complete" if outcome else "missing", "outcome": outcome}
+            {
+                **cell,
+                "state": "complete" if outcome else "unverified",
+                "outcome": outcome,
+            }
         )
     summary = audit.summarize(cells, rows[::-1])
     primary = summary["primary"]
@@ -421,7 +436,7 @@ def test_summary_reports_bounds_when_no_pair_completes() -> None:
         rows.append(
             {
                 **cell,
-                "state": "missing" if score is None else "complete",
+                "state": "unverified" if score is None else "complete",
                 "outcome": outcome,
             }
         )

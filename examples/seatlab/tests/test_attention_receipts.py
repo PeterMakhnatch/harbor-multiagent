@@ -8,8 +8,9 @@ from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 
+from examples.seatlab import native_panel
 from examples.seatlab.attention import receipts
-from examples.seatlab.attention.__main__ import _plan
+from examples.seatlab.attention.__main__ import experiment
 from examples.seatlab.handoff.external_audit import _MAX_REPORT
 from examples.seatlab.tests import test_attention_audit as native
 
@@ -116,7 +117,9 @@ def study(tmp_path: Path) -> Study:
     subject = Study(
         {
             "schema": "seatlab.native-attention-report/v1",
-            "plan": _plan("commands", _COMMANDS_DIGEST),
+            "plan": native_panel._plan(
+                experiment(), cells, "commands", _COMMANDS_DIGEST
+            ),
             "rows": rows,
         },
         root / "report.json",
@@ -221,10 +224,10 @@ def test_native_report_mutations_reject_real_receipt_set(
     first, second, missing, *_ = study.report["rows"]
     outcome = first["outcome"]
     turn = outcome["turns"][0]
-    refresh = False
     if mutation == "score":
         outcome["native_score"] += 1 / 6
-        refresh = True
+        with pytest.raises(ValueError):
+            study.publish()
     elif mutation == "summary":
         study.report["summary"]["primary"]["matched_pairs"] = 2
     elif mutation == "unverified":
@@ -242,7 +245,8 @@ def test_native_report_mutations_reject_real_receipt_set(
             "output_tokens": 4,
             "cache_tokens": 1,
         }
-        refresh = True
+        with pytest.raises(ValueError):
+            study.publish()
     elif mutation == "wrong_grid":
         study.report["plan"]["cells"][0]["seed"] += 1
     elif mutation == "direct":
@@ -251,7 +255,7 @@ def test_native_report_mutations_reject_real_receipt_set(
         study.report["meter"] = {}
     else:
         second["outcome"]["trial_id"] = outcome["trial_id"]
-    study.publish(summarize=refresh)
+    study.publish(summarize=False)
     _reject(study, capsys)
 
 
