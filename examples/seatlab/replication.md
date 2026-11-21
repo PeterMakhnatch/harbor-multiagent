@@ -110,6 +110,26 @@ Use `demo` instead of `commands` and omit `--config` for a no-model transport ch
 - Secondary: the same contrast in `stable`; selection of the now-current desk at each post-switch step; accuracy where the changed stock also changes the best bay; pre-switch differences; and report copying errors. Each regime has at most 96 final choices per policy after the cutoff. These are 12 native seed worlds, not 96 independent tasks.
 - Use direct DeepSeek Flash with the existing spend directory, at most 52 first calls per block and 2,496 in total. The private runner commits to the exact prompts and first replies. An independent stock check scores only observed model choices. Its fixed-bay reference probes are not agent actions or native trial rewards.
 
+### Run different agent programs on the same stock changes
+
+This command uses the checked-in native world. It needs Python 3.12 or later. It does not need Docker, the private archive, or an API key. Use the same absolute `reviewer` and `decider` programs as in [the two-program example](#run-your-own-reviewer-and-decision-maker).
+
+```sh
+module=examples.seatlab.visibility.feedback_cli
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+mkdir -m 700 "$private/study"
+python -m "$module" plan --seed 7001
+python -m "$module" commands --seed 7001 --study "$private/study" --config seats.json --start 0 --stop 1
+python -m "$module" report --seed 7001 --study "$private/study" > "$private/report.json"
+python -m examples.seatlab.visibility.feedback_stock "$private/report.json"
+```
+
+Your executables can incur their own provider costs. For a free transport check, use `demo` instead of `commands` and omit `--config`. For the registered study, omit `--seed`. Repeat `--seed` for a custom set of worlds. Use the same seeds and order when reading the study.
+
+Separate workers can use disjoint block ranges in one private directory. Keep an interrupted block closed. Use `report` to find untouched blocks. The built-in `direct` mode uses only the registered seed set and requires the original spend directory.
+
+For a direct run, add `--spend-dir "$SEATLAB_SPEND_DIR"` to `report`. This compares the role, model, and token counts with the original host ledger. Do not use that ledger to price an external executable or a subscription. Save report files outside the private study directory.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.

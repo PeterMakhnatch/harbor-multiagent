@@ -63,6 +63,8 @@ verifier, and the limitations.
 
 To compare two agent programs, start with [Run your own reviewer and decision maker](examples/seatlab/replication.md#run-your-own-reviewer-and-decision-maker). The included packet and demo need only Python. Give the reviewer and coordinator separate executables to run real agents. The [delegation experiment](examples/seatlab/native-model-results.md#does-identifying-a-reviewers-track-record-improve-delegation) shows when a small piece of shared history changed which teammate the model asked.
 
+To test feedback rather than fixed history, [run your own team through a stock change](examples/seatlab/replication.md#run-different-agent-programs-on-the-same-stock-changes). Give each role a separate executable. The next request uses only what that team learned from its previous decisions. The included stock checker needs no model or Docker.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a
