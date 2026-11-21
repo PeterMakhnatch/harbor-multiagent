@@ -52,7 +52,11 @@ def _summary(pack: _Doc, report: _Doc) -> None:
         print(
             f"{task}: {len(selected)} original team observations in {len({r['world'] for r in selected})} worlds"
         )
-        for arm in ("original", "peer"):
+        for arm in (
+            ("original",)
+            if pack["schema"] == protocol.SINGLE_SCHEMA
+            else ("original", "peer")
+        ):
             rows = [r for r in report["rows"] if r["task"] == task and r["arm"] == arm]
             done = [r for r in rows if r["state"] == "complete"]
             n = sum(len(r["outcome"]["correct"]) for r in done)
@@ -108,6 +112,14 @@ def _dispatch(a: argparse.Namespace) -> int:
         )
         return 0
     pack = _load(a.pack, a.sha256)
+    if pack["schema"] == protocol.SINGLE_SCHEMA and a.mode in (
+        "effects",
+        "compare",
+        "stock",
+    ):
+        raise ValueError(
+            "this command compares paired peer contexts; use the stage experiment's analysis"
+        )
     if a.mode in ("plan", "samples", "show", "grade"):
         rows = protocol.plan(pack)
         records = {r["id"]: r for r in pack["records"]}

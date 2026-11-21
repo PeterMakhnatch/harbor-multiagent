@@ -7,6 +7,8 @@ from math import isfinite
 from typing import Any, cast
 
 SCHEMA = "seatlab.rolepack/v1"
+# A stage may have no same-role peer by design. This is not a missing peer in a paired experiment.
+SINGLE_SCHEMA = "seatlab.rolepack-original/v1"
 _MAX_RECORDS = 1024
 _MAX_ITEMS = 128
 _MAX_CHOICES = 256
@@ -242,13 +244,15 @@ def _validate_record(value: object) -> Document:
 
 def _checked_pack(pack: object) -> tuple[Document, dict[str, str | None]]:
     document = _object(pack, "pack", "schema", "records")
-    if document["schema"] != SCHEMA:
+    if document["schema"] not in (SCHEMA, SINGLE_SCHEMA):
         raise ValueError("unsupported rolepack schema")
     records = _list(document["records"], 1, _MAX_RECORDS, "records")
     peer_hashes: dict[str, str | None] = {}
-    size = len(canonical_bytes({"schema": SCHEMA, "records": []})) - 1
+    size = len(canonical_bytes({"schema": document["schema"], "records": []})) - 1
     for value in records:
         record = _validate_record(value)
+        if document["schema"] == SINGLE_SCHEMA and record["peer"] is not None:
+            raise ValueError("an original-only role stage cannot register a peer")
         record_id = record["id"]
         if record_id in peer_hashes:
             raise ValueError("duplicate record ID")
@@ -279,16 +283,21 @@ def prompt(record: Document, arm: str) -> str:
 
 def plan(pack: Document) -> list[Document]:
     document, peer_hashes = _checked_pack(pack)
-    records = sorted(document["records"], key=lambda r: (r["task"], r["id"]))
+    single = document["schema"] == SINGLE_SCHEMA
+    records = (
+        document["records"]
+        if single
+        else sorted(document["records"], key=lambda r: (r["task"], r["id"]))
+    )
+    arms = ("original",) if single else _ARMS
     rows: list[Document] = []
     for draw in (0, 1):
-        for round_offset in (0, 1):
+        for round_offset in range(len(arms)):
             for offset, record in enumerate(records):
-                arm_index = (offset + round_offset) % len(_ARMS)
-                arm = _ARMS[arm_index]
+                arm = arms[(offset + round_offset) % len(arms)]
                 record_id = record["id"]
                 commitment = peer_hashes[record_id]
-                if commitment is not None and arm == "original":
+                if arm == "original" and (single or commitment is not None):
                     commitment = record["prompt_sha256"]
                 rows.append(
                     {

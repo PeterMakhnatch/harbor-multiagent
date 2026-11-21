@@ -2,6 +2,22 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## What happens when the scheduler can ask its teammate a specific question?
+
+**Showing the real reply raised joint-slot choices from 2/24 to 17/24.** The unchanged scoring rule checks whether one meeting slot fits both seats. It does not credit an explanation or a plausible local choice. The difference is **+62.5 percentage points** on 3 retained worlds. This is not a population estimate or a new Harbor team reward.
+
+| Original world | Questions containing the joint slot | Joint choice, reply withheld | Joint choice, reply visible |
+| --- | ---: | ---: | ---: |
+| w00 | 3/4 | 0/8 | 8/8 |
+| w04 | 2/4 | 2/8 | 5/8 |
+| w08 | 1/4 | 0/8 | 4/8 |
+
+Astra asked 12 questions. Sol answered all 24 slot checks correctly, using only its own calendar. A fresh Astra decided twice in each condition. Showing the same real reply changed 22/24 matched choices. It changed 15 incorrect choices to correct, and none in the opposite direction. All 7 remaining visible-condition errors followed a question that did not name the joint slot. A negative reply can also help by ruling out a candidate. These observations do not establish that two questions suffice outside this cohort.
+
+Verify the result from this fork with `python3.12 -S -m examples.seatlab.calendar_questions summary`. No model, Docker or API key is needed. Use `--json` for the result by world. The [protocol and run instructions](replication.md#can-a-question-about-two-slots-help-a-real-scheduler) show how to replace the questioner, responder or final scheduler. The [72 service-matched first replies](results/calendar-question-effects.json) include 12 questions, 12 answers, and 48 finals (see [question](results/calendar-question-ask-service.json), [answer](results/calendar-question-answer-service.json), and [final](results/calendar-question-final-service.json) receipts). The [original scorer](results/calendar-question-stock.json) checked all 48 final choices and counted 19 joint slots. This study used subscriptions and spent $0 on paid models.
+
+For a live two-seat comparison, see [the separate native experiment](https://github.com/PeterMakhnatch/harbor-multiagent/pull/73). It tests **whether the responder receives the scheduler's proposals** on 9 other worlds. That is a different intervention from showing the final scheduler a fixed real reply.
+
 ## Can I move real teammate decisions from Inspect into a new Harbor role study?
 
 Yes, for a one-turn role with a finite action rubric. The [source index](results/rolepack-inspect-index.json) selects the first registered observation in each of 9 task/world groups, without using its score. The importer recovered each role prompt and the **first actual Sol reply** from a private native Inspect archive. The [public pack](results/rolepack-from-inspect.json) binds those replies to their archive and reply hashes. The input bytes and grading rules match the corresponding original Harbor observations.

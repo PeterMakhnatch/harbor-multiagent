@@ -13,7 +13,7 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 This fork adds a role replay tool. Start after one agent receives its teammate's messages. Freeze that observation, substitute a new receiver, and check the receiver's first answer against the original world. Harbor still runs the environment. SeatLab runs the cheaper, conditional comparison outside it.
 
 ```sh
-git clone --depth 1 --branch experiments/seatlab-rolepack https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch experiments/seatlab-calendar-questions https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
 python3.12 -S -m examples.seatlab.rolepack compare
 ```
@@ -23,6 +23,7 @@ The command uses only standard Python. It needs no installation, Docker, model a
 - [Run your own receiver or add a task](examples/seatlab/replication.md#use-a-role-pack-with-your-own-receiver). Export user-only messages to Inspect AI or run your trusted role program. Parallel workers share a study and do not retry a claimed call.
 - [Import an existing Inspect archive](examples/seatlab/replication.md#build-your-first-pack-from-native-inspect-logs). Keep the real role input and first reply. Test another teammate without exporting the full trace.
 - [Check the mixed-task results](examples/seatlab/native-model-results.md#does-showing-a-real-peer-proposal-help-the-same-receiver-on-two-tasks). The report distinguishes copied actions, corrected actions, incomplete attempts, and same-input repeats.
+- [Test a questioner and responder](examples/seatlab/replication.md#run-your-own-questioner-and-answering-teammate). Run `python3.12 -S -m examples.seatlab.calendar_questions summary` for the [72-call calendar experiment](examples/seatlab/native-model-results.md#what-happens-when-the-scheduler-can-ask-its-teammate-a-specific-question). It separates bad questions from incorrect replies and final decisions.
 - [Diagnose a sender versus a receiver](examples/seatlab/replication.md#compare-your-receiver-with-the-recorded-receiver), [change a single visible report](examples/seatlab/replication.md#run-the-reviewer-through-inspect-ai), or [continue both seats from a native checkpoint](examples/seatlab/replication.md#start-from-the-published-team-checkpoint). To start with your own team notes, use the [handoff replay](examples/seatlab/replication.md#run-a-handoff-on-your-own-records).
 
 These are new model decisions on retained observations, not new native Harbor rewards. An adapter must export the role's actual observation and the task's grading rule. SeatLab does not infer them from arbitrary Harbor logs.

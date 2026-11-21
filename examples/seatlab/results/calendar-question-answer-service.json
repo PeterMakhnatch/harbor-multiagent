@@ -1,0 +1,1 @@
+{"pack_sha256":"ef19dffcc7320debd5a7a107456b03a39fb5919e9b754adc342a6bf6c7b357a0","requested_model":"openai-codex/gpt-6.2-sol","roles":{"dispatch":{"cache_tokens":0,"incomplete_without_reply":0,"input_tokens":6956,"matched":12,"output_tokens":180}},"schema":"seatlab.rolepack-service/v1","verified_served_model":"openai-codex/gpt-6.2-sol"}
