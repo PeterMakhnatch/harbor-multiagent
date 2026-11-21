@@ -122,7 +122,7 @@ def sp4_tests(valid: list[dict], jobs: Path) -> None:
     verdict = "INCONCLUSIVE" if len(pairs) < 6 else "PASS" if b > c and p <= 0.05 else "FAIL"
     print(f"Primary test (open vs sp3 silent, deal): {len(pairs)} pairs, b = {b}, c = {c}, exact McNemar p = "
           f"{p:.4f}: {verdict}")
-    talk = [arms for arms in by.values() if {"open", "talk"} <= set(arms)]
+    talk = [by[game] for game in sorted(by) if {"open", "talk"} <= set(by[game])]
     gaps = [arms["talk"]["reward"] - arms["open"]["reward"] for arms in talk]
     print(f"Talk - open efficiency per instance: {[round(g, 3) for g in gaps]}"
           + (f", mean {sum(gaps) / len(gaps):+.3f}" if gaps else ""))

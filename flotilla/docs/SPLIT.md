@@ -323,3 +323,45 @@ share of the surplus in open deals (talk: almost 0); claims round by round.
 **Budget.** At most $0.40 of real cost from tokens (off-peak, Saturday). No new trial starts when the spend plus
 $0.10 passes $0.40, or when the account balance is below $4.50 (to keep room for Astra's claim on the shared
 budget).
+
+## 12. Open arm (sp4): result
+
+The run went from 6:33 AM to 7:37 AM ET (2026-11-21), off-peak. `split_trials.py <jobs> 'sp4-??????' sp4`. A
+separate agent re-derived every number from the raw files ($0); all match (it found that the script printed the
+talk - open gaps in job order; fixed, the mean is unchanged).
+
+- **Primary test: FAIL.** Open made a deal in 0 of 6 instances, the same as sp3 silent (b = 0, c = 0, p = 1.0).
+  Public outside options alone did not give deals. p = 1.0 does not show that open and silent are equal.
+- **Validity test: PASS.** 6 of 6 trials valid; 3 of 72 seat-rounds missed (4.2%); 24 passes; real cost $0.3088
+  from tokens (895,104 cached input, 122,812 other input, 479,443 output tokens). Balance $5.32 before, $4.94 after.
+- Talk - open efficiency, instances 0 to 5: 0.000, 0.221, 0.271, 0.125, 0.176, 0.278 (mean +0.179). Open efficiency
+  equals silent efficiency in every instance, because neither arm made a deal.
+
+| Instance | Pot | Outside options (p1, p2) | Round 1 claims (p1, p2) | Above own outside option | First pot below the sum of outside options |
+|---|---|---|---|---|---|
+| 0 | 67 | 9, 44 | 23, missed | +14, - | round 3 |
+| 1 | 140 | 96, 13 | 127, missed | +31, - | round 3 |
+| 2 | 133 | 19, 78 | 55, 112 | +36, +34 | round 3 |
+| 3 | 96 | 7, 57 | 23, 89 | +16, +32 | round 3 |
+| 4 | 68 | 12, 44 | 24, 56 | +12, +12 | round 2 |
+| 5 | 97 | 15, 55 | missed, 80 | -, +25 | round 3 |
+
+Observed:
+
+- With both outside options known, both seats claimed part of the surplus in round 1: the strong seat in all 5
+  rounds where it acted, the weak seat in all 4. In the 3 instances where both seats claimed in round 1, the
+  claims did not fit in the pot; in the other 3, 1 claim arrived late.
+- A subagent read all 72 decisions with quotes (`docs/results/split-open-why.md`; all quotes checked). Compared
+  with silent, the weak seat no longer anchored on half of the pot (silent: 6 of 6 opened at half; open: 0 of 4),
+  but the strong seat claimed nearly all of the surplus: its 5 recorded round 1 claims left the weak seat 0 to 2
+  points above its outside option (class H, 9 decisions).
+- The 3 late round 1 claims landed in round 2; the subagent found that the intended claims would not have fit
+  either.
+- By round 2 or 3, the pot was below the sum of the outside options. From then on, the strong seat passed or
+  claimed its outside option, and no deal was possible.
+
+Inferred: in sp3, talk did not work only by telling the weak seat the strong seat's outside option. With the same
+facts and no channel, both seats claimed the surplus and no deal fit. In talk, the seats agreed on one split
+before they claimed: the strong seat named its outside option as its claim, and the weak seat took the rest. The
+channel let them coordinate who gets the surplus; the information alone did not. Limits: 6 instances, 1 model;
+open ran after sp3 on the same morning, not in a randomized order.
