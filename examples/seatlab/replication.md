@@ -740,6 +740,31 @@ python3.12 -BS -m examples.seatlab.calendar_notices.transfer_fixed_result \
   --sha256 8995d5311e9627989a1a35065902ef89a39f72eb693409532a95513b22a4a61a
 ```
 
+#### Route a booking before calling a receiver
+
+Use the checked scheduling request from the export above. Keep the owner capsule on the scorer host. Set `RECEIVER` to the absolute path of a trusted worker executable. Run from the fork root:
+
+```sh
+umask 077
+python3.12 -BS -m examples.seatlab.calendar_case emit "$private/case" --view checked \
+  > "$private/checked.jsonl"
+python3.12 -BS -m examples.seatlab.calendar_notices.booking_worker \
+  --fallback "$RECEIVER" < "$private/checked.jsonl" > "$private/routed.jsonl"
+```
+
+The worker returns one booked slot without starting the executable when the visible evidence supports exactly one start. Otherwise, the executable receives the original request and must return one matching reply envelope. The worker keeps the first reply, even when its booking is invalid. A failed executable or a mismatched envelope fails the command. There is no retry. The executable gets a private working directory and does not inherit API keys. It still runs as your user; this is not a sandbox.
+
+To inspect a route without invoking a receiver, use `examples.seatlab.calendar_notices.route_booking` with the same input. To score a paired reply, pass `"$private/routed.jsonl"` to the `calendar_case compare` command above. To reproduce the two registered routing verdicts without a worker or an API key:
+
+```sh
+results=examples/seatlab/results
+reader=examples.seatlab.calendar_notices.route_result
+python3.12 -BS -m "$reader" "$results/calendar-booking-route-transfer-fixed.json" \
+  --cost "$results/calendar-fixed-transfer-48-71-cost.json"
+python3.12 -BS -m "$reader" "$results/calendar-booking-route-role-stress.json" \
+  --cost "$results/calendar-booking-route-role-stress-cost.json"
+```
+
 #### Let a receiver choose which report to read next
 
 Use this when the receiver can ask for 2 reports and you want to test **when to deliver the first one**. Use one completed SeatLab calendar trial with private views. Run the export in the fork environment on the scorer host:

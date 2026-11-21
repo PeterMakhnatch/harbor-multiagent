@@ -91,6 +91,23 @@ All 96 first replies scored. The private owner scorer and a separate stock calcu
 
 [24 native sources and 96 decisions](results/calendar-fixed-transfer-48-71.json) · [96 token charges](results/calendar-fixed-transfer-48-71-cost.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063538303) · [Check either receiver study without a model](replication.md#compare-2-workers-on-your-own-completed-scheduling-trial).
 
+### When can the harness skip a receiver call?
+
+**Count the starts supported by the visible reports and the receiver's own calendar.** If exactly 1 start remains, the harness can book it without a model. Otherwise, it sends the unchanged request to the receiver and keeps its first reply.
+
+| Source of the reports | Calls the rule skips | Always ask: correct | Use the rule: correct | Wrong local bookings |
+|---|---:|---:|---:|---:|
+| 24 new worlds, 2 receiver draws per world | 38/48 | 42/48 | 42/48 | 0/38 |
+| 12 earlier worlds, 4 sender and receiver conditions | 16/47 | 15/47 | 15/47 | 2/16 |
+
+In the first study, we replayed the rule against logged decisions. In the second, the rule ran first. It called a real receiver on 31 cases. We also bought 16 separate comparison calls to measure what the receiver would have done. One original team stopped before booking; it stayed in the source count and received no call.
+
+The registered test required the rule to skip at least half the calls without replacing a correct decision with a wrong one. Only the first study passed. In the second, both wrong local bookings came from raw sender reports. The comparison receiver made the same mistakes. **Agreement is not proof that a reported start is free.**
+
+The 31 live fallback calls cost **$0.001556772**. The 16 comparison calls cost **$0.000707898**. In the first study, previously paid calls worth **$0.001253184** could have been omitted. We did not measure latency or change the native team's reward.
+
+[Run the booking worker](replication.md#route-a-booking-before-calling-a-receiver) · [Transfer decisions](results/calendar-booking-route-transfer-fixed.json) · [Operational decisions](results/calendar-booking-route-role-stress.json) · [47 charges](results/calendar-booking-route-role-stress-cost.json) · [Registered comparison and result](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063694662).
+
 ### Should the receiver wait for the first report before requesting a second one?
 
 **Waiting did not improve bookings on these senders.** We reused all 48 native senders from the 24-world test above. Each pair of fresh receiver branches shared its first requested day. The `immediate` receiver saw that report before choosing its second day. The `delayed` receiver did not. Both could read exactly 2 reports and used the same final booking format.
