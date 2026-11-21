@@ -304,6 +304,17 @@ Use the direct `api.deepseek.com` endpoint and the `deepseek-flash` model for bo
 
 The budget allows at most 48 calls for 24 fresh native trials and 36 calls for 6 historical cases with new listeners. Check the direct account before every generation. Reserve $0.01 per call under a $1 local cap. Stop before crossing the shared $10 cap or the $1.50 balance floor. Keep the full reservation for an ambiguous call. Never send credentials to Docker or store them in trial artifacts. Record each run's token-based cost separately from the account balance. Apply the [published Flash prices](https://api-docs.deepseek.com/quick_start/pricing) for the request interval. The account balance alone does not identify one run's cost.
 
+### Can a change notice help a live team spend two reads?
+
+**Registered before the first native trial.** The handoff replay names one changed record. A native team can have several changed reports but only enough time to open 2. Test whether the dispatcher uses names to select useful updates and earn a better native reward. Do not replace the Harbor world, verifier, or either agent with a reference policy.
+
+- Use the `reordered` Dispatch Handoff task with 6 shipments, seeds `6401` through `6406`, and 2 repetitions. Start a new 2-seat Harbor team in both arms of every pair. Run `named` first when the zero-based seed index plus repetition is even. There are 24 native trials and at most 72 direct DeepSeek calls.
+- The inventory model submits both reports for each shipment through its real seat. Compute a change notice only when the **sender's submitted sets of bays** differ across its 2 revisions. Do not use private stock or the best dispatch choice to issue a notice.
+- The dispatch model sees the actual revision 1 reports, utility ranks, and the number of reports with changed content. In `named` it also sees which shipments changed. Map native shipment IDs to `Q1` through `Q6` in increasing SHA-256 order of `seatlab-attn-v1:{seed}:{repetition}:{id}`. Use the same mapping in both arms. Never show the seed, native ID, or second payload before selection.
+- Ask the model to open exactly 2 distinct shipments. In a fresh generation, give it both selected revision 2 payloads, the original reports for all 6 shipments, and the utility ranks. Do not repeat the notices, the arm name, or the selector's explanation. Submit its 6 actual bay choices to Harbor, even when a choice is suboptimal. Use the same direct model and budget in both arms. Each valid team makes 1 inventory call and 2 dispatch calls. Keep each first attempt; never backfill a missing result.
+- Primary: the paired difference in **native Harbor reward**, `named − count`. Average over complete repetitions within each world, then give all 6 worlds equal weight. Omit the full-register point estimate if any world has no complete pair. Compute finite bounds over all 12 pairs, using each observed reward and allowing an unknown reward in `[0,1]`. These are not confidence intervals.
+- Secondary: which of the 2 reads covered a changed **submitted** report, which opened shipments had a different true optimum, the number of optimal and feasible decisions, and actual sender transcription errors. Check final actions against native stock. Independent senders can disagree within a pair: this estimates a team policy, not a contrast on one frozen note.
+
 ### Replay the original server evidence
 
 Run these commands from the fork root with Python 3.12 or later. No model, SQL service, Docker, or Harbor installation is needed for the stored projections.
