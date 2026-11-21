@@ -28,7 +28,7 @@ def _load(name: str, path: Path):
 SPLIT = _load("split", HERE.parents[3] / "games" / "split.py")
 WAVE = _load("wave", HERE.parent / "commons_wave.py")  # trial reading and the token price
 MAX_MISSED = 0.10
-PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40)}  # pilot -> (trials planned, cost cap in dollars)
+PLANS = {"sp1": (6, 0.50), "sp2": (8, 0.40), "sp3": (12, 0.70)}  # plan -> (trials planned, cost cap in dollars)
 
 
 def equal_first_round_deal(row: dict) -> bool:
@@ -65,10 +65,37 @@ def sp2_tests(valid: list[dict]) -> None:
               f"{game['capacity']}) got {r['split']['totals'][strong]}; below outside: {r['split']['below_outside']}")
 
 
+def sp3_tests(valid: list[dict]) -> None:
+    deals: dict[int, dict[str, bool]] = {}
+    for r in valid:
+        deals.setdefault(r["instance"], {})[r["arm"]] = bool(r["split"]["agreed"])
+    pairs = [arms for arms in deals.values() if set(arms) == {"silent", "talk"}]
+    b = sum(arms["talk"] and not arms["silent"] for arms in pairs)
+    c = sum(arms["silent"] and not arms["talk"] for arms in pairs)
+    p = WAVE.exact_mcnemar(b, c)
+    verdict = ("INCONCLUSIVE" if len(pairs) < 6 else "PASS" if b > c and p <= 0.05 else "FAIL")
+    print(f"Primary test: {len(pairs)} complete pairs, only talk dealt b = {b}, only silent dealt c = {c}, exact "
+          f"McNemar p = {p:.4f}: {verdict}")
+    shares = [r["split"]["surplus_shares"] for r in valid if r["arm"] == "talk" and r["split"]["surplus_shares"]]
+    strong = []
+    for r in valid:
+        game = r["task"]["game"]
+        if r["arm"] == "talk" and r["split"]["surplus_shares"]:
+            strong.append(r["split"]["surplus_shares"][max(game["outside"], key=game["outside"].get)])
+    print(f"Strong seat's surplus share in talk deals: {[round(s, 3) for s in strong]}"
+          + (f", mean {sum(strong) / len(strong):.3f}" if strong else "") + f" ({len(shares)} deals)")
+    for arm in ("silent", "talk"):
+        rows = [r for r in valid if r["arm"] == arm]
+        if rows:
+            print(f"{arm}: passed {sum(r['split']['passed'] for r in rows) / len(rows):.3f}, missed "
+                  f"{sum(r['split']['missed'] for r in rows) / len(rows):.3f} (mean share of seat-rounds per trial)")
+
+
 def main() -> None:
     jobs, pattern = Path(sys.argv[1]), sys.argv[2]
     plan = sys.argv[3] if len(sys.argv) > 3 else "sp1"
     planned, max_cost = PLANS[plan]
+    tests = {"sp1": sp1_tests, "sp2": sp2_tests, "sp3": sp3_tests}[plan]
     rows = []
     for row in WAVE.trials(jobs, pattern, scorer=SPLIT.score_game):  # valid: a score, no error, no exception
         trial = jobs / row["job"] / row["trial"]
@@ -106,7 +133,7 @@ def main() -> None:
     if any("passed" in record for row in valid for record in row["log"]):
         passed = sum(r["split"]["passed"] * len(r["log"]) * len(r["task"]["game"]["seats"]) for r in valid)
         print(f"Passed {passed / seat_rounds:.3f} of seat-rounds.")
-    (sp1_tests if plan == "sp1" else sp2_tests)(valid)
+    tests(valid)
     for arm in ("silent", "talk"):
         scores = [r["split"] for r in valid if r["arm"] == arm]
         if scores:

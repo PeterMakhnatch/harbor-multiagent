@@ -182,3 +182,38 @@ effect worth a wave, not a rate.
 For a wave: count a deliberate non-claim as a refusal, not a missed round. Done after this pilot: world version 7
 accepts `{"pass": true}` on `/claim` (section 1), and the scorer reports `passed` apart from `missed`. Expect
 about $0.07 per silent trial and $0.025 per talk trial (this pilot: $0.0670 and $0.0245 on average).
+
+## 8. Regime b wave 1 (sp3): pre-registration
+
+Written and committed before the first paid trial of this wave (2026-11-21). The analysis is
+`docs/results/scripts/split_trials.py <jobs> 'sp3-??????' sp3`, committed with this section.
+
+**Question.** In regime b, does a message channel let 2 DeepSeek seats make a deal more often than no channel?
+The sp2 pilot gave 4 of 4 talk deals and 0 of 4 silent deals; this wave tests that on new instances.
+
+**Design.** 6 new instances (a secret seed; `build_tasks.py --family split --difficulty b --instances 0-5
+--conditions silent,talk --round-seconds 240`), world version 7 (seats can pass), in the arms silent and talk: 12
+trials, 1 attempt each, 1 at a time, the 2 arms of each instance in a random order (seed 20261123). Seats as in
+sp2: terminus-2 on DeepSeek direct `deepseek-flash`, 40 turns per seat. Before the wave: `qa.py` with 0 FAIL
+(done: PASS) and an oracle check of instance 0 in both arms (reward at least (P - 1) / P).
+
+**Primary measure.** `deal`: the seats made a deal within the 6 rounds.
+
+**Primary test (pass or fail).** Exact McNemar test on `deal`, talk against silent, over the instances where both
+trials are valid. b = instances where only talk made a deal; c = instances where only silent did.
+
+- PASS: b > c and two-sided p <= 0.05, with at least 6 complete pairs. With 6 pairs, only b = 6, c = 0 passes
+  (p = 0.031).
+- FAIL: at least 6 complete pairs, and not PASS.
+- INCONCLUSIVE: fewer than 6 complete pairs.
+
+**Validity test (pass or fail).** All 12 trials valid, missed seat-rounds (not passes) at most 10%, real cost at
+most $0.70.
+
+**Reported, no test.** Per arm: deals, efficiency, deal round, passes, misses. In talk deals: the strong seat's
+share of the surplus (sp2: 0 in 4 of 4). Outside-option statements in talk (true, false, not stated). As a
+secondary, labelled post hoc: the McNemar test over sp2 and sp3 together (10 pairs).
+
+**Budget.** At most $0.70 of real cost from tokens at DeepSeek's off-peak price (Saturday); the expected cost from
+sp2 is $0.55. No new trial starts when the spend plus $0.10 passes $0.70, or when the account balance is below
+$4.00 (a floor above Peter's $1.50, so that the shared budget keeps room for Astra's claim).
