@@ -6,6 +6,17 @@ The run measured **12 of 16 registered native Harbor trials**. In the 3 complete
 
 The [registered mixed-roster study](replication.md) swaps a direct DeepSeek seat and a Claude Max subscription seat in native Harbor. The first team used Claude for inventory and DeepSeek for dispatch. Both seats completed. The native score was 1.0 on 6 shipments. The direct call matched the host ledger at **$0.000098700 USD**, with no open hold. One team does not establish a model or role effect.
 
+The final register has **18 scored teams, 1 unscored team, and 13 unstarted teams**. The first unscored dispatch response failed validation. No call was retried. Collection ended at the subscription admission limit. The incomplete trial is not a zero.
+
+| Delivery | Complete role pairs | Worlds represented | Observed change with Claude dispatch | Bounds on the 4-world change |
+| --- | ---: | ---: | ---: | ---: |
+| Revised inventory arrives before stale inventory | 5 of 8 | 3 of 4 | +5.56 percentage points | −33.33 to +41.67 points |
+| Only current inventory arrives | 4 of 8 | 2 of 4 | −4.17 percentage points | −52.08 to +47.92 points |
+
+The observed change gives each represented world equal weight. Neither delivery condition has a 4-world point estimate. Across both assignments, the inventory seats reproduced 108 of 108 shipment states correctly. Repeated dispatch choices differed once across 48 comparable shipments. These results do not establish a preferred model assignment.
+
+The [native report](results/mixed-roster-final.json) retains all 32 registered cells. The [stock reader](results/mixed-roster-stock.json) found 19 distinct native trials, 38 seats, and 18 native scores. The [host ledger](results/mixed-roster-cost.json) measured 19 direct calls at **$0.002455560 USD**, including the pilot. It has no open holds. The report matched 18 calls to complete trial evidence. The paid call in the incomplete team remains unmatched there. The Claude subscription has no incremental charge in this ledger.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
