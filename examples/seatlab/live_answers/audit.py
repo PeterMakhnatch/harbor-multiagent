@@ -39,13 +39,13 @@ def _log(data: bytes) -> list[dict[str, Any]]:
 
 
 def _native_binding(
-    result: dict[str, Any], config: dict[str, Any], cell: p.Cell, checksum: str
+    result: dict[str, Any], config: dict[str, Any], task_name: str, checksum: str
 ) -> str:
     identifier = str(UUID(result["id"]))
     actual = result["config"]
     require(
         result["trial_name"] == config["trial_name"]
-        and result["task_name"] == f"flotilla/{cell.task_name}"
+        and result["task_name"] == f"flotilla/{task_name}"
         and result["task_checksum"] == checksum
         and actual["task"]["path"] == config["task"]["path"]
         and actual["trials_dir"] == config["trials_dir"]
@@ -203,7 +203,8 @@ def _usage(
             require(ledger["served_model"] is None, "missing_settled_usage")
         require(control or receipt["status"] == "model_failed", "missing_turn_usage")
         return
-    require(not control and ledger is not None, "unexpected_control_usage")
+    if control or ledger is None:
+        raise BindingError("unexpected_control_usage")
     total, cached, output = usage
     require(
         all(type(n) is int and n >= 0 for n in usage)
@@ -397,7 +398,7 @@ def inspect(trial, config, cell, checksum, ledger, row) -> None:
     result_data = raw(trial / "result.json")
     result = json.loads(result_data)
     row["artifact_sha256"]["result"] = p.digest(result_data)
-    identifier = _native_binding(result, config, cell, checksum)
+    identifier = _native_binding(result, config, cell.task_name, checksum)
     row["trial_uuid"] = identifier
     result_reward = (
         (result.get("verifier_result") or {}).get("rewards", {}).get("reward")
