@@ -14,6 +14,7 @@ with pytest.MonkeyPatch.context() as patch:
     patch.syspath_prepend(str(root / "examples" / "seatlab"))
     patch.syspath_prepend(str(root))
     audit = importlib.import_module("examples.seatlab.attention.audit")
+    confirmation = importlib.import_module("examples.seatlab.attention.confirmation")
     protocol = importlib.import_module("examples.seatlab.attention.protocol")
     native = importlib.import_module("examples.seatlab.visibility.native_pairs")
 
@@ -35,7 +36,11 @@ def _case_config(
         "participants": [
             {
                 "seat": role,
-                "import_path": "examples.seatlab.attention.agent:AttentionSeat",
+                "import_path": (
+                    confirmation.AGENT_IMPORT
+                    if cell["cell_id"].startswith(confirmation.RUN_PREFIX)
+                    else "examples.seatlab.attention.agent:AttentionSeat"
+                ),
                 "model_name": "deepseek/deepseek-flash" if direct else None,
                 "kwargs": {
                     "cell_id": cell["cell_id"],
@@ -117,9 +122,10 @@ def _write(path: Path, value: dict[str, Any]) -> None:
 
 
 def _trial(
-    tmp_path: Path, transport: str
+    tmp_path: Path, transport: str, *, cell: dict[str, Any] | None = None
 ) -> tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    cell = next(cell for cell in protocol.grid() if cell["arm"] == "named")
+    if cell is None:
+        cell = next(cell for cell in protocol.grid() if cell["arm"] == "named")
     cell_id, seed, rep = cell["cell_id"], cell["seed"], cell["repetition"]
     world_type = run_path(str(native.run_panel.TASK_DIR / "environment/seatworld.py"))[
         "World"
@@ -171,7 +177,7 @@ def _trial(
     selector = _turn(
         cell_id,
         "select",
-        protocol.select_prompt(cases, seed, rep, "named"),
+        protocol.select_prompt(cases, seed, rep, cell["arm"]),
         {"open": opened},
         direct,
     )
@@ -351,3 +357,40 @@ def test_summary_rejects_an_outcome_labelled_as_the_other_arm() -> None:
     named["outcome"], count["outcome"] = count["outcome"], named["outcome"]
     with pytest.raises(ValueError):
         audit.summarize(cells, rows)
+
+
+def test_confirmation_audits_only_its_direct_first_attempts(tmp_path: Path) -> None:
+    cells = list(confirmation.grid())
+    for index, (first, second) in enumerate(zip(cells[::2], cells[1::2], strict=True)):
+        seed = 6801 + index
+        arms = ("named", "count") if index % 2 == 0 else ("count", "named")
+        for cell, arm in zip((first, second), arms, strict=True):
+            assert cell == {
+                "cell_id": f"attnc-s{seed}-r0-{arm}",
+                "seed": seed,
+                "repetition": 0,
+                "condition": "reordered",
+                "pairing": "MM",
+                "arm": arm,
+            }
+    trial, config, cell, result, _ = _trial(tmp_path.resolve(), "direct", cell=cells[0])
+    observed = audit.inspect_trial(trial, config, cell, "direct")
+    assert observed["trial_alias"] != result["id"]
+    assert "trial_id" not in observed
+    assert observed["native_score"] == pytest.approx(4 / 6)
+    with pytest.raises(ValueError, match="unregistered attention"):
+        audit.inspect_trial(trial, config, cell, "commands")
+    rows = [dict(cell, state="unclaimed", outcome=None) for cell in cells]
+    rows[0].update(state="complete", outcome=observed)
+    summary = audit.summarize(cells, rows, confirmation_cohort=True)
+    assert summary["registered_cells"] == 16
+    assert summary["primary"]["registered_pairs"] == 8
+    assert summary["primary"]["estimate"] is None
+    assert summary["primary"]["registered_bounds"] == pytest.approx(
+        {"lower": -7 / 8 - 1 / 24, "upper": 7 / 8 + 1 / 12}
+    )
+    with pytest.raises(ValueError):
+        audit.summarize(cells, rows)
+    observed["fingerprint"] = _sha("an unrelated world")
+    with pytest.raises(ValueError):
+        audit.summarize(cells, rows, confirmation_cohort=True)

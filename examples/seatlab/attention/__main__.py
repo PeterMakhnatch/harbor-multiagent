@@ -15,11 +15,13 @@ from ..visibility import clarify_run as files
 from ..visibility import native_pairs as native
 from ..visibility import spend
 from ..visibility.seat_command import load_commands
-from . import audit, protocol
+from . import audit, confirmation, protocol
 
 panel = native.run_panel
 teams = native.team_driver
 _RUNS = {"inventory": "inventory", "select": "dispatch", "decide": "dispatch"}
+_PLAN_SCHEMA = "seatlab.native-attention-plan/v1"
+_REPORT_SCHEMA = "seatlab.native-attention-report/v1"
 
 
 def _source_stamp() -> dict[str, str]:
@@ -33,24 +35,35 @@ def _checked_study(path: Path) -> Path:
     return teams._root(path)
 
 
-def _plan(transport: str, config_sha: str | None) -> dict[str, Any]:
+def _plan(
+    transport: str, config_sha: str | None, *, confirmation_cohort: bool = False
+) -> dict[str, Any]:
+    sources = ("agent.py", "protocol.py")
+    if confirmation_cohort:
+        if transport != "direct" or config_sha is not None:
+            raise ValueError("confirmation requires the direct transport")
+        sources += ("confirmation.py", "confirmation_agent.py")
+    cells = confirmation.grid() if confirmation_cohort else protocol.grid()
     return {
-        "schema": "seatlab.native-attention-plan/v1",
+        "schema": confirmation.PLAN_SCHEMA if confirmation_cohort else _PLAN_SCHEMA,
         "transport": transport,
         "command_config_sha256": config_sha,
-        "episodes": 6,
-        "max_direct_calls": 72 if transport == "direct" else 0,
+        "episodes": protocol.EPISODES,
+        "max_direct_calls": len(cells) * len(_RUNS) if transport == "direct" else 0,
         "sources": _source_stamp(),
         "seat_sources": {
             name: sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-            for name in ("agent.py", "protocol.py")
+            for name in sources
         },
-        "cells": list(protocol.grid()),
+        "cells": list(cells),
     }
 
 
-def _ledger(path: Path, cells: list[dict[str, Any]]) -> dict[str, Any]:
-    result = spend.report(path, run_prefix="attn-")
+def _ledger(
+    path: Path, cells: list[dict[str, Any]], *, confirmation_cohort: bool
+) -> dict[str, Any]:
+    prefix = confirmation.RUN_PREFIX if confirmation_cohort else "attn-"
+    result = spend.report(path, run_prefix=prefix)
     keys = {
         (f"{c['cell_id']}-{stage}", role)
         for c in cells
@@ -84,8 +97,15 @@ def _register(root: Path, args: argparse.Namespace) -> None:
         not directory.is_absolute() or directory != directory.resolve(strict=True)
     ):
         raise ValueError("direct spend directory must be a physical absolute path")
-    plan = _plan(args.transport, None if body is None else sha256(body).hexdigest())
-    if directory is not None and _ledger(directory, plan["cells"])["calls"]:
+    confirmation_cohort = args.cohort == "confirmation"
+    plan = _plan(
+        args.transport,
+        None if body is None else sha256(body).hexdigest(),
+        confirmation_cohort=confirmation_cohort,
+    )
+    if directory is not None and _ledger(
+        directory, plan["cells"], confirmation_cohort=confirmation_cohort
+    )["calls"]:
         raise ValueError("a prior registered direct run already occupies this ledger")
     root.mkdir(mode=0o700)
     teams._check_path(root, 0o700, directory=True)
@@ -106,6 +126,7 @@ def _load(root: Path) -> tuple[dict[str, Any], dict[str, Any] | None]:
     teams._check_path(root / "cells", 0o700, directory=True)
     record = files._object(teams._read_sealed(root / "register.json"))
     plan = record["plan"]
+    confirmation_cohort = plan["schema"] == confirmation.PLAN_SCHEMA
     transport = plan["transport"]
     if transport == "commands":
         digest = sha256(teams._read_sealed(root / "commands.json")).hexdigest()
@@ -118,7 +139,9 @@ def _load(root: Path) -> tuple[dict[str, Any], dict[str, Any] | None]:
             raise ValueError("original direct spend directory unavailable")
     else:
         raise ValueError("unsupported transport")
-    if teams._bytes(plan) != teams._bytes(_plan(transport, digest)):
+    if teams._bytes(plan) != teams._bytes(
+        _plan(transport, digest, confirmation_cohort=confirmation_cohort)
+    ):
         raise ValueError("registered sources or cells changed")
     keys = {c["cell_id"] for c in plan["cells"]}
     with os.scandir(root / "cells") as entries:
@@ -129,7 +152,11 @@ def _load(root: Path) -> tuple[dict[str, Any], dict[str, Any] | None]:
     ledger = (
         None
         if transport == "commands"
-        else _ledger(Path(record["spend_directory"]), plan["cells"])
+        else _ledger(
+            Path(record["spend_directory"]),
+            plan["cells"],
+            confirmation_cohort=confirmation_cohort,
+        )
     )
     return plan, ledger
 
@@ -139,7 +166,7 @@ def _config(root: Path, cell: dict[str, Any], transport: str) -> dict[str, Any]:
     config["agent_timeout_multiplier"] = 3.0
     for p in config["participants"]:
         p.update(
-            import_path="examples.seatlab.attention.agent:AttentionSeat",
+            import_path=audit._agent_import(cell["cell_id"]),
             model_name=native.DECLARED_MODEL if transport == "direct" else None,
             kwargs={
                 "cell_id": cell["cell_id"],
@@ -238,6 +265,12 @@ def _run(
     directory = teams._cell_dir(root, cell)
     if os.path.lexists(directory) or _reserved(ledger, cell):
         raise ValueError("a first attempt or reservation already exists")
+    if plan["schema"] == confirmation.PLAN_SCHEMA:
+        cells = plan["cells"]
+        index = cells.index(cell)
+        if index % 2:
+            first = teams._cell_dir(root, cells[index - 1])
+            teams._outcome(first / "outcome.json")
     transport = plan["transport"]
     if transport == "direct":
         record = files._object(teams._read_sealed(root / "register.json"))
@@ -284,6 +317,10 @@ def main(argv: list[str] | None = None) -> int:
     modes = cli.add_subparsers(dest="mode", required=True)
     for mode in ("plan", "seal", "pending", "run", "collect", "report", "verify"):
         sub = modes.add_parser(mode, allow_abbrev=False)
+        if mode in ("plan", "seal"):
+            sub.add_argument(
+                "--cohort", choices=("original", "confirmation"), default="original"
+            )
         if mode == "verify":
             sub.add_argument("report", type=Path)
         elif mode != "plan":
@@ -305,20 +342,35 @@ def main(argv: list[str] | None = None) -> int:
             sub.add_argument("--cell", required=True)
     args = cli.parse_args(argv)
     try:
-        cells = list(protocol.grid())
         if args.mode == "plan":
-            _print({"cells": cells, "episodes": 6, "max_calls": 72})
+            cells = (
+                confirmation.grid() if args.cohort == "confirmation" else protocol.grid()
+            )
+            _print(
+                {
+                    "cells": list(cells),
+                    "episodes": protocol.EPISODES,
+                    "max_calls": len(cells) * len(_RUNS),
+                }
+            )
             return 0
         if args.mode == "verify":
             from ..handoff.external_audit import _report
 
             item = _report(args.report)
-            if (
-                item["schema"] != "seatlab.native-attention-report/v1"
-                or item["plan"]["cells"] != cells
-            ):
-                raise ValueError("unexpected public register")
-            summary = audit.summarize(cells, item["rows"])
+            confirmation_cohort = item["schema"] == confirmation.REPORT_SCHEMA
+            if confirmation_cohort:
+                plan = _plan("direct", None, confirmation_cohort=True)
+                if teams._bytes(plan) != teams._bytes(item["plan"]):
+                    raise ValueError("confirmation sources or register changed")
+                cells = plan["cells"]
+            else:
+                cells = list(protocol.grid())
+                if item["schema"] != _REPORT_SCHEMA or item["plan"]["cells"] != cells:
+                    raise ValueError("unexpected public register")
+            summary = audit.summarize(
+                cells, item["rows"], confirmation_cohort=confirmation_cohort
+            )
             if teams._bytes(summary) != teams._bytes(item["summary"]):
                 raise ValueError("published reward summary differs")
             _print(summary)
@@ -328,6 +380,8 @@ def main(argv: list[str] | None = None) -> int:
             _register(root, args)
             return 0
         plan, ledger = _load(root)
+        cells = plan["cells"]
+        confirmation_cohort = plan["schema"] == confirmation.PLAN_SCHEMA
         if args.mode in ("run", "collect"):
             cell = next((c for c in cells if c["cell_id"] == args.cell), None)
             if cell is None:
@@ -353,10 +407,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         rows = [_observed(root, c, plan["transport"], ledger) for c in cells]
         report = {
-            "schema": "seatlab.native-attention-report/v1",
+            "schema": (
+                confirmation.REPORT_SCHEMA if confirmation_cohort else _REPORT_SCHEMA
+            ),
             "plan": plan,
             "rows": rows,
-            "summary": audit.summarize(cells, rows),
+            "summary": audit.summarize(
+                cells, rows, confirmation_cohort=confirmation_cohort
+            ),
         }
         if ledger is not None:
             report["meter"] = _meter(
