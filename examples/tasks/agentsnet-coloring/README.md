@@ -93,7 +93,7 @@ On Peter's shared host, prefix every native command with `/tmp/crucible-docker-s
 
 For a standalone host, use the inner capability-wrapper command with 1 active trial. The wrapper keeps capabilities in the child environment. It does not print them.
 
-### Direct DeepSeek baseline
+### Direct DeepSeek
 
 The only model credential is `DEEPSEEK_API_KEY`. Keep it in the key store. Do not place it in a task file or container.
 
@@ -117,19 +117,25 @@ The serialized message guard is 30,720 UTF-8 bytes. Each POST reserves 32,768 in
 
 These reserves are bounds, not actual spend.
 
-Before each paid request, the adapter checks the direct account balance. It stops new admission below USD 1.50 or after unknown usage. Balance and generation use a trial-scoped lock. Provider calls are serial; the round barriers remain synchronous. Do not interpret the baseline as a parallel-provider latency measurement.
+The adapter allows up to 4 completion POSTs per trial and 1 per seat at a time. The round barriers remain synchronous. This is a configured maximum, not measured overlap or a speedup.
+
+Before each POST, the adapter checks the direct USD balance against the USD 1.50 floor. The balance GET runs outside the trial lock. A successful check does not reserve wallet funds. Concurrent charges can lower the balance after a check.
 
 The adapter records every response, format retry, token count, cache subset, estimated price window, and cost. A failed started call without usage remains unknown. It does not become a zero-cost call.
 
 Reported cost uses the published rate schedule at the client start time. The estimate does not apply the Chinese public holiday exception. It does not establish the provider's billing clock, wallet debit, or invoice amount. The response model alias does not attest to a fixed provider build.
 
-`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. The budget check runs before the balance GET and the completion POST. Prior peak-priced charges, unresolved reserves, and the next peak reserve must fit the limit. A refused request has no charge.
+`--trial-budget-nanodollars` sets an optional shared trial limit. The example sets USD 0.25. The adapter checks capacity before the balance GET and rechecks it under the trial lock before reserving for the POST. Peak-priced charges, outstanding reserves, and the next peak reserve must fit the limit. A refused request does not start a POST.
 
-For budget admission only, valid usage replaces its reserve with the published peak prices for the actual uncached input, cached input, and output tokens. This upper bound does not depend on which price window the provider uses. Unknown usage keeps the full reserve and stops new admission. A reserve is not a bill.
+For budget admission only, complete valid usage replaces its reserve with the published peak prices for actual uncached input, cached input, and output tokens. This upper bound does not depend on which price window the provider uses.
+
+Unknown usage keeps the full reserve and stops new admission. A partial response does not establish usage, even if its captured bytes contain a usage field. A rejected balance check also stops new admission. Already admitted calls still settle when their client requests end.
+
+Cancellation ends the client request and retains the full reserve when usage is unknown. It does not guarantee that the provider stops processing. A reserve is not a bill.
 
 Each seat records the exact integer `budgeted_model_cost_nanodollars` for valid usage. In `call_finished`, that field is the call's budget charge, while `cost_usd` is its reported cost estimate. Unknown usage leaves both fields null and records the reserve separately.
 
-`summary.json` still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
+`summary.json` labels `model_call_concurrency` as a `configured_maximum` and records the balance admission and cancellation policies. It still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
 
 ## Retained artifacts
 
@@ -180,7 +186,7 @@ All calls start on Saturday. The stored cost estimate uses the published off-pea
 
 The source-parity proof compares the pinned prompts, parser, histories, routing, and both scores without a provider call. All 3 native controls also pass.
 
-This is 1 successful episode, not an estimated success rate. Provider calls remain serial. The trial does not establish communication necessity or model superiority.
+This is 1 successful episode, not an estimated success rate. This run uses serial provider calls. It does not establish communication necessity or model superiority.
 
 ## Repeated output-cap study
 
@@ -226,3 +232,54 @@ The complete cohort has 295 paid calls and costs USD 0.093563754 from raw usage 
 The cohort uses 1 released graph. These counts do not establish a benchmark-wide success rate or a causal quality loss from the larger cap.
 
 The cohort SHA-256 is `286848f036f0c8ea1cbe6b4387eb6d4d305afc62ab07694c6083ae22077b445b`. The observed source snapshot has SHA-256 `900cd00a1b87d50b7145616698b550bc8d936f5bb74f1d8307310bb54c0c3f30`.
+
+## Native concurrency and cancellation study
+
+The study executes agent commit `cd7f32cbf3c16b957ca2ea3a62d95cb78cb0567d` with SDK commit `6aa0f2c653f15e2578a54aab604db6686e589b89`.
+It registers 6 clean trials and 6 cancellation trials before any model call.
+Every trial uses 4 under-test seats, 512 output tokens, and no Trial or transport retry.
+
+All 6 clean trials show 4 physical request bodies complete before the first response-header read completes.
+The clean condition uses no barrier, pause, or artificial delay.
+All 6 native rewards remain valid. Five trials produce a proper coloring.
+Case `clean-03` has a valid proper-coloring score of 0 and remains included.
+
+Each cancellation probe pauses header consumption only after the real request body reaches the transport.
+The probe cancels the native Trial once after all 4 bodies finish writing.
+All 6 native `Job.run` calls raise `CancelledError`. They do not return a successful Job result or receive an official reward.
+Across all 12 trials, every client scope exits before `AGENT_END`. Admission counters remain stable through native `END` and Job exit.
+
+### Measured cost and time per seat
+
+Each seat has 6 clean intervals and 6 cancellation intervals.
+The cost column sums complete clean usage. Time columns show medians of native seat execution intervals.
+
+| Seat | Clean calls | Known clean USD | Clean time (s) | Cancellation time (s) | Unknown cancelled calls | Held reserve USD |
+|---|---:|---:|---:|---:|---:|---:|
+| Bradley (`n0`) | 51 | 0.014248506 | 37.3500630 | 0.6676070 | 6 | 0.062668800 |
+| Sean (`n1`) | 37 | 0.009324732 | 35.3405520 | 0.6611485 | 6 | 0.062668800 |
+| Hannah (`n2`) | 47 | 0.012588180 | 35.4327095 | 0.6549755 | 6 | 0.062668800 |
+| Kathryn (`n3`) | 50 | 0.014012898 | 35.1477415 | 0.6478660 | 6 | 0.062668800 |
+
+The 185 complete calls report 429390 input tokens, including 383872 cached tokens, and 70325 output tokens.
+All complete calls start in the UTC weekend off-peak window.
+Their token-priced known subtotal is USD 0.050174316:
+`(429390 - 383872) * 0.15 / 1000000 + 383872 * 0.003 / 1000000 + 70325 * 0.60 / 1000000`.
+
+The 24 cancelled calls have no complete usage. Their fee stays unknown.
+The ledger retains USD 0.250675200 for them. A held reserve is not a bill or a refund.
+Peak-priced known charges plus held unknown reserves total USD 0.351023832, below the registered USD 0.40 cap.
+The complete cohort bill remains unknown.
+
+Median native `Job.run` time is 49.380030750 seconds for clean trials and 12.1527616455 seconds for cancellation trials.
+These monotonic intervals exclude the Docker slot wait, `Job.create`, and archive checks.
+Seat intervals include model and world waits. They overlap and must not be added as Job wall time.
+
+The local SDK archives preserve native result bytes but omit the seat trace directories at the executed SDK revision.
+The study keeps separate private trace copies and hashes. It does not claim a Hub transfer or recovery of omitted logs.
+Client joins do not prove provider compute overlap, server cancellation, a refund, or the absence of every container process.
+The study does not establish a causal speedup, a quality change, or a benchmark-wide success rate.
+
+The scoped gate passes 192 budget scenarios across 32 recorded seeds, Ruff, formatting, and the agent/runner type check.
+The actual public `--check` mode reports a configured concurrency of 4 without a model or Docker call.
+Independent verification has SHA-256 `e1c104cacff1aaf619465bedc67047fd897ad13481c6b86e82257ee01793b052`.
