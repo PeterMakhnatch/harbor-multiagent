@@ -230,7 +230,7 @@ python -m examples.seatlab.visibility.calendar_query_run --tasks "$private/tasks
 python -m examples.seatlab.visibility.calendar_query_summary --study "$study"
 ```
 
-The command claims a block before the first model turn. Different workers can run distinct world/direction pairs against the same study directory. Never submit the same block twice. A failed attempt stays in the register. Keep all native output private. The checked public result includes no raw role prompts or task credentials.
+The command claims a block before the first model turn. Different workers can run distinct world/direction pairs against the same study directory. Never submit the same block twice. A failed attempt stays in the register. Keep all raw native output private. Export the sanitized register with `calendar_query_summary --study "$study" --export > native.json`. Another worker can run `calendar_query_summary --input native.json` with standard Python only. The export contains decoded slot choices, original rewards and turn hashes. It contains no raw role prompts or task credentials.
 
 ### Can the receiver help its teammate recheck a calendar?
 

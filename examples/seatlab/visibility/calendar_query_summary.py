@@ -371,10 +371,12 @@ def _print_summary(result: dict[str, Any]) -> None:
     )
     print(f"Block status: {statuses}.")
     for arm, counts in result["arms"].items():
-        print(
-            f"{arm}: {counts['success']}/{counts['scored']} scored successes "
-            f"({counts['unknown']} unknown)."
-        )
+        if counts["scored"]:
+            print(
+                f"{arm}: {counts['success']}/{counts['scored']} tasks succeeded; {counts['unknown']} unknown."
+            )
+        else:
+            print(f"{arm}: no scored tasks; {counts['unknown']} unknown.")
     print(
         f"Paired rewards ({paired['blocks']} blocks): {paired['improved']} improved, "
         f"{paired['harmed']} harmed, {paired['unchanged']} unchanged."
@@ -389,17 +391,21 @@ def _print_summary(result: dict[str, Any]) -> None:
     lo, hi = result["registered_peer_minus_blind_bounds"]
     print(f"Bounds for registered blocks: [{100 * lo:+.1f}, {100 * hi:+.1f}] pp.")
     equality = result["native_slot_equality"]
-    print(
-        f"Same native slot: {equality['equal']}/{equality['comparable']} "
-        "blocks with 2 slots."
-    )
+    if equality["comparable"]:
+        print(
+            f"Same native slot: {equality['equal']}/{equality['comparable']} blocks with 2 slots."
+        )
+    else:
+        print("No blocks have 2 submitted slots.")
     recommendations = result["recommendations"]
     overlap = recommendations["overlap_with_original_receiver_candidates"]["arms"]
     for arm, counts in overlap.items():
-        print(
-            f"{arm} recommendations overlap the receiver's first list in "
-            f"{counts['with_overlap']}/{counts['comparable']} comparable blocks."
-        )
+        if counts["comparable"]:
+            print(
+                f"{arm} recommendations overlap the receiver's first list in {counts['with_overlap']}/{counts['comparable']} comparable blocks."
+            )
+        else:
+            print(f"{arm}: no comparable recommendations.")
     exceed = recommendations["blocks_either_seat_exceeded"]
     receipts = result["response_receipts_by_role"]
     print(f"Either seat exceeds 2 starts in {exceed} observed blocks.")
@@ -416,8 +422,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--study", type=Path)
     source.add_argument("--input", type=Path, default=_DEFAULT)
-    parser.add_argument("--json", action="store_true")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
+        "--json", action="store_true", help="Emit the complete analysis."
+    )
+    output.add_argument(
+        "--export",
+        action="store_true",
+        help="From --study, export verified native scores, decoded slot choices and turn commitments, not private task files.",
+    )
     args = parser.parse_args(argv)
+    if args.export and args.study is None:
+        parser.error("--export requires a private native --study")
     try:
         rows = (
             _read_study(args.study)
@@ -427,7 +443,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = analyze(rows)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
-    if args.json:
+    if args.export:
+        print(
+            json.dumps(
+                {"schema": _SCHEMA, "rows": rows},
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
+    elif args.json:
         print(json.dumps(result, indent=2))
     else:
         _print_summary(result)
