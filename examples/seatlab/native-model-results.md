@@ -2,6 +2,10 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## Can a seat-local calendar tool change a native team decision?
+
+The [registered comparison](replication.md#can-live-teammates-choose-and-use-a-tool-that-reads-only-their-own-calendar) started with world 0, direction 0, repetition 0. All 4 native teams completed. Both rooms scored 0 without tool access. Both also scored 0 with tool access. The host reconciled 24 direct calls at **$0.001421316 USD**. This is a single block, not the 12-world estimate.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
