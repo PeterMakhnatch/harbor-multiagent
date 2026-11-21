@@ -1,6 +1,28 @@
 # Native speaker–listener results
 
-The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
+## Does sending a short proposal change the native team reward?
+
+**Sending the proposed times did not improve the native team score on these 9 worlds.** All 18 registered pairs completed. Sending the proposals helped 1 pair, hurt 2, and left 15 scores unchanged. The equal-world difference was **−5.56 percentage points**. Each world supplied 2 seat directions. They are not 18 independent worlds.
+
+| Scheduler's first list | Joint meetings with ready marker | Joint meetings with proposed times |
+| --- | ---: | ---: |
+| Contained the joint start | 6/6 | 6/6 |
+| Omitted the joint start | 7/12 | 6/12 |
+| **All pairs** | **13/18** | **12/18** |
+
+The first lists were shared within pairs. The split by first list is descriptive. Sending the proposals changed the responder's recommendation set in 8/18 pairs and the submitted meeting time in 5/18. Both losses occurred in world 06. The gain occurred in world 10. Every recommended time was feasible for the responder. It was not necessarily feasible for the scheduler.
+
+The [native register](results/calendar-query-native.json) contains each team's decoded choices and original reward. [Stock Eval Lab's read-only loader](replication.md#read-the-same-native-teams-with-stock-eval-lab) matched all 36 original trial UUIDs and team rewards. The [public calendar check](results/calendar-query-world-check.json) independently graded all 36 submitted times and confirmed 25 successes. The [service check](results/calendar-query-models.json) matched all 108 first replies: 54 from Sol and 54 from Astra. No call used a paid API key.
+
+Run `python3.12 -S -m examples.seatlab.visibility.calendar_query_summary` for the [registered comparison](results/calendar-query-effects.json). Add `--verify-slots` to check the submitted times against both seats' original availability. Run `python3.12 -S -m examples.seatlab.visibility.calendar_query_service` to match the [service receipts](results/calendar-query-service-receipts.json). None of these commands needs Docker or a model.
+
+The [separate fixed-observation replay](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72) showed the scheduler an actual answer to a question. This native study instead sent proposals **to the responder**. It used 9 different worlds. The results do not contradict each other or establish a general effect of messaging. See the [protocol and instructions](replication.md#does-sending-two-proposed-slots-improve-a-native-schedule).
+
+### Pilot included in the final register
+
+**Pilot snapshot, before enrolling the remaining pairs.** Both native teams in world 01, direction 0, submitted slot 11 and earned 1. The scheduler first proposed slots 2 and 3. With the ready marker, the responder returned `[0,11,19,34]`. With the real proposals, it returned `[0,11]`. Neither reply repeated the scheduler's first proposals. The scheduler could still use the recommendations. The host preserved the four-item response despite asking for at most two.
+
+At this point only 1/18 registered pairs had run. Both stock timelines and all 6 model replies passed the independent checks. The [frozen pilot](https://github.com/PeterMakhnatch/harbor-multiagent/blob/2777dd07f3597e82c262d5e73c1e1628c34519ef/examples/seatlab/results/calendar-query-native.json) remains available. The study did not retry or replace this pair.
 
 ## Does it matter which role gets the calendar tool?
 
@@ -16,6 +38,8 @@ In the first [registered block](replication.md#which-teammate-should-receive-a-l
 The [stock Eval Lab reader](results/role-allocation-stock.json) confirmed all 192 rewards and found 384 native seat records. Those records have no model token counts. The separate [host ledger](results/role-allocation-cost.json) matched 1,152 direct calls at **$0.051333798 USD**, including the first block. No hold remains. The 2 rooms share opening messages; they are not 2 independent worlds.
 
 ## What ran
+
+The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
 
