@@ -5,11 +5,12 @@ from hashlib import sha256
 from math import fsum
 from pathlib import Path
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from .. import evidence, run_panel, seat_agent, team_report
 from ..export_capsules import reconstructed_capsules
 from ..visibility import native_pairs
-from . import protocol
+from . import confirmation, protocol
 
 _EPISODES = 6
 _ROLES = ("inventory", "dispatch")
@@ -26,6 +27,12 @@ _METRICS = (
 )
 
 
+def _agent_import(cell_id: str) -> str:
+    if cell_id.startswith(confirmation.RUN_PREFIX):
+        return confirmation.AGENT_IMPORT
+    return _AGENT_IMPORT
+
+
 def _digest(text: str) -> str:
     return sha256(text.encode("utf-8")).hexdigest()
 
@@ -40,7 +47,7 @@ def _read_native(
         kwargs = participant.get("kwargs")
         if (
             participant.get("name") is not None
-            or participant.get("import_path") != _AGENT_IMPORT
+            or participant.get("import_path") != _agent_import(cell_id)
             or participant.get("model_name") != declared
             or not isinstance(kwargs, dict)
             or not kwargs.keys() <= {"cell_id", "transport", "command_config"}
@@ -258,14 +265,20 @@ def _observation_metrics(
 def inspect_trial(
     trial: Path, config: dict[str, Any], cell: dict[str, Any], transport: str
 ) -> dict[str, Any]:
-    if transport not in ("direct", "commands") or not any(
+    cell_id = cell.get("cell_id")
+    if not isinstance(cell_id, str):
+        raise TypeError("attention cell id must be a string")
+    confirmation_cohort = cell_id.startswith(confirmation.RUN_PREFIX)
+    cells = confirmation.grid() if confirmation_cohort else protocol.grid()
+    transports = ("direct",) if confirmation_cohort else ("direct", "commands")
+    if transport not in transports or not any(
         run_panel._config_matches(registered, cell) and registered.keys() == cell.keys()
-        for registered in protocol.grid()
+        for registered in cells
     ):
         raise ValueError("unregistered attention cell or transport")
     try:
         trial = trial.resolve()
-        native = _read_native(trial, config, cell["cell_id"], transport)
+        native = _read_native(trial, config, cell_id, transport)
         dossier = team_report._read_object(trial / "artifacts/logs/world/handoff.json")
         receipt, world = evidence.read_trial_with_world(trial)
         score = receipt["score"]
@@ -281,8 +294,14 @@ def inspect_trial(
             raise ValueError("native world differs from the registered world")
         records = evidence._by_role(native.get("seat_results"), "seat_results")
         opened, turns = _reconcile_turns(records, world, cell, transport)
+        trial_id = receipt["trial_id"]
+        if confirmation_cohort:
+            alias = uuid5(NAMESPACE_URL, f"{confirmation.REPORT_SCHEMA}:{trial_id}")
+            identity = {"trial_alias": str(alias)}
+        else:
+            identity = {"trial_id": trial_id}
         return {
-            "trial_id": receipt["trial_id"],
+            **identity,
             "fingerprint": receipt["fingerprint"],
             "native_score": score["optimal"] / _EPISODES,
             "actions": [
@@ -324,7 +343,7 @@ def _index(
     outcomes: bool,
 ) -> dict[str, dict[str, Any]]:
     if len(entries) != len(registered):
-        raise ValueError("expected exactly 24 registered attention cells")
+        raise ValueError("expected exactly the registered attention cells")
     indexed: dict[str, dict[str, Any]] = {}
     for entry in entries:
         cell_id = entry.get("cell_id") if isinstance(entry, dict) else None
@@ -349,19 +368,25 @@ def _index(
 
 
 def _score_index(
-    rows: dict[str, dict[str, Any]],
+    rows: dict[str, dict[str, Any]], *, confirmation_cohort: bool
 ) -> dict[tuple[int, int, str], float | None]:
     scores: dict[tuple[int, int, str], float | None] = {}
     fingerprints: dict[int, str] = {}
     trial_ids: set[str] = set()
+    identity_key = "trial_alias" if confirmation_cohort else "trial_id"
     for cell_id, row in rows.items():
         seed = row["seed"]
         outcome = row["outcome"]
         score = None
         if outcome is not None:
             score = outcome["native_score"]
-            trial_id = evidence._trial_id({"id": outcome["trial_id"]})
+            trial_id = evidence._trial_id({"id": outcome[identity_key]})
             fingerprint = outcome["fingerprint"]
+            if confirmation_cohort and (
+                "trial_id" in outcome
+                or fingerprint != team_report._registered_fingerprint(seed, _EPISODES)
+            ):
+                raise ValueError("outcome does not identify the registered world")
             if (
                 type(score) not in (int, float)
                 or not 0 <= score <= 1
@@ -380,11 +405,12 @@ def _score_index(
 
 def _primary(scores: dict[tuple[int, int, str], float | None]) -> dict[str, Any]:
     seeds = sorted({seed for seed, _, _ in scores})
+    repetitions = sorted({rep for _, rep, _ in scores})
     seed_blocks = []
     lower, upper = [], []
     for seed in seeds:
         deltas = []
-        for rep in (0, 1):
+        for rep in repetitions:
             named, count = (scores[seed, rep, arm] for arm in _ARMS)
             if named is not None and count is not None:
                 deltas.append(named - count)
@@ -452,12 +478,16 @@ def _secondary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def summarize(
-    cells: list[dict[str, Any]], rows: list[dict[str, Any]]
+    cells: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    *,
+    confirmation_cohort: bool = False,
 ) -> dict[str, Any]:
-    registered = {cell["cell_id"]: cell for cell in protocol.grid()}
+    grid = confirmation.grid() if confirmation_cohort else protocol.grid()
+    registered = {cell["cell_id"]: cell for cell in grid}
     _index(registered, cells, outcomes=False)
     indexed = _index(registered, rows, outcomes=True)
-    scores = _score_index(indexed)
+    scores = _score_index(indexed, confirmation_cohort=confirmation_cohort)
     observed = sum(score is not None for score in scores.values())
     return {
         "registered_cells": len(registered),
