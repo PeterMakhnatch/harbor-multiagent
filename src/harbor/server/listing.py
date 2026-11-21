@@ -25,6 +25,7 @@ Table = Literal["internal_job", "internal_rollout"]
 LATEST_ROLLOUT_SOURCE = (
     "internal_rollout_request q JOIN internal_rollout r ON r.id = q.latest_rollout_id"
 )
+JOB_AGENT_NAMES_SOURCE = "json_each(folder_job_agent_names(j.id))"
 METADATA_FIELDS = (
     "agent_name",
     "agent_version",
@@ -52,6 +53,7 @@ def predicates(
     *,
     jobs: bool,
     native_job_times: bool = False,
+    declared_job_agents: bool = False,
     joined_metadata: bool = False,
     public: bool = False,
     exclude: str | None = None,
@@ -91,10 +93,16 @@ def predicates(
     metadata_params: list[Any] = []
     for field in METADATA_FIELDS:
         values = getattr(filters, field)
-        if field != exclude and values:
-            metadata.append(
-                f"{column(field, 'r')} IN ({','.join('?' for _ in values)})"
+        if field == exclude or not values:
+            continue
+        placeholders = ",".join("?" for _ in values)
+        if jobs and declared_job_agents and field == "agent_name":
+            clauses.append(
+                f"EXISTS (SELECT 1 FROM {JOB_AGENT_NAMES_SOURCE} WHERE value IN ({placeholders}))"
             )
+            params.extend(values)
+        else:
+            metadata.append(f"{column(field, 'r')} IN ({placeholders})")
             metadata_params.extend(values)
     if exclude != "task" and filters.task:
         task_clauses = []
@@ -136,6 +144,7 @@ def page(
     columns: tuple[str, ...],
     *,
     native_job_times: bool = False,
+    declared_job_agents: bool = False,
     job_id: UUID | None = None,
 ) -> Page[dict[str, Any]]:
     jobs = table == "internal_job"
@@ -154,6 +163,8 @@ def page(
     scope_filters = request.model_dump(mode="json", exclude={"page_token", "page_size"})
     if native_job_times:
         scope_filters["native_job_times"] = True
+    if declared_job_agents and request.agent_name:
+        scope_filters["declared_job_agents"] = True
     # Descriptive pin names and repeated OR ordering do not change task identity.
     scope_filters["task"] = sorted(
         {
@@ -173,7 +184,12 @@ def page(
         ).encode()
     ).hexdigest()
     where, params = predicates(
-        request, owner_id, jobs=jobs, native_job_times=native_job_times, job_id=job_id
+        request,
+        owner_id,
+        jobs=jobs,
+        native_job_times=native_job_times,
+        declared_job_agents=declared_job_agents,
+        job_id=job_id,
     )
 
     page_where, page_params = where, params.copy()
@@ -238,30 +254,37 @@ def filter_values(
     field: FilterField,
     *,
     native_job_times: bool = False,
+    declared_job_agents: bool = False,
     job_id: UUID | None = None,
 ) -> FilterValuesResponse:
     jobs = table == "internal_job"
-    # Disjunctive facets retain alternatives; metadata and the selected choice
-    # must belong to the same rollout when counting distinct jobs.
+    roster_facet = jobs and declared_job_agents and field == "agent_name"
+    # Disjunctive facets retain alternatives. Rollout-based filters and facet
+    # values must still match the same rollout.
     where, params = predicates(
         filters,
         owner_id,
         jobs=jobs,
         native_job_times=native_job_times,
-        joined_metadata=jobs and field != "state",
+        declared_job_agents=declared_job_agents,
+        joined_metadata=jobs and field != "state" and not roster_facet,
         exclude=field,
         job_id=job_id,
     )
-    alias = "j" if jobs and field == "state" else "r"
-    key = "r.task_digest" if field == "task" else column(field, alias)
-    value = "min(r.task_name) || '@' || r.task_digest" if field == "task" else key
-    source = (
-        "internal_job j"
-        if jobs and field == "state"
-        else "internal_rollout r JOIN internal_job j ON j.id = r.job_id"
-        if jobs
-        else "internal_rollout r"
-    )
+    if roster_facet:
+        key = value = "a.value"
+        source = f"internal_job j, {JOB_AGENT_NAMES_SOURCE} a"
+    else:
+        alias = "j" if jobs and field == "state" else "r"
+        key = "r.task_digest" if field == "task" else column(field, alias)
+        value = "min(r.task_name) || '@' || r.task_digest" if field == "task" else key
+        source = (
+            "internal_job j"
+            if jobs and field == "state"
+            else "internal_rollout r JOIN internal_job j ON j.id = r.job_id"
+            if jobs
+            else "internal_rollout r"
+        )
     count = "count(DISTINCT j.id)" if jobs else "count(*)"
     rows = db.execute(
         f"SELECT {value} AS value, {count} AS count FROM {source} WHERE {where} AND {key} IS NOT NULL GROUP BY {key} ORDER BY {key} LIMIT ?",

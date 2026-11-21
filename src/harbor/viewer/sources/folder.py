@@ -28,7 +28,7 @@ from harbor.server.models import (
     QueryRequest,
 )
 from harbor.server.service import JOB_SUMMARY_COLUMNS, ROLLOUT_SUMMARY_COLUMNS, Service
-from harbor.viewer.scanner import JobScanner
+from harbor.viewer.scanner import JobScanner, declared_job_agent_names
 from harbor.viewer.sources.base import Operation
 
 
@@ -43,8 +43,11 @@ class FolderSource(JobScanner):
     def __init__(self, jobs_dir: Path):
         super().__init__(jobs_dir.resolve())
         self._temporary = TemporaryDirectory(prefix="harbor-view-index-")
+        self._job_agent_names: dict[str, list[str]] = {}
         self._database = SQLiteDatabase(
-            Path(self._temporary.name), native_job_times=True
+            Path(self._temporary.name),
+            native_job_times=True,
+            job_agent_names=lambda job_id: self._job_agent_names[job_id],
         )
         self._signature: list[tuple[str, int, int]] | None = None
         self._executor = ThreadPoolExecutor(
@@ -65,7 +68,7 @@ class FolderSource(JobScanner):
             parts = path.relative_to(self.jobs_dir).parts
             if len(parts) >= 3:
                 trial_files.setdefault((parts[0], parts[1]), []).append(path)
-        job_ids = set()
+        job_agent_names: dict[str, list[str]] = {}
         rollout_ids = set()
         with database.transaction():
             database.db.execute("DELETE FROM internal_rollout")
@@ -83,9 +86,9 @@ class FolderSource(JobScanner):
                 job_id = (
                     result.id if result else uuid5(NAMESPACE_URL, directory.as_uri())
                 )
-                if job_id in job_ids:
+                if str(job_id) in job_agent_names:
                     job_id = uuid5(NAMESPACE_URL, directory.as_uri())
-                job_ids.add(job_id)
+                job_agent_names[str(job_id)] = declared_job_agent_names(config)
                 database.insert_job(
                     JobRecord(
                         id=job_id,
@@ -176,6 +179,7 @@ class FolderSource(JobScanner):
                             artifacts=artifacts,
                         )
                     )
+        self._job_agent_names = job_agent_names
 
     def _read(self, operation: Operation, parameters: dict[str, Any]) -> Any:
         files = self._files()

@@ -132,6 +132,61 @@ def test_folder_contract_and_legacy_routes(tmp_path):
         require(not (tmp_path / "harbor.sqlite3").exists())
 
 
+def test_folder_jobs_use_declared_agent_roster(tmp_path):
+    _, trial, directory = write_job(tmp_path)
+    custom = "missing_folder_test_agent.custom:SeatAgent"
+    root_agents = [{"name": "oracle"}]
+    (directory.parent / "config.json").write_text(
+        json.dumps(
+            {
+                "agents": root_agents,
+                "participants": [
+                    {"seat": "candidate", "name": "named-agent"},
+                    {"seat": "peer-a", "import_path": custom},
+                    {"seat": "peer-b", "import_path": custom},
+                    {"seat": "observer", "name": "observer"},
+                ],
+            }
+        )
+    )
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    (legacy / "config.json").write_text(
+        json.dumps({"agents": root_agents, "participants": []})
+    )
+    route = "/api/source/jobs"
+    native_names = [custom, "named-agent", "observer"]
+    expected = {"example": native_names, "legacy": ["oracle"]}
+    with TestClient(create_app(tmp_path), client=("127.0.0.1", 50000)) as client:
+        items = client.get(route).json()["items"]
+        assert {item["name"]: item["agent_names"] for item in items} == expected
+        for item in items:
+            detail = client.get(f"{route}/{item['id']}").json()["job"]
+            assert detail["agent_names"] == expected[item["name"]]
+        for name, names in expected.items():
+            for agent in names:
+                page = client.get(route, params={"agent_name": agent}).json()
+                assert [item["name"] for item in page["items"]] == [name]
+        assert client.get(route, params={"agent_name": "nop"}).json()["total"] == 0
+
+        for filters, names in (
+            ({}, sorted([*native_names, "oracle"])),
+            ({"task": "hello", "agent_name": "oracle"}, native_names),
+        ):
+            facets = client.get(
+                f"{route}/filters", params={"field": "agent_name", **filters}
+            ).json()
+            assert facets["values"] == [{"value": name, "count": 1} for name in names]
+        task_facets = client.get(
+            f"{route}/filters", params={"field": "task", "agent_name": custom}
+        ).json()
+        assert task_facets["values"] == [
+            {"value": "hello@sha256:" + "a" * 64, "count": 1}
+        ]
+        rollouts = client.get("/api/source/rollouts", params={"agent_name": "nop"})
+        assert [item["id"] for item in rollouts.json()["items"]] == [str(trial.id)]
+
+
 def test_native_job_dates_keep_offsetless_starts_outside_absolute_order(tmp_path):
     reference = datetime.now(UTC)
     recent = (reference - timedelta(hours=13)).astimezone(
@@ -183,6 +238,9 @@ def test_native_job_dates_keep_offsetless_starts_outside_absolute_order(tmp_path
             )
             assert [row["name"] for row in shared[:2]] == expected
             assert {row["name"] for row in shared[2:]} == set(historical)
+            for name, (result, _, _) in historical.items():
+                item = next(row for row in shared if row["name"] == name)
+                assert item["started_at"] == result.started_at.isoformat()
 
         cutoff = (
             (reference - timedelta(days=1))
@@ -205,10 +263,6 @@ def test_native_job_dates_keep_offsetless_starts_outside_absolute_order(tmp_path
             start = result.started_at.isoformat()
             assert (
                 next(row for row in legacy if row["name"] == name)["started_at"]
-                == start
-            )
-            assert (
-                next(row for row in shared if row["name"] == name)["started_at"]
                 == start
             )
             assert client.get(f"/api/jobs/{name}").json()["started_at"] == start
