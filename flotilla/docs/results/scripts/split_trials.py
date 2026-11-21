@@ -32,7 +32,7 @@ MAX_MISSED, MAX_COST = 0.10, 0.50
 def main() -> None:
     jobs, pattern = Path(sys.argv[1]), sys.argv[2]
     rows = []
-    for row in WAVE.trials(jobs, pattern):  # valid = a verifier score, no error, no Harbor exception
+    for row in WAVE.trials(jobs, pattern, scorer=SPLIT.score_game):  # valid: a score, no error, no exception
         trial = jobs / row["job"] / row["trial"]
         result = json.loads((trial / "result.json").read_text())
         task = json.loads((Path(result["task_id"]["path"]) / "environment" / "task.json").read_text())

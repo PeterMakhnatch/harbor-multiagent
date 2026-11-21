@@ -52,7 +52,9 @@ def tokens_and_cost(result: dict) -> tuple[dict[str, int], float]:
     return tokens, rate(when) * sum(tokens[k] * OFF_PEAK[k] for k in tokens) / 1e6
 
 
-def trials(jobs: Path, pattern: str) -> list[dict]:
+def trials(jobs: Path, pattern: str, scorer=None) -> list[dict]:
+    """Every trial of the matching jobs; `scorer` recomputes the measures (default: commons score_game)."""
+    scorer = scorer or COMMONS.score_game
     found = []
     for trial in sorted(jobs.glob(f"{pattern}/*/")):
         if not (trial / "result.json").is_file():
@@ -68,7 +70,7 @@ def trials(jobs: Path, pattern: str) -> list[dict]:
         if valid:  # every measure from the frozen round log, whatever verifier version wrote score.json
             task = json.loads((Path(result["task_id"]["path"]) / "environment" / "task.json").read_text())
             log = (json.loads(state_path.read_text()).get("game") or {}).get("log") or []
-            score |= COMMONS.score_game(task["game"], log)
+            score |= scorer(task["game"], log)
         found.append({"job": trial.parent.name, "trial": trial.name, "started": result.get("started_at") or "",
                       "score": score, "valid": valid, "tokens": tokens, "cost": cost,
                       "instance": score.get("instance"), "arm": score.get("condition")})
