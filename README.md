@@ -91,10 +91,39 @@ Job archives include canonical regular retry outcome files.
 Their names and raw bytes are part of the archive revision.
 Changed outcomes cannot reuse stale finalized pointers or resumable archives.
 Batch metadata still lists retained Trials only.
-Legacy Jobs without retry outcomes keep their archive names and members.
+Jobs without retry outcomes or eligible seat logs keep their legacy archive names
+and members.
 
 Local extraction preserves these files. It does not refresh existing restore
 directories or `.sources` caches automatically.
+
+## Native seat archives
+
+Trial and Job archives include regular files from
+`seats/<declared-seat>/agent/` at their original relative paths.
+The roster comes from `config.json.participants[].seat`, including supporting
+seats. Empty regular files count as payload; empty directories do not.
+The selector excludes undeclared seats, symlink roots, parents and leaves,
+and special files. Checked file descriptors prevent a swapped link from
+adding bytes outside the selected tree.
+
+Fresh archives capture eligible seat files in bounded chunks.
+The same capture supplies archive naming and tar members.
+Eligible payload adds `-seats-v1` before the existing `.tar.gz` suffix.
+This changes remote keys, local archive names, and resumable sidecar names.
+The uploader does not reuse legacy-name archive and TUS pairs for seat payload.
+An exact-key pending upload resumes its original bytes, not later local changes.
+
+Both finalized Trial paths and the Job sweep can migrate an old archive pointer.
+They publish the new pointer only after upload succeeds.
+A Trial migration updates only the archive path and preserves its stored
+direct trajectory pointer.
+If local seat payload is absent, an observed seat-aware pointer remains intact.
+The pointer check and publication are not one atomic operation across
+independent uploaders.
+
+This capture does not snapshot unrelated running Job files.
+It preserves retained seat logs, not deleted retry directories.
 
 ## Toward Harbor
 
