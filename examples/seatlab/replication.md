@@ -268,3 +268,58 @@ The primary estimate was **+0.25 excess claims per team** with disclosure. All 3
 Of 14 blocks that began with a duplicate new proposal, none finished without a duplicate when proposals were visible. Two did when proposals were masked. A descriptive check explains where the extra duplicates came from: **all 9 seats that switched with disclosure left a unique proposal for a box a teammate had proposed and still chose.** Only 1 of the 4 masked switches had that pattern. These are observed choices, not evidence of model intent.
 
 All 36 proposal barriers verified. The [paired report](results/muster-box-intentions-results.json) includes every choice and rotation. The [direct cost ledger](results/muster-box-intentions-cost.json) matched all 324 calls with no unresolved hold. The estimated cost was **$0.012125736 USD**. These are 3 archived game states and 1 model. No selected box was opened. We did not measure new flags or a native team reward.
+
+### Does an explicit ownership rule help when the searchers actually open boxes?
+
+**Registered before the first new model reply or native control.** The preceding experiment measured a collision between proposals. It did not measure whether the team found a flag. Here, each arm restores the original game and makes 3 new, real opens. The comparison holds the prior 3 model proposals fixed. It tests a shared rule, not an enforced reservation.
+
+Use all 36 proposal triples from the [preceding report](results/muster-box-intentions-results.json), SHA-256 `8b80f2330fcf0f93cd877226cc2ce30087b8cf48cefc88fc52cffdeecc312bc2`. Extract only the registered coordinate and the proposals. Do not use a previous final decision. Use the same 3 worlds, both numberings, all 3 rotations, and both original proposal repetitions. Construct 2 fresh teams per triple. Use the neutral arm first if the previous schedule put the masked arm first. Otherwise start with ownership.
+
+1. Check the original task's legacy checksum and package digest against the archived trial. Run the stock 3-seat task and its stock verifier. Use only private local Docker networks.
+2. Restore the accepted opens and game messages before the fixed anchor. Each seat makes its own original writes in the archived service order. Do not replay rejected requests, the anchor, or later events. Check each seat's live open history, remaining budget, identity, and shared mailbox before requesting a model reply.
+3. Show each model its own flag observations, its label, the public rules, prior peer box numbers, and all 3 sealed proposals. Do not supply the free-text mailbox, a peer's flags, a later action, a reward, or the hidden layout. This restores the **game state**, not the original models' memories.
+4. Give all 3 seats the same policy. **Neutral:** a proposal is a suggestion. Nobody has priority. **Ownership:** the earliest proposing label owns each proposed box (A before B before C). Keep an owned proposal. Otherwise choose outside all proposals. The game does not enforce either policy. Every box remains legal. The other prompt text and generation settings are the same.
+5. Ask labels A, B, and C once each. Seal all replies before executing any new open. An invalid reply prevents all 3 new opens. Do not replace it. If all replies are valid, execute the choices in physical seat order p1, p2, p3. Preserve legal duplicates. Stop immediately and let the stock verifier close the game.
+
+Primary: number of **new distinct flag boxes**, ownership minus neutral. The native reward includes the archived prefix. Subtract the number of distinct flag boxes opened before the cutoff from the final stock flag count. Pair within the same proposal triple. Average complete differences within each world, then weight the 3 worlds equally. Withhold that estimate if any world lacks a complete pair. An unknown increment is not zero.
+
+Secondary: native reward, number of distinct new boxes, excess claims on the same new box, historical repeats, and single-seat switches. Separate teams whose starting proposals already collide from those whose proposals do not. Count whether a seat keeps a proposal it owns, or selects outside all proposals if it does not own its proposal. Analyze both policies with the same definition. Report every missing or invalid arm. Publish only safe aggregates, decoded actions, and digests. Never publish the raw mailbox or model replies.
+
+Use the same direct model and settings as the preceding experiment. At most 216 new paid calls are eligible. Stop on an uncertain charge or custody failure. The analysis addresses this **single next move** on 3 fixed historical states. It does not measure a complete search policy, or establish a benefit on new games or models.
+
+**Run one seat without private files.** The following commands use only the published proposal triples and role histories. They never execute a game or call a model.
+
+```sh
+module=examples.seatlab.visibility
+run=bo-i01-m0-l0-r0-neutral
+python -m "$module.ownership_protocol" prompt "$run" --seat A
+printf '%s\n' '{"box":12}' | python -m "$module.ownership_protocol" decode "$run"
+```
+
+**Run the native verifier.** This step requires the unmodified original Muster `team-3` boxes tasks and the retained original `team-3` trials. An arbitrary regenerated task is not a substitute. Supply physical absolute paths for `$ARCHIVE`, `$TASKS`, and `$PRIVATE`. The local Harbor environment needs Docker. `$PRIVATE` must be an owner-only directory outside the checkout.
+
+```sh
+mkdir -m 700 "$PRIVATE/controls"
+python -m "$module.ownership_driver" demo --archive "$ARCHIVE" --tasks "$TASKS" \
+  --out "$PRIVATE/controls/$run" --block bi-i01-m0-l0-r0 --arm neutral
+python -m "$module.ownership_report" --archive "$ARCHIVE" --tasks "$TASKS" \
+  --study "$PRIVATE/controls"
+```
+
+The demo uses a fixed reply. It does not use a key. We verified all 3 original histories with [separate no-key controls](results/muster-box-ownership-controls.json). Eval Lab read all 9 native seat records. The stock rewards were 0.05, 0.10, and 0.10. The controls found no additional flags. They do not count as model evidence.
+
+For an authorized paid study, use `direct` instead of `demo`, a new private study directory, and the existing initialized `SEATLAB_SPEND_DIR`. Never resubmit an attempted ID. Use `ownership_protocol plan` for the registered order. Use `ownership_meter --study "$STUDY" --spend-dir "$SEATLAB_SPEND_DIR"` to check direct usage, unsettled charges, and native timing. The meter does not replace a native reward with an estimate.
+
+**Result: fewer duplicate choices did not produce more flags.** All 36 matched pairs finished in the stock game. Each team started with the same observations and the same 3 model proposals as its paired team.
+
+| One new move per seat | Neutral | Ownership rule |
+| --- | ---: | ---: |
+| New flag boxes across 36 teams | 48 | 46 |
+| Distinct, previously unopened boxes selected | 89 | 92 |
+| Excess claims on the same new box | 17 | 14 |
+| Seats that changed their initial choice, of 108 | 17 | 23 |
+| Mean native team reward, including the restored prefix | 0.1500 | 0.1472 |
+
+Ownership found more flags in 4 pairs, fewer in 6, and the same number in 26. The registered difference was **−0.056 new flags per team**. The world differences were 0, 0, and −0.167. In the 14 pairs whose initial proposals collided, each policy found 18 new flags. This is one move in 3 fixed worlds. It does not establish that ownership rules reduce reward in general.
+
+The [native decisions and scores](results/box-ownership-native.json) retain all 72 trial identities as digests. The [meter](results/box-ownership-meter.json) matched all 216 new model calls to their native seat receipts. All calls fell after restoration and before the first new open. [Stock Eval Lab](results/box-ownership-evallab.json) independently read all 72 native rewards and 216 seat records. Harbor did not record token counts for these relay seats. The separate [direct ledger](results/box-ownership-cost.json) gives **$0.005842944 USD**, at the published rates for the request times, with no unresolved charges.

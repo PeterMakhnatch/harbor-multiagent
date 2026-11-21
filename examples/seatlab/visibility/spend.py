@@ -23,6 +23,7 @@ _ROLES = {
     "dispatch",
     "decision_maker",
     "box_intent",
+    "box_open",
     "box_receiver",
     "analyst_1",
     "analyst_2",
