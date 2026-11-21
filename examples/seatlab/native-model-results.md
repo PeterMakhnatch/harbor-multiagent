@@ -10,6 +10,14 @@ The first DeepSeek writer returned a 337-byte note against the 256-byte limit. I
 
 Two independent local programs also ran a non-shipping example with 18 subprocess calls. The replacement answered questions about opening hours. Two changed cases used separate final answers, and two unchanged cases shared one actual answer each. No private note or opening time appeared in the report. This checks the portable interface, not a model.
 
+**Naming the revised record improved lookup, but many final answers were invalid.** On changed cases, the named policy selected the revised record on **77 of 77** valid selections. The anonymous policy selected it on **17 of 70**. The changed record had an optimal final choice in 39 of 50 observed named decisions and 20 of 45 anonymous decisions. These last two denominators differ.
+
+The [complete decision record](results/handoff-live.json) has all 120 claimed blocks. Of the 96 changed blocks, both decisions were valid in only **38**. Across those pairs, the named policy improved 13, worsened 1, and tied 24. The registered equal-world difference was **+32.64 percentage points** on complete pairs. Across all 96 scheduled comparisons, the missing-data bounds are **−27.08 to +61.46 points**. These are not confidence intervals. The study does not establish an improvement across the full register. The 20 complete stable controls tied.
+
+The [stock check](results/handoff-stock.json) confirmed 416 choices in 104 distinct final decisions across 12 worlds. Both policies shared 31 complete decisions after opening the same record. All [470 first calls](results/handoff-cost.json) matched the host ledger at **$0.025455102 USD** including the first block. The final ledger has no open hold. No new Harbor trial ran for this comparison.
+
+The [96-byte follow-up](replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) preserves all 120 actual writer responses, including the 21 that failed the first study's note contract. The [source seal](results/packing-source.json) pins them without publishing the notes. As a separate interface check, two desk programs compared clipping with extracting the hours from four 166-byte notes. All 12 packing and decision processes completed at no cost. This checks the harness only.
+
 ## Can a new dispatcher learn which stock source to trust?
 
 The [registered experiment](replication.md#how-quickly-does-a-team-stop-trusting-a-stale-source) gives the selector only feedback from its own team's completed decisions. One policy remembers all of them. The other remembers the last 2. A separate inventory agent reports the stock it sees. Half the source assignments reverse without notice.

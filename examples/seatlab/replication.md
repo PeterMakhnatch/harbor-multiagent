@@ -142,6 +142,22 @@ To use Dispatch Handoff instead, omit `--packet` and `--sha256`. `packet` prints
 - Primary: `rewrite − prefix` in correct choices on **unchanged** records. Compute the fraction within each block, then the mean within each native world, then the mean across 12 worlds. A correct answer to a disclosed revised record cannot improve this measure. Report complete pairs and missing-choice bounds. Do not present a 12-world estimate when any world lacks a complete pair. Report revised-record accuracy, shared answers, invalid sources, byte use, and actual call costs separately.
 - Use the existing direct DeepSeek Flash settings and ledger. Each block can start 1 packing call and 2 successor calls at most: 360 total. The prefix policy has no packing-call charge. The experiment tests this cost tradeoff, not equal compute. Check observed default-domain decisions against the original native scorer. These are new decisions on fixed records, not new Harbor trials.
 
+**Try it with your own completed handoff.** Keep the original private directory. Do not run its writer again. Use the same packet and exact digest as before. Omit `--packet` and `--sha256` only for the included Dispatch worlds.
+
+```sh
+packing=examples.seatlab.packing
+original="$private/study"
+python -m "$packing" seal --packet "$packet" --sha256 "$digest" --original "$original" > "$private/seal.json"
+seal=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_sha256"])' "$private/seal.json")
+mkdir -m 700 "$private/packing"
+python -m "$packing" commands --packet "$packet" --sha256 "$digest" --source-sha256 "$seal" \
+  --original "$original" --study "$private/packing" --config packing-seats.json --start 0 --stop 2
+python -m "$packing" report --packet "$packet" --sha256 "$digest" --source-sha256 "$seal" \
+  --original "$original" --study "$private/packing" > "$private/packing-report.json"
+```
+
+Use the same two-program configuration format as `handoff commands`. The `reviewer` now rewrites notes. It sees no questions, records, or answer key. The `decider` receives one packed note per decision. You may replace either executable. Give parallel workers disjoint indices. A changed source digest stops the run. The public report contains response hashes and choices, not raw notes.
+
 ### Repeat the handoff comparison on saved native Harbor trials
 
 **Recorded-source replication, registered before new model responses.** For each of the 4 registered mixed-roster seeds, select the first scored `reordered` trial in the published register. This selects seeds `4001`, `4003`, and `4007`. Seed `4013` has no eligible trial. Use every shipment ID, `0` through `5`. Do not select on score, disagreement, or whether a shipment changed.
