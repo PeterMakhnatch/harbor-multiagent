@@ -20,6 +20,8 @@ python -m examples.seatlab.handoff plan \
 
 Run this command from this branch with Python 3.12 or later. It needs no account or Docker. The [working example](examples/seatlab/replication.md#run-a-handoff-on-your-own-records) shows how to run two programs, capture their first answers, and score them. It also accepts your own records.
 
+To start from real Harbor data, use the [saved trial packet](examples/seatlab/replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials). No private archive is needed. From your own completed handoff, you can compare [shorter notes](examples/seatlab/replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) or [one worker per answer](examples/seatlab/replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs). Each worker claims a separate first attempt. The [results](examples/seatlab/native-model-results.md#does-a-revised-record-help-a-replacement-agent-find-the-right-context) distinguish a better lookup from a better final decision.
+
 ## Install
 
 ```bash

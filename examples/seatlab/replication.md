@@ -195,6 +195,31 @@ The [published 3-trial packet](results/handoff-recorded-packet.json) also works 
 - Also report how many records each valid submission answered, native stock accuracy on completed deliveries, and correct delivered choices per eligible record. Count no choice from a rejected whole-map answer. Count valid owner submissions separately even if another owner fails. The stock check must flag any disagreement on an observed choice. Report actual distinct model calls and costs per strategy. No team receives a truth value, an original final answer, or other unopened stock.
 - A work index identifies one physical call. Different local workers can claim disjoint indices. The immutable source digest and the original spend ledger block repeat charges after an interruption. Reports never publish role prompts or private notes.
 
+To compare output strategies on your own handoff, use the same packet, digest, and original private study. The following commands use no built-in provider:
+
+```sh
+coverage=examples.seatlab.coverage
+original="$private/study"
+source_args=(--packet "$packet" --sha256 "$digest" --original "$original")
+python -m "$coverage" seal "${source_args[@]}" > "$private/coverage-source.json"
+seal=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_sha256"])' "$private/coverage-source.json")
+source_args+=(--source-sha256 "$seal")
+python -m "$coverage" plan "${source_args[@]}"
+mkdir -m 700 "$private/coverage"
+study_args=(--study "$private/coverage")
+python -m "$coverage" commands "${source_args[@]}" "${study_args[@]}" --config seats.json --start 0 --stop 2
+python -m "$coverage" pending "${source_args[@]}" "${study_args[@]}"
+python -m "$coverage" report "${source_args[@]}" "${study_args[@]}" > "$private/coverage-report.json"
+```
+
+Use Bash for this example. Set `decider` to your batch and checklist program. Set `reviewer` to the program that answers for one record. Each `plan` index represents one real process call, not one whole team. Start a second worker on a disjoint range. A claim remains occupied after an interrupted call. For paid direct runs, always give `pending` and `report` the original `--spend-dir`. `stock` checks the included Dispatch domain, not custom packets. The [source seal](results/coverage-source.json) lists the 99 observed requests and the 21 slots without one; it contains no raw notes or answers.
+
+### Can a different subscription harness use the same recorded trial packet?
+
+**Registered before collecting subscription teams.** Use the [recorded packet](results/handoff-recorded-packet.json) without modifying its rubric or its role prompts. In each of its 3 worlds, test the first revised case and the stable control, with both registered repetitions. This gives 12 handoffs and at most 60 new first calls. Do not select cases by the previous teams' answers.
+
+Use the same explicitly named subscription model for both new roles through a trusted external command. Give it no tool, earlier conversation, API key, packet, or private journal. Reject a reply when the served model differs. Retain a missing call; do not retry or switch providers within the cohort. Record prompt and response commitments and service-reported tokens separately from the original Harbor trial. Primary: how many of 12 writer turns yield a valid note, then how many named and anonymous successors deliver a complete decision. Check accepted choices against the stock scorer. This small replication tests portability and contract completion, not relative model quality.
+
 ## How quickly does a team stop trusting a stale source?
 
 **Registered before the first model call.** The preceding Crucible experiment supplied prior accuracy. It did not let the team learn from its own choices. Here, two independently callable agent roles make decisions on new Dispatch Handoff worlds. Each choice affects the information the next selector receives. The world generator and stock scoring rule are unmodified. This is a host-side experiment, not a native Harbor trial.
