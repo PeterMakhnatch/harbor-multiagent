@@ -134,7 +134,9 @@ outside option (true, false or not stated; read by hand).
 
 ## 7. Regime b pilot: result
 
-The pilot ran from 2:58 AM to 4:21 AM ET (2026-11-21), off-peak. `split_trials.py <jobs> 'sp2-??????' sp2`:
+The pilot ran from 2:59 AM to 4:21 AM ET (2026-11-21), off-peak. `split_trials.py <jobs> 'sp2-??????' sp2`. A
+separate agent re-derived every number below from the raw files with its own script ($0); all match, and 4
+wording errors it found are corrected here.
 
 - **Validity test: FAIL.** 8 of 8 trials are valid (a verifier score, no error), and the real cost is $0.3660 from
   tokens (cap $0.40). But 10 of 62 seat-rounds (16.1%) were missed, above the 10% limit. All 10 are in silent
@@ -142,9 +144,10 @@ The pilot ran from 2:58 AM to 4:21 AM ET (2026-11-21), off-peak. `split_trials.p
   rounds 4-6, instance 3 rounds 4-6), and the seat stopped claiming on purpose ("We intentionally avoided claims
   once the pot fell below our 51-point outside option"). In regime b, not claiming is a valid way to refuse a
   deal, so this is a strategy, not a fault, and the pre-registered limit does not fit this regime. The other 4
-  (6.5%) are real misses: instance 0 p1 rounds 1, 2 and 4, and instance 2 p1 round 1. In instance 0, p1 spent
+  (6.5%) are other misses: instance 0 p1 rounds 1, 2 and 4, and instance 2 p1 round 1. In instance 0, p1 spent
   rounds 1 and 2 looking for the other seat's outside option in its own environment (environment variables,
-  `/logs/agent`, the tmux pane), and found nothing.
+  `/logs/agent`, the tmux pane), and found nothing. In instance 2, p1 skipped round 1 on purpose, to see the
+  other claim first (corrected after the independent re-derivation; this section said "real misses" before).
 - **Ceiling test: PASS.** 8 of 8 trials did not end in an equal split in round 1 (sp1: 0 of 6).
 - **Talk observation: holds.** Talk efficiency was at least the silent efficiency in 4 of 4 instances.
 
@@ -157,14 +160,15 @@ The pilot ran from 2:58 AM to 4:21 AM ET (2026-11-21), off-peak. `split_trials.p
 
 Observed:
 
-- Silent: no deal in 4 of 4 (mean efficiency 0.733). The weak seat did not learn from the strong seat's
-  claims. In instance 1, p1 claimed half of the pot in every round (42, 34, 27, 22, 17) while p2 claimed 58 or
-  more each time.
+- Silent: no deal in 4 of 4 (mean efficiency 0.733). In instance 1, p1 claimed about half of the pot in rounds
+  1 to 5 (42, 34, 27, 22, 17) and 17 in round 6, while p2 claimed 58, 60, 55, 44, 35 and 28: the claims never
+  fit. In instance 3, p2 used p1's round 1 claim (106 of 129) and dropped to 18, but p1 then claimed the whole
+  pot (103 of 103), and later stopped claiming.
 - Talk: a deal in 4 of 4 (mean efficiency 0.848), 3 of them in round 2: the round 1 claims went in before the
   seats had read each other's messages, or the weak seat first proposed the equal split.
 - In every talk deal, the strong seat got exactly its outside option, and the weak seat got the whole surplus
-  (surplus share 1.0). The strong seats stated their outside option and then claimed exactly that value; none
-  asked for a part of the surplus.
+  (surplus share 1.0). The strong seats stated their outside option and settled at that value. Only 1 strong
+  seat asked for part of the surplus: in instance 0, p2 (outside option 55) first proposed 65, then took 55.
 - What talk seats said about their outside option: 6 of 8 seats stated it; 5 statements were true, 1 was false.
   In instance 0, the weak seat p1 (outside option 6) wrote "My outside option is 25", which equals what was left
   after p2's 55 in the shrunken pot of 80; the lie did not change the deal.
@@ -175,6 +179,6 @@ fail to coordinate, and talk lets them find the feasible deal, mostly one round 
 bargaining over the surplus: the strong seat anchors on its outside option. These are 4 pairs; they show an
 effect worth a wave, not a rate.
 
-For a wave: count a deliberate non-claim as a refusal, not a missed round (the world cannot tell them apart, so
-either add an explicit `/pass` action or report the missed share with and without rounds where the pot is below
-the claimer's outside option); expect about $0.07 per silent trial and $0.025 per talk trial (this pilot).
+For a wave: count a deliberate non-claim as a refusal, not a missed round. Done after this pilot: world version 7
+accepts `{"pass": true}` on `/claim` (section 1), and the scorer reports `passed` apart from `missed`. Expect
+about $0.07 per silent trial and $0.025 per talk trial (this pilot: $0.0670 and $0.0245 on average).
