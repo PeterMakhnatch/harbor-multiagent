@@ -341,10 +341,13 @@ def analyze(rows: Iterable[_Row]) -> dict[str, Any]:
 
 
 def _read_study(study: Path) -> list[_Row]:
+    from .calendar_list_run import _root
     from .calendar_query_report import read_block
     from .calendar_query_run import blocks
 
-    return [read_block(study, block) for block in blocks()]
+    # A bad study argument is not evidence about any registered team.
+    with _root(study.absolute()):
+        return [read_block(study, block) for block in blocks()]
 
 
 def _read_archive(path: Path) -> list[_Row]:

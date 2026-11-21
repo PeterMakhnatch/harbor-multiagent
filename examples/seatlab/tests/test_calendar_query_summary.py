@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from itertools import product
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from unittest import TestCase
 
-from examples.seatlab.visibility.calendar_query_summary import analyze
+from examples.seatlab.visibility.calendar_query_summary import _read_study, analyze
 
 _WORLDS = (1, 2, 3, 5, 6, 7, 9, 10, 11)
 _ARMS = ("blind", "peer")
@@ -50,6 +52,18 @@ def _receipt(identifier: str, role: str) -> dict[str, str]:
 
 
 class TestCalendarQuerySummary(TestCase):
+    def test_bad_study_path_is_not_a_team_outcome(self) -> None:
+        with TemporaryDirectory() as tmp:
+            study = Path(tmp).resolve()
+            self.assertEqual({r["status"] for r in _read_study(study)}, {"not_started"})
+            with self.assertRaises(FileNotFoundError):
+                _read_study(study / "absent")
+            (study / ".git").touch()
+            with self.assertRaisesRegex(
+                ValueError, "private_study_outside_checkout_required"
+            ):
+                _read_study(study)
+
     def test_paired_summary_with_unknowns_and_real_candidate_lists(self) -> None:
         rows = _rows()
         for d in (0, 1):
