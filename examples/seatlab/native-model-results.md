@@ -6,6 +6,15 @@ The run measured **12 of 16 registered native Harbor trials**. In the 3 complete
 
 In the first [registered block](replication.md#which-teammate-should-receive-a-local-tool), 4 native teams completed. When only the sender had access, the blind room scored 1 and the peer room scored 0. When only the receiver had access, both rooms scored 0. The host reconciled 24 direct calls at **$0.001151628 USD**. This is one world, direction, and repetition. It does not establish which role should receive the tool.
 
+**Moving the tool to the receiver added 3 agreements across 96 matched comparisons.** The [full register](results/role-allocation-live.json) includes 192 first-attempt Harbor teams in 12 fixed worlds. All teams submitted a valid slot. Of 96 pairs, receiver access won 17, lost 14, and tied 65. The registered equal-world difference was **+3.125 percentage points**. This small difference does not identify a general best role for the tool.
+
+| Room | Agreement with sender tool | Agreement with receiver tool |
+| --- | ---: | ---: |
+| Blind | 11 / 48 | 12 / 48 |
+| Peer list visible | 6 / 48 | 8 / 48 |
+
+The [stock Eval Lab reader](results/role-allocation-stock.json) confirmed all 192 rewards and found 384 native seat records. Those records have no model token counts. The separate [host ledger](results/role-allocation-cost.json) matched 1,152 direct calls at **$0.051333798 USD**, including the first block. No hold remains. The 2 rooms share opening messages; they are not 2 independent worlds.
+
 ## What ran
 
 The [frozen protocol](team-protocol.md) registers seeds `2001` and `2003`, 2 delivery orders, and 4 actor pairings. Each trial has 12 synthetic shipments. `fresh` delivers revision 2 only. `reordered` delivers revision 2, then revision 1. The first letter in each pairing identifies inventory (speaker); the second identifies dispatch (listener). `S` is the arrival-order script, not the oracle. `M` is `anthropic/claude-sonnet-5-5`, served by the first-party Claude CLI.
