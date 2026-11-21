@@ -535,3 +535,5 @@ Estimate the difference between the receiver programs with the sender fixed, and
 
 
 **Secondary diagnosis, registered before the crossed receiver calls:** reconstruct the best bay under the latest report the dispatcher actually sees. Compare it with the true best bay. Separate agreement with visible evidence from agreement with hidden stock. A dispatcher can decide correctly from its messages and still receive a lower stock score. A visible disagreement is not proof that the true answer is unknowable. Report unique observations separately from their weighted reuse; do not call repeated draws new worlds.
+
+The [frozen observation register](results/decision-cross-board.json) binds all 48 real sender selections to 28 distinct dispatcher prompts within their source teams. The register SHA-256 is `60b976b6666acde139605d14a855b9d21b66da8d94343d05a029a585b49d4c7b`. Each receiver gets 56 independent first calls instead of 96. Reused observations count once in the repeatability analysis and retain their multiplicity in sender comparisons.
