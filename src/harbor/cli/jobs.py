@@ -148,6 +148,16 @@ def _run_preflight(config: JobConfig) -> None:
         raise SystemExit(1) from None
 
 
+def _check_resume_start(job_dir: Path) -> None:
+    from harbor.job import Job
+
+    try:
+        Job._load_resumable_result(job_dir / "result.json")
+    except ValueError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise SystemExit(1) from None
+
+
 def _confirm_host_env_access(
     job,
     console: Console,
@@ -2377,10 +2387,14 @@ def _execute_job(
         plugins = await attach_job_plugins(job, plugin_configs)
 
         hub_plugin = None
+        started_at = None
         if upload:
             from harbor.cli.plugins.harbor_hub import HarborHubUploadPlugin
 
+            started_at = job._resolve_started_at()
+
             hub_plugin = HarborHubUploadPlugin(
+                started_at=started_at,
                 public=public,
                 org=org,
                 share_orgs=requested_share_orgs,
@@ -2391,7 +2405,11 @@ def _execute_job(
             )
             await hub_plugin.on_job_start(job)
 
-        job_result = await job.run()
+        job_result = (
+            await job.run()
+            if started_at is None
+            else await job.run(started_at=started_at)
+        )
 
         # Print the run summary BEFORE plugin and Harbor Hub finalize so users
         # see results even if downstream operations fail.
@@ -2418,6 +2436,7 @@ def _execute_job(
 
         return job, job_result
 
+    _check_resume_start(config.jobs_dir / config.job_name)
     _run_preflight(config)
 
     explicit_env_file_keys: set[str] = set()
@@ -2590,6 +2609,8 @@ def resume(
     if not config_path.exists():
         raise ValueError(f"Config file not found: {config_path}")
 
+    _check_resume_start(job_dir)
+
     if filter_error_types:
         filter_error_types_set = set(filter_error_types)
         for trial_dir in job_dir.iterdir():
@@ -2673,10 +2694,14 @@ def resume(
         #    archive path is still NULL, then finalizes the job if needed.
 
         hub_plugin = None
+        started_at = None
         if upload:
             from harbor.cli.plugins.harbor_hub import HarborHubUploadPlugin
 
+            started_at = job._resolve_started_at()
+
             hub_plugin = HarborHubUploadPlugin(
+                started_at=started_at,
                 public=public,
                 org=org,
                 share_orgs=requested_share_orgs,
@@ -2686,7 +2711,11 @@ def resume(
                 console=console,
             )
             await hub_plugin.on_job_start(job)
-        job_result = await job.run()
+        job_result = (
+            await job.run()
+            if started_at is None
+            else await job.run(started_at=started_at)
+        )
 
         await finalize_job_plugins(plugins, job_result)
 

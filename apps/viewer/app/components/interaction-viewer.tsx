@@ -21,6 +21,11 @@ import {
 import { LoadingDots } from "~/components/ui/loading-dots";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { fetchInteraction } from "~/lib/api";
+import {
+  elapsedTimestampMs,
+  parseAbsoluteTimestampMs,
+  UNKNOWN_TIME_LABEL,
+} from "~/lib/timestamps";
 import type { AgentInteraction, Step, Trajectory } from "~/lib/types";
 
 type JsonRecord = Record<string, unknown>;
@@ -73,18 +78,17 @@ function timestampOf(value: unknown): string | null {
 
 function formatTimestamp(value: string | null): string {
   if (!value) return "No timestamp in source";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
+  const ms = parseAbsoluteTimestampMs(value);
+  if (ms === null) return `${UNKNOWN_TIME_LABEL} (${value})`;
+  return new Date(Math.floor(ms)).toLocaleString(undefined, {
     hour12: false,
     fractionalSecondDigits: 3,
   });
 }
 
 function formatDuration(start: string | null, end: string | null): string | null {
-  if (!start || !end) return null;
-  const milliseconds = new Date(end).getTime() - new Date(start).getTime();
-  if (!Number.isFinite(milliseconds) || milliseconds < 0) return null;
+  const milliseconds = elapsedTimestampMs(start, end);
+  if (milliseconds === null) return null;
   const seconds = milliseconds / 1000;
   if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
   const minutes = Math.floor(seconds / 60);

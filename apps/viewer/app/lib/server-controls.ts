@@ -1,4 +1,5 @@
 import { API_BASE } from "./api";
+import { parseAbsoluteTimestampMs } from "./timestamps";
 
 export async function submitJob(
   config: Record<string, unknown>,
@@ -54,9 +55,7 @@ export function rolloutPollInterval(
   if (!trial?.finished_at) return 2000;
   // Briefly discover late automatic retries; later manual retries invalidate
   // the query, and window focus refetches retries created by other clients.
-  return server &&
-    trial.retry_ids?.[0] === trial.id &&
-    now - Date.parse(trial.finished_at) < 30_000
-    ? 2000
-    : false;
+  if (!server || trial.retry_ids?.[0] !== trial.id) return false;
+  const finishedAt = parseAbsoluteTimestampMs(trial.finished_at);
+  return finishedAt !== null && now - finishedAt < 30_000 ? 2000 : false;
 }

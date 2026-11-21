@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -183,3 +183,39 @@ def test_job_plan_aggregates_trial_results(tmp_path: Path, error: str | None) ->
     valid = error != "ApiRateLimitError"
     assert result.stats.evals[evals_key].metrics == [{"mean": 0.5 if valid else 1.0}]
     assert result.stats.evals[evals_key].pass_at_k == ({2: 1.0} if valid else {})
+
+
+@pytest.mark.unit
+def test_job_plan_rejects_unknown_inferred_start_without_changing_trials(
+    tmp_path: Path,
+) -> None:
+    task_dir = _make_task_dir(tmp_path)
+    config = JobConfig(n_attempts=2, tasks=[TaskConfig(path=task_dir)])
+    plan = JobPlan.from_resolved(
+        config,
+        task_configs=config.tasks,
+        metrics={},
+        task_download_results={config.tasks[0].get_task_id(): _task_download(task_dir)},
+        job_id=uuid4(),
+    )
+    known_start = datetime(2026, 7, 3, 8, tzinfo=timezone(timedelta(hours=-4)))
+    legacy_start = datetime(2026, 7, 3, 8)
+    known_trial = _trial_result(plan.trial_configs[0], reward=1, started_at=known_start)
+    legacy_trial = _trial_result(
+        plan.trial_configs[1], reward=0, started_at=legacy_start
+    )
+
+    inferred = plan.aggregate([known_trial])
+    assert inferred.started_at.tzinfo is timezone.utc
+    assert inferred.started_at == known_start
+    assert inferred.finished_at is not None
+    assert inferred.finished_at.tzinfo is timezone.utc
+    assert inferred.updated_at == inferred.finished_at
+
+    with pytest.raises(ValueError, match=f"Trial {legacy_trial.trial_name} started_at"):
+        plan.aggregate([known_trial, legacy_trial])
+
+    overridden = plan.aggregate([known_trial, legacy_trial], started_at=known_start)
+    assert overridden.started_at.tzinfo is timezone.utc
+    assert overridden.trial_results[1].started_at == legacy_start
+    assert legacy_trial.started_at == legacy_start

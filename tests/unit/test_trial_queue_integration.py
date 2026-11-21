@@ -4,7 +4,7 @@ Integration tests for TrialQueue and JobConfig backward compatibility.
 
 import json
 import warnings
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -412,7 +412,7 @@ class TestTrialQueueIntegration:
             job._job_result_path.write_text(
                 JobResult(
                     id=job.id,
-                    started_at=datetime.now(),
+                    started_at=datetime.now(UTC),
                     n_total_trials=1,
                     stats=JobStats(),
                 ).model_dump_json(indent=4)
@@ -480,7 +480,7 @@ class TestTrialQueueIntegration:
             job._job_result_path.write_text(
                 JobResult(
                     id=job.id,
-                    started_at=datetime.now(),
+                    started_at=datetime.now(UTC),
                     n_total_trials=3,
                     stats=JobStats(),
                 ).model_dump_json(indent=4)

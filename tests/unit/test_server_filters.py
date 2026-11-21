@@ -248,6 +248,45 @@ async def test_pagination_with_saved_tokens(
     assert response.status_code == 400
 
 
+async def test_server_utc_job_columns_survive_sqlite_datetime_serialization(
+    store, listing_api
+):
+    _, client = listing_api
+    job = add_job(store)
+    with store.transaction():
+        store.db.execute(
+            "UPDATE internal_job SET created_at = datetime(?), started_at = datetime(?) WHERE id = ?",
+            (
+                "2026-01-31T19:00:00-05:00",
+                "2026-02-01T02:01:00+02:00",
+                str(job.id),
+            ),
+        )
+
+    response = await client.get(
+        "/jobs",
+        params={
+            "created_after": "2026-01-31T19:00:00-05:00",
+            "created_before": "2026-02-01T00:01:00Z",
+        },
+    )
+    assert response.status_code == 200, response.text
+    (item,) = response.json()["items"]
+    assert item["id"] == str(job.id)
+    assert item["created_at"] == "2026-02-01T00:00:00Z"
+    assert item["started_at"] == "2026-02-01T00:01:00Z"
+
+    detail = await client.get(f"/jobs/{job.id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["job"]["started_at"] == item["started_at"]
+    assert (
+        store.db.execute(
+            "SELECT started_at FROM internal_job WHERE id = ?", (str(job.id),)
+        ).fetchone()[0]
+        == "2026-02-01 00:01:00"
+    )
+
+
 async def test_search_dates_task_labels_limits_and_unknown_scopes(store, listing_api):
     _, client = listing_api
     job = add_job(store)

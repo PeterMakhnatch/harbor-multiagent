@@ -57,6 +57,21 @@ harbor run -c examples/configs/features/seats-job.yaml
 covers the task format, participants, how a run starts and ends, logs, the
 verifier, and the limitations.
 
+## Job timestamps
+
+New Job lifecycle timestamps include the UTC offset. The CLI uses one start
+instant for local results and Hub records. Supply offset-aware values to
+`Job.run(started_at=...)`, Job aggregation, and Hub upload APIs.
+
+Legacy results without an offset remain readable. Their absolute time is
+unknown. The viewer keeps unknown starts last in either start-time sort
+direction. It excludes them from absolute date filters and does not invent
+an active duration.
+
+Resume requires a known stored start. It rejects a start without an offset
+before it changes results or logs. An explicit resume start must match the
+stored instant. Do not assign a historical zone from the current host settings.
+
 ## Toward Harbor
 
 We want multi-agent support in Harbor itself. Until then, this fork carries a
