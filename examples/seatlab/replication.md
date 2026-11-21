@@ -573,6 +573,32 @@ python3.12 -BS -m examples.seatlab.calendar_notices.visible_replay_summary \
   examples/seatlab/results/calendar-visible-fixed-replay.json
 ```
 
+#### Let a receiver choose which report to read next
+
+Use this when the receiver can ask for 2 reports and you want to test **when to deliver the first one**. Use one completed SeatLab calendar trial with private views. Run the export in the fork environment on the scorer host:
+
+```sh
+umask 077
+inquiry=examples.seatlab.calendar_inquiry
+owner="$private/staged.owner.json"
+"$python" -B -m "$inquiry" export "$TRIAL" \
+  --spend-dir "$SEATLAB_SPEND_DIR" --out "$owner"
+python3.12 -BS -m "$inquiry" next "$owner" --timing immediate
+```
+
+**Keep the owner file on the scorer host.** It contains the sender's full accepted revision and the stock answer. Send only the output record with `messages` to the worker. Keep each original reply in the same envelope format as above. On the scorer host, supply the cumulative reply history for that branch:
+
+```sh
+python3.12 -BS -m "$inquiry" next "$owner" --timing immediate \
+  --history "$private/immediate-replies.jsonl"
+```
+
+Both branches start with the same request and first reply. With `immediate`, the worker sees the first report before it chooses a second day. With `delayed`, it sees the same first day ID, but the report is pending. The worker must choose 2 different days. It then gets the 2 requested reports and the same checked booking format in both branches.
+
+Stop when `next` returns `status`. This record is for the scorer only. An invalid reply has no booking grade. Without a reply, `next` still shows the outstanding request. None of these steps needs Docker, a model key, or a running Harbor service after export.
+
+To compare both timings programmatically, use `calendar_inquiry_pair.play_pair(source, first_timing=..., respond=...)`. The callback receives a call label and a worker request. Return the worker's reply envelope, or `None` if it is missing. The runner calls each second decision separately. If both bookings have identical inputs, it calls the worker only once. Never send the returned trace to a worker. This compares receivers against one recorded sender; it does not rerun the full team.
+
 #### Could a different report request have helped?
 
 Use the native job you already ran. This diagnostic makes no model calls and starts no containers:

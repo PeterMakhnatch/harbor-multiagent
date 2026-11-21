@@ -23,6 +23,7 @@ class SourceCase:
     target: int
     target_visible: bool
     prompts: dict[str, str]
+    inquiry: dict[str, object]
 
 
 _CELL_TYPES = {
@@ -207,18 +208,27 @@ def _read_case(
     receiver = tables[p.SEATS.index(cell.receiver)]
     messages = audit._messages(trial, cell)
     notice_text, request_text, opened_text = (message["text"] for message in messages)
-    initial = audit._object(notice_text)["initial"]
-    opened = audit._object(opened_text)
-    audit.require(
-        list(team_views._opened_starts(opened)) == p.decode(request_text, "pick"),
-        "native_source_opened_report_binding",
-    )
+    notice = audit._object(notice_text)
+    initial = notice["initial"]
     receipts = audit._receipts(trial, cell)
     audit.require(
         receipts.keys() == set(p.PHASES)
         and all(turn["status"] == "accepted" for turn in receipts.values()),
         "native_source_accepted_turns_required",
     )
+    revision_receipt = receipts["revision"]
+    revision = p.decode(revision_receipt["response_text"], "revision")
+    audit.require(
+        p.wire(revision_receipt["value"]) == p.wire(revision),
+        "native_source_revision_binding",
+    )
+    days = p.decode(receipts["pick"]["response_text"], "pick")
+    audit.require(
+        request_text == p.request_wire(days)
+        and opened_text == p.read_wire(revision, days),
+        "native_source_opened_report_binding",
+    )
+    opened = audit._object(opened_text)
     prompts = {
         "factual": team_views.choice_prompt(receiver, initial, opened, cell.arm),
         "lists": team_views.choice_prompt(receiver, initial, opened, "lists"),
@@ -255,6 +265,23 @@ def _read_case(
         target=target,
         target_visible=target_visible,
         prompts=prompts,
+        inquiry={
+            "schema": "seatlab.calendar-inquiry-source/v1",
+            "trial_uuid": row["trial_uuid"],
+            "result_sha256": result_sha,
+            "stock_semantics_sha256": semantics_sha,
+            "world": cell.world,
+            "arm": cell.arm,
+            "receiver_table": [list(masks) for masks in receiver],
+            "notice": notice,
+            "revision": revision,
+            "native_days": days,
+            "native_opened_sha256": p.digest(opened_text),
+            "native_final_prompt_sha256": calendar_packet._check_digest(
+                receipt["prompt_sha256"]
+            ),
+            "target": target,
+        },
     )
 
 
