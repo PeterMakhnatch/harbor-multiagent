@@ -29,6 +29,33 @@ Separate workers can add new worlds, actor-side context transformations, and cro
 - Primary: compare complementary minus duplicate reviewer context **with the evidence channel**, paired within each block. Report correct physical choices, complete-pair differences and worst/best differences over the full register. Average within each source policy and weight the 3 policies equally. Secondary: the same difference with votes only; evidence minus vote for each reviewer input; the paired interaction on complete quartets. Report transcription errors, recommendation following, label swaps and repeat disagreement. Do not treat repeated rounds, permutations or identical prompts as independent worlds.
 - The public packet contains only allowlisted numeric values, event references and source commitments. Only the scorer can use the answer key. Role callbacks receive a prompt string, not a path or the packet. These are new 2-agent decisions from recorded observations, **not** a native Harbor rerun, a measurement of the archived scouts' model use, or a comparison with a single model using all the evidence.
 
+Within each lens, reverse the channel order across the 2 repetitions. Start with `vote` when `(rotation + repetition + is_complementary)` is even. This balances channel order separately from which reviewer runs first.
+
+### Run your own reviewer and decision maker
+
+The packet and its SHA-256 commitment ship on this branch. These commands need Python 3.12 or later. The demo does not use a model, an API key, Docker, Eval Lab, or the source archive.
+
+```bash
+module=examples.seatlab.visibility.route_cli
+private=$(python -c 'import tempfile; from pathlib import Path; print(Path(tempfile.mkdtemp()).resolve())')
+python -m "$module" plan
+python -m "$module" demo --study "$private" --start 0 --stop 1
+python -m "$module" report --study "$private" > "$private/report.json"
+```
+
+For model seats, use `commands` instead of `demo` and use a new private study directory. Give each role its own executable in a JSON config:
+
+```json
+{
+  "reviewer": {"argv": ["/absolute/path/to/my-reviewer"], "env": []},
+  "decider": {"argv": ["/absolute/path/to/my-decider"], "env": []}
+}
+```
+
+Run `python -m "$module" commands --config seats.json --study "$private" --start 0 --stop 1`. Each program reads one UTF-8 JSON line: `{"schema":"seatlab.seat-turn/v1","prompt":"..."}`. It writes one JSON line: `{"text":"..."}`. Return the model's first text unchanged. The runner starts a fresh process for every turn. Both decision branches receive the same actual review. Different workers may claim disjoint block ranges in the same private study. The runner refuses a second attempt at a claimed block.
+
+Use only trusted executables. The runner starts each in an empty working directory and passes only the environment variables named for that role. This is not an operating-system sandbox. An executable can still use the network and read files available to its user. The offline report verifies the selected role inputs and observed replies. It makes no claim about model identity or billing for external commands. For Python callbacks, use `route_run.play_block(..., reviewer=my_reviewer, decider=my_decider)`; both callbacks take one prompt string.
+
 ## Receiver visibility: stored teams and fresh model decisions
 
 These are 3 different measurements. Do not pool their denominators.
