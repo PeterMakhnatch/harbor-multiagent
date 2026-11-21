@@ -541,6 +541,199 @@ def _secondary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _join_worlds(
+    grid: list[dict[str, Any]],
+) -> dict[int, tuple[str, str, list[dict[str, Any]]]]:
+    world_type = run_path(str(team_report._WORLD_PATH))["World"]
+    worlds = {}
+    fingerprints = set()
+    for cell in grid:
+        seed = cell["seed"]
+        if seed in worlds:
+            continue
+        world = world_type(
+            {
+                "schema": "seatlab.scenario/v1",
+                "seed": seed,
+                "episodes": _EPISODES,
+                "condition": cell["condition"],
+            }
+        )
+        latent = [
+            {key: case[key] for key in ("id", "utilities", "before", "after")}
+            for case in world.evidence()["cases"]
+        ]
+        fingerprint = view_hash(latent)
+        if fingerprint in fingerprints:
+            raise ValueError("registered worlds must have distinct source fingerprints")
+        fingerprints.add(fingerprint)
+        inventory_prompt = native_pairs._prompt(
+            "inventory", world.view("inventory")["cases"]
+        )
+        worlds[seed] = (fingerprint, _digest(inventory_prompt), latent)
+    return worlds
+
+
+def _join_turns(turns: object, cell_id: str, inventory_hash: str) -> str:
+    if not isinstance(turns, list) or len(turns) != len(_TURN_STAGES):
+        raise ValueError("expected three bound native turns")
+    first = turns[0]
+    transport = (
+        "commands"
+        if isinstance(first, dict) and first.get("usage") is None
+        else "direct"
+    )
+    for turn, (stage, role) in zip(turns, _TURN_STAGES, strict=True):
+        if (
+            not isinstance(turn, dict)
+            or turn.keys() != _TURN_FIELDS
+            or not run_panel._config_matches(turn, _turn_identity(stage, role, cell_id))
+        ):
+            raise ValueError("turn does not identify the registered first reply")
+        turn = cast(dict[str, Any], turn)
+        for key in ("prompt_sha256", "response_sha256"):
+            digest = turn[key]
+            if (
+                not isinstance(digest, str)
+                or fullmatch(r"[0-9a-f]{64}", digest) is None
+            ):
+                raise ValueError("turn does not identify the registered first reply")
+        _check_usage(turn["usage"], transport)
+        if stage == "inventory" and turn["prompt_sha256"] != inventory_hash:
+            raise ValueError("inventory differs from the registered stock prompt")
+    return transport
+
+
+def _join_action_counts(
+    outcome: dict[str, Any], latent: list[dict[str, Any]]
+) -> tuple[int, int]:
+    actions = outcome["actions"]
+    if not isinstance(actions, list) or len(actions) != _EPISODES:
+        raise ValueError("expected one accepted choice per shipment")
+    optimal = feasible = 0
+    for action, case in zip(actions, latent, strict=True):
+        if not isinstance(action, dict) or action.keys() != {
+            "id",
+            "choice",
+            "optimal",
+            "feasible",
+        }:
+            raise ValueError("invalid stock action fields")
+        action = cast(dict[str, Any], action)
+        if (
+            not run_panel._config_matches(action["id"], case["id"])
+            or action["choice"] not in protocol._BAYS
+        ):
+            raise ValueError("invalid accepted stock choice")
+        is_optimal = action["choice"] == max(
+            case["after"], key=case["utilities"].__getitem__
+        )
+        is_feasible = action["choice"] in case["after"]
+        if action["optimal"] is not is_optimal or action["feasible"] is not is_feasible:
+            raise ValueError("accepted choice and stock grade disagree")
+        optimal += is_optimal
+        feasible += is_feasible
+    score = outcome["native_score"]
+    if type(score) not in (int, float) or score != optimal / _EPISODES:
+        raise ValueError("native score and stock grades disagree")
+    return optimal, feasible
+
+
+def _join_outcome(
+    outcome: dict[str, Any], cell_id: str, world: tuple[str, str, list[dict[str, Any]]]
+) -> tuple[str, tuple[int, int], str]:
+    fingerprint, inventory_hash, latent = world
+    if outcome.keys() != _JOIN_OUTCOME_FIELDS or outcome["fingerprint"] != fingerprint:
+        raise ValueError("outcome does not identify the registered stock world")
+    trial_id = evidence._trial_id({"id": outcome["trial_id"]})
+    opened = outcome["opened"]
+    if not isinstance(opened, list):
+        raise TypeError("expected the two named lookups")
+    protocol._open_pair(opened)
+    for key in _METRICS:
+        limit = len(opened) if key.startswith("opened_") else _EPISODES
+        if type(outcome[key]) is not int or not 0 <= outcome[key] <= limit:
+            raise ValueError("invalid observation count")
+    if (
+        outcome["opened_report_changes"] > outcome["total_report_changes"]
+        or outcome["opened_sensitive"] > outcome["opened_stock_changes"]
+    ):
+        raise ValueError("inconsistent observation count")
+    score = _join_action_counts(outcome, latent)
+    transport = _join_turns(outcome["turns"], cell_id, inventory_hash)
+    return trial_id, score, transport
+
+
+def _summarize_join(
+    cells: list[dict[str, Any]], rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    grid = list(evidence_join.grid())
+    if cells != grid:
+        raise ValueError("unexpected evidence-join registration order")
+    registered = {cell["cell_id"]: cell for cell in grid}
+    _index(registered, cells, outcomes=False)
+    indexed = _index(registered, rows, outcomes=True)
+    worlds = _join_worlds(grid)
+    comparisons: dict[int, dict[str, tuple[int, int] | None]] = {
+        seed: dict.fromkeys(join_summary.ARMS) for seed in worlds
+    }
+    arms = {
+        arm: dict.fromkeys(
+            (
+                "enrolled",
+                "claimed",
+                "completed",
+                "stock_optimal",
+                "feasible",
+                "enrolled_shipments",
+                "observed_shipments",
+                "opened_slots",
+                "received_turns",
+            ),
+            0,
+        )
+        for arm in join_summary.ARMS
+    }
+    trial_ids: set[str] = set()
+    transports: set[str] = set()
+    for cell_id, row in indexed.items():
+        state, outcome = row["state"], row["outcome"]
+        if (
+            row.keys() != registered[cell_id].keys() | {"state", "outcome"}
+            or state not in _JOIN_STATES
+            or (state == "complete") != (outcome is not None)
+        ):
+            raise ValueError("invalid registered first-attempt row")
+        counts = arms[row["arm"]]
+        counts["enrolled"] += 1
+        counts["enrolled_shipments"] += _EPISODES
+        counts["claimed"] += state not in ("unclaimed", "reserved_without_trial")
+        if outcome is None:
+            continue
+        seed = row["seed"]
+        trial_id, score, transport = _join_outcome(outcome, cell_id, worlds[seed])
+        if trial_id in trial_ids:
+            raise ValueError("first attempts must identify distinct native trials")
+        trial_ids.add(trial_id)
+        transports.add(transport)
+        comparisons[seed][row["arm"]] = score
+        counts["completed"] += 1
+        counts["stock_optimal"] += score[0]
+        counts["feasible"] += score[1]
+        counts["observed_shipments"] += len(outcome["actions"])
+        counts["opened_slots"] += len(outcome["opened"])
+        counts["received_turns"] += len(outcome["turns"])
+    if len(transports) > 1:
+        raise ValueError("first attempts must share a registered transport")
+    return {
+        "registered_cells": len(registered),
+        "observed_cells": len(trial_ids),
+        "missing_cells": len(registered) - len(trial_ids),
+        "arms": arms,
+        "primary": join_summary.primary(comparisons),
+    }
+
+
 def summarize(
     cells: list[dict[str, Any]],
     rows: list[dict[str, Any]],
