@@ -21,6 +21,21 @@ The stock Eval Lab reader matched all 24 native scores. The 23 full conversation
 
 [Native evidence](results/calendar-private-views-live.json) · [Per-team costs](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060350368) · [Run the experiment](replication.md#test-private-calendar-views-with-2-live-seats) · [What other reads could reveal](results/calendar-read-opportunities.json).
 
+## Did the receiver use the peer’s actual start IDs?
+
+**Yes, in a controlled receiver replay.** We froze the exact-view sender and the 2 reports its receiver opened in each of the 12 worlds. Fresh receivers saw either the real peer start IDs or `?` in their place. Both arms saw the same local starts, weekdays, entry counts, and instructions.
+
+| Receiver outcome | IDs masked | IDs shown |
+|---|---:|---:|
+| Chose the joint meeting | 6/24 | 12/24 |
+| Chose a start that fit its own calendar | 24/24 | 24/24 |
+
+We ran 2 replies per arm per world. Showing the IDs gained 1 correct reply in each of 6 worlds and lost none. The one-sided test swapped labels by **world**, not by reply: 64 of 4,096 swaps matched or exceeded the observed gain (p = **1/64**). This passed the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060340046).
+
+When the received reports contained the joint meeting, shown IDs gave 12/16 correct choices versus 6/16 with masked IDs. When they did not, both arms got 0/8. Two senders supplied no IDs at all; we kept those identical prompts. For this workflow, preserve actual proposed times, not just message counts. These 48 replies are not new native teams or native rewards.
+
+[First-reply evidence](results/calendar-peer-payload-replay.json) · [Each direct charge: $0.001471896 total, 0 holds](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060463024) · [Use the projection in another harness](replication.md#test-the-content-of-peer-reports).
+
 ## Earlier test: name the changed weekdays
 
 **Naming changed weekdays did not improve native team reward.** Receivers opened more changed reports, but that difference did not meet the registered threshold.
@@ -72,6 +87,7 @@ The reported experiment used 1 model and the 12 previously studied worlds. With 
 ```sh
 python3 examples/seatlab/calendar_notices/summary.py
 python3 examples/seatlab/calendar_notices/summary.py examples/seatlab/results/calendar-private-views-live.json
+python3 examples/seatlab/calendar_notices/peer_payload_score.py --receipt examples/seatlab/results/calendar-peer-payload-replay.json
 ```
 
 [Redacted per-team evidence and direct token charges](results/calendar-notice-live.json) · [Frozen harness](https://github.com/PeterMakhnatch/harbor-multiagent/tree/0bd4b5563ea6df03d277cdc81c5e013bb33d2f34/examples/seatlab/calendar_notices) · [Native control evidence](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059482347) · [Fixture checks](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059394292).

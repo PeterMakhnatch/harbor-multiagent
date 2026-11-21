@@ -413,6 +413,19 @@ Remove `--private-views` for the original count-versus-names study. Each complet
 
 The optional comparison sorts days by the number of provisional, locally valid starts. It requests the first 2 days and picks the earliest remaining start. Ties use weekday order. This rule never sees the target or unopened responses. The diagnostic keeps a missing or inconsistent transcript as a missing row, not a loss. The output contains no calendars, messages, or answer IDs.
 
+#### Test the content of peer reports
+
+The [registered receiver replay](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060340046) has a `shown` arm and a `masked` arm. Each arm uses the same exact local starts, 5 initial weekday lists, and 2 delivered reports. `masked` replaces each peer start ID with `?`. It preserves the day, order, and count of entries. Neither arm gets an unopened revision. These are receiver choices, not new native team scores.
+
+On the original private job, the no-key plan prints source UUIDs and prompt hashes, not prompts:
+
+```bash
+"$python" -m examples.seatlab.calendar_notices.peer_payload_run plan "$private/teams" \
+  --spend-dir "$SEATLAB_SPEND_DIR"
+```
+
+Regenerating a world does not recreate its trial UUID. For another scheduling harness, use `peer_payload.project(own_table, initial, opened, masked=...)` with its actual delivered data. Send just one resulting string to each fresh receiver. Do not send the native task or the entire transcript.
+
 #### Native replication with an external harness
 
 The archived task hashes above cannot be recreated: each build makes fresh service credentials. This independent replication uses the public Flotilla generator and freshly built tasks. It does not add replacements to the original panel.
