@@ -487,3 +487,39 @@ python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-pr
 ```
 
 After each window stops, run `python -m examples.seatlab.visibility.clarify_meter "$study" --spend-dir "$SEATLAB_SPEND_DIR"` offline. It checks both turns against the original ledger and the sealed time boundaries. A late finish differs from a late start. A missing timestamp does not establish that a call never occurred. The meter does not authenticate the provider or verify an invoice.
+
+## Can a sender use the right preference attached to the right record?
+
+**Registered before any continuation call.** Enroll the 12 direct `brief` sources in the native briefing register, seeds `6501`–`6506`, repetitions `0` and `1`. Keep a source only if its native team passes the four-turn audit. Do not replace an absent source or select by score, brief accuracy, or opened reports. Preserve the accepted inventory reports, the actual six-letter card, and hashes for both upstream model turns. This is a scoped export of synthetic shipment data, not a general trace sanitizer.
+
+Freeze those two upstream messages. Start independent inventory and dispatch calls in each of 3 policies. `aligned` releases the original card. `shifted` rotates the same 6 letters left by 1 slot. `repeat` sends the exact `aligned` prompt again with fresh model calls. Rotate policy order by `(seed − 6501 + repetition) mod 3`. Every sender can select 2 of the 6 revisions. Only the selected revisions enter the final dispatch prompt. Do not give the sender utilities or true final stock. Do not show either actor the treatment name or other draws. A repeated letter can survive rotation. Count these slots.
+
+Run 36 continuations per transport. Use direct DeepSeek Flash and separate keyless `openai-codex/gpt-6.2-sol` programs. Do not pool transports. Each has at most 72 first attempts. There are 6 source worlds, not 36. Register failures as missing, without retries. Capture each direct call's cost in the existing results log. Do not rerun native teams. New decisions receive a stock score, not a new native Harbor reward.
+
+Primary: the equal-world difference in optimal choices per 6 shipments, `aligned − shifted`. Within each world, pair by original source and average observed repetitions. Do not report a full-register estimate when a world has no matched repetition. Bound unknown scores over all 12 enrolled sources. Report `aligned − repeat` separately as variation under identical sender inputs. Also report agreement on opened report sets and final actions, changes in the best bay under the two reports, and coverage. These bounds are not confidence intervals.
+
+### Start from the published team checkpoint
+
+Use Python 3.12 or later from this branch. These commands need no Harbor, Docker, model account, or private trial archive. The second and third commands print the exact role prompts, not a description of them.
+
+```sh
+module=examples.seatlab.turn_fork
+python -S -m "$module" plan
+python -S -m "$module" show --source s6501-r0 --arm shifted
+python -S -m "$module" show --source s6501-r0 --opened Q1 Q3
+```
+
+**To run fresh agents:** configure 2 trusted [seat programs](#run-your-own-reviewer-and-decision-maker). Set `reviewer` to the inventory program and `decider` to the dispatch program. The launcher passes each program its own prompt, not the world, answer key, other program's reply, or treatment label. Use a separate receipt directory for each role. Programs can incur costs. This interface does not isolate untrusted programs from your computer.
+
+```sh
+private=$(python -c 'from pathlib import Path; import tempfile; print(Path(tempfile.mkdtemp()).resolve())')
+python -m "$module" seal --study "$private/team" --transport commands --config "$config"
+python -m "$module" run --study "$private/team" --start 0 --stop 3
+python -m "$module" pending --study "$private/team"
+python -m "$module" report --study "$private/team" > "$private/report.json"
+python -S -m "$module" verify "$private/report.json"
+```
+
+`$config` is the absolute path to your command configuration. One source has 3 consecutive cells. Give each worker a separate range of complete sources, such as `0:18` and `18:36`. The stop index is exclusive. At most 2 model turns run per cell. If work stops, `pending` lists only untouched cells. Preserve failed first attempts. The public report identifies separately the measured difference, disagreement with the same sender input, and bounds from missing first attempts.
+
+**To export your own source:** `export --native-study DIR --native-report REPORT` reads an existing native briefing study with its original configurations. It emits only the accepted synthetic fields. Pin the exact bytes with SHA-256. Supply the pair to readers with `--packet PATH --sha256 DIGEST`. The direct transport accepts only the registered public packet; custom packets can use command programs. Do not publish raw private native folders.

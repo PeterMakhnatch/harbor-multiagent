@@ -2,6 +2,23 @@
 
 The run measured **12 of 16 registered native Harbor trials**. In the 3 complete seed and delivery-order groups, the inventory model copied both revisions correctly. The dispatch model changed choices in both `reordered` groups, but did not always improve the number of optimal choices.
 
+## What changes when an agent sees the same preferences on different records?
+
+All 12 direct source teams passed the original native audit. The [portable packet](results/turn-fork-packet.json) fixes the 2 real upstream messages for each team. Under the aligned policy it reproduces all 24 original downstream prompt hashes and the scores for all 72 original actions. These new runs start at the sender's selection, not in a new Harbor world.
+
+The first direct continuation used 2 settled calls, with an estimated cost of **$0.000090618**. The inventory call cost $0.000033834. The dispatch call cost $0.000056784. This pilot is part of the registered cohort, not an extra attempt. The first keyless continuation produced 2 separate service receipts. Neither pilot was retried.
+
+**Result:** Both cohorts finished 36/36 continuations on the same 6 source worlds. Rotating the card changed 49 of 72 letters. All 12 source cards changed. The same letters remained available; their assignment to records changed.
+
+| Receiver and sender | Optimal with original card | Optimal with shifted card | Optimal on fresh repeat | Original − shifted | Original − repeat |
+|---|---:|---:|---:|---:|---:|
+| [Direct DeepSeek](results/turn-fork-direct-live.json) | 62/72 | 60/72 | 60/72 | +2.78 pp | +2.78 pp |
+| [Subscription Sol](results/turn-fork-subscription-live.json) | 64/72 | 67/72 | 65/72 | −4.17 pp | −1.39 pp |
+
+With **identical sender input**, DeepSeek changed the 2 selected reports in 5/12 pairs. Sol changed them in 4/12. Final decisions differed in 13/72 and 5/72 slots, respectively. Those final differences include both a fresh sender and a fresh dispatcher. They do not isolate dispatcher variability. Under card rotation, the selected sets differed in 6/12 and 9/12 pairs. The effects do not establish that preserving the card order improves reward. On DeepSeek, the score contrast equaled the same-input repeat contrast.
+
+The [direct stock check](results/turn-fork-direct-stock.json) and [subscription stock check](results/turn-fork-subscription-stock.json) independently matched all 432 continuation actions with the original native worlds. The [direct meter](results/turn-fork-direct-meter.json) lists the cost of each of 72 settled calls: **$0.003544038 total**, including the pilot. The other 70 calls cost $0.003453420. The [external command receipts](results/turn-fork-subscription-receipts.json) matched 36 inventory calls and 36 dispatch calls to `openai-codex/gpt-6.2-sol`. Subscription cost is not measured.
+
 ## Can a dispatcher help another agent decide which two reports to send?
 
 Two live agents share a strict message budget. The dispatcher writes 6 preferred bay letters. The inventory agent chooses 2 revised reports to send. Both policies generate a card. Only `brief` gives it to inventory. The final dispatcher receives the selected reports, not the card. The [register](replication.md#can-a-six-letter-brief-help-another-agent-prioritize-revisions) fixes the order and the 6 worlds before either model runs.

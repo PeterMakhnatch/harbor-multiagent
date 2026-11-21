@@ -30,6 +30,14 @@ python -S -m examples.seatlab.native_report examples/seatlab/results/attention-d
 
 The first study changes which revisions the dispatcher can identify. The second changes what the inventory agent knows before choosing 2 revisions to send. The command checks the published decisions and score arithmetic. It does not contact a model, start Docker, confirm a bill, or reopen a private trace.
 
+**How much does an agent change its answer with the same context?** You can check both real model cohorts in one command. It compares a changed message against a fresh run with the original message:
+
+```sh
+python -S -m examples.seatlab.turn_fork summary
+```
+
+Use the [published team checkpoint](examples/seatlab/replication.md#start-from-the-published-team-checkpoint) to run your own two agents on the same saved messages. You do not need to rerun the original Harbor teams. This interface scores new decisions against the original world. It does not create a new native reward.
+
 ## Install
 
 ```bash
