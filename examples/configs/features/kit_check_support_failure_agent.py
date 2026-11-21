@@ -25,6 +25,8 @@ MODEL = "deepseek-flash"
 PROVIDER = "deepseek-host"
 CALL_IDS = {"left": "left-report", "right": "right-report", "builder": "builder-choice"}
 AUDIT = "left-audit"
+FaultCallId = Literal["left-report", "left-audit"]
+FAULT_CALL_IDS = (CALL_IDS["left"], AUDIT)
 _TRANSPORT = Path(__file__).with_name("deepseek_stream_transport.py").resolve()
 _CLIENT_WAIT_SEC = 100
 _GATE_WAIT_SEC = 110
@@ -64,9 +66,11 @@ def _error(error: BaseException) -> str:
 class CaseExchange:
     directory: Path
     condition: Condition
+    fault_call_id: FaultCallId
     gateway: DeepSeekGateway
     audit_ended: asyncio.Event = field(default_factory=asyncio.Event)
     intervention: dict[str, Any] | None = None
+    worker_attempts: dict[str, dict[str, Any]] = field(default_factory=dict)
     worker_records: dict[str, dict[str, Any]] = field(default_factory=dict)
     worker_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     gate: dict[str, Any] | None = None
@@ -76,12 +80,23 @@ _CASE: CaseExchange | None = None
 
 
 def prepare_case(
-    *, directory: Path, condition: Condition, gateway: DeepSeekGateway
+    *,
+    directory: Path,
+    condition: Condition,
+    fault_call_id: FaultCallId,
+    gateway: DeepSeekGateway,
 ) -> CaseExchange:
     global _CASE
     if _CASE is not None:
         raise RuntimeError("A Kit Check support failure trial is already prepared")
-    _CASE = CaseExchange(directory=directory, condition=condition, gateway=gateway)
+    if fault_call_id not in FAULT_CALL_IDS:
+        raise ValueError("Invalid Kit Check fault call")
+    _CASE = CaseExchange(
+        directory=directory,
+        condition=condition,
+        fault_call_id=fault_call_id,
+        gateway=gateway,
+    )
     return _CASE
 
 
@@ -199,8 +214,9 @@ class _Worker:
         }
 
     def _spawn(self, prompt: str) -> None:
-        audit_timeout = (
-            self.call_id == AUDIT and self.exchange.condition == "worker-timeout"
+        inject_timeout = (
+            self.call_id == self.exchange.fault_call_id
+            and self.exchange.condition == "worker-timeout"
         )
         config = {
             "gateway_url": self.exchange.gateway.url,
@@ -209,7 +225,7 @@ class _Worker:
             "payload": _payload(prompt, audit=self.call_id == AUDIT),
             "result_path": str(self.result_path),
             "events_path": str(self.events_path),
-            "mode": "timeout" if audit_timeout else "normal",
+            "mode": "timeout" if inject_timeout else "normal",
             "timeout_after_delta_sec": 0.05,
         }
         config_path = self.directory / "config.json"
@@ -242,6 +258,7 @@ class _Worker:
             spawned_ns=started["monotonic_ns"],
             spawned_wall_time_ns=started["wall_time_ns"],
         )
+        self.exchange.worker_records[self.call_id] = self.record
         try:
             _process_identity(self.process.pid, self.record)
         except (subprocess.CalledProcessError, ProcessLookupError):
@@ -250,13 +267,13 @@ class _Worker:
             self.record["error"] = "Worker terminated before its identity could be read"
         write_json(self.directory / "process.json", self.record)
 
-    def _watch_audit(self) -> None:
-        assert self.process is not None and self.call_id == AUDIT
+    def _watch_fault_call(self) -> None:
+        assert self.process is not None and self.call_id == self.exchange.fault_call_id
         if self.intervention_signal is not None or self.terminal_observed is not None:
             return
         if "first_model_delta" not in _worker_events(self.events_path):
             return
-        if not self.exchange.gateway.is_live(AUDIT):
+        if not self.exchange.gateway.is_live(self.call_id):
             self.terminal_observed = stamp()
             return
         if (
@@ -267,7 +284,7 @@ class _Worker:
         pid = self.process.pid
         if self.record["pgid"] != pid:
             raise RuntimeError("Refusing to signal an unverified worker group")
-        if not self.exchange.gateway.is_live(AUDIT):
+        if not self.exchange.gateway.is_live(self.call_id):
             self.terminal_observed = stamp()
             return
         live_checked = stamp()
@@ -283,8 +300,8 @@ class _Worker:
         assert self.process is not None
         async with asyncio.timeout(_CLIENT_WAIT_SEC):
             while (code := self.process.poll()) is None:
-                if self.call_id == AUDIT:
-                    self._watch_audit()
+                if self.call_id == self.exchange.fault_call_id:
+                    self._watch_fault_call()
                 await asyncio.sleep(_POLL_SEC)
         return code
 
@@ -353,7 +370,7 @@ class _Worker:
             self.mechanism = "worker_deadline"
         completed = events.get("response_complete")
         gateway_events = _worker_events(
-            self.exchange.directory / "gateway" / AUDIT / "events.jsonl"
+            self.exchange.directory / "gateway" / self.call_id / "events.jsonl"
         )
         gateway_terminal = gateway_events.get("terminal_delta")
         terminal = gateway_terminal or self.terminal_observed or completed
@@ -371,7 +388,7 @@ class _Worker:
             elif terminal_before:
                 error = "The stream was terminal before the intervention"
         elif error is None and self.record["exit_code"] != 0:
-            error = "The healthy audit did not exit successfully"
+            error = "The healthy target worker did not exit successfully"
         evidence = {
             "condition": self.exchange.condition,
             "target_seat": "left",
@@ -426,6 +443,9 @@ class _Worker:
 
     async def run(self, prompt: str) -> dict[str, Any]:
         self.directory.mkdir(parents=True, mode=0o700, exist_ok=False)
+        self.exchange.worker_attempts[self.call_id] = self.record
+        code = None
+        result = None
         try:
             self._spawn(prompt)
             code = await self._wait()
@@ -439,19 +459,20 @@ class _Worker:
         finally:
             self._record_reap()
             write_json(self.directory / "process.json", self.record)
-            self.exchange.worker_records[self.call_id] = self.record
-            if self.call_id == AUDIT:
+            if self.call_id == self.exchange.fault_call_id:
                 self._record_intervention()
-        result = None
-        if self.result_path.is_file():
-            try:
-                parsed = json.loads(self.result_path.read_bytes())
-                if isinstance(parsed, dict) and parsed.get("call_id") == self.call_id:
-                    self.exchange.worker_results[self.call_id] = parsed
-                    result = parsed
-            except (OSError, ValueError):
-                if code == 0:
-                    raise
+            if self.result_path.is_file():
+                try:
+                    parsed = json.loads(self.result_path.read_bytes())
+                    if (
+                        isinstance(parsed, dict)
+                        and parsed.get("call_id") == self.call_id
+                    ):
+                        self.exchange.worker_results[self.call_id] = parsed
+                        result = parsed
+                except (OSError, ValueError):
+                    if code == 0:
+                        raise
         if code != 0:
             raise NonZeroAgentExitCodeError(
                 f"DeepSeek host worker {self.call_id} exited {code}"
@@ -478,16 +499,25 @@ class SupportFailureKitAgent(BaseAgent):
         *,
         role: str,
         condition: Condition,
+        fault_call_id: FaultCallId,
         **kwargs: Any,
     ) -> None:
-        if role not in CALL_IDS or condition not in CONDITIONS:
+        if (
+            role not in CALL_IDS
+            or condition not in CONDITIONS
+            or fault_call_id not in FAULT_CALL_IDS
+        ):
             raise ValueError("Invalid Kit Check support failure seat options")
         super().__init__(logs_dir=logs_dir, model_name=model_name, **kwargs)
         if (self._parsed_model_provider, self._parsed_model_name) != (PROVIDER, MODEL):
             raise ValueError(
                 f"Kit Check support failure seats require {PROVIDER}/{MODEL}"
             )
-        if _CASE is None or _CASE.condition != condition:
+        if (
+            _CASE is None
+            or _CASE.condition != condition
+            or _CASE.fault_call_id != fault_call_id
+        ):
             raise RuntimeError(
                 "No matching Kit Check support failure trial is prepared"
             )
@@ -534,8 +564,8 @@ class SupportFailureKitAgent(BaseAgent):
         try:
             async with asyncio.timeout(_GATE_WAIT_SEC):
                 await self._exchange.audit_ended.wait()
-            intervention = self._exchange.intervention
-            if intervention is None or intervention["reaped_ns"] is None:
+            audit = self._exchange.worker_records.get(AUDIT)
+            if audit is None or audit["reaped_ns"] is None:
                 raise RuntimeError("The left audit worker was not reaped")
         except BaseException as failure:
             error = _error(failure)
@@ -561,6 +591,9 @@ class SupportFailureKitAgent(BaseAgent):
         calls = [CALL_IDS[self._role]]
         if self._role == "left":
             calls.append(AUDIT)
+        calls = [
+            call_id for call_id in calls if call_id in self._exchange.worker_records
+        ]
         by_call = {
             key: self._exchange.worker_results.get(key, {}).get("usage")
             for key in calls
@@ -590,12 +623,18 @@ class SupportFailureKitAgent(BaseAgent):
         call_id = CALL_IDS[self._role]
         self._event("seat_start", primary_call_id=call_id)
         error = None
+        error_type = None
+        phase = "observation"
         try:
+            self._event("observation_start")
             observation = await _observe(environment, self._role)
             write_json(self._directory / "observation.json", observation)
+            self._event("observation_received")
+            phase = "primary_worker"
             response = await _Worker(self._exchange, call_id).run(
                 _prompt(instruction, self._role, observation)
             )
+            phase = "decision"
             if response.get("finish_reason") != "stop":
                 raise RuntimeError("DeepSeek did not finish the Kit Check decision")
             action = _action(response["content"], self._role)
@@ -603,15 +642,19 @@ class SupportFailureKitAgent(BaseAgent):
                 _json(action), encoding="utf-8"
             )
             if self._role == "builder":
+                phase = "builder_audit_gate"
                 await self._builder_gate()
+            phase = "post"
             self._event("post_attempt", primary_call_id=call_id)
             await _submit(environment, self._role, action)
             self._event("post_accepted", primary_call_id=call_id, http_status=201)
             if self._role == "left":
+                phase = "audit"
                 await self._audit(observation, action)
         except BaseException as failure:
             error = _error(failure)
+            error_type = type(failure).__name__
             raise
         finally:
             self._usage(context)
-            self._event("seat_end", error=error)
+            self._event("seat_end", phase=phase, error=error, error_type=error_type)
