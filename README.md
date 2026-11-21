@@ -8,6 +8,18 @@ support.
 
 By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
+## SeatLab: test a message in a real Harbor team
+
+Does a responder schedule a better meeting when it sees the scheduler’s two proposed times? This branch runs the same pair of agents with and without that message. Each agent sees only its own calendar. The original Harbor task scores the final submission.
+
+```sh
+git clone --depth 1 --branch experiments/seatlab-native-queries https://github.com/PeterMakhnatch/harbor-multiagent.git
+cd harbor-multiagent
+python3.12 -S -m examples.seatlab.visibility.calendar_query_summary
+```
+
+Reading the published evidence needs no model account, Docker, or package install. To test your own programs, follow the [native two-seat quickstart](examples/seatlab/replication.md#run-two-native-seat-programs-on-your-own-machine). To change only the **last observation** rather than running new teams, use [the role replay experiment](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72) or [import your own Inspect log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/71). These answer different questions.
+
 ## Install
 
 ```bash
