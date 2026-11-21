@@ -469,3 +469,46 @@ python -m examples.seatlab.visibility.spend report "$SEATLAB_SPEND_DIR" --run-pr
 ```
 
 After each window stops, run `python -m examples.seatlab.visibility.clarify_meter "$study" --spend-dir "$SEATLAB_SPEND_DIR"` offline. It checks both turns against the original ledger and the sealed time boundaries. A late finish differs from a late start. A missing timestamp does not establish that a call never occurred. The meter does not authenticate the provider or verify an invoice.
+
+## Compare receivers on one real Dispatch decision
+
+Use this when you want to change the last decision without paying for the inventory or lookup turns again. The two formats contain the same visible bays. `report` preserves the sender's order. `utility` sorts each list by the receiver's own utility. Neither view reveals unopened reports.
+
+**With your own native run:** use the checkout and environment that ran the `ranked` direct study. The exporter requires its original settlement ledger and a completed `shown` source. It checks the original final prompt against the native evidence. Work from the checkout root:
+
+```sh
+export PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab"
+study=$(realpath "$PRIVATE_STUDY")
+out=$(mktemp -d)
+source_module=examples.seatlab.attention.peer_order_source
+for arm in report utility; do
+  python -m "$source_module" --study "$study" --seed 517301 prompt "$arm" > "$out/$arm.txt" || exit 1
+done
+```
+
+Give each worker only its role prompt. Use `Answer only with JSON.` as the system instruction. Save the first raw reply as `report-reply.json` or `utility-reply.json`. Keep the stock state and ledger on the owner's machine. Assign different seeds to separate workers.
+
+```sh
+for arm in report utility; do
+  python -m "$source_module" --study "$study" --seed 517301 score < "$out/$arm-reply.json"
+done
+python -m examples.seatlab.attention.ranked_collect --study "$study" > "$out/native.json"
+python -m examples.seatlab.attention.ranked_result "$out/native.json"
+```
+
+The first command scores the receiver on six shipments. The next two report the original native teams and their coverage. A new receiver score is **not** a new Harbor team reward.
+
+**Without private evidence:** the [public Dispatch cases](https://github.com/PeterMakhnatch/harbor-multiagent/blob/cd7201d16d99cbb91e647521dfe9f4f90997c26a/examples/seatlab/dispatch_peer_case.py) supply eight earlier factual source prompts. Run this from the ranking checkout with Python 3.12:
+
+```sh
+out=$(mktemp -d)
+git clone -q --branch experiments/seatlab-live-confirmation --single-branch \
+  https://github.com/PeterMakhnatch/harbor-multiagent.git "$out/sources"
+git -C "$out/sources" checkout -q cd7201d16d99cbb91e647521dfe9f4f90997c26a
+(cd "$out/sources" && python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm shown) > "$out/shown.txt"
+for arm in report utility; do
+  python3.12 -BS -m examples.seatlab.attention.peer_order "$arm" < "$out/shown.txt" > "$out/$arm.txt" || exit 1
+done
+```
+
+Use `dispatch_peer_case score --world 6801` in the source checkout to score a worker's first reply from stdin. All eight earlier sources accept both formats. These are different sources from the 16-world [published order comparison](native-model-results.md#does-changing-only-the-list-order-change-the-receivers-choice). These offline commands need no model, Docker or Harbor installation.

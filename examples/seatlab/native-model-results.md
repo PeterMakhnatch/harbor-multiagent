@@ -38,6 +38,26 @@ python3.12 -BS -m examples.seatlab.attention.ranked_result examples/seatlab/resu
 
 The stock Harbor grades, an independent shipment scorer and Eval Lab's read-only trial importer agreed for all 32 teams. The receipt binds each row to a native trial UUID and a digest of the whole result. It does not independently authenticate the model provider.
 
+### Does changing only the list order change the receiver’s choice?
+
+**The registered test did not establish a useful gain.** Sorting options by utility increased selections of the best visible option by 7/192, or 3.65 percentage points. The target was at least 20/192 and a two-sided world-level p-value of 0.05 or less. Five worlds improved, two declined and nine tied. The exact p-value was 17/64 (0.266).
+
+| Final decisions on identical peer evidence | Report order | Utility order |
+|---|---:|---:|
+| Chose the best option in the latest visible report | 175/192 | 182/192 |
+| Chose the stock-optimal bay | 150/192 | 154/192 |
+| Chose a feasible bay | 167/192 | 169/192 |
+
+Each of the 16 original plain teams supplied one receiver input. Both formats appended the same six peer lists with the same label and byte length. Only the order within a list could differ. Sorting changed 50 of the 96 lists. Each format got two independent first replies per source. All 64 replies were valid. Two scorers agreed on every reply. The primary test kept both repetitions and all six shipments together within each world.
+
+The first row measures use of visible evidence. The other rows use the stock grader; an unopened update can make an old report wrong. This compares receivers on fixed inputs. It cannot measure how a new team reacts. The high starting result also left only 17 possible improvements, fewer than the 20 required to pass. **Do not pay for this change on the strength of these results.**
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.peer_order_result examples/seatlab/results/dispatch-peer-order.json
+```
+
+[Registration](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063103003) · [Source admission](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7063182403) · [Use your own receiver](replication.md#compare-receivers-on-one-real-dispatch-decision) · [Scored first attempts](results/dispatch-peer-order.json) · [64 physical calls: $0.003034752, no holds](results/dispatch-peer-order-cost.json).
+
 ## Does a revised record help a replacement agent find the right context?
 
 The [handoff experiment](replication.md#which-record-should-a-replacement-agent-read) shares one writer's note between two replacement policies. Both may read one current record. Only one policy gets the record name on each revision receipt.

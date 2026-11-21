@@ -1,0 +1,581 @@
+{
+  "cells": [
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517301,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 0,
+      "seed": 517301,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 1,
+      "seed": 517301,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517301,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 0,
+      "seed": 517302,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 0,
+      "seed": 517302,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 1,
+      "seed": 517302,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 1,
+      "seed": 517302,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517303,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 5,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517303,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517303,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517303,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517304,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517304,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517304,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517304,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517305,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517305,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517305,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517305,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517306,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 3,
+      "follows_best_visible": 4,
+      "optimal": 3,
+      "repetition": 0,
+      "seed": 517306,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517306,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517306,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517307,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517307,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517307,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517307,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517308,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517308,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 3,
+      "follows_best_visible": 3,
+      "optimal": 3,
+      "repetition": 1,
+      "seed": 517308,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517308,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517309,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517309,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517309,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517309,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517310,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517310,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517310,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517310,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517311,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517311,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 1,
+      "seed": 517311,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517311,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 0,
+      "seed": 517312,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517312,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 1,
+      "seed": 517312,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517312,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 0,
+      "seed": 517313,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 0,
+      "seed": 517313,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 1,
+      "seed": 517313,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 1,
+      "seed": 517313,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517314,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 0,
+      "seed": 517314,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517314,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 6,
+      "follows_best_visible": 6,
+      "optimal": 6,
+      "repetition": 1,
+      "seed": 517314,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 0,
+      "seed": 517315,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 0,
+      "seed": 517315,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 5,
+      "follows_best_visible": 5,
+      "optimal": 4,
+      "repetition": 1,
+      "seed": 517315,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 5,
+      "follows_best_visible": 6,
+      "optimal": 5,
+      "repetition": 1,
+      "seed": 517315,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 0,
+      "seed": 517316,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 0,
+      "seed": 517316,
+      "status": "complete"
+    },
+    {
+      "arm": "report",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 1,
+      "seed": 517316,
+      "status": "complete"
+    },
+    {
+      "arm": "utility",
+      "feasible": 4,
+      "follows_best_visible": 5,
+      "optimal": 3,
+      "repetition": 1,
+      "seed": 517316,
+      "status": "complete"
+    }
+  ],
+  "schema": "seatlab.dispatch-peer-order/v1"
+}
