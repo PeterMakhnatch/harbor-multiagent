@@ -378,6 +378,26 @@ For a full seat briefing, `calendar_packet.starts(calendar_packet.normalize_brie
 
 The [native oracle checks on worlds 012 and 023](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7059898908) timed out without a native trial receipt. Neither world has an observed team reward from that check. The manifest verifies the task files, not a completed native run.
 
+#### Test private calendar views with 2 live seats
+
+The [registered live comparison](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7060106913) uses both arms on each held-out world. `raw` shows each seat its own busy hours. `exact` shows valid starts for the same attendees. The first sender turn sees only 2 attendees, not 3. Both arms name the changed weekdays and let the receiver open 2 reports. No seat gets the other calendar or a suggested meeting.
+
+Generate and verify the tasks above. Use the Python executable from your installed fork and the matching `harbor` executable. Start with this **no-key** oracle control:
+
+```bash
+umask 077
+module=examples.seatlab.calendar_notices
+mkdir -m 700 "$private/teams"
+"$python" -m "$module" views-control --job "$private/teams" \
+  --tasks "$private/tasks/schedule" --world w12 --arm raw --policy oracle --harbor "$harbor"
+```
+
+The positive control must earn 1. The `wrong` control must earn 0. These are scripted controls, not DeepSeek trials. On a shared Docker host, run each command under the host's slot limit. On our host that wrapper is `/tmp/crucible-docker-slot.sh`.
+
+For a paid replication, use `views-run` instead of `views-control`. Remove `--policy` and pass `--spend-dir` with the existing private spend database. Supply only the direct DeepSeek credential through `keys run --`. Make the first attempt once per registered arm. Use `raw` first on worlds 12, 15, 16, 19, 20, and 23. Use `exact` first on the other 6. Start the second arm only after the first ends. Give parallel workers different worlds.
+
+Audit a private job offline with `"$python" -m "$module.audit" "$private/teams" --private-views --spend-dir "$SEATLAB_SPEND_DIR"`. Add `--controls` to audit controls instead. Missing native rewards stay unknown. The public summary reader needs only Python; it does not run Docker or contact a model.
+
 #### Native replication with an external harness
 
 The archived task hashes above cannot be recreated: each build makes fresh service credentials. This independent replication uses the public Flotilla generator and freshly built tasks. It does not add replacements to the original panel.

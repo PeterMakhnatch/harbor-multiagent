@@ -172,8 +172,8 @@ def _expected_table(world: int, seat: str) -> calendar_packet.Table:
     ].tables[_SEATS.index(seat)]
 
 
-async def _table(
-    environment: SeatEnvironment, world: int, seat: str
+async def _read_local_table(
+    environment: SeatEnvironment, seat: str
 ) -> calendar_packet.Table:
     identity = await _request(environment, "whoami", 200)
     limits = identity.get("limits")
@@ -197,23 +197,31 @@ async def _table(
             or any(type(mask) is not int or not 0 <= mask <= 255 for mask in row)
         ):
             raise _SeatError("invalid_transport")
-    table = tuple(tuple(row) for row in raw)
+    return cast(calendar_packet.Table, tuple(tuple(row) for row in raw))
+
+
+async def _table(
+    environment: SeatEnvironment, world: int, seat: str
+) -> calendar_packet.Table:
+    table = await _read_local_table(environment, seat)
     if table != _expected_table(world, seat):
         raise _SeatError("invalid_transport")
-    return cast(calendar_packet.Table, table)
+    return table
 
 
 def _message(value: object, mid: str, sender: str, receiver: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise _SeatError("invalid_transport")
+    message = cast(dict[str, Any], value)
     if (
-        not isinstance(value, dict)
-        or value.keys() != {"id", "from", "to", "text", "t"}
-        or (value["id"], value["from"], value["to"]) != (mid, sender, receiver)
-        or not isinstance(value["text"], str)
-        or type(value["t"]) not in (int, float)
-        or not 0 <= value["t"] < float("inf")
+        message.keys() != {"id", "from", "to", "text", "t"}
+        or (message["id"], message["from"], message["to"]) != (mid, sender, receiver)
+        or not isinstance(message["text"], str)
+        or type(message["t"]) not in (int, float)
+        or not 0 <= message["t"] < float("inf")
     ):
         raise _SeatError("invalid_transport")
-    return value
+    return message
 
 
 async def _send(

@@ -1,0 +1,141 @@
+from dataclasses import dataclass
+
+from ..visibility import calendar_packet, calendar_protocol
+from . import protocol as p
+
+WORLDS = tuple(f"w{i:02d}" for i in range(12, 24))
+ARMS = ("raw", "exact")
+SEATS = p.SEATS
+PHASES = p.PHASES
+MODEL = p.MODEL
+AGENT_IMPORT = "examples.seatlab.calendar_notices.seat:PrivateViewSeat"
+AGENT_NAME = "seatlab-calendar-private-view"
+AGENT_VERSION = "1.0.0"
+SCHEMA = "seatlab.native-calendar-private-views/v1"
+
+_VIEW_PREFIX = calendar_protocol._RULES[
+    : calendar_protocol._RULES.index("Your calendar: ")
+]
+
+
+@dataclass(frozen=True, slots=True)
+class Cell:
+    world: str
+    arm: str
+    control: str = "live"
+
+    def __post_init__(self) -> None:
+        if (
+            self.world not in WORLDS
+            or self.arm not in ARMS
+            or self.control not in ("live", "oracle", "wrong")
+        ):
+            raise ValueError("invalid_cell")
+
+    @property
+    def index(self) -> int:
+        return int(self.world[1:])
+
+    @property
+    def receiver(self) -> str:
+        return SEATS[self.index % 2]
+
+    @property
+    def sender(self) -> str:
+        return SEATS[1 - self.index % 2]
+
+    @property
+    def first(self) -> str:
+        return "raw" if self.index % 4 in (0, 3) else "exact"
+
+    @property
+    def run(self) -> str:
+        mode = "" if self.control == "live" else f"ctl-{self.control}-"
+        return f"cpv-{mode}{self.world}-{self.arm}"
+
+    @property
+    def task_name(self) -> str:
+        return f"schedule-{self.index:03d}-talk"
+
+
+def _view(table: calendar_packet.Table, arm: str, *, first_two: bool = False) -> str:
+    if len(table) != 3:
+        raise ValueError("expected_three_attendees")
+    if arm == "raw":
+        return p._view(table, first_two=first_two)
+    if arm != "exact":
+        raise ValueError("invalid_arm")
+    visible = (*table[:2], (0,) * len(calendar_protocol._DAYS)) if first_two else table
+    starts = p.wire(calendar_packet.starts(visible))
+    return (
+        _VIEW_PREFIX
+        + f"Your calendar: 2-hour start IDs that fit all attendees in this view: {starts}."
+        + "\n\nTask:\n"
+        + p._DAY_IDS
+    )
+
+
+def initial_prompt(table: calendar_packet.Table, arm: str) -> str:
+    return (
+        _view(table, arm, first_two=True)
+        + "Find every start that fits both attendees.\n"
+        + p._LIST_RULE
+    )
+
+
+def revision_prompt(table: calendar_packet.Table, old: object, arm: str) -> str:
+    return (
+        _view(table, arm)
+        + f"Your initial report: {p.wire({'starts': p._starts(old)})}\n"
+        + "Check the initial report against all 3 attendees. Return the full "
+        "revised list of starts that fit all 3 attendees, not just the changes.\n"
+        + p._LIST_RULE
+    )
+
+
+def pick_prompt(
+    table: calendar_packet.Table, index: dict[str, object], arm: str
+) -> str:
+    notice = calendar_packet._object(index, "initial", "count", "changed")
+    p._starts(calendar_packet._list(notice["initial"]))
+    count = notice["count"]
+    if type(count) is not int or not 0 <= count <= len(calendar_protocol._DAYS):
+        raise ValueError("invalid_change_count")
+    days = p._days(calendar_packet._list(notice["changed"]))
+    if len(days) != count or days != sorted(days):
+        raise ValueError("invalid_changed_days")
+    return (
+        _view(table, arm)
+        + f"Notice from the other calendar: {p.wire(notice)}\n"
+        + "The notice contains the full initial list, the number of weekdays "
+        "whose list changed, and the IDs of those weekdays. A weekday changed if any "
+        "start was added or removed. Use the notice and your calendar to request the "
+        '2 weekday reports most useful for finding a joint start. Return only JSON: {"days":[a,b]}. '
+        "Replace a and b with 2 distinct day IDs."
+    )
+
+
+def choice_prompt(
+    table: calendar_packet.Table, old: object, opened: dict[str, object], arm: str
+) -> str:
+    reports = calendar_packet._list(
+        calendar_packet._object(opened, "reports")["reports"]
+    )
+    if len(reports) != 2:
+        raise ValueError("expected_two_opened_reports")
+    items = [calendar_packet._object(report, "day", "starts") for report in reports]
+    days = p._days([item["day"] for item in items])
+    for day, item in zip(days, items, strict=True):
+        starts = p._starts(calendar_packet._list(item["starts"]))
+        if any(p._day(slot) != day for slot in starts):
+            raise ValueError("opened_report_slot_on_wrong_day")
+    return (
+        _view(table, arm)
+        + f"Initial report from the other calendar: {p.wire(p._starts(old))}\n"
+        + f"Opened weekday reports: {p.wire(opened)}\n"
+        + "Each opened report replaces the initial list for that weekday. An empty "
+        "report means the sender listed no start for that weekday; it is not proof none exists. "
+        "For every other weekday, the initial list is your only information about the "
+        'other calendar. Select one joint start. Return only JSON: {"slot":n}. '
+        "Replace n with one slot ID."
+    )

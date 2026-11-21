@@ -11,11 +11,14 @@ from typing import Any
 from ..live_answers import __main__ as live
 from ..visibility import calendar_driver, calendar_replica_source
 from . import protocol as p
+from . import team_source, team_views
 
 MODULE = "examples.seatlab.calendar_notices"
 SCHEMA = "seatlab.native-calendar-notices/v1"
 BINDINGS = ("DEEPSEEK_API_KEY", "SEATLAB_SPEND_DIR")
 POLICIES = ("oracle", "wrong")
+
+_Cell = p.Cell | team_views.Cell
 
 
 def _require(ok: bool, category: str) -> None:
@@ -30,20 +33,51 @@ def _private_dir(path: Path) -> Path:
     return path
 
 
-def _directory(job: Path, cell: p.Cell) -> Path:
+def _directory(job: Path, cell: _Cell) -> Path:
     return job / ("cells" if cell.control == "live" else "controls") / cell.run
 
 
-def _source(task: Path, cell: p.Cell) -> dict[str, str]:
-    identity = calendar_replica_source.verify(task, cell.index)
+def _schema(cell: _Cell) -> str:
+    return team_views.SCHEMA if isinstance(cell, team_views.Cell) else SCHEMA
+
+
+def _cell_from_attempt(attempt: dict[str, Any]) -> _Cell:
+    schema = attempt["schema"]
+    if schema == SCHEMA:
+        cell_type = p.Cell
+    elif schema == team_views.SCHEMA:
+        cell_type = team_views.Cell
+    else:
+        raise ValueError("invalid_attempt_schema")
+    return cell_type(attempt["world"], attempt["arm"], attempt["control"])
+
+
+def _source(task: Path, cell: _Cell) -> dict[str, str]:
+    identity = (
+        team_source.identity(task, cell)
+        if isinstance(cell, team_views.Cell)
+        else calendar_replica_source.verify(task, cell.index)
+    )
     return {
         "task_sha256": identity.native_sha256,
         "semantics_sha256": identity.semantics_sha256,
     }
 
 
-def _config(directory: Path, task: Path, cell: p.Cell) -> dict[str, Any]:
-    model = {"model_name": p.MODEL} if cell.control == "live" else {}
+def _seat_kwargs(task: Path, cell: _Cell, seat: str) -> dict[str, Any]:
+    if isinstance(cell, team_views.Cell):
+        return team_source.seat_kwargs(task, cell, seat)
+    return {
+        "world": cell.world,
+        "arm": cell.arm,
+        "seat": seat,
+        "control": cell.control,
+    }
+
+
+def _config(directory: Path, task: Path, cell: _Cell) -> dict[str, Any]:
+    variant = team_views if isinstance(cell, team_views.Cell) else p
+    model = {"model_name": variant.MODEL} if cell.control == "live" else {}
     return {
         "schema_version": 1,
         "trial_name": cell.run,
@@ -59,25 +93,20 @@ def _config(directory: Path, task: Path, cell: p.Cell) -> dict[str, Any]:
         "participants": [
             {
                 "seat": seat,
-                "import_path": p.AGENT_IMPORT,
+                "import_path": variant.AGENT_IMPORT,
                 **model,
-                "kwargs": {
-                    "world": cell.world,
-                    "arm": cell.arm,
-                    "seat": seat,
-                    "control": cell.control,
-                },
+                "kwargs": _seat_kwargs(task, cell, seat),
             }
-            for seat in p.SEATS
+            for seat in variant.SEATS
         ],
     }
 
 
 def _attempt(
-    cell: p.Cell, source: dict[str, str] | None = None, config_sha256: str | None = None
+    cell: _Cell, source: dict[str, str] | None = None, config_sha256: str | None = None
 ) -> dict[str, Any]:
     return {
-        "schema": SCHEMA,
+        "schema": _schema(cell),
         "world": cell.world,
         "arm": cell.arm,
         "control": cell.control,
@@ -89,7 +118,7 @@ def _attempt(
 
 def _check_binding(
     directory: Path,
-    cell: p.Cell,
+    cell: _Cell,
     task: Path,
     source: dict[str, str],
     attempt: dict[str, Any],
@@ -103,15 +132,15 @@ def _check_binding(
     )
 
 
-def _check_first(job: Path, cell: p.Cell, task: Path, source: dict[str, str]) -> None:
+def _check_first(job: Path, cell: _Cell, task: Path, source: dict[str, str]) -> None:
     if cell.control != "live" or cell.arm == cell.first:
         return
-    first = p.Cell(cell.world, cell.first, "live")
+    first = type(cell)(cell.world, cell.first, "live")
     directory = _private_dir(_directory(job, first))
     team = calendar_driver._team_helpers()
     outcome = live._sealed(directory / "outcome.json")
     _require(
-        outcome.get("schema") == SCHEMA
+        outcome.get("schema") == _schema(first)
         and outcome.get("run") == first.run
         and set(outcome) == {"schema", "run", "returncode", "error"},
         "first_arm_not_terminal",
@@ -126,7 +155,7 @@ def _check_first(job: Path, cell: p.Cell, task: Path, source: dict[str, str]) ->
     )
 
 
-def _bind_host(cell: p.Cell) -> None:
+def _bind_host(cell: _Cell) -> None:
     bindings = set(BINDINGS) if cell.control == "live" else set()
     allowed = calendar_driver._PUBLIC_ENV | bindings
     for name in os.environ.keys() - allowed:
@@ -157,7 +186,7 @@ def _host_trial(directory: Path, harbor: Path) -> int:
         _require(Path.cwd() == directory, "host_working_directory_mismatch")
         _require(not os.path.lexists(directory / "outcome.json"), "attempt_is_terminal")
         attempt = live._sealed(directory / "attempt.json")
-        cell = p.Cell(attempt["world"], attempt["arm"], attempt["control"])
+        cell = _cell_from_attempt(attempt)
         _bind_host(cell)
         config_path = directory / "config.json"
         team = calendar_driver._team_helpers()
@@ -233,7 +262,7 @@ def _launch(directory: Path, harbor: Path, spend_dir: Path | None) -> int:
 
 
 def _run(
-    job: Path, tasks: Path, harbor: Path, cell: p.Cell, spend_dir: Path | None
+    job: Path, tasks: Path, harbor: Path, cell: _Cell, spend_dir: Path | None
 ) -> dict[str, Any]:
     job = _private_dir(job)
     directory = _directory(job, cell)
@@ -242,7 +271,7 @@ def _run(
     directory.mkdir(mode=0o700)
     attempt = _attempt(cell)
     outcome: dict[str, Any] = {
-        "schema": SCHEMA,
+        "schema": _schema(cell),
         "run": cell.run,
         "returncode": None,
         "error": "source_setup_failed",
@@ -294,16 +323,22 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         description="Launch one native calendar notice trial."
     )
     sub = parser.add_subparsers(dest="mode", required=True)
-    for mode in ("run", "control"):
+    for mode, variant in (
+        ("run", p),
+        ("control", p),
+        ("views-run", team_views),
+        ("views-control", team_views),
+    ):
         command = sub.add_parser(mode)
+        command.set_defaults(cell_type=variant.Cell)
         command.add_argument("--job", type=Path, required=True)
         command.add_argument("--tasks", type=Path, required=True)
-        command.add_argument("--world", choices=p.WORLDS, required=True)
-        command.add_argument("--arm", choices=p.ARMS, required=True)
+        command.add_argument("--world", choices=variant.WORLDS, required=True)
+        command.add_argument("--arm", choices=variant.ARMS, required=True)
         command.add_argument(
             "--harbor", type=Path, default=Path(sys.executable).with_name("harbor")
         )
-        if mode == "run":
+        if mode in ("run", "views-run"):
             command.add_argument("--spend-dir", type=Path, required=True)
         else:
             command.add_argument("--policy", choices=POLICIES, required=True)
@@ -316,8 +351,7 @@ def main(argv: list[str] | None = None) -> int:
         return _host_trial(Path(argv[1]), Path(argv[2])) if len(argv) == 3 else 2
     args = _arguments(argv)
     try:
-        control = args.policy if args.mode == "control" else "live"
-        cell = p.Cell(args.world, args.arm, control)
+        cell = args.cell_type(args.world, args.arm, getattr(args, "policy", "live"))
         outcome = _run(
             args.job, args.tasks, args.harbor, cell, getattr(args, "spend_dir", None)
         )

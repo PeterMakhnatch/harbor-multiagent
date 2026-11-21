@@ -13,8 +13,16 @@ _WORLDS = tuple(f"w{i:02d}" for i in range(12))
 
 
 def _grid(receipt: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
-    if receipt.get("schema") != "seatlab.calendar-notice-audit/v1":
+    private_views = receipt.get("schema") == "seatlab.calendar-private-view-audit/v1"
+    if (
+        not private_views
+        and receipt.get("schema") != "seatlab.calendar-notice-audit/v1"
+    ):
         raise ValueError("not a weekday-notice receipt")
+    arms = ("raw", "exact") if private_views else _ARMS
+    worlds = tuple(f"w{i}" for i in range(12, 24)) if private_views else _WORLDS
+    if private_views and receipt.get("mode") != "live":
+        raise ValueError("expected registered live teams, not control teams")
     grid = {}
     trials = set()
     for row in receipt["cells"]:
@@ -22,6 +30,14 @@ def _grid(receipt: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
         if key in grid or row["control"] != "live" or type(row["complete"]) is not bool:
             raise ValueError("expected one first-attempt live cell per world and arm")
         reward, trial = row["reward"], row["trial_uuid"]
+        if private_views and (
+            row["run"] != f"cpv-{key[0]}-{key[1]}"
+            or type(row["reward_valid"]) is not bool
+            or type(row["reward_verified"]) is not bool
+            or row["reward_verified"]
+            and not row["reward_valid"]
+        ):
+            raise ValueError("invalid native private-view cell binding")
         if reward is not None and (
             type(reward) not in (int, float) or reward not in (0, 1) or not trial
         ):
@@ -45,8 +61,13 @@ def _grid(receipt: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
             raise ValueError(
                 "a complete cell requires a native reward and exactly two audited reads"
             )
-        grid[key] = row if row["reward_verified"] is True else {**row, "reward": None}
-    if set(grid) != {(world, arm) for world in _WORLDS for arm in _ARMS}:
+        arm_bound = (
+            not private_views or row["complete"] or row.get("error") == "model_invalid"
+        )
+        if row["reward_verified"] is not True or not arm_bound:
+            row = {**row, "reward": None}
+        grid[key] = row
+    if set(grid) != {(world, arm) for world in worlds for arm in arms}:
         raise ValueError(
             "expected all 12 registered world pairs, including missing attempts"
         )
@@ -116,8 +137,60 @@ def _single_candidate_replay(teams: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _private_views(grid: dict[tuple[str, str], dict[str, Any]]) -> dict[str, Any]:
+    arms: dict[str, dict[str, int]] = {}
+    for arm in ("raw", "exact"):
+        cells = [row for (_, name), row in grid.items() if name == arm]
+        complete = [row for row in cells if row["complete"]]
+        arms[arm] = {
+            "enrolled": len(cells),
+            "complete": len(complete),
+            "scored": sum(row["reward"] is not None for row in cells),
+            "native_successes": sum(row["reward"] == 1 for row in cells),
+            "initial_exact": sum(
+                row["initial_report_exact"] is True for row in complete
+            ),
+            "revised_exact": sum(
+                row["revision_report_exact"] is True for row in complete
+            ),
+            "receiver_valid": sum(
+                row["chosen_locally_fits"] is True for row in complete
+            ),
+            "one_candidate": sum(row["final_candidate_count"] == 1 for row in complete),
+        }
+    wins = ties = losses = low = high = 0
+    for world in sorted({world for world, _ in grid}):
+        raw, exact = (grid[world, arm]["reward"] for arm in ("raw", "exact"))
+        low += (0 if exact is None else int(exact)) - (1 if raw is None else int(raw))
+        high += (1 if exact is None else int(exact)) - (0 if raw is None else int(raw))
+        if raw is not None and exact is not None:
+            wins += exact > raw
+            ties += exact == raw
+            losses += exact < raw
+    observed = wins + ties + losses
+    discordant = wins + losses
+    tail = sum(comb(discordant, k) for k in range(wins, discordant + 1))
+    p = Fraction(tail, 2**discordant)
+    return {
+        "arms": arms,
+        "verified_reward_pairs": observed,
+        "exact_wins_ties_losses": [wins, ties, losses],
+        "net_extra_wins_bounds": [low, high],
+        "one_sided_p": str(p) if observed == 12 else None,
+        "registered_result": (
+            "inconclusive"
+            if observed != 12
+            else "pass"
+            if low >= 4 and p <= Fraction(1, 20)
+            else "not_established"
+        ),
+    }
+
+
 def summarize(receipt: dict[str, Any]) -> dict[str, Any]:
     grid = _grid(receipt)
+    if receipt.get("schema") == "seatlab.calendar-private-view-audit/v1":
+        return _private_views(grid)
     arms = {}
     for arm in _ARMS:
         enrolled = [grid[world, arm] for world in _WORLDS]

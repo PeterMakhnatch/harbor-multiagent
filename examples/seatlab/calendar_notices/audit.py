@@ -25,8 +25,10 @@ from ..visibility import (
     spend,
 )
 from . import protocol as p
+from . import team_source, team_views
 
 SCHEMA = "seatlab.calendar-notice-audit/v1"
+PRIVATE_VIEWS_SCHEMA = "seatlab.calendar-private-view-audit/v1"
 _REGISTRATION = "seatlab.native-calendar-notices/v1"
 _WORLD = {
     "world_version": 2,
@@ -36,6 +38,8 @@ _WORLD = {
 }
 _USAGE = ("n_input_tokens", "n_cache_tokens", "n_output_tokens")
 Row = dict[str, Any]
+Cell = p.Cell | team_views.Cell
+Tables = tuple[calendar_packet.Table, calendar_packet.Table]
 
 
 def _object(data: bytes | str) -> Row:
@@ -44,6 +48,10 @@ def _object(data: bytes | str) -> Row:
 
 def _read(path: Path) -> Row:
     return _object(raw(path))
+
+
+def _present(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
 
 
 def _sealed(path: Path) -> bytes:
@@ -58,24 +66,47 @@ def _sealed(path: Path) -> bytes:
     return raw(path)
 
 
-def _participants(cell: p.Cell) -> list[Row]:
+def _schema(cell: Cell) -> str:
+    return team_views.SCHEMA if isinstance(cell, team_views.Cell) else _REGISTRATION
+
+
+def _target(tables: Tables) -> int:
+    a, b = tables
+    shared = set(calendar_packet.starts(a)).intersection(calendar_packet.starts(b))
+    require(len(shared) == 1, "stock_shared_slot")
+    return shared.pop()
+
+
+def _participants(cell: Cell, tables: Tables) -> list[Row]:
+    private_views = isinstance(cell, team_views.Cell)
+    study = team_views if private_views else p
+    control_slot = None
+    if private_views and cell.control != "live":
+        target = _target(tables)
+        control_slot = target if cell.control == "oracle" else int(target == 0)
     return [
         {
             "seat": seat,
-            "import_path": p.AGENT_IMPORT,
-            **({"model_name": p.MODEL} if cell.control == "live" else {}),
+            "import_path": study.AGENT_IMPORT,
+            **({"model_name": study.MODEL} if cell.control == "live" else {}),
             "kwargs": {
                 "world": cell.world,
                 "arm": cell.arm,
                 "seat": seat,
                 "control": cell.control,
+                **(
+                    {"calendar_sha256": p.digest(p.wire(table))}
+                    if private_views
+                    else {}
+                ),
+                **({"control_slot": control_slot} if control_slot is not None else {}),
             },
         }
-        for seat in p.SEATS
+        for seat, table in zip(p.SEATS, tables, strict=True)
     ]
 
 
-def _registration(directory: Path, cell: p.Cell, result: Row, row: Row) -> None:
+def _attempt(directory: Path, cell: Cell) -> Row:
     attempt = _object(_sealed(directory / "attempt.json"))
     require(
         (
@@ -85,15 +116,38 @@ def _registration(directory: Path, cell: p.Cell, result: Row, row: Row) -> None:
             attempt["control"],
             attempt["run"],
         )
-        == (_REGISTRATION, cell.world, cell.arm, cell.control, cell.run),
+        == (_schema(cell), cell.world, cell.arm, cell.control, cell.run),
         "attempt_binding",
     )
+    if isinstance(cell, team_views.Cell):
+        require(
+            attempt.keys()
+            == {"schema", "world", "arm", "control", "run", "config_sha256", "source"},
+            "attempt_binding",
+        )
+    return attempt
+
+
+def _registration(
+    directory: Path,
+    cell: Cell,
+    row: Row,
+    tables: Tables | None,
+    *,
+    attempt: Row | None = None,
+) -> tuple[Row, Tables]:
+    if attempt is None:
+        attempt = _attempt(directory, cell)
     config_data = _sealed(directory / "config.json")
     require(p.digest(config_data) == attempt["config_sha256"], "config_hash")
     config = _object(config_data)
     task = Path(config["task"]["path"])
+    if isinstance(cell, team_views.Cell):
+        require(task.is_absolute(), "config_binding")
+        tables = team_source.tables(task, cell)
+    if tables is None:
+        raise BindingError("missing_stock_tables")
     trial_root = directory / "trials"
-    trial = trial_root / cell.run
     environment = {
         "type": "docker",
         "force_build": True,
@@ -110,19 +164,34 @@ def _registration(directory: Path, cell: p.Cell, result: Row, row: Row) -> None:
                 "task": {"path": str(task)},
                 "environment": environment,
                 "verifier": {"disable": False},
-                "participants": _participants(cell),
+                "participants": _participants(cell, tables),
             }
         )
         and task.is_absolute(),
         "config_binding",
     )
-    verified = calendar_replica_source.verify(task, cell.index)
+    verified = (
+        team_source.identity(task, cell)
+        if isinstance(cell, team_views.Cell)
+        else calendar_replica_source.verify(task, cell.index)
+    )
     source = {
         "task_sha256": verified.native_sha256,
         "semantics_sha256": verified.semantics_sha256,
     }
     require(attempt["source"] == source, "stock_source_binding")
     row["_source"] = source
+    return config, tables
+
+
+def _result_binding(
+    directory: Path, cell: Cell, result: Row, config: Row, row: Row
+) -> None:
+    task = Path(config["task"]["path"])
+    trial_root = directory / "trials"
+    trial = trial_root / cell.run
+    environment = config["environment"]
+    source = row["_source"]
     actual = result["config"]
     require(
         all(actual["environment"].get(k) == v for k, v in environment.items())
@@ -141,6 +210,15 @@ def _registration(directory: Path, cell: p.Cell, result: Row, row: Row) -> None:
         == row["trial_uuid"],
         "native_trial_binding",
     )
+    if isinstance(cell, team_views.Cell):
+        for participant, expected in zip(
+            actual["participants"], config["participants"], strict=True
+        ):
+            require(
+                p.wire(participant["kwargs"]) == p.wire(expected["kwargs"])
+                and not participant.get("env"),
+                "native_roster_binding",
+            )
 
 
 def _timestamp(value: object) -> bool:
@@ -151,7 +229,7 @@ def _timestamp(value: object) -> bool:
     )
 
 
-def _messages(trial: Path, cell: p.Cell) -> list[Row]:
+def _messages(trial: Path, cell: Cell) -> list[Row]:
     root = trial / "artifacts/logs/world"
     messages = [_object(line) for line in raw(root / "messages.jsonl").splitlines()]
     directions = (
@@ -174,7 +252,7 @@ def _messages(trial: Path, cell: p.Cell) -> list[Row]:
 
 
 def _score(
-    trial: Path, cell: p.Cell, row: Row, messages: list[Row], target: int
+    trial: Path, cell: Cell, row: Row, messages: list[Row], target: int
 ) -> Row | None:
     logs = trial / "verifier"
     frozen = _read(logs / "world-state.json")
@@ -242,12 +320,19 @@ def _score(
     return submit
 
 
-def _timeline(trial: Path, messages: list[Row], submit: Row | None) -> set[str]:
+def _timeline(
+    trial: Path,
+    messages: list[Row],
+    submit: Row | None,
+    *,
+    unscored_receiver: str | None = None,
+) -> tuple[set[str], dict[str, str] | None]:
     events = raw(trial / "artifacts/logs/world/events.jsonl").splitlines()
     require(events, "missing_world_events")
     identified: set[str] = set()
     delivered: set[str] = set()
-    sent, submitted, previous = 0, False, 0
+    sent, previous = 0, 0
+    answer: dict[str, str] | None = None
     for i, line in enumerate(events, 1):
         event = _object(line)
         kind, seat, t, data = (event[k] for k in ("kind", "seat", "t", "data"))
@@ -270,7 +355,7 @@ def _timeline(trial: Path, messages: list[Row], submit: Row | None) -> set[str]:
             )
             identified.add(seat)
         else:
-            require(seat in identified and not submitted, "world_event_actor")
+            require(seat in identified and answer is None, "world_event_actor")
             if kind == "send":
                 require(
                     sent < len(messages) and (sent == 0 or f"m{sent}" in delivered),
@@ -290,41 +375,57 @@ def _timeline(trial: Path, messages: list[Row], submit: Row | None) -> set[str]:
                 require(data == {"ids": ids}, "deliver_binding")
                 delivered.update(ids)
             elif kind == "submit":
-                require(
-                    submit is not None
-                    and "m3" in delivered
-                    and seat == submit["seat"]
-                    and previous <= submit["t"] <= t
-                    and data == {"n": 1, "answer": submit["answer"]},
-                    "submit_event_binding",
-                )
-                submitted = True
+                if unscored_receiver is None:
+                    require(
+                        submit is not None
+                        and "m3" in delivered
+                        and seat == submit["seat"]
+                        and previous <= submit["t"] <= t
+                        and data == {"n": 1, "answer": submit["answer"]},
+                        "submit_event_binding",
+                    )
+                else:
+                    require(
+                        "m3" in delivered
+                        and seat == unscored_receiver
+                        and data.keys() == {"n", "answer"}
+                        and type(data["n"]) is int
+                        and data["n"] == 1
+                        and data["answer"] in map(calendar_protocol.answer, range(35)),
+                        "submit_event_binding",
+                    )
+                answer = data["answer"]
             else:
                 raise BindingError("unexpected_world_event")
         previous = t
     require(
-        sent == len(messages) and submitted == (submit is not None), "world_log_binding"
+        sent == len(messages)
+        and (
+            unscored_receiver is not None
+            or (answer is not None) == (submit is not None)
+        ),
+        "world_log_binding",
     )
-    return delivered
+    return delivered, answer
 
 
-def _actor(cell: p.Cell, phase: str) -> str:
+def _actor(cell: Cell, phase: str) -> str:
     return cell.sender if phase in ("initial", "revision") else cell.receiver
 
 
-def _receipts(trial: Path, cell: p.Cell) -> dict[str, Row]:
+def _receipts(trial: Path, cell: Cell) -> dict[str, Row]:
     receipts = {}
     for phase in p.PHASES:
         for seat in p.SEATS:
             path = trial / "seats" / seat / "agent" / f"{phase}.json"
-            if path.exists() or path.is_symlink():
+            if _present(path):
                 require(seat == _actor(cell, phase), "unexpected_turn_actor")
                 receipts[phase] = _read(path)
     return receipts
 
 
 def _check_turn(
-    receipt: Row, row: Row, cell: p.Cell, phase: str, prompt: str, call: Row | None
+    receipt: Row, row: Row, cell: Cell, phase: str, prompt: str, call: Row | None
 ) -> Any:
     control = cell.control != "live"
     role = None if control else p.role(cell, phase)
@@ -385,7 +486,12 @@ def _match_message(messages: list[Row], offset: int, expected: str) -> str | Non
 def _turn_path(
     cell, row, receipts, calls, sender, receiver, messages, delivered, target
 ):
-    prompts = {"initial": p.initial_prompt(sender)}
+    arm = cell.arm if isinstance(cell, team_views.Cell) else None
+    prompts = {
+        "initial": p.initial_prompt(sender)
+        if arm is None
+        else team_views.initial_prompt(sender, arm)
+    }
     expects = {
         "initial": list(
             calendar_packet.starts((*sender[:2], (0,) * len(calendar_protocol._DAYS)))
@@ -412,7 +518,11 @@ def _turn_path(
                 initial_report_exact=value == expects[phase],
                 joint_slot_in_initial=target in value,
             )
-            prompts["revision"] = p.revision_prompt(sender, value)
+            prompts["revision"] = (
+                p.revision_prompt(sender, value)
+                if arm is None
+                else team_views.revision_prompt(sender, value, arm)
+            )
         elif phase == "revision":
             old = values["initial"]
             row.update(
@@ -420,10 +530,16 @@ def _turn_path(
                 joint_slot_in_revision=target in value,
             )
             row["changed_days"] = len(p.changed_days(old, value))
-            index_text = _match_message(messages, 0, p.index_wire(old, value, cell.arm))
+            wire_arm = cell.arm if arm is None else "named"
+            index_text = _match_message(messages, 0, p.index_wire(old, value, wire_arm))
             bound += index_text is not None
             if index_text is not None and "m1" in delivered:
-                prompts["pick"] = p.pick_prompt(receiver, _object(index_text))
+                index = _object(index_text)
+                prompts["pick"] = (
+                    p.pick_prompt(receiver, index)
+                    if arm is None
+                    else team_views.pick_prompt(receiver, index, arm)
+                )
         elif phase == "pick":
             request = _match_message(messages, 1, p.request_wire(value))
             bound += request is not None
@@ -454,7 +570,11 @@ def _turn_path(
                 final_candidate_count=len(candidates),
                 joint_slot_in_final_report=target in composite,
             )
-            prompts["choice"] = p.choice_prompt(receiver, old, opened)
+            prompts["choice"] = (
+                p.choice_prompt(receiver, old, opened)
+                if arm is None
+                else team_views.choice_prompt(receiver, old, opened, arm)
+            )
         else:
             row.update(
                 chosen_locally_fits=value in receiver_starts,
@@ -482,6 +602,11 @@ def _model_usage(context: Row, turns: list[Row]) -> None:
 
 
 def _seat_path(result, cell, receipts, tables, messages, delivered):
+    private_views = isinstance(cell, team_views.Cell)
+    study = team_views if private_views else p
+    if private_views and result.get("seat_results") is None:
+        require(not receipts and not messages, "missing_native_seat_roster")
+        return False
     seats = result["seat_results"]
     require([seat["seat"] for seat in seats] == list(p.SEATS), "native_seat_roster")
     contexts = {}
@@ -497,7 +622,7 @@ def _seat_path(result, cell, receipts, tables, messages, delivered):
         require(
             record["under_test"] is True
             and (info["name"], info["version"], info["model_info"])
-            == (p.AGENT_NAME, p.AGENT_VERSION, model),
+            == (study.AGENT_NAME, study.AGENT_VERSION, model),
             "native_seat_identity",
         )
         context = record["agent_result"]
@@ -513,13 +638,18 @@ def _seat_path(result, cell, receipts, tables, messages, delivered):
         require(
             (state["run"], state["seat"]) == (cell.run, seat), "seat_metadata_binding"
         )
+        calendar_sha256 = p.digest(p.wire(tables[seat]))
+        if private_views and (own or state["calendar_sha256"] is not None):
+            require(
+                state["calendar_sha256"] == calendar_sha256, "seat_calendar_binding"
+            )
         if state["stage"] != "complete":
             complete = False
             continue
         require(
             state["error"] is None
             and state["phase"] == ("revision" if seat == cell.sender else "choice")
-            and state["calendar_sha256"] == p.digest(p.wire(tables[seat]))
+            and state["calendar_sha256"] == calendar_sha256
             and state["sent"] == [msg for msg in messages if msg["from"] == seat]
             and state["received"]
             == [msg for msg in messages if msg["to"] == seat and msg["id"] in delivered]
@@ -543,24 +673,41 @@ def _binary(value: object) -> int | None:
     return int(value)
 
 
+def _transport(
+    trial: Path, cell: Cell, row: Row, target: int
+) -> tuple[list[Row], set[str], dict[str, str] | None]:
+    private_views = isinstance(cell, team_views.Cell)
+    world = trial / "artifacts/logs/world"
+    messages = (
+        _messages(trial, cell)
+        if not private_views or _present(world / "messages.jsonl")
+        else []
+    )
+    if not private_views or row["reward"] is not None:
+        submit = _score(trial, cell, row, messages, target)
+        delivered, answer = _timeline(trial, messages, submit)
+        row["reward_verified"] = row["reward_valid"]
+        return messages, delivered, answer
+    if not _present(world / "events.jsonl"):
+        require(not messages, "missing_world_events")
+        return messages, set(), None
+    delivered, answer = _timeline(
+        trial, messages, None, unscored_receiver=cell.receiver
+    )
+    return messages, delivered, answer
+
+
 def _inspect(
     trial: Path,
-    cell: p.Cell,
+    cell: Cell,
     row: Row,
     result: Row,
-    world: calendar_packet.World,
+    stock_tables: Tables,
     ledger: list[Row],
 ) -> None:
-    tables = dict(zip(p.SEATS, world.tables, strict=True))
-    shared = set.intersection(
-        *(set(calendar_packet.starts(table)) for table in world.tables)
-    )
-    require(len(shared) == 1, "stock_shared_slot")
-    target = shared.pop()
-    messages = _messages(trial, cell)
-    submit = _score(trial, cell, row, messages, target)
-    delivered = _timeline(trial, messages, submit)
-    row["reward_verified"] = row["reward_valid"]
+    tables = dict(zip(p.SEATS, stock_tables, strict=True))
+    target = _target(stock_tables)
+    messages, delivered, answer = _transport(trial, cell, row, target)
     receipts = _receipts(trial, cell)
     calls = {call["role"]: call for call in ledger}
     require(
@@ -569,6 +716,12 @@ def _inspect(
         if cell.control == "live"
         else not calls,
         "ledger_role_binding",
+    )
+    private_views = isinstance(cell, team_views.Cell)
+    seats_done = (
+        _seat_path(result, cell, receipts, tables, messages, delivered)
+        if private_views
+        else False
     )
     choice = _turn_path(
         cell,
@@ -581,12 +734,13 @@ def _inspect(
         delivered,
         target,
     )
-    if submit is not None:
+    if answer is not None:
         require(
-            choice is not None and calendar_protocol.answer(choice) == submit["answer"],
+            choice is not None and calendar_protocol.answer(choice) == answer,
             "choice_submission_binding",
         )
-    seats_done = _seat_path(result, cell, receipts, tables, messages, delivered)
+    if not private_views:
+        seats_done = _seat_path(result, cell, receipts, tables, messages, delivered)
     outcome = _outcome(trial.parent.parent, cell)
     row["complete"] = bool(
         row["reward_verified"]
@@ -599,13 +753,18 @@ def _inspect(
         and outcome["returncode"] == 0
         and outcome["error"] is None
         and seats_done
-        and submit is not None
+        and answer is not None
         and len(receipts) == len(p.PHASES)
         and delivered == {"m1", "m2", "m3"}
         and row["error"] is None
     )
     if not row["complete"] and row["error"] is None:
-        row["error"] = _launch_error(outcome) or "behavior_incomplete"
+        category = (
+            "missing_native_reward"
+            if private_views and row["reward"] is None
+            else "behavior_incomplete"
+        )
+        row["error"] = _launch_error(outcome) or category
 
 
 def _cost(calls: list[Row]) -> Row:
@@ -632,12 +791,17 @@ def _cost(calls: list[Row]) -> Row:
     }
 
 
-def _outcome(directory: Path, cell: p.Cell) -> Row:
+def _outcome(directory: Path, cell: Cell) -> Row:
     outcome = _object(_sealed(directory / "outcome.json"))
     require(
-        (outcome["schema"], outcome["run"]) == (_REGISTRATION, cell.run),
+        (outcome["schema"], outcome["run"]) == (_schema(cell), cell.run),
         "outcome_binding",
     )
+    if isinstance(cell, team_views.Cell):
+        require(
+            outcome.keys() == {"schema", "run", "returncode", "error"},
+            "outcome_binding",
+        )
     return outcome
 
 
@@ -659,8 +823,8 @@ def _launch_error(outcome: Row) -> str | None:
 
 def _cell(
     job: Path,
-    cell: p.Cell,
-    world: calendar_packet.World,
+    cell: Cell,
+    tables: Tables | None,
     ledger: list[Row],
     ledger_error: str | None,
 ) -> Row:
@@ -671,7 +835,7 @@ def _cell(
         "world": cell.world,
         "arm": cell.arm,
         "control": cell.control,
-        "attempted": directory.exists() or directory.is_symlink(),
+        "attempted": _present(directory),
         "trial_uuid": None,
         "result_sha256": None,
         "reward": None,
@@ -697,11 +861,15 @@ def _cell(
         row["error"] = "ledger_without_attempt" if ledger else "not_attempted"
         return row
     try:
-        if (
-            not (trial / "result.json").exists()
-            and not (trial / "result.json").is_symlink()
-        ):
-            if (directory / "outcome.json").exists():
+        if not _present(trial / "result.json"):
+            private_views = isinstance(cell, team_views.Cell)
+            attempt_path = directory / "attempt.json"
+            if private_views and _present(attempt_path):
+                attempt = _attempt(directory, cell)
+                if attempt["config_sha256"] is not None:
+                    _registration(directory, cell, row, tables, attempt=attempt)
+            outcome_path = directory / "outcome.json"
+            if outcome_path.exists() or (private_views and outcome_path.is_symlink()):
                 row["error"] = _launch_error(_outcome(directory, cell))
             row["error"] = row["error"] or "missing_native_result"
             return row
@@ -721,8 +889,9 @@ def _cell(
         row["reward_valid"] = (
             result.get("reward_valid") is True and row["reward"] is not None
         )
-        _registration(directory, cell, result, row)
-        _inspect(trial, cell, row, result, world, ledger)
+        config, tables = _registration(directory, cell, row, tables)
+        _result_binding(directory, cell, result, config, row)
+        _inspect(trial, cell, row, result, tables, ledger)
         if ledger_error and cell.control == "live":
             row.update(complete=False, error=ledger_error)
     except BindingError as exc:
@@ -788,27 +957,30 @@ def _counts(rows: list[Row]) -> Row:
     }
 
 
-def report(job: Path, spend_dir: Path, *, controls: bool = False) -> Row:
+def report(
+    job: Path, spend_dir: Path, *, controls: bool = False, private_views: bool = False
+) -> Row:
     job = job.expanduser().absolute()
-    worlds = calendar_packet.load(calendar_packet.PACKET, calendar_packet.PACKET_SHA256)
+    study = team_views if private_views else p
+    prefix = "cpv-" if private_views else "cdn-"
+    worlds = (
+        None
+        if private_views
+        else calendar_packet.load(calendar_packet.PACKET, calendar_packet.PACKET_SHA256)
+    )
     control_types = ("oracle", "wrong") if controls else ("live",)
     cells = [
-        p.Cell(world, arm, control)
-        for world in p.WORLDS
-        for arm in p.ARMS
+        study.Cell(world, arm, control)
+        for world in study.WORLDS
+        for arm in study.ARMS
         for control in control_types
     ]
     if controls:
-        cells = [
-            cell
-            for cell in cells
-            if (job / "controls" / cell.run).exists()
-            or (job / "controls" / cell.run).is_symlink()
-        ]
+        cells = [cell for cell in cells if _present(job / "controls" / cell.run)]
     run_ids = {cell.run for cell in cells}
     ledger_error = None
     try:
-        calls = spend.report(spend_dir.expanduser().absolute(), run_prefix="cdn-")[
+        calls = spend.report(spend_dir.expanduser().absolute(), run_prefix=prefix)[
             "calls"
         ]
     except (ValueError, OSError, sqlite3.Error):
@@ -817,12 +989,14 @@ def report(job: Path, spend_dir: Path, *, controls: bool = False) -> Row:
     if controls:
         selected = [call for call in calls if call["run"] in run_ids]
     else:
-        selected = [call for call in calls if not call["run"].startswith("cdn-ctl-")]
+        selected = [
+            call for call in calls if not call["run"].startswith(f"{prefix}ctl-")
+        ]
     rows = [
         _cell(
             job,
             cell,
-            worlds[cell.index],
+            worlds[cell.index].tables if worlds is not None else None,
             [call for call in selected if call["run"] == cell.run],
             ledger_error,
         )
@@ -830,11 +1004,12 @@ def report(job: Path, spend_dir: Path, *, controls: bool = False) -> Row:
     ]
     _reconcile(rows)
     return {
-        "schema": SCHEMA,
+        "schema": PRIVATE_VIEWS_SCHEMA if private_views else SCHEMA,
         "mode": "controls" if controls else "live",
         "cells": rows,
         "counts": {
-            arm: _counts([row for row in rows if row["arm"] == arm]) for arm in p.ARMS
+            arm: _counts([row for row in rows if row["arm"] == arm])
+            for arm in study.ARMS
         },
         "ledger_error": ledger_error,
         "unassigned_calls": sum(call["run"] not in run_ids for call in selected),
@@ -849,10 +1024,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("job", type=Path)
     parser.add_argument("--spend-dir", type=Path, required=True)
     parser.add_argument("--controls", action="store_true")
+    parser.add_argument("--private-views", action="store_true")
     args = parser.parse_args(argv)
     print(
         json.dumps(
-            report(args.job, args.spend_dir, controls=args.controls), sort_keys=True
+            report(
+                args.job,
+                args.spend_dir,
+                controls=args.controls,
+                private_views=args.private_views,
+            ),
+            sort_keys=True,
         )
     )
     return 0

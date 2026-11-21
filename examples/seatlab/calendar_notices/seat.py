@@ -14,6 +14,7 @@ from ..live_answers.seat import _add_usage
 from ..visibility import calendar_packet, calendar_protocol, deepseek
 from ..visibility.calendar_seat import (
     _message,
+    _read_local_table,
     _request,
     _SeatError,
     _send,
@@ -21,11 +22,13 @@ from ..visibility.calendar_seat import (
     _write_private,
 )
 from . import protocol as p
+from . import team_views
 
 _INBOX_TIMEOUT_SEC = 180
 _POLL_INTERVAL_SEC = 1
 _DAY_COUNT = len(calendar_protocol._DAYS)
 _CONTROL_DAYS = (0, 1)
+_MISSING_CONTROL_SLOT = object()
 
 
 async def _receive(
@@ -123,19 +126,19 @@ def _decode_opened(text: str, days: list[int]) -> dict[str, Any]:
     return opened
 
 
-def _control_choice(cell: p.Cell) -> str:
-    if cell.control not in ("oracle", "wrong"):
+def _control_choice(index: int, control: str) -> str:
+    if control not in ("oracle", "wrong"):
         raise _SeatError("invalid_control")
     first, second = calendar_packet.load(
         calendar_packet.PACKET, calendar_packet.PACKET_SHA256
-    )[cell.index].tables
+    )[index].tables
     shared = set(calendar_packet.starts(first)).intersection(
         calendar_packet.starts(second)
     )
     if len(shared) != 1:
         raise _SeatError("invalid_control")
     slot = shared.pop()
-    if cell.control == "wrong":
+    if control == "wrong":
         slot = 1 if slot == 0 else 0
     return p.wire({"slot": slot})
 
@@ -154,7 +157,7 @@ class NoticeSeat(BaseAgent):
         extra_env: dict[str, str] | None = None,
         override_setup_timeout_sec: float | None = None,
     ) -> None:
-        self._cell = p.Cell(world, arm, control)
+        self._cell = self._make_cell(world, arm, control)
         declared = p.MODEL if control == "live" else None
         if seat not in p.SEATS or model_name != declared or extra_env:
             raise ValueError("invalid_calendar_notice_actor")
@@ -186,6 +189,39 @@ class NoticeSeat(BaseAgent):
     async def setup(self, environment: BaseEnvironment) -> None:
         pass
 
+    @staticmethod
+    def _make_cell(world: str, arm: str, control: str) -> p.Cell | team_views.Cell:
+        return p.Cell(world, arm, control)
+
+    async def _own_table(
+        self, environment: SeatEnvironment
+    ) -> tuple[calendar_packet.Table, str]:
+        table = await _table(environment, self._cell.index, self._seat)
+        return table, p.digest(p.wire(table))
+
+    @property
+    def _notice_arm(self) -> str:
+        return self._cell.arm
+
+    def _initial_prompt(self, table: calendar_packet.Table) -> str:
+        return p.initial_prompt(table)
+
+    def _revision_prompt(self, table: calendar_packet.Table, old: object) -> str:
+        return p.revision_prompt(table, old)
+
+    def _pick_prompt(
+        self, table: calendar_packet.Table, index: dict[str, object]
+    ) -> str:
+        return p.pick_prompt(table, index)
+
+    def _choice_prompt(
+        self, table: calendar_packet.Table, old: object, opened: dict[str, object]
+    ) -> str:
+        return p.choice_prompt(table, old, opened)
+
+    def _choice_control_text(self) -> str:
+        return _control_choice(self._cell.index, self._cell.control)
+
     async def _measure(
         self,
         phase: str,
@@ -198,7 +234,7 @@ class NoticeSeat(BaseAgent):
         live = self._cell.control == "live"
         if (control_text is None) != live or self.context_id is None:
             raise _SeatError("invalid_turn_binding")
-        role = p.role(self._cell, phase)
+        role = p.role(cast(p.Cell, self._cell), phase)
         state.update(phase=phase, stage="model_turn")
         receipt: dict[str, Any] = {
             "trial_uuid": str(self.context_id),
@@ -265,7 +301,7 @@ class NoticeSeat(BaseAgent):
             list[int],
             await self._measure(
                 "initial",
-                p.initial_prompt(table),
+                self._initial_prompt(table),
                 context,
                 state,
                 control_text=(
@@ -285,7 +321,7 @@ class NoticeSeat(BaseAgent):
             list[int],
             await self._measure(
                 "revision",
-                p.revision_prompt(table, old),
+                self._revision_prompt(table, old),
                 context,
                 state,
                 control_text=(
@@ -295,7 +331,7 @@ class NoticeSeat(BaseAgent):
         )
         state["stage"] = "sending_index"
         index = await _send(
-            environment, "m1", peer, p.index_wire(old, new, self._cell.arm)
+            environment, "m1", peer, p.index_wire(old, new, self._notice_arm)
         )
         state["sent"].append(index)
         state["stage"] = "waiting_for_request"
@@ -319,13 +355,13 @@ class NoticeSeat(BaseAgent):
         peer = self._cell.sender
         state["stage"] = "waiting_for_index"
         index_message = await _receive(environment, peer)
-        index = _decode_index(index_message["text"], self._cell.arm)
+        index = _decode_index(index_message["text"], self._notice_arm)
         state["received"].append(index_message)
         days = cast(
             list[int],
             await self._measure(
                 "pick",
-                p.pick_prompt(table, index),
+                self._pick_prompt(table, index),
                 context,
                 state,
                 control_text=None if live else p.wire({"days": _CONTROL_DAYS}),
@@ -344,10 +380,10 @@ class NoticeSeat(BaseAgent):
             int,
             await self._measure(
                 "choice",
-                p.choice_prompt(table, index["initial"], opened),
+                self._choice_prompt(table, index["initial"], opened),
                 context,
                 state,
-                control_text=None if live else _control_choice(self._cell),
+                control_text=None if live else self._choice_control_text(),
             ),
         )
         state["stage"] = "submitting"
@@ -380,8 +416,7 @@ class NoticeSeat(BaseAgent):
             ):
                 raise _SeatError("invalid_seat_binding")
             self._started = True
-            table = await _table(environment, self._cell.index, self._seat)
-            state["calendar_sha256"] = p.digest(p.wire(table))
+            table, state["calendar_sha256"] = await self._own_table(environment)
             if self._seat == self._cell.sender:
                 await self._report(environment, context, table, state)
             else:
@@ -396,3 +431,96 @@ class NoticeSeat(BaseAgent):
             raise
         except (OSError, LookupError, TypeError, RuntimeError):
             state.update(stage="seat_failed", error="seat_failed")
+
+
+class PrivateViewSeat(NoticeSeat):
+    def __init__(
+        self,
+        logs_dir: Path,
+        model_name: str | None = None,
+        *,
+        world: str,
+        arm: str,
+        seat: str,
+        calendar_sha256: str,
+        control: str = "live",
+        control_slot: object = _MISSING_CONTROL_SLOT,
+        logger: logging.Logger | None = None,
+        extra_env: dict[str, str] | None = None,
+        override_setup_timeout_sec: float | None = None,
+    ) -> None:
+        self._calendar_sha256 = calendar_packet._check_digest(calendar_sha256)
+        self._control_slot: int | None = None
+        if control == "live":
+            if control_slot is not _MISSING_CONTROL_SLOT:
+                raise ValueError("invalid_control")
+        elif control in ("oracle", "wrong"):
+            self._control_slot = calendar_protocol._checked_slot(control_slot)
+        else:
+            raise ValueError("invalid_control")
+        super().__init__(
+            logs_dir=logs_dir,
+            model_name=model_name,
+            world=world,
+            arm=arm,
+            seat=seat,
+            control=control,
+            logger=logger,
+            extra_env=extra_env,
+            override_setup_timeout_sec=override_setup_timeout_sec,
+        )
+
+    @staticmethod
+    @override
+    def name() -> str:
+        return team_views.AGENT_NAME
+
+    @override
+    def version(self) -> str:
+        return team_views.AGENT_VERSION
+
+    @staticmethod
+    @override
+    def _make_cell(world: str, arm: str, control: str) -> team_views.Cell:
+        return team_views.Cell(world, arm, control)
+
+    @override
+    async def _own_table(
+        self, environment: SeatEnvironment
+    ) -> tuple[calendar_packet.Table, str]:
+        table = await _read_local_table(environment, self._seat)
+        digest = p.digest(p.wire(table))
+        if digest != self._calendar_sha256:
+            raise _SeatError("invalid_transport")
+        return table, digest
+
+    @property
+    @override
+    def _notice_arm(self) -> str:
+        return "named"
+
+    @override
+    def _initial_prompt(self, table: calendar_packet.Table) -> str:
+        return team_views.initial_prompt(table, self._cell.arm)
+
+    @override
+    def _revision_prompt(self, table: calendar_packet.Table, old: object) -> str:
+        return team_views.revision_prompt(table, old, self._cell.arm)
+
+    @override
+    def _pick_prompt(
+        self, table: calendar_packet.Table, index: dict[str, object]
+    ) -> str:
+        return team_views.pick_prompt(table, index, self._cell.arm)
+
+    @override
+    def _choice_prompt(
+        self, table: calendar_packet.Table, old: object, opened: dict[str, object]
+    ) -> str:
+        return team_views.choice_prompt(table, old, opened, self._cell.arm)
+
+    @override
+    def _choice_control_text(self) -> str:
+        if self._control_slot is None:
+            raise _SeatError("invalid_control")
+        return p.wire({"slot": self._control_slot})

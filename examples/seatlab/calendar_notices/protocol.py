@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Protocol
 
 from ..live_answers import protocol as _common
 from ..visibility import calendar_packet, calendar_protocol
@@ -66,7 +67,12 @@ class Cell:
         return f"schedule-{self.index:03d}-talk"
 
 
-def role(cell: Cell, phase: str) -> str:
+class _HasSender(Protocol):
+    @property
+    def sender(self) -> str: ...
+
+
+def role(cell: _HasSender, phase: str) -> str:
     if phase == "initial":
         return f"cal_initial_{cell.sender}"
     if phase == "revision":
