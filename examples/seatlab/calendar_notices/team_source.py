@@ -64,6 +64,8 @@ def _seat_kwargs(
         "control": cell.control,
         "calendar_sha256": p.digest(p.wire(table)),
     }
+    if isinstance(cell, team_views.RepeatJoinCell):
+        kwargs["repetition"] = cell.repetition
     if cell.control != "live":
         target = packet._shared(own_tables)
         kwargs["control_slot"] = (

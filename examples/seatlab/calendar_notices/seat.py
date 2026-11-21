@@ -29,6 +29,7 @@ _POLL_INTERVAL_SEC = 1
 _DAY_COUNT = len(calendar_protocol._DAYS)
 _CONTROL_DAYS = (0, 1)
 _MISSING_CONTROL_SLOT = object()
+_MISSING_REPETITION = object()
 
 
 async def _receive(
@@ -157,8 +158,29 @@ class NoticeSeat(BaseAgent):
         extra_env: dict[str, str] | None = None,
         override_setup_timeout_sec: float | None = None,
     ) -> None:
-        self._cell = self._make_cell(world, arm, control)
-        declared = p.MODEL if control == "live" else None
+        self._initialize(
+            logs_dir=logs_dir,
+            model_name=model_name,
+            cell=p.Cell(world, arm, control),
+            seat=seat,
+            logger=logger,
+            extra_env=extra_env,
+            override_setup_timeout_sec=override_setup_timeout_sec,
+        )
+
+    def _initialize(
+        self,
+        *,
+        logs_dir: Path,
+        model_name: str | None,
+        cell: p.Cell | team_views.Cell,
+        seat: str,
+        logger: logging.Logger | None,
+        extra_env: dict[str, str] | None,
+        override_setup_timeout_sec: float | None,
+    ) -> None:
+        self._cell = cell
+        declared = p.MODEL if cell.control == "live" else None
         if seat not in p.SEATS or model_name != declared or extra_env:
             raise ValueError("invalid_calendar_notice_actor")
         super().__init__(
@@ -188,10 +210,6 @@ class NoticeSeat(BaseAgent):
     @override
     async def setup(self, environment: BaseEnvironment) -> None:
         pass
-
-    @staticmethod
-    def _make_cell(world: str, arm: str, control: str) -> p.Cell | team_views.Cell:
-        return p.Cell(world, arm, control)
 
     async def _own_table(
         self, environment: SeatEnvironment
@@ -445,6 +463,7 @@ class PrivateViewSeat(NoticeSeat):
         calendar_sha256: str,
         control: str = "live",
         control_slot: object = _MISSING_CONTROL_SLOT,
+        repetition: object = _MISSING_REPETITION,
         logger: logging.Logger | None = None,
         extra_env: dict[str, str] | None = None,
         override_setup_timeout_sec: float | None = None,
@@ -458,13 +477,11 @@ class PrivateViewSeat(NoticeSeat):
             self._control_slot = calendar_protocol._checked_slot(control_slot)
         else:
             raise ValueError("invalid_control")
-        super().__init__(
+        self._initialize(
             logs_dir=logs_dir,
             model_name=model_name,
-            world=world,
-            arm=arm,
+            cell=self._make_cell(world, arm, control, repetition),
             seat=seat,
-            control=control,
             logger=logger,
             extra_env=extra_env,
             override_setup_timeout_sec=override_setup_timeout_sec,
@@ -480,8 +497,13 @@ class PrivateViewSeat(NoticeSeat):
         return team_views.AGENT_VERSION
 
     @staticmethod
-    @override
-    def _make_cell(world: str, arm: str, control: str) -> team_views.Cell:
+    def _make_cell(
+        world: str, arm: str, control: str, repetition: object
+    ) -> team_views.Cell:
+        if repetition is not _MISSING_REPETITION:
+            if not isinstance(repetition, int):
+                raise ValueError("invalid_repetition")
+            return team_views.RepeatJoinCell(world, arm, control, repetition)
         if arm in team_views.ROLE_ARMS:
             return team_views.RoleCell(world, arm, control)
         if arm in team_views.JOIN_ARMS:

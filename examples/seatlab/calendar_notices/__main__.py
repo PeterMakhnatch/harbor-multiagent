@@ -5,6 +5,7 @@ import runpy
 import signal
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,8 @@ def _directory(job: Path, cell: _Cell) -> Path:
 
 
 def _schema(cell: _Cell) -> str:
+    if isinstance(cell, team_views.RepeatJoinCell):
+        return team_views.REPEAT_SCHEMA
     if isinstance(cell, team_views.JoinCell):
         return team_views.JOIN_SCHEMA
     if isinstance(cell, team_views.RoleCell):
@@ -56,6 +59,13 @@ def _cell_from_attempt(attempt: dict[str, Any]) -> _Cell:
         cell_type = team_views.RoleCell
     elif schema == team_views.JOIN_SCHEMA:
         cell_type = team_views.JoinCell
+    elif schema == team_views.REPEAT_SCHEMA:
+        return team_views.RepeatJoinCell(
+            attempt["world"],
+            attempt["arm"],
+            attempt["control"],
+            repetition=attempt["repetition"],
+        )
     else:
         raise ValueError("invalid_attempt_schema")
     return cell_type(attempt["world"], attempt["arm"], attempt["control"])
@@ -121,7 +131,7 @@ def _config(
 def _attempt(
     cell: _Cell, source: dict[str, str] | None = None, config_sha256: str | None = None
 ) -> dict[str, Any]:
-    return {
+    attempt: dict[str, Any] = {
         "schema": _schema(cell),
         "world": cell.world,
         "arm": cell.arm,
@@ -130,6 +140,9 @@ def _attempt(
         "source": source,
         "config_sha256": config_sha256,
     }
+    if isinstance(cell, team_views.RepeatJoinCell):
+        attempt["repetition"] = cell.repetition
+    return attempt
 
 
 def _check_binding(
@@ -144,6 +157,10 @@ def _check_binding(
     _require(
         directory == _directory(directory.parent.parent, cell)
         and attempt == _attempt(cell, source, p.digest(config))
+        and (
+            not isinstance(cell, team_views.RepeatJoinCell)
+            or type(attempt["repetition"]) is int
+        )
         and config == (p.wire(_config(directory, task, cell, tables)) + "\n").encode(),
         "attempt_binding_invalid",
     )
@@ -154,7 +171,7 @@ def _check_first(
 ) -> None:
     if cell.control != "live" or cell.arm == cell.first:
         return
-    first = type(cell)(cell.world, cell.first, "live")
+    first = replace(cell, arm=cell.first)
     directory = _private_dir(_directory(job, first))
     team = calendar_driver._team_helpers()
     outcome = live._sealed(directory / "outcome.json")
@@ -366,6 +383,10 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
         command.add_argument(
             "--harbor", type=Path, default=Path(sys.executable).with_name("harbor")
         )
+        if cell_type is team_views.JoinCell:
+            command.add_argument(
+                "--repeat", type=int, choices=range(1, 33), metavar="N"
+            )
         if mode in ("run", "views-run", "role-views-run", "run-visible"):
             command.add_argument("--spend-dir", type=Path, required=True)
         else:
@@ -379,7 +400,14 @@ def main(argv: list[str] | None = None) -> int:
         return _host_trial(Path(argv[1]), Path(argv[2])) if len(argv) == 3 else 2
     args = _arguments(argv)
     try:
-        cell = args.cell_type(args.world, args.arm, getattr(args, "policy", "live"))
+        control = getattr(args, "policy", "live")
+        repetition = getattr(args, "repeat", None)
+        if repetition is None:
+            cell = args.cell_type(args.world, args.arm, control)
+        else:
+            cell = team_views.RepeatJoinCell(
+                args.world, args.arm, control, repetition=repetition
+            )
         outcome = _run(
             args.job, args.tasks, args.harbor, cell, getattr(args, "spend_dir", None)
         )

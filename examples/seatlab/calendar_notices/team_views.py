@@ -18,6 +18,7 @@ AGENT_VERSION = "1.0.0"
 SCHEMA = "seatlab.native-calendar-private-views/v1"
 ROLE_SCHEMA = "seatlab.native-calendar-role-views/v1"
 JOIN_SCHEMA = "seatlab.native-calendar-visible-check/v1"
+REPEAT_SCHEMA = "seatlab.native-calendar-visible-repeat/v1"
 
 _JOIN_LISTS_FIRST = frozenset(
     world
@@ -117,6 +118,35 @@ class JoinCell(Cell):
     def run(self) -> str:
         mode = "" if self.control == "live" else f"ctl-{self.control}-"
         return f"cvj-{mode}{self.world}-{self.arm}"
+
+
+@dataclass(frozen=True, slots=True)
+class RepeatJoinCell(JoinCell):
+    repetition: int = 1
+
+    @override
+    def __post_init__(self) -> None:
+        JoinCell.__post_init__(self)
+        if (
+            not isinstance(self.repetition, int)
+            or isinstance(self.repetition, bool)
+            or not 1 <= self.repetition <= 32
+        ):
+            raise ValueError("invalid_repetition")
+
+    @property
+    @override
+    def first(self) -> str:
+        first = super(RepeatJoinCell, self).first
+        if self.repetition % 2 == 0:
+            return first
+        return "checked" if first == "lists" else "lists"
+
+    @property
+    @override
+    def run(self) -> str:
+        mode = "" if self.control == "live" else f"ctl-{self.control}-"
+        return f"cvr-r{self.repetition:02d}-{mode}{self.world}-{self.arm}"
 
 
 def _view_arm(arm: str, exact_arm: str) -> str:

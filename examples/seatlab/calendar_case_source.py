@@ -51,8 +51,14 @@ def _location(trial: Path) -> tuple[Path, Path, team_views.Cell]:
         and directory.name == trial.name,
         "invalid_native_source_location",
     )
-    prefix, world, arm = trial.name.split("-", 2)
-    cell = _CELL_TYPES[prefix](world, arm)
+    prefix, suffix = trial.name.split("-", 1)
+    if prefix == "cvr":
+        wave, world, arm = suffix.split("-", 2)
+        audit.require(wave.startswith("r"), "unsupported_native_source_cell")
+        cell = team_views.RepeatJoinCell(world, arm, repetition=int(wave[1:]))
+    else:
+        world, arm = suffix.split("-", 1)
+        cell = _CELL_TYPES[prefix](world, arm)
     audit.require(trial.name == cell.run, "unsupported_native_source_cell")
     for path in (job, directory.parent, directory, trial.parent):
         _private(path)

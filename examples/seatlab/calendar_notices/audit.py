@@ -31,6 +31,7 @@ SCHEMA = "seatlab.calendar-notice-audit/v1"
 PRIVATE_VIEWS_SCHEMA = "seatlab.calendar-private-view-audit/v1"
 ROLE_VIEWS_SCHEMA = "seatlab.calendar-role-view-audit/v1"
 VISIBLE_CHECK_SCHEMA = "seatlab.native-calendar-visible-check-results/v1"
+REPEAT_VISIBLE_CHECK_SCHEMA = "seatlab.native-calendar-visible-repeat-results/v1"
 _REGISTRATION = "seatlab.native-calendar-notices/v1"
 _WORLD = {
     "world_version": 2,
@@ -76,6 +77,8 @@ def _sealed(path: Path) -> bytes:
 
 
 def _schema(cell: Cell) -> str:
+    if isinstance(cell, team_views.RepeatJoinCell):
+        return team_views.REPEAT_SCHEMA
     if isinstance(cell, team_views.JoinCell):
         return team_views.JOIN_SCHEMA
     if isinstance(cell, team_views.RoleCell):
@@ -90,6 +93,14 @@ def _target(tables: Tables) -> int:
     return shared.pop()
 
 
+def _repeat_fields(cell: Cell) -> dict[str, int]:
+    return (
+        {"repetition": cell.repetition}
+        if isinstance(cell, team_views.RepeatJoinCell)
+        else {}
+    )
+
+
 def _participants(cell: Cell, tables: Tables) -> list[Row]:
     private_views = isinstance(cell, team_views.Cell)
     study = team_views if private_views else p
@@ -97,6 +108,7 @@ def _participants(cell: Cell, tables: Tables) -> list[Row]:
     if private_views and cell.control != "live":
         target = _target(tables)
         control_slot = target if cell.control == "oracle" else int(target == 0)
+    repeat = _repeat_fields(cell)
     return [
         {
             "seat": seat,
@@ -113,6 +125,7 @@ def _participants(cell: Cell, tables: Tables) -> list[Row]:
                     else {}
                 ),
                 **({"control_slot": control_slot} if control_slot is not None else {}),
+                **repeat,
             },
         }
         for seat, table in zip(p.SEATS, tables, strict=True)
@@ -133,11 +146,15 @@ def _attempt(directory: Path, cell: Cell) -> Row:
         "attempt_binding",
     )
     if isinstance(cell, team_views.Cell):
-        require(
-            attempt.keys()
-            == {"schema", "world", "arm", "control", "run", "config_sha256", "source"},
-            "attempt_binding",
-        )
+        fields = {"schema", "world", "arm", "control", "run", "config_sha256", "source"}
+        if isinstance(cell, team_views.RepeatJoinCell):
+            fields.add("repetition")
+            repetition = attempt.get("repetition")
+            require(
+                type(repetition) is int and repetition == cell.repetition,
+                "attempt_binding",
+            )
+        require(attempt.keys() == fields, "attempt_binding")
     return attempt
 
 
@@ -923,6 +940,7 @@ def _cell(
         "world": cell.world,
         "arm": cell.arm,
         "control": cell.control,
+        **_repeat_fields(cell),
         "attempted": _present(directory),
         "trial_uuid": None,
         "result_sha256": None,
@@ -1075,9 +1093,12 @@ def report(
     private_views: bool = False,
     role_views: bool = False,
     visible_check: bool = False,
+    repetition: int | None = None,
 ) -> Row:
     if sum((private_views, role_views, visible_check)) > 1:
         raise ValueError("conflicting_view_modes")
+    if repetition is not None and not visible_check:
+        raise ValueError("repeat_requires_visible_check")
     job = job.expanduser().absolute()
     if visible_check:
         cell_type, world_ids, arms = (
@@ -1106,11 +1127,16 @@ def report(
     )
     control_types = ("oracle", "wrong") if controls else ("live",)
     cells = [
-        cell_type(world, arm, control)
+        team_views.RepeatJoinCell(world, arm, control, repetition)
+        if repetition is not None
+        else cell_type(world, arm, control)
         for world in world_ids
         for arm in arms
         for control in control_types
     ]
+    if repetition is not None:
+        prefix = f"cvr-r{repetition:02d}-"
+        schema = REPEAT_VISIBLE_CHECK_SCHEMA
     if controls:
         cells = [cell for cell in cells if _present(job / "controls" / cell.run)]
     run_ids = {cell.run for cell in cells}
@@ -1142,6 +1168,7 @@ def report(
     return {
         "schema": schema,
         "mode": "controls" if controls else "live",
+        **({"repetition": repetition} if repetition is not None else {}),
         "cells": rows,
         "counts": {
             arm: _counts([row for row in rows if row["arm"] == arm]) for arm in arms
@@ -1163,7 +1190,10 @@ def main(argv: list[str] | None = None) -> int:
     views.add_argument("--private-views", action="store_true")
     views.add_argument("--role-views", action="store_true")
     views.add_argument("--visible-check", action="store_true")
+    parser.add_argument("--repeat", type=int, choices=range(1, 33), metavar="N")
     args = parser.parse_args(argv)
+    if args.repeat is not None and not args.visible_check:
+        parser.error("--repeat requires --visible-check")
     print(
         json.dumps(
             report(
@@ -1173,6 +1203,7 @@ def main(argv: list[str] | None = None) -> int:
                 private_views=args.private_views,
                 role_views=args.role_views,
                 visible_check=args.visible_check,
+                repetition=args.repeat,
             ),
             sort_keys=True,
         )
