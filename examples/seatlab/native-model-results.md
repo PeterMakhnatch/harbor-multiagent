@@ -1,5 +1,7 @@
 # Native speaker–listener results
 
+For the direct DeepSeek team experiments, see [Does better team context improve Harbor reward?](live-confirmation.md). It separates a visible notice, a delivered answer, and the final team reward.
+
 ## Does sending a short proposal change the native team reward?
 
 **Sending the proposed times did not improve the native team score on these 9 worlds.** All 18 registered pairs completed. Sending the proposals helped 1 pair, hurt 2, and left 15 scores unchanged. The equal-world difference was **−5.56 percentage points**. Each world supplied 2 seat directions. They are not 18 independent worlds.

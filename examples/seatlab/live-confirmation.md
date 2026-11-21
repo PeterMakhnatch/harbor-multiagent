@@ -20,6 +20,8 @@ The arms used independent model calls on matched worlds. Neither inventory seat 
 
 The [native receipt](https://github.com/PeterMakhnatch/harbor-multiagent/blob/0cfaab3f21/examples/seatlab/results/attention-confirmation-live.json) contains each world and turn. The [cost record](https://github.com/PeterMakhnatch/harbor-multiagent/pull/74#issuecomment-7058608137) lists each team's token-priced cost. All 48 calls settled at **$0.004705728** in total. No trial was replaced.
 
+An [earlier shipment study](https://github.com/PeterMakhnatch/harbor-multiagent/pull/66) also favored names: 38/72 versus 49/72 optimal decisions. It used six other worlds, with two repetitions each. We did not pool those results with the new worlds.
+
 The earlier [2/24 → 17/24 result](https://github.com/PeterMakhnatch/harbor-multiagent/pull/72) tested a different intervention. A scheduler saw or did not see two actual answers from its teammate. Those were replay decisions, not native team rewards.
 
 ## Two answers about shipment eligibility
