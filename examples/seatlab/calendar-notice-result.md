@@ -1,6 +1,6 @@
 # What helps two agents find a meeting?
 
-**Make the receiver's next decision easy to check.** On 24 fresh scheduling worlds, DeepSeek teams booked 20 meetings with the check and 10 without it. Both arms already had each seat's own feasible starts.
+**Show the receiver which reported times fit its own calendar.** In 96 new native teams on the same 24 scheduling worlds, this check raised bookings from 21/48 to 36/48. It added no calendar information.
 
 ## Does checking the received reports help a live team?
 
@@ -19,6 +19,24 @@ Each team generated its own reports. The checked teams received better evidence 
 The stock Eval Lab reader matched all 48 native scores. Independent checks matched 144 delivered messages and 192 accepted model turns. The 192 direct DeepSeek calls cost **$0.008619348** at the recorded token rates. No hold remains.
 
 [Native results and every charge](results/calendar-visible-check-live.json) · [Cost log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061789256) · [Run both arms](replication.md#check-a-receivers-own-availability-against-delivered-reports) · [Reuse one of your own completed native trials](replication.md#compare-2-workers-on-your-own-completed-scheduling-trial).
+
+### Does the booking gain repeat in fresh teams?
+
+**Yes, on these 24 worlds.** We ran 2 new teams per world per arm. Each team generated its own messages. We reversed the starting arm between repetitions and replaced no team.
+
+| Stock bookings | Reports and local starts | Same facts plus check |
+|---|---:|---:|
+| First repetition | 11/24 | 18/24 |
+| Second repetition | 10/24 | 18/24 |
+| Grade changed between repetitions | 7/24 worlds | 4/24 worlds |
+
+The check gained **31.25 percentage points**. Across the 24 worlds, 11 improved, 11 tied, and 2 declined. The exact two-sided sign-flip test by world gave **p = 35/4096 (0.00854)**. This passed the [registered test](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062119814). The true meeting appeared in the final reports of 33/48 unassisted teams and 36/48 checked teams. These are new teams, not new worlds or identical sender reports.
+
+**Where did the teams differ?** The booking grade changed on 11 of the 48 same-workflow pairs. Only **3/11** had identical final receiver prompts. The other 8 pairs already differed in the evidence shown at the final turn. The [registered majority claim](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7062203777) did not hold. This comparison does not isolate the cause of a lost meeting. It shows why replaying only the last receiver cannot reproduce all variation in a team.
+
+The stock Eval Lab reader matched all 96 native rewards. Independent checks matched 288 message deliveries and 384 model turns. All 384 direct DeepSeek calls settled for **$0.014291868**. There were no missing grades, replacements, or outstanding charges.
+
+[All first attempts](results/calendar-native-repeatability.json) · [Matched turns, without message text or action hashes](results/calendar-native-repeatability-turns.json) · [Per-call tokens and costs](results/calendar-native-repeatability-cost.json) · [Run the experiment or inspect your own reruns](replication.md#repeat-a-native-team-without-replacing-its-first-attempt).
 
 ### What if the receivers get exactly the same reports?
 
