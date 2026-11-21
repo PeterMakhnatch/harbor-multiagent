@@ -3,22 +3,27 @@
 import asyncio
 import hashlib
 import logging
+import re
+import stat
 import tarfile
 import time
 from collections.abc import Callable
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from harbor.db.types import PublicJobVisibility
+from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import TrialLock
 from harbor.models.job.result import JobResult
-from harbor.models.trial.result import TrialResult
+from harbor.models.trial.config import TrialConfig
+from harbor.models.trial.result import ModelInfo, TrialResult
+from harbor.trial.trial import SEAT_SCRUB_ERROR_FILENAME
 from harbor.upload.db_client import OwnerOrgError, UploadDB
 from harbor.upload.storage import UploadStorage
 
@@ -106,6 +111,9 @@ _STEP_ARCHIVE_INCLUDES: tuple[str, ...] = (
     "verifier",
     "artifacts",
 )
+
+# Older resumable seat archives may contain unscanned files.
+_SEAT_ARCHIVE_CACHE_PREFIX = "seats-v1-"
 
 # Per-job archive: job-level allowlist + every trial subdir, each filtered
 # through `_TRIAL_ARCHIVE_INCLUDES`. Consumed by `harbor job download`.
@@ -321,6 +329,10 @@ class Uploader:
         calls this for incomplete jobs or when new attempts were uploaded.
         A revision preserves immutable storage objects on re-upload.
         """
+        seat_dirs_by_trial = {
+            child: _seat_archive_dirs(child)
+            for child in _job_archive_trial_dirs(job_dir)
+        }
         log_path: str | None = None
         job_log = job_dir / "job.log"
         if job_log.exists():
@@ -333,13 +345,18 @@ class Uploader:
 
         archive_name = f"job-{revision}.tar.gz" if revision else "job.tar.gz"
         archive_path = f"jobs/{job_result.id}/{archive_name}"
-        local_archive_path = job_dir / ".harbor-upload" / archive_name
+        local_archive_name = (
+            f"{_SEAT_ARCHIVE_CACHE_PREFIX}{archive_name}"
+            if any(seat_dirs_by_trial.values())
+            else archive_name
+        )
+        local_archive_path = job_dir / ".harbor-upload" / local_archive_name
         upload_url_path = local_archive_path.with_suffix(
             local_archive_path.suffix + ".tus-url"
         )
         if not (local_archive_path.exists() and upload_url_path.exists()):
             upload_url_path.unlink(missing_ok=True)
-            _create_job_archive_file(job_dir, local_archive_path)
+            _create_job_archive_file(job_dir, local_archive_path, seat_dirs_by_trial)
         await self.storage.upload_resumable_file(local_archive_path, archive_path)
 
         await self.db.finalize_job(
@@ -532,15 +549,12 @@ class Uploader:
                 agent_cache[agent_key] = await self.db.upsert_agent(
                     tr.agent_info.name, tr.agent_info.version
                 )
-            if tr.agent_info.model_info is not None:
-                model_key = (
-                    tr.agent_info.model_info.name,
-                    tr.agent_info.model_info.provider,
-                )
+            for model_info, _ in _trial_model_usage(tr):
+                model_key = (model_info.name, model_info.provider)
                 if model_key not in model_cache:
                     model_cache[model_key] = await self.db.upsert_model(
-                        tr.agent_info.model_info.name,
-                        tr.agent_info.model_info.provider,
+                        model_info.name,
+                        model_info.provider,
                     )
         return agent_cache, model_cache
 
@@ -572,13 +586,19 @@ class Uploader:
             trajectory_path: str | None = None
 
             archive_path = f"trials/{trial_result.id}/trial.tar.gz"
-            local_archive_path = trial_dir / ".harbor-upload" / "trial.tar.gz"
+            seat_dirs = _seat_archive_dirs(trial_dir, expected_result=trial_result)
+            local_archive_name = (
+                f"{_SEAT_ARCHIVE_CACHE_PREFIX}trial.tar.gz"
+                if seat_dirs
+                else "trial.tar.gz"
+            )
+            local_archive_path = trial_dir / ".harbor-upload" / local_archive_name
             upload_url_path = local_archive_path.with_suffix(
                 local_archive_path.suffix + ".tus-url"
             )
             if not (local_archive_path.exists() and upload_url_path.exists()):
                 upload_url_path.unlink(missing_ok=True)
-                _create_trial_archive_file(trial_dir, local_archive_path)
+                _create_trial_archive_file(trial_dir, local_archive_path, seat_dirs)
             archive_size = local_archive_path.stat().st_size
 
             # Upsert the agent if we haven't seen this (name, version) pair
@@ -596,19 +616,23 @@ class Uploader:
                     )
                 agent_id = agent_cache[agent_key]
 
-            model_id: str | None = None
-            if trial_result.agent_info.model_info is not None:
-                model_key = (
-                    trial_result.agent_info.model_info.name,
-                    trial_result.agent_info.model_info.provider,
-                )
+            # One trial_model row per Hub model, with the usage of every agent
+            # configured with it. Two model keys can name one Hub model (the
+            # Hub stores a missing provider as "unknown"), and the row's
+            # insert keeps the first link, so usage is summed by model ID.
+            usage_by_model_id: dict[str, list[AgentContext]] = {}
+            for model_info, usage in _trial_model_usage(trial_result):
+                model_key = (model_info.name, model_info.provider)
                 async with self._model_cache_lock:
                     if model_key not in model_cache:
                         model_cache[model_key] = await self.db.upsert_model(
-                            trial_result.agent_info.model_info.name,
-                            trial_result.agent_info.model_info.provider,
+                            model_info.name,
+                            model_info.provider,
                         )
                     model_id = model_cache[model_key]
+                contexts = usage_by_model_id.setdefault(model_id, [])
+                if usage is not None:
+                    contexts.append(usage)
 
             # Reserve the trial before writing Storage. Conflict-safe inserts
             # let an interrupted or concurrent attempt continue without
@@ -659,21 +683,15 @@ class Uploader:
                 ),
             )
 
-            if model_id is not None:
-                agent_result = trial_result.agent_result
+            for model_id, contexts in usage_by_model_id.items():
+                usage = _sum_usage(contexts)
                 await self.db.insert_trial_model(
                     trial_id=trial_result.id,
                     model_id=model_id,
-                    n_input_tokens=(
-                        agent_result.n_input_tokens if agent_result else None
-                    ),
-                    n_cache_tokens=(
-                        agent_result.n_cache_tokens if agent_result else None
-                    ),
-                    n_output_tokens=(
-                        agent_result.n_output_tokens if agent_result else None
-                    ),
-                    cost_usd=agent_result.cost_usd if agent_result else None,
+                    n_input_tokens=usage.n_input_tokens,
+                    n_cache_tokens=usage.n_cache_tokens,
+                    n_output_tokens=usage.n_output_tokens,
+                    cost_usd=usage.cost_usd,
                 )
 
             # Now that the row exists (authorizing the storage write), upload
@@ -759,12 +777,49 @@ def _load_job_from_disk(
     trial_results: list[TrialResult] = []
     for child in sorted(job_dir.iterdir()):
         if child.is_dir() and (child / "result.json").exists():
-            result = TrialResult.model_validate_json(
-                (child / "result.json").read_text()
-            )
+            result = _read_trial_result_for_upload(child)
             trial_dirs[result.id] = child
             trial_results.append(result)
     return job_result, job_config, trial_results, trial_dirs
+
+
+def _trial_model_usage(
+    trial_result: TrialResult,
+) -> list[tuple[ModelInfo, AgentContext | None]]:
+    """Each agent's configured model, with the usage recorded for that agent.
+
+    A single-agent trial has its agent's model and ``agent_result``. A
+    multi-agent trial has no ``agent_result``; each seat in ``seat_results``
+    has its own agent, model and usage. A seat's usage counts in full toward
+    its configured model, as a single agent's does. The per-model breakdown
+    some harnesses record in ``AgentContext.model_usage`` is not used: its
+    names carry no provider and need not match any configured model.
+    """
+    if not trial_result.seat_results:
+        model_info = trial_result.agent_info.model_info
+        return [] if model_info is None else [(model_info, trial_result.agent_result)]
+    return [
+        (seat.agent_info.model_info, seat.agent_result)
+        for seat in trial_result.seat_results
+        if seat.agent_info is not None and seat.agent_info.model_info is not None
+    ]
+
+
+def _sum_usage(contexts: list[AgentContext]) -> AgentContext:
+    """Token counts and cost summed over contexts, as
+    ``TrialResult.compute_token_cost_totals`` sums a trial's seats; a field
+    none of them recorded stays None."""
+
+    def total(values: list[Any]) -> Any:
+        known = [value for value in values if value is not None]
+        return sum(known) if known else None
+
+    return AgentContext(
+        n_input_tokens=total([c.n_input_tokens for c in contexts]),
+        n_cache_tokens=total([c.n_cache_tokens for c in contexts]),
+        n_output_tokens=total([c.n_output_tokens for c in contexts]),
+        cost_usd=total([c.cost_usd for c in contexts]),
+    )
 
 
 def _timing_field(timing: object | None, field: str) -> datetime | None:
@@ -828,17 +883,25 @@ def _create_trial_archive(trial_dir: Path) -> bytes:
     return buf.getvalue()
 
 
-def _create_trial_archive_file(trial_dir: Path, archive_path: Path) -> None:
+def _create_trial_archive_file(
+    trial_dir: Path, archive_path: Path, seat_dirs: list[tuple[str, Path]]
+) -> None:
     """Create a trial archive on disk for resumable upload."""
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_trial_archive_entries(tar, trial_dir)
+        _add_trial_archive_entries(tar, trial_dir, seat_dirs=seat_dirs)
 
 
 def _add_trial_archive_entries(
-    tar: tarfile.TarFile, trial_dir: Path, *, arcname_prefix: str = ""
+    tar: tarfile.TarFile,
+    trial_dir: Path,
+    *,
+    arcname_prefix: str = "",
+    seat_dirs: list[tuple[str, Path]] | None = None,
 ) -> None:
     """Add allowlisted trial entries to an open tar archive."""
+    if seat_dirs is None:
+        seat_dirs = _seat_archive_dirs(trial_dir)
     if not (trial_dir / "lock.json").exists():
         raise FileNotFoundError(
             f"Trial lock file is required for upload: {trial_dir / 'lock.json'}"
@@ -848,6 +911,11 @@ def _add_trial_archive_entries(
         path = trial_dir / name
         if path.exists():
             tar.add(path, arcname=f"{arcname_prefix}{name}")
+
+    for seat, agent_dir in seat_dirs:
+        _add_seat_archive_entries(
+            tar, agent_dir, seat, arcname=f"{arcname_prefix}seats/{seat}/agent"
+        )
 
     steps_dir = trial_dir / "steps"
     if not steps_dir.exists():
@@ -863,24 +931,256 @@ def _add_trial_archive_entries(
                 )
 
 
-def _create_job_archive_file(job_dir: Path, archive_path: Path) -> None:
+def _add_seat_archive_entries(
+    tar: tarfile.TarFile, root: Path, seat: str, *, arcname: str
+) -> None:
+    """Archive only the bytes that pass the credential scan."""
+
+    def scan_error(path: Path) -> SeatCredentialError:
+        return SeatCredentialError(
+            f"seat {seat}: could not scan {path.relative_to(root.parent)}"
+        )
+
+    def on_walk_error(error: OSError) -> None:
+        raise scan_error(Path(error.filename) if error.filename else root) from None
+
+    for directory, dirs, files in root.walk(on_error=on_walk_error):
+        dirs.sort()
+        for path in (directory, *(directory / name for name in sorted(files))):
+            relative = path.relative_to(root)
+            if _is_credential_path(relative):
+                # Refuse rather than filter, since a second path can be a hard link.
+                raise SeatCredentialError(
+                    f"seat {seat}: {relative} is a known credential path; "
+                    "remove it from the seat's files before uploading this trial"
+                )
+            member_name = (
+                arcname if path == root else f"{arcname}/{relative.as_posix()}"
+            )
+            try:
+                member = tar.gettarinfo(str(path), arcname=member_name)
+                if member is None or _keep_seat_member(member) is None:
+                    continue
+                if member.isfile() or member.islnk():
+                    with path.open("rb") as handle:
+                        data = handle.read(_CREDENTIAL_SCAN_LIMIT + 1)
+                    _check_seat_credentials(data, seat, relative)
+                    member.type = tarfile.REGTYPE
+                    member.linkname = ""
+                    member.size = len(data)
+                    tar.addfile(member, BytesIO(data))
+                else:
+                    tar.addfile(member)
+            except OSError:
+                raise scan_error(path) from None
+
+
+# Credential shapes that must never leave the machine in a seat's files. Seat
+# logs of runs made before per-seat scrubbing can still hold another seat's key.
+_CREDENTIAL_PATTERNS = re.compile(
+    rb"(sk-(?:ant-|or-v1-|proj-)?[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|gh[pousr]_[A-Za-z0-9]{36,}"
+    rb"|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})"
+)
+_CREDENTIAL_SCAN_LIMIT = 64 * 1024 * 1024  # bytes per file
+_CREDENTIAL_PATHS = (
+    (".codex", "auth.json"),
+    (".claude", ".credentials.json"),
+    (".config", "gh", "hosts.yml"),
+    (".netrc",),
+    ("_netrc",),
+    (".git-credentials",),
+    (".aws", "credentials"),
+    (".docker", "config.json"),
+    ("id_rsa",),
+    ("id_ed25519",),
+)
+
+
+class SeatCredentialError(ValueError):
+    """A seat file could expose credentials; the trial is not uploaded."""
+
+
+def _is_credential_path(path: Path) -> bool:
+    parts = tuple(part.lower() for part in path.parts)
+    return any(parts[-len(suffix) :] == suffix for suffix in _CREDENTIAL_PATHS)
+
+
+def _check_seat_credentials(data: bytes, seat: str, path: Path) -> None:
+    if len(data) > _CREDENTIAL_SCAN_LIMIT:
+        raise SeatCredentialError(
+            f"seat {seat}: cannot fully scan {path}; "
+            f"file exceeds the {_CREDENTIAL_SCAN_LIMIT}-byte credential scan limit"
+        )
+    if _CREDENTIAL_PATTERNS.search(data):
+        raise SeatCredentialError(
+            f"seat {seat}: {path} contains a credential-shaped string; "
+            "scrub the seat's files before uploading this trial"
+        )
+
+
+class SeatArchiveError(ValueError):
+    """The trial's declared seats cannot be archived in full."""
+
+
+def _read_trial_result_for_upload(
+    trial_dir: Path, expected_seats: set[str] | None = None
+) -> TrialResult:
+    result_path = trial_dir / "result.json"
+    try:
+        if result_path.is_symlink():
+            raise ValueError
+        return TrialResult.model_validate_json(result_path.read_bytes())
+    except (OSError, ValueError):
+        if not expected_seats:
+            try:
+                config = TrialConfig.model_validate_json(
+                    (trial_dir / "config.json").read_bytes()
+                )
+                expected_seats = {
+                    participant.seat for participant in config.participants
+                }
+            except (OSError, ValueError):
+                pass
+        seats = (
+            f" (seats: {', '.join(sorted(expected_seats))})" if expected_seats else ""
+        )
+        raise SeatArchiveError(
+            f"trial {trial_dir.name}{seats}: could not read valid result.json"
+        ) from None
+
+
+def _check_seat_scrub_status(trial_dir: Path) -> None:
+    marker = trial_dir / SEAT_SCRUB_ERROR_FILENAME
+    try:
+        is_regular_file = stat.S_ISREG(marker.lstat().st_mode)
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise SeatCredentialError(
+            f"trial {trial_dir.name}: could not check {marker.name}"
+        ) from None
+    try:
+        message = marker.read_text(encoding="utf-8") if is_regular_file else ""
+    except (OSError, ValueError):
+        message = ""
+    if not message:
+        message = f"trial {trial_dir.name}: unable to verify the seat scrub"
+    raise SeatCredentialError(
+        f"{message}; scrub the seat's files before removing {marker.name} and retrying"
+    )
+
+
+def _seat_archive_dirs(
+    trial_dir: Path, *, expected_result: TrialResult | None = None
+) -> list[tuple[str, Path]]:
+    """Validate the seat layout before creating or resuming an archive."""
+    _check_seat_scrub_status(trial_dir)
+    expected_seats: set[str] = set()
+    if expected_result is not None:
+        expected_seats.update(p.seat for p in expected_result.config.participants)
+        expected_seats.update(seat.seat for seat in expected_result.seat_results or [])
+    if expected_result is None and not (trial_dir / "result.json").exists():
+        return []
+    result = _read_trial_result_for_upload(trial_dir, expected_seats)
+    expected_seats.update(
+        participant.seat for participant in result.config.participants
+    )
+    seats = [seat.seat for seat in result.seat_results or []]
+    for seat in seats:
+        if not _is_plain_name(seat):
+            raise SeatArchiveError(f"seat {seat!r}: invalid seat name in result.json")
+    if missing := expected_seats.difference(seats):
+        raise SeatArchiveError(
+            f"seats {', '.join(sorted(missing))}: missing from result.json"
+        )
+
+    seat_dirs = []
+    for seat in seats:
+        path = trial_dir
+        for name in ("seats", seat, "agent"):
+            path = path / name
+            try:
+                is_directory = stat.S_ISDIR(path.lstat().st_mode)
+            except OSError:
+                is_directory = False
+            if not is_directory:
+                raise SeatArchiveError(
+                    f"seat {seat}: {path.relative_to(trial_dir)} must be a real directory"
+                )
+        seat_dirs.append((seat, path))
+    return seat_dirs
+
+
+def _is_plain_name(name: str) -> bool:
+    """Whether ``name`` is a single path component, as a seat's service is."""
+    return (
+        name not in ("", ".", "..")
+        and PurePosixPath(name).name == name
+        and PureWindowsPath(name).name == name
+    )
+
+
+def _keep_seat_member(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """Keep directories, regular files, hard links to earlier members, and
+    symlinks that are relative and have no ``..``; leave out other links and
+    special files.
+
+    ``harbor trial download`` and ``harbor job download`` extract with
+    ``filter="data"``, which refuses special files and links that leave the
+    destination, and one refused member fails the whole download. A link
+    without an anchor or ``..`` resolves below its own directory wherever the
+    archive is extracted, even through other such links.
+    """
+    if member.isdir() or member.isfile() or member.islnk():
+        return member
+    if not member.issym() or not member.linkname:
+        return None
+    # PureWindowsPath splits on both separators and treats "/" and drives as
+    # anchors, so the check holds on any platform that downloads the archive.
+    target = PureWindowsPath(member.linkname)
+    if target.anchor or ".." in target.parts:
+        return None
+    return member
+
+
+def _create_job_archive_file(
+    job_dir: Path,
+    archive_path: Path,
+    seat_dirs_by_trial: dict[Path, list[tuple[str, Path]]] | None = None,
+) -> None:
     """Create the job archive on disk to avoid holding large jobs in memory."""
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, mode="w:gz") as tar:
-        _add_job_archive_entries(tar, job_dir)
+        _add_job_archive_entries(tar, job_dir, seat_dirs_by_trial)
 
 
-def _add_job_archive_entries(tar: tarfile.TarFile, job_dir: Path) -> None:
+def _job_archive_trial_dirs(job_dir: Path) -> list[Path]:
+    return [
+        child
+        for child in sorted(job_dir.iterdir())
+        if child.is_dir() and (child / "result.json").exists()
+    ]
+
+
+def _add_job_archive_entries(
+    tar: tarfile.TarFile,
+    job_dir: Path,
+    seat_dirs_by_trial: dict[Path, list[tuple[str, Path]]] | None,
+) -> None:
     root = job_dir.name
     for name in _JOB_ARCHIVE_INCLUDES:
         path = job_dir / name
         if path.exists():
             tar.add(path, arcname=f"{root}/{name}")
-    for child in sorted(job_dir.iterdir()):
-        if not (child.is_dir() and (child / "result.json").exists()):
-            continue
+    if seat_dirs_by_trial is None:
+        seat_dirs_by_trial = {
+            child: _seat_archive_dirs(child)
+            for child in _job_archive_trial_dirs(job_dir)
+        }
+    for child, seat_dirs in seat_dirs_by_trial.items():
         _add_trial_archive_entries(
             tar,
             child,
             arcname_prefix=f"{root}/{child.name}/",
+            seat_dirs=seat_dirs,
         )

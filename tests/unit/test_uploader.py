@@ -1,4 +1,6 @@
+import hashlib
 import json
+import os
 import tarfile
 import asyncio
 from datetime import datetime, timezone
@@ -9,6 +11,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from harbor.download.downloader import Downloader
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.config import JobConfig
 from harbor.models.job.lock import VerifierLock, TaskLock, TrialLock
@@ -16,6 +19,7 @@ from harbor.models.job.result import JobResult, JobStats
 from harbor.models.trial.config import (
     AgentConfig,
     EnvironmentConfig,
+    Participant,
     TaskConfig,
     TrialConfig,
 )
@@ -23,12 +27,15 @@ from harbor.models.trial.result import (
     AgentInfo,
     ExceptionInfo,
     ModelInfo,
+    SeatResult,
     TimingInfo,
     TrialResult,
 )
 from harbor.models.verifier.result import VerifierResult
 from harbor.upload.db_client import OwnerOrgError
 from harbor.upload.uploader import (
+    SeatArchiveError,
+    SeatCredentialError,
     Uploader,
     _create_job_archive_file,
     _create_trial_archive,
@@ -1254,8 +1261,10 @@ class TestUploadJob:
                 raise RuntimeError("trajectory upload blocked")
             return None
 
-        def _capture_job_archive(source_dir: Path, archive_path: Path) -> None:
-            _create_job_archive_file(source_dir, archive_path)
+        def _capture_job_archive(
+            source_dir: Path, archive_path: Path, seat_dirs_by_trial: dict
+        ) -> None:
+            _create_job_archive_file(source_dir, archive_path, seat_dirs_by_trial)
             with tarfile.open(archive_path, mode="r:gz") as tar:
                 job_archive_names.update(tar.getnames())
 
@@ -1567,3 +1576,611 @@ def test_archives_keep_both_conversation_roles_and_uploaded_inputs(
             assert member is not None
             assert member.read() == contents.encode("utf-8")
         assert prefix + "unrelated-secret.txt" not in tar.getnames()
+
+
+# A multi-agent trial keeps each agent's logs and trajectory in
+# seats/<seat>/agent and its usage in seat_results; its root agent/ is empty
+# and its agent_result is None.
+SEAT_TRIAL_NAME = "hello-seats__seats"
+SEAT_MODEL = ModelInfo(name="deepseek/deepseek-v4-flash", provider="openrouter")
+SEAT_USAGE = {
+    "p1": AgentContext(
+        n_input_tokens=1000, n_cache_tokens=600, n_output_tokens=100, cost_usd=0.25
+    ),
+    "p2": AgentContext(
+        n_input_tokens=500, n_cache_tokens=300, n_output_tokens=50, cost_usd=0.125
+    ),
+}
+
+
+def _seat_agent_info(model_info: ModelInfo = SEAT_MODEL) -> AgentInfo:
+    return AgentInfo(name="terminus-2", version="2.0.0", model_info=model_info)
+
+
+def _make_seat_trial_result(seats: tuple[str, ...] = ("p1", "p2")) -> TrialResult:
+    """A finished seat trial: p1 under test and the others supporting, all
+    terminus-2 on one model."""
+    task_config = TaskConfig(path=Path("/tmp/hello-seats"))
+    return TrialResult(
+        task_name="hello-seats",
+        trial_name=SEAT_TRIAL_NAME,
+        trial_uri=f"file:///trials/{SEAT_TRIAL_NAME}",
+        task_id=task_config.get_task_id(),
+        task_checksum="deadbeef",
+        config=TrialConfig(
+            task=task_config,
+            trial_name=SEAT_TRIAL_NAME,
+            job_id=uuid4(),
+            participants=[
+                Participant(
+                    seat=seat,
+                    name="terminus-2",
+                    model_name="openrouter/deepseek/deepseek-v4-flash",
+                )
+                for seat in seats
+            ],
+        ),
+        agent_info=_seat_agent_info(),
+        seat_results=[
+            SeatResult(
+                seat=seat,
+                under_test=seat == "p1",
+                agent_info=_seat_agent_info(),
+                agent_result=(
+                    SEAT_USAGE[seat].model_copy() if seat in SEAT_USAGE else None
+                ),
+            )
+            for seat in seats
+        ],
+        verifier_result=VerifierResult(rewards={"reward": 1}),
+        started_at=datetime(2026, 4, 17, 10, 0, 0, tzinfo=timezone.utc),
+        finished_at=datetime(2026, 4, 17, 10, 5, 0, tzinfo=timezone.utc),
+    )
+
+
+def _write_seat_trial_dir(parent: Path, trial_result: TrialResult) -> Path:
+    trial_dir = parent / trial_result.trial_name
+    trial_dir.mkdir(parents=True)
+    (trial_dir / "result.json").write_text(trial_result.model_dump_json())
+    (trial_dir / "config.json").write_text(
+        trial_result.config.model_dump_json(exclude={"agent"})
+    )
+    _write_trial_lock(trial_dir, task_name=trial_result.task_name, digest="a" * 64)
+    (trial_dir / "agent").mkdir()
+    for seat in trial_result.seat_results or []:
+        agent_dir = trial_dir / "seats" / seat.seat / "agent"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "trajectory.json").write_text(
+            json.dumps({"session_id": f"{SEAT_TRIAL_NAME}__{seat.seat}", "steps": []})
+        )
+    (trial_dir / "verifier").mkdir()
+    (trial_dir / "verifier" / "reward.txt").write_text("1")
+    return trial_dir
+
+
+def _write_seat_job_dir(
+    tmp_path: Path, trial_result: TrialResult | None = None
+) -> Path:
+    trial_result = trial_result or _make_seat_trial_result()
+    job_dir = tmp_path / "seat-job"
+    _write_seat_trial_dir(job_dir, trial_result)
+    job_result = JobResult(
+        id=uuid4(),
+        started_at=trial_result.started_at,
+        finished_at=trial_result.finished_at,
+        n_total_trials=1,
+        stats=JobStats.from_trial_results([trial_result]),
+        trial_results=[trial_result],
+    )
+    (job_dir / "result.json").write_text(job_result.model_dump_json())
+    (job_dir / "config.json").write_text(
+        JobConfig(job_name="seat-job").model_dump_json()
+    )
+    return job_dir
+
+
+def _p2_on_another_model(trial_result: TrialResult) -> TrialResult:
+    p2 = (trial_result.seat_results or [])[1]
+    p2.agent_info = _seat_agent_info(
+        ModelInfo(name="claude-test", provider="anthropic")
+    )
+    return trial_result
+
+
+@pytest.fixture
+def symlinks_available(tmp_path: Path) -> None:
+    link = tmp_path / "symlink-check"
+    try:
+        link.symlink_to("missing")
+    except OSError as error:
+        pytest.skip(f"Symlinks are unavailable: {error}")
+    link.unlink()
+
+
+def _write_seat_job_with_hazards(tmp_path: Path) -> Path:
+    """The seat job plus an undeclared directory, unsafe links and a pipe."""
+    outside = tmp_path / "outside"
+    (outside / "agent").mkdir(parents=True)
+    (outside / "agent" / "host.txt").write_text("host file")
+    job_dir = _write_seat_job_dir(tmp_path)
+    seats = job_dir / SEAT_TRIAL_NAME / "seats"
+    (seats / "ghost" / "agent").mkdir(parents=True)
+    (seats / "ghost" / "agent" / "notes.txt").write_text("not a seat")
+    p1 = seats / "p1" / "agent"
+    (p1 / "latest.json").symlink_to("trajectory.json")
+    (p1 / "absolute.txt").symlink_to(outside / "agent" / "host.txt")
+    (p1 / "parent.txt").symlink_to(
+        Path("..", "..", "..", "..", "..", "outside", "agent", "host.txt")
+    )
+    if hasattr(os, "mkfifo"):
+        os.mkfifo(p1 / "pipe")
+    return job_dir
+
+
+# What a download restores under seats/ from that job: the declared seats
+# inside the trial, without the links that leave it or the pipe.
+SAFE_SEAT_TREE = {
+    "seats/p1": "dir",
+    "seats/p1/agent": "dir",
+    "seats/p1/agent/latest.json": "-> trajectory.json",
+    "seats/p1/agent/trajectory.json": json.dumps(
+        {"session_id": f"{SEAT_TRIAL_NAME}__p1", "steps": []}
+    ),
+    "seats/p2": "dir",
+    "seats/p2/agent": "dir",
+    "seats/p2/agent/trajectory.json": json.dumps(
+        {"session_id": f"{SEAT_TRIAL_NAME}__p2", "steps": []}
+    ),
+}
+
+
+def _seat_tree(trial_dir: Path) -> dict[str, str]:
+    """Each entry under seats/: "-> target" for a link, a file's text, or
+    "dir"."""
+    tree = {}
+    for path in sorted((trial_dir / "seats").rglob("*")):
+        key = path.relative_to(trial_dir).as_posix()
+        if path.is_symlink():
+            tree[key] = f"-> {os.readlink(path)}"
+        elif path.is_dir():
+            tree[key] = "dir"
+        else:
+            tree[key] = path.read_text()
+    return tree
+
+
+def _capture_storage(uploader: Uploader) -> dict[str, bytes]:
+    """The bytes of each resumable upload, by remote path."""
+    stored: dict[str, bytes] = {}
+
+    async def upload(file_path: Path, remote_path: str, **_: object) -> None:
+        stored[remote_path] = Path(file_path).read_bytes()
+
+    uploader.storage.upload_resumable_file.side_effect = upload
+    return stored
+
+
+def _downloader_serving(stored: dict[str, bytes]) -> Downloader:
+    with (
+        patch("harbor.download.downloader.UploadDB") as db_cls,
+        patch("harbor.download.downloader.UploadStorage") as storage_cls,
+    ):
+        db_cls.return_value = AsyncMock()
+        storage = AsyncMock()
+        storage.download_bytes.side_effect = lambda remote_path: stored[remote_path]
+        storage_cls.return_value = storage
+        return Downloader()
+
+
+class TestSeatTrialUpload:
+    def test_seat_credentials_stop_the_archive(self, tmp_path: Path) -> None:
+        """Review #1 (critical): seat logs of older runs can still hold another
+        seat's key; the upload must fail closed, not publish them."""
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        log = trial_dir / "seats" / "p2" / "agent" / "terminus_2.log"
+        log.write_text("request header: Bearer sk-or-v1-" + "a1" * 32 + "\n")
+
+        with pytest.raises(SeatCredentialError) as error:
+            _create_trial_archive(trial_dir)
+        assert "seat p2" in str(error.value)
+        assert "sk-or-v1" not in str(error.value)
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            ".codex/auth.json",
+            ".claude/.credentials.json",
+            ".config/gh/hosts.yml",
+            ".netrc",
+            ".git-credentials",
+            ".aws/credentials",
+            ".docker/config.json",
+            ".ssh/id_rsa",
+            ".ssh/id_ed25519",
+        ],
+    )
+    def test_known_credential_file_stops_the_archive(
+        self, tmp_path: Path, name: str
+    ) -> None:
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        credential = trial_dir / "seats" / "p2" / "agent" / "home" / name
+        credential.parent.mkdir(parents=True, exist_ok=True)
+        credential.write_text("unrecognized credential value")
+
+        with pytest.raises(SeatCredentialError, match=f"seat p2: home/{name}") as error:
+            _create_trial_archive(trial_dir)
+        assert "unrecognized credential value" not in str(error.value)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("failure", ["unreadable", "scan_limit"])
+    async def test_incomplete_scan_stops_upload(
+        self,
+        tmp_path: Path,
+        mock_uploader: Uploader,
+        monkeypatch: pytest.MonkeyPatch,
+        failure: str,
+    ) -> None:
+        job_dir = _write_seat_job_dir(tmp_path)
+        log = job_dir / SEAT_TRIAL_NAME / "seats" / "p2" / "agent" / "output.log"
+        secret = "sk-proj-" + "a" * 32
+        log.write_text("x" * 256 + secret)
+        if failure == "unreadable":
+            original = Path.open
+
+            def fail_open(path, *args, **kwargs):
+                if path == log:
+                    raise PermissionError(secret)
+                return original(path, *args, **kwargs)
+
+            monkeypatch.setattr(Path, "open", fail_open)
+        else:
+            monkeypatch.setattr("harbor.upload.uploader._CREDENTIAL_SCAN_LIMIT", 256)
+
+        upload = await mock_uploader.upload_job(job_dir)
+
+        assert (upload.n_trials_uploaded, upload.n_trials_failed) == (0, 1)
+        error = upload.trial_results[0].error
+        assert error is not None and error.startswith("SeatCredentialError: seat p2:")
+        assert "output.log" in error
+        assert secret not in error
+        mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+        mock_uploader.db.finalize_trial_artifacts.assert_not_awaited()
+        mock_uploader.db.finalize_job.assert_not_awaited()
+
+    def test_clean_seat_logs_still_archive(self, tmp_path: Path) -> None:
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        log = trial_dir / "seats" / "p1" / "agent" / "terminus_2.log"
+        log.write_text("model said: sk is not a key; the skeleton key is a metaphor\n")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            assert "seats/p1/agent/terminus_2.log" in tar.getnames()
+
+    def test_trial_archive_includes_each_seat(self, tmp_path: Path) -> None:
+        trial_dir = _write_seat_trial_dir(tmp_path, _make_seat_trial_result())
+        (trial_dir / "seats" / "p1" / "scratch.txt").write_text("not an output")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            names = set(tar.getnames())
+        assert "seats/p1/agent/trajectory.json" in names
+        assert "seats/p2/agent/trajectory.json" in names
+        assert "seats/p1/scratch.txt" not in names
+
+    def test_job_archive_includes_each_seat(self, tmp_path: Path) -> None:
+        job_dir = _write_seat_job_dir(tmp_path)
+
+        names = _job_archive_names(job_dir, tmp_path)
+
+        prefix = f"{job_dir.name}/{SEAT_TRIAL_NAME}"
+        assert f"{prefix}/seats/p1/agent/trajectory.json" in names
+        assert f"{prefix}/seats/p2/agent/trajectory.json" in names
+
+    @pytest.mark.asyncio
+    async def test_records_the_seats_usage_on_their_model(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        job_dir = _write_seat_job_dir(tmp_path)
+
+        result = await mock_uploader.upload_job(job_dir)
+
+        assert result.n_trials_uploaded == 1
+        mock_uploader.db.upsert_model.assert_awaited_once_with(
+            "deepseek/deepseek-v4-flash", "openrouter"
+        )
+        mock_uploader.db.insert_trial_model.assert_awaited_once()
+        row = mock_uploader.db.insert_trial_model.await_args.kwargs
+        assert row["model_id"] == "model-deepseek/deepseek-v4-flash-openrouter"
+        # p1 + p2 from seat_results.
+        assert (
+            row["n_input_tokens"],
+            row["n_cache_tokens"],
+            row["n_output_tokens"],
+            row["cost_usd"],
+        ) == (1500, 900, 150, 0.375)
+
+    @pytest.mark.asyncio
+    async def test_records_each_seat_model_separately(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        job_dir = _write_seat_job_dir(
+            tmp_path, _p2_on_another_model(_make_seat_trial_result())
+        )
+
+        await mock_uploader.upload_job(job_dir)
+
+        assert [
+            call.args for call in mock_uploader.db.upsert_model.await_args_list
+        ] == [
+            ("deepseek/deepseek-v4-flash", "openrouter"),
+            ("claude-test", "anthropic"),
+        ]
+        rows = {
+            call.kwargs["model_id"]: (
+                call.kwargs["n_input_tokens"],
+                call.kwargs["n_cache_tokens"],
+                call.kwargs["n_output_tokens"],
+                call.kwargs["cost_usd"],
+            )
+            for call in mock_uploader.db.insert_trial_model.await_args_list
+        }
+        assert rows == {
+            "model-deepseek/deepseek-v4-flash-openrouter": (1000, 600, 100, 0.25),
+            "model-claude-test-anthropic": (500, 300, 50, 0.125),
+        }
+
+    @pytest.mark.asyncio
+    async def test_streaming_upload_records_each_seat_model(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        """`harbor run --upload` uploads each trial with caches that start empty."""
+        trial_result = _p2_on_another_model(_make_seat_trial_result())
+        trial_dir = _write_seat_trial_dir(tmp_path, trial_result)
+
+        result = await mock_uploader.upload_single_trial(
+            trial_result=trial_result,
+            trial_dir=trial_dir,
+            trial_lock=_read_trial_lock_for_upload(trial_dir),
+            job_id=uuid4(),
+            agent_cache={},
+            model_cache={},
+        )
+
+        assert result.error is None
+        assert mock_uploader.db.insert_trial_model.await_count == 2
+        # The trial row has one agent: agent_info, the first agent under test.
+        mock_uploader.db.upsert_agent.assert_awaited_once_with("terminus-2", "2.0.0")
+        # There is no root agent/trajectory.json; the seats' trajectories are
+        # in the archive only.
+        finalize = mock_uploader.db.finalize_trial_artifacts.await_args.kwargs
+        assert finalize["trajectory_path"] is None
+
+    def test_ordinary_trial_archive_leaves_out_a_seats_dir(
+        self, tmp_path: Path
+    ) -> None:
+        """A trial without seat_results has no seats, whatever is on disk."""
+        trial_dir = _write_trial_dir(tmp_path, _make_trial_result())
+        stray = trial_dir / "seats" / "p1" / "agent"
+        stray.mkdir(parents=True)
+        (stray / "notes.txt").write_text("not a seat")
+
+        archive = _create_trial_archive(trial_dir)
+
+        with tarfile.open(fileobj=BytesIO(archive), mode="r:gz") as tar:
+            assert not [name for name in tar.getnames() if name.startswith("seats")]
+
+    @pytest.mark.parametrize(
+        "seat",
+        ["../agent", "..", ".", "p9/agent", "p9\\agent", ""],
+    )
+    def test_trial_archive_refuses_a_seat_name_that_is_a_path(
+        self, tmp_path: Path, seat: str
+    ) -> None:
+        """A declared seat with an invalid name must not be dropped."""
+        trial_result = _make_seat_trial_result()
+        trial_dir = _write_seat_trial_dir(tmp_path, trial_result)
+        (trial_result.seat_results or [])[1].seat = seat
+        (trial_dir / "result.json").write_text(trial_result.model_dump_json())
+        reached = trial_dir / "seats" / seat / "agent"
+        reached.mkdir(parents=True, exist_ok=True)
+        (reached / "reached.txt").write_text("reached through a path")
+
+        with pytest.raises(SeatArchiveError, match="invalid seat name"):
+            _create_trial_archive(trial_dir)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("dir_name", ["seats", "seats/p2", "seats/p2/agent"])
+    @pytest.mark.parametrize("linked", [False, True])
+    async def test_damaged_seat_directory_stops_upload_until_restored(
+        self,
+        tmp_path: Path,
+        mock_uploader: Uploader,
+        dir_name: str,
+        linked: bool,
+        request: pytest.FixtureRequest,
+    ) -> None:
+        job_dir = _write_seat_job_dir(tmp_path)
+        damaged_dir = job_dir / SEAT_TRIAL_NAME / dir_name
+        saved_dir = damaged_dir.rename(tmp_path / "saved")
+        if linked:
+            request.getfixturevalue("symlinks_available")
+            damaged_dir.symlink_to(saved_dir, target_is_directory=True)
+
+        upload = await mock_uploader.upload_job(job_dir)
+
+        assert (upload.n_trials_uploaded, upload.n_trials_failed) == (0, 1)
+        error = upload.trial_results[0].error
+        seat = "p1" if dir_name == "seats" else "p2"
+        assert (
+            error
+            == f"SeatArchiveError: seat {seat}: {dir_name} must be a real directory"
+        )
+        mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+        mock_uploader.db.finalize_trial_artifacts.assert_not_awaited()
+        mock_uploader.db.finalize_job.assert_not_awaited()
+
+        if linked:
+            damaged_dir.unlink()
+        saved_dir.rename(damaged_dir)
+        retried = await mock_uploader.upload_job(job_dir)
+        assert (retried.n_trials_uploaded, retried.n_trials_failed) == (1, 0)
+        mock_uploader.db.finalize_trial_artifacts.assert_awaited_once()
+        mock_uploader.db.finalize_job.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("streaming", [True, False])
+    async def test_unparseable_seat_result_stops_upload(
+        self, tmp_path: Path, mock_uploader: Uploader, streaming: bool
+    ) -> None:
+        trial_result = _make_seat_trial_result()
+        job_dir = _write_seat_job_dir(tmp_path, trial_result)
+        trial_dir = job_dir / trial_result.trial_name
+        raw = trial_result.model_dump(mode="json")
+        raw["seat_results"][1] = "private-value-in-invalid-result"
+        (trial_dir / "result.json").write_text(json.dumps(raw))
+
+        if streaming:
+            result = await mock_uploader.upload_single_trial(
+                trial_result=trial_result,
+                trial_dir=trial_dir,
+                trial_lock=_read_trial_lock_for_upload(trial_dir),
+                job_id=uuid4(),
+                agent_cache={},
+                model_cache={},
+            )
+            assert result.error is not None
+            message = result.error
+        else:
+            with pytest.raises(SeatArchiveError) as error:
+                await mock_uploader.upload_job(job_dir)
+            message = str(error.value)
+
+        assert "seats: p1, p2" in message
+        assert "could not read valid result.json" in message
+        assert raw["seat_results"][1] not in message
+        mock_uploader.storage.upload_resumable_file.assert_not_awaited()
+        mock_uploader.db.finalize_trial_artifacts.assert_not_awaited()
+        mock_uploader.db.finalize_job.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_legacy_cached_seat_archives_are_not_uploaded(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        trial_result = _make_seat_trial_result()
+        job_dir = _write_seat_job_dir(tmp_path, trial_result)
+        trial_dir = job_dir / trial_result.trial_name
+        revision = hashlib.sha256(str(trial_result.id).encode()).hexdigest()
+        for path in (
+            trial_dir / ".harbor-upload" / "trial.tar.gz",
+            job_dir / ".harbor-upload" / f"job-{revision}.tar.gz",
+        ):
+            path.parent.mkdir()
+            path.write_bytes(b"old unscanned archive")
+            path.with_suffix(".gz.tus-url").write_text("https://uploads.example/old")
+        stored = _capture_storage(mock_uploader)
+
+        upload = await mock_uploader.upload_job(job_dir)
+
+        assert (upload.n_trials_uploaded, upload.n_trials_failed) == (1, 0)
+        assert len(stored) == 2
+        for name, contents in stored.items():
+            with tarfile.open(fileobj=BytesIO(contents), mode="r:gz") as tar:
+                assert any(
+                    member.endswith("seats/p2/agent/trajectory.json")
+                    for member in tar.getnames()
+                ), name
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("download", ["trial", "job"])
+    async def test_upload_then_download_restores_only_safe_seat_files(
+        self,
+        tmp_path: Path,
+        mock_uploader: Uploader,
+        symlinks_available: None,
+        download: str,
+    ) -> None:
+        job_dir = _write_seat_job_with_hazards(tmp_path)
+        trial_result = TrialResult.model_validate_json(
+            (job_dir / SEAT_TRIAL_NAME / "result.json").read_text()
+        )
+        stored = _capture_storage(mock_uploader)
+
+        upload = await mock_uploader.upload_job(job_dir)
+
+        assert (upload.n_trials_uploaded, upload.n_trials_failed) == (1, 0)
+        downloader = _downloader_serving(stored)
+        target = tmp_path / "downloads"
+        if download == "trial":
+            downloader.db.get_trial.return_value = {
+                "id": str(trial_result.id),
+                "trial_name": SEAT_TRIAL_NAME,
+                "archive_path": f"trials/{trial_result.id}/trial.tar.gz",
+            }
+            result = await downloader.download_trial(trial_result.id, target)
+            restored = result.output_dir
+        else:
+            (job_archive,) = [path for path in stored if path.startswith("jobs/")]
+            downloader.db.get_job.return_value = {
+                "id": upload.job_id,
+                "job_name": "seat-job",
+                "archive_path": job_archive,
+            }
+            result = await downloader.download_job(UUID(upload.job_id), target)
+            restored = result.output_dir / SEAT_TRIAL_NAME
+        assert _seat_tree(restored) == SAFE_SEAT_TREE
+        assert (restored / "result.json").exists()
+        assert (restored / "seats" / "p1" / "agent" / "latest.json").read_text() == (
+            SAFE_SEAT_TREE["seats/p1/agent/trajectory.json"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_seat_models_that_are_one_hub_model_share_its_row(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        """The Hub stores a missing provider as "unknown", so two model keys
+        get one model ID. insert_trial_model keeps the first link of a
+        (trial, model) pair, so the seats' usage must be summed into one row."""
+        mock_uploader.db.upsert_model.side_effect = lambda name, provider: (
+            f"model-{name}-{provider or 'unknown'}"
+        )
+        trial_result = _make_seat_trial_result()
+        p1, p2 = trial_result.seat_results or []
+        p1.agent_info = _seat_agent_info(ModelInfo(name="gpt-test", provider=None))
+        p2.agent_info = _seat_agent_info(ModelInfo(name="gpt-test", provider="unknown"))
+        trial_result.agent_info = p1.agent_info
+        job_dir = _write_seat_job_dir(tmp_path, trial_result)
+
+        await mock_uploader.upload_job(job_dir)
+
+        assert [
+            call.args for call in mock_uploader.db.upsert_model.await_args_list
+        ] == [("gpt-test", None), ("gpt-test", "unknown")]
+        mock_uploader.db.insert_trial_model.assert_awaited_once()
+        row = mock_uploader.db.insert_trial_model.await_args.kwargs
+        assert row["model_id"] == "model-gpt-test-unknown"
+        assert (
+            row["n_input_tokens"],
+            row["n_cache_tokens"],
+            row["n_output_tokens"],
+            row["cost_usd"],
+        ) == (1500, 900, 150, 0.375)
+
+    @pytest.mark.asyncio
+    async def test_single_agent_usage_row_is_its_agent_result(
+        self, tmp_path: Path, mock_uploader: Uploader
+    ) -> None:
+        trial_result = _make_trial_result(rewards={"reward": 1.0})
+        job_dir, _, _ = _write_job_dir(tmp_path, [trial_result])
+
+        await mock_uploader.upload_job(job_dir)
+
+        mock_uploader.db.insert_trial_model.assert_awaited_once_with(
+            trial_id=trial_result.id,
+            model_id="model-claude-opus-4-1-anthropic",
+            n_input_tokens=100,
+            n_cache_tokens=10,
+            n_output_tokens=50,
+            cost_usd=0.012,
+        )

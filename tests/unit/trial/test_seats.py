@@ -32,9 +32,11 @@ from harbor.models.trial.config import (
 )
 from harbor.models.trial.result import TrialResult
 from harbor.models.verifier.result import VerifierResult
+from harbor.trial.hooks import TrialEvent
 from harbor.trial.seats import SeatsTrial
 from harbor.trial.single_step import SingleStepTrial
 from harbor.trial.trial import Trial
+from harbor.upload.uploader import SeatCredentialError, _create_trial_archive
 
 EVENTS: list[tuple[str, ...]] = []
 WAITERS: dict[tuple[str, ...], asyncio.Event] = {}
@@ -567,6 +569,91 @@ async def test_secrets_of_every_seat_are_scrubbed_in_each_pass(
         assert calls.count(log) == 2
 
 
+@pytest.mark.parametrize("failure", ["read", "write", "binary"])
+async def test_failed_seat_scrub_blocks_streaming_and_later_uploads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+):
+    secret = "a seat credential with no distinctive format"
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            {**_participant("maya"), "env": {"MAYA_API_KEY": secret}},
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    output = trial.paths.trial_dir / "seats" / "raj" / "agent" / "faulty.log"
+    output.write_bytes((b"\x00\xff" if failure == "binary" else b"") + secret.encode())
+    original_open = Path.open
+
+    def fail_open(path, mode="r", *args, **kwargs):
+        affected_mode = {"read": "rb", "write": "w"}.get(failure)
+        if path == output and mode == affected_mode:
+            raise PermissionError(secret)
+        return original_open(path, mode, *args, **kwargs)
+
+    async def archive_at_end(_):
+        with pytest.raises(SeatCredentialError, match="seat raj:.*faulty.log") as error:
+            _create_trial_archive(trial.paths.trial_dir)
+        assert secret not in str(error.value)
+
+    trial.add_hook(TrialEvent.END, archive_at_end)
+    with monkeypatch.context() as patcher:
+        patcher.setattr(Path, "open", fail_open)
+        await trial.run()
+
+    assert secret.encode() in output.read_bytes()
+    await archive_at_end(None)
+
+
+def _native_key_participant(seat: str, api_key: str | None) -> dict[str, Any]:
+    """mini-swe-agent, with its model key in its native config when given."""
+    native = {"config": {"model": {"model_kwargs": {"api_key": api_key}}}}
+    return {
+        "seat": seat,
+        "name": "mini-swe-agent",
+        "model_name": "openai/gpt-4o",
+        "kwargs": native if api_key is not None else {},
+    }
+
+
+@pytest.mark.parametrize("raj_source", ["native_config", "host_env"])
+async def test_each_seat_resolved_model_key_is_scrubbed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raj_source: str
+):
+    """Each seat resolves its own model key outside its env. Raj's is not
+    the key of the first agent under test (maya), so it must come from raj's
+    own agent."""
+    keys = {"maya": "maya-native-model-key", "raj": f"raj-{raj_source}-model-key"}
+    for name in ("OPENAI_API_KEY", "MSWEA_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    if raj_source == "host_env":
+        monkeypatch.setenv("MSWEA_API_KEY", keys["raj"])
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _native_key_participant("maya", keys["maya"]),
+            _native_key_participant(
+                "raj", keys["raj"] if raj_source == "native_config" else None
+            ),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    seats = {seat.name: seat for seat in trial.seats}
+    assert {name: seats[name].agent.model_connection.api_key for name in keys} == keys
+    logs = {}
+    for name, key in keys.items():
+        logs[name] = seats[name].paths.agent_dir / "mini-swe-agent.txt"
+        logs[name].write_text(f"model api key: {key}\n")
+
+    trial._scrub_jobs_dir()
+
+    for log in logs.values():
+        assert log.read_text() == "model api key: [REDACTED]\n"
+
+
 async def test_result_json_records_every_seat(tmp_path: Path):
     trial = await _seats_trial(
         _config(
@@ -655,3 +742,35 @@ def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
         f"  raj: {AGENT} (under test)",
         f"  lee: {AGENT}",
     ]
+
+
+async def test_terminus_seat_resolved_key_is_scrubbed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """terminus-2 is a plain BaseAgent, not an installed agent; its model key
+    (here from llm_kwargs.api_key) must still be scrubbed from seat logs."""
+    for name in ("OPENAI_API_KEY", "MSWEA_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    key = "terminus-native-model-key"
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            {
+                "seat": "maya",
+                "name": "terminus-2",
+                "model_name": "openai/gpt-4o",
+                "kwargs": {"llm_kwargs": {"api_key": key}},
+            },
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    seats = {seat.name: seat for seat in trial.seats}
+    assert seats["maya"].agent.model_connection.api_key == key
+    log = seats["raj"].paths.agent_dir / "terminus_2.log"
+    log.write_text(f"leaked: {key}\n")
+
+    trial._scrub_jobs_dir()
+
+    assert log.read_text() == "leaked: [REDACTED]\n"
