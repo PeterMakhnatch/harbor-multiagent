@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Native seat measurements:** Show recorded per-seat token counts, USD costs, phase intervals, roles, and errors. Keep unknown values and known zero values distinct. Use native participant identities for folder Job rosters, search, and filters without importing agent modules. Preserve single-agent cards.
+
 - **Breaking (Job timestamps):** Emit aware UTC lifecycle times and share the CLI start with Hub uploads. Supplied Job and required upload times must include an offset. Reject unsafe legacy resume before file changes. Keep unknown historical starts readable, last in start-time sorting, and outside absolute date filters. Normalize proven server-UTC columns at the REST boundary without rewriting stored dates.
 
 - **Breaking (server rollout filters):** Use `job_ids` for one or more jobs instead of the singular `job_id` filter.

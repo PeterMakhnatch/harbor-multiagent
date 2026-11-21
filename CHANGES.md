@@ -10,8 +10,8 @@ several Harbor agents in one environment, each in its own Compose service
 | File | Why |
 |---|---|
 | `.github/workflows/*.yml` | Harbor runs its CI on Blacksmith runners (`blacksmith-<n>vcpu-<os>` labels), which only a repository with the Blacksmith GitHub App installed can use; this repository does not have it, so those jobs would wait in the queue and never start. Each job runs on the GitHub-hosted runner of the same OS instead (`ubuntu-26.04`, `ubuntu-24.04`, `windows-2025`); the steps are Harbor's. The `agents` runtime suite's test VM gets 4 CPUs and 12 GB, as Harbor's other two runtime suites do, where Harbor gives it 8 and 24: a GitHub-hosted Linux runner has 4 CPUs and 16 GB, and QEMU fails to start a VM larger than its host. The non-runtime suites run one pytest worker per CPU (`-n auto`) where Harbor runs eight: eight workers on four CPUs made the relay tests' 2 to 5 s waits time out; with half the CPUs the Windows suite takes 13 to 16 minutes, so both non-runtime jobs get 30 minutes where Harbor gives 15. Tradeoff: the suites run slower than on the Blacksmith sizes Harbor picked. |
-| `README.md` | Describes this fork, installation, and the Job timestamp contract. Harbor's README is at [harbor-framework/harbor](https://github.com/harbor-framework/harbor). |
-| `CHANGELOG.md` | Records the breaking Job timestamp boundary and legacy reader behavior. |
+| `README.md` | Describes this fork, installation, the Job timestamp contract, and recorded native seat measurements. Harbor's README is at [harbor-framework/harbor](https://github.com/harbor-framework/harbor). |
+| `CHANGELOG.md` | Records the Job timestamp boundary, legacy reader behavior, and native viewer measurements. |
 | `src/harbor/models/task/config.py` | `SeatConfig` and `TaskConfig.agents` (`[agents.<service>]`), with the seat refusals at task load. |
 | `src/harbor/models/task/paths.py` | `seat_instruction_path`: `instructions/<seat>.md`. |
 | `src/harbor/models/task/task.py` | Reads each seat's instruction and does not require `instruction.md` for a seat task. |
@@ -36,16 +36,17 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/trial/trial.py` | `Trial.create` routes seat tasks to `SeatsTrial`, and refuses `participants` on a task without seats and a regrade of a seat task. `_scrub_jobs_dir` takes its secrets from a new `_secrets_to_scrub`, so a seat trial scrubs once with every seat's secrets. `_secrets_to_scrub`, `_validate_agent_capabilities` and `_compute_agent_setup_timeout_sec` take an optional agent and agent config, defaulting to `self.agent` and `self.config.agent`, so a seat trial passes each seat's instead of swapping trial fields; Harbor's callers are unchanged. |
 | `src/harbor/cli/jobs.py`, `src/harbor/cli/utils.py`, `src/harbor/cli/plugins/harbor_hub.py` | Share one aware start between native execution and Hub records. Reject unknown required upload boundaries. |
 | `src/harbor/upload/uploader.py` | Validates required Job times, omits unknown optional Trial times, and preserves archived payloads. Existing reservations do not rewrite timestamps. |
-| `src/harbor/viewer/server.py`, `src/harbor/viewer/sources/folder.py` | Keep historical raw times unchanged. Sort unknown starts last and exclude them from absolute date filters. |
+| `src/harbor/viewer/server.py`, `src/harbor/viewer/sources/folder.py` | Keep historical raw times unchanged. Sort unknown starts last and exclude them from absolute date filters. Folder Job rosters and filters read nonempty participant lists without importing agent modules. |
 | `src/harbor/server/listing.py`, `src/harbor/server/database.py` | Restore the known UTC contract at REST boundaries when the SQLite codec drops the offset. Keep stored and raw SQL values unchanged. |
-| `apps/viewer/app/lib/pareto.ts`, `apps/viewer/app/lib/server-controls.ts`, `apps/viewer/app/routes/home.tsx`, `apps/viewer/app/routes/trial.tsx`, `apps/viewer/app/components/rollout-columns.tsx`, `apps/viewer/app/components/interaction-viewer.tsx` | Show unknown absolute times explicitly. Keep date filters, ordering, and durations consistent across Job and Trial views. |
+| `apps/viewer/app/lib/pareto.ts`, `apps/viewer/app/lib/server-controls.ts`, `apps/viewer/app/routes/home.tsx`, `apps/viewer/app/routes/trial.tsx`, `apps/viewer/app/components/rollout-columns.tsx`, `apps/viewer/app/components/interaction-viewer.tsx` | Show unknown absolute times explicitly. Keep date filters, ordering, and durations consistent across Job and Trial views. Select recorded native seat rows while preserving single-agent cards. |
 | `tests/unit/test_job_status.py`, `tests/unit/test_job_plan.py`, `tests/unit/test_cli_run_upload.py`, `tests/unit/test_cli_resume_upload.py`, `tests/unit/cli/test_utils.py`, `tests/unit/test_trial_queue_integration.py`, `tests/unit/test_uploader.py` | Exercise UTC lifecycle boundaries, safe resume, native and Hub start equality, and legacy upload behavior. |
-| `tests/unit/viewer/test_sources.py`, `tests/unit/viewer/test_job_status.py`, `tests/unit/test_server_filters.py` | Cover mixed-offset ordering, unknown date filters, preserved historical bytes, and server REST UTC without changing stored values. |
+| `tests/unit/viewer/test_sources.py`, `tests/unit/viewer/test_job_status.py`, `tests/unit/test_server_filters.py` | Cover mixed-offset ordering, unknown date filters, preserved historical bytes, native roster search and filter parity, and server REST UTC without changing stored values. |
+| `apps/viewer/app/lib/types.ts` | Match native nullable seat records and model providers in the handwritten viewer types. |
 
-Readers of `agent_info` are untouched: a seat trial fills it with its first
-agent under test. Readers of `exception_info` are untouched too: a seat
-trial puts its first seat's error there, as a single-agent trial puts its
-agent's.
+Legacy root fields still identify the first agent under test and the first
+recorded seat error. Native viewer rows read each seat's own identity, usage,
+cost, timing, and error. They do not copy a root error or a price estimate into
+missing seat fields.
 
 ## New files
 
@@ -59,3 +60,4 @@ agent's.
 | `tests/runtime/test_hello_seats_docker.py` | Runs hello-seats with the oracle in both seats on real Docker. |
 | `src/harbor/utils/timestamps.py` | Defines known UTC instants and required offset-aware timestamp boundaries. |
 | `apps/viewer/app/lib/timestamps.ts` | Keeps browser formatting, instant parsing, ordering, and durations consistent without assigning a zone to legacy values. |
+| `apps/viewer/app/components/seat-measurements.tsx` | Shows recorded native seat fields without replacing unknown values with zero or inventing an overall duration. |

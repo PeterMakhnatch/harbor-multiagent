@@ -123,7 +123,7 @@ export interface ExceptionInfo {
 
 export interface ModelInfo {
   name: string;
-  provider: string;
+  provider: string | null;
 }
 
 export interface AgentInfo {
@@ -142,6 +142,21 @@ export interface StepResult {
   exception_info: ExceptionInfo | null;
   agent_execution: TimingInfo | null;
   verifier: TimingInfo | null;
+}
+
+export interface SeatResult {
+  seat: string;
+  under_test: boolean;
+  agent_info?: AgentInfo | null;
+  agent_result?: {
+    n_input_tokens?: number | null;
+    n_cache_tokens?: number | null;
+    n_output_tokens?: number | null;
+    cost_usd?: number | null;
+  } | null;
+  agent_setup?: TimingInfo | null;
+  agent_execution?: TimingInfo | null;
+  exception_info?: ExceptionInfo | null;
 }
 
 export interface UserAgentConfig {
@@ -178,6 +193,7 @@ export interface TrialResult {
   agent_execution: TimingInfo | null;
   verifier: TimingInfo | null;
   step_results: StepResult[] | null;
+  seat_results?: SeatResult[] | null;
 }
 
 export interface TrialRecording {
