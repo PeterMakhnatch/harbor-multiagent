@@ -280,3 +280,39 @@ To verify the public receipt, run this command from the fork root in its Python 
 PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab" \
   python -m examples.seatlab.attention verify examples/seatlab/results/dispatch-evidence-join-live.json
 ```
+
+#### What if both receivers open exactly the same reports?
+
+The original lists again produced more optimal choices, but the registered test did not establish a difference. We froze the inventory reports and the 2 actual reads from each of the 8 original-list teams. Each format got 2 fresh `deepseek-flash` replies per source. No sender or selector ran again.
+
+| Fixed-read outcome | Original lists | Joined table |
+|---|---:|---:|
+| Optimal shipment decisions | 67 / 96 | 53 / 96 |
+| Feasible shipment decisions | 73 / 96 | 53 / 96 |
+
+The original lists led in 7 of 8 worlds. The table’s optimal-count changes were −1, −1, −3, −3, −1, −5, +3, and −3. The two-sided world-level test gave p = 24/256 = 0.09375. The 96 choices in each format were **not** 96 independent samples. The result does not establish equivalence either.
+
+All 32 calls returned valid first replies. The cost was **$0.001679184 USD**. These are conditional receiver scores on reused worlds. They do not change the original Harbor rewards.
+
+[Fixed-read receipt](results/dispatch-frozen-final.json) · [Call costs](results/dispatch-frozen-final-cost.json) · [Registered decision rule](https://github.com/PeterMakhnatch/harbor-multiagent/pull/75#issuecomment-7061034423)
+
+Verify the fixed-read result from the fork root with Python 3.12 or later. This check does not need Docker, site packages, or the private trials:
+
+```sh
+python3.12 -BS -m examples.seatlab.attention.frozen_result verify \
+  examples/seatlab/results/dispatch-frozen-final.json
+```
+
+If you have a completed native `evidence-join` study, you can also replay one final decision. In the fork’s Harbor Python environment, run:
+
+```sh
+cell=dvj-s14521-r0-nested
+export PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab"
+python -m examples.seatlab.attention.final_receiver prompt \
+  --study "$study" --cell "$cell" --format nested > receiver-input.txt
+your-receiver < receiver-input.txt > first-reply.json
+python -m examples.seatlab.attention.final_receiver score \
+  --study "$study" --cell "$cell" < first-reply.json
+```
+
+Use a receiver that reads one prompt from stdin and writes one JSON reply to stdout. Send it only `receiver-input.txt`. Do not give it the trial directory. Use `--format joined` for the alternate layout. Neither command calls a model or needs the original spend ledger.

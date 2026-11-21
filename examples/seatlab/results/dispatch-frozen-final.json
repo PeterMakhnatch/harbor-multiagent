@@ -1,0 +1,1382 @@
+{
+  "rows": [
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "3bd3daa517ba2ab7cca35fcf201b50996b7e647770103470bb2e17a0a819c9b5",
+      "rep": 0,
+      "reply_sha256": "68f087c99c6127239710c971572ecb807b3d5b717fc461e4e621afc718a0545b",
+      "run": "dvf-s14521-r0-nested",
+      "state": "valid",
+      "world": 14521
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "D",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "dc3b90118c23d71f7970734e3dbb2760b4b776b9a24768d4fb6f92b0bf93811d",
+      "rep": 0,
+      "reply_sha256": "dfcda92bef59b5e1099f77161572c57b5d6c1c30563261ce37b9aa767c9d322a",
+      "run": "dvf-s14521-r0-joined",
+      "state": "valid",
+      "world": 14521
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "dc3b90118c23d71f7970734e3dbb2760b4b776b9a24768d4fb6f92b0bf93811d",
+      "rep": 1,
+      "reply_sha256": "5fff68a3c0aad0796405fa9c5ae9f911d6f3ae894e084ddd8ae81e10ad68caf8",
+      "run": "dvf-s14521-r1-joined",
+      "state": "valid",
+      "world": 14521
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "3bd3daa517ba2ab7cca35fcf201b50996b7e647770103470bb2e17a0a819c9b5",
+      "rep": 1,
+      "reply_sha256": "68f087c99c6127239710c971572ecb807b3d5b717fc461e4e621afc718a0545b",
+      "run": "dvf-s14521-r1-nested",
+      "state": "valid",
+      "world": 14521
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "D",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "B",
+          "id": 4
+        },
+        {
+          "bay": "D",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "ce6605a410380b7ae7de022406e0cd45e4ab2fa5da795ac0c2da7d8ce0651ae0",
+      "rep": 0,
+      "reply_sha256": "0fea44fa1f9668fb64535f60429ef2aefe9446dd6340222e30206b5d956527ee",
+      "run": "dvf-s14522-r0-joined",
+      "state": "valid",
+      "world": 14522
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "D",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 6,
+      "optimal": 4,
+      "prompt_sha256": "12d5ec45237325173f2d6ecc6795f539072f2598183b58a8b356da37e47c821e",
+      "rep": 0,
+      "reply_sha256": "7b7e0c68a910f011022105063b1676e7aa30890de0bbb2bc9a2dc5f7b88cf302",
+      "run": "dvf-s14522-r0-nested",
+      "state": "valid",
+      "world": 14522
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "D",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 6,
+      "optimal": 5,
+      "prompt_sha256": "12d5ec45237325173f2d6ecc6795f539072f2598183b58a8b356da37e47c821e",
+      "rep": 1,
+      "reply_sha256": "77a045c1142310c038b1dbe8db3445ef09ab5fb913106c6942c64a7b0d19a1e5",
+      "run": "dvf-s14522-r1-nested",
+      "state": "valid",
+      "world": 14522
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "D",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "B",
+          "id": 4
+        },
+        {
+          "bay": "D",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "ce6605a410380b7ae7de022406e0cd45e4ab2fa5da795ac0c2da7d8ce0651ae0",
+      "rep": 1,
+      "reply_sha256": "0fea44fa1f9668fb64535f60429ef2aefe9446dd6340222e30206b5d956527ee",
+      "run": "dvf-s14522-r1-joined",
+      "state": "valid",
+      "world": 14522
+    },
+    {
+      "actions": [
+        {
+          "bay": "D",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "D",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 4,
+      "optimal": 3,
+      "prompt_sha256": "d6da42278f2e331160ce00e55c4b3ac977ab0dc3e7f31ca06adaa299c45bc9a9",
+      "rep": 0,
+      "reply_sha256": "a7ee95c22e08e7aad9be7d3e6e9ab24ba489e63b3f23a6e8315ac1a480066cf9",
+      "run": "dvf-s14523-r0-nested",
+      "state": "valid",
+      "world": 14523
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 78300,
+      "feasible": 2,
+      "optimal": 2,
+      "prompt_sha256": "aed2f2d68c037214375f2b8fdab1d36ac254a65919bd721ef47837e884f5d4c6",
+      "rep": 0,
+      "reply_sha256": "e6f0992999c006cc6efd5efad56f8d0414d1f2a65265acb30c47adf045987bd2",
+      "run": "dvf-s14523-r0-joined",
+      "state": "valid",
+      "world": 14523
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 2,
+      "optimal": 2,
+      "prompt_sha256": "aed2f2d68c037214375f2b8fdab1d36ac254a65919bd721ef47837e884f5d4c6",
+      "rep": 1,
+      "reply_sha256": "e6f0992999c006cc6efd5efad56f8d0414d1f2a65265acb30c47adf045987bd2",
+      "run": "dvf-s14523-r1-joined",
+      "state": "valid",
+      "world": 14523
+    },
+    {
+      "actions": [
+        {
+          "bay": "D",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "d6da42278f2e331160ce00e55c4b3ac977ab0dc3e7f31ca06adaa299c45bc9a9",
+      "rep": 1,
+      "reply_sha256": "d328cba89bc2ee7d31a9b584098480937f27a8dca451bf4dd63ee1f4b5df2798",
+      "run": "dvf-s14523-r1-nested",
+      "state": "valid",
+      "world": 14523
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "D",
+          "id": 1
+        },
+        {
+          "bay": "A",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 59484,
+      "feasible": 2,
+      "optimal": 2,
+      "prompt_sha256": "e05e5aaa430d3c9b923387037f3b96073c7a4f6876e2378e7957a26252154c33",
+      "rep": 0,
+      "reply_sha256": "0efa5d4bd845b4ab473da42f33fcb755da9d73185cec54314c8a233661e66ab9",
+      "run": "dvf-s14524-r0-joined",
+      "state": "valid",
+      "world": 14524
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "D",
+          "id": 1
+        },
+        {
+          "bay": "A",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 3,
+      "optimal": 3,
+      "prompt_sha256": "e3f23e824296f38a45faf000ecb635fd4b35c63eed041378c80f2c0d7c8f8a44",
+      "rep": 0,
+      "reply_sha256": "446b6cfabe74bd3a7ba072d595ef8a5464d45ada41f666b0a70839a4946adcbc",
+      "run": "dvf-s14524-r0-nested",
+      "state": "valid",
+      "world": 14524
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "D",
+          "id": 1
+        },
+        {
+          "bay": "A",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "D",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "e3f23e824296f38a45faf000ecb635fd4b35c63eed041378c80f2c0d7c8f8a44",
+      "rep": 1,
+      "reply_sha256": "bc77f138ac3cd33847ef0d0ad282d2d0d3fe2a3bb692650c79f0817862aef8c3",
+      "run": "dvf-s14524-r1-nested",
+      "state": "valid",
+      "world": 14524
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "D",
+          "id": 1
+        },
+        {
+          "bay": "A",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 2,
+      "optimal": 2,
+      "prompt_sha256": "e05e5aaa430d3c9b923387037f3b96073c7a4f6876e2378e7957a26252154c33",
+      "rep": 1,
+      "reply_sha256": "0efa5d4bd845b4ab473da42f33fcb755da9d73185cec54314c8a233661e66ab9",
+      "run": "dvf-s14524-r1-joined",
+      "state": "valid",
+      "world": 14524
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "ec0aaee0d56074cde24d66c3c4994b67148163e04c61645e4880ca5f74cdfa07",
+      "rep": 0,
+      "reply_sha256": "7e3f122c7e1a931217f0573e7f11745180a5bd1727ec8c811f86d51f6d61ea28",
+      "run": "dvf-s14525-r0-nested",
+      "state": "valid",
+      "world": 14525
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "e6ec8da563cf84eec5f73e299df0a64ce03fb7e003807d247bdf36cb8f461d14",
+      "rep": 0,
+      "reply_sha256": "7e3f122c7e1a931217f0573e7f11745180a5bd1727ec8c811f86d51f6d61ea28",
+      "run": "dvf-s14525-r0-joined",
+      "state": "valid",
+      "world": 14525
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "e6ec8da563cf84eec5f73e299df0a64ce03fb7e003807d247bdf36cb8f461d14",
+      "rep": 1,
+      "reply_sha256": "9ff8a1994fb59d4c0e66be2b75d2e974cbf92bf6b4cbcc9d8b368b03ae9d1794",
+      "run": "dvf-s14525-r1-joined",
+      "state": "valid",
+      "world": 14525
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "A",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "ec0aaee0d56074cde24d66c3c4994b67148163e04c61645e4880ca5f74cdfa07",
+      "rep": 1,
+      "reply_sha256": "7e3f122c7e1a931217f0573e7f11745180a5bd1727ec8c811f86d51f6d61ea28",
+      "run": "dvf-s14525-r1-nested",
+      "state": "valid",
+      "world": 14525
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "B",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 78300,
+      "feasible": 1,
+      "optimal": 1,
+      "prompt_sha256": "b3499081a3177444de575334a3f3a01813965c092cb29339c1658e4cfe9f7641",
+      "rep": 0,
+      "reply_sha256": "ccfe819722b815e142ee64fa9ad733314d412433b44bb2fce52aba48f2646aee",
+      "run": "dvf-s14526-r0-joined",
+      "state": "valid",
+      "world": 14526
+    },
+    {
+      "actions": [
+        {
+          "bay": "D",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "B",
+          "id": 2
+        },
+        {
+          "bay": "D",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "0c150608b9afe12aacd77685b1099d17a2c6a619508d76bfd13ca02c2363fc2c",
+      "rep": 0,
+      "reply_sha256": "9fbb293138766c94a10750748a2501361075eb91928c2060fb89ba2005813c93",
+      "run": "dvf-s14526-r0-nested",
+      "state": "valid",
+      "world": 14526
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "D",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "A",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 3,
+      "optimal": 3,
+      "prompt_sha256": "0c150608b9afe12aacd77685b1099d17a2c6a619508d76bfd13ca02c2363fc2c",
+      "rep": 1,
+      "reply_sha256": "a1a10158567aad2066a33b0d953b54fce7f4712b033412a547fa41cbdbb7ab57",
+      "run": "dvf-s14526-r1-nested",
+      "state": "valid",
+      "world": 14526
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "C",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "D",
+          "id": 4
+        },
+        {
+          "bay": "B",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 2,
+      "optimal": 2,
+      "prompt_sha256": "b3499081a3177444de575334a3f3a01813965c092cb29339c1658e4cfe9f7641",
+      "rep": 1,
+      "reply_sha256": "64b3dcdbb62808f38cebc10abaf741d921b885c8c7c4527ba9a7026a25a815c8",
+      "run": "dvf-s14526-r1-joined",
+      "state": "valid",
+      "world": 14526
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "C",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "d684e084934f015ba7440d7cad02667c6e23e71e4aa8ae8bfabebfbe9ef6a90d",
+      "rep": 0,
+      "reply_sha256": "bb0600caafff39a000092076c00b2458a72a192e8bf72903716aa51d3378561e",
+      "run": "dvf-s14527-r0-nested",
+      "state": "valid",
+      "world": 14527
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "C",
+          "id": 4
+        },
+        {
+          "bay": "B",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 6,
+      "optimal": 6,
+      "prompt_sha256": "e40676e4ebdcaabee514cf58b9673ad732a39c3534d5f3ebe310b3ddf2930c58",
+      "rep": 0,
+      "reply_sha256": "25438fd0cc41a45b878567b6c4007a2f78f70a68061273ab79b1ce6ea69db416",
+      "run": "dvf-s14527-r0-joined",
+      "state": "valid",
+      "world": 14527
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "C",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 5,
+      "optimal": 5,
+      "prompt_sha256": "e40676e4ebdcaabee514cf58b9673ad732a39c3534d5f3ebe310b3ddf2930c58",
+      "rep": 1,
+      "reply_sha256": "a89d667c17475d16b06d122c4b1c6fa2e0cf9bd49958e33508255f31ed2205ce",
+      "run": "dvf-s14527-r1-joined",
+      "state": "valid",
+      "world": 14527
+    },
+    {
+      "actions": [
+        {
+          "bay": "B",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "C",
+          "id": 3
+        },
+        {
+          "bay": "C",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 4,
+      "optimal": 4,
+      "prompt_sha256": "d684e084934f015ba7440d7cad02667c6e23e71e4aa8ae8bfabebfbe9ef6a90d",
+      "rep": 1,
+      "reply_sha256": "bb0600caafff39a000092076c00b2458a72a192e8bf72903716aa51d3378561e",
+      "run": "dvf-s14527-r1-nested",
+      "state": "valid",
+      "world": 14527
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 59484,
+      "feasible": 3,
+      "optimal": 3,
+      "prompt_sha256": "2b3f8d17f7a7d629815d750ac4c7e56cdb558b9372f214a89618a9684a3f1e27",
+      "rep": 0,
+      "reply_sha256": "19d424d6d14ecf40a310edd2460c5d8fc83e451a0095e2a3225ebf3fa5bf6523",
+      "run": "dvf-s14528-r0-joined",
+      "state": "valid",
+      "world": 14528
+    },
+    {
+      "actions": [
+        {
+          "bay": "D",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 4,
+      "prompt_sha256": "12150c89c7d3f659a48964870f43cef8bd9e2df53159d979d518ae175efdb0c3",
+      "rep": 0,
+      "reply_sha256": "e58534ca7ad158c958852416bf7b57174ad5073ff067eebf0f2636f0a62110dd",
+      "run": "dvf-s14528-r0-nested",
+      "state": "valid",
+      "world": 14528
+    },
+    {
+      "actions": [
+        {
+          "bay": "D",
+          "id": 0
+        },
+        {
+          "bay": "C",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "C",
+          "id": 5
+        }
+      ],
+      "arm": "nested",
+      "cost_nanousd": 56784,
+      "feasible": 5,
+      "optimal": 4,
+      "prompt_sha256": "12150c89c7d3f659a48964870f43cef8bd9e2df53159d979d518ae175efdb0c3",
+      "rep": 1,
+      "reply_sha256": "e58534ca7ad158c958852416bf7b57174ad5073ff067eebf0f2636f0a62110dd",
+      "run": "dvf-s14528-r1-nested",
+      "state": "valid",
+      "world": 14528
+    },
+    {
+      "actions": [
+        {
+          "bay": "A",
+          "id": 0
+        },
+        {
+          "bay": "A",
+          "id": 1
+        },
+        {
+          "bay": "D",
+          "id": 2
+        },
+        {
+          "bay": "B",
+          "id": 3
+        },
+        {
+          "bay": "A",
+          "id": 4
+        },
+        {
+          "bay": "D",
+          "id": 5
+        }
+      ],
+      "arm": "joined",
+      "cost_nanousd": 41256,
+      "feasible": 2,
+      "optimal": 2,
+      "prompt_sha256": "2b3f8d17f7a7d629815d750ac4c7e56cdb558b9372f214a89618a9684a3f1e27",
+      "rep": 1,
+      "reply_sha256": "34d100c8eb4e4413fb3370822d79f09327758568b7664e04ebca4c8316d08152",
+      "run": "dvf-s14528-r1-joined",
+      "state": "valid",
+      "world": 14528
+    }
+  ],
+  "schema": "seatlab.dispatch-frozen-final/v1",
+  "sources": [
+    {
+      "prompt_sha256": {
+        "joined": "dc3b90118c23d71f7970734e3dbb2760b4b776b9a24768d4fb6f92b0bf93811d",
+        "nested": "3bd3daa517ba2ab7cca35fcf201b50996b7e647770103470bb2e17a0a819c9b5"
+      },
+      "source_cell": "dvj-s14521-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "c4b767e379adc592b53ff8c5707ab5866a1eec722ee5099a9d9242cf549fc51b",
+      "trial_id_sha256": "6f8dae7dccdc25cef041eca88375b2bab1af7cee84f16d0beb9730f3f7c6e645",
+      "world": 14521
+    },
+    {
+      "prompt_sha256": {
+        "joined": "ce6605a410380b7ae7de022406e0cd45e4ab2fa5da795ac0c2da7d8ce0651ae0",
+        "nested": "12d5ec45237325173f2d6ecc6795f539072f2598183b58a8b356da37e47c821e"
+      },
+      "source_cell": "dvj-s14522-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "d1c0a45b8dd3ecdc5a37191dbe72007413664d75630df03c19d0bc4c843b155b",
+      "trial_id_sha256": "98877f3e39347ac55d333381bae9eac84c6ed270101a11e184cc54f702fe9e9c",
+      "world": 14522
+    },
+    {
+      "prompt_sha256": {
+        "joined": "aed2f2d68c037214375f2b8fdab1d36ac254a65919bd721ef47837e884f5d4c6",
+        "nested": "d6da42278f2e331160ce00e55c4b3ac977ab0dc3e7f31ca06adaa299c45bc9a9"
+      },
+      "source_cell": "dvj-s14523-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "00d6bcdfa29f3a00655e9ba0065cd636f1da311ec2b0ffc9423c909867b493ba",
+      "trial_id_sha256": "a9d61d094677d8fccfae399aa14923246ab020fbbcb9dd45f80196c33bf6cb72",
+      "world": 14523
+    },
+    {
+      "prompt_sha256": {
+        "joined": "e05e5aaa430d3c9b923387037f3b96073c7a4f6876e2378e7957a26252154c33",
+        "nested": "e3f23e824296f38a45faf000ecb635fd4b35c63eed041378c80f2c0d7c8f8a44"
+      },
+      "source_cell": "dvj-s14524-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "0370891b3ad54a0770767ca30e19e483105cf325e24e0f249a0c9002ca26f70c",
+      "trial_id_sha256": "c336d587a1fe8c7afb6f0ba4d92acca98c418be5f7a15a9a313ab5a7d8aeee7f",
+      "world": 14524
+    },
+    {
+      "prompt_sha256": {
+        "joined": "e6ec8da563cf84eec5f73e299df0a64ce03fb7e003807d247bdf36cb8f461d14",
+        "nested": "ec0aaee0d56074cde24d66c3c4994b67148163e04c61645e4880ca5f74cdfa07"
+      },
+      "source_cell": "dvj-s14525-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "adcddc18a671af78ea3ad5e62a6077ef562506cd0b427c1753a893b59be4c5d4",
+      "trial_id_sha256": "a20cd58099b302e0eac876b5a8e842fe58c83aaaba514c6cedec5f18c38bb8c4",
+      "world": 14525
+    },
+    {
+      "prompt_sha256": {
+        "joined": "b3499081a3177444de575334a3f3a01813965c092cb29339c1658e4cfe9f7641",
+        "nested": "0c150608b9afe12aacd77685b1099d17a2c6a619508d76bfd13ca02c2363fc2c"
+      },
+      "source_cell": "dvj-s14526-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "18411c8353a4e5031b618d9abfe6b3a0d3e901caf4e71d5af23ab1ea6ae27ce5",
+      "trial_id_sha256": "3f61fc623fbcfa1908b4f2184e7719b90ff0d0ac215dd5d00221904680b1e829",
+      "world": 14526
+    },
+    {
+      "prompt_sha256": {
+        "joined": "e40676e4ebdcaabee514cf58b9673ad732a39c3534d5f3ebe310b3ddf2930c58",
+        "nested": "d684e084934f015ba7440d7cad02667c6e23e71e4aa8ae8bfabebfbe9ef6a90d"
+      },
+      "source_cell": "dvj-s14527-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "843dfeba45d32645a501326d65dedffb00da07a809fe553043d3e4ee9a811b7c",
+      "trial_id_sha256": "214fd3e98adfdb5c7a8599fcb5840f861e7d5e8464c035cd38dac776db40c2f8",
+      "world": 14527
+    },
+    {
+      "prompt_sha256": {
+        "joined": "2b3f8d17f7a7d629815d750ac4c7e56cdb558b9372f214a89618a9684a3f1e27",
+        "nested": "12150c89c7d3f659a48964870f43cef8bd9e2df53159d979d518ae175efdb0c3"
+      },
+      "source_cell": "dvj-s14528-r0-nested",
+      "source_format": "nested",
+      "stock_world_sha256": "95abf54dbe84dd03a13e7b47b69917406a3c24d6191ea9d6151180beebdfb7da",
+      "trial_id_sha256": "c9f084e751db0feafd2c93649b29f5977bb1877efd63ac4fe50bbe6109b020f4",
+      "world": 14528
+    }
+  ],
+  "summary": {
+    "arms": {
+      "joined": {
+        "cost_nanousd": 770640,
+        "feasible": 53,
+        "invalid": 0,
+        "missing": 0,
+        "optimal": 53,
+        "unpriced": 0,
+        "valid": 16
+      },
+      "nested": {
+        "cost_nanousd": 908544,
+        "feasible": 73,
+        "invalid": 0,
+        "missing": 0,
+        "optimal": 67,
+        "unpriced": 0,
+        "valid": 16
+      }
+    },
+    "matched_worlds": 8,
+    "net_feasible": -20,
+    "net_optimal": -14,
+    "p_value": 0.09375,
+    "permutations": 256,
+    "tail": 24,
+    "verdict": "not_established",
+    "world_deltas": [
+      {
+        "feasible": -1,
+        "optimal": -1,
+        "world": 14521
+      },
+      {
+        "feasible": -4,
+        "optimal": -1,
+        "world": 14522
+      },
+      {
+        "feasible": -4,
+        "optimal": -3,
+        "world": 14523
+      },
+      {
+        "feasible": -3,
+        "optimal": -3,
+        "world": 14524
+      },
+      {
+        "feasible": -1,
+        "optimal": -1,
+        "world": 14525
+      },
+      {
+        "feasible": -5,
+        "optimal": -5,
+        "world": 14526
+      },
+      {
+        "feasible": 3,
+        "optimal": 3,
+        "world": 14527
+      },
+      {
+        "feasible": -5,
+        "optimal": -3,
+        "world": 14528
+      }
+    ]
+  }
+}
