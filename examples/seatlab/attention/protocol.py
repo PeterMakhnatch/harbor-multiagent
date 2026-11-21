@@ -43,12 +43,13 @@ def grid() -> tuple[dict[str, Any], ...]:
 
 
 def aliases(cases: list[dict[str, Any]], seed: int, rep: int) -> dict[str, int]:
-    ids = [case.get("id") for case in cases]
-    if (
-        len(ids) != EPISODES
-        or any(type(native_id) is not int for native_id in ids)
-        or set(ids) != set(range(EPISODES))
-    ):
+    ids: list[int] = []
+    for case in cases:
+        native_id = case.get("id")
+        if type(native_id) is not int:
+            raise ValueError("Expected integer native case IDs")
+        ids.append(native_id)
+    if len(ids) != EPISODES or set(ids) != set(range(EPISODES)):
         raise ValueError("Expected all 6 registered native case IDs")
     ordered = sorted(
         ids,
@@ -106,7 +107,13 @@ def select_prompt(cases: list[dict[str, Any]], seed: int, rep: int, arm: str) ->
 def _open_pair(value: object) -> tuple[str, str]:
     if isinstance(value, (list, tuple)) and len(value) == 2:
         first, second = value
-        if first in _ALIASES and second in _ALIASES and first != second:
+        if (
+            isinstance(first, str)
+            and isinstance(second, str)
+            and first in _ALIASES
+            and second in _ALIASES
+            and first != second
+        ):
             return first, second
     raise ValueError("Expected 2 distinct registered aliases")
 

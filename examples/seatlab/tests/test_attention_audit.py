@@ -280,7 +280,15 @@ def _outcome(cell: dict[str, Any], score: int) -> dict[str, Any]:
             for i in range(6)
         ],
         "turns": [
-            {"run": f"{cell['cell_id']}-{stage}", "usage": None}
+            {
+                "run": f"{cell['cell_id']}-{stage}",
+                "stage": stage,
+                "role": "inventory" if stage in ("inventory", "push") else "dispatch",
+                "status": "received",
+                "prompt_sha256": _sha(f"prompt-{stage}"),
+                "response_sha256": _sha(f"answer-{stage}"),
+                "usage": None,
+            }
             for stage in ("inventory", "select", "decide")
         ],
     }
@@ -297,7 +305,11 @@ def test_summary_weights_worlds_and_bounds_missing_pairs() -> None:
         elif (seed, rep, arm) == (6402, 1, "named"):
             outcome = _outcome(cell, 1)
         rows.append(
-            {**cell, "state": "complete" if outcome else "missing", "outcome": outcome}
+            {
+                **cell,
+                "state": "complete" if outcome else "unverified",
+                "outcome": outcome,
+            }
         )
 
     summary = audit.summarize(cells, rows[::-1])
@@ -321,7 +333,7 @@ def test_summary_weights_worlds_and_bounds_missing_pairs() -> None:
         for row in rows
         if (row["seed"], row["repetition"], row["arm"]) == (6406, 0, "named")
     )
-    missing.update(outcome=None, state="missing")
+    missing.update(outcome=None, state="unverified")
     primary = audit.summarize(cells, rows)["primary"]
     assert primary["estimate"] is None
     assert primary["matched_pairs"] == 6

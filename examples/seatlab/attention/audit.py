@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections.abc import Mapping
 from hashlib import sha256
-from math import fsum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .. import evidence, run_panel, seat_agent, team_report
+from ..capsule import Capsule
 from ..export_capsules import reconstructed_capsules
+from ..native_report import summarize_attention as summarize
 from ..visibility import native_pairs
 from . import protocol
 
+__all__ = ["inspect_trial", "summarize"]
+
 _EPISODES = 6
 _ROLES = ("inventory", "dispatch")
-_ARMS = ("named", "count")
 _AGENT_IMPORT = "examples.seatlab.attention.agent:AttentionSeat"
 _SEAT_SCHEMA = "seatlab.native-attention-seat/v1"
 _TOKENS = ("input_tokens", "cache_tokens", "output_tokens")
@@ -31,19 +33,31 @@ def _digest(text: str) -> str:
 
 
 def _read_native(
-    trial: Path, config: dict[str, Any], cell_id: str, transport: str
+    trial: Path,
+    config: dict[str, Any],
+    cell_id: str,
+    transport: str,
+    *,
+    agent_import: str = _AGENT_IMPORT,
+    channel_id: str | None = None,
 ) -> dict[str, Any]:
     declared = native_pairs.DECLARED_MODEL if transport == "direct" else None
+    allowed = {"cell_id", "transport", "command_config"}
+    if channel_id is not None:
+        if channel_id != trial.name:
+            raise ValueError("declared channel differs from this trial")
+        allowed.add("channel_id")
     for participant in evidence._by_role(
         config.get("participants"), "participants"
     ).values():
         kwargs = participant.get("kwargs")
         if (
             participant.get("name") is not None
-            or participant.get("import_path") != _AGENT_IMPORT
+            or participant.get("import_path") != agent_import
             or participant.get("model_name") != declared
             or not isinstance(kwargs, dict)
-            or not kwargs.keys() <= {"cell_id", "transport", "command_config"}
+            or not kwargs.keys() <= allowed
+            or kwargs.get("channel_id") != channel_id
             or kwargs.get("cell_id") != cell_id
             or kwargs.get("transport") != transport
         ):
@@ -80,7 +94,7 @@ def _read_native(
 
 
 def _turn(
-    record: object, stage: str, role: str, cell_id: str, transport: str
+    raw: object, stage: str, role: str, cell_id: str, transport: str
 ) -> tuple[str, dict[str, Any]]:
     identity = {
         "stage": stage,
@@ -88,8 +102,11 @@ def _turn(
         "role": role,
         "status": "received",
     }
-    if not run_panel._config_matches(record, identity):
+    if not isinstance(raw, dict) or not run_panel._config_matches(raw, identity):
         raise ValueError("native model turn identity or stage mismatch")
+    record = cast(dict[str, Any], raw)
+    if not {"text", "response_sha256", "usage", "prompt_sha256"} <= record.keys():
+        raise ValueError("missing native model turn fields")
     text = record["text"]
     response_hash = record["response_sha256"]
     if not isinstance(text, str) or response_hash != _digest(text):
@@ -117,15 +134,18 @@ def _turn(
 
 def _seat_metadata(
     record: dict[str, Any],
-    capsule: dict[str, Any],
+    capsule: Mapping[str, object],
     role: str,
     cell_id: str,
     rows: list[dict[str, Any]],
     transport: str,
+    *,
+    agent_name: str = "seatlab-revision-attention",
+    seat_schema: str = _SEAT_SCHEMA,
 ) -> dict[str, Any]:
     model = {"name": "deepseek-flash", "provider": "deepseek"}
     if record.get("agent_info") != {
-        "name": "seatlab-revision-attention",
+        "name": agent_name,
         "version": "1.0.0",
         "model_info": model if transport == "direct" else None,
     }:
@@ -134,7 +154,7 @@ def _seat_metadata(
     if capsule["basis"] != "bound" or not run_panel._config_matches(
         metadata,
         {
-            "schema": _SEAT_SCHEMA,
+            "schema": seat_schema,
             "cell_id": cell_id,
             "role": role,
             "stage": "complete",
@@ -144,6 +164,16 @@ def _seat_metadata(
     ):
         raise ValueError("native seat did not attest a complete bound submission")
     return metadata
+
+
+def _capsule_cases(capsule: Capsule) -> list[dict[str, Any]]:
+    view = capsule["view"]
+    if not isinstance(view, dict):
+        raise ValueError("invalid native capsule view")
+    cases = view.get("cases")
+    if not isinstance(cases, list) or not all(isinstance(case, dict) for case in cases):
+        raise ValueError("invalid native capsule cases")
+    return cast(list[dict[str, Any]], cases)
 
 
 def _check_prompt(turn: dict[str, Any], prompt: str) -> None:
@@ -156,7 +186,7 @@ def _reconcile_turns(
     world: dict[str, Any],
     cell: dict[str, Any],
     transport: str,
-) -> tuple[list[str], list[dict[str, Any]]]:
+) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
     cell_id, seed, rep = cell["cell_id"], cell["seed"], cell["repetition"]
     capsules = reconstructed_capsules(world)
     inventory_rows = [
@@ -195,7 +225,7 @@ def _reconcile_turns(
     )
     _check_prompt(
         inv_turn,
-        native_pairs._prompt("inventory", capsules["inventory"]["view"]["cases"]),
+        native_pairs._prompt("inventory", _capsule_cases(capsules["inventory"])),
     )
     submitted = seat_agent._json_object(inventory_text, "inventory model")
     seat_agent._checked_submission(submitted, "inventory", _EPISODES)
@@ -205,7 +235,7 @@ def _reconcile_turns(
     ):
         raise ValueError("inventory model response differs from accepted reports")
 
-    cases = capsules["dispatch"]["view"]["cases"]
+    cases = _capsule_cases(capsules["dispatch"])
     select_text, select_turn = _turn(
         dispatch["turns"][0], "select", "dispatch", cell_id, transport
     )
@@ -225,7 +255,7 @@ def _reconcile_turns(
         != dispatch["decision_sha256"]
     ):
         raise ValueError("dispatch model response differs from accepted decisions")
-    return list(opened), [inv_turn, select_turn, decide_turn]
+    return list(opened), [inv_turn, select_turn, decide_turn], cases
 
 
 def _observation_metrics(
@@ -280,7 +310,7 @@ def inspect_trial(
         ):
             raise ValueError("native world differs from the registered world")
         records = evidence._by_role(native.get("seat_results"), "seat_results")
-        opened, turns = _reconcile_turns(records, world, cell, transport)
+        opened, turns, cases = _reconcile_turns(records, world, cell, transport)
         return {
             "trial_id": receipt["trial_id"],
             "fingerprint": receipt["fingerprint"],
@@ -295,12 +325,7 @@ def inspect_trial(
                 for grade, case in zip(score["rows"], world["cases"], strict=True)
             ],
             "opened": opened,
-            **_observation_metrics(
-                world,
-                reconstructed_capsules(world)["dispatch"]["view"]["cases"],
-                cell,
-                opened,
-            ),
+            **_observation_metrics(world, cases, cell, opened),
             "turns": turns,
         }
     except (
@@ -315,163 +340,3 @@ def inspect_trial(
         raise ValueError(
             "native attention evidence is incomplete or inconsistent"
         ) from None
-
-
-def _index(
-    registered: dict[str, dict[str, Any]],
-    entries: list[dict[str, Any]],
-    *,
-    outcomes: bool,
-) -> dict[str, dict[str, Any]]:
-    if len(entries) != len(registered):
-        raise ValueError("expected exactly 24 registered attention cells")
-    indexed: dict[str, dict[str, Any]] = {}
-    for entry in entries:
-        cell_id = entry.get("cell_id") if isinstance(entry, dict) else None
-        if (
-            not isinstance(cell_id, str)
-            or cell_id not in registered
-            or cell_id in indexed
-            or not run_panel._config_matches(entry, registered[cell_id])
-        ):
-            raise ValueError("unknown, duplicate, or mislabelled attention cell")
-        if outcomes and (
-            not isinstance(entry.get("state"), str)
-            or not entry["state"]
-            or "outcome" not in entry
-            or (entry["outcome"] is not None and not isinstance(entry["outcome"], dict))
-        ):
-            raise ValueError(
-                "each cell requires a state and an explicit outcome or null"
-            )
-        indexed[cell_id] = entry
-    return indexed
-
-
-def _score_index(
-    rows: dict[str, dict[str, Any]],
-) -> dict[tuple[int, int, str], float | None]:
-    scores: dict[tuple[int, int, str], float | None] = {}
-    fingerprints: dict[int, str] = {}
-    trial_ids: set[str] = set()
-    for cell_id, row in rows.items():
-        seed = row["seed"]
-        outcome = row["outcome"]
-        score = None
-        if outcome is not None:
-            score = outcome["native_score"]
-            trial_id = evidence._trial_id({"id": outcome["trial_id"]})
-            fingerprint = outcome["fingerprint"]
-            if (
-                type(score) not in (int, float)
-                or not 0 <= score <= 1
-                or trial_id in trial_ids
-                or fingerprints.setdefault(seed, fingerprint) != fingerprint
-                or [turn["run"] for turn in outcome["turns"]]
-                != [f"{cell_id}-{stage}" for stage in ("inventory", "select", "decide")]
-            ):
-                raise ValueError(
-                    "outcome does not identify an independent registered trial"
-                )
-            trial_ids.add(trial_id)
-        scores[seed, row["repetition"], row["arm"]] = score
-    return scores
-
-
-def _primary(scores: dict[tuple[int, int, str], float | None]) -> dict[str, Any]:
-    seeds = sorted({seed for seed, _, _ in scores})
-    seed_blocks = []
-    lower, upper = [], []
-    for seed in seeds:
-        deltas = []
-        for rep in (0, 1):
-            named, count = (scores[seed, rep, arm] for arm in _ARMS)
-            if named is not None and count is not None:
-                deltas.append(named - count)
-            lower.append(
-                (0.0 if named is None else named) - (1.0 if count is None else count)
-            )
-            upper.append(
-                (1.0 if named is None else named) - (0.0 if count is None else count)
-            )
-        seed_blocks.append(
-            {
-                "seed": seed,
-                "matched_pairs": len(deltas),
-                "mean": fsum(deltas) / len(deltas) if deltas else None,
-            }
-        )
-    means = [block["mean"] for block in seed_blocks if block["mean"] is not None]
-    pair_count = len(lower)
-    return {
-        "contrast": "named_minus_count_native_score",
-        "estimate": fsum(means) / len(seeds) if len(means) == len(seeds) else None,
-        "matched_pairs": sum(block["matched_pairs"] for block in seed_blocks),
-        "registered_pairs": pair_count,
-        "registered_seeds": len(seeds),
-        "paired_seeds": [
-            block["seed"] for block in seed_blocks if block["matched_pairs"]
-        ],
-        "seed_blocks": seed_blocks,
-        "registered_bounds": {
-            "lower": fsum(lower) / pair_count,
-            "upper": fsum(upper) / pair_count,
-        },
-    }
-
-
-def _secondary(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    counts = dict.fromkeys(_METRICS, 0)
-    slots = optimal = feasible = cases = unreported = 0
-    source_models: Counter[str] = Counter()
-    for outcome in rows:
-        for field in counts:
-            counts[field] += outcome[field]
-        slots += len(outcome["opened"])
-        cases += len(outcome["actions"])
-        optimal += sum(action["optimal"] for action in outcome["actions"])
-        feasible += sum(action["feasible"] for action in outcome["actions"])
-        usage = outcome["turns"][0]["usage"]
-        if usage is None:
-            unreported += 1
-        else:
-            source_models[usage["served_model"]] += 1
-    return {
-        "observed_cells": len(rows),
-        "opened_slots": slots,
-        **counts,
-        "opened_report_change_rate": counts["opened_report_changes"] / slots
-        if slots
-        else None,
-        "cases": cases,
-        "optimal": optimal,
-        "feasible": feasible,
-        "inventory_served_models": dict(source_models),
-        "inventory_model_unreported": unreported,
-    }
-
-
-def summarize(
-    cells: list[dict[str, Any]], rows: list[dict[str, Any]]
-) -> dict[str, Any]:
-    registered = {cell["cell_id"]: cell for cell in protocol.grid()}
-    _index(registered, cells, outcomes=False)
-    indexed = _index(registered, rows, outcomes=True)
-    scores = _score_index(indexed)
-    observed = sum(score is not None for score in scores.values())
-    return {
-        "registered_cells": len(registered),
-        "observed_cells": observed,
-        "missing_cells": len(registered) - observed,
-        "primary": _primary(scores),
-        "secondary": {
-            arm: _secondary(
-                [
-                    row["outcome"]
-                    for row in indexed.values()
-                    if row["arm"] == arm and row["outcome"] is not None
-                ]
-            )
-            for arm in _ARMS
-        },
-    }

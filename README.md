@@ -22,6 +22,14 @@ Run this command from this branch with Python 3.12 or later. It needs no account
 
 To start from real Harbor data, use the [saved trial packet](examples/seatlab/replication.md#repeat-the-handoff-comparison-on-saved-native-harbor-trials). No private archive is needed. From your own completed handoff, you can compare [shorter notes](examples/seatlab/replication.md#can-a-model-pack-an-actual-outgoing-note-better-than-a-byte-prefix) or [one worker per answer](examples/seatlab/replication.md#does-assigning-answer-ownership-prevent-incomplete-handoffs). Each worker claims a separate first attempt. The [results](examples/seatlab/native-model-results.md#does-a-revised-record-help-a-replacement-agent-find-the-right-context) distinguish a better lookup from a better final decision.
 
+To check results from real Harbor teams without installing Harbor, run this command from the fork branch with Python 3.12 or later:
+
+```sh
+python -S -m examples.seatlab.native_report examples/seatlab/results/attention-direct-live.json examples/seatlab/results/briefing-direct-live.json
+```
+
+The first study changes which revisions the dispatcher can identify. The second changes what the inventory agent knows before choosing 2 revisions to send. The command checks the published decisions and score arithmetic. It does not contact a model, start Docker, confirm a bill, or reopen a private trace.
+
 ## Install
 
 ```bash
