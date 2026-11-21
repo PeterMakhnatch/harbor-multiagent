@@ -46,13 +46,14 @@ def _stock_score(stock: Any) -> int | None:
         return None
     if not isinstance(stock, dict):
         raise TypeError("expected a native stock grade object")
-    grades = tuple(stock.get(key) for key in ("outer", "verifier", "oracle"))
-    outer, verifier, oracle = grades
-    if any(type(grade) is not int or grade not in (0, 1) for grade in grades):
-        raise ValueError("expected three binary integer native stock grades")
-    if not outer == verifier == oracle:
+    if stock.keys() != {"outer", "verifier", "oracle"}:
+        raise ValueError("missing or unknown native stock grade source")
+    observed = [value for value in stock.values() if value is not None]
+    if any(type(value) is not int or value not in (0, 1) for value in observed):
+        raise ValueError("expected a binary integer for each observed native grade")
+    if len(set(observed)) > 1:
         raise ValueError("discordant native stock grades")
-    return outer
+    return observed[0] if len(observed) == 3 else None
 
 
 def _cell(row: dict[str, Any], trial_ids: set[UUID]) -> _Cell:
