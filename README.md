@@ -8,6 +8,18 @@ support.
 
 By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
+## Replay an agent handoff without installing Harbor
+
+SeatLab is a fork-only experiment. It lets you change what a replacement agent sees without changing the world or rerunning the departing agent. Start with two service desks and a revised opening time:
+
+```sh
+python -m examples.seatlab.handoff plan \
+  --packet examples/seatlab/handoff/rota.json \
+  --sha256 "$(shasum -a 256 examples/seatlab/handoff/rota.json | cut -d' ' -f1)"
+```
+
+Run this command from this branch with Python 3.12 or later. It needs no account or Docker. The [working example](examples/seatlab/replication.md#run-a-handoff-on-your-own-records) shows how to run two programs, capture their first answers, and score them. It also accepts your own records.
+
 ## Install
 
 ```bash
