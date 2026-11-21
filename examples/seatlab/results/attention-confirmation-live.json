@@ -1,0 +1,1958 @@
+{
+  "meter": {
+    "by_match": {
+      "matched": 48
+    },
+    "known_usd_low": "0.004705728",
+    "ledger_without_turn": 0,
+    "unsettled_calls": 0,
+    "upper_usd_including_holds": "0.004705728"
+  },
+  "plan": {
+    "cells": [
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6801-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6801
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6801-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6801
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6802-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6802
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6802-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6802
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6803-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6803
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6803-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6803
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6804-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6804
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6804-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6804
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6805-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6805
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6805-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6805
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6806-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6806
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6806-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6806
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6807-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6807
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6807-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6807
+      },
+      {
+        "arm": "count",
+        "cell_id": "attnc-s6808-r0-count",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6808
+      },
+      {
+        "arm": "named",
+        "cell_id": "attnc-s6808-r0-named",
+        "condition": "reordered",
+        "pairing": "MM",
+        "repetition": 0,
+        "seed": 6808
+      }
+    ],
+    "command_config_sha256": null,
+    "episodes": 6,
+    "max_direct_calls": 48,
+    "schema": "seatlab.native-attention-confirmation-plan/v1",
+    "seat_sources": {
+      "agent.py": "5cee2d78c3240ba1d408b2eebf6119705ce240139826d23c7625d001ab5e7e60",
+      "confirmation.py": "9a4ed56e15f2c00ed75c594e0adf6b9bebc5bfd92a3a0566c2803e89a57f9f53",
+      "confirmation_agent.py": "e606019dd6599e31b9746a15e20459c6e7391bd983a7988dc1589a91c21d1f33",
+      "protocol.py": "df86b115cc34ebc743bebe85845451c9584d52940fa12c33d4368859da233429"
+    },
+    "sources": {
+      "seatlab/evidence.py": "bc83eea15c8c0ce6ac4d036271733effb4557793770e722caed5b040555dc90c",
+      "seatlab/run_panel.py": "b925297d236af3ed9a3ca2d9a4f7747fcc6aa59173cebda5c3b32251d9440cc1",
+      "seatlab/seat_agent.py": "453e69a7c861910b9a0b1eaa4a877800f54fd4b82794d8677a1d4c5a1c3229c8",
+      "tasks/dispatch-handoff/environment/Dockerfile": "f27cf682b9cafde11f0c8fba4c990be6680b19ad9299d60e8e654a6e7e8b6101",
+      "tasks/dispatch-handoff/environment/docker-compose.yaml": "871745544b8e81199f882bbe5c4c5124668843d5bd0a473cdcee2081e77cd478",
+      "tasks/dispatch-handoff/environment/player/Dockerfile": "e993437d33af04e36a5be83ce2e6a32675cfe41d33878d1ea6300348c774f66e",
+      "tasks/dispatch-handoff/environment/scenario.json": "7e11a4168ae10835e47c27f815af5896f094c9a030182b1ec499e28391721f17",
+      "tasks/dispatch-handoff/environment/seatworld.py": "016662e497f2760cc6395661fb6789152fa2007d3d7064cba8f29c0e650ae8bd",
+      "tasks/dispatch-handoff/environment/serve.py": "e1264cb03059d0343974dc717dcaa84c372de236617e24c6576790f1d16a2db2",
+      "tasks/dispatch-handoff/instructions/dispatch.md": "fe1e1d9c111ee2330bf23159e8df963ccad36d1060914711e2f537b36b65756e",
+      "tasks/dispatch-handoff/instructions/inventory.md": "0b17998087160dd502f3b6a43ec1f058e16aa5e6610a1570b9f631e155b6cb8c",
+      "tasks/dispatch-handoff/solution/solve.sh": "bd5a769196439351be22fd8befcbe0bd67b4211e69cca47ef50646b218210f56",
+      "tasks/dispatch-handoff/task.toml": "f9f29f101ded67f57f2d903964bbe0402e8639d62a6057166a5f4a860b3918fc",
+      "tasks/dispatch-handoff/tests/score.py": "a088db6055b35b40d935383a85115f61aaa4f4c31a0a27d5b6a9a7db93701036",
+      "tasks/dispatch-handoff/tests/test.sh": "8817579b848df444ae4f926fc6e2133906e5ea92a4622e93dca89dda1b69c4c2"
+    },
+    "transport": "direct"
+  },
+  "rows": [
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6801-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "B",
+            "feasible": false,
+            "id": 0,
+            "optimal": false
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "14bc0cec61d99938219735617b37a150b825960d3fa3ccc501fe0c697bfac6f7",
+        "native_score": 0.8333333333333334,
+        "opened": [
+          "Q3",
+          "Q6"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 1,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "2cd93ccd-69a6-52f3-8539-90d5376dd9b7",
+        "turns": [
+          {
+            "prompt_sha256": "ed8cdfc64837a4f7da570e4ba7412a615bff248c56383c44bab7490b7cf3dde2",
+            "response_sha256": "ecc51816688781630cc9e2dcbf20ebfc89e172a968439743640da121622cd7e2",
+            "role": "inventory",
+            "run": "attnc-s6801-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "81b8a287dc502cc298126217d2a13415892aa45d9cd0f752d6a95b7387329636",
+            "response_sha256": "70622c54c21806bca0071a15d976e6fedd62f1ee0e73b373e69996428f026f1d",
+            "role": "dispatch",
+            "run": "attnc-s6801-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "7149ed4198447fa2d2667b2544d2389df950f5466bd647766d703aaa5a1037f2",
+            "response_sha256": "d9035786df80695791f5f7f942e351feaf61d289e2323e10c40fbe36e04d73cb",
+            "role": "dispatch",
+            "run": "attnc-s6801-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6801,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6801-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "14bc0cec61d99938219735617b37a150b825960d3fa3ccc501fe0c697bfac6f7",
+        "native_score": 0.8333333333333334,
+        "opened": [
+          "Q1",
+          "Q2"
+        ],
+        "opened_report_changes": 0,
+        "opened_sensitive": 0,
+        "opened_stock_changes": 0,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "d2a63caa-3b0c-5e1f-a47a-3363dbe1c58b",
+        "turns": [
+          {
+            "prompt_sha256": "ed8cdfc64837a4f7da570e4ba7412a615bff248c56383c44bab7490b7cf3dde2",
+            "response_sha256": "ecc51816688781630cc9e2dcbf20ebfc89e172a968439743640da121622cd7e2",
+            "role": "inventory",
+            "run": "attnc-s6801-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "117b322e99e38bfdd6cf5e0d2d63f6b5cee12e9b4b9e73dba7dd63ef53ae74c2",
+            "response_sha256": "80342a9cc3a31e383ac12fe5e80753da427c9fb565fcb0e30d1c01acb28ef8c9",
+            "role": "dispatch",
+            "run": "attnc-s6801-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "f8082d82c74e44191448d445ab0064fa39e2c1cad7337d0f345b4ccc32eb72f7",
+            "response_sha256": "e808c8723d8a94bfc518459b6937af6908204d91eddcef01f38caca4a1b8011e",
+            "role": "dispatch",
+            "run": "attnc-s6801-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6801,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6802-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": false,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "1eb011f4b42f81efa1ebfe6d31d7315ef6d40cb7987a72394207b9a3fb829aab",
+        "native_score": 0.6666666666666666,
+        "opened": [
+          "Q1",
+          "Q4"
+        ],
+        "opened_report_changes": 1,
+        "opened_sensitive": 0,
+        "opened_stock_changes": 1,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "b9130420-bd0f-53b5-bf30-8fb1ece4c367",
+        "turns": [
+          {
+            "prompt_sha256": "ebdaeeb6e842ccd83c011b9d146670b91ccfea4415bd06a401895ff03518f2f7",
+            "response_sha256": "863f4f4a2a88f04168076f4ae88db720c764e44e125a96485c18072b19690fd1",
+            "role": "inventory",
+            "run": "attnc-s6802-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "4b8682b7796fab8c3ce899add408e7a9243a0bb28b42639771455d5d7d5c07bc",
+            "response_sha256": "28fd61eeafbb4f68e8f8c0fd58544344c896b389e9b77e284b6c9f777a82cc3b",
+            "role": "dispatch",
+            "run": "attnc-s6802-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "30fa4547673acdce9318d4be5f90b0ff2878188673d1812bc0afc74c244dc87e",
+            "response_sha256": "fdc18b007715681c1bbcec2ca2b113634c9396e707a792be0a64f3d97305af7e",
+            "role": "dispatch",
+            "run": "attnc-s6802-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6802,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6802-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "1eb011f4b42f81efa1ebfe6d31d7315ef6d40cb7987a72394207b9a3fb829aab",
+        "native_score": 0.8333333333333334,
+        "opened": [
+          "Q2",
+          "Q4"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 1,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "614b50f8-47fc-511a-aa0c-828bc25b4737",
+        "turns": [
+          {
+            "prompt_sha256": "ebdaeeb6e842ccd83c011b9d146670b91ccfea4415bd06a401895ff03518f2f7",
+            "response_sha256": "863f4f4a2a88f04168076f4ae88db720c764e44e125a96485c18072b19690fd1",
+            "role": "inventory",
+            "run": "attnc-s6802-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "99cba98fff36f1c28d9c76362fcd4126c221c069cdd3acfabce585d5f826abd0",
+            "response_sha256": "2666960729419a8e04818d2ddbc2cad02caaf2951a39bc5f1138da06f490cd01",
+            "role": "dispatch",
+            "run": "attnc-s6802-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "4062edbb34a6726d66d9e43af38afa076ac5bb15e905a9f12f679d6b4e741723",
+            "response_sha256": "c3dbba4bd7061bd2470b1d5ff293b68528597aa53d37911f42bac69df65c97ed",
+            "role": "dispatch",
+            "run": "attnc-s6802-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6802,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6803-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 2,
+            "optimal": false
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "0022f6c86666de0fdc7511febcd9fdb70bacaefebb65ce79da863e33bcedf23d",
+        "native_score": 0.8333333333333334,
+        "opened": [
+          "Q2",
+          "Q3"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 2,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "2d34306c-f8b5-5436-8885-ed153e854ba7",
+        "turns": [
+          {
+            "prompt_sha256": "8f64b5fbf611fc3753ca539831ae0e3a245b93b4dffa9cd76207a7fcfa19f381",
+            "response_sha256": "8b9dcd085870c3505efd84264450fd36461dbf19f0e22d0fa5bc55da7d9da666",
+            "role": "inventory",
+            "run": "attnc-s6803-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "09827fb50db9260d31d0e06722ee36710f8b2fbf78c72c64a4a9e19edc6a2b31",
+            "response_sha256": "225cd99fc3c65ff578fa57470efd9662739a607b3d66d9890d6809e7c9cbb396",
+            "role": "dispatch",
+            "run": "attnc-s6803-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "bb0835cefede4bfe750752d1091fe3438cfa8409113deb31122a01084a1d28ce",
+            "response_sha256": "a6ac5e80bfd1121affe01a88f33b80a0ee1bd97adb61cfd477643fd8da60f9bb",
+            "role": "dispatch",
+            "run": "attnc-s6803-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6803,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6803-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": false,
+            "id": 1,
+            "optimal": false
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 2,
+            "optimal": false
+          },
+          {
+            "choice": "B",
+            "feasible": false,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "0022f6c86666de0fdc7511febcd9fdb70bacaefebb65ce79da863e33bcedf23d",
+        "native_score": 0.5,
+        "opened": [
+          "Q1",
+          "Q3"
+        ],
+        "opened_report_changes": 1,
+        "opened_sensitive": 1,
+        "opened_stock_changes": 1,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "3d35e30c-b4f9-52d6-b643-0c5a60402f9d",
+        "turns": [
+          {
+            "prompt_sha256": "8f64b5fbf611fc3753ca539831ae0e3a245b93b4dffa9cd76207a7fcfa19f381",
+            "response_sha256": "8b9dcd085870c3505efd84264450fd36461dbf19f0e22d0fa5bc55da7d9da666",
+            "role": "inventory",
+            "run": "attnc-s6803-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "59e42349abeb604f21e905d4c4380077f5cb2b7e7fea0f9271a13e7645f6b4e6",
+            "response_sha256": "3fca8baa9eccf8909948636697f866d232b2c125e341bfa5949656b6ee9db6bc",
+            "role": "dispatch",
+            "run": "attnc-s6803-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "4ee964d51d3c544e7c56bf240621bcf00e7b3f8aa8fc452307b82d59ea7a97cb",
+            "response_sha256": "984903974d9815bebe7e04707ae7b0ec529ef55db4bb1e0aa76ac12cfec91cda",
+            "role": "dispatch",
+            "run": "attnc-s6803-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6803,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6804-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": false,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "ee7b2b192b47b8e8cd8e8245814e421e8658de771ebee7e065f56a981b80f2a2",
+        "native_score": 0.5,
+        "opened": [
+          "Q1",
+          "Q6"
+        ],
+        "opened_report_changes": 1,
+        "opened_sensitive": 0,
+        "opened_stock_changes": 1,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "ac1fdcc7-7620-59f7-8094-dd1579c5c0f0",
+        "turns": [
+          {
+            "prompt_sha256": "1153bce45d6229b7a049a4a55d8aa24cb6254719f2e23a9ce21012b50e3452e4",
+            "response_sha256": "819a1d376d240e974dac709ffc93f1ac3606dcaa8139e34c2d85c90e5a16d86a",
+            "role": "inventory",
+            "run": "attnc-s6804-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "7363491c69d55c61c296b5918067182143f41587f3a70479bf52ad074169cd34",
+            "response_sha256": "2d8a1ea4167435aadcaa5539726a3a1984e56a52b6b12aa275173ba1bd62594e",
+            "role": "dispatch",
+            "run": "attnc-s6804-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "9d4a50d581eb6c68776de7829538422c35274b478fa023359b408defbca7ecaa",
+            "response_sha256": "afded7ad8084097f9a25c8813c844af77fcfb52646182611899df8e0d73bb2f2",
+            "role": "dispatch",
+            "run": "attnc-s6804-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6804,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6804-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": false
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "ee7b2b192b47b8e8cd8e8245814e421e8658de771ebee7e065f56a981b80f2a2",
+        "native_score": 0.6666666666666666,
+        "opened": [
+          "Q1",
+          "Q2"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 1,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "c8695f92-83bb-54b3-81af-d95612adb1a9",
+        "turns": [
+          {
+            "prompt_sha256": "1153bce45d6229b7a049a4a55d8aa24cb6254719f2e23a9ce21012b50e3452e4",
+            "response_sha256": "819a1d376d240e974dac709ffc93f1ac3606dcaa8139e34c2d85c90e5a16d86a",
+            "role": "inventory",
+            "run": "attnc-s6804-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "fd190cc99d99a5294c8df6c1c04035bf09116acb0348d0174621f526907cf044",
+            "response_sha256": "80342a9cc3a31e383ac12fe5e80753da427c9fb565fcb0e30d1c01acb28ef8c9",
+            "role": "dispatch",
+            "run": "attnc-s6804-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "b4769b5eaae797655a7f6abfe6a0db1b287af414ec19b3160110537b078d37a6",
+            "response_sha256": "f894df313dca29ce87964691d232b0945222a205be69defc598a29455bf54c76",
+            "role": "dispatch",
+            "run": "attnc-s6804-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6804,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6805-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": false,
+            "id": 4,
+            "optimal": false
+          },
+          {
+            "choice": "B",
+            "feasible": false,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "89a1b05b9163c3335ee4988637e75238376430bbbb2c48d52daf6d1c56143201",
+        "native_score": 0.6666666666666666,
+        "opened": [
+          "Q3",
+          "Q5"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 1,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "4372af05-bd6d-5795-9b8f-1ff57f2c6a84",
+        "turns": [
+          {
+            "prompt_sha256": "83b0a179ff08351fa64d2add8f03b6228963e0868c5eec522dbb974a95afd7de",
+            "response_sha256": "9c9151ea74cd8528e09ebbc26dbe1df453d45a4124a096913e61fdeaefb4690c",
+            "role": "inventory",
+            "run": "attnc-s6805-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "d3aa0840449b83a9aa31f0d1ad78135523cfbf81bfc737520153a1b43c19f63d",
+            "response_sha256": "e99583a569cd83202f3db95e71b33bcb3324e3a3d7a6b6b71a165ef3f0b92bbb",
+            "role": "dispatch",
+            "run": "attnc-s6805-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "e92745cc1ad63f49250c6502bce6fe6cb5d0809d12f65f89c61237b2601f2e61",
+            "response_sha256": "938f223b27ef96c2047b0c7be17f2f71fbf968f63e327091537339a00ad2847e",
+            "role": "dispatch",
+            "run": "attnc-s6805-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6805,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6805-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": false,
+            "id": 1,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": false,
+            "id": 4,
+            "optimal": false
+          },
+          {
+            "choice": "A",
+            "feasible": false,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "89a1b05b9163c3335ee4988637e75238376430bbbb2c48d52daf6d1c56143201",
+        "native_score": 0.5,
+        "opened": [
+          "Q1",
+          "Q2"
+        ],
+        "opened_report_changes": 0,
+        "opened_sensitive": 0,
+        "opened_stock_changes": 0,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "557d4bc4-428b-527c-8bd3-b953c06df3f3",
+        "turns": [
+          {
+            "prompt_sha256": "83b0a179ff08351fa64d2add8f03b6228963e0868c5eec522dbb974a95afd7de",
+            "response_sha256": "9c9151ea74cd8528e09ebbc26dbe1df453d45a4124a096913e61fdeaefb4690c",
+            "role": "inventory",
+            "run": "attnc-s6805-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "7224e473723183557f0d79258e1d8eb70230a3d038e6f8b49aa13cd5aa1baff6",
+            "response_sha256": "80342a9cc3a31e383ac12fe5e80753da427c9fb565fcb0e30d1c01acb28ef8c9",
+            "role": "dispatch",
+            "run": "attnc-s6805-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "fffe7a832723b5c19b160e847905f44aef4f449642a783ea962efa791f8101a9",
+            "response_sha256": "60e19500e22a171befcb52ba3be9dd35d3c6f4ac49b0d11709eeeb6e17f03e54",
+            "role": "dispatch",
+            "run": "attnc-s6805-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6805,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6806-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": false,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "d3450f9823e61cdd9dc52d5bee701c03ec9acb2a46c87c43916ad95881788631",
+        "native_score": 0.8333333333333334,
+        "opened": [
+          "Q1",
+          "Q5"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 2,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "bc4f84ae-2920-566e-924e-1ec6522c7232",
+        "turns": [
+          {
+            "prompt_sha256": "a5ec0f01b6f6f4654cd5ea6bac6c5accd50041c11fe8a4e72c77e868170baea4",
+            "response_sha256": "ef7d2525dd1b37ff15489f3e710d8645cb833872c430663d6b2c47d4bf9d4412",
+            "role": "inventory",
+            "run": "attnc-s6806-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "f07daafd4f567673eb622d506ef2ab84fb97f7a0459461542a844fd2e0d976d6",
+            "response_sha256": "d786641fe68e5ea3cbab7119179f6dadf1bad40532aa343d6e7f848b0d77003a",
+            "role": "dispatch",
+            "run": "attnc-s6806-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+            "response_sha256": "616359c61d427096cc402d94ed01bfb2091c3963821a1dce532a37fa82243d32",
+            "role": "dispatch",
+            "run": "attnc-s6806-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6806,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6806-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": false,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": false,
+            "id": 5,
+            "optimal": false
+          }
+        ],
+        "fingerprint": "d3450f9823e61cdd9dc52d5bee701c03ec9acb2a46c87c43916ad95881788631",
+        "native_score": 0.6666666666666666,
+        "opened": [
+          "Q1",
+          "Q5"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 2,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "7be36c3f-40d4-5fb9-a8b1-cb581d58e429",
+        "turns": [
+          {
+            "prompt_sha256": "a5ec0f01b6f6f4654cd5ea6bac6c5accd50041c11fe8a4e72c77e868170baea4",
+            "response_sha256": "ef7d2525dd1b37ff15489f3e710d8645cb833872c430663d6b2c47d4bf9d4412",
+            "role": "inventory",
+            "run": "attnc-s6806-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "134f636925ec1c9bd055cc05375bf8f2d2be586d760f30541907b2f55ea2c4c7",
+            "response_sha256": "d786641fe68e5ea3cbab7119179f6dadf1bad40532aa343d6e7f848b0d77003a",
+            "role": "dispatch",
+            "run": "attnc-s6806-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "63ac0031ba82c6e465809c6c3425a9ad7a9a53ef1a5ac9ca03085d73ecf22eb9",
+            "response_sha256": "db850907a54534ab59a0ec98a83fbba4fddc1f8dbfb36ce19a5095ec05fd67b6",
+            "role": "dispatch",
+            "run": "attnc-s6806-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6806,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6807-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "4abddb0531535957c588260955c69a2990cc08135c34d74bb1883ac872946328",
+        "native_score": 1.0,
+        "opened": [
+          "Q3",
+          "Q6"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 1,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "87c15af9-ac6f-52cf-a711-553492f13aab",
+        "turns": [
+          {
+            "prompt_sha256": "b1dafe4274903566fa9f21ff37935813b44bd7cb79b80be9a50e67d11e97a331",
+            "response_sha256": "7813a1359c494ce37cbf96756d64aeb49d5c4b1dc7956e91350cc5f5455173cc",
+            "role": "inventory",
+            "run": "attnc-s6807-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "b7537a6c7547415fd215d20d46a428909c90bcfbef44634e77065dbf153570a7",
+            "response_sha256": "70622c54c21806bca0071a15d976e6fedd62f1ee0e73b373e69996428f026f1d",
+            "role": "dispatch",
+            "run": "attnc-s6807-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "441701d18338b9a2de4a7e08aa84224352a6117899f9aad44c994cb8bd32c697",
+            "response_sha256": "ea645343c86cd60b5ed7928df6a9cb547b5ab63f96966501fb62c4bee4acf41a",
+            "role": "dispatch",
+            "run": "attnc-s6807-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6807,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6807-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 1,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": false,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 4,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "4abddb0531535957c588260955c69a2990cc08135c34d74bb1883ac872946328",
+        "native_score": 0.8333333333333334,
+        "opened": [
+          "Q4",
+          "Q5"
+        ],
+        "opened_report_changes": 1,
+        "opened_sensitive": 0,
+        "opened_stock_changes": 1,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "2b0246cd-0f44-5277-9aba-12e4a29104d2",
+        "turns": [
+          {
+            "prompt_sha256": "b1dafe4274903566fa9f21ff37935813b44bd7cb79b80be9a50e67d11e97a331",
+            "response_sha256": "7813a1359c494ce37cbf96756d64aeb49d5c4b1dc7956e91350cc5f5455173cc",
+            "role": "inventory",
+            "run": "attnc-s6807-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "e2f449474f0f0f9d8ddecfa0ee6e03f034edd18269f2b2c8afe3d2f872f8bd15",
+            "response_sha256": "ca19718ef4c4e0f9498192b6f34cf666239ea0ba065623d38ff50a91d4e55afc",
+            "role": "dispatch",
+            "run": "attnc-s6807-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "023f7bced735460d9ffced03081ff0370112ae811fd70b6c611e8e8ddfef280a",
+            "response_sha256": "c842080a312ea1c6abba43b38bec1e1a54edaea601bd836d6e715afb10eb1cc5",
+            "role": "dispatch",
+            "run": "attnc-s6807-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6807,
+      "state": "complete"
+    },
+    {
+      "arm": "count",
+      "cell_id": "attnc-s6808-r0-count",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 0,
+            "optimal": true
+          },
+          {
+            "choice": "A",
+            "feasible": false,
+            "id": 1,
+            "optimal": false
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 3,
+            "optimal": false
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": false
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "e13e19d2962b40698be35bda0332b351ae65ecb59c80818a6b759bce07d5a4bf",
+        "native_score": 0.5,
+        "opened": [
+          "Q2",
+          "Q6"
+        ],
+        "opened_report_changes": 0,
+        "opened_sensitive": 0,
+        "opened_stock_changes": 0,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "643f5f13-ada3-500a-a3d3-340304e4ca93",
+        "turns": [
+          {
+            "prompt_sha256": "db4279f0147b44316321aacc065b8cdfd9c4ac11a031e8c9d874ee852c229080",
+            "response_sha256": "44c77311d2e7a3b0f201e86d0bf70692c1a8e86edff3f19d314f7b4c4ef6d841",
+            "role": "inventory",
+            "run": "attnc-s6808-r0-count-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "c3b6cfe34351c9f46c853d9f5e7f502b1f6c49b07b92a8ee83d14a1f816e8cf5",
+            "response_sha256": "df2f8a2997f5ee7b023f220ebe445943599f25ee6f4c605dee4de541b772a4ff",
+            "role": "dispatch",
+            "run": "attnc-s6808-r0-count-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 344,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "2f0dfb88a2746bbdae620e57650a3785159acc0c836f44a00813d938d0199861",
+            "response_sha256": "1ea6381a9f24e41130ef98885a9508992d8e051b2115960ca9d17d3394b1d6f7",
+            "role": "dispatch",
+            "run": "attnc-s6808-r0-count-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6808,
+      "state": "complete"
+    },
+    {
+      "arm": "named",
+      "cell_id": "attnc-s6808-r0-named",
+      "condition": "reordered",
+      "outcome": {
+        "actions": [
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 0,
+            "optimal": false
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 1,
+            "optimal": false
+          },
+          {
+            "choice": "A",
+            "feasible": true,
+            "id": 2,
+            "optimal": true
+          },
+          {
+            "choice": "B",
+            "feasible": true,
+            "id": 3,
+            "optimal": true
+          },
+          {
+            "choice": "C",
+            "feasible": true,
+            "id": 4,
+            "optimal": false
+          },
+          {
+            "choice": "D",
+            "feasible": true,
+            "id": 5,
+            "optimal": true
+          }
+        ],
+        "fingerprint": "e13e19d2962b40698be35bda0332b351ae65ecb59c80818a6b759bce07d5a4bf",
+        "native_score": 0.5,
+        "opened": [
+          "Q3",
+          "Q4"
+        ],
+        "opened_report_changes": 2,
+        "opened_sensitive": 2,
+        "opened_stock_changes": 2,
+        "source_copy_errors": 0,
+        "total_report_changes": 3,
+        "trial_alias": "b7a617cd-9e27-5067-9e66-8e34ee7e95e1",
+        "turns": [
+          {
+            "prompt_sha256": "db4279f0147b44316321aacc065b8cdfd9c4ac11a031e8c9d874ee852c229080",
+            "response_sha256": "44c77311d2e7a3b0f201e86d0bf70692c1a8e86edff3f19d314f7b4c4ef6d841",
+            "role": "inventory",
+            "run": "attnc-s6808-r0-named-inventory",
+            "stage": "inventory",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 334,
+              "output_tokens": 215,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "cc7d5c522c02c101bc00ed8cf755f0cc4f9a4b57afb0d02d30be61fafe11000a",
+            "response_sha256": "f93a4d08f3f5ebe213dc5a7d2c19613bcb1f4f2a46813f8038dd80a8fffbd3b6",
+            "role": "dispatch",
+            "run": "attnc-s6808-r0-named-select",
+            "stage": "select",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 128,
+              "input_tokens": 360,
+              "output_tokens": 11,
+              "served_model": "deepseek-flash"
+            }
+          },
+          {
+            "prompt_sha256": "a29d0aa42b8a5dc1ff3855e585123264783fc74c4776d90cbf01814a7c8dd2b6",
+            "response_sha256": "037fd7d5e26027c92a832f8b62a8e209458068ee756c379329a8b6e7afce68eb",
+            "role": "dispatch",
+            "run": "attnc-s6808-r0-named-decide",
+            "stage": "decide",
+            "status": "received",
+            "usage": {
+              "cache_tokens": 0,
+              "input_tokens": 368,
+              "output_tokens": 34,
+              "served_model": "deepseek-flash"
+            }
+          }
+        ]
+      },
+      "pairing": "MM",
+      "repetition": 0,
+      "seed": 6808,
+      "state": "complete"
+    }
+  ],
+  "schema": "seatlab.native-attention-confirmation-report/v1",
+  "summary": {
+    "missing_cells": 0,
+    "observed_cells": 16,
+    "primary": {
+      "contrast": "named_minus_count_native_score",
+      "estimate": 0.10416666666666666,
+      "matched_pairs": 8,
+      "paired_seeds": [
+        6801,
+        6802,
+        6803,
+        6804,
+        6805,
+        6806,
+        6807,
+        6808
+      ],
+      "registered_bounds": {
+        "lower": 0.10416666666666666,
+        "upper": 0.10416666666666666
+      },
+      "registered_pairs": 8,
+      "registered_seeds": 8,
+      "seed_blocks": [
+        {
+          "matched_pairs": 1,
+          "mean": 0.0,
+          "seed": 6801
+        },
+        {
+          "matched_pairs": 1,
+          "mean": 0.16666666666666674,
+          "seed": 6802
+        },
+        {
+          "matched_pairs": 1,
+          "mean": 0.33333333333333337,
+          "seed": 6803
+        },
+        {
+          "matched_pairs": 1,
+          "mean": 0.16666666666666663,
+          "seed": 6804
+        },
+        {
+          "matched_pairs": 1,
+          "mean": 0.16666666666666663,
+          "seed": 6805
+        },
+        {
+          "matched_pairs": 1,
+          "mean": -0.16666666666666674,
+          "seed": 6806
+        },
+        {
+          "matched_pairs": 1,
+          "mean": 0.16666666666666663,
+          "seed": 6807
+        },
+        {
+          "matched_pairs": 1,
+          "mean": 0.0,
+          "seed": 6808
+        }
+      ]
+    },
+    "registered_cells": 16,
+    "secondary": {
+      "count": {
+        "cases": 48,
+        "feasible": 38,
+        "inventory_model_unreported": 0,
+        "inventory_served_models": {
+          "deepseek-flash": 8
+        },
+        "observed_cells": 8,
+        "opened_report_change_rate": 0.375,
+        "opened_report_changes": 6,
+        "opened_sensitive": 3,
+        "opened_slots": 16,
+        "opened_stock_changes": 6,
+        "optimal": 31,
+        "source_copy_errors": 0,
+        "total_report_changes": 24
+      },
+      "named": {
+        "cases": 48,
+        "feasible": 43,
+        "inventory_model_unreported": 0,
+        "inventory_served_models": {
+          "deepseek-flash": 8
+        },
+        "observed_cells": 8,
+        "opened_report_change_rate": 1.0,
+        "opened_report_changes": 16,
+        "opened_sensitive": 11,
+        "opened_slots": 16,
+        "opened_stock_changes": 16,
+        "optimal": 36,
+        "source_copy_errors": 0,
+        "total_report_changes": 24
+      }
+    }
+  }
+}
