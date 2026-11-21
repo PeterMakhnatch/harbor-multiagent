@@ -10,6 +10,7 @@ from fractions import Fraction
 from conftest import FLOTILLA, load
 
 COMMONS = load(FLOTILLA / "games" / "commons.py", "flotilla_test_game_commons_world")
+SPLIT = load(FLOTILLA / "games" / "split.py", "flotilla_test_game_split_world")
 VIEW_KEYS = {"season_started", "season_over", "round", "stock", "closes_in", "you_requested", "your_total",
              "closed_rounds"}
 ROUND_KEYS = {"round", "stock", "requests", "catch", "missed", "remaining", "collapsed"}
@@ -64,8 +65,55 @@ def test_one_request_per_round_and_only_whole_numbers(start_world, tmp_path):
     assert world.seat("p1", "POST", "/harvest", {"amount": 10})[0] == 409
     for bad in (-1, 1.5, True, "5", None):
         assert world.seat("p2", "POST", "/harvest", {"amount": bad})[0] == 400, bad
+    assert world.seat("p2", "POST", "/harvest", {"pass": True})[0] == 400
     assert world.seat("p2", "POST", "/submit", {"answer": {}})[0] == 404  # no answer slot in a game
     assert "repeat" in world.kinds()
+
+
+def test_split_pass_blocks_the_deal_and_only_the_first_action_in_a_round_counts(start_world, tmp_path, monkeypatch):
+    params = SPLIT._params(100, Fraction(4, 5), {"p1": 55, "p2": 20}, regime="b")
+    path = tmp_path / "split.json"
+    path.write_text(json.dumps(params))
+    world = start_world("silent", FLOTILLA_GAME=str(FLOTILLA / "games" / "split.py"),
+                        FLOTILLA_GAME_PARAMS=str(path), FLOTILLA_ROUND_SECONDS="30")
+    clock = 0.0
+    monkeypatch.setattr(world.module, "now", lambda: clock)
+    everyone_calls(world)
+
+    for bad in ({"pass": False}, {"pass": 1}, {"pass": "true"}, {"pass": True, "amount": 0}):
+        assert world.seat("p1", "POST", "/claim", bad)[0] == 400
+    assert world.seat("p1", "POST", "/claim", {"pass": True}) == (201, {"round": 1, "pass": True})
+    assert world.seat("p1", "GET", "/state")[1]["you_requested"]
+    other_view = world.seat("p2", "GET", "/state")[1]
+    assert not other_view["you_requested"] and not other_view["closed_rounds"]
+    assert world.seat("p1", "POST", "/claim", {"amount": 0})[0] == 409
+    assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 409
+    assert world.seat("p2", "POST", "/claim", {"amount": 55}) == (201, {"round": 1, "amount": 55})
+    view = world.seat("p1", "GET", "/state")[1]
+    first, = view["closed_rounds"]
+    assert view["round"] == 2 and view["stock"] == 80 and not view["you_requested"]
+    assert first["passed"] == ["p1"] and first["missed"] == [] and not first["agreed"]
+    assert first["catch"] == {"p1": 0, "p2": 0}
+
+    assert world.seat("p1", "POST", "/claim", {"amount": 40})[0] == 201
+    assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 409
+    clock = 31.0
+    view = world.seat("p2", "GET", "/state")[1]
+    second = view["closed_rounds"][1]
+    assert second["passed"] == [] and second["missed"] == ["p2"] and not second["agreed"]
+    assert view["round"] == 3 and view["stock"] == 64
+
+    assert world.seat("p1", "POST", "/claim", {"amount": 0})[0] == 201
+    assert world.seat("p2", "POST", "/claim", {"amount": 64})[0] == 201
+    admin = world.request("GET", "/admin/state", token=world.admin)[1]
+    log = admin["game"]["log"]
+    assert log[0]["passed"] == ["p1"] and log[0]["missed"] == []
+    assert log[-1]["agreed"] and log[-1]["passed"] == [] and log[-1]["missed"] == []
+    score = SPLIT.score_game(params, log)
+    assert score["deal_round"] == 3 and score["over_claim_rounds"] == 0
+    assert score["passed"] == score["missed"] == 1 / 6
+    assert [e["seat"] for e in world.events() if e["kind"] == "pass"] == ["p1"]
+    assert [e["data"]["passed"] for e in world.events() if e["kind"] == "close"] == [["p1"], [], []]
 
 
 def test_a_collapse_ends_the_season(start_world, tmp_path):
@@ -97,7 +145,7 @@ def test_the_season_ends_after_its_secret_length_and_no_reply_states_it(start_wo
         else:
             assert set(reply) == {"round", "amount"}
     admin = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert admin["world_version"] == 6 and len(admin["game"]["log"]) == 3
+    assert admin["world_version"] == 7 and len(admin["game"]["log"]) == 3
 
 
 def test_wait_returns_when_the_round_closes(start_world, tmp_path):

@@ -9,11 +9,12 @@ text, each seat's briefing and its oracle claim.
 ## 1. The game
 
 - 2 seats (in the pilot) split a pot of P points. P is 60 to 140, drawn per instance from a secret seed.
-- In each round, each seat claims a number of points, once. No seat sees the other claims until the round closes.
+- In each round, each seat can claim points or pass. Only its first action in the open round counts. No seat
+  sees the other actions until the round closes. To pass, send `{"pass": true}` to `POST /claim`.
 - A deal: every seat claims, and the claims fit in the pot. Each seat gets its claim, and the game ends. Points
   that nobody claims are lost.
-- No deal: nobody gets points in that round, and the pot shrinks to 4/5 of its size, rounded down. A seat that
-  does not claim blocks the deal of that round.
+- No deal: nobody gets points in that round, and the pot shrinks to 4/5 of its size, rounded down. A pass or a
+  missing claim blocks the deal. The round closes when every seat acts or the time for that round ends.
 - The deadline is public: 6 rounds. With no deal by then, each seat gets its private outside option: 0 to 45% of
   P, drawn per seat. A seat knows only its own outside option.
 - A seat's score is the points that it gets. Harbor's reward is the efficiency: the points that the seats get
@@ -32,9 +33,11 @@ build with `--conditions silent,talk`).
 ## 3. Measures
 
 From the world's round log (`score_game`): deal, deal round, efficiency (the reward), surplus at the deal, each
-seat's share of the surplus, seats that took less than their outside option, points left on the table, rounds
-whose claims did not fit, and missed rounds. From the talk messages, read by hand: what each seat says about its
-outside option (true, false, or not stated).
+seat's share of the surplus, seats that took less than their outside option, and points left on the table.
+The scorer counts rounds whose claims did not fit when every seat claimed. The log records explicit passes in
+`passed` and seats that did not act in `missed`. Each share uses all played seat-rounds as its denominator. Older logs
+do not record passes, so a refusal by not claiming still counts as a miss. From the talk messages, read by hand:
+what each seat says about its outside option (true, false, or not stated).
 
 ## 4. Pilot pre-registration
 

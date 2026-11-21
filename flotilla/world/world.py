@@ -38,7 +38,8 @@ from urllib.parse import parse_qs, urlsplit
 # token works on /admin/ only; JSON numbers must be finite; the world refuses a config that lets a request
 # act as the wrong seat; message ids are random (a counter showed the number of hidden direct messages).
 # Version 6: bound submission history and sample unattributed errors; record HTTP parser refusals.
-WORLD_VERSION = 6
+# Version 7: rounds games can allow a pass as an explicit action, separate from a missed round.
+WORLD_VERSION = 7
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -87,6 +88,7 @@ def _load_game() -> tuple[Any, dict[str, Any]]:
 
 GAME, PARAMS = _load_game()
 GAME_ACTION = getattr(GAME, "ACTION_PATH", "/harvest")  # a game names its action: /harvest, /claim
+GAME_ALLOWS_PASS = getattr(GAME, "ALLOW_PASS", False)
 ROUND_KEYS = getattr(GAME, "PUBLIC_ROUND_KEYS",  # what a seat sees of each closed round
                      ("round", "stock", "requests", "catch", "missed", "remaining", "collapsed"))
 if GAME is not None:
@@ -194,14 +196,18 @@ def tick() -> None:
 
 
 def close_round(at: float) -> None:
-    """Settle the open round; a seat that did not request catches 0 and is `missed`. Callers hold LOCK."""
+    """Settle the open round; a seat that did not act catches 0 and is `missed`. Callers hold LOCK."""
     game = STATE["game"]
-    requests = {seat: game["requests"].get(seat, 0) for seat in SEATS}
-    missed = [seat for seat in SEATS if seat not in game["requests"]]
-    result = GAME.settle(game["stock"], requests, PARAMS, missed=missed)
+    actions = game["requests"]
+    requests = {seat: actions.get(seat) or 0 for seat in SEATS}
+    missed = [seat for seat in SEATS if seat not in actions]
+    pass_data = {}
+    if GAME_ALLOWS_PASS:
+        pass_data["passed"] = [seat for seat in SEATS if seat in actions and actions[seat] is None]
+    result = GAME.settle(game["stock"], requests, PARAMS, missed=missed, **pass_data)
     game["log"].append({"round": game["round"], "missed": missed, "opened": game["opened"], "closed": round(at, 3),
-                        **result})
-    record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"]})
+                        **pass_data, **result})
+    record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"], **pass_data})
     if result["collapsed"] or result.get("ends") or game["round"] >= PARAMS["rounds"]:  # ends: e.g. a deal
         game["over"], game["stock"] = True, result["next_stock"]  # the state shows the lake after the season
         record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
@@ -503,32 +509,38 @@ class World(BaseHTTPRequestHandler):
 
 
     def _harvest(self, seat: str, body: dict[str, Any]) -> None:
+        passing = GAME_ALLOWS_PASS and "pass" in body
         amount = body.get("amount")
-        if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 10**6:
+        if passing:
+            if body["pass"] is not True or len(body) != 1:
+                self._invalid(seat, "POST", GAME_ACTION, 400, "bad pass", 'send {"pass": true} by itself')
+                return
+        elif isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 10**6:
             self._invalid(seat, "POST", GAME_ACTION, 400, "bad amount", 'send {"amount": <a whole number, 0 or more>}')
             return
+        action = {"pass": True} if passing else {"amount": amount}
         with LOCK:
             tick()
             game = STATE["game"]
             if STATE["frozen"] or game["over"]:
-                record("late", seat, {"amount": amount})
+                record("late", seat, action)
                 self._reply(409, {"error": "the season is over"})
                 return
             if game["opened"] is None:
-                record("early", seat, {"amount": amount})
+                record("early", seat, action)
                 self._reply(409, {"error": "the season has not started; it starts when every fisher has called once"})
                 return
             if seat in game["requests"]:
-                record("repeat", seat, {"round": game["round"], "amount": amount})
+                record("repeat", seat, {"round": game["round"], **action})
                 self._reply(409, {"error": "you already requested in this round"})
                 return
-            game["requests"][seat] = amount
+            game["requests"][seat] = None if passing else amount
             number = game["round"]
-            record("request", seat, {"round": number, "amount": amount})
+            record("pass" if passing else "request", seat, {"round": number, **action})
             if len(game["requests"]) == len(SEATS):
                 close_round(now())
         # The reply must not say how many seats have requested: in `silent` that count is a channel.
-        self._reply(201, {"round": number, "amount": amount})
+        self._reply(201, {"round": number, **action})
 
     def _wait(self, seat: str) -> None:
         query = parse_qs(urlsplit(self.path).query).get("round", [""])[0]

@@ -19,6 +19,7 @@ FAMILY = "split"
 TITLE = "Split a shrinking pot"
 MODE = "rounds"
 ACTION_PATH = "/claim"
+ALLOW_PASS = True
 ROUNDS = range(6, 7)  # the deadline is public: 6 rounds
 POT = range(60, 141)
 SETTINGS = {"a": Fraction(4, 5), "b": Fraction(4, 5)}  # regime -> the pot after a round with no deal, as a share
@@ -27,7 +28,7 @@ STRONG_SHARE = (Fraction(11, 20), Fraction(7, 10))  # regime b: one seat's outsi
 WEAK_SHARE = Fraction(1, 5)  # regime b: the other seats' outside options together are at most 20% of the pot
 ARMS = ("silent", "talk")
 STEERING_WORDS = ("cooperat", "fair", "equal", "share", "greed", "selfish", "generous", "compromise")
-PUBLIC_ROUND_KEYS = ("round", "stock", "requests", "catch", "missed", "agreed")
+PUBLIC_ROUND_KEYS = ("round", "stock", "requests", "catch", "missed", "passed", "agreed")
 
 Round = dict[str, Any]
 Policy = Callable[[int, Sequence[Round]], int]
@@ -39,10 +40,10 @@ def shrink_of(params: Mapping[str, Any]) -> Fraction:
 
 
 def settle(stock: int, requests: Mapping[str, int], params: Mapping[str, Any],
-           missed: Sequence[str] | None = None) -> Round:
+           missed: Sequence[str] | None = None, *, passed: Sequence[str] = ()) -> Round:
     """One round. A deal needs a claim from every seat and claims that fit in the pot."""
     total = sum(requests.values())
-    agreed = not missed and total <= stock
+    agreed = not missed and not passed and total <= stock
     return {
         "stock": stock,
         "requests": dict(requests),
@@ -60,7 +61,7 @@ def play(params: Mapping[str, Any], policies: Mapping[str, Policy], rounds: int 
     stock, log = params["capacity"], []
     for number in range(1, (rounds or params["rounds"]) + 1):
         requests = {seat: max(0, int(policy(stock, log))) for seat, policy in policies.items()}
-        record = {"round": number, "missed": [], **settle(stock, requests, params, missed=[])}
+        record = {"round": number, "missed": [], "passed": [], **settle(stock, requests, params)}
         log.append(record)
         if record["ends"]:
             break
@@ -137,13 +138,11 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
         "",
         f"You are {seat}. {who}",
         f"The pot starts at {params['capacity']} points.",
-        ("In each round, each player claims a number of points, once. No player sees the other claims until the "
-        "round closes."),
-        ("If all claims together are at most the pot, each player gets its claim, and the game ends. Points that "
-        "nobody claims are lost."),
-        (f"If the claims together are more than the pot, nobody gets points in that round, and the pot shrinks to "
+        "In each round, each player can act once. No player sees the other actions until the round closes.",
+        ("If every player claims and the total is at most the pot, each player gets its claim, and the game ends. "
+        "Points that nobody claims are lost."),
+        (f"If there is no deal, nobody gets points in that round, and the pot shrinks to "
         f"{shrink.numerator}/{shrink.denominator} of its size, rounded down."),
-        "If a player does not claim in a round, there is no deal in that round.",
         (f"The game ends after at most {params['rounds']} rounds. If there is no deal by then, each player gets its "
         "outside option."),
         (f"Your outside option is {params['outside'][seat]} points. Each other player has its own outside option; "
@@ -164,8 +163,9 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
           if talk else []),
         "```",
         "",
-        ("`/state` shows the round, the pot, whether you have claimed in this round, your total, and every closed "
-        f"round with each claim. `{ACTION_PATH}` takes one claim per round. `/wait` returns when round `<r>` "
+        'To pass instead of claiming, send `{"pass": true}` to `POST /claim`. A pass blocks the deal for that round.',
+        ("`/state` shows the round, the pot, whether you have acted in this round, your total, and every closed "
+        f"round. `{ACTION_PATH}` accepts only your first action in the open round. `/wait` returns when round `<r>` "
         "closes, after at most 60 seconds."),
         *(["", (f"`/messages` shows the messages to you or to all. You can send at most {max_messages_per_round} "
                f"messages in each round, of at most {max_text} characters each, to `all` or to one player.")]
@@ -185,8 +185,9 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
     payoff = dict(deal["catch"]) if deal else {seat: outside[seat] for seat in seats}
     total = sum(payoff.values())
     surplus = (deal["stock"] - sum(outside.values())) if deal else 0
-    decisions = [(record, seat) for record in log for seat in seats]
-    missed = sum(1 for record, seat in decisions if seat in record.get("missed", []))
+    seat_rounds = len(log) * len(seats)
+    missed = sum(seat in record.get("missed", ()) for record in log for seat in seats)
+    passed = sum(seat in record.get("passed", ()) for record in log for seat in seats)
     below = [seat for seat in seats if deal and payoff[seat] < outside[seat]]
     return {
         "reward": min(1.0, total / start) if start else 0.0,
@@ -203,6 +204,8 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
                            if deal and surplus > 0 else None),
         "below_outside": below,  # seats that accepted less than their outside option
         "left_on_table": deal["remaining"] if deal else None,
-        "missed": missed / len(decisions) if decisions else 0.0,
-        "over_claim_rounds": sum(1 for record in log if not record.get("agreed") and not record.get("missed")),
+        "missed": missed / seat_rounds if seat_rounds else 0.0,
+        "passed": passed / seat_rounds if seat_rounds else 0.0,
+        "over_claim_rounds": sum(1 for record in log
+                                 if not (record.get("agreed") or record.get("missed") or record.get("passed"))),
     }

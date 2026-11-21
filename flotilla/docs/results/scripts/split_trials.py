@@ -83,12 +83,15 @@ def main() -> None:
         print(f"instance {row['instance']} {row['arm']}: pot {game['capacity']}, outside {game['outside']}, "
               f"valid {row['valid']}, cost ${row['cost']:.4f}")
         for record in row["log"]:
+            passed = f", passed {record['passed']}" if "passed" in record else ""
             print(f"    round {record['round']}: pot {record['stock']}, claims {record['requests']}, "
-                  f"deal {record['agreed']}, missed {record['missed']}")
+                  f"deal {record['agreed']}, missed {record['missed']}{passed}")
         if score:
+            passed = f", passed {score['passed']:.2f}" if any("passed" in record for record in row["log"]) else ""
             print(f"    deal {score['agreed']} in round {score['deal_round']}, payoff {score['totals']}, efficiency "
                   f"{score['reward']:.3f}, surplus {score['surplus_at_deal']}, shares {score['surplus_shares']}, "
-                  f"below outside {score['below_outside']}, left {score['left_on_table']}, missed {score['missed']:.2f}")
+                  f"below outside {score['below_outside']}, left {score['left_on_table']}, "
+                  f"missed {score['missed']:.2f}{passed}")
         for message in row["messages"]:
             print(f"    message {message.get('from')}->{message.get('to')} at {message.get('t')} s: "
                   f"{str(message.get('text'))[:300]!r}")
@@ -100,6 +103,9 @@ def main() -> None:
     validity = len(rows) == planned and len(valid) == planned and missed_share <= MAX_MISSED and cost <= max_cost
     print(f"\nValidity test: {len(valid)} of {len(rows)} trials valid ({planned} planned), missed {missed_share:.3f} "
           f"of seat-rounds, real cost ${cost:.4f} (cap ${max_cost:.2f}): {'PASS' if validity else 'FAIL'}")
+    if any("passed" in record for row in valid for record in row["log"]):
+        passed = sum(r["split"]["passed"] * len(r["log"]) * len(r["task"]["game"]["seats"]) for r in valid)
+        print(f"Passed {passed / seat_rounds:.3f} of seat-rounds.")
     (sp1_tests if plan == "sp1" else sp2_tests)(valid)
     for arm in ("silent", "talk"):
         scores = [r["split"] for r in valid if r["arm"] == arm]

@@ -49,6 +49,8 @@ def test_a_deal_ends_the_game_and_a_failed_round_shrinks_the_pot():
     assert not over["agreed"] and over["catch"] == {"p1": 0, "p2": 0} and over["next_stock"] == 80
     missing = SPLIT.settle(100, {"p1": 10, "p2": 0}, params, missed=["p2"])
     assert not missing["agreed"]  # a seat that does not claim blocks the deal
+    refusal = SPLIT.settle(100, {"p1": 10, "p2": 0}, params, missed=[], passed=["p2"])
+    assert refusal == missing
 
 
 def test_scores_with_a_deal_without_one_and_the_oracle():
@@ -67,12 +69,31 @@ def test_scores_with_a_deal_without_one_and_the_oracle():
     assert score["deal_round"] == 1 and score["left_on_table"] == 35 and score["reward"] == 0.65
 
 
+def test_old_round_logs_keep_their_scores_and_misses():
+    params = example({"p1": 55, "p2": 20})
+    log = [
+        {"round": 1, "stock": 100, "requests": {"p1": 55, "p2": 50}, "agreed": False, "missed": []},
+        {"round": 2, "stock": 80, "requests": {"p1": 0, "p2": 35}, "agreed": False, "missed": ["p1"]},
+        {"round": 3, "stock": 64, "requests": {"p1": 0, "p2": 32}, "agreed": False, "missed": ["p1"]},
+        {"round": 4, "stock": 51, "requests": {"p1": 0, "p2": 25}, "agreed": False, "missed": ["p1"]},
+        {"round": 5, "stock": 40, "requests": {"p1": 0, "p2": 20}, "agreed": False, "missed": ["p1"]},
+        {"round": 6, "stock": 32, "requests": {"p1": 0, "p2": 16}, "agreed": False, "missed": ["p1"]},
+    ]
+    assert SPLIT.score_game(params, log) == {
+        "reward": 0.75, "efficiency": 0.75, "agreed": False, "deal_round": None, "rounds_played": 6,
+        "rounds_planned": 6, "truncated": False, "totals": {"p1": 55, "p2": 20}, "outside": {"p1": 55, "p2": 20},
+        "surplus_at_deal": 0, "surplus_shares": None, "below_outside": [], "left_on_table": None,
+        "missed": 5 / 12, "passed": 0.0, "over_claim_rounds": 1,
+    }
+
+
 def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     params = example()
     for arm in SPLIT.ARMS:
         text = SPLIT.instruction_text(params, "p1", arm, 400, 2)
         assert text == SPLIT.instruction_text(example({"p1": 30, "p2": 44}), "p1", arm, 400, 2)
         assert "Your outside option is 30 points." in text and "20 points" not in text
+        assert sum('`{"pass": true}` to `POST /claim`' in line for line in text.splitlines()) == 1
         assert not [word for word in SPLIT.STEERING_WORDS if word in text.lower()], text
     assert SPLIT.briefing(params, "p1") == {"capacity": 100, "shrink": [4, 5], "seats": ["p1", "p2"],
                                             "players": ["p1", "p2"], "my_outside": 30}
