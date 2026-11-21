@@ -128,3 +128,50 @@ learns it only from a failed round's claims.
 **Reported, no test.** For each trial: the claims in each round, the deal round, the efficiency, what the strong
 seat got against its outside option, seats below their outside option, and what each talk seat says about its
 outside option (true, false or not stated; read by hand).
+
+## 7. Regime b pilot: result
+
+The pilot ran from 2:58 AM to 4:21 AM ET (2026-11-21), off-peak. `split_trials.py <jobs> 'sp2-??????' sp2`:
+
+- **Validity test: FAIL.** 8 of 8 trials are valid (a verifier score, no error), and the real cost is $0.3660 from
+  tokens (cap $0.40). But 10 of 62 seat-rounds (16.1%) were missed, above the 10% limit. All 10 are in silent
+  trials. 6 of them are rounds in which the pot was already below the strong seat's outside option (instance 2
+  rounds 4-6, instance 3 rounds 4-6), and the seat stopped claiming on purpose ("We intentionally avoided claims
+  once the pot fell below our 51-point outside option"). In regime b, not claiming is a valid way to refuse a
+  deal, so this is a strategy, not a fault, and the pre-registered limit does not fit this regime. The other 4
+  (6.5%) are real misses: instance 0 p1 rounds 1, 2 and 4, and instance 2 p1 round 1. In instance 0, p1 spent
+  rounds 1 and 2 looking for the other seat's outside option in its own environment (environment variables,
+  `/logs/agent`, the tmux pane), and found nothing.
+- **Ceiling test: PASS.** 8 of 8 trials did not end in an equal split in round 1 (sp1: 0 of 6).
+- **Talk observation: holds.** Talk efficiency was at least the silent efficiency in 4 of 4 instances.
+
+| Instance | Pot | Outside options (p1, p2) | silent | talk |
+|---|---|---|---|---|
+| 0 | 100 | 6, 55 | no deal, 0.610 | deal in round 2 (25, 55), 0.800 |
+| 1 | 85 | 17, 58 | no deal, 0.882 | deal in round 1 (27, 58), 1.000 |
+| 2 | 92 | 51, 13 | no deal, 0.696 | deal in round 2 (51, 22), 0.793 |
+| 3 | 129 | 82, 14 | no deal, 0.744 | deal in round 2 (82, 21), 0.798 |
+
+Observed:
+
+- Silent: no deal in 4 of 4 (mean efficiency 0.733). The weak seat did not learn from the strong seat's
+  claims. In instance 1, p1 claimed half of the pot in every round (42, 34, 27, 22, 17) while p2 claimed 58 or
+  more each time.
+- Talk: a deal in 4 of 4 (mean efficiency 0.848), 3 of them in round 2: the round 1 claims went in before the
+  seats had read each other's messages, or the weak seat first proposed the equal split.
+- In every talk deal, the strong seat got exactly its outside option, and the weak seat got the whole surplus
+  (surplus share 1.0). The strong seats stated their outside option and then claimed exactly that value; none
+  asked for a part of the surplus.
+- What talk seats said about their outside option: 6 of 8 seats stated it; 5 statements were true, 1 was false.
+  In instance 0, the weak seat p1 (outside option 6) wrote "My outside option is 25", which equals what was left
+  after p2's 55 in the shrunken pot of 80; the lie did not change the deal.
+- No seat took less than its outside option.
+
+Inferred: regime b removes the sp1 ceiling. With one outside option above half of the pot, silent DeepSeek seats
+fail to coordinate, and talk lets them find the feasible deal, mostly one round late. Talk does not produce
+bargaining over the surplus: the strong seat anchors on its outside option. These are 4 pairs; they show an
+effect worth a wave, not a rate.
+
+For a wave: count a deliberate non-claim as a refusal, not a missed round (the world cannot tell them apart, so
+either add an explicit `/pass` action or report the missed share with and without rounds where the pot is below
+the claimer's outside option); expect about $0.07 per silent trial and $0.025 per talk trial (this pilot).
