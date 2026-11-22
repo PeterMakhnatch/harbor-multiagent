@@ -31,8 +31,11 @@ BASE_URL = "https://api.deepseek.com"
 BALANCE_FLOOR = Decimal("1.50")
 MAX_MESSAGE_BYTES = 30_720
 MAX_INPUT_TOKENS = 32_768
-MIN_OUTPUT_TOKENS = 512
+MIN_OUTPUT_TOKENS = 32
+DEFAULT_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 1024
+MESSAGE_TEMPLATE_TOKENS = 8
+REQUEST_TEMPLATE_TOKENS = 16
 MAX_SEAT_CALLS = 10
 MAX_TRIAL_CALLS = 40
 MAX_LIVE_CALLS = 4
@@ -43,11 +46,15 @@ OFF_PEAK_NANODOLLARS = (150, 3, 600)
 
 class AgentsNetOptions(AgentOptions):
     max_output_tokens: int = Field(
-        default=MIN_OUTPUT_TOKENS,
+        default=DEFAULT_OUTPUT_TOKENS,
         strict=True,
         ge=MIN_OUTPUT_TOKENS,
         le=MAX_OUTPUT_TOKENS,
     )
+    max_input_tokens: int = Field(
+        default=MAX_INPUT_TOKENS, strict=True, ge=1, le=MAX_INPUT_TOKENS
+    )
+    max_model_calls_per_seat: Annotated[int, Field(strict=True, ge=1)] | None = None
     trial_budget_nanodollars: Annotated[int, Field(strict=True, ge=0)] | None = None
 
 
@@ -83,6 +90,14 @@ def _json_body(value: object) -> bytes:
     return json.dumps(
         value, ensure_ascii=False, separators=(",", ":"), allow_nan=False
     ).encode("utf-8", errors="backslashreplace")
+
+
+def _input_token_bound(history: list[dict[str, str]]) -> int:
+    return REQUEST_TEMPLATE_TOKENS + sum(
+        len(message["content"].encode("utf-8", errors="backslashreplace"))
+        + MESSAGE_TEMPLATE_TOKENS
+        for message in history
+    )
 
 
 def _record(logs_dir: Path, event: str, **fields: Any) -> None:
@@ -162,7 +177,11 @@ class _Usage:
 
     @classmethod
     def from_response(
-        cls, payload: dict[str, Any], started: datetime, max_output_tokens: int
+        cls,
+        payload: dict[str, Any],
+        started: datetime,
+        max_output_tokens: int,
+        max_input_tokens: int = MAX_INPUT_TOKENS,
     ) -> "_Usage":
         usage = _object(payload.get("usage"))
         input_tokens = _token_count(usage.get("prompt_tokens"))
@@ -171,7 +190,7 @@ class _Usage:
         output_tokens = _token_count(usage.get("completion_tokens"))
         if (
             cache_tokens + miss_tokens != input_tokens
-            or input_tokens > MAX_INPUT_TOKENS
+            or input_tokens > max_input_tokens
             or output_tokens > max_output_tokens
         ):
             raise ValueError(
@@ -308,15 +327,20 @@ class _SeatModel:
     admission: _Admission
     logs_dir: Path
     max_output_tokens: int
+    max_input_tokens: int = MAX_INPUT_TOKENS
+    max_model_calls_per_seat: int | None = None
     account: _Account = field(default_factory=_Account)
     history: list[dict[str, str]] = field(default_factory=list)
     _querying: bool = field(default=False, init=False)
     _active_trial_call: int | None = field(default=None, init=False)
 
-    def _require_capacity(self, message_bytes: int, reserve: int) -> None:
+    def _require_capacity(
+        self, message_bytes: int, input_bound: int, reserve: int
+    ) -> None:
         self.admission.require_open()
         if (
             message_bytes > MAX_MESSAGE_BYTES
+            or input_bound > self.max_input_tokens
             or self.account.started >= MAX_SEAT_CALLS
             or self.admission.started_calls >= MAX_TRIAL_CALLS
             or self._active_trial_call is not None
@@ -325,6 +349,13 @@ class _SeatModel:
         ):
             raise NonZeroAgentExitCodeError(
                 "AgentsNet request exceeds admission bounds"
+            )
+        if (
+            self.max_model_calls_per_seat is not None
+            and self.account.started >= self.max_model_calls_per_seat
+        ):
+            raise NonZeroAgentExitCodeError(
+                "AgentsNet seat reached its model call limit"
             )
         budget = self.admission.budget_nanodollars
         if budget is not None and (
@@ -338,9 +369,14 @@ class _SeatModel:
             )
 
     def _reserve(
-        self, message_bytes: int, reserve: int, round_number: int, attempt: int
+        self,
+        message_bytes: int,
+        input_bound: int,
+        reserve: int,
+        round_number: int,
+        attempt: int,
     ) -> tuple[datetime, dict[str, Any]]:
-        self._require_capacity(message_bytes, reserve)
+        self._require_capacity(message_bytes, input_bound, reserve)
         started = datetime.now(UTC)
         call = {
             "seat_call": self.account.started + 1,
@@ -395,7 +431,9 @@ class _SeatModel:
                 raise ValueError("DeepSeek completion did not return HTTP success")
             raw = captured.raw(self.key)
             response = _decode_object(raw)
-            usage = _Usage.from_response(response, started, self.max_output_tokens)
+            usage = _Usage.from_response(
+                response, started, self.max_output_tokens, self.max_input_tokens
+            )
             return _completion(response)
         except asyncio.CancelledError:
             failure = "CancelledError"
@@ -482,16 +520,19 @@ class _SeatModel:
             "thinking": {"type": "disabled"},
         }
         message_bytes = len(_json_body(self.history))
+        input_bound = _input_token_bound(self.history)
         reserve = (
-            MAX_INPUT_TOKENS * PEAK_NANODOLLARS[0]
+            self.max_input_tokens * PEAK_NANODOLLARS[0]
             + self.max_output_tokens * PEAK_NANODOLLARS[2]
         )
         async with self.admission.lock:
-            self._require_capacity(message_bytes, reserve)
+            self._require_capacity(message_bytes, input_bound, reserve)
         body = _json_body(payload)
         balance = await self._check_balance(round_number, attempt)
         async with self.admission.lock:
-            started, call = self._reserve(message_bytes, reserve, round_number, attempt)
+            started, call = self._reserve(
+                message_bytes, input_bound, reserve, round_number, attempt
+            )
         try:
             _record(
                 self.logs_dir,
@@ -500,6 +541,7 @@ class _SeatModel:
                 balance_checked_at=started.isoformat(),
                 balance_usd=str(balance),
                 message_bytes=message_bytes,
+                input_token_bound=input_bound,
                 request=payload,
             )
         except BaseException:
@@ -628,7 +670,13 @@ class AgentsNetAgent(BaseAgent):
             follow_redirects=False,
         ) as client:
             model = _SeatModel(
-                client, key, admission, self.logs_dir, self.options.max_output_tokens
+                client,
+                key,
+                admission,
+                self.logs_dir,
+                self.options.max_output_tokens,
+                self.options.max_input_tokens,
+                self.options.max_model_calls_per_seat,
             )
             try:
                 await self._play(instruction, environment, model)
