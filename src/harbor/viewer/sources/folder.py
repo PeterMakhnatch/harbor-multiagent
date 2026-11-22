@@ -26,7 +26,9 @@ from harbor.server.models import (
     ListRolloutsRequest,
     RolloutFilterValuesRequest,
     QueryRequest,
+    RunState,
 )
+from harbor.server.projections import is_trial_cancelled
 from harbor.server.service import JOB_SUMMARY_COLUMNS, ROLLOUT_SUMMARY_COLUMNS, Service
 from harbor.viewer.scanner import JobScanner, declared_job_agent_names
 from harbor.viewer.sources.base import Operation
@@ -136,6 +138,16 @@ class FolderSource(JobScanner):
                         )
                     started = trial_result.started_at if trial_result else None
                     finished = trial_result.finished_at if trial_result else None
+                    if trial_result is not None and finished is not None:
+                        state: RunState = (
+                            "cancelled"
+                            if is_trial_cancelled(trial_result)
+                            else "finished"
+                        )
+                    elif started is not None:
+                        state = "running"
+                    else:
+                        state = "queued"
                     modified = datetime.fromtimestamp(trial_dir.stat().st_mtime, UTC)
                     artifacts = {
                         path.relative_to(trial_dir).as_posix(): path.as_uri()
@@ -170,11 +182,7 @@ class FolderSource(JobScanner):
                             updated_at=finished or modified,
                             started_at=started,
                             finished_at=finished,
-                            state="finished"
-                            if finished
-                            else "running"
-                            if started
-                            else "queued",
+                            state=state,
                             result=trial_result,
                             artifacts=artifacts,
                         )
