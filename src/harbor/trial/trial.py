@@ -992,7 +992,7 @@ class Trial(ABC):
             [self.agent_env_paths.tests_dir], chmod=False
         )
 
-    def _step_verifier_timeout_sec(self, step: StepConfig) -> float | None:
+    def _step_verifier_timeout_sec(self, step: StepConfig) -> float:
         default_timeout_sec = (
             step.verifier.timeout_sec
             if step.verifier.timeout_sec is not None

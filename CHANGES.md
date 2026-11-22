@@ -100,7 +100,7 @@ The upstream files changed for this behavior are:
 | Files | Change |
 |---|---|
 | `src/harbor/models/task/config.py` | `VerifierCollectConfig.timeout_sec` defaults to `None`. |
-| `src/harbor/trial/trial.py` | `_collect_artifacts_phased` sets one deadline from the step's verifier timeout, and `_run_collect_hooks` gives each hook what remains. |
+| `src/harbor/trial/trial.py` | `_collect_artifacts_phased` sets one deadline from the step's verifier timeout, and `_run_collect_hooks` gives each hook what remains. `_step_verifier_timeout_sec` is annotated `float`, which `_resolve_timeout_sec` always returns. |
 | `docs-mintlify/jobs/artifact-collection.mdx` | Describes the shared budget. |
 | `tests/unit/test_trial_verifier_artifact_transfer.py`, `tests/unit/models/test_artifact_validation.py`, `tests/unit/test_single_step_trial.py` | Cover the shared budget, an explicit shorter share and a spent budget, and update the old 60-second expectations. |
 
