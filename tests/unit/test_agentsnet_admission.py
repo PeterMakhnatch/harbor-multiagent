@@ -11,7 +11,7 @@ from enum import Enum, auto
 from functools import wraps
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, override
 from uuid import UUID
 
 import httpx
@@ -58,6 +58,9 @@ SEATS = 4
 MAX_PROBES = 8
 OUTPUT_LIMIT = 512
 RESERVE = 10_444_800
+MAX_INPUT = 32_768
+PRESSURE_RESERVE = 960_000
+PRESSURE_LIMITS = {"output_limit": 32, "input_limit": 3_072, "call_limit": 1}
 NANODOLLARS_PER_USD = 1_000_000_000
 
 
@@ -139,6 +142,7 @@ class _Probe:
     seat: int
     index: int
     reply: _Reply
+    prompt: str = "simulate"
     balance_ready: asyncio.Event = field(default_factory=asyncio.Event)
     body_ready: asyncio.Event = field(default_factory=asyncio.Event)
     amount: str | None = None
@@ -162,22 +166,38 @@ class _ReplyStream(httpx.AsyncByteStream):
         self.probe = probe
         self.active = active
 
+    @override
     async def __aiter__(self) -> AsyncIterator[bytes]:
         await self.probe.body_ready.wait()
         yield self.probe.reply.body()
         if self.probe.reply.partial:
             raise httpx.ReadError("injected missing end of body")
 
+    @override
     async def aclose(self) -> None:
         self.active.remove(self.probe)
 
 
 class _Simulation:
-    def __init__(self, module: ModuleType, path: Path, lease: int, seed: int) -> None:
+    def __init__(
+        self,
+        module: ModuleType,
+        path: Path,
+        lease: int,
+        seed: int,
+        *,
+        output_limit: int = OUTPUT_LIMIT,
+        input_limit: int = MAX_INPUT,
+        call_limit: int | None = None,
+    ) -> None:
         self.module = module
         self.path = path
         self.lease = lease
         self.seed = seed
+        self.output_limit = output_limit
+        self.input_limit = input_limit
+        self.call_limit = call_limit
+        self.reserve = 300 * input_limit + 1200 * output_limit
         self.rng = random.Random(seed)
         self.clock = _Clock()
         self.current: ContextVar[_Probe] = ContextVar("current_probe")
@@ -199,19 +219,20 @@ class _Simulation:
         def reserve(
             model: Any,
             message_bytes: int,
+            input_bound: int,
             reserve: int,
             round_number: int,
             attempt: int,
         ) -> tuple[datetime, dict[str, Any]]:
             result = original_reserve(
-                model, message_bytes, reserve, round_number, attempt
+                model, message_bytes, input_bound, reserve, round_number, attempt
             )
             started, call = result
             probe = self.current.get()
             assert self.admission.lock.locked() and self.models[probe.seat] is model
             assert probe not in self.started and probe.started == started
             assert (round_number, attempt) == probe.position
-            assert reserve == RESERVE
+            assert reserve == self.reserve
             key = (call["trial_call"], call["seat_call"])
             assert key[0] == len(self.started) + 1
             assert key[1] == 1 + sum(p.seat == probe.seat for p in self.started)
@@ -225,7 +246,7 @@ class _Simulation:
             assert self.admission.lock.locked() and self.models[probe.seat] is model
             assert probe not in self.settled and probe.terminal is not None
             assert self.started[probe] == (call["trial_call"], call["seat_call"])
-            assert reserve == RESERVE
+            assert reserve == self.reserve
             assert (usage is None) == (probe.terminal is _Terminal.UNKNOWN)
             original_settle(model, call, reserve, usage)
             self.settled.add(probe)
@@ -250,7 +271,13 @@ class _Simulation:
                 assert admission is self.admission
                 self.models.append(
                     self.module._SeatModel(
-                        client, "fake-key", admission, logs, OUTPUT_LIMIT
+                        client,
+                        "fake-key",
+                        admission,
+                        logs,
+                        self.output_limit,
+                        self.input_limit,
+                        self.call_limit,
                     )
                 )
             async with asyncio.TaskGroup() as group:
@@ -288,11 +315,11 @@ class _Simulation:
                 assert len(self.posts) < SEATS
                 assert all(active.seat != probe.seat for active in self.posts)
                 pending = self.admission.outstanding_reserve_nanodollars
-                assert pending >= (len(self.posts) + 1) * RESERVE
+                assert pending >= (len(self.posts) + 1) * self.reserve
                 assert pending + self.admission.budgeted_cost_nanodollars <= self.lease
                 assert (
                     self.models[probe.seat].account.outstanding_reserve_nanodollars
-                    == RESERVE
+                    == self.reserve
                 )
                 self.post_calls.add(probe)
                 self.posts.add(probe)
@@ -300,12 +327,12 @@ class _Simulation:
             case _:
                 raise AssertionError(f"Unexpected fake transport request: {request}")
 
-    def launch(self, seat: int, reply: _Reply) -> _Probe:
+    def launch(self, seat: int, reply: _Reply, prompt: str = "simulate") -> _Probe:
         assert 0 <= seat < SEATS
         assert len(self.probes) < MAX_PROBES
         assert sum(not probe.task.done() for probe in self.probes) < SEATS
         self.clock.tick()
-        probe = _Probe(seat, len(self.probes), reply)
+        probe = _Probe(seat, len(self.probes), reply, prompt)
         self.probes.append(probe)
         probe.task = self.group.create_task(self.query(probe))
         return probe
@@ -313,7 +340,7 @@ class _Simulation:
     async def query(self, probe: _Probe) -> str | _Failure:
         token = self.current.set(probe)
         try:
-            return await self.models[probe.seat].query("simulate", *probe.position)
+            return await self.models[probe.seat].query(probe.prompt, *probe.position)
         except NonZeroAgentExitCodeError:
             return _Failure.QUERY_REJECTED
         finally:
@@ -399,7 +426,7 @@ class _Simulation:
         assert len({p.seat for p in live}) == len(live)
         known = {p for p in self.settled if p.terminal is _Terminal.KNOWN}
         settled = sum(p.reply.peak_cost for p in known)
-        pending = RESERVE * (len(self.started) - len(known))
+        pending = self.reserve * (len(self.started) - len(known))
         assert self.admission.started_calls == len(self.started)
         assert self.admission.budgeted_cost_nanodollars == settled
         assert self.admission.outstanding_reserve_nanodollars == pending
@@ -421,7 +448,9 @@ class _Simulation:
         expected_cost = sum(p.actual_cost for p in known)
         assert account.budgeted_cost_nanodollars == expected_peak
         assert account.cost_nanodollars == expected_cost
-        assert account.outstanding_reserve_nanodollars == (active + unknown) * RESERVE
+        assert account.outstanding_reserve_nanodollars == (
+            (active + unknown) * self.reserve
+        )
         context = AgentContext()
         account.publish(context)
         assert context.metadata is not None
@@ -432,7 +461,7 @@ class _Simulation:
         if not active:
             assert context.metadata["unknown_usage_calls"] == unknown
             assert context.metadata["unknown_usage_reserve_nanodollars"] == (
-                unknown * RESERVE
+                unknown * self.reserve
             )
         native_usage = (
             context.n_input_tokens,
@@ -483,7 +512,7 @@ class _Simulation:
         for key, probe in expected.items():
             start = starts[key]
             assert (start["round"], start["attempt"]) == probe.position
-            assert start["reserve_usd"] == RESERVE / NANODOLLARS_PER_USD
+            assert start["reserve_usd"] == self.reserve / NANODOLLARS_PER_USD
             if probe.terminal is None:
                 continue
             finish = finishes[key]
@@ -499,7 +528,8 @@ class _Simulation:
                 assert finish["cost_usd"] is None
                 assert finish["budgeted_model_cost_nanodollars"] is None
                 assert (
-                    finish["unknown_usage_reserve_usd"] == RESERVE / NANODOLLARS_PER_USD
+                    finish["unknown_usage_reserve_usd"]
+                    == self.reserve / NANODOLLARS_PER_USD
                 )
                 if probe.reply.partial:
                     assert (
@@ -519,7 +549,7 @@ class _Simulation:
         return _Reply(
             miss=self.rng.randint(1, max_miss),
             hit=self.rng.randint(1, 768),
-            output=self.rng.randint(1, OUTPUT_LIMIT) if output is None else output,
+            output=self.rng.randint(1, self.output_limit) if output is None else output,
             text=text,
             reason=reason,
             partial=partial,
@@ -624,6 +654,51 @@ async def _cancel_before_reserve(sim: _Simulation) -> None:
     assert not sim.post_calls and not sim.balances
 
 
+async def _input_bound(sim: _Simulation) -> None:
+    assert sim.reserve == PRESSURE_RESERVE
+    bound = sim.input_limit - sim.module.REQUEST_TEMPLATE_TOKENS
+    bound -= sim.module.MESSAGE_TEMPLATE_TOKENS
+    seat, other = sim.rng.sample(range(SEATS), 2)
+    over = sim.launch(seat, sim.reply(max_miss=2_304), "x" * (bound + 1))
+    await sim.reject(over)
+    assert not sim.started and not sim.post_calls and not sim.balances
+    assert sim.admission.started_calls == 0
+    assert sim.admission.outstanding_reserve_nanodollars == 0
+    assert sim.models[seat].account.started == 0
+    exact = sim.launch(other, sim.reply(max_miss=2_304), "é" * (bound // 2))
+    await sim.checkpoint()
+    await sim.balance(exact, allow=True)
+    await sim.finish(exact)
+
+
+async def _call_cap(sim: _Simulation) -> None:
+    assert sim.reserve == PRESSURE_RESERVE
+    probes = await sim.batch(*(sim.reply(max_miss=2_304) for _ in range(SEATS)))
+    sim.rng.shuffle(probes)
+    first, second, *rest = probes
+    await sim.balance(first, allow=True)
+    await sim.finish(first)
+    started = len(sim.started)
+    reserve = sim.admission.outstanding_reserve_nanodollars
+    await sim.reject(sim.launch(first.seat, sim.reply(max_miss=2_304)))
+    assert len(sim.started) == started
+    assert sim.admission.started_calls == started
+    assert sim.admission.outstanding_reserve_nanodollars == reserve
+    assert sim.models[first.seat].account.started == 1
+    await sim.balance(second, allow=True)
+    if sim.seed % 2:
+        await sim.finish(second)
+        await sim.balance(rest[0], allow=True)
+        await sim.cancel(rest[1])
+        await sim.finish(rest[0])
+    else:
+        await sim.balance(rest[0], allow=True)
+        await sim.balance(rest[1], allow=True)
+        await sim.cancel(second, rest[0])
+        await sim.finish(rest[1])
+    await sim.reject(sim.launch(second.seat, sim.reply(max_miss=2_304)))
+
+
 async def _pre_dispatch(sim: _Simulation) -> None:
     seat, other = sim.rng.sample(range(SEATS), 2)
     admitted = sim.launch(seat, sim.reply())
@@ -639,16 +714,27 @@ async def _pre_dispatch(sim: _Simulation) -> None:
 @pytest.mark.unit
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize(
-    ("scenario", "lease"),
+    ("scenario", "lease", "limits"),
     [
-        (_clean, 5 * RESERVE),
-        (_stop_with_partial_usage, 5 * RESERVE),
-        (_cancel_all_dispatched, 5 * RESERVE),
-        (_tight_cap, 2 * RESERVE),
-        (_cancel_before_reserve, 4 * RESERVE),
-        (_pre_dispatch, 4 * RESERVE),
+        (_clean, 5 * RESERVE, {}),
+        (_stop_with_partial_usage, 5 * RESERVE, {}),
+        (_cancel_all_dispatched, 5 * RESERVE, {}),
+        (_tight_cap, 2 * RESERVE, {}),
+        (_cancel_before_reserve, 4 * RESERVE, {}),
+        (_pre_dispatch, 4 * RESERVE, {}),
+        (_input_bound, 4 * PRESSURE_RESERVE, PRESSURE_LIMITS),
+        (_call_cap, 4 * PRESSURE_RESERVE, PRESSURE_LIMITS),
     ],
-    ids=("clean", "partial", "cancel", "tight-cap", "cancel-balance", "pre-dispatch"),
+    ids=(
+        "clean",
+        "partial",
+        "cancel",
+        "tight-cap",
+        "cancel-balance",
+        "pre-dispatch",
+        "input-bound",
+        "call-cap",
+    ),
 )
 async def test_agentsnet_admission_simulation(
     task_module: ModuleType,
@@ -657,8 +743,9 @@ async def test_agentsnet_admission_simulation(
     seed: int,
     scenario: Callable[[_Simulation], Awaitable[None]],
     lease: int,
+    limits: dict[str, int],
 ) -> None:
-    simulation = _Simulation(task_module, tmp_path, lease, seed)
+    simulation = _Simulation(task_module, tmp_path, lease, seed, **limits)
     monkeypatch.setattr(task_module, "datetime", simulation.clock)
     simulation.observe_transitions(monkeypatch)
     await simulation.run(scenario)

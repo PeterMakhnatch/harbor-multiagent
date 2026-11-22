@@ -23,6 +23,7 @@ MODES = ("oracle", "nop", "conflict", "deepseek")
 SEATS = {"n0", "n1", "n2", "n3"}
 METRICS = {"edge_fraction", "proper_coloring"}
 DEFAULT_MAX_OUTPUT_TOKENS = 512
+DEFAULT_MAX_INPUT_TOKENS = 32768
 
 
 def _git(*args: str) -> str:
@@ -225,17 +226,34 @@ def main() -> int:
         help=f"DeepSeek output token cap (default: {DEFAULT_MAX_OUTPUT_TOKENS})",
     )
     parser.add_argument(
+        "--max-input-tokens",
+        type=int,
+        help="DeepSeek input token upper bound (default: 32768)",
+    )
+    parser.add_argument(
+        "--max-model-calls-per-seat",
+        type=int,
+        help="DeepSeek started-call limit per seat (default: existing 10-call ceiling)",
+    )
+    parser.add_argument(
         "--trial-budget-nanodollars",
         type=int,
         help="DeepSeek trial budget in nanodollars",
     )
     args = parser.parse_args()
     deepseek = args.mode == "deepseek"
-    if not deepseek and (
-        args.max_output_tokens is not None or args.trial_budget_nanodollars is not None
+    if not deepseek and any(
+        value is not None
+        for value in (
+            args.max_output_tokens,
+            args.max_input_tokens,
+            args.max_model_calls_per_seat,
+            args.trial_budget_nanodollars,
+        )
     ):
         parser.error(
-            "--max-output-tokens and --trial-budget-nanodollars require deepseek mode"
+            "--max-output-tokens, --max-input-tokens, --max-model-calls-per-seat "
+            "and --trial-budget-nanodollars require deepseek mode"
         )
     deepseek_options = {}
     if deepseek:
@@ -243,6 +261,10 @@ def main() -> int:
             "max_output_tokens": DEFAULT_MAX_OUTPUT_TOKENS
             if args.max_output_tokens is None
             else args.max_output_tokens,
+            "max_input_tokens": DEFAULT_MAX_INPUT_TOKENS
+            if args.max_input_tokens is None
+            else args.max_input_tokens,
+            "max_model_calls_per_seat": args.max_model_calls_per_seat,
             "trial_budget_nanodollars": args.trial_budget_nanodollars,
         }
     output = args.output.resolve()

@@ -106,9 +106,13 @@ The only model credential is `DEEPSEEK_API_KEY`. Keep it in the key store. Do no
 
 The adapter uses `https://api.deepseek.com/chat/completions` directly. It requests `deepseek-flash`, disables provider thinking mode, and uses the original visible reasoning prompts. It makes no transport retries.
 
-Each role has 5 scheduled model calls. The source's single format retry permits at most 10 calls per role, or 40 total. The default output cap is 512 tokens. `--max-output-tokens` accepts 512 through 1024.
+Each role has 5 scheduled model calls. The source's single format retry permits at most 10 calls per role, or 40 total. The default output cap is 512 tokens. `--max-output-tokens` accepts 32 through 1024.
 
-The serialized message guard is 30,720 UTF-8 bytes. Each POST reserves 32,768 input tokens at the peak uncached rate and the configured output cap at the peak output rate.
+`--max-input-tokens` sets the input token upper bound. It defaults to 32,768 and accepts 1 through 32,768. The adapter never truncates a prompt. Before each request, it computes a provable input bound: 16 tokens for the request, plus 8 tokens and the UTF-8 byte length of the content for each history message. A token covers at least 1 byte, so this bound is not an estimate. A request over the configured bound fails before the balance GET, reservation, started-call count, and POST. Each POST reserves the configured input bound at the peak uncached rate and the configured output cap at the peak output rate. Provider usage over the bound makes the call unknown.
+
+`--max-model-calls-per-seat` limits started calls for each seat. It defaults to unset, which keeps the 10-call seat limit. When set, it accepts a positive integer. At the limit, the adapter refuses the next request with an admission error inside the short trial lock. The refusal makes no reservation and does not increment a started or unknown call. It is not a model response. Other seats keep their own counts.
+
+The serialized message guard is 30,720 UTF-8 bytes. With the defaults, each POST reserves 32,768 input tokens at the peak uncached rate and the configured output cap at the peak output rate. An input bound of 3,072 tokens with a 32-token output cap reserves 960,000 nanodollars per POST.
 
 | Output cap | Peak reserve per POST (USD) | Peak reserve for 40 calls (USD) |
 |---|---:|---:|
@@ -135,7 +139,7 @@ Cancellation ends the client request and retains the full reserve when usage is 
 
 Each seat records the exact integer `budgeted_model_cost_nanodollars` for valid usage. In `call_finished`, that field is the call's budget charge, while `cost_usd` is its reported cost estimate. Unknown usage leaves both fields null and records the reserve separately.
 
-`summary.json` labels `model_call_concurrency` as a `configured_maximum` and records the balance admission and cancellation policies. It still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the cap and budget without a provider call.
+`summary.json` labels `model_call_concurrency` as a `configured_maximum` and records the balance admission and cancellation policies. It also records the selected `max_output_tokens`, `max_input_tokens`, `max_model_calls_per_seat`, and `trial_budget_nanodollars`. It still records exact `observed_model_cost_nanodollars` and `unknown_usage_reserve_nanodollars` totals. Native cost and token counts do not change. Missing accounting stays null. `--check` validates the caps and budget without a provider call.
 
 ## Retained artifacts
 
