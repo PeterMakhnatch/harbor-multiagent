@@ -790,9 +790,10 @@ class VerifierCollectConfig(BaseModel):
         default=MAIN_SERVICE_NAME,
         description="Compose service to run the command in. Defaults to main.",
     )
-    timeout_sec: float = Field(
-        default=60.0,
-        description="Timeout in seconds for the collect command.",
+    timeout_sec: float | None = Field(
+        default=None,
+        description="Timeout in seconds for the collect command. Unset, the "
+        "hooks of one collection share the verifier timeout as one budget.",
     )
     user: str | int | None = Field(
         default=None,
