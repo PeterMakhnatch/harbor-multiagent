@@ -3,6 +3,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import math
 import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
@@ -1651,9 +1652,27 @@ class Trial(ABC):
     async def _run_collect_hooks(
         self,
         hooks: Sequence[VerifierCollectConfig],
+        deadline: float,
     ) -> None:
-        """Run collect hooks best-effort; failures never abort the trial."""
+        """Run collect hooks best-effort; failures never abort the trial.
+
+        Hooks share one budget ending at *deadline* (event-loop time); a hook's
+        own `timeout_sec` can only shorten its share.
+        """
+        loop = asyncio.get_running_loop()
         for hook in hooks:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                self.logger.warning(
+                    f"Collect hook in service '{hook.service}' not run: the "
+                    f"collection budget is spent ({hook.command!r})"
+                )
+                continue
+            timeout_sec = (
+                remaining
+                if hook.timeout_sec is None
+                else min(hook.timeout_sec, remaining)
+            )
             self.logger.debug(
                 f"Running collect hook in service '{hook.service}': {hook.command!r}"
             )
@@ -1661,7 +1680,7 @@ class Trial(ABC):
                 result = await self.agent_environment.service_exec(
                     hook.command,
                     service=hook.service,
-                    timeout_sec=int(hook.timeout_sec),
+                    timeout_sec=math.ceil(timeout_sec),
                     user=hook.user,
                 )
                 if result.return_code != 0:
@@ -1697,6 +1716,11 @@ class Trial(ABC):
         processes cannot interfere with collection.
         """
         hooks = self._collect_hooks_for(step_cfg)
+        deadline = asyncio.get_running_loop().time() + (
+            self._verifier_timeout_sec
+            if step_cfg is None
+            else self._step_verifier_timeout_sec(step_cfg)
+        )
         main_hooks = [hook for hook in hooks if hook.service == MAIN_SERVICE_NAME]
         sidecar_hooks = [hook for hook in hooks if hook.service != MAIN_SERVICE_NAME]
 
@@ -1705,7 +1729,7 @@ class Trial(ABC):
         self._artifact_handler.begin_collection()
 
         self.logger.debug("Collecting main service artifacts")
-        await self._run_collect_hooks(main_hooks)
+        await self._run_collect_hooks(main_hooks, deadline)
         await self._artifact_handler.download_artifacts(
             self.agent_environment,
             artifacts_dir,
@@ -1734,7 +1758,7 @@ class Trial(ABC):
         self.logger.debug(
             f"Collecting sidecar artifacts from services: {sorted(sidecars)}"
         )
-        await self._run_collect_hooks(sidecar_hooks)
+        await self._run_collect_hooks(sidecar_hooks, deadline)
         await self._artifact_handler.download_artifacts(
             self.agent_environment,
             artifacts_dir,

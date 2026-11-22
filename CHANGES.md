@@ -68,6 +68,42 @@ The upstream files changed for this behavior are:
 | `tests/unit/environments/test_seat.py`, `tests/unit/environments/test_aca_sandbox.py`, `tests/unit/environments/test_prime.py`, `tests/unit/environments/test_runloop.py`, `tests/unit/environments/test_use_computer.py`, `tests/unit/environments/cwsandbox/conftest.py`, `tests/unit/environments/cwsandbox/test_cwsandbox.py` | Cover separate environment transport and retain the existing exec semantics. |
 | `tests/unit/environments/test_ack.py`, `tests/unit/environments/test_apple_container.py`, `tests/unit/environments/test_beam.py`, `tests/unit/environments/test_blaxel.py`, `tests/unit/environments/test_boxd.py`, `tests/unit/environments/test_cua_cloud.py`, `tests/unit/environments/test_daytona.py`, `tests/unit/environments/test_docker.py`, `tests/unit/environments/test_ec2.py`, `tests/unit/environments/test_gke.py`, `tests/unit/environments/test_hyperbrowser.py`, `tests/unit/environments/test_islo.py`, `tests/unit/environments/test_kernel.py`, `tests/unit/environments/test_modal.py`, `tests/unit/environments/test_openshift.py`, `tests/unit/environments/test_runta.py`, `tests/unit/environments/test_sail.py`, `tests/unit/environments/test_tensorlake.py`, `tests/unit/environments/cwsandbox/test_cwsandbox_compose.py`, `tests/unit/environments/sbx/test_compose.py`, `tests/unit/environments/sbx/test_local.py`, `tests/unit/test_langsmith_environment.py` | Assert argv contains names rather than values and the separate environment transport preserves values. |
 
+## Collect hook budget
+
+Original Harbor gives every `[[verifier.collect]]` hook its own timeout,
+`timeout_sec`, which defaults to 60 seconds. The hooks run one after another,
+and a hook that reaches its limit is killed and logged as a warning. Its
+evidence is then missing, so the verifier sees an empty or absent receipt. A
+probe that drives real services in a sidecar takes as long as those services
+take. When several trials share a host, the same probe can go from about 20 s to
+over a minute, so a limit the task never chose cuts it off. Raising the limit in
+each task only adds more independent deadlines, one per hook, on top of the
+verifier's own timeout.
+
+Here an unset hook `timeout_sec` means the hooks of one collection share a
+single budget: the verifier timeout that the trial resolves for that step, after
+overrides, the maximum and the multiplier. Each hook gets whatever is left of
+that budget. A hook's own `timeout_sec` can still shorten its share, but never
+extend it. Once the budget is spent, any remaining hooks are skipped with a
+warning. Changing the default is the only way to get one backstop. The deadline
+lives in the trial, which is the only place that knows the verifier timeout and
+runs the hooks. A task can set a value per hook, but it cannot make the hooks
+share one.
+
+Tradeoff: a task that relied on the 60-second default now waits up to the
+verifier timeout for a stuck hook, and collection plus verification can take up
+to twice the verifier timeout. A hook set to 60 seconds explicitly behaves as
+before.
+
+The upstream files changed for this behavior are:
+
+| Files | Change |
+|---|---|
+| `src/harbor/models/task/config.py` | `VerifierCollectConfig.timeout_sec` defaults to `None`. |
+| `src/harbor/trial/trial.py` | `_collect_artifacts_phased` sets one deadline from the step's verifier timeout, and `_run_collect_hooks` gives each hook what remains. |
+| `docs-mintlify/jobs/artifact-collection.mdx` | Describes the shared budget. |
+| `tests/unit/test_trial_verifier_artifact_transfer.py`, `tests/unit/models/test_artifact_validation.py`, `tests/unit/test_single_step_trial.py` | Cover the shared budget, an explicit shorter share and a spent budget, and update the old 60-second expectations. |
+
 ## New files
 
 | File | What |

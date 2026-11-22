@@ -30,6 +30,7 @@ def _single_step_trial(tmp_path: Path) -> SingleStepTrial:
     trial = object.__new__(SingleStepTrial)
     trial.logger = MagicMock()
     trial._are_artifacts_collected = False
+    trial._verifier_timeout_sec = 600.0
     trial._artifact_handler = SimpleNamespace(
         download_artifacts=AsyncMock(),
         sidecar_services=lambda artifacts=None: set(),
