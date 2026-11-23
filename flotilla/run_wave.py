@@ -3,9 +3,10 @@
     python3 flotilla/run_wave.py --dry-run flotilla/plans/example.json
     keys run -- python3 flotilla/run_wave.py flotilla/plans/<name>.json --run-dir /tmp/flotilla/<name>
 
-A cell is (task set, instance, arm, model). Blocks are (task set, instance). The order seed shuffles the
-blocks, then shuffles the cells inside each block, so families interleave and the order is a function of
-the seed. Each job is <plan>-<6 hex> with n_concurrent_trials 1. Docker runs at most 2 jobs, each through
+A cell is (task set, instance, arm, model). Blocks are (task set, instance). Each task set's blocks are shuffled
+with the order seed, then the sets alternate in proportion to their block counts. Equal counts alternate
+strictly, and the seed picks which set starts. Cells inside a block stay in a seeded random order. Each job
+is <plan>-<6 hex> with n_concurrent_trials 1. Docker runs at most 2 jobs, each through
 /tmp/crucible-docker-slot.sh. Modal has no wrapper.
 
 The plan file must be committed and unmodified at HEAD. The prereg commit must exist and be an ancestor
@@ -24,6 +25,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import time
 import tomllib
 import urllib.request
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -35,6 +37,12 @@ ROOT = Path(__file__).resolve().parent
 HARBOR = Path.home() / "Developer/harbor-multiagent-flotilla/.venv/bin/harbor"
 WRAPPER = Path("/tmp/crucible-docker-slot.sh")
 KEYS = {"deepseek": "DEEPSEEK_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+KEEP = frozenset({
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "LANG",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
+})
+KEEP_PREFIXES = ("LC_", "XDG_", "MODAL_", "DOCKER_")
+BALANCE_BACKOFF = (2, 5, 10)
 LEAKY = ("silent", "talk", "open", "propose", "solo", "deepseek", "qwen", "gpt", "oracle")
 _SPEC = importlib.util.spec_from_file_location("flotilla_pricing", ROOT / "pricing.py")
 PRICING = importlib.util.module_from_spec(_SPEC)  # type: ignore[arg-type]
@@ -120,40 +128,65 @@ def assert_prereg(plan: dict, repo: Path) -> None:
     ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=repo)
     if ancestor.returncode != 0:
         raise SystemExit(f"refused: prereg commit {commit} is not an ancestor of HEAD")
-    doc = repo / plan["prereg"]["doc"]
-    if not doc.is_file() or plan["prereg"]["section"] not in doc.read_text():
-        raise SystemExit(f"refused: prereg section {plan['prereg']['section']!r} is not in {plan['prereg']['doc']}")
+    shown = subprocess.run(
+        ["git", "show", f"{commit}:{plan['prereg']['doc']}"], cwd=repo, capture_output=True, text=True)
+    if shown.returncode != 0 or plan["prereg"]["section"] not in shown.stdout:
+        raise SystemExit(f"refused: prereg section {plan['prereg']['section']!r} is not in {commit}:{plan['prereg']['doc']}")
 
 
 def arms_of(task_set: dict) -> list[str]:
     return list(task_set.get("arms") or task_set["conditions"])
 
 
-def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None) -> list[list[dict]]:
-    """One block per (task set, instance), cells in listed arm then model order. paths is None for a dry run."""
-    blocks = []
+def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None) -> list[list[list[dict]]]:
+    """Blocks grouped by task set. A block is one (task set, instance). paths is None for a dry run."""
+    grouped = []
     for index, task_set in enumerate(plan["task_sets"]):
+        blocks = []
         for instance in task_set["instances"]:
             block = []
             for arm in arms_of(task_set):
                 for model in plan["models"]:
                     task = "" if paths is None else paths[(index, instance, arm)]
                     block.append({"task_set": index, "instance": instance, "arm": arm, "model": model,
-                                   "task": task, "key": cell_key(index, instance, arm, model)})
+                                  "task": task, "key": cell_key(index, instance, arm, model)})
             blocks.append(block)
-    return blocks
+        grouped.append(blocks)
+    return grouped
+
+
+def interleave(grouped: list[list[list[dict]]], rng: random.Random) -> list[list[dict]]:
+    """Alternate sets in proportion to their block counts. Equal counts alternate strictly."""
+    counts = [len(blocks) for blocks in grouped]
+    total = sum(counts)
+    rank = list(range(len(grouped)))
+    rng.shuffle(rank)
+    cursors = [0] * len(grouped)
+    chosen = []
+    for step in range(1, total + 1):
+        best, best_score = None, None
+        for index in rank:
+            if cursors[index] >= counts[index]:
+                continue
+            score = counts[index] * step - cursors[index] * total
+            if best is None or score > best_score:
+                best, best_score = index, score
+        assert best is not None
+        chosen.append(grouped[best][cursors[best]])
+        cursors[best] += 1
+    return chosen
 
 
 def order_of(plan: dict, paths: dict[tuple[int, int, str], str] | None = None) -> list[dict]:
-    """Shuffle blocks, then shuffle cells inside each block, with one Random(order_seed)."""
+    """Shuffle each set's blocks, shuffle cells inside a block, then alternate the sets."""
     rng = random.Random(plan["order_seed"])
-    blocks = blocks_of(plan, paths)
-    rng.shuffle(blocks)
-    ordered = []
-    for block in blocks:
-        rng.shuffle(block)
-        ordered.extend(block)
-    return ordered
+    grouped = blocks_of(plan, paths)
+    for blocks in grouped:
+        rng.shuffle(blocks)
+        for block in blocks:
+            rng.shuffle(block)
+    ordered = grouped[0] if len(grouped) == 1 else interleave(grouped, rng)
+    return [cell for block in ordered for cell in block]
 
 
 def resolve_paths(plan: dict, repo: Path) -> dict[tuple[int, int, str], str]:
@@ -212,7 +245,11 @@ def harbor_command(env: str, harbor: Path, config: Path, wrapper: Path) -> list[
 
 def harbor_env(base: dict[str, str], models: list[str]) -> dict[str, str]:
     needed = {KEYS[provider_of(model)] for model in models}
-    return {key: value for key, value in base.items() if not key.endswith("_API_KEY") or key in needed}
+    kept = {}
+    for key, value in base.items():
+        if key in needed or key in KEEP or key.startswith(KEEP_PREFIXES):
+            kept[key] = value
+    return kept
 
 
 def over_cap(spent: float, in_flight: int, reserve: float, cap: float) -> bool:
@@ -295,13 +332,41 @@ def read_trial(jobs_dir: Path, job: str) -> tuple[Path | None, dict | None]:
     return trial, json.loads((trial / "result.json").read_text())
 
 
-def trial_valid(trial: Path | None, result: dict | None) -> bool:
-    if trial is None or result is None:
+def trial_config(trial: Path, result: dict) -> dict:
+    config_path = trial / "config.json"
+    config = json.loads(config_path.read_text()) if config_path.is_file() else {}
+    return result.get("config") or config
+
+
+def trial_valid(trial: Path | None, result: dict | None, cell: dict) -> bool:
+    if trial is None or result is None or result.get("exception_info"):
+        return False
+    if any(seat.get("exception_info") for seat in result.get("seat_results") or []):
         return False
     score_path, state_path = trial / "verifier" / "score.json", trial / "verifier" / "world-state.json"
-    verdict = json.loads(score_path.read_text()) if score_path.is_file() else {}
-    failed = [seat.get("seat") for seat in result.get("seat_results") or [] if seat.get("exception_info")]
-    return bool(verdict) and state_path.is_file() and verdict.get("error") is None and not result.get("exception_info") and not failed
+    if not score_path.is_file() or not state_path.is_file():
+        return False
+    verdict = json.loads(score_path.read_text())
+    if verdict.get("error") is not None:
+        return False
+    if (verdict.get("instance"), verdict.get("condition")) != (cell["instance"], cell["arm"]):
+        return False
+    participants = trial_config(trial, result).get("participants") or []
+    if not participants or any(seat.get("model_name") != cell["model"] for seat in participants):
+        return False
+    return True
+
+
+def attempts_of(row: dict | None) -> list[dict]:
+    if not row:
+        return []
+    if "attempts" in row:
+        return list(row["attempts"])
+    return [row]
+
+
+def cell_valid(row: dict | None) -> bool:
+    return any(item["valid"] for item in attempts_of(row))
 
 
 def when_of(result: dict) -> datetime:
@@ -340,7 +405,8 @@ def pending_of(order: list[dict], finished: dict, retry_invalid: bool) -> list[d
     pending = []
     for cell in order:
         row = finished.get(cell["key"])
-        if row is None or (retry_invalid and not row["valid"]):
+        attempts = attempts_of(row)
+        if not attempts or (retry_invalid and not cell_valid(row) and len(attempts) < 2):
             pending.append(cell)
     return pending
 
@@ -389,13 +455,18 @@ def account(future, futures, state, events, jobs_dir, reserve, run_dir, lock: th
     exit_code = future.result()
     trial, result = read_trial(jobs_dir, job)
     bill = charge(cell, result, state["prices"], reserve)
-    valid = trial_valid(trial, result)
+    valid = trial_valid(trial, result, cell)
+    attempt = {
+        "job": job, "valid": valid, "cost_usd": bill["cost"], "estimate_usd": bill["estimate"],
+        "cost_source": bill["source"], "flag": bill["flag"], "exit_code": exit_code,
+        "started_at": (result or {}).get("started_at"), "finished_at": datetime.now(UTC).isoformat(),
+    }
     with lock:
         state["spent_usd"] += bill["cost"]
+        attempts = attempts_of(state["finished"].get(cell["key"]))
+        attempts.append(attempt)
         state["finished"][cell["key"]] = {
-            "job": job, "valid": valid, "cost_usd": bill["cost"], "estimate_usd": bill["estimate"],
-            "cost_source": bill["source"], "flag": bill["flag"], "exit_code": exit_code,
-            "started_at": (result or {}).get("started_at"), "finished_at": datetime.now(UTC).isoformat(),
+            "attempts": attempts, "valid": any(item["valid"] for item in attempts), "job": job,
         }
         save_state(run_dir / "state.json", state)
         spent = state["spent_usd"]
@@ -420,14 +491,38 @@ def wait_one(futures):
     return done.pop()
 
 
-def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, wrapper, env, repo, sources, namer):
+def read_balance(sources, provider: str, sleep):
+    last = None
+    for attempt in range(1 + len(BALANCE_BACKOFF)):
+        try:
+            return sources.balance(provider), None
+        except (Exception, SystemExit) as exc:
+            last = exc
+            if attempt == len(BALANCE_BACKOFF):
+                return None, exc
+            sleep(BALANCE_BACKOFF[attempt])
+    return None, last
+
+
+def wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap) -> str | None:
+    """Wait until the next start fits. 'cap' only when nothing is in flight and it still does not."""
+    while over_cap(state["spent_usd"], len(futures), reserve, cap):
+        if not futures:
+            return "cap"
+        account(wait_one(futures), futures, state, events, jobs_dir, reserve, run_dir, lock)
+        drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+    return None
+
+
+def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, wrapper, env, repo, sources, namer,
+             sleep):
     options = plan["make_jobs"]
     reserve, cap = float(plan["budget"]["reserve_per_trial_usd"]), float(plan["budget"]["cap_usd"])
     floors, concurrency = plan["budget"]["provider_floors"], options["concurrency"]
     futures: dict = {}
     lock = threading.Lock()
     index, spins, stop = 0, 0, None
-    bound = len(pending) * 8 + 8
+    bound = len(pending) * 16 + 32
     try:
         while index < len(pending):
             spins += 1
@@ -438,17 +533,20 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
                 account(wait_one(futures), futures, state, events, jobs_dir, reserve, run_dir, lock)
                 continue
             cell = pending[index]
-            if over_cap(state["spent_usd"], len(futures), reserve, cap):
+            if wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap) == "cap":
                 stop = "cap"
                 break
             provider = provider_of(cell["model"])
-            money = sources.balance(provider)
+            money, error = read_balance(sources, provider, sleep)
             drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
-            if len(futures) >= concurrency:
+            if len(futures) >= concurrency or over_cap(state["spent_usd"], len(futures), reserve, cap):
                 continue
-            if over_cap(state["spent_usd"], len(futures), reserve, cap):
-                stop = "cap"
-                break
+            if error is not None:
+                if futures:
+                    stop = "balance"
+                    log(run_dir, f"stop: {provider} balance read failed; draining in-flight jobs")
+                    break
+                raise SystemExit(f"refused: could not read {provider} balance ({type(error).__name__})")
             if money < float(floors[provider]):
                 stop = "floor"
                 log(run_dir, f"stop: {provider} balance ${money:.2f} is below floor ${float(floors[provider]):.2f}")
@@ -471,7 +569,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
 
 def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, retry_invalid: bool = False,
         harbor: Path = HARBOR, jobs_dir: Path | None = None, wrapper: Path = WRAPPER,
-        sources=None, base_env: dict[str, str] | None = None, namer=None) -> list[dict]:
+        sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None) -> list[dict]:
     plan_path = plan_path.resolve()
     plan = load_plan(plan_path)
     repo = repo_of(plan_path)
@@ -506,7 +604,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     with ThreadPoolExecutor(max_workers=plan["make_jobs"]["concurrency"]) as pool:
         reason = schedule(plan, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
                           harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
-                          namer=namer or secrets.token_hex)
+                          namer=namer or secrets.token_hex, sleep=sleep or time.sleep)
     events.append({"kind": "stop", "reason": reason, "spent": state["spent_usd"]})
     log(run_dir, f"stop {reason}: spent ${state['spent_usd']:.4f}")
     save_state(state_path, state)

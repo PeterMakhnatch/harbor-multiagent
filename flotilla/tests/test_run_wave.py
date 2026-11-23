@@ -27,23 +27,23 @@ args = sys.argv[1:]
 config = json.loads(Path(args[args.index("-c") + 1]).read_text())
 task = config["tasks"][0]["path"]
 model = config["participants"][0]["model_name"]
-control = json.loads(Path(os.environ["WAVE_CONTROL"]).read_text())
+control = json.loads(Path(__CONTROL__).read_text())
 spec = control[task + "|" + model]
-log = Path(os.environ["WAVE_HARBOR_LOG"])
+log = Path(__LOG__)
+gate = Path(__GATE__)
 keys = sorted(name for name in os.environ if name.endswith("_API_KEY"))
 with log.open("a") as handle:
     handle.write(json.dumps({"event": "start", "task": task, "model": model, "keys": keys,
-                             "job": config["job_name"], "concurrent": config["n_concurrent_trials"],
-                             "t": time.time()}) + "\n")
+                             "env": sorted(os.environ), "job": config["job_name"],
+                             "concurrent": config["n_concurrent_trials"], "t": time.time()}) + "\n")
 if spec["behavior"] == "slow":
-    gate = Path(os.environ["WAVE_GATE"])
     with gate.open("a") as handle:
         handle.write("slow\n")
     deadline = time.time() + 2
-    while time.time() < deadline:
-        if gate.read_text().count("slow") >= 2:
-            break
+    while time.time() < deadline and gate.read_text().count("slow") < 2:
         time.sleep(0.01)
+if spec["behavior"] == "hold":
+    time.sleep(0.3)
 if spec["behavior"] == "crash":
     with log.open("a") as handle:
         handle.write(json.dumps({"event": "end", "task": task, "model": model, "t": time.time()}) + "\n")
@@ -58,7 +58,14 @@ result = {"started_at": spec["started_at"], "exception_info": spec.get("exceptio
 (job / "result.json").write_text(json.dumps(result))
 if spec["behavior"] != "invalid":
     (job / "verifier").mkdir()
-    (job / "verifier" / "score.json").write_text('{"error": null}')
+    score = {"error": None, "instance": spec["instance"], "condition": spec["arm"]}
+    used = spec.get("model_name") or model
+    if spec["behavior"] == "wrong-score":
+        score["instance"] = spec["instance"] + 1
+    if spec["behavior"] == "wrong-model":
+        used = "other/model"
+    (job / "config.json").write_text(json.dumps({"participants": [{"seat": "p1", "model_name": used}]}))
+    (job / "verifier" / "score.json").write_text(json.dumps(score))
     (job / "verifier" / "world-state.json").write_text("{}")
 with log.open("a") as handle:
     handle.write(json.dumps({"event": "end", "task": task, "model": model, "t": time.time()}) + "\n")
@@ -165,16 +172,23 @@ def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, 
     task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"])
     path = commit_plan(repo, plan)
     harbor, wrapper = tmp / "harbor", tmp / "wrapper"
-    write_executable(harbor, HARBOR_SCRIPT)
-    write_executable(wrapper, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$WAVE_WRAPPER_LOG\"\nexec \"$@\"\n")
+    script = (HARBOR_SCRIPT.replace("__CONTROL__", json.dumps(str(tmp / "control.json")))
+              .replace("__LOG__", json.dumps(str(tmp / "harbor.jsonl")))
+              .replace("__GATE__", json.dumps(str(tmp / "gate"))))
+    write_executable(harbor, script)
+    write_executable(wrapper, f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {json.dumps(str(tmp / 'wrapper.log'))}\nexec \"$@\"\n")
     order = RUN.order_of(plan, RUN.resolve_paths(plan, repo))
-    mapped = {cell["task"] + "|" + cell["model"]: behaviors[cell["key"]] for cell in order}
+    mapped = {}
+    for cell in order:
+        spec = dict(behaviors[cell["key"]])
+        spec["instance"] = cell["instance"]
+        spec["arm"] = cell["arm"]
+        mapped[cell["task"] + "|" + cell["model"]] = spec
     (tmp / "control.json").write_text(json.dumps(mapped))
     (tmp / "gate").write_text("")
-    env = {"PATH": os.environ["PATH"], "WAVE_CONTROL": str(tmp / "control.json"),
-           "WAVE_HARBOR_LOG": str(tmp / "harbor.jsonl"), "WAVE_WRAPPER_LOG": str(tmp / "wrapper.log"),
-           "WAVE_GATE": str(tmp / "gate"), "DEEPSEEK_API_KEY": "ds", "OPENROUTER_API_KEY": "or",
-           "OPENAI_API_KEY": "no"}
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp), "LC_ALL": "C", "MODAL_TOKEN_ID": "modal",
+           "DEEPSEEK_API_KEY": "ds", "OPENROUTER_API_KEY": "or", "OPENAI_API_KEY": "no",
+           "HF_TOKEN": "secret", "SSH_AUTH_SOCK": "/tmp/agent.sock"}
     events = RUN.run(path, run_dir=tmp / "run", jobs_dir=tmp / "jobs", harbor=harbor, wrapper=wrapper,
                      sources=sources, base_env=env, namer=lambda _n: f"{namer_box(tmp):06x}", **extra)
     return events, order, path, env
@@ -206,6 +220,18 @@ def test_order_is_a_function_of_the_seed_and_blocks_stay_together():
             assert block not in seen
             seen.append(block)
     assert any(blocks_of(seed) != sorted(blocks_of(seed)) for seed in range(1, 30))
+    sets = [block[0] for block in blocks_of(1)]
+    assert sets == [sets[0], 1 - sets[0]] * (len(sets) // 2)
+    assert {blocks_of(seed)[0][0] for seed in range(1, 40)} == {0, 1}
+    wide = plan_for([0, 1, 2, 3], ["silent"], [DEEPSEEK], seed=7)
+    wide["task_sets"].append({"tasks_dir": "other", "manifest": "other/manifest.json",
+                              "instances": [0, 1], "arms": ["silent"]})
+    wide_blocks = []
+    for cell in RUN.order_of(wide):
+        block = (cell["task_set"], cell["instance"])
+        if not wide_blocks or wide_blocks[-1] != block:
+            wide_blocks.append(block)
+    assert [item[0] for item in wide_blocks] == [0, 1, 0, 0, 1, 0]
 
 
 def blocks_of(seed: int) -> list[tuple[int, int]]:
@@ -312,6 +338,15 @@ def test_retry_invalid_reruns_only_invalid_cells(tmp_path):
                       sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000100",
                       retry_invalid=True)
     assert [event["key"] for event in retried if event["kind"] == "start"] == [order[0]["key"]]
+    again = RUN.run(path, run_dir=tmp_path / "retry" / "run", jobs_dir=tmp_path / "retry" / "jobs",
+                    harbor=tmp_path / "retry" / "harbor", wrapper=tmp_path / "retry" / "wrapper",
+                    sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000101",
+                    retry_invalid=True)
+    assert [event for event in again if event["kind"] == "start"] == []
+    saved = json.loads((tmp_path / "retry" / "run" / "state.json").read_text())
+    attempts = saved["finished"][order[0]["key"]]["attempts"]
+    assert len(attempts) == 2 and attempts[0]["job"] != attempts[1]["job"]
+    assert all(item["valid"] is False for item in attempts)
 
 
 def test_modal_is_not_wrapped_and_may_exceed_two(tmp_path):
@@ -406,3 +441,137 @@ def test_help_and_example_dry_run():
     assert dry.returncode == 0, dry.stderr
     assert "reserve $0.10 per trial" in dry.stdout
     assert "openrouter/qwen/qwen3.8-27b" in dry.stdout
+
+
+def test_cap_drains_in_flight_before_it_stops(tmp_path):
+    plan = plan_for([0, 1], ["silent", "talk"], [DEEPSEEK], concurrency=2, cap=0.25, reserve=0.10)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0, 1], ["silent", "talk"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    behaviors = {cell["key"]: spec_for("ok", miss=66_667) for cell in order}
+    events, _order, _path, _env = launch(tmp_path / "drain", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert_invariants(events, concurrency=2, cap=0.25, reserve=0.10)
+    starts = [event for event in events if event["kind"] == "start"]
+    assert len(starts) == 4 and events[-1]["reason"] == "done"
+    third = [index for index, event in enumerate(events) if event["kind"] == "start"][2]
+    assert any(event["kind"] == "end" for event in events[:third])
+
+
+def test_balance_retries_twice_and_a_failed_read_does_not_kill_in_flight(tmp_path):
+    plan = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1, cap=1.0, reserve=0.05)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0], ["silent"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    sleeps = []
+
+    def balance(_provider, n):
+        if n <= 2:
+            raise RuntimeError("down")
+        return 10.0
+
+    events, _order, _path, _env = launch(
+        tmp_path / "retry-balance", plan, {order[0]["key"]: spec_for("ok")},
+        Sources({}, balance), sleep=lambda delay: sleeps.append(delay))
+    assert sleeps == [2, 5]
+    assert events[-1]["reason"] == "done" and any(event["kind"] == "start" for event in events)
+    held = plan_for([0], ["silent", "talk"], [DEEPSEEK], concurrency=2, cap=1.0, reserve=0.05)
+    preview2 = init_repo(tmp_path / "preview2")
+    task_tree(preview2, [0], ["silent", "talk"])
+    held_order = RUN.order_of(held, RUN.resolve_paths(held, preview2))
+    behaviors = {cell["key"]: spec_for("ok") for cell in held_order}
+    behaviors[held_order[0]["key"]] = spec_for("hold")
+
+    def fail_later(_provider, n):
+        if n == 1:
+            return 10.0
+        raise RuntimeError("down")
+
+    drained, _order, _path, _env = launch(
+        tmp_path / "drain-balance", held, behaviors, Sources({}, fail_later), sleep=lambda _delay: None)
+    assert drained[-1]["reason"] == "balance"
+    assert [event["key"] for event in drained if event["kind"] == "start"] == [held_order[0]["key"]]
+    assert any(event["kind"] == "end" and event["key"] == held_order[0]["key"] for event in drained)
+    alone = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1)
+    try:
+        launch(tmp_path / "no-balance", alone, {order[0]["key"]: spec_for("ok")},
+               Sources({}, lambda *_args: (_ for _ in ()).throw(RuntimeError("down"))), sleep=lambda _delay: None)
+    except SystemExit as exc:
+        assert "could not read" in str(exc)
+    else:
+        raise AssertionError("a failed balance read with nothing in flight must be refused")
+
+
+def test_harbor_env_drops_host_secrets(tmp_path):
+    plan = plan_for([0], ["silent"], [OPENROUTER], concurrency=1, env="modal", cap=1.0, reserve=0.01)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0], ["silent"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    launch(tmp_path / "env", plan, {order[0]["key"]: spec_for("ok", cost_usd=0.01)},
+           Sources(catalog(), lambda *_args: 10.0))
+    row = json.loads((tmp_path / "env" / "harbor.jsonl").read_text().splitlines()[0])
+    assert "HF_TOKEN" not in row["env"] and "SSH_AUTH_SOCK" not in row["env"]
+    assert "OPENAI_API_KEY" not in row["env"] and "OPENROUTER_API_KEY" in row["env"]
+    assert {"PATH", "HOME", "LC_ALL", "MODAL_TOKEN_ID"} <= set(row["env"])
+
+
+def test_a_score_for_another_instance_is_invalid(tmp_path):
+    plan = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1, cap=1.0, reserve=0.05)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0], ["silent"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    events, order, _path, _env = launch(
+        tmp_path / "mismatch", plan, {order[0]["key"]: spec_for("wrong-score")}, Sources({}, lambda *_args: 10.0))
+    assert events[-1]["reason"] == "done"
+    assert next(event for event in events if event["kind"] == "end")["valid"] is False
+
+
+def test_prereg_section_comes_from_the_cited_commit(tmp_path):
+    repo = init_repo(tmp_path)
+    task_tree(repo, [0], ["silent"])
+    plan = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1)
+    path = commit_plan(repo, plan)
+    (repo / "docs" / "plan.md").write_text("# something else\n")
+    assert RUN.run(path, dry_run=True) == []
+    bare = init_repo(tmp_path / "bare")
+    (bare / "docs").mkdir()
+    (bare / "docs" / "plan.md").write_text("# not the section\n")
+    git(bare, "add", "docs/plan.md")
+    git(bare, "commit", "-m", "empty")
+    cited = git(bare, "rev-parse", "HEAD")
+    (bare / "docs" / "plan.md").write_text("# How to run a wave\n")
+    missing = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1)
+    missing["prereg"]["commit"] = cited
+    blob = bare / "plan.json"
+    blob.write_text(json.dumps(missing))
+    git(bare, "add", "plan.json")
+    git(bare, "commit", "-m", "plan")
+    try:
+        RUN.run(blob, dry_run=True)
+    except SystemExit as exc:
+        assert "not in" in str(exc)
+    else:
+        raise AssertionError("a section that is only in the working tree must be refused")
+
+
+def test_xm1_dry_run_alternates_families():
+    plan = json.loads((FLOTILLA / "plans" / "xm1.json").read_text())
+    sets = []
+    for cell in RUN.order_of(plan):
+        if not sets or sets[-1] != cell["task_set"]:
+            sets.append(cell["task_set"])
+    assert sets == [sets[0], 1 - sets[0]] * (len(sets) // 2)
+    assert len(sets) == 24
+    dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run",
+                          str(FLOTILLA / "plans" / "xm1.json")], capture_output=True, text=True)
+    assert dry.returncode == 0, dry.stderr
+    lines = [line for line in dry.stdout.splitlines() if line[:1].isdigit()]
+    families = []
+    for line in lines:
+        family = int(line.split("set ")[1].split(" ")[0])
+        if not families or families[-1][0] != family:
+            families.append([family, 1])
+        else:
+            families[-1][1] += 1
+    assert [item[0] for item in families] == sets
+    assert {item[1] for item in families} == {12, 8}
+
