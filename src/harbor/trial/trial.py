@@ -940,10 +940,9 @@ class Trial(ABC):
                     step_cfg=step,
                 )
         except Exception as exc:
-            if step_result.exception_info is None:
-                step_result.exception_info = ExceptionInfo.from_exception(
-                    exc, override_error_policy=self.config.override_error_policy
-                )
+            step_result.exception_info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
         finally:
             step_result.verifier.finished_at = self._now()
 

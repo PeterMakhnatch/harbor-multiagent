@@ -106,6 +106,33 @@ The upstream files changed for this behavior are:
 | `docs-mintlify/jobs/artifact-collection.mdx` | Describes the shared budget. |
 | `tests/unit/test_trial_verifier_artifact_transfer.py`, `tests/unit/models/test_artifact_validation.py`, `tests/unit/test_single_step_trial.py` | Cover the shared budget, an explicit shorter share and a spent budget, and update the old 60-second expectations. |
 
+## Verifier errors after a graded agent error
+
+Harbor records only the first exception on a trial. An agent error whose
+policy still grades the trial, such as `AgentTimeoutError` or
+`NonZeroAgentExitCodeError`, is recorded first, so when the verifier then
+fails (for example a `VerifierTimeoutError` while downloading a large
+`/logs/verifier`), Harbor logs the verifier's exception at debug level and
+`result.json` keeps the agent's. The trial has no reward and reports only that
+the agent timed out, which hides why it was not graded. A multi-step trial does
+the same per step.
+
+Here the verifier's exception replaces the agent's on the trial, and on the
+step for a multi-step trial, and `exception.txt` holds its traceback. A
+second exception field would change the result schema that every reader of
+`result.json` parses; replacing the recorded exception keeps the schema and
+reports the error that left the trial without a reward.
+
+Tradeoff: a trial whose verifier failed after its agent timed out no longer
+names the agent's error in `exception_info`; the agent's timing stays in
+`agent_execution`.
+
+| Files | Change |
+|---|---|
+| `src/harbor/trial/single_step.py` | `_run_verifier` clears the agent's exception before the verifier's propagates, so `Trial.run` records the verifier's. |
+| `src/harbor/trial/trial.py` | `_run_step_verifier` records the verifier's exception on the step whether or not the step's agent raised. |
+| `tests/unit/test_single_step_trial.py`, `tests/unit/test_multi_step_run_step.py` | Cover a verifier timeout after an agent timeout, in both verifier modes. |
+
 ## New files
 
 | File | What |
