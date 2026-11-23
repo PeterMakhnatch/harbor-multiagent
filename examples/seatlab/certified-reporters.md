@@ -12,3 +12,39 @@ Use the next eight previously unscreened four-seat Flotilla scheduling worlds, i
 - Before the model teams, run three native controls with the same outside-owner connector. World 1232 with all truthful typed reporters must grade 1 in both arms. On 1233, make the first reporter in `stop` give an inexact list. The booker must refuse, make no submission and receive native grade 0. Offline wrong-order and ambiguous inputs must also refuse. Typed controls use no model sessions.
 
 **Pass test:** all three controls match; all 16 issued native teams have bound first outcomes; both arms book correctly on all eight worlds; `stop` saves at least two confirmed reporter sessions across at least two distinct worlds. A requested reporter without a usable private receipt, or a missing native grade, makes the model comparison inconclusive. Accounted wrong grades or too few savings fail. Include any failure and its original grade. No claim about non-inferiority, spending, outage rate or unrelated tasks follows from a pass. Do not issue another paid or fallback-credit call for this study.
+
+## Result: two reporters stayed idle, but the team did not use fewer tokens
+
+The registered test passed at its stated minimum. Both arms booked correctly in all 8 matched worlds. `stop` avoided one real reporter session on world 1232 and one on 1239. The two workers used disjoint worlds and kept the registered order within every pair. No attempt was repeated. Each requested reporter answered. The 46 independent owner receipts matched the prompts and answers on the native wire.
+
+| Eight native teams per arm | Correct bookings | Model reporting sessions | Client-reported tokens |
+|---|---:|---:|---:|
+| Ask every reporter | 8 | 24 | 138,305 |
+| Stop on a certified answer | 8 | 22 | 143,817 |
+
+The early-stop teams used **5,512 more** client-reported tokens in this sample. A reduction in calls did not establish a reduction in tokens or cost. These were tool-free personal subscription sessions. The client requested `gemini-4-carbon-low`. There was no paid-API key or paid-credit fallback. The provider did not attest the served model. The local booker started no model in either arm. This is a result about 8 calendars with a known unique answer, not about general team planning.
+
+Both truthful typed controls scored 1. In the third control the first report was inexact. The other two were exact. The local booker refused; Harbor recorded no submission and a native grade of 0. The [redacted rows](results/certified-reporters/rows.json) contain the 3 controls and all 16 team outcomes. The [report](results/certified-reporters/panel.json) counts missing receipts separately from skipped reporters. The owner also checked the actual arm timestamps and which report was inexact against the private originals. The redacted rows alone do not show either fact.
+
+## Reproduce or collect new evidence
+
+Rebuild the report with the standard library. Run this from the checkout root. No Docker, account or model call is necessary.
+
+```sh
+python3.12 -BS -m examples.seatlab.fanin.certified_panel \
+  examples/seatlab/results/certified-reporters/rows.json
+```
+
+For a fresh native team, follow the [native setup](shared-read.md#run-the-same-comparison-on-eight-new-worlds). Set `HARBOR_PYTHON` and `DOCKER_SLOT`. Begin with a typed control:
+
+```sh
+PRIVATE=$(mktemp -d)
+PRIVATE=$(cd "$PRIVATE" && pwd -P)
+python3.12 -BS -m examples.seatlab.fanin.reporter_worker \
+  --world 1240 --arm stop --out "$PRIVATE/w1240-control" \
+  --harbor-python "$HARBOR_PYTHON" --slot "$DOCKER_SLOT" --control correct
+```
+
+For real reporters, use a new output directory and replace `--control correct` with `--agy "$AGY"`. `AGY` must be the absolute path to the supported, signed-in personal client. This is not an API-key interface. The worker acquires its slot before it starts the four listeners. An output directory is a permanent first attempt. Reusing one, even after interruption, is an error.
+
+`external.json` records what the four programs sent and how Harbor graded their team. Only a personal run also writes `provenance.json`, which binds the nominated reporters to their separate client receipts. Keep the native directory, private logs and owner receipts private. The generator creates fresh local service credentials for each trial. Its native package checksum may differ across arms. The generator commit, seed and calendar digest identify the matched world.
