@@ -199,3 +199,11 @@ python3.12 -BS -m examples.seatlab.continuation fetch "$w/cache" || exit 1
 python3.12 -BS -m examples.seatlab.continuation.mark_transfer "$w/cache" |
   cmp - examples/seatlab/results/continuation-mark-transfer.json
 ```
+
+### Does equal seat-time also match the publisher's reported model cost?
+
+Register this resource check before calculating the cost ratios. The terminal grades and the 3-hour selector result are already known. Use `metrics.costUsd` only from the pinned Bespoke release for the same 27 communicating teams. In each of the 6 settings, charge each completed pair the **sum** of both smaller teams' reported totals. Average over the 3 pairs and divide by the mean reported total of the 3 full-size teams. Do not divide by the selected company's cost alone.
+
+Call seat-time a close match for reported model cost here only if the pair/full ratio is between 0.90 and 1.10 inclusive in at least 5 of 6 settings, and its unweighted mean across settings is also within that range. Report both mean costs in each setting and the 3-hour rule's known terminal grade. Separately count settings where the pair costs no more and grades no worse, with one strict improvement. Overlapping runs are not independent.
+
+These are publisher-reported terminal amounts, not invoices, infrastructure charges or a measurement at hour 3. The published index does not give the billing route or a per-mark cost series. The stock harness can [price subscription usage at API rates and omit fees](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/harness/docs/proxy.md#budget-and-pricing). Do not claim that a job can enforce a future budget with terminal observations. Missing, invalid or zero-denominator evidence makes the result incomplete.

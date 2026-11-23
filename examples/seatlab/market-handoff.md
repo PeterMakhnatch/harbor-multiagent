@@ -115,3 +115,9 @@ python3.12 -BS -m "$m.native_panel" score "$d" "$campaign/bundle.json"
 ```
 
 For the published campaign, a third worker examined both shards after completion. It recognized all 22 existing trials, reused the 2 published receipts and started **0** trials. New batches get new native trial IDs; compare the grade and seat agreement, not the UUIDs. A partial batch reports the missing cases and withholds the paired mean.
+
+## Can an operator bring new sales and finance seats?
+
+**Acceptance test, fixed before running outside policies.** First, two separate programs answer the published role prompts with the fixed keep-price policy. The programs get prompt packets only. Prepare the finance packets only after the sales replies arrive. On world 1 with the company's own sales view, require both first picks to be 1. Require both native prompt hashes to match the actual outside requests, and the native reward to match the offline stock grade. This is not a replication with new model draws.
+
+Next, give a native trial two operator-supplied programs. In worlds 1 and 2, keep the inputs and the finance program fixed. In one arm, sales recommends keeping prices (1). In the other, it recommends discounting (3). Finance must return the recommendation from its *delivered* prompt. No answer or precomputed finance pick may be present in the native configuration. Pass only if all 4 trials finish, each role sees the expected prompt, the 2 finance prompts per world differ, and every reward equals the stock payoff for its delivered choice. Report even equal payoffs. Refuse invalid replies rather than choosing a default. These programs use no model; they test live orchestration, not team quality.
