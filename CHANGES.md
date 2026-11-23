@@ -34,8 +34,6 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/cli/trials.py` | `harbor trial start` lists a seat trial's participants (`seat: harness model`, agents under test marked) where it prints `Agent:` for one agent, and preflights each participant instead of the unused default agent. SIGTERM raises `KeyboardInterrupt`, as `harbor run` already makes it do, so a terminated trial takes the cancellation path and writes `result.json` with the logs, tokens and cost collected so far; under Harbor, SIGTERM ends `harbor trial start` without a result. |
 | `src/harbor/job.py`, `src/harbor/cli/jobs.py` | A job with `participants` preflights them instead of the unused default agent. |
 | `src/harbor/trial/trial.py` | `Trial.create` routes seat tasks to `SeatsTrial`, and refuses `participants` on a task without seats and a regrade of a seat task. `_scrub_jobs_dir` takes its secrets from a new `_secrets_to_scrub`, so a seat trial scrubs once with every seat's secrets. `_secrets_to_scrub`, `_validate_agent_capabilities` and `_compute_agent_setup_timeout_sec` take an optional agent and agent config, defaulting to `self.agent` and `self.config.agent`, so a seat trial passes each seat's instead of swapping trial fields; Harbor's callers are unchanged. A hook every trial registers (`_journal_event`) appends each lifecycle event (`{"event": "agent-start", "timestamp": ...}`) to `trial-events.jsonl` in the trial directory, so a process watching the directory can tell a single-agent or multi-agent trial's phase; Harbor writes no such file. |
-| `src/harbor/agents/installed/mini_swe_agent.py`, `tests/unit/agents/installed/test_opaque_litellm_credentials.py` | When a key is selected with `model_api_key_name`, or the model name is opaque or its provider unknown, Harbor's adapter passes the key to mini-swe-agent as a `-c model.model_kwargs.api_key=...` spec. mini-swe-agent prints its spec list, wrapped at 80 columns, into `mini-swe-agent.txt`: a key longer than about 51 characters (an OpenRouter key has 73) breaks across 2 lines there, and the trial scrub, which replaced exact strings only, left it in the log. The adapter writes the same setting to `api-key.yaml` in a private `mktemp -d` directory and passes that file as the spec, as Harbor's Aider adapter does with its model settings; mini-swe-agent prints only the path, and the launch shell removes the directory when it exits. The key still reaches LiteLLM as `model_kwargs.api_key`, so key names, API formats and base URLs behave as before. Tradeoff: the key is in a file in the environment's `/tmp` while the agent runs, and a launch killed by SIGKILL leaves the file there. |
-| `src/harbor/utils/redaction.py`, `tests/unit/test_single_step_trial.py` | Harbor's scrub replaces exact copies of a secret only, so a secret that wrapped output broke across lines stays in the trial directory (harbor-framework/harbor#3961; harbor-framework/harbor#3964 proposes a different matcher). `scrub_file_text` also replaces a secret of 16 or more characters that a line break splits, with the spaces, tabs and CRs around the break, raw or JSON-escaped at any depth; the line break goes with the secret. Digit-only secrets, and secrets that hold whitespace or a backslash, still match only unbroken, and binary files are still skipped. One pass per file rules out the secrets that the file cannot hold however it is wrapped; only the others get a regex scan. Tradeoff: scrubbing a 50 MB file takes 0.2 to 0.4 s of CPU where Harbor takes 0.04 s, and a secret broken by anything other than whitespace (a box border, a terminal escape code) still stays. |
 
 Readers of `agent_info` are untouched: a seat trial fills it with its first
 agent under test. Readers of `exception_info` are untouched too: a seat
@@ -135,6 +133,48 @@ names the agent's error in `exception_info`; the agent's timing stays in
 | `src/harbor/trial/trial.py` | `_run_step_verifier` records the verifier's exception on the step whether or not the step's agent raised. |
 | `tests/unit/test_single_step_trial.py`, `tests/unit/test_multi_step_run_step.py` | Cover a verifier timeout after an agent timeout, in both verifier modes. |
 
+## Wrapped secrets in trial output
+
+Harbor scrubs a trial directory by replacing exact copies of each secret, so a
+secret that wrapped output broke across lines stays in the trial directory
+(harbor-framework/harbor#3961; harbor-framework/harbor#3964 proposes a
+different matcher). mini-swe-agent produces such a break: when a key is
+selected with `model_api_key_name`, or the model name is opaque or its
+provider unknown, Harbor's adapter passes the key as a
+`-c model.model_kwargs.api_key=...` spec, and mini-swe-agent prints its spec
+list, wrapped at 80 columns, into `mini-swe-agent.txt`. A key longer than about
+51 characters (an OpenRouter key has 73) breaks across 2 lines there and stays
+in the log. Exec environment forwarding does not cover it, because the key is a
+command argument of mini-swe-agent, not an exec environment value.
+
+Here the adapter writes the same setting to `api-key.yaml` in a private
+`mktemp -d` directory and passes that file as the spec, as Harbor's Aider
+adapter does with its model settings; mini-swe-agent prints only the path, and
+the launch shell removes the directory when it exits. The key still reaches
+LiteLLM as `model_kwargs.api_key`, so key names, API formats and base URLs
+behave as before. `scrub_file_text` also replaces a secret of 16 or more
+characters that a line break splits, with the spaces, tabs and CRs around the
+break, raw or JSON-escaped at any depth; the line break goes with the secret.
+Digit-only secrets, and secrets that hold whitespace or a backslash, still
+match only unbroken, and binary files are still skipped. One pass per file
+rules out the secrets that the file cannot hold however it is wrapped; only the
+others get a regex scan, and each wrap is bounded so a scan stays linear.
+
+Tradeoff: the key is in a file in the environment's `/tmp` while the agent
+runs, and a launch killed by SIGKILL leaves the file there. Scrubbing a 50 MB
+file takes 0.2 to 0.4 s of CPU where Harbor takes 0.04 s, and a secret broken
+by anything other than whitespace (a box border, a terminal escape code) still
+stays.
+
+The upstream files changed for this behavior are:
+
+| Files | Change |
+|---|---|
+| `src/harbor/agents/installed/mini_swe_agent.py` | Passes a selected model key in a file spec instead of a `-c` argument. |
+| `src/harbor/utils/redaction.py` | `scrub_file_text` also replaces a secret that a line break splits. |
+| `tests/unit/agents/installed/test_opaque_litellm_credentials.py` | Cover the private key file spec. |
+| `tests/unit/utils/test_redaction.py`, `tests/unit/test_single_step_trial.py` | Cover wrapped secrets, raw and JSON-escaped, the secrets that still match only unbroken, and a CPU-time guard on hostile input. |
+
 ## New files
 
 | File | What |
@@ -145,5 +185,4 @@ names the agent's error in `exception_info`; the agent's timing stays in
 | `docs-mintlify/tasks/multi-agent.mdx` | The task format, participants, how a run starts and ends, logs, the verifier, and the limitations. |
 | `examples/tasks/hello-seats/`, `examples/configs/features/seats-trial.yaml`, `examples/configs/features/seats-job.yaml` | A runnable two-agent example task and the trial and job configs that run it. |
 | `tests/unit/models/test_task_config_seats.py`, `tests/unit/models/test_trial_participants.py`, `tests/unit/environments/test_seat.py`, `tests/unit/environments/test_dind_service_upload.py`, `tests/unit/trial/test_seats.py` | Unit tests; none needs Docker. |
-| `tests/unit/utils/test_redaction.py` | Unit tests of the scrub of secrets that wrapped output split, with a CPU-time guard on hostile input. |
 | `tests/runtime/test_hello_seats_docker.py` | Runs hello-seats with the oracle in both seats on real Docker. |
