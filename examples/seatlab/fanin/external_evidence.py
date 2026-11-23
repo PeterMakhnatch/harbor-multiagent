@@ -19,7 +19,7 @@ DESCRIPTION = (
 SCHEMA = "seatlab.peer-fanin-external/v1"
 TAG = "external"
 SEATS = protocol.SEATS
-ARMS = (*protocol.ARMS, *protocol.TIMING_ARMS)
+ARMS = protocol.EXTERNAL_ARMS
 REQUEST = external_owner.REQUEST
 REPLY = external_owner.REPLY
 RECORD_NAMES = ({REQUEST}, {REQUEST, REPLY})
@@ -258,7 +258,7 @@ def trial_row(
 
 
 def audit(cell: Path, world: int, arm: str) -> Row:
-    need(ev.admitted(world, arm) and arm in ARMS, "world_arm_pairing")
+    need(protocol.external_admitted(world, arm), "world_arm_pairing")
     launch_raw, launch, trial, stock = ev.staged(cell, world, arm, TAG)
     need(not present(cell / "admission"), "study_tag_binding")
     owner = owner_root(cell)
@@ -290,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--world", type=int, required=True)
     parser.add_argument("--arm", required=True, choices=ARMS)
     args = parser.parse_args(argv)
-    if not ev.admitted(args.world, args.arm):
+    if not protocol.external_admitted(args.world, args.arm):
         parser.error("world_arm_pairing")
     try:
         cell = args.cell.resolve(strict=True)
