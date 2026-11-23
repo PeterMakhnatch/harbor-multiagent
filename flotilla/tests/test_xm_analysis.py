@@ -225,6 +225,21 @@ def test_truncated_split_counts_unplayed_seat_rounds_as_missed_and_no_deal():
     assert not found["truncated"] and (found["seat_rounds"], found["missed"], found["success"]) == (2, 0, True)
 
 
+def test_v10_inactive_lists_replace_missed_for_validity_and_older_logs_keep_missed():
+    params = SPLIT.generate(1, 8, 2, "b")
+    claim_all = {seat: SPLIT.fixed_policy(params["capacity"]) for seat in params["seats"]}
+    log = [dict(record) for record in SPLIT.play(params, claim_all)]
+    log[0]["missed"] = [params["seats"][0]]
+    older = XM.played("split", params, log, SPLIT.score_game(params, log))
+    assert (older["seat_rounds"], older["missed"]) == (12, 1)
+    proposer_only = [record | {"inactive": []} for record in log]
+    found = XM.played("split", params, proposer_only, SPLIT.score_game(params, proposer_only))
+    assert (found["seat_rounds"], found["missed"]) == (12, 0)
+    idle = [record | {"inactive": list(record["missed"])} for record in log]
+    found = XM.played("split", params, idle, SPLIT.score_game(params, idle))
+    assert (found["seat_rounds"], found["missed"]) == (12, 1)
+
+
 def test_truncated_commons_survives_when_no_played_round_collapsed():
     params = COMMONS.generate(1, 4, 3, "b")
     planned, seats = params["rounds"], len(params["seats"])

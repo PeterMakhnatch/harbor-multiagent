@@ -165,19 +165,23 @@ def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
 def played(family: str, params: dict, log: list[dict], score: dict) -> dict[str, Any]:
     """Seat-rounds, missed and passed seat-rounds, truncation and success of a scored trial. A truncated game counts
     every unplayed seat-round as missed: split as no deal, commons as survived when no played round collapsed (the
-    unplayed rounds would have zero catch)."""
+    unplayed rounds would have zero catch). When every round record lists `inactive` seats (world v10 on), a
+    seat-round is missed when the seat was inactive: no claim, pass, post, accept or decline (SPLIT.md section 16);
+    in arms without proposals that equals `missed`."""
     seats, planned = len(params.get("players") or params["seats"]), params["rounds"]
     ended = any(record.get("agreed") or record.get("collapsed") for record in log)
     truncated = not ended and len(log) < planned
     assert score.get("truncated", truncated) == truncated, (score.get("truncated"), truncated)
     logged = len(log) * seats
     unplayed = (planned - len(log)) * seats if truncated else 0
+    acted_rule = bool(log) and all("inactive" in record for record in log)
+    missed = sum(len(record["inactive"]) for record in log) if acted_rule else round(score["missed"] * logged)
     if family == "split":
         success = bool(score["agreed"])
     else:
         success = score["collapsed_in"] is None if truncated else bool(score["survived"])
     assert not (truncated and family == "split" and success)
-    return {"seat_rounds": logged + unplayed, "missed": round(score["missed"] * logged) + unplayed,
+    return {"seat_rounds": logged + unplayed, "missed": missed + unplayed,
             "passed": round(score.get("passed", 0.0) * logged), "truncated": truncated, "success": success,
             "measures": measures(family, score), "score": score}
 
