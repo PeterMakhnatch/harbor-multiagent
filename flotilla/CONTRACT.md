@@ -149,7 +149,7 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 6`. Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 11` (section 11). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
@@ -164,10 +164,10 @@ name). A reply has no header but `Server`, `Date`, `Content-Type`, `Content-Leng
 | `GET /health` | | `{"ok": true}` | Compose health check |
 | `GET /whoami` | | `{"seat", "seats", "messaging": bool, "limits": {"max_text", "max_messages"}}` | |
 | `POST /messages` | `{"to": "<seat>" or "all", "text": str}` | 201 `{"id": "m<k>", ...}` | 403 when messaging is off (`solo`, `silent`); 413 above `max_text` characters; 429 after `max_messages` messages of this seat |
-| `GET /messages` | | `{"messages": [{"id","from","to","text","t"}]}` | every message to the caller or to `all`, plus its own; 403 when messaging is off |
+| `GET /messages` | | `{"messages": [{"id","from","to","text","t"}]}` | every message to the caller or to `all`, plus its own; 403 when messaging is off; from world version 11 the messages count as delivered only after the reply was written (section 11) |
 | `POST /submit` | `{"answer": {...}}` | 200 `{"accepted": true}` | the team answer is the **last accepted submission from any seat**; 429 past the seat's limit, or 409 if frozen; replies never reveal correctness or how many submissions exist (world version 1 returned the running count `n`, which a seat in `silent` read as a signal from its teammates) |
 | `POST /admin/freeze` | | 200 | admin token only; valid later submissions within the seat's limit are refused (409) and logged as `late` |
-| `GET /admin/state` | | full state, with `world_version`, `condition` and `limits` | admin token only; used by the verifier |
+| `GET /admin/state` | | full state, with `world_version`, `condition` and `limits` | admin token only; used by the verifier; from world version 11 also `delivered` (seat -> message id -> world time of its first successful delivery) |
 
 Any other path is 404 and a known path with the wrong method is 405 (with `Allow`); a seat that asks
 for an `/admin/` path gets 404. A body that is not a JSON object of at most `max(64,000,
@@ -191,8 +191,9 @@ Compose health check and connections that close or fail before the world can par
 leave no event. Lifecycle events such as an automatic freeze are separate. `kind` is one of:
 
 - `start` (`data.condition`, `data.seats`, `data.world_version`, `data.limits`), written once;
-- `whoami`, `send` (`data.id`, `data.to`, `data.chars`), `deliver` (`data.ids`: message ids returned
-  to the caller by `GET /messages`), `submit` (`data.n` and answer evidence), `late` (for a
+- `whoami`, `send` (`data.id`, `data.to`, `data.chars`), `deliver` (`data.ids`: message ids from other seats
+  returned to the caller by `GET /messages`; from world version 11 written after the reply, and also by a gate
+  refusal with `data.via: "gate"`, section 11), `submit` (`data.n` and answer evidence), `late` (for a
   late submission, `data.path` and answer evidence), `freeze`, `state` (the verifier read the state);
 - `denied` (`data.path`, `data.reason`): messaging is off, or a seat reaches a message or submit limit;
 - `bad_token` (`data.path`, at most 128 characters): a missing or unknown token (401);
@@ -307,3 +308,48 @@ serves `GET /state`, `POST /harvest {"amount": n}` and `GET /wait?round=r`. No r
 parameter or how many seats acted in the open round. A game module provides `settle(stock, requests,
 params)` and `score_game(params, log)`; the verifier scores `task.json` with `"mode": "rounds"` through
 `score_game` and still writes exactly one reward key (section 6).
+
+## 11. World version 11: the `gated` condition, `unread`, a decline with a counter
+
+**The `gated` condition** is `talk` with a read gate. Seats can message as in `talk` (`/whoami` says
+`"messaging": true`), and every byte a seat reads before its first refusal equals `talk`: the instruction, the
+briefing, the environment and the replies (`qa.py` checks `talk` and `gated` as twins). Only `main`'s
+`FLOTILLA_CONDITION`, `task.json` (`"read_gate": true`), the manifest, the `start` event and `/admin/state` say
+`gated`. In a game world, the `start` event has `data.read_gate` (false in every other condition).
+
+**The gate.** An undelivered message for a seat is a message from another seat, to that seat or to `all`, whose
+id no successful reply has shown to that seat (by `GET /messages` or by a gate refusal). It does not depend on the
+round: a message sent before the season or in an earlier round counts. Before a game action (`POST` to the
+game's action path, a claim, a request or a pass, and the round-protocol paths `/propose`, `/accept`, `/decline`),
+the world checks in this order, in one locked step: the body (400), then late, early and repeat (409), then the
+round protocol's own refusal (400, 409 or 429), then the gate, then the action. A request that would be refused
+anyway is never held. If the seat has undelivered messages, the action is not applied and the reply is 409
+`{"error": "not recorded in round <r>: messages reached you that you have not read; they are below; read them and
+send your action again", "round": <r>, "messages": [...]}`, with `r` the round of the refused action and the
+messages in the format of `GET /messages`. A message cannot arrive between the check and the action. The seat
+sends the action again; if a round closed meanwhile, the retry applies to the round that is then open.
+
+**Delivery after the write.** On `GET /messages` and on a gate refusal, the world takes the messages under its
+lock, writes the reply outside the lock (at most 5 seconds for the write), and only then records `deliver` and
+marks the messages delivered. A failed or timed-out write records nothing, so the messages stay undelivered and
+the next action is held again. An action that arrives while such a reply is still being written is held again,
+which is harmless. World version 10 recorded `deliver` before the write. **A delivery is not proof that the model
+read the message**: it means the world wrote the bytes to the seat's connection. Whether the agent's terminal
+showed them, and whether the model used them, is the analysis' question (`analysis`, `listening.py`).
+
+**Events.** `gated` (`data.round`, `data.path`, `data.ids`, `data.action`: the claim, pass or protocol body,
+`data.unread`), then, after a successful write, `deliver` (`data.ids`, `data.via: "gate"`). Every action event
+(`request`, `pass`, `propose`, `accept`, `decline`, and `gated`) carries `data.unread`: the number of undelivered
+messages for the acting seat at that moment, in every condition (always 0 when messaging is off, and 0 on an
+applied action in `gated`).
+
+**A decline with a counter** (split, `propose` arm). `POST /decline` takes `{"id": "<id>", "counter": {"split":
+{...}}}`; the counter follows the rules of `POST /propose`. The world validates the declined proposal and the
+whole counter first; an invalid counter refuses the whole request (400, or 429 at the proposal limit) and the
+decline is not recorded. Otherwise the decline and the new proposal are one locked step, so the counter holds the
+round open (world version 10 released the hold at the decline, and a counter sent next landed in the next, smaller
+pot). The reply is `{"id", "declined": true, "counter": {"id", "proposer", "split", "time"}}`. Events: `decline`
+with `data.counter` (the new id), then `propose` with `data.counter_to` (the declined id). The round log's offer
+ledger has `decline.counter`. A plain decline is as in world version 10.
+
+Also new: the bad-amount reply names the limit (`send {"amount": <a whole number from 0 to 1000000>}`).

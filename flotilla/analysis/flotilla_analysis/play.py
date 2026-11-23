@@ -7,7 +7,8 @@ Message funnel, per (message, intended recipient) pair:
 - recipients: every other seat under test for a message to "all"; the named seat otherwise; none for a
   message a seat sends to itself or to a seat that is not under test (a scripted seat).
 - delivered: the message id is in ``data.ids`` of a ``deliver`` event of the recipient (a
-  ``GET /messages`` that returned it). The first such event gives the delivery time (world clock).
+  ``GET /messages`` that returned it, or from world v11 a gate refusal, ``via: gate``). The first such
+  event gives the delivery time (world clock).
 - seen: the recipient's terminal showed the message after delivery (``seen_pairs`` has the rule).
 - acted on: a generic per-trial proxy (``acted_on``).
 """
@@ -24,6 +25,7 @@ from typing import Any
 
 from flotilla_analysis import shell
 from flotilla_analysis.load import Evidence, Trajectory, Trial
+from flotilla_analysis.names import MESSAGING_CONDITIONS
 from flotilla_analysis.tasks import (
     TaskInfo,
     answer_examples,
@@ -550,7 +552,7 @@ def found_lost(trial: Trial, evidence: Evidence, task: TaskInfo, final: float | 
 
     A measure that needs a hook the family module lacks is None ("unknown"), unless no message qualifies.
     """
-    if not trial.condition.startswith("talk"):
+    if trial.condition not in MESSAGING_CONDITIONS:
         return None
     final_right = None if final is None else final >= FULL
     submissions = evidence.submissions

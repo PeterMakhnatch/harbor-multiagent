@@ -26,9 +26,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-CONDITIONS = ("solo", "silent", "talk", "talk-liar", "talk-warned", "talk-liar-warned")
+CONDITIONS = ("solo", "silent", "talk", "talk-liar", "talk-warned", "talk-liar-warned", "gated")
+MESSAGING_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned", "gated")
 TASK_NAME = re.compile(
-    r"^flotilla/(?P<label>[a-z0-9_]+(?:\.[a-z0-9_]+)?)-(?P<instance>\d{3})-(?P<condition>solo|silent|talk|talk-liar|talk-warned|talk-liar-warned)$"
+    r"^flotilla/(?P<label>[a-z0-9_]+(?:\.[a-z0-9_]+)?)-(?P<instance>\d{3})-(?P<condition>solo|silent|talk|talk-liar|talk-warned|talk-liar-warned|gated)$"
 )
 LABEL = re.compile(r"^[a-z0-9_]+(?:\.[a-z0-9_-]+)?$")
 MANIFEST = "manifest.json"

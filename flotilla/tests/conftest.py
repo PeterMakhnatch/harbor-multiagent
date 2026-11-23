@@ -7,6 +7,7 @@ import http.client
 import importlib.util
 import itertools
 import json
+import socket
 import sys
 import threading
 from collections.abc import Iterator
@@ -58,7 +59,9 @@ class World:
 
     def request(self, method: str, path: str, token: str | None = None, body: Any = None,
                 raw: bytes | None = None, headers: dict[str, str] | None = None) -> tuple[int, Any, dict[str, str]]:
-        """(status, parsed JSON reply or None, reply headers). Never raises for an HTTP error status."""
+        """(status, parsed JSON reply or None, reply headers). Never raises for an HTTP error status. Returns only
+        after the server closed the connection, so the request's handler has returned (world v11 records a delivery
+        after the reply is written)."""
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         sent = dict(headers or {})
         if token is not None:
@@ -66,13 +69,17 @@ class World:
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
         if data is not None:
             sent.setdefault("Content-Type", "application/json")
+        done = None
         try:
             connection.request(method, path, body=data, headers=sent)
+            done = connection.sock.dup()
             response = connection.getresponse()
             payload = response.read()
             return response.status, (json.loads(payload) if payload else None), dict(response.getheaders())
         finally:
             connection.close()
+            if done is not None:
+                wait_for_close(done)
 
     def seat(self, seat: str, method: str, path: str, body: Any = None) -> tuple[int, Any]:
         status, reply, _headers = self.request(method, path, token=self.tokens[seat], body=body)
@@ -83,6 +90,19 @@ class World:
 
     def kinds(self) -> list[str]:
         return [event["kind"] for event in self.events()]
+
+
+def wait_for_close(sock: socket.socket, limit: int = 64) -> None:
+    """Read until the peer closes the connection (at most `limit` reads of 10 seconds each), then close."""
+    try:
+        sock.settimeout(10)
+        for _ in range(limit):
+            if not sock.recv(4096):
+                break
+    except OSError:
+        pass
+    finally:
+        sock.close()
 
 
 @pytest.fixture

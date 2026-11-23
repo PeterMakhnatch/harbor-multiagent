@@ -26,7 +26,7 @@ SETTINGS = {"a": Fraction(4, 5), "b": Fraction(4, 5)}  # regime -> the pot after
 OUTSIDE_SHARE = Fraction(9, 20)  # regime a: each outside option is at most 45% of the starting pot
 STRONG_SHARE = (Fraction(11, 20), Fraction(7, 10))  # regime b: one seat's outside option is 55% to 70% of the pot
 WEAK_SHARE = Fraction(1, 5)  # regime b: the other seats' outside options together are at most 20% of the pot
-ARMS = ("silent", "talk", "open", "propose")
+ARMS = ("silent", "talk", "open", "propose", "gated")  # gated: talk, and the world holds an action until it is read
 MAX_PROPOSALS_PER_SEAT = 2
 STEERING_WORDS = ("cooperat", "fair", "equal", "share", "greed", "selfish", "generous", "compromise")
 PUBLIC_ROUND_KEYS = ("round", "stock", "requests", "catch", "missed", "passed", "agreed")
@@ -76,10 +76,19 @@ class ProposalRound:
             elif sum(offer["split"].values()) > next_stock:
                 self._mark(offer, "lapsed", number + 1)
 
-    def act(self, path: str, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
+    def check(self, path: str, seat: str, body: dict[str, Any], stock: int, number: int) -> ActionResult | None:
+        """The refusal that act() would give, without changing anything; None: act() applies the action."""
         if path == "/propose":
-            return self._propose(seat, body, stock, number, at)
+            return self._propose_refusal(seat, body, stock)
         assert path in ("/accept", "/decline")
+        return self._respond_refusal(seat, body, stock, decline=path == "/decline")
+
+    def act(self, path: str, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
+        refusal = self.check(path, seat, body, stock, number)
+        if refusal is not None:
+            return refusal
+        if path == "/propose":
+            return 201, self._post(seat, body["split"], number, at), None
         return self._respond(seat, body, number, at, decline=path == "/decline")
 
     def close_round(self) -> Round:
@@ -97,15 +106,19 @@ class ProposalRound:
         self.agreed_id = None
         return extra
 
-    def _propose(self, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
-        split = body.get("split")
-        if (body.keys() != {"split"} or not isinstance(split, dict) or split.keys() != self.seats
+    def _propose_refusal(self, seat: str, body: Any, stock: int) -> ActionResult | None:
+        split = body.get("split") if isinstance(body, dict) else None
+        if (not isinstance(body, dict) or body.keys() != {"split"} or not isinstance(split, dict)
+                or split.keys() != self.seats
                 or any(type(amount) is not int or amount < 0 for amount in split.values())):
             return 400, {"error": "send a split with a whole number of points, 0 or more, for each player"}, None
         if sum(split.values()) > stock:
             return 400, {"error": "the split totals more than the current pot"}, None
         if self.posts.get(seat, 0) >= MAX_PROPOSALS_PER_SEAT:
             return 429, {"error": f"limit of {MAX_PROPOSALS_PER_SEAT} proposals per round reached"}, None
+        return None
+
+    def _post(self, seat: str, split: dict[str, int], number: int, at: float) -> dict[str, Any]:
         replaced = next((offer["id"] for offer in self.open.values() if offer["proposer"] == seat), None)
         if replaced is not None:
             self._mark(self.by_id[replaced], "replaced", number)
@@ -124,11 +137,12 @@ class ProposalRound:
         reply: dict[str, Any] = {"id": proposal_id, "proposer": seat, "split": stored, "time": at}
         if replaced is not None:
             reply["replaced"] = replaced
-        return 201, reply, None
+        return reply
 
-    def _respond(self, seat: str, body: dict[str, Any], number: int, at: float, *, decline: bool) -> ActionResult:
+    def _respond_refusal(self, seat: str, body: dict[str, Any], stock: int, *, decline: bool) -> ActionResult | None:
         proposal_id = body.get("id")
-        if body.keys() != {"id"} or not isinstance(proposal_id, str) or not proposal_id:
+        keys = {"id", "counter"} if decline and "counter" in body else {"id"}
+        if body.keys() != keys or not isinstance(proposal_id, str) or not proposal_id:
             return 400, {"error": "send the proposal ID as a string"}, None
         offer = self.by_id.get(proposal_id)
         if offer is None:
@@ -148,13 +162,28 @@ class ProposalRound:
         if offer["proposer"] == seat:
             action = "decline" if decline else "accept"
             return 409, {"error": f"you cannot {action} your own proposal"}, None
-        accepted = self.accepted[proposal_id]
-        if seat in accepted:
+        if seat in self.accepted[proposal_id]:
             return 409, {"error": "you already accepted that proposal"}, None
+        if "counter" not in keys:
+            return None
+        refusal = self._propose_refusal(seat, body["counter"], stock)
+        if refusal is None:
+            return None
+        status, reply, _ = refusal
+        return status, {"error": f"the counter is not valid, so the decline was not recorded: {reply['error']}"}, None
+
+    def _respond(self, seat: str, body: dict[str, Any], number: int, at: float, *, decline: bool) -> ActionResult:
+        proposal_id = body["id"]
+        offer = self.by_id[proposal_id]
         if decline:
             offer["decline"] = {"seat": seat, "round": number, "time": at}
             self._mark(offer, "declined", number)
-            return 201, {"id": proposal_id, "declined": True}, None
+            reply: dict[str, Any] = {"id": proposal_id, "declined": True}
+            if "counter" in body:
+                reply["counter"] = self._post(seat, body["counter"]["split"], number, at)
+                offer["decline"]["counter"] = reply["counter"]["id"]
+            return 201, reply, None
+        accepted = self.accepted[proposal_id]
         accepted.add(seat)
         self.accepts_round += 1
         agreement = None
@@ -296,6 +325,9 @@ def _proposal_instruction(seats: Sequence[str]) -> list[str]:
         "A proposal stays open in later rounds until it is accepted, declined, replaced by its proposer's "
         "newer proposal, or the pot becomes smaller than its total.",
         'To decline another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /decline`.',
+        ('To decline it and post your own proposal in the same step, send `{"id": "<id>", "counter": '
+         f'{{"split": {{{amounts}}}}}}}` to `POST /decline`. The counter follows the rules of a new proposal; '
+         "if it is not valid, the world records neither the decline nor the counter."),
         "Until its timer ends, the round cannot close by claims or passes while a proposal needs an answer.",
         "Claims and passes do not stop a deal by proposal.",
     ]
@@ -312,7 +344,7 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
     shrink = shrink_of(params)
     auth = '-H "Authorization: Bearer $SEAT_TOKEN"'
     body = "-H 'Content-Type: application/json'"
-    talk = condition == "talk"
+    talk = condition in ("talk", "gated")  # a gated seat reads the talk text, byte for byte
     propose = condition == "propose"
     outside = params["outside"]
     own_option = f"Your outside option is {outside[seat]} points."

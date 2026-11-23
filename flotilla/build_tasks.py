@@ -512,7 +512,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          "world_version": WORLD_VERSION, "max_text": max_text, "max_messages": max_messages}
             if game:
                 task_json |= {"mode": "rounds", "game": arm, "round_seconds": round_seconds,
-                              "max_messages_per_round": max_messages_per_round}
+                              "max_messages_per_round": max_messages_per_round, "read_gate": condition == "gated"}
             else:
                 task_json["answer_key"] = inst["answer_key"]
             if submitter:
