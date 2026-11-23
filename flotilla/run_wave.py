@@ -43,7 +43,8 @@ KEEP = frozenset({
 })
 KEEP_PREFIXES = ("LC_", "XDG_", "MODAL_", "DOCKER_")
 BALANCE_BACKOFF = (2, 5, 10)
-LEAKY = ("silent", "talk", "open", "propose", "solo", "deepseek", "qwen", "gpt", "oracle")
+LEAKY = ("silent", "talk", "open", "propose", "gated", "solo", "deepseek", "qwen", "gpt", "claude", "haiku", "luna",
+          "oracle")
 _SPEC = importlib.util.spec_from_file_location("flotilla_pricing", ROOT / "pricing.py")
 PRICING = importlib.util.module_from_spec(_SPEC)  # type: ignore[arg-type]
 assert _SPEC and _SPEC.loader
