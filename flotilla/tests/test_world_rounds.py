@@ -136,8 +136,9 @@ def test_an_accepted_split_proposal_settles_immediately_and_scores_as_one_deal(s
     assert world.seat("p1", "POST", "/messages", {"to": "all", "text": "test"})[0] == 403
     status, proposal = world.seat("p1", "POST", "/propose", {"split": split})
     assert status == 201 and proposal == {"id": proposal["id"], "proposer": "p1", "split": split, "time": 0.0}
+    public = {"id": proposal["id"], "proposer": "p1", "split": split, "round": 1}
     for seat in params["seats"]:
-        assert world.seat(seat, "GET", "/state")[1]["proposals"] == [proposal]
+        assert world.seat(seat, "GET", "/state")[1]["proposals"] == [public]
     accept = {"id": proposal["id"]}
     assert world.seat("p1", "POST", "/accept", accept)[0] == 409
     assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 201
@@ -162,7 +163,7 @@ def test_an_accepted_split_proposal_settles_immediately_and_scores_as_one_deal(s
     assert events[-1]["data"]["proposal_id"] == proposal["id"]
 
 
-def test_split_proposals_validate_each_amount_and_expire_at_the_round_deadline(start_world, tmp_path, monkeypatch):
+def test_split_proposals_validate_each_amount_and_lapse_when_the_pot_shrinks(start_world, tmp_path, monkeypatch):
     world, params = split_world(start_world, tmp_path)
     clock = 0.0
     monkeypatch.setattr(world.module, "now", lambda: clock)
@@ -173,25 +174,33 @@ def test_split_proposals_validate_each_amount_and_expire_at_the_round_deadline(s
     for bad in (None, 1, [], "", {}):
         assert world.seat("p2", "POST", "/accept", {"id": bad})[0] == 400, bad
     assert world.seat("p2", "GET", "/state")[1]["proposals"] == []
+    assert world.seat("p2", "POST", "/accept", {"id": "9-9"}) == (409, {"error": "no proposal with that ID"})
 
     split = {"split": {"p1": 60, "p2": 40}}
     first = world.seat("p1", "POST", "/propose", split)[1]
-    assert world.seat("p1", "POST", "/propose", split)[0] == 201
+    second = world.seat("p1", "POST", "/propose", split)[1]
+    assert second["replaced"] == first["id"]
     assert world.seat("p1", "POST", "/propose", split)[0] == 429
-    assert world.seat("p2", "POST", "/propose", split)[0] == 201
-    assert len(world.seat("p2", "GET", "/state")[1]["proposals"]) == 3
+    third = world.seat("p2", "POST", "/propose", split)[1]
+    shown = world.seat("p2", "GET", "/state")[1]["proposals"]
+    assert [item["id"] for item in shown] == [second["id"], third["id"]]
+    assert all(set(item) == {"id", "proposer", "split", "round"} for item in shown)
     clock = 30.0
-    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 409
+    replaced = world.seat("p2", "POST", "/accept", {"id": first["id"]})
+    assert replaced == (409, {"error": "that proposal was replaced"})
     view = world.seat("p1", "GET", "/state")[1]
     assert view["round"] == 2 and view["stock"] == 80 and view["proposals"] == []
+    lapsed = world.seat("p2", "POST", "/accept", {"id": second["id"]})
+    assert lapsed == (409, {"error": "that proposal lapsed"})
+    assert world.seat("p2", "POST", "/accept", {"id": third["id"]}) == lapsed
     assert world.seat("p1", "POST", "/propose", split)[0] == 400
     status, next_proposal = world.seat("p1", "POST", "/propose", {"split": {"p1": 60, "p2": 20}})
     assert status == 201 and next_proposal["id"] != first["id"]
-    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 409
     assert world.seat("p2", "POST", "/accept", {"id": next_proposal["id"]})[0] == 201
     log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
     score = SPLIT.score_game(params, log)
     assert score["deal_round"] == 2 and score["proposals"] == 4 and score["acceptances"] == 1
+    assert (score["replaced"], score["lapsed"], score["accepted"], score["expired"]) == (1, 2, 1, 0)
     assert any(event["kind"] == "denied" and event["data"]["status"] == 429 for event in world.events())
 
 
@@ -203,16 +212,18 @@ def test_every_other_seat_must_accept_the_same_split_proposal(start_world, tmp_p
     split = {"p1": 46, "p2": 28, "p3": 26}
     status, first = world.seat("p1", "POST", "/propose", {"split": split})
     assert status == 201
-    status, second = world.seat("p1", "POST", "/propose", {"split": {"p1": 43, "p2": 29, "p3": 28}})
+    status, second = world.seat("p2", "POST", "/propose", {"split": {"p1": 40, "p2": 30, "p3": 30}})
     assert status == 201
-    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 201
-    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 409
     assert world.seat("p3", "POST", "/accept", {"id": second["id"]})[0] == 201
+    assert world.seat("p3", "POST", "/accept", {"id": second["id"]})[0] == 409
+    assert not world.seat("p1", "GET", "/state")[1]["season_over"]
+    assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 201
     assert not world.seat("p1", "GET", "/state")[1]["season_over"]
     assert world.seat("p3", "POST", "/accept", {"id": first["id"]})[0] == 201
     log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
     assert log[-1]["proposal_id"] == first["id"] and log[-1]["catch"] == split
-    assert SPLIT.score_game(params, log)["acceptances"] == 3
+    score = SPLIT.score_game(params, log)
+    assert score["acceptances"] == 3 and score["accepted"] == 1 and score["expired"] == 1
 
 
 def test_a_claim_deal_can_end_the_propose_game(start_world, tmp_path):
@@ -232,6 +243,69 @@ def test_a_claim_deal_can_end_the_propose_game(start_world, tmp_path):
     assert log[0]["passed"] == ["p2"] and not log[0]["agreed"]
     assert score["via"] == "claim" and score["deal_round"] == 2 and score["totals"] == {"p1": 20, "p2": 60}
     assert score["proposals"] == 2 and score["acceptances"] == 0
+    assert score["expired"] == 2 and score["accepted"] == score["replaced"] == score["lapsed"] == 0
+
+
+def test_a_round_1_proposal_can_be_accepted_in_round_2_while_it_still_fits(start_world, tmp_path, monkeypatch):
+    world, params = split_world(start_world, tmp_path)
+    clock = 0.0
+    monkeypatch.setattr(world.module, "now", lambda: clock)
+    everyone_calls(world)
+    split = {"p1": 60, "p2": 20}
+    status, proposal = world.seat("p1", "POST", "/propose", {"split": split})
+    assert status == 201
+    clock = 30.0
+    assert world.seat("p1", "GET", "/state")[1]["round"] == 2
+    shown = world.seat("p2", "GET", "/state")[1]["proposals"]
+    assert shown == [{"id": proposal["id"], "proposer": "p1", "split": split, "round": 1}]
+    assert "seen" not in shown[0] and "feasible" not in shown[0]
+    assert world.seat("p2", "POST", "/accept", {"id": proposal["id"]})[0] == 201
+    assert world.seat("p2", "GET", "/state")[1]["season_over"]
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    score = SPLIT.score_game(params, log)
+    assert score["via"] == "proposal" and score["deal_round"] == 2 and score["totals"] == split
+    assert score["accepted"] == 1 and score["lapsed"] == score["replaced"] == score["expired"] == 0
+    assert score["feasible"] == 1 and score["feasible_unseen"] == 0
+    seen = [event for event in world.events() if event["kind"] == "seen"]
+    assert [(event["seat"], event["data"]["id"]) for event in seen] == [("p2", proposal["id"])]
+
+
+def test_a_feasible_proposal_no_other_seat_reads_counts_as_unseen(start_world, tmp_path, monkeypatch):
+    world, params = split_world(start_world, tmp_path)
+    clock = 0.0
+    monkeypatch.setattr(world.module, "now", lambda: clock)
+    everyone_calls(world)
+    status, proposal = world.seat("p1", "POST", "/propose", {"split": {"p1": 60, "p2": 20}})
+    assert status == 201
+    clock = 30.0
+    assert world.seat("p1", "GET", "/state")[1]["proposals"][0]["id"] == proposal["id"]
+    clock = 60.0
+    view = world.seat("p1", "GET", "/state")[1]
+    assert view["round"] == 3 and view["stock"] == 64 and view["proposals"] == []
+    refused = world.seat("p2", "POST", "/accept", {"id": proposal["id"]})
+    assert refused == (409, {"error": "that proposal lapsed"})
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    score = SPLIT.score_game(params, log)
+    assert score["lapsed"] == 1 and score["feasible"] == 1 and score["feasible_unseen"] == 1
+    assert score["accepted"] == score["replaced"] == score["expired"] == 0
+    assert not [event for event in world.events() if event["kind"] == "seen"]
+    assert "feasible" not in world.seat("p2", "GET", "/state")[1]
+
+
+def test_a_newer_proposal_replaces_the_older_and_the_old_id_is_refused(start_world, tmp_path):
+    world, params = split_world(start_world, tmp_path)
+    everyone_calls(world)
+    first = world.seat("p1", "POST", "/propose", {"split": {"p1": 60, "p2": 20}})[1]
+    second = world.seat("p1", "POST", "/propose", {"split": {"p1": 55, "p2": 25}})[1]
+    assert second["replaced"] == first["id"]
+    shown = world.seat("p2", "GET", "/state")[1]["proposals"]
+    assert [item["id"] for item in shown] == [second["id"]]
+    assert world.seat("p2", "POST", "/accept", {"id": first["id"]}) == (409, {"error": "that proposal was replaced"})
+    assert world.seat("p2", "POST", "/accept", {"id": second["id"]})[0] == 201
+    log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+    score = SPLIT.score_game(params, log)
+    assert score["replaced"] == 1 and score["accepted"] == 1 and score["feasible"] == 2
+    assert score["feasible_unseen"] == 1
 
 
 def test_a_collapse_ends_the_season(start_world, tmp_path):
@@ -263,7 +337,7 @@ def test_the_season_ends_after_its_secret_length_and_no_reply_states_it(start_wo
         else:
             assert set(reply) == {"round", "amount"}
     admin = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert admin["world_version"] == 8 and len(admin["game"]["log"]) == 3
+    assert admin["world_version"] == 9 and len(admin["game"]["log"]) == 3
 
 
 def test_wait_returns_when_the_round_closes(start_world, tmp_path):

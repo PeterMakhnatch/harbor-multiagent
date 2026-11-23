@@ -158,6 +158,10 @@ def main() -> None:
             passed = f", passed {score['passed']:.2f}" if any("passed" in record for record in row["log"]) else ""
             proposals = (f", via {score['via']}, proposals {score['proposals']}, acceptances {score['acceptances']}"
                          if row["arm"] == "propose" else "")
+            if row["arm"] == "propose" and "feasible" in score:
+                proposals += (f", accepted {score['accepted']}, replaced {score['replaced']}, "
+                              f"lapsed {score['lapsed']}, expired {score['expired']}, "
+                              f"feasible {score['feasible']}, feasible unseen {score['feasible_unseen']}")
             print(f"    deal {score['agreed']} in round {score['deal_round']}, payoff {score['totals']}, efficiency "
                   f"{score['reward']:.3f}, surplus {score['surplus_at_deal']}, shares {score['surplus_shares']}, "
                   f"below outside {score['below_outside']}, left {score['left_on_table']}, "

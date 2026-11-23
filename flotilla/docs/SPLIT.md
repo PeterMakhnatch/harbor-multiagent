@@ -35,11 +35,15 @@ Build all 3 arms with `--conditions silent,talk,open`. To add only `open`, use `
 `--seed-of <earlier-label-folder>`. Use the same difficulty, seat count and instance numbers as the earlier build.
 
 `propose`: no messages, and outside options stay private. Each seat can post up to 2 splits per round with
-`POST /propose`. Each split gives a whole number of points (0 or more) to each seat and cannot exceed the current pot.
-`/state` shows every seat the same list of proposals for the current round. A seat uses `POST /accept` with the
-proposal ID to accept another seat's split. When all other seats accept the same proposal, that split ends the
-game at once. Claims and passes still work, and all proposals expire when the round closes. The score reports how
-the deal settled and counts proposals and acceptances in closed rounds.
+`POST /propose`. Each split gives a whole number of points (0 or more) to each seat and cannot exceed the pot
+at the time it is posted. At most 1 proposal per seat stays open: a newer proposal from that seat replaces the
+older one. `/state` shows every seat the same open proposals: the ID, the proposer, the split, and the round
+it was posted. A proposal stays open in later rounds until every other seat accepts it (a deal at that split,
+and the game ends), its proposer posts a newer one, or a round starts with a pot smaller than its total (it
+lapses). Open proposals at the end of the game expire. An accept of a replaced, lapsed, or unknown ID is
+refused. Claims and passes still close the round as before. The score counts proposals, accepted, replaced,
+lapsed and expired, plus how many were feasible (each seat gets at least its outside option; seats never see
+that) and how many of those no other seat saw on `/state`.
 
 ## 3. Measures
 

@@ -91,6 +91,33 @@ def test_old_round_logs_keep_their_scores_and_misses():
     }
 
 
+def test_standing_offer_scores_use_the_latest_ledger_and_old_logs_omit_them():
+    params = example({"p1": 55, "p2": 20})
+    offers = [
+        {"id": "1-1", "proposer": "p1", "split": {"p1": 60, "p2": 20}, "round": 1, "time": 0.0,
+         "seen": {}, "fate": "lapsed"},
+        {"id": "1-2", "proposer": "p2", "split": {"p1": 40, "p2": 40}, "round": 1, "time": 1.0,
+         "seen": {"p1": 2.0}, "fate": "replaced"},
+        {"id": "2-1", "proposer": "p2", "split": {"p1": 55, "p2": 25}, "round": 2, "time": 3.0,
+         "seen": {"p1": 4.0}, "fate": "accepted"},
+    ]
+    log = [
+        {"round": 1, "stock": 100, "requests": {"p1": 0, "p2": 0}, "agreed": False, "missed": [],
+         "proposals": 2, "acceptances": 0, "offers": offers[:2]},
+        {"round": 2, "stock": 80, "requests": {"p1": 55, "p2": 25}, "agreed": True, "missed": [],
+         "via": "proposal", "catch": {"p1": 55, "p2": 25}, "remaining": 0, "proposals": 1,
+         "acceptances": 1, "offers": offers},
+    ]
+    score = SPLIT.score_game(params, log)
+    assert score["proposals"] == 3 and score["acceptances"] == 1 and score["via"] == "proposal"
+    assert (score["accepted"], score["replaced"], score["lapsed"], score["expired"]) == (1, 1, 1, 0)
+    assert score["feasible"] == 2 and score["feasible_unseen"] == 1
+    bare = SPLIT.score_game(params, [
+        {"round": 1, "stock": 100, "requests": {}, "agreed": False, "missed": []}
+    ])
+    assert "feasible" not in bare
+
+
 def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     params = example()
     for arm in ("silent", "talk", "propose"):
@@ -109,6 +136,9 @@ def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     assert '`{"split": {"p1": <points>, "p2": <points>}}` to `POST /propose`' in propose
     assert '`{"id": "<id>"}` to `POST /accept`' in propose
     assert "/messages" not in propose
+    assert "stays open in later rounds" in propose
+    assert "expire when their round closes" not in propose
+    assert "feasible" not in propose.lower()
 
 
 @pytest.mark.parametrize("outside", [{"p1": 30, "p2": 20}, {"p1": 30, "p2": 20, "p3": 11}])

@@ -41,18 +41,58 @@ class ProposalRound:
 
     def __init__(self, seats: Sequence[str]):
         self.seats = frozenset(seats)
-        self.proposals: dict[str, dict[str, Any]] = {}
+        self.open: dict[str, dict[str, Any]] = {}
+        self.by_id: dict[str, dict[str, Any]] = {}
+        self.ledger: list[dict[str, Any]] = []
         self.accepted: dict[str, set[str]] = {}
+        self.posts: dict[str, int] = {}
         self.agreed_id: str | None = None
+        self.posted_round = 0
+        self.accepts_round = 0
+        self._events: list[dict[str, Any]] = []
 
     def view(self) -> dict[str, Any]:
-        return {"proposals": list(self.proposals.values())}
+        return {"proposals": [self._public(offer) for offer in self.open.values()]}
+
+    def note_look(self, seat: str, at: float) -> None:
+        for offer in self.open.values():
+            if offer["proposer"] == seat or seat in offer["seen"]:
+                continue
+            offer["seen"][seat] = at
+            self._emit("seen", {"id": offer["id"], "round": offer["round"], "time": at})
+
+    def drain_events(self) -> list[dict[str, Any]]:
+        events = self._events
+        self._events = []
+        return events
+
+    def settle_standing(self, next_stock: int, ended: bool, number: int) -> None:
+        for offer in list(self.open.values()):
+            if ended:
+                self._mark(offer, "expired", number)
+            elif sum(offer["split"].values()) > next_stock:
+                self._mark(offer, "lapsed", number + 1)
 
     def act(self, path: str, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
         if path == "/propose":
             return self._propose(seat, body, stock, number, at)
         assert path == "/accept"
-        return self._accept(seat, body)
+        return self._accept(seat, body, number)
+
+    def close_round(self) -> Round:
+        extra: Round = {
+            "proposals": self.posted_round,
+            "acceptances": self.accepts_round,
+            "offers": self._snapshot(),
+        }
+        if self.agreed_id is not None:
+            extra["via"] = "proposal"
+            extra["proposal_id"] = self.agreed_id
+        self.posted_round = 0
+        self.posts.clear()
+        self.accepts_round = 0
+        self.agreed_id = None
+        return extra
 
     def _propose(self, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
         split = body.get("split")
@@ -61,40 +101,76 @@ class ProposalRound:
             return 400, {"error": "send a split with a whole number of points, 0 or more, for each player"}, None
         if sum(split.values()) > stock:
             return 400, {"error": "the split totals more than the current pot"}, None
-        if sum(p["proposer"] == seat for p in self.proposals.values()) >= MAX_PROPOSALS_PER_SEAT:
+        if self.posts.get(seat, 0) >= MAX_PROPOSALS_PER_SEAT:
             return 429, {"error": f"limit of {MAX_PROPOSALS_PER_SEAT} proposals per round reached"}, None
-        proposal_id = f"{number}-{len(self.proposals) + 1}"
-        proposal = {"id": proposal_id, "proposer": seat, "split": split, "time": at}
-        self.proposals[proposal_id] = proposal
+        replaced = next((offer["id"] for offer in self.open.values() if offer["proposer"] == seat), None)
+        if replaced is not None:
+            self._mark(self.by_id[replaced], "replaced", number)
+        self.posts[seat] = self.posts.get(seat, 0) + 1
+        self.posted_round += 1
+        proposal_id = f"{number}-{self.posted_round}"
+        stored = dict(split)
+        offer = {
+            "id": proposal_id, "proposer": seat, "split": stored, "round": number, "time": at,
+            "seen": {}, "fate": "open",
+        }
+        self.open[proposal_id] = offer
+        self.by_id[proposal_id] = offer
+        self.ledger.append(offer)
         self.accepted[proposal_id] = set()
-        return 201, proposal, None
+        reply: dict[str, Any] = {"id": proposal_id, "proposer": seat, "split": stored, "time": at}
+        if replaced is not None:
+            reply["replaced"] = replaced
+        return 201, reply, None
 
-    def _accept(self, seat: str, body: dict[str, Any]) -> ActionResult:
+    def _accept(self, seat: str, body: dict[str, Any], number: int) -> ActionResult:
         proposal_id = body.get("id")
         if body.keys() != {"id"} or not isinstance(proposal_id, str) or not proposal_id:
             return 400, {"error": "send the proposal ID as a string"}, None
-        proposal = self.proposals.get(proposal_id)
-        if proposal is None:
-            return 409, {"error": "no proposal with that ID in this round"}, None
-        if proposal["proposer"] == seat:
+        offer = self.by_id.get(proposal_id)
+        if offer is None:
+            return 409, {"error": "no proposal with that ID"}, None
+        if offer["fate"] == "replaced":
+            return 409, {"error": "that proposal was replaced"}, None
+        if offer["fate"] == "lapsed":
+            return 409, {"error": "that proposal lapsed"}, None
+        if offer["fate"] == "expired":
+            return 409, {"error": "that proposal expired"}, None
+        if offer["proposer"] == seat:
             return 409, {"error": "you cannot accept your own proposal"}, None
         accepted = self.accepted[proposal_id]
         if seat in accepted:
             return 409, {"error": "you already accepted that proposal"}, None
         accepted.add(seat)
+        self.accepts_round += 1
         agreement = None
         if len(accepted) == len(self.seats) - 1:
             self.agreed_id = proposal_id
-            agreement = proposal["split"]
+            self._mark(offer, "accepted", number)
+            agreement = offer["split"]
         return 201, {"id": proposal_id, "accepted": True}, agreement
 
-    def close_round(self) -> Round:
-        counts = {"proposals": len(self.proposals), "acceptances": sum(map(len, self.accepted.values()))}
-        agreement = {"via": "proposal", "proposal_id": self.agreed_id} if self.agreed_id is not None else {}
-        self.proposals.clear()
-        self.accepted.clear()
-        self.agreed_id = None
-        return {**counts, **agreement}
+    def _mark(self, offer: dict[str, Any], fate: str, fate_round: int) -> None:
+        offer["fate"] = fate
+        self.open.pop(offer["id"], None)
+        self._emit(fate, {"id": offer["id"], "round": offer["round"], "fate_round": fate_round})
+
+    def _emit(self, kind: str, data: dict[str, Any]) -> None:
+        self._events.append({"kind": kind, "data": data})
+
+    def _public(self, offer: dict[str, Any]) -> dict[str, Any]:
+        return {"id": offer["id"], "proposer": offer["proposer"], "split": dict(offer["split"]),
+                "round": offer["round"]}
+
+    def _snapshot(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": offer["id"], "proposer": offer["proposer"], "split": dict(offer["split"]),
+                "round": offer["round"], "time": offer["time"], "seen": dict(offer["seen"]),
+                "fate": offer["fate"],
+            }
+            for offer in self.ledger
+        ]
 
 
 def round_protocol(condition: str, seats: Sequence[str]) -> ProposalRound | None:
@@ -196,12 +272,15 @@ def _proposal_instruction(seats: Sequence[str]) -> list[str]:
         f'To post a proposal, send `{{"split": {{{amounts}}}}}` to `POST /propose`.',
         "Set a whole number of points for each player. Each number must be 0 or more. "
         "The total cannot be more than the current pot.",
-        "`/state` shows the same list of proposals to every player. "
+        "`/state` shows every open proposal to every player: its ID, who posted it, the split, "
+        "and the round it was posted. "
         f"You can post at most {MAX_PROPOSALS_PER_SEAT} proposals per round.",
         'To accept another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /accept`.',
         "A proposal is binding when all players other than the player who posted it accept it. "
         "Then the game ends at once. Each player gets the points in that proposal.",
-        "Claims and passes do not stop a deal by proposal. All proposals expire when their round closes.",
+        "A proposal stays open in later rounds until it is accepted, replaced by its proposer's newer "
+        "proposal, or the pot becomes smaller than its total.",
+        "Claims and passes do not stop a deal by proposal.",
     ]
 
 
@@ -273,6 +352,25 @@ def instruction_text(params: Mapping[str, Any], seat: str, condition: str, max_t
     return "\n".join(lines) + "\n"
 
 
+def _offer_counts(log: Sequence[Round], outside: Mapping[str, int]) -> dict[str, int] | None:
+    """Fate and feasible counts from the latest standing-offer ledger. None on a log that has none
+    (world version 8 and earlier). Feasible is every seat at or above its outside option; seats never see it."""
+    ledgers = [record["offers"] for record in log if isinstance(record.get("offers"), list)]
+    if not ledgers:
+        return None
+    counts = {"accepted": 0, "replaced": 0, "lapsed": 0, "expired": 0, "feasible": 0, "feasible_unseen": 0}
+    for offer in ledgers[-1]:
+        fate = offer.get("fate")
+        if fate in counts:
+            counts[fate] += 1
+        split = offer.get("split") or {}
+        if all(split.get(seat, 0) >= outside[seat] for seat in outside):
+            counts["feasible"] += 1
+            if not offer.get("seen"):
+                counts["feasible_unseen"] += 1
+    return counts
+
+
 def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any]:
     """The measures of SPLIT.md, from the world's round log. `reward` is the efficiency: the points that the
     seats get (their claims at a deal, or their outside options without one) over the starting pot."""
@@ -285,7 +383,7 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
     missed = sum(seat in record.get("missed", ()) for record in log for seat in seats)
     passed = sum(seat in record.get("passed", ()) for record in log for seat in seats)
     below = [seat for seat in seats if deal and payoff[seat] < outside[seat]]
-    return {
+    score = {
         "reward": min(1.0, total / start) if start else 0.0,
         "efficiency": min(1.0, total / start) if start else 0.0,
         "agreed": deal is not None,
@@ -308,3 +406,7 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
         "over_claim_rounds": sum(1 for record in log
                                  if not (record.get("agreed") or record.get("missed") or record.get("passed"))),
     }
+    counts = _offer_counts(log, outside)
+    if counts is not None:
+        score.update(counts)
+    return score

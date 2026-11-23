@@ -39,7 +39,12 @@ from urllib.parse import parse_qs, urlsplit
 # act as the wrong seat; message ids are random (a counter showed the number of hidden direct messages).
 # Version 6: bound submission history and sample unattributed errors; record HTTP parser refusals.
 # Version 7: rounds games can allow a pass as an explicit action, separate from a missed round.
-WORLD_VERSION = 8
+# Version 8: an optional round protocol (extra POST paths, /state fields, close-round log fields).
+# Version 9: standing offers. Optional hooks, called only if the protocol defines them:
+# note_look(seat, time) on GET /state, settle_standing(next_stock, ended, round) before the round
+# log line, and drain_events() for offer fates. A round still closes when every seat has acted
+# or the round's time ends.
+WORLD_VERSION = 9
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -199,6 +204,27 @@ def tick(at: float | None = None) -> None:
         close_round(game["opened"] + ROUND_SECONDS)
 
 
+def _drain_protocol(seat: str | None) -> None:
+    """Write offer events the protocol queued. Callers hold LOCK. No-op when the hook is absent."""
+    if ROUND_PROTOCOL is None:
+        return
+    drain = getattr(ROUND_PROTOCOL, "drain_events", None)
+    if drain is None:
+        return
+    for item in drain():
+        record(item["kind"], seat, item["data"])
+
+
+def _note_look(seat: str) -> None:
+    """The first GET /state by another seat after a proposal was posted. Callers hold LOCK."""
+    if ROUND_PROTOCOL is None:
+        return
+    note = getattr(ROUND_PROTOCOL, "note_look", None)
+    if note is not None:
+        note(seat, now())
+    _drain_protocol(seat)
+
+
 def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
     """Settle the open round; a seat that did not act catches 0 and is `missed`. Callers hold LOCK."""
     game = STATE["game"]
@@ -209,12 +235,19 @@ def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
     if GAME_ALLOWS_PASS:
         pass_data["passed"] = [seat for seat in SEATS if seat in actions and actions[seat] is None]
     result = GAME.settle(game["stock"], requests, PARAMS, missed=missed, **pass_data)
-    extra = ROUND_PROTOCOL.close_round() if ROUND_PROTOCOL is not None else {}
+    ended = bool(result["collapsed"] or result.get("ends") or game["round"] >= PARAMS["rounds"])
+    extra: dict[str, Any] = {}
+    if ROUND_PROTOCOL is not None:
+        settle = getattr(ROUND_PROTOCOL, "settle_standing", None)
+        if settle is not None:
+            settle(result["next_stock"], ended, game["round"])
+        _drain_protocol(None)
+        extra = ROUND_PROTOCOL.close_round()
     game["log"].append({"round": game["round"], "missed": missed, "opened": game["opened"], "closed": round(at, 3),
                         **pass_data, **result, **extra})
     record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"],
                            **pass_data, **extra})
-    if result["collapsed"] or result.get("ends") or game["round"] >= PARAMS["rounds"]:  # ends: e.g. a deal
+    if ended:  # a deal, a collapse, or the deadline
         game["over"], game["stock"] = True, result["next_stock"]  # the state shows the lake after the season
         record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
     else:
@@ -393,6 +426,7 @@ class World(BaseHTTPRequestHandler):
                 with LOCK:
                     tick()
                     record("look", seat, {"round": STATE["game"]["round"]})
+                    _note_look(seat)
                     view = game_view(seat)
                 self._reply(200, view)
             elif path == "/wait":
@@ -573,6 +607,7 @@ class World(BaseHTTPRequestHandler):
             else:
                 record("invalid" if status == 400 else "denied", seat,
                        {"method": "POST", "path": path, "status": status, "reason": reply["error"]})
+            _drain_protocol(seat)
             if agreement is not None:
                 close_round(at, agreement=agreement)
         self._reply(status, reply)
