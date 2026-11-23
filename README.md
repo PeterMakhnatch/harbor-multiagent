@@ -30,6 +30,8 @@ git fetch --depth 1 origin 71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
 
 This does not switch branches or fetch model data. Live trials also need the fork's Python environment, local Docker and a slot wrapper. Use the [new-cohort commands](examples/seatlab/shared-read.md#run-the-same-comparison-on-eight-new-worlds) to divide calendars among workers. Use the [business worker commands](examples/seatlab/market-operations.md#how-independent-workers-run-this-study) to divide companies. The offline replay does not need these steps.
 
+To use your own seat programs, follow the [four-program calendar example](examples/seatlab/external-seats.md#run-one-team). Each process reads a seat prompt and returns one answer. Harbor grades the team. The connector records what crossed each socket; it does not guess the model, the token count or the bill.
+
 The fork homepage and default branch do not include the workbench yet. Use the `experiments/seatlab-workbench` branch above.
 
 ## SeatLab: test what a receiver can do with a peer report
