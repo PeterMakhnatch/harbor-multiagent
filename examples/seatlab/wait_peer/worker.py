@@ -18,7 +18,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Any, NoReturn, override
 
-from . import protocol
+from . import cohort, protocol, run
 
 SCHEMA = "seatlab.wait-peer-work/v1"
 HERE = Path(__file__).resolve().parent
@@ -27,7 +27,6 @@ RELAY = HERE.parent / "visibility" / "local_seat.py"
 AGY_SEAT = HERE.parent / "visibility" / "agy_seat.py"
 CONTROL = HERE / "control.py"
 PHASES = protocol.PHASES
-WORLDS = range(protocol.FIRST, protocol.FIRST + protocol.COUNT)
 CONTROL_TAGS = {"correct": "control-ok", "wrong": "control-wrong"}
 LIVE_TAG = "live"
 SOCKET_ROOT = "/tmp"
@@ -124,7 +123,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("tasks", type=Path)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--sha256", required=True)
-    parser.add_argument("--world", type=int, required=True, choices=WORLDS)
+    parser.add_argument("--world", type=int, required=True)
     parser.add_argument("--arm", required=True, choices=protocol.ARMS)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--slot", type=Path, required=True)
@@ -180,12 +179,30 @@ def new_cell(out: Path) -> Path:
     return cell
 
 
+def bound_task(tasks: Path, manifest: Path, sha256: str, world: int) -> Path:
+    try:
+        selected, rows = cohort.load(manifest, sha256)
+    except FAILURES:
+        raise Refused("manifest_invalid") from None
+    if not selected.first <= world <= selected.last:
+        raise Refused("world_outside_cohort")
+    try:
+        task = run.content_bind(tasks, selected, rows, world)["task"]
+    except FAILURES:
+        raise Refused("task_mismatch") from None
+    try:
+        cohort.verify_origin(selected, sha256)
+    except cohort.Unverified as failure:
+        raise Refused(failure.reason) from None
+    return task
+
+
 def checked(args: argparse.Namespace) -> Plan:
     if SHA256.fullmatch(args.sha256) is None:
         raise Refused("sha256_invalid")
     tasks = real_directory(physical(args.tasks, "tasks_invalid"), "tasks_invalid")
-    task = real_directory(tasks / f"schedule-{args.world:03d}-talk", "task_missing")
     manifest = regular(args.manifest.absolute(), "manifest_invalid")
+    task = bound_task(tasks, manifest, args.sha256, args.world)
     cell = new_cell(args.out)
     if cell.is_relative_to(tasks) or tasks.is_relative_to(cell):
         raise Refused("out_overlaps_tasks")

@@ -12,20 +12,23 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from types import FrameType, SimpleNamespace
 from typing import Any, cast
 
-from . import protocol, worker
+from . import cohort, protocol, run, worker
 
 SCHEMA = "seatlab.wait-peer-campaign/v1"
 ISSUE_SCHEMA = "seatlab.wait-peer-issue/v1"
 RESULT_SCHEMA = "seatlab.wait-peer-campaign-result/v1"
 STATUS_SCHEMA = "seatlab.wait-peer-campaign-status/v1"
-WORLDS, ARMS = tuple(worker.WORLDS), protocol.ARMS
+ARMS = protocol.ARMS
 TAGS = (worker.LIVE_TAG, *worker.CONTROL_TAGS.values())
-REGISTRATION, LOCK, RECEIPT = "campaign.json", "campaign.lock", "receipt.json"
+REGISTRATION, COHORT = "campaign.json", "calendar-cohort.json"
+LOCK, RECEIPT = "campaign.lock", "receipt.json"
+REGISTERING = protocol.COUNT
 STATES = ("complete", "incomplete", "issued", "unmarked", "mismatch", "missing")
 BUSY = frozenset({errno.EACCES, errno.EAGAIN})
 CHILD_ENV = ("HOME", "PATH", "LANG", "TMPDIR", "DOCKER_HOST")
@@ -40,7 +43,7 @@ LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC
 STATE: dict[str, int | None] = {"signal": None}
 Refused = worker.Refused
 
-assert len(WORLDS) == protocol.COUNT == 8 and len(ARMS) == 3
+assert protocol.COUNT == 8 and len(ARMS) == 3
 
 
 def _signalled(signum: int, frame: FrameType | None) -> None:
@@ -62,13 +65,25 @@ def owned(path: Path, limit: int = MAX_BYTES) -> bytes:
     return data
 
 
-def publish(campaign: Path, filename: str, data: bytes) -> None:
-    worker.create(campaign / filename, data, 0o400)
+def sync_dir(campaign: Path) -> None:
     fd = os.open(campaign, os.O_RDONLY | os.O_CLOEXEC)
     try:
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def publish(campaign: Path, filename: str, data: bytes) -> None:
+    worker.create(campaign / filename, data, 0o400)
+    sync_dir(campaign)
+
+
+def register_file(campaign: Path, name: str, data: bytes) -> None:
+    with tempfile.TemporaryDirectory(dir=campaign, prefix=".register-") as scratch:
+        staged = Path(scratch) / name
+        worker.create(staged, data, 0o400)
+        os.rename(staged, campaign / name)
+        sync_dir(campaign)
 
 
 def private(mode: int, info: os.stat_result) -> bool:
@@ -118,6 +133,27 @@ def registered(campaign: Path) -> dict[str, str] | None:
     return {"tag": tag, "sha256": sha256}
 
 
+def cohort_worlds(path: Path, sha256: str, *, sealed: bool, reason: str) -> range:
+    try:
+        found, _ = cohort.load(path, sha256, sealed=sealed)
+    except (ValueError, OSError, KeyError, TypeError):
+        raise Refused(reason) from None
+    worlds = range(found.first, found.last + 1)
+    assert found.first >= 0 and len(worlds) == protocol.COUNT
+    return worlds
+
+
+def stored_worlds(campaign: Path, sha256: str) -> range:
+    path = campaign / COHORT
+    if os.path.lexists(path):
+        return cohort_worlds(path, sha256, sealed=True, reason="cohort_mismatch")
+    if sha256 != cohort.PUBLISHED_SHA256:
+        raise Refused("cohort_missing")
+    return cohort_worlds(
+        cohort.PUBLISHED_MANIFEST, sha256, sealed=False, reason="cohort_invalid"
+    )
+
+
 def cell_state(campaign: Path, reg: dict[str, str] | None, world: int, arm: str) -> str:
     cell = campaign / name(world, arm)
     marker = campaign / f"{cell.name}.issued"
@@ -130,8 +166,10 @@ def cell_state(campaign: Path, reg: dict[str, str] | None, world: int, arm: str)
         info = cell.lstat()
         if reg is None or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
             return "mismatch"
+        if not marked:
+            return "unmarked"
         if not os.path.lexists(cell / RECEIPT):
-            return "issued" if marked else "unmarked"
+            return "issued"
         plan = cast(worker.Plan, SimpleNamespace(world=world, arm=arm, tag=reg["tag"]))
         raw = owned(cell / RECEIPT, worker.MAX_RECEIPT_BYTES)
         receipt = worker.checked_receipt(plan, raw)
@@ -144,9 +182,9 @@ def cell_state(campaign: Path, reg: dict[str, str] | None, world: int, arm: str)
 
 
 def world_view(
-    campaign: Path, reg: dict[str, str] | None, world: int
+    campaign: Path, reg: dict[str, str] | None, world: int, first: int
 ) -> tuple[dict[str, str], str | None]:
-    order = protocol.ordered_arms(world)
+    order = protocol.ordered_arms(world, first)
     states = {arm: cell_state(campaign, reg, world, arm) for arm in order}
     for index, arm in enumerate(order):
         if states[arm] != "complete":
@@ -164,11 +202,12 @@ def exit_code(campaign: Path, cell: str) -> Any:
 
 def status(campaign: Path) -> dict[str, Any]:
     reg = registered(campaign)
+    worlds = range(0) if reg is None else stored_worlds(campaign, reg["sha256"])
     cells: dict[str, str] = {}
     backlog: list[str] = []
     blocked: list[int] = []
-    for world in WORLDS:
-        states, arm = world_view(campaign, reg, world)
+    for world in worlds:
+        states, arm = world_view(campaign, reg, world, worlds.start)
         cells.update({name(world, each): state for each, state in states.items()})
         if arm is not None:
             backlog.append(name(world, arm))
@@ -182,7 +221,7 @@ def status(campaign: Path) -> dict[str, Any]:
         "cells": cells,
         "counts": {state: list(cells.values()).count(state) for state in STATES},
         "coverage": {arm: sum(c.endswith(f"-{arm}") for c in done) for arm in ARMS},
-        "worlds_complete": [w for w in WORLDS if all(name(w, a) in done for a in ARMS)],
+        "worlds_complete": [w for w in worlds if all(name(w, a) in done for a in ARMS)],
         "backlog": backlog,
         "blocked": blocked,
         "exits": {cell: exit_code(campaign, cell) for cell in exits},
@@ -199,49 +238,75 @@ def try_lock(fd: int, index: int) -> bool:
     return True
 
 
-def register(campaign: Path, lock: int, want: bytes) -> None:
+def register(
+    campaign: Path, lock: int, want: bytes, manifest: bytes, sha256: str
+) -> range:
     for _ in range(REGISTER_TRIES):
-        if try_lock(lock, len(WORLDS)):
+        if try_lock(lock, REGISTERING):
             break
         time.sleep(0.05)
     else:
         raise Refused("campaign_busy")
     try:
-        if not os.path.lexists(campaign / REGISTRATION):
-            publish(campaign, REGISTRATION, want)
-        if owned(campaign / REGISTRATION) != want:
+        existing = os.path.lexists(campaign / REGISTRATION)
+        if existing and owned(campaign / REGISTRATION) != want:
             raise Refused("registration_mismatch")
+        if not os.path.lexists(campaign / COHORT):
+            if existing and sha256 != cohort.PUBLISHED_SHA256:
+                raise Refused("cohort_missing")
+            register_file(campaign, COHORT, manifest)
+        worlds = stored_worlds(campaign, sha256)
+        if not existing:
+            register_file(campaign, REGISTRATION, want)
+        return worlds
     finally:
-        fcntl.lockf(lock, fcntl.LOCK_UN, 1, len(WORLDS), os.SEEK_SET)
+        fcntl.lockf(lock, fcntl.LOCK_UN, 1, REGISTERING, os.SEEK_SET)
 
 
-def prepare(args: argparse.Namespace) -> tuple[Path, dict[str, str], int]:
+def prepare(args: argparse.Namespace) -> tuple[Path, dict[str, str], int, range]:
     if worker.SHA256.fullmatch(args.sha256) is None:
         raise Refused("sha256_invalid")
     tasks = worker.physical(args.tasks, "tasks_invalid")
     args.tasks = worker.real_directory(tasks, "tasks_invalid")
+    args.manifest = args.manifest.absolute()
+    manifest = owned(args.manifest)
+    if hashlib.sha256(manifest).hexdigest() != args.sha256:
+        raise Refused("manifest_digest_mismatch")
+    try:
+        study, pins = cohort.load(args.manifest, args.sha256)
+    except worker.FAILURES:
+        raise Refused("manifest_invalid") from None
     campaign = campaign_dir(args.campaign, create=True)
     if campaign.is_relative_to(args.tasks) or args.tasks.is_relative_to(campaign):
         raise Refused("campaign_overlaps_tasks")
-    args.manifest = args.manifest.absolute()
-    if hashlib.sha256(owned(args.manifest)).hexdigest() != args.sha256:
-        raise Refused("manifest_digest_mismatch")
+    if not os.path.lexists(campaign / REGISTRATION):
+        try:
+            cohort.verify_origin(study, args.sha256)
+            for world in range(study.first, study.last + 1):
+                run.content_bind(args.tasks, study, pins, world)
+        except worker.FAILURES:
+            raise Refused("stock_mismatch") from None
     tag = worker.LIVE_TAG if args.agy is not None else worker.CONTROL_TAGS[args.control]
     lock = os.open(campaign / LOCK, LOCK_FLAGS, 0o600)
     info = os.fstat(lock)
     if not stat.S_ISREG(info.st_mode) or not private(0o600, info):
         raise Refused("lock_unsafe")
-    register(campaign, lock, registration(tag, args.sha256))
-    return campaign, {"tag": tag, "sha256": args.sha256}, lock
+    want = registration(tag, args.sha256)
+    worlds = register(campaign, lock, want, manifest, args.sha256)
+    return campaign, {"tag": tag, "sha256": args.sha256}, lock, worlds
 
 
 def claim(
-    shard: tuple[int, int], campaign: Path, reg: dict[str, str], lock: int
+    shard: tuple[int, int],
+    campaign: Path,
+    reg: dict[str, str],
+    lock: int,
+    worlds: range,
 ) -> tuple[int, str] | None:
-    for index, world in enumerate(WORLDS):
+    for index, world in enumerate(worlds):
         if index % shard[1] != shard[0] or not try_lock(lock, index):
             continue
-        _, arm = world_view(campaign, reg, world)
+        _, arm = world_view(campaign, reg, world, worlds.start)
         if arm is not None:
             return world, arm
         fcntl.lockf(lock, fcntl.LOCK_UN, 1, index, os.SEEK_SET)
@@ -302,8 +367,8 @@ def launch(campaign: Path, cell: str, tail: list[str]) -> int | None:
 
 
 def one(args: argparse.Namespace, out: dict[str, Any]) -> int:
-    campaign, reg, lock = prepare(args)
-    picked = claim(args.shard, campaign, reg, lock)
+    campaign, reg, lock, worlds = prepare(args)
+    picked = claim(args.shard, campaign, reg, lock, worlds)
     if picked is None:
         out["work"] = "no_available"
         return 3

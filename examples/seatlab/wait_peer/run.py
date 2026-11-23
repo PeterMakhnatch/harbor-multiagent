@@ -12,6 +12,7 @@ from ..calendar_notices import heldout, transfer_registration
 from ..market_handoff import native_stage
 from ..visibility import calendar_driver
 from ..visibility import calendar_packet as packet
+from . import cohort, protocol
 
 REGISTRATION_SCHEMA = "seatlab.wait-peer-registration/v1"
 LAUNCH_SCHEMA = "seatlab.wait-peer-launch/v1"
@@ -19,17 +20,11 @@ SEAT_IMPORT = "examples.seatlab.wait_peer.seat:PeerSeat"
 ARMS = ("auto", "neutral", "remind")
 TAGS = ("live", "control-ok", "control-wrong")
 SEATS = ("p1", "p2")
-FIRST, LAST, SEED = 408, 415, 579409134
 READ_ONLY = 0o444
 
 
 def trial_name(world: int, arm: str, tag: str) -> str:
-    if (
-        type(world) is not int
-        or not FIRST <= world <= LAST
-        or arm not in ARMS
-        or tag not in TAGS
-    ):
+    if type(world) is not int or world < 0 or arm not in ARMS or tag not in TAGS:
         raise ValueError("invalid wait-peer trial identity")
     return f"swr-{world:03d}-{arm}-{tag}"
 
@@ -80,48 +75,53 @@ def checked_sockets(sockets: Path, out: Path, tasks: Path) -> Path:
     return sockets
 
 
-def verified_world(
-    tasks: Path, manifest: Path, sha256: str, world: int
+def content_bind(
+    tasks: Path, selected: heldout._Cohort, rows: cohort.Rows, world: int
 ) -> dict[str, Any]:
-    cohort, rows = transfer_registration._load(manifest, sha256, sealed=False)
-    if (cohort.first, cohort.last, cohort.stock_limits[0]) != (FIRST, LAST, SEED):
-        raise ValueError("manifest is not the registered wait-peer cohort")
-    if not cohort.first <= world <= cohort.last:
-        raise ValueError("world is outside the registered cohort")
-    root = transfer_registration._schedule(tasks, cohort)
-    name = cohort.names()[world]
+    if type(world) is not int or not selected.first <= world <= selected.last:
+        raise ValueError("world is outside the operator cohort")
+    root = transfer_registration._schedule(tasks, selected)
+    name = selected.names()[world]
     task = root / name
-    calendar, semantics = rows[world - cohort.first]
-    _, tables = heldout._checked_stock(
-        task, world, name, cohort, expected_semantics_sha256=semantics
+    calendar, semantics = rows[world - selected.first]
+    source, tables = heldout._checked_stock(
+        task, world, name, selected, expected_semantics_sha256=semantics
     )
     if heldout._calendar_digest(tables) != calendar:
         raise ValueError("task differs from the registered calendar identity")
-    checksum, _, _ = packet._source_hashes(task)
-    if calendar_driver._stock(task, checksum) != f"flotilla/{name}":
-        raise ValueError("stock task name differs from the registered world")
-    raw = transfer_registration._read_manifest(manifest, sealed=False)
-    if packet._digest(raw) != sha256:
-        raise ValueError("manifest changed during verification")
     return {
+        "cohort": selected,
         "task": task,
-        "manifest": raw,
         "task_name": name,
-        "task_checksum": checksum,
+        "task_checksum": source.native_sha256,
         "calendar_sha256": calendar,
         "stock_semantics_sha256": semantics,
     }
 
 
+def verified_world(
+    tasks: Path, manifest: Path, sha256: str, world: int
+) -> dict[str, Any]:
+    selected, rows = cohort.load(manifest, sha256)
+    bound = content_bind(tasks, selected, rows, world)
+    cohort.verify_origin(selected, sha256)
+    name, checksum = bound["task_name"], bound["task_checksum"]
+    if calendar_driver._stock(bound["task"], checksum) != f"flotilla/{name}":
+        raise ValueError("stock task name differs from the registered world")
+    raw = transfer_registration._read_manifest(manifest, sealed=False)
+    if packet._digest(raw) != sha256:
+        raise ValueError("manifest changed during verification")
+    return {**bound, "manifest": raw}
+
+
 def stage(
     out: Path, args: argparse.Namespace, stock: dict[str, Any]
 ) -> tuple[Path, str]:
-    from . import protocol
-
+    selected = stock["cohort"]
     name = trial_name(args.world, args.arm, args.tag)
     config = trial_config(out, stock["task"], args.world, args.arm, args.tag)
     sender, receiver = protocol.role_ids(args.world)
-    arm_order = list(protocol.ordered_arms(args.world))
+    arm_order = list(protocol.ordered_arms(args.world, selected.first))
     if args.arm not in arm_order or {sender, receiver} != set(SEATS):
         raise ValueError("arm or roles differ from the wait-peer protocol")
     config_bytes = native_stage.canonical(config)
@@ -135,8 +135,8 @@ def stage(
         "receiver": receiver,
         "arm_order": arm_order,
         "manifest_sha256": args.sha256,
-        "instance_range": [FIRST, LAST],
-        "seed": SEED,
+        "instance_range": [selected.first, selected.last],
+        "seed": selected.stock_limits[0],
         "calendar_sha256": stock["calendar_sha256"],
         "stock_semantics_sha256": stock["stock_semantics_sha256"],
         "task_name": stock["task_name"],
@@ -217,9 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("tasks", type=Path)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--sha256", required=True)
-    parser.add_argument(
-        "--world", type=int, required=True, choices=range(FIRST, LAST + 1)
-    )
+    parser.add_argument("--world", type=int, required=True)
     parser.add_argument("--arm", required=True, choices=ARMS)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--sockets", type=Path, required=True)

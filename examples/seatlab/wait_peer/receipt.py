@@ -16,19 +16,16 @@ from pathlib import Path
 from typing import Any, NoReturn, TypeGuard, override
 from uuid import UUID
 
-from ..calendar_notices import heldout, team_source
+from ..calendar_notices import heldout
 from ..visibility import agy_seat, calendar_protocol
 from ..visibility import calendar_packet as packet
-from . import protocol
+from . import cohort, protocol
 
 SCHEMA = "seatlab.wait-peer-receipt/v1"
 REGISTRATION_SCHEMA = "seatlab.wait-peer-registration/v1"
 LAUNCH_SCHEMA = "seatlab.wait-peer-launch/v1"
 SEAT_IMPORT = "examples.seatlab.wait_peer.seat:PeerSeat"
 AGENT = ("seatlab-wait-peer-seat", "1.0.0", None)
-COHORT = heldout._Cohort(
-    408, 415, (579409134, 4000, 200, 600.0), team_source.JOIN_MANIFEST_SHA256
-)
 ARMS = ("auto", "neutral", "remind")
 TAGS = ("live", "control-ok", "control-wrong")
 SEATS = ("p1", "p2")
@@ -199,14 +196,36 @@ def row_list(value: object, category: str) -> list[Row]:
     return [packet._object(item) for item in value]
 
 
+def staged_cohort(
+    out: Path, reg: Row
+) -> tuple[heldout._Cohort, tuple[tuple[str, str], ...]]:
+    manifest = out / "manifest.json"
+    need(present(manifest), "manifest_missing")
+    digest = reg["manifest_sha256"]
+    need(
+        isinstance(digest, str)
+        and HEX64.fullmatch(digest)
+        and packet._digest(read(manifest, sealed=True)) == digest,
+        "manifest_binding",
+    )
+    study, rows = cohort.load(manifest, digest)
+    need(
+        study.last - study.first + 1 == protocol.COUNT == len(rows),
+        "manifest_world_count",
+    )
+    return study, rows
+
+
 def registered(
     out: Path, trial: Path, task: Path, world: int, arm: str
-) -> tuple[Row, Row, Row]:
+) -> tuple[Row, Row, Row, heldout._Cohort]:
     _, reg = sealed(out / "registration.json")
     cfg_raw, cfg = sealed(out / "config.json")
     need(reg.keys() == REGISTRATION_KEYS and reg["tag"] in TAGS, "registration_shape")
+    study, rows = staged_cohort(out, reg)
+    need(study.first <= world <= study.last, "world_outside_cohort")
     sender, receiver = protocol.role_ids(world)
-    name = COHORT.names()[world]
+    name = study.names()[world]
     need(
         same(
             {
@@ -228,9 +247,9 @@ def registered(
                 "trial_name": f"swr-{world:03d}-{arm}-{reg['tag']}",
                 "sender": sender,
                 "receiver": receiver,
-                "arm_order": list(protocol.ordered_arms(world)),
-                "instance_range": [COHORT.first, COHORT.last],
-                "seed": COHORT.stock_limits[0],
+                "arm_order": list(protocol.ordered_arms(world, study.first)),
+                "instance_range": [study.first, study.last],
+                "seed": study.stock_limits[0],
                 "task_name": name,
                 "config_sha256": packet._digest(cfg_raw),
             },
@@ -271,43 +290,27 @@ def registered(
         ],
     }
     need(cfg_raw == canonical(expected), "config_binding")
-    stock = stock_source(out, task, world, reg)
-    return reg, cfg, stock
+    stock = stock_source(task, world, reg, study, rows[world - study.first])
+    return reg, cfg, stock, study
 
 
-def stock_source(out: Path, task: Path, world: int, reg: Row) -> Row:
-    name = COHORT.names()[world]
-    root = heldout._check_schedule(task.parent, COHORT)
-    manifest = out / "manifest.json"
-    pinned = None
-    if present(manifest):
-        read(manifest, sealed=True)
-        rows = heldout._pinned_manifest_rows(manifest, reg["manifest_sha256"], COHORT)
-        worlds = [
-            {"instance": i, "calendar_sha256": c, "stock_semantics_sha256": s}
-            for i, (c, s) in enumerate(rows, start=COHORT.first)
-        ]
-        rendered = heldout._render_manifest(
-            {**heldout._manifest_fields(COHORT), "worlds": worlds}
-        )
-        need(
-            packet._read(manifest, heldout._MAX_MANIFEST_BYTES) == rendered,
-            "noncanonical_manifest",
-        )
-        need(len({c for c, _ in rows}) == len(rows), "manifest_repeats_calendar")
-        pinned = rows[world - COHORT.first]
+def stock_source(
+    task: Path, world: int, reg: Row, study: heldout._Cohort, pinned: tuple[str, str]
+) -> Row:
+    name = study.names()[world]
+    root = heldout._check_schedule(task.parent, study)
     source, tables = heldout._checked_stock(
         root / name,
         world,
         name,
-        COHORT,
-        expected_semantics_sha256=None if pinned is None else pinned[1],
+        study,
+        expected_semantics_sha256=pinned[1],
     )
     calendar = heldout._calendar_digest(tables)
     need(
         (calendar, source.semantics_sha256, source.native_sha256)
         == (reg["calendar_sha256"], reg["stock_semantics_sha256"], reg["task_checksum"])
-        and (pinned is None or pinned[0] == calendar),
+        and pinned[0] == calendar,
         "stock_source_binding",
     )
     seat_digests = {
@@ -320,8 +323,8 @@ def stock_source(out: Path, task: Path, world: int, reg: Row) -> Row:
         "target": packet._shared(tables),
         "public": {
             "generator_commit": heldout.GENERATOR_COMMIT,
-            "manifest_sha256": None if pinned is None else reg["manifest_sha256"],
-            "manifest_verified": pinned is not None,
+            "manifest_sha256": reg["manifest_sha256"],
+            "manifest_verified": True,
             "calendar_sha256": calendar,
             "stock_semantics_sha256": source.semantics_sha256,
             "task_checksum": source.native_sha256,
@@ -1007,7 +1010,7 @@ def audit(trial: Path, task: Path, world: int, arm: str, owner: Path | None) -> 
     out = trial.parent.parent
     need(trial.parent.name == "trials", "trial_location")
     packet._directory(trial)
-    reg, cfg, stock = registered(out, trial, task, world, arm)
+    reg, cfg, stock, study = registered(out, trial, task, world, arm)
     tag, roles = reg["tag"], (reg["sender"], reg["receiver"])
     need(owner is None or tag == "live", "owner_records_for_control")
     need(present(out / "launch.json"), "launch_record_missing")
@@ -1024,7 +1027,7 @@ def audit(trial: Path, task: Path, world: int, arm: str, owner: Path | None) -> 
         "world": world,
         "arm": arm,
         "tag": tag,
-        "arm_position": list(protocol.ordered_arms(world)).index(arm),
+        "arm_position": list(protocol.ordered_arms(world, study.first)).index(arm),
         "sender": roles[0],
         "receiver": roles[1],
         "source": stock["public"],
@@ -1153,9 +1156,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("trial", type=Path)
     parser.add_argument("--task", type=Path, required=True)
-    parser.add_argument(
-        "--world", type=int, required=True, choices=range(COHORT.first, COHORT.last + 1)
-    )
+    parser.add_argument("--world", type=int, required=True)
     parser.add_argument("--arm", required=True, choices=ARMS)
     parser.add_argument("--owner", type=Path)
     args = parser.parse_args(argv)
