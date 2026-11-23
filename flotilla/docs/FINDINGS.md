@@ -425,3 +425,10 @@ Inferred:
 
 Lesson: before reading a talk effect, check that the messages were read. Make the world hand messages to the
 seats; do not wait for the seats to fetch them.
+
+Addendum 17:40 ET (`listening.py` on earlier waves): DeepSeek's share of exposed actions taken with an unread
+message was 3/11 in sp2 and 3/13 in sp3 (split talk) and 123/363 in w1 (commons talk). Those waves used DeepSeek
+direct, local Docker and world versions 5, 7 and 4, against OpenRouter, Modal and world v9 in xm1 (12/33 split,
+79/173 commons). The rate is stable across route, environment and world version for this model. Eval Lab's
+muster runs (`boxes`, DeepSeek Flash with thinking off, another harness) measured 82%, so the task and the
+harness change the rate too.
