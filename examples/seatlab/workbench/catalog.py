@@ -30,6 +30,17 @@ class Study:
 
 STUDIES: tuple[Study, ...] = (
     Study(
+        id="certified-reporters",
+        question="Can a local booker skip real reporting sessions on new stock calendars?",
+        kind="native-hybrid-team",
+        guide="examples/seatlab/certified-reporters.md",
+        module="examples.seatlab.fanin.certified_panel",
+        argv=(f"{_RESULTS}/certified-reporters/rows.json",),
+        report=f"{_RESULTS}/certified-reporters/panel.json",
+        exit_code=0,
+        sha256="93488d7c23bc53b66a8242f1873b0be363a96e1ac9ea540d98b5394bc22de770",
+    ),
+    Study(
         id="peer-fanin",
         question="Can a four-seat Harbor booker leave an unneeded reporter idle?",
         kind="native-model-team",
