@@ -32,10 +32,10 @@ All 54 first replies were valid. With public messages, the supervisor selected c
 | First-hour activity and message text: Flash | 0.45386 | +0.00265 |
 | First-hour activity, no message text: Flash | 0.47784 | +0.02663 |
 | Public post counts only: busiest team | 0.47784 | +0.02663 |
-| First-hour verifier grade, unavailable to Flash | 0.45121 | 0 |
+| First-hour live-company mark, withheld from Flash | 0.45121 | 0 |
 | Final grade, unavailable before time ran out | 0.51046 | +0.05924 |
 
-The activity-only supervisor selected the busiest board in all 9 sets, including ties. Adding text changed the selected grade in 5 sets: 2 gains and 3 losses. The other 4 tied. The mean difference was −0.02398; the one-sided sign test for a benefit gave p=0.8125. All 27 first-hour verifier grades were zero. These observations do not show that chat harms teams. We changed the **supervisor's input**, not communication between the original agents. None of these policies qualifies for autonomous budget allocation.
+The activity-only supervisor selected the busiest board in all 9 sets, including ties. Adding text changed the selected grade in 5 sets: 2 gains and 3 losses. The other 4 tied. The mean difference was −0.02398; the one-sided sign test for a benefit gave p=0.8125. All 27 first-hour **live-company marks** were zero. These observations do not show that chat harms teams. We changed the **supervisor's input**, not communication between the original agents. None of these policies qualifies for autonomous budget allocation.
 
 The [54 first-call costs](results/continuation-meter.json) total **$0.008075562**. The [derived results](results/continuation-results.json) include every set. The [input receipt](results/continuation-inputs.json) was public before the first model call. Public files contain choices and hashes, not the source messages.
 
@@ -69,25 +69,21 @@ Use `1/3` and `2/3` for the other workers. Pass their reply files as separate ar
 
 ## Is screening worth doing at equal cumulative team time?
 
-Registered before reading the 2-hour and 3-hour grades of these multi-seat teams. This is a retrospective analysis of the same release. Its 1-hour and 4-hour results are already known. The question is whether an operator with **240 team-minutes** should start several teams or give one team all 4 hours. Compare policies only within the same model and team size. Keep all 9 sets of 3 runs. A seat-minute is one team-minute times the number of seats in that team.
+**Correction: the published marks cannot answer the early-stop question.** We registered a comparison at 240 cumulative team-minutes. Its initial analysis treated an interim mark like a terminal reward. They measure different things. We withdraw the earlier −0.10332 effect, its sign test and the recommendation to give one team the full time. This release does not establish whether early stopping helps or hurts.
 
-**Primary comparison:** start 2 teams for 60 minutes each. Keep the one with more public first-hour posts for another 120 minutes. Use its recorded **3-hour** grade. Average tied selections instead of choosing a favorable run. Average over all 3 possible pairs within each set, then give each of the 9 sets equal weight. Compare with a uniformly chosen team run for 4 hours. Require a mean gain of at least 0.03 and a one-sided exact sign test across sets of p≤0.05 before recommending a prospective replication. The 27 pairs are not independent.
+The [stock verifier](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/tasks/seed-to-profit/task/tests/verify.py#L334-L411) reads current company value at an interim mark. It does not finish the remaining months, check a replay or grade the team's business playbook. At the deadline the verifier does all 3. The final grade combines the replay-checked live result and the playbook result with equal weight.
 
-**Diagnostics:** for those pairs also compute the mean grade from uniform selection at 1 hour and the best possible 3-hour selection with hindsight. Separately, start 3 teams for 60 minutes each and keep one for 60 more. Use the published supervisor's sealed choice and its **2-hour** grade. Compare this with the busiest board, uniform choice and perfect 2-hour hindsight in each set. Average all tied winners. Do not choose a better threshold, branch count, cutoff or selector after reading those grades.
+| Schedule at 240 cumulative team-minutes | End of agent work | Published reading for the selection | Final reward for this schedule |
+|---|---:|---|---:|
+| Run 1 team for 4 hours; choose uniformly at the start | 240 min | Terminal verifier | 0.45121 |
+| Start 2 teams; keep the busiest after 1 hour | 180 min | Live company only: 0.34789 | Unknown |
+| Start 3 teams; keep the supervisor's choice after 1 hour | 120 min | Live company only: 0.08830 | Unknown |
 
-All 3 schedules use 240 cumulative team-minutes. They finish after 240, 180 and 120 wall-clock minutes respectively, assuming enough compute. They do not necessarily cost the same in tokens or dollars. The checkpoint grades evaluate published work. No sandbox was resumed, no job was canceled, and the hypothetical supervisor cannot use hindsight.
+We averaged all 3 pairs within each set, then weighted the 9 sets equally. Ties share the selection. These are published readings of uninterrupted teams, not trials we stopped. The scheduled seat-time does not establish dollars spent. Even the largest interim mark is not a bound on the terminal reward.
 
-**Result: give one team the full time on this task.** The busiest-board policy won in 1 set and lost in 8. Its mean grade was 0.34789 against 0.45121 for one full run. The difference was −0.10332; p=511/512 in the registered direction. Even an operator who knew which smaller run would finish best could not recover the mean four-hour grade. This bound applies to the released teams and these schedules. It is not a claim that early stopping always loses.
+On a job you own, enable `--ak grade_at` at launch. The [harness writes completed marks to the trial directory](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/harness/README.md#graded-marks). A mark can arrive after the scheduled time. To test stopping, retain the company state and team submission at the cutoff and run the same **terminal verifier** on both schedules. The published boards and scalar marks are not enough.
 
-| Plan using 240 team-minutes | Time to result | Grade with the stated rule | Best possible grade for that plan |
-|---|---:|---:|---:|
-| Run one team to completion, chosen uniformly at the start | 240 min | 0.45121 | Not applicable: one output |
-| Start 2 teams; keep the busiest after 1 hour | 180 min | 0.34789 | 0.38016 |
-| Start 3 teams; keep the supervisor's choice after 1 hour | 120 min | 0.08830 | 0.16019 |
-
-The 120-minute plan is faster. It does not give the same score. The time column is a scheduled limit, not measured active worker time. The release does not provide token or dollar totals at the intermediate marks. It also does not provide seed IDs: a source repeat is not proof of an independent world.
-
-Recompute every comparison from the pinned public cache and the sealed replies. This does not need a provider, a container, or a simulator.
+Recompute the observed readings from the pinned public cache and the sealed replies. This needs no provider, container or simulator.
 
 ```sh
 d=examples/seatlab/results
@@ -95,7 +91,7 @@ python3.12 -BS -m examples.seatlab.continuation.equal_time "$w/cache" \
   "$d/continuation-inputs.json" "$d/continuation-posts-first.jsonl"
 ```
 
-The [full result](results/continuation-equal-time.json) gives the selected teams, their checkpoint grades, and tie handling for every set.
+The [typed results](results/continuation-equal-time.json) distinguish observed live marks from final rewards. Only the 4-hour run has a terminal reward.
 
 ## What if all the smaller teams finish?
 
@@ -125,3 +121,11 @@ Separately, test a blind two-option reader when an eligible model is available. 
 ### A complete free worker: count activity in the final hour
 
 The projection found 147 public posts and no comparable labeled score. Before joining final-hour counts to pair winners, register a second reader. It sees the same blind packets and chooses the candidate with more public posts during minutes 180–240, excluding minute 240. An exact tie chooses the first displayed candidate. Averaging the reversed orders gives uniform choice on a tie. Run all 36 decisions on separate packet shards with no access to grades. Use the same reader gate: at least +0.03 versus the full team and a grade above both uniform choice and the first-hour count rule. This is a deterministic worker acting on real agent traffic. It is not an LLM judge or an independent replication of these released teams.
+
+### Can the owner use a 3-hour company mark to choose a completed output?
+
+**Question, fixed before joining 3-hour pair rankings to final grades.** At equal seats and 4 hours, can an owner choose the better small-team output using a live signal rather than chat? This is a retrospective test. We have already seen these teams' marks and final grades in other analyses. We do not claim a new cohort.
+
+Use the same 18 pairs in 6 model/seat-budget settings as the full-length comparison. Both teams work for all 4 hours. Once both 3-hour marks exist, choose the company with the higher mark. Average the candidates on a tie. Missing or invalid marks make the comparison incomplete; a missing mark is not zero. Do not use 1-hour, 2-hour or 4-hour values in the decision. Do not forward either mark to the teams.
+
+Evaluate only with the 4-hour terminal verifier. Average the 3 pairs per setting, then average the 6 settings. Pass only if the mean gains at least 0.03 over one full-size team, beats uniform and first-hour count selection, and beats the full-size team in at least 4 of 6 settings. Report ties and all 6 setting results. Do not infer a p-value from overlapping pairs, equal dollar cost, or what would happen if a team stopped early.
