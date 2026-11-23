@@ -66,11 +66,11 @@ out=$(mktemp -d)
 python3.12 -BS -m examples.seatlab.market_handoff.native_stage stage "$d" "$out" \
   --world 1 --arm donor --mode replay \
   --sales-replies "$d/sales-first.jsonl" --finance-replies "$d/finance-first.jsonl"
-"$HARBOR_PYTHON" -B -m examples.seatlab.market_handoff.native_run "$out"
+"$SLOT_WRAPPER" "$HARBOR_PYTHON" -B -m examples.seatlab.market_handoff.native_run "$out"
 python3.12 -BS -m examples.seatlab.market_handoff.native_receipt "$out"
 ```
 
-Set `HARBOR_PYTHON` to the absolute path of the Python executable in the fork's environment. On Peter's machine, run the middle command through `/tmp/crucible-docker-slot.sh`. Use a new output directory for each trial. The receipt checks both submitted views, prompts and choices, then matches the actual Harbor reward against the stock outcome. Missing evidence is an error; a measured reward of zero is not.
+Set `HARBOR_PYTHON` to the absolute Python path in the fork's environment. Set `SLOT_WRAPPER` to the local Docker trial gate; on Peter's machine it is `/tmp/crucible-docker-slot.sh`. Use a new output directory for each trial. The receipt checks both submitted views, prompts and choices, then matches the Harbor reward against the stock outcome. Missing evidence is an error; a measured reward of zero is not.
 
 | Staged team | Replay: sales → finance | Replay reward | Fresh seats: sales → finance | Fresh reward |
 |---|---:|---:|---:|---:|
@@ -86,3 +86,32 @@ Both replays and both fresh teams completed in Harbor. [Four native receipts and
 **Pass/fail.** Require exactly 24 unique native trial IDs, one per registered target and arm. Require both seats to complete, with no served model. Match both native picks and both user-prompt digests to the corresponding original direct decisions. Match the target prefix, selected stock outcome and actual native reward to the archived direct comparison. Recompute the paired mean difference and win/loss/tie counts. All 48 seat bindings and all 24 rewards must agree. A missing or failed trial is incomplete, not a zero; do not publish a matched mean for an incomplete panel. Report any mismatch without altering the original grades.
 
 The 2 role services enforce the order of delivery. The native verifier reads an already computed stock payoff table; it does not start 3 years of new simulated trading. A pass confirms the replay transport, not the benefit of this sales policy.
+
+**Result: all 24 native replays matched.** Two workers ran 11 new trials each through the shared Docker gate. We reused the 2 registered replay receipts; we did not reuse the 2 live teams as replays. All 48 role inputs and choices matched, and all 24 native rewards matched. With the target company's sales advice, the mean was **0.09468**. With the donor's advice, it was **0.09013**. The recorded team decisions gave 3 wins, 1 loss and 8 ties. The mean difference was identical to the original direct result. This batch used **0 new model calls**.
+
+Verify the [native receipts](results/market-handoff/native-panel.json) and compare with the [published score](results/market-handoff/native-panel-score.json). This command needs neither Docker nor a model key:
+
+```sh
+d=examples/seatlab/results/market-handoff
+m=examples.seatlab.market_handoff
+python3.12 -BS -m "$m.native_panel" score "$d" "$d/native-panel.json" |
+  cmp - "$d/native-panel-score.json"
+```
+
+To build a new batch, start with an empty private campaign directory. Give each worker the same directory and a different shard. These workers reserve a case before staging it. They do not automatically repeat an incomplete trial.
+
+```sh
+campaign=$(mktemp -d)
+pids=""
+for i in 0 1; do
+  python3.12 -BS -m "$m.native_panel_work" "$d" "$campaign" \
+    --harbor-python "$HARBOR_PYTHON" --slot-wrapper "$SLOT_WRAPPER" \
+    --shard "$i/2" > "$campaign/worker-$i.json" &
+  pids="$pids $!"
+done
+for pid in $pids; do wait "$pid" || exit 1; done
+python3.12 -BS -m "$m.native_panel" collect "$d" "$campaign" > "$campaign/bundle.json"
+python3.12 -BS -m "$m.native_panel" score "$d" "$campaign/bundle.json"
+```
+
+For the published campaign, a third worker examined both shards after completion. It recognized all 22 existing trials, reused the 2 published receipts and started **0** trials. New batches get new native trial IDs; compare the grade and seat agreement, not the UUIDs. A partial batch reports the missing cases and withholds the paired mean.
