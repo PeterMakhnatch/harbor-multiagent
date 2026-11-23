@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import httpx
 
 pytest.importorskip("sail")
 
@@ -24,6 +25,7 @@ from harbor.environments.sail import (
     _SailDirect,
     _referenced_env_names,
 )
+from harbor.environments.ssh import SSHAccessError, StreamHandle
 from harbor.models.task.config import (
     EnvironmentConfig,
     HealthcheckConfig,
@@ -198,7 +200,15 @@ def sdk(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Mock the SDK's image, app, and Sailbox entry points."""
     sailbox = MagicMock()
     sailbox.sailbox_id = "sbx_123"
+    sailbox.status = "running"
+    sailbox.enable_ssh.aio = AsyncMock()
+    sailbox.listener.aio = AsyncMock(
+        return_value=SimpleNamespace(
+            endpoint=sail_mod.TcpEndpoint(host="ssh.example.com", port=2222)
+        )
+    )
     sailbox.run.aio = AsyncMock(return_value=_run_result())
+    sailbox.exec.aio = AsyncMock()
     sailbox.set_egress_policy.aio = AsyncMock()
     sailbox.terminate.aio = AsyncMock()
     sailbox.sleep.aio = AsyncMock()
@@ -216,6 +226,7 @@ def sdk(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     app_cls = MagicMock()
     app_cls.find.aio = AsyncMock(return_value="app-handle")
     sailbox_cls = MagicMock()
+    sailbox_cls.get.aio = AsyncMock(return_value=sailbox)
     sailbox_cls.create.aio = AsyncMock(return_value=sailbox)
 
     monkeypatch.setattr(sail_mod, "Image", image_cls)
@@ -259,8 +270,11 @@ class TestCapabilities:
 
     def test_network_policies_in_both_modes(self, temp_dir):
         caps = _make_env(temp_dir).capabilities
-        assert _make_env(temp_dir, compose=True).capabilities == caps
+        compose_caps = _make_env(temp_dir, compose=True).capabilities
+        assert compose_caps.model_copy(update={"stream": True}) == caps
         assert caps.docker_compose is True
+        assert caps.stream is True
+        assert compose_caps.stream is False
         assert caps.network_allowlist is True
         assert caps.dynamic_network_policy is True
 
@@ -503,7 +517,7 @@ class TestDirectStart:
             vcpu_count=4,
             memory_limit_gib=40,
             disk_limit_gib=None,
-            max_lifetime_seconds=86400,
+            max_lifetime_seconds=172800,
             image_build_timeout=600,
             egress_policy={},
         )
@@ -534,24 +548,54 @@ class TestDirectStart:
         sdk.sailbox.terminate.aio.assert_awaited_once()
         assert env._sailbox is None
 
-    async def test_cancelled_create_still_terminates_sailbox(self, temp_dir, sdk):
+    async def test_cancelled_create_reaches_sdk_cleanup(self, temp_dir, sdk):
         env = _make_env(temp_dir)
         creating = asyncio.Event()
-        created = asyncio.Event()
+        cancelled = asyncio.Event()
 
         async def create(**kwargs):
             creating.set()
-            await created.wait()
-            return sdk.sailbox
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
 
         sdk.Sailbox.create.aio = create
         task = asyncio.create_task(env.start(force_build=False))
         await creating.wait()
         task.cancel()
-        created.set()
 
         with pytest.raises(asyncio.CancelledError):
             await task
+        assert cancelled.is_set()
+        assert env._sailbox is None
+
+    async def test_failed_cleanup_preserves_start_error_and_handle(self, temp_dir, sdk):
+        env = _make_env(temp_dir, workdir="/app")
+        sdk.sailbox.fs.mkdir.aio.side_effect = ValueError("workdir failed")
+        sdk.sailbox.terminate.aio.side_effect = RuntimeError("terminate failed")
+
+        with pytest.raises(ValueError, match="workdir failed"):
+            await env.start(force_build=False)
+
+        assert env._sailbox is sdk.sailbox
+
+    async def test_cancelled_start_terminates_created_sailbox(self, temp_dir, sdk):
+        env = _make_env(temp_dir, workdir="/app")
+        configuring = asyncio.Event()
+
+        async def mkdir(*args):
+            configuring.set()
+            await asyncio.Event().wait()
+
+        sdk.sailbox.fs.mkdir.aio.side_effect = mkdir
+        task = asyncio.create_task(env.start(force_build=False))
+        await configuring.wait()
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
         sdk.sailbox.terminate.aio.assert_awaited_once()
         assert env._sailbox is None
 
@@ -592,6 +636,174 @@ class TestDirectStart:
 
         sdk.App.find.aio.assert_awaited_once_with("evals", mint_if_missing=True)
         assert sdk.Sailbox.create.aio.await_args.kwargs["max_lifetime_seconds"] == 3600
+
+
+class TestSSHStream:
+    async def test_stream_start_enables_native_ssh_and_exports_handle(
+        self, temp_dir, sdk
+    ):
+        env = _make_env(temp_dir, workdir="/app", environment_kwargs={"stream": True})
+
+        await env.start(force_build=False)
+
+        sdk.sailbox.enable_ssh.aio.assert_awaited_once_with()
+        assert env.stream_handle == StreamHandle(
+            provider="sail", reference={"sailbox_id": "sbx_123"}, workspace="/app"
+        )
+
+    async def test_without_stream_does_not_enable_ssh(self, temp_dir, sdk):
+        await _make_env(temp_dir).start(force_build=False)
+
+        sdk.sailbox.enable_ssh.aio.assert_not_awaited()
+
+    @pytest.mark.parametrize("phase_policy", [False, True])
+    async def test_no_network_fails_before_creation(self, temp_dir, sdk, phase_policy):
+        env = _make_env(
+            temp_dir,
+            network_policy=None if phase_policy else NO_NETWORK,
+            phase_network_policies=[NO_NETWORK] if phase_policy else None,
+            environment_kwargs={"stream": True},
+        )
+
+        with pytest.raises(ValueError, match="requires SSH ingress.*no_network"):
+            await env.start(force_build=False)
+
+        sdk.Sailbox.create.aio.assert_not_awaited()
+
+    async def test_ssh_start_failure_terminates_sailbox(self, temp_dir, sdk):
+        env = _make_env(temp_dir, environment_kwargs={"stream": True})
+        sdk.sailbox.enable_ssh.aio.side_effect = RuntimeError("SSH failed")
+
+        with pytest.raises(RuntimeError, match="SSH failed"):
+            await env.start(force_build=False)
+
+        sdk.sailbox.terminate.aio.assert_awaited_once()
+        assert env._sailbox is None
+
+    def test_compose_refuses_ssh_stream_mode(self, temp_dir):
+        with pytest.raises(ValueError, match="does not support stream mode"):
+            _make_env(temp_dir, compose=True, environment_kwargs={"stream": True})
+
+    def test_handle_requires_started_sailbox(self, temp_dir):
+        with pytest.raises(RuntimeError, match="start the environment first"):
+            _make_env(temp_dir).stream_handle
+
+    @pytest.fixture
+    def ssh(self, monkeypatch):
+        config = SimpleNamespace(
+            sailbox_api_url="https://sail.example/", api_key="synthetic-key"
+        )
+        monkeypatch.setattr(sail_mod.Config, "from_env", lambda: config)
+
+        async def keygen(*args):
+            identity = Path(args[-1])
+            identity.write_text("synthetic-private-key")
+            identity.with_suffix(".pub").write_text("ssh-ed25519 synthetic-public-key")
+
+        monkeypatch.setattr(sail_mod, "run_local", AsyncMock(side_effect=keygen))
+        client = MagicMock()
+        client.post = AsyncMock(
+            return_value=httpx.Response(
+                200,
+                json={"certificate": "synthetic-certificate", "key_id": "test"},
+                request=httpx.Request(
+                    "POST", "https://sail.example/v1/ssh/certificate"
+                ),
+            )
+        )
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(
+            sail_mod.httpx, "AsyncClient", MagicMock(return_value=client)
+        )
+        access = MagicMock()
+        access.__aenter__ = AsyncMock(return_value=access)
+        access.__aexit__ = AsyncMock(return_value=False)
+        access_cls = MagicMock(return_value=access)
+        monkeypatch.setattr(sail_mod, "SSHAccess", access_cls)
+        return SimpleNamespace(client=client, access=access, access_cls=access_cls)
+
+    async def test_connect_uses_persisted_id_and_ephemeral_certificate(self, sdk, ssh):
+        handle = StreamHandle(
+            provider="sail", reference={"sailbox_id": "sbx_123"}, workspace="/app"
+        )
+
+        async with SailEnvironment.connect_ssh(handle) as access:
+            assert access is ssh.access
+            config = ssh.access_cls.call_args.args[0]
+            assert config.connection.host == "ssh.example.com"
+            assert config.connection.port == 2222
+            assert config.connection.user == "root"
+            assert config.workspace == "/app"
+            identity = Path(config.connection.identity.file)
+            assert identity.exists()
+            assert (
+                identity.with_name("identity-cert.pub").read_text()
+                == "synthetic-certificate"
+            )
+
+        assert not identity.exists()
+        ssh.access.__aexit__.assert_awaited_once()
+        sdk.Sailbox.get.aio.assert_awaited_once_with("sbx_123")
+        sdk.sailbox.listener.aio.assert_awaited_once_with(22, protocol="tcp")
+        sail_mod.httpx.AsyncClient.assert_called_once_with()
+        ssh.client.post.assert_awaited_once_with(
+            "https://sail.example/v1/ssh/certificate",
+            headers={"Authorization": "Bearer synthetic-key"},
+            json={"public_key": "ssh-ed25519 synthetic-public-key"},
+        )
+        sdk.sailbox.enable_ssh.aio.assert_not_awaited()
+        sdk.Sailbox.create.aio.assert_not_awaited()
+        sdk.Sailbox.list.assert_not_called()
+        sdk.sailbox.terminate.aio.assert_not_awaited()
+
+    async def test_connect_never_resumes_stopped_box(self, sdk, ssh):
+        sdk.sailbox.status = "paused"
+        handle = StreamHandle(provider="sail", reference={"sailbox_id": "sbx_123"})
+
+        with pytest.raises(SSHAccessError, match="not running"):
+            async with SailEnvironment.connect_ssh(handle):
+                pytest.fail("SSH connected to paused Sailbox")
+
+        sdk.sailbox.resume.assert_not_called()
+        sdk.sailbox.enable_ssh.aio.assert_not_awaited()
+        ssh.client.post.assert_not_awaited()
+
+    async def test_connect_requires_tcp_listener(self, sdk, ssh):
+        sdk.sailbox.listener.aio.return_value = SimpleNamespace(endpoint=None)
+        handle = StreamHandle(provider="sail", reference={"sailbox_id": "sbx_123"})
+
+        with pytest.raises(SSHAccessError, match="Start the trial with --stream"):
+            async with SailEnvironment.connect_ssh(handle):
+                pytest.fail("SSH connected without TCP endpoint")
+
+        ssh.client.post.assert_not_awaited()
+
+    async def test_certificate_failure_propagates_without_connecting(self, sdk, ssh):
+        ssh.client.post.return_value = httpx.Response(
+            403,
+            request=httpx.Request("POST", "https://sail.example/v1/ssh/certificate"),
+        )
+        handle = StreamHandle(provider="sail", reference={"sailbox_id": "sbx_123"})
+
+        with pytest.raises(httpx.HTTPStatusError):
+            async with SailEnvironment.connect_ssh(handle):
+                pytest.fail("SSH connected without certificate")
+
+        ssh.access_cls.assert_not_called()
+
+    async def test_certificate_transport_error_is_not_retried(self, sdk, ssh):
+        ssh.client.post.side_effect = httpx.ReadTimeout("Certificate request timed out")
+        handle = StreamHandle(provider="sail", reference={"sailbox_id": "sbx_123"})
+
+        with pytest.raises(httpx.ReadTimeout):
+            async with SailEnvironment.connect_ssh(handle):
+                pytest.fail("SSH connected without certificate")
+
+        ssh.client.post.assert_awaited_once()
+        ssh.access_cls.assert_not_called()
+        identity = Path(sail_mod.run_local.await_args.args[-1])
+        assert not identity.exists()
 
 
 class TestExec:
@@ -656,6 +868,184 @@ class TestExec:
     async def test_before_start_raises(self, temp_dir):
         with pytest.raises(RuntimeError, match="start the environment first"):
             await _make_env(temp_dir).exec("true")
+
+
+class TestStreamingExec:
+    @pytest.mark.parametrize("compose", [False, True])
+    async def test_streams_both_outputs_before_exit(self, temp_dir, sdk, compose):
+        env = _make_env(
+            temp_dir,
+            compose=compose,
+            workdir="/app",
+            persistent_env={"KEEP": "1"},
+            environment_kwargs={"stream": not compose},
+        )
+        env._sailbox = sdk.sailbox
+        received = {"stdout": asyncio.Event(), "stderr": asyncio.Event()}
+        finish = asyncio.Event()
+        chunks = []
+
+        async def output(stream):
+            yield f"{stream} first"
+            await finish.wait()
+            yield " last\n"
+
+        async def emit(text, stream):
+            chunks.append((text, stream))
+            received[stream].set()
+
+        process = MagicMock()
+        process.stdout = output("stdout")
+        process.stderr = output("stderr")
+        process.wait = AsyncMock(
+            return_value=_run_result(
+                3, stdout="stdout first last\n", stderr="stderr first last\n"
+            )
+        )
+        process.cancel = AsyncMock()
+        sdk.sailbox.exec.aio.return_value = process
+
+        with env.scoped_output_callback(emit):
+            task = asyncio.create_task(
+                env.exec("command", env={"FOO": "bar"}, user="agent", timeout_sec=30)
+            )
+            try:
+                async with asyncio.timeout(5):
+                    await received["stdout"].wait()
+                    await received["stderr"].wait()
+                assert not task.done()
+                process.wait.assert_not_awaited()
+            finally:
+                finish.set()
+                result = await task
+
+        assert result == ExecResult(
+            return_code=3, stdout="stdout first last\n", stderr="stderr first last\n"
+        )
+        assert chunks[:2] == [("stdout first", "stdout"), ("stderr first", "stderr")]
+        call = sdk.sailbox.exec.aio.await_args
+        if compose:
+            assert call.args[0][:2] == ["/usr/bin/docker", "compose"]
+            assert call.args[0][-4:] == ["main", "bash", "-c", "command"]
+            assert "-T" in call.args[0]
+            assert "-w" in call.args[0]
+            assert "-u" in call.args[0]
+        else:
+            assert call.args[0] == ["bash", "-c", "cd /app && exec bash -c command"]
+            assert call.kwargs["user"] == "agent"
+        assert call.kwargs["env"]["KEEP"] == "1"
+        assert call.kwargs["env"]["FOO"] == "bar"
+        assert call.kwargs["timeout"] == 30
+        assert call.kwargs["output_mode"] == "pipe"
+        assert call.kwargs["output_buffer_bytes"] == 64 * 1024 * 1024
+        process.close.assert_called_once_with()
+        process.cancel.assert_not_awaited()
+        sdk.sailbox.run.aio.assert_not_awaited()
+
+    async def test_without_callback_keeps_buffered_exec(self, temp_dir, sdk):
+        env = _make_env(temp_dir, environment_kwargs={"stream": True})
+        env._sailbox = sdk.sailbox
+
+        await env.exec("true")
+
+        sdk.sailbox.run.aio.assert_awaited_once()
+        sdk.sailbox.exec.aio.assert_not_awaited()
+
+    @pytest.mark.parametrize("truncated", [False, True])
+    async def test_returns_sdk_result_without_replaying_it(
+        self, temp_dir, sdk, caplog, truncated
+    ):
+        env = _make_env(temp_dir)
+        env._sailbox = sdk.sailbox
+        chunks = []
+
+        async def output(text):
+            yield text
+
+        async def emit(text, stream):
+            chunks.append((text, stream))
+
+        process = MagicMock()
+        process.stdout = output("before disconnect\n")
+        process.stderr = output("")
+        process.wait = AsyncMock(
+            return_value=_run_result(
+                stdout="buffered output\n", stdout_truncated=truncated
+            )
+        )
+        sdk.sailbox.exec.aio.return_value = process
+
+        with caplog.at_level(logging.WARNING), env.scoped_output_callback(emit):
+            result = await env.exec("command")
+
+        assert result.stdout == "buffered output\n"
+        assert chunks == [("before disconnect\n", "stdout"), ("", "stderr")]
+        assert ("exceeded 64 MiB" in caplog.text) == truncated
+
+    @pytest.mark.parametrize(
+        "failure", ["callback", "reader", "wait", "cancel", "timeout"]
+    )
+    async def test_failure_releases_process_and_preserves_error(
+        self, temp_dir, sdk, failure
+    ):
+        env = _make_env(temp_dir)
+        env._sailbox = sdk.sailbox
+        reading = asyncio.Event()
+        closed = {"stdout": False, "stderr": False}
+        error = ValueError("stream failed")
+
+        async def output(stream):
+            try:
+                reading.set()
+                if failure == "cancel":
+                    await asyncio.Event().wait()
+                if failure == "reader" and stream == "stdout":
+                    raise error
+                yield stream
+            finally:
+                closed[stream] = True
+
+        async def emit(text, stream):
+            if failure == "callback":
+                raise error
+
+        process = MagicMock()
+        process.stdout = output("stdout")
+        process.stderr = output("stderr")
+        process.wait = AsyncMock(
+            return_value=_run_result(124, timed_out=failure == "timeout")
+        )
+        if failure == "wait":
+            process.wait.side_effect = error
+        process.cancel = AsyncMock()
+        sdk.sailbox.exec.aio.return_value = process
+
+        with env.scoped_output_callback(emit):
+            task = asyncio.create_task(env.exec("command", timeout_sec=5))
+            if failure == "cancel":
+                await reading.wait()
+                task.cancel()
+            if failure == "timeout":
+                with pytest.raises(RuntimeError, match="timed out after 5 seconds"):
+                    await task
+                process.cancel.assert_not_awaited()
+            elif failure == "cancel":
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                process.cancel.assert_awaited_once_with(force=True)
+            elif failure == "callback":
+                with pytest.raises(ExceptionGroup) as info:
+                    await task
+                assert all(exc is error for exc in info.value.exceptions)
+                process.cancel.assert_awaited_once_with(force=True)
+            else:
+                with pytest.raises(ValueError) as info:
+                    await task
+                assert info.value is error
+                process.cancel.assert_awaited_once_with(force=True)
+
+        assert all(closed.values())
+        process.close.assert_called_once_with()
 
 
 class TestHealthcheck:
@@ -759,16 +1149,34 @@ class TestStop:
     async def test_without_sailbox_is_noop(self, temp_dir):
         await _make_env(temp_dir).stop(delete=True)
 
-    async def test_release_failure_is_logged_not_raised(self, temp_dir, sdk, caplog):
+    @pytest.mark.parametrize("delete", [False, True])
+    async def test_release_failure_is_raised_and_keeps_handle(
+        self, temp_dir, sdk, delete
+    ):
         env = _make_env(temp_dir)
         env._sailbox = sdk.sailbox
-        sdk.sailbox.terminate.aio.side_effect = RuntimeError("boom")
+        release = sdk.sailbox.terminate.aio if delete else sdk.sailbox.sleep.aio
+        release.side_effect = RuntimeError("boom")
 
-        with caplog.at_level(logging.WARNING):
+        with pytest.raises(RuntimeError, match="boom"):
+            await env.stop(delete=delete)
+
+        assert env._sailbox is sdk.sailbox
+        release.side_effect = None
+        await env.stop(delete=delete)
+        await env.stop(delete=delete)
+        assert env._sailbox is None
+        assert release.await_count == 2
+
+    async def test_cancelled_stop_keeps_handle(self, temp_dir, sdk):
+        env = _make_env(temp_dir)
+        env._sailbox = sdk.sailbox
+        sdk.sailbox.terminate.aio.side_effect = asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
             await env.stop(delete=True)
 
-        assert env._sailbox is None
-        assert "boom" in caplog.text
+        assert env._sailbox is sdk.sailbox
 
 
 class TestAttach:
