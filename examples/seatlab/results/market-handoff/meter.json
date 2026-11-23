@@ -1,0 +1,421 @@
+{
+  "currency": "USD",
+  "price_source": "https://api-docs.deepseek.com/quick_start/pricing",
+  "rate_usd_per_million": {
+    "input_cache_hit": "0.003",
+    "input_cache_miss": "0.15",
+    "output": "0.60"
+  },
+  "roles": {
+    "finance": {
+      "calls": [
+        {
+          "cache_hit": 0,
+          "cache_miss": 577,
+          "output": 6,
+          "request_id": "cont-0f916c3f3dfb2f387015f992",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090150"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 193,
+          "output": 6,
+          "request_id": "cont-38ae0b0ed66d2018fde13216",
+          "served_model": "deepseek-flash",
+          "usd": "0.000033702"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 198,
+          "output": 6,
+          "request_id": "cont-4554607da4a480587c842dc9",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034452"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 582,
+          "output": 6,
+          "request_id": "cont-461a8c355d3c9383d0383f42",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090900"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 582,
+          "output": 6,
+          "request_id": "cont-5f49597d7eab922739dfbf5b",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090900"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 197,
+          "output": 6,
+          "request_id": "cont-626bf39f87e82918f1fdf929",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034302"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 193,
+          "output": 6,
+          "request_id": "cont-65bb704f3ed522f4322c3359",
+          "served_model": "deepseek-flash",
+          "usd": "0.000033702"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 583,
+          "output": 6,
+          "request_id": "cont-6cdbe2a9b55063f8a1f60246",
+          "served_model": "deepseek-flash",
+          "usd": "0.000091050"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 577,
+          "output": 6,
+          "request_id": "cont-863b2a4f2a9db773658effe2",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090150"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 581,
+          "output": 6,
+          "request_id": "cont-86e9d2060d063225b7f2cc0c",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090750"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 581,
+          "output": 6,
+          "request_id": "cont-8fbef12ee111e8939d60b3b2",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090750"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 198,
+          "output": 6,
+          "request_id": "cont-a43d0ac1ba8d26cdf7e9f27d",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034452"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 581,
+          "output": 6,
+          "request_id": "cont-a6c1a8ce4a202b780c02b9a3",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090750"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 577,
+          "output": 6,
+          "request_id": "cont-ab0359e7a1104ffc273f6cf3",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090150"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 199,
+          "output": 6,
+          "request_id": "cont-af1d9a0bcddea7e08aa2d010",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034602"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 197,
+          "output": 6,
+          "request_id": "cont-b2b55e882a5a5c18380dee9b",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034302"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 577,
+          "output": 6,
+          "request_id": "cont-bf85e13638a59125382705f8",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090150"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 193,
+          "output": 6,
+          "request_id": "cont-c2f8f8d87d0d47306de591d6",
+          "served_model": "deepseek-flash",
+          "usd": "0.000033702"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 197,
+          "output": 6,
+          "request_id": "cont-c8a64d83d780d345028aeaaa",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034302"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 198,
+          "output": 6,
+          "request_id": "cont-d0efd6dd1cbc5279a7536cd3",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034452"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 582,
+          "output": 6,
+          "request_id": "cont-d0f4998d48469bcabed6fc3a",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090900"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 581,
+          "output": 6,
+          "request_id": "cont-d8f023b85d7157ab051170ec",
+          "served_model": "deepseek-flash",
+          "usd": "0.000090750"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 193,
+          "output": 6,
+          "request_id": "cont-d99688d9a4645bedcf7c562e",
+          "served_model": "deepseek-flash",
+          "usd": "0.000033702"
+        },
+        {
+          "cache_hit": 384,
+          "cache_miss": 197,
+          "output": 6,
+          "request_id": "cont-e5ae1701098d38d6aa458bfe",
+          "served_model": "deepseek-flash",
+          "usd": "0.000034302"
+        }
+      ],
+      "study": "bespoke-market-finance-nov23",
+      "tokens": {
+        "cache_hit": 4608,
+        "cache_miss": 9314,
+        "output": 144
+      },
+      "unsettled": 0,
+      "usd": "0.001497324"
+    },
+    "sales": {
+      "calls": [
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-091dbee2fe6ad23da1e3f96b",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-0e2e323690897f1ab55317eb",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-20d6129c3eebb5ae819cef77",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-2711ee830e65c4b4698cb669",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-2beb882f4a7e2f6b3b426143",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-2c0877755b83661d5950a380",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-361d8a3fca35ec28ac382dcc",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-56e32f8869a054d8e971b02b",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-5bdffbaaa0150d3693b835b8",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-5e7b4542187b0489b7c7cd8b",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-6979f229d4ef52d35b35ad0a",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-6f903f0c383f21764c06e770",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-70e329ba9daa1803907e9302",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-72fdf06e87a4eddc218916e3",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 530,
+          "output": 6,
+          "request_id": "cont-76c7b8c8cd738ef21603bd9d",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083100"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-808266979a7c2e1221cb2aa0",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-80fb2fe87cfe9e0ac297a33e",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-9f14071b3b4d59599597348f",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-c523fda9dd970242f6f88231",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-db7fee9a91aa324af0415e3f",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-dc8bf80f1030153455fd99aa",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-e73fd60d0bf1bf3f61454972",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-ed1023efb11c46e895ed005e",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 532,
+          "output": 6,
+          "request_id": "cont-f7f050595586c440a42b36bd",
+          "served_model": "deepseek-flash",
+          "usd": "0.000083400"
+        }
+      ],
+      "study": "bespoke-market-sales-nov23",
+      "tokens": {
+        "cache_hit": 0,
+        "cache_miss": 12766,
+        "output": 144
+      },
+      "unsettled": 0,
+      "usd": "0.002001300"
+    }
+  },
+  "schema": "seatlab.market-handoff-token-receipt/v1",
+  "usd_total": "0.003498624"
+}
