@@ -122,6 +122,31 @@ Separately, test a blind two-option reader when an eligible model is available. 
 
 The projection found 147 public posts and no comparable labeled score. Before joining final-hour counts to pair winners, register a second reader. It sees the same blind packets and chooses the candidate with more public posts during minutes 180–240, excluding minute 240. An exact tie chooses the first displayed candidate. Averaging the reversed orders gives uniform choice on a tie. Run all 36 decisions on separate packet shards with no access to grades. Use the same reader gate: at least +0.03 versus the full team and a grade above both uniform choice and the first-hour count rule. This is a deterministic worker acting on real agent traffic. It is not an LLM judge or an independent replication of these released teams.
 
+**Result.** The 18 candidate teams made 147 final-hour public broadcasts. The projection excluded 255 private messages. Six teams had no public posts in this window. No pair reported the same qualifying score. The registered claim rule abstained on all 18 pairs and received the uniform grade, **0.44027**. This tests a reporting format; it does not show that the agents had nothing useful to say.
+
+Three independent count-only workers returned all 36 first choices. They chose the same team under both presentation orders for 12 of 18 pairs. The selected mean was **0.44518**, compared with 0.45347 for first-hour counts and 0.45582 for one full-size team. The free worker failed the gate. No model evaluated these 36 final-hour packets. The earlier 54 Flash calls concern a different question.
+
+## Give completed team pairs to independent workers
+
+Use this to compare your own selection method with the count-only worker. Give each worker its packet file. Keep the archive and scorer separate from the worker. The packets contain short, untrusted excerpts; do not give a reader tools. This example uses 3 local processes and no model.
+
+```sh
+m=examples.seatlab.continuation
+w=$(mktemp -d)
+python3.12 -BS -m "$m" fetch "$w/cache" || exit 1
+pids=""
+for i in 0 1 2; do
+  python3.12 -BS -m "$m.final" emit "$w/cache" --shard "$i/3" > "$w/requests-$i.jsonl" || exit 1
+  python3.12 -I -S examples/seatlab/continuation/activity_worker.py \
+    < "$w/requests-$i.jsonl" > "$w/returns-$i.jsonl" &
+  pids="$pids $!"
+done
+for pid in $pids; do wait "$pid" || exit 1; done
+python3.12 -BS -m "$m.final" score --reader final-hour-count "$w/cache" "$w"/returns-*.jsonl
+```
+
+The owner joins each first reply to its request ID and prompt digest. Missing or invalid decisions do not receive a grade. An unknown or duplicate return is an input error. The archived [first replies](results/final-board-activity-first.jsonl), [worker hashes](results/final-board-workers.json) and [scored batch](results/final-board-activity.json) contain no source messages. The [claim result](results/final-board-claims.json) also shows the model-reader slot as incomplete.
+
 ### Can the owner use a 3-hour company mark to choose a completed output?
 
 **Question, fixed before joining 3-hour pair rankings to final grades.** At equal seats and 4 hours, can an owner choose the better small-team output using a live signal rather than chat? This is a retrospective test. We have already seen these teams' marks and final grades in other analyses. We do not claim a new cohort.

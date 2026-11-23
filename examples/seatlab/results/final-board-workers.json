@@ -1,0 +1,33 @@
+{
+  "cost_usd": "0",
+  "execution": "3 separate stdlib Python processes with disjoint 12-request streams. Only request envelopes passed on stdin. No operating-system sandbox claimed.",
+  "first_reply_file": "final-board-activity-first.jsonl",
+  "first_reply_sha256": "d71f3880de355cf26d285aa7eca0aea42763c7b7d2ed99c6e50a03ccbf81fd12",
+  "method": "final-hour-count",
+  "model_calls": 0,
+  "registration_commit": "13f2f22f3f9a80cd6ddcdcba3cc0068c16f278df",
+  "schema": "seatlab.final-board-worker-batch/v1",
+  "selection": "More final-hour public posts, first option on tied counts. No message text used.",
+  "shards": [
+    {
+      "first_reply_stream_sha256": "1dd9bd36d7caf0d49281350a9e4ada7fd4d65e7c5b2b2e2c098bf45f72c70ad6",
+      "request_stream_sha256": "aa5790a73f73aa7b906a3bd3009892c6fc223149f5c80471908b30ee334477f8",
+      "requests": 12,
+      "shard": "0/3"
+    },
+    {
+      "first_reply_stream_sha256": "b2e79b97bb90dfafbaeedbad1fb2054a1d76abcf8651ef42673eea3f58f61d1f",
+      "request_stream_sha256": "5cee579dc06bd6e390382bd98bebf5648e0743100b7a372d28cee73f7ccf1800",
+      "requests": 12,
+      "shard": "1/3"
+    },
+    {
+      "first_reply_stream_sha256": "233adfc44b67da554e498ab62139cd8b31ffdc3fa34a35e896e00901609f5d7b",
+      "request_stream_sha256": "23af782deb8d2e766c6cd25a801b2815412f2f8616a4817045b2c852d4926034",
+      "requests": 12,
+      "shard": "2/3"
+    }
+  ],
+  "worker_code_sha256": "38d06c6e8cdbc606ee7cf859dd1602fce5d01e322d47fcf42ac01e7e57396774",
+  "worker_path": "examples/seatlab/continuation/activity_worker.py"
+}

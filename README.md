@@ -52,7 +52,9 @@ Give an independent supervisor [the first hour of 3 real Bespoke teams](examples
 
 To run your own two-seat business task, [stage a real market in local Harbor](examples/seatlab/market-handoff.md#run-one-business-team-in-harbor). Sales sees demand and competition. Finance sees the company's cash and the sales recommendation. Replay needs no key. [Score 12 matched companies](examples/seatlab/market-handoff.md#result-the-correct-sales-recommendation-did-not-pass) without Docker, a simulator install, or a paid call.
 
-For a local campaign, [give independent workers the same sealed market panel](examples/seatlab/market-operations.md#how-independent-workers-run-this-study). They claim different companies and resume after an interruption. Use the [equal-time comparison](examples/seatlab/continuation-study.md#is-screening-worth-doing-at-equal-cumulative-team-time) before spending team time on early selection.
+For a local campaign, [give independent workers the same sealed market panel](examples/seatlab/market-operations.md#how-independent-workers-run-this-study). They claim different companies and resume after an interruption. To test your own output selector, [split 18 completed-team pairs among blind workers](examples/seatlab/continuation-study.md#give-completed-team-pairs-to-independent-workers). The example runs without an API key.
+
+**Do not use an interim business mark as a final reward.** The [stock verifier uses different measures](examples/seatlab/continuation-study.md#is-screening-worth-doing-at-equal-cumulative-team-time). The public archive cannot say what the final reward would have been if a team stopped early.
 
 ## Install
 
