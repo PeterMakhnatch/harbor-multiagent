@@ -392,3 +392,35 @@ A resource limit creates a different decision from choosing one supplier for eve
 Score an assignment as the mean of the 2 terminal stock live grades. Compare a hindsight oracle with 4 fixed policies: always X, always Y, higher last-month revenue, and lower last-month revenue. Break both revenue ties toward X. Do not run model teams unless all 32 counterfactuals are valid, the oracle advantage over the best fixed policy is at least 0.015, and each side wins by at least 0.01 on at least 2 pairs. Count ties. An oracle that only beats a bad baseline does not justify adding a supervisor.
 
 **Conditional model comparison.** Only if the check passes: run 2 fresh subscription teams per pair, independent first answers and no game tools. A remote analyst sees only Y's stock public books and returns a bounded urgency estimate and its most recent revenue and cash estimates. A planner sees only X's books. In `shared` it receives the analyst's actual numeric report. In `private` it receives a content-free notice; the analyst still runs. Alternate which arm runs first by pair. Accept one X/Y assignment. Favor sharing only if its mean reward exceeds private by at least 0.015, it has at least 2 more wins than losses across the 8 pairs, and it exceeds the best fixed policy. Report actual completions and receipt binding; do not replace an invalid first answer. This is a stock-business allocation experiment, not an official two-seat benchmark score.
+
+### Result: do not buy model turns to assign this deployment
+
+All 32 stock runs produced a valid outcome. The 2 landings had identical public books through month 13 for every company. The runs cover 1,175 simulated company-months. Thirty-one companies reached month 37. Pair 6, company X, went bankrupt at month 28 under the later deployment. We kept that result.
+
+| Assignment policy | Mean grade across 8 pairs |
+|---|---:|
+| Always give X the early deployment | 0.07735 |
+| Always give Y the early deployment | 0.04885 |
+| Give it to the company with higher last-month revenue | 0.04950 |
+| Give it to the company with lower last-month revenue | 0.07670 |
+| Choose after seeing both endings | 0.08311 |
+
+The hindsight advantage over the best fixed policy was **0.00576**, below the registered **0.015**. X won by at least 0.01 on 1 pair; Y won on 2. Of the other 5 pairs, 4 tied exactly. Pair 6 did have a large local effect: its assignment grade was 0.26889 with X early and 0 with Y early. That single example does not justify a team on this panel. We released no role prompts and ran no model teams for this choice.
+
+The [32 original cells](results/deploy-queue-cells) include the public books and stock program digests for every completed month. The [complete panel](results/deploy-queue-panel.json) names every cell, policy, threshold and denominator. Recompute it with Python 3.12 and no installed packages. Exit 1 means the opportunity test did not pass; it is not a missing result.
+
+```sh
+out=$(mktemp)
+rc=0
+python3.12 -BS -m examples.seatlab.continuation.deploy_queue \
+  panel examples/seatlab/results/deploy-queue-cells >"$out" || rc=$?
+test "$rc" -eq 1 && cmp "$out" examples/seatlab/results/deploy-queue-panel.json
+```
+
+To regenerate one stock outcome instead of reading the release, use the trusted Bespoke checkout and its Python environment:
+
+```sh
+env -u PYTHONPATH -u PYTHONHOME "$STOCK_PYTHON" -B \
+  -m examples.seatlab.continuation.deploy_queue_cell "$BESPOKE_ROOT" \
+  --pair 6 --side X --landing 17
+```
