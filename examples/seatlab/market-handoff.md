@@ -78,3 +78,11 @@ Set `HARBOR_PYTHON` to the absolute path of the Python executable in the fork's 
 | World 1, donor sales view | 3 → 3 | 0.18797 | 1 → 1 | 0.25984 |
 
 Both replays and both fresh teams completed in Harbor. [Four native receipts and their token costs](results/market-handoff/native.json) identify the trials. The fresh teams used 4 new calls and cost **$0.000122658**. The replay rows used no model calls. These 2 different worlds test transport and grading; they are not a paired estimate of the handoff effect.
+
+## Can the 12-company offline comparison survive native delivery?
+
+**Question and arms, registered before the batch.** Replay the recorded sales and finance decisions through the actual two-seat Harbor task. On each of the 12 targets, run both the target's own sales view and its matched donor view. Use the two published, complete replay receipts above and start the other 22 local Docker trials. No new model may answer. This measures message delivery and grading, not agent resampling.
+
+**Pass/fail.** Require exactly 24 unique native trial IDs, one per registered target and arm. Require both seats to complete, with no served model. Match both native picks and both user-prompt digests to the corresponding original direct decisions. Match the target prefix, selected stock outcome and actual native reward to the archived direct comparison. Recompute the paired mean difference and win/loss/tie counts. All 48 seat bindings and all 24 rewards must agree. A missing or failed trial is incomplete, not a zero; do not publish a matched mean for an incomplete panel. Report any mismatch without altering the original grades.
+
+The 2 role services enforce the order of delivery. The native verifier reads an already computed stock payoff table; it does not start 3 years of new simulated trading. A pass confirms the replay transport, not the benefit of this sales policy.
