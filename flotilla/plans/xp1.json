@@ -1,0 +1,87 @@
+{
+  "name": "xp1",
+  "prereg": {
+    "commit": "fc7f09768326e25a003552ae6367385d226cf61b",
+    "doc": "flotilla/docs/SPLIT.md",
+    "section": "17. Cross-play wave xp1: pre-registration"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1-split",
+      "manifest": ".flotilla-local/tasks/xm1-split/manifest.json",
+      "instances": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16
+      ],
+      "arms": [
+        "talk"
+      ]
+    }
+  ],
+  "seat_assignments": [
+    [
+      "openrouter/anthropic/claude-haiku-5.5",
+      "openrouter/anthropic/claude-haiku-5.5"
+    ],
+    [
+      "openrouter/anthropic/claude-haiku-5.5",
+      "openrouter/openai/gpt-6-luna"
+    ],
+    [
+      "openrouter/anthropic/claude-haiku-5.5",
+      "openrouter/deepseek/deepseek-v4.1-flash-1017"
+    ],
+    [
+      "openrouter/openai/gpt-6-luna",
+      "openrouter/anthropic/claude-haiku-5.5"
+    ],
+    [
+      "openrouter/openai/gpt-6-luna",
+      "openrouter/openai/gpt-6-luna"
+    ],
+    [
+      "openrouter/openai/gpt-6-luna",
+      "openrouter/deepseek/deepseek-v4.1-flash-1017"
+    ],
+    [
+      "openrouter/deepseek/deepseek-v4.1-flash-1017",
+      "openrouter/anthropic/claude-haiku-5.5"
+    ],
+    [
+      "openrouter/deepseek/deepseek-v4.1-flash-1017",
+      "openrouter/openai/gpt-6-luna"
+    ],
+    [
+      "openrouter/deepseek/deepseek-v4.1-flash-1017",
+      "openrouter/deepseek/deepseek-v4.1-flash-1017"
+    ]
+  ],
+  "agent": "terminus-2",
+  "make_jobs": {
+    "max_turns": 40,
+    "env": "modal",
+    "concurrency": 8
+  },
+  "budget": {
+    "cap_usd": 3.0,
+    "reserve_per_trial_usd": 0.3,
+    "provider_floors": {
+      "openrouter": 2.0
+    }
+  },
+  "order_seed": 20261125
+}
