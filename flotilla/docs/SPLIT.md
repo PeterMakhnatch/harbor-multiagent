@@ -605,3 +605,18 @@ wave are Claude Haiku 5.5 and then, in this order, those of `glm-5.3-flash`, `gp
 up to 3 new models in all. The pooled tests use the new models that run. Disclosure: at about 2:50 PM ET the
 worker that calibrated `speech_acts.py` read the talk messages of the first 8 smoke trials; its report to the
 operator quoted one Qwen3.8-27B pledge (that model had already left the wave). No other smoke outcome was read.
+
+**Amendment 4 (2026-11-23, 3:05 PM ET, before the first wave trial and before the glm-5.3-flash commons smoke
+trial finished).** Smoke facts, validity and cost only: `gpt-6-luna` passes (2 valid trials, 0 missed
+seat-rounds, $0.0068 split and $0.0098 commons); `muse-ember` fails (same zero-data-retention error as
+`qwen3.8-flash`); `glm-5.3-flash` split trial is valid with 0 missed seat-rounds ($0.0185) and its commons trial
+still runs. The wave therefore runs in 2 runner processes with the same tasks, arms, instances and order seed:
+plan `xm1` (Claude Haiku 5.5, `gpt-6-luna` and the DeepSeek stratum; up to 12 trials at once; cap $9) starts now;
+plan `xm1g` (`glm-5.3-flash`; up to 4 trials at once; cap $3) starts only if its commons smoke trial passes the
+smoke rule. Comparisons are within a model and instance, so the later start of one model does not enter a pair.
+Up to 16 trials run at once (Amendment 1 said 12). The v9 world runs on Modal in 11 valid smoke trials, so no
+separate oracle check is run. Analysis: `--new-models
+openrouter/anthropic/claude-haiku-5.5,openrouter/openai/gpt-6-luna[,openrouter/z-ai/glm-5.3-flash]
+--replication-model openrouter/deepseek/deepseek-v4.1-flash-1017`. The commons prediction 3 (GPT-OSS) and the
+split prediction 5 (Qwen) are void. After the wave, `egress_audit.py` lists hosts other than the world that a seat
+named (on w1, sp2 to sp5 and the smoke trials: 0 public hosts).
