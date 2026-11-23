@@ -32,6 +32,7 @@ RELAY = HERE.parent / "visibility" / "local_seat.py"
 AGY_SEAT = HERE.parent / "visibility" / "agy_seat.py"
 CONTROL = HERE / "control.py"
 JOIN_OWNER = HERE / "join_owner.py"
+EXTERNAL_OWNER = HERE / "external_owner.py"
 COMMIT = "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3"
 GENERATOR = (
     "flotilla/build_tasks.py",
@@ -47,7 +48,9 @@ TIMING_WORLDS = protocol.TIMING_WORLDS
 CONTROLS = ("correct", "inexact", "wrong")
 RECOVERY_CONTROLS = ("correct", "inexact")
 LIVE_TAG = "live"
+EXTERNAL_TAG = "external"
 OWNER_ENV = ("HOME", "PATH", "LANG", "TMPDIR")
+EXTERNAL_ENV = ("PATH", "LANG", "TMPDIR")
 SOCKET_ROOT = "/tmp"
 MAX_SOCKET_PATH_BYTES = 103
 MAX_ARCHIVE_BYTES = 1 << 20
@@ -103,6 +106,8 @@ class Plan:
     agy: Path | None
     control: str | None
     owner_env: dict[str, str]
+    sockets: Path | None = None
+    listeners: dict[str, tuple[int, int]] | None = None
 
     @property
     def trial_name(self) -> str:
@@ -129,11 +134,16 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     seat = parser.add_mutually_exclusive_group(required=True)
     seat.add_argument("--control", choices=CONTROLS)
     seat.add_argument("--agy", type=Path)
+    seat.add_argument("--sockets", type=Path)
     args = parser.parse_args(argv)
     if not protocol.admitted(args.world, args.arm) or (
         args.arm in protocol.RECOVERY_ARMS
         and args.control is not None
         and args.control not in RECOVERY_CONTROLS
+    ):
+        raise Failed("invalid_arguments")
+    if args.sockets is not None and (
+        args.arm in protocol.RECOVERY_ARMS or not args.sockets.is_absolute()
     ):
         raise Failed("invalid_arguments")
     return args
@@ -173,28 +183,54 @@ def new_out(out: Path) -> Path:
     return cell
 
 
+def admitted_listeners(directory: Path, out: Path) -> dict[str, tuple[int, int]]:
+    regular(EXTERNAL_OWNER, "external_owner_missing")
+    if directory.is_relative_to(ROOT):
+        raise Failed("sockets_inside_repository")
+    try:
+        from . import external_owner
+    except ImportError:
+        raise Failed("external_owner_missing") from None
+    try:
+        return external_owner.admit(directory, out=out)
+    except SETUP_FAILURES:
+        raise Failed("sockets_refused") from None
+
+
 def checked(args: argparse.Namespace) -> Plan:
     regular(RELAY, "relay_missing")
-    owner_env = {key: os.environ[key] for key in OWNER_ENV if os.environ.get(key)}
+    external = args.sockets is not None
+    names = EXTERNAL_ENV if external else OWNER_ENV
+    owner_env = {key: os.environ[key] for key in names if os.environ.get(key)}
     if args.agy is not None:
         regular(AGY_SEAT, "seat_missing")
         if "HOME" not in owner_env:
             raise Failed("home_missing")
-    else:
+    elif not external:
         regular(CONTROL, "control_missing")
     if args.arm in protocol.RECOVERY_ARMS:
         regular(JOIN_OWNER, "owner_missing")
     harbor = calendar_driver._entrypoint(Path(sys.executable).parent / "harbor")
+    out = new_out(args.out)
+    sockets: Path | None = args.sockets
+    if args.agy is not None:
+        tag = LIVE_TAG
+    elif external:
+        tag = EXTERNAL_TAG
+    else:
+        tag = f"control-{args.control}"
     return Plan(
         world=args.world,
         arm=args.arm,
-        tag=LIVE_TAG if args.agy is not None else f"control-{args.control}",
-        out=new_out(args.out),
+        tag=tag,
+        out=out,
         harbor=harbor,
         python=executable(Path(sys.executable), "python_invalid"),
         agy=None if args.agy is None else executable(args.agy, "agy_invalid"),
         control=args.control,
         owner_env=owner_env,
+        sockets=sockets,
+        listeners=None if sockets is None else admitted_listeners(sockets, out),
     )
 
 
@@ -377,6 +413,23 @@ def owner_argv(plan: Plan, seat: str) -> list[str]:
             plan.arm,
             "--booker",
             seat,
+            "--record",
+            record,
+        ]
+    if plan.sockets is not None:
+        if plan.listeners is None:
+            raise Failed("seat_unset")
+        device, inode = plan.listeners[seat]
+        return [
+            str(plan.python),
+            "-IS",
+            str(EXTERNAL_OWNER),
+            "--socket",
+            str(plan.sockets / f"{seat}.sock"),
+            "--device",
+            str(device),
+            "--inode",
+            str(inode),
             "--record",
             record,
         ]
