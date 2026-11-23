@@ -455,3 +455,40 @@ all 3 boats. The only talk collapse followed a broken pledge, with no agent assi
 Limits of the comparison: GovSim already removes communication, so this is not a first test of the effect. Do not
 compare GovSim's survival rates with ours directly: the models, group size, scenarios, growth and survival rules
 differ. The solo arm changes control and scoring; it is a reference, not a second estimate of the message effect.
+
+## 19. Cross-model wave xm1 (commons part): pre-registration
+
+Written and committed before the first paid trial of wave `xm1` (2026-11-23), together with SPLIT.md section 15,
+which holds the shared parts: models, smoke trials and the substitution rule, Harbor binary, Modal environment,
+order, validity rules, budget and commands. The plan is `flotilla/plans/xm1.json`; the analysis is
+`docs/results/scripts/xm_analysis.py`.
+
+**Question.** In regime B with 3 seats, talk kept the lake alive in 15 of 16 instances and silent in 6 of 16 with
+DeepSeek V4.1 Flash (section 15). Does the talk-over-silent survival effect hold for other model families?
+
+**Design.** 12 instances: `build_tasks.py --family commons --difficulty b --seats 3 --instances 0-11 --conditions
+silent,talk --round-seconds 240 --max-messages-per-round 2 --seed-of .flotilla-local/tasks/w1/commons --out
+.flotilla-local/tasks/xm1-commons` (qa PASS), the same lakes as wave 1 instances 0-11 (checked). 2 arms x 12
+instances x 4 models = 96 trials, 1 attempt each, 40 turns per seat. No solo arm in this wave: solo is a reference,
+not a second estimate of the message effect (section 18). The world is version 9 (wave 1 ran version 4). For a
+commons seat the differences are random message ids in talk, finite-number checks, and a freeze of the world after
+the play time. Both arms of this wave share them, so the comparison with wave 1 is descriptive only.
+
+**Primary test (pass or fail; alpha 0.025).** `survived`, talk against silent, pooled over the 3 new models with
+the exact stratified conditional test of SPLIT.md section 15, over complete valid pairs. PASS: at least 24 complete
+valid pairs, sum of b greater than sum of c, and p <= 0.025. FAIL: at least 24 pairs and not PASS (the report gives
+the direction if sum of c > sum of b with p <= 0.025). INCONCLUSIVE: fewer than 24 pairs.
+
+**Secondary (reported).** Per-model exact McNemar on `survived` ("replicates" if b > c and p <= 0.05), the same for
+the DeepSeek replication stratum, and for each model and arm: survival count, mean sustained share, mean collapse
+round, over-use share, missed and passed seat-rounds, cost. The DeepSeek stratum is also set beside wave 1
+instances 0-11 (same lakes, DeepSeek direct, local Docker), without a test.
+
+**Predictions (from the library note; recorded, not gates).**
+
+1. For each new model with valid arms, talk survival minus silent survival is at least 3 of 12.
+2. Talk survival is at most 10 of 12 for each new model: regime B pays over-use, so a copy of DeepSeek's 15 of 16
+   would be a surprise.
+3. GPT-OSS-120B results are readable only if its missed seat-rounds stay at or below 10%.
+4. Talk over-use is at most half of silent over-use on models where talk survives in at least 4 more instances.
+5. The DeepSeek replication stratum: talk survives in at least 10 of 12, silent in at most 7 of 12.

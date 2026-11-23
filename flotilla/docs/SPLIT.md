@@ -447,3 +447,89 @@ passed. The seats lost feasible proposals to that timing. Talk did not have this
 seats agreed on the split in messages before anyone claimed. A next version should keep proposals open until the
 round's time ends (a claim should not close the round early in `propose`), and report how many feasible proposals
 expired unread. Limits: 5 instances, 1 model, not randomized in time.
+
+## 15. Cross-model wave xm1 (split part): pre-registration
+
+Written and committed before the first paid trial of wave `xm1` (2026-11-23), smoke trials included. Peter approved
+up to $50 of paid infrastructure for this work on 2026-11-23. The commons part of the same wave is COMMONS.md
+section 19. The plan is `flotilla/plans/xm1.json` (committed after this section, naming this commit), the runner
+`flotilla/run_wave.py`, and the analysis `docs/results/scripts/xm_analysis.py`, committed with this section. The
+predictions come from the library note `multi-agent/2026-11-23-negotiation-commons-evidence-and-intake.md` in
+research-context.
+
+**Question.** In regime b, talk gave 6 deals in 6 and silent 0 in 6 with DeepSeek V4.1 Flash (section 9). Does the
+talk-over-silent deal effect hold for other model families? Secondary: do standing proposals give deals without
+free text? Arm `propose` is now world version 9 (section 2): a proposal stays open across rounds until it is
+accepted, replaced by its proposer, or the pot is smaller than its total. Section 14 suggested keeping proposals
+open until the round's time ends; standing proposals remove the same failure (proposals lost at round close)
+without making trials longer, and they are the alternating-offer shape that the bargaining studies in the library
+note test.
+
+**Models.** All seats of a trial use the same model, through OpenRouter, with terminus-2 and 40 turns per seat:
+
+- New models (the strata of the pooled tests): `openrouter/qwen/qwen3.8-27b`, `openrouter/openai/gpt-oss-120b`,
+  `openrouter/anthropic/claude-haiku-5.5`.
+- Replication stratum (reported, never pooled): `openrouter/deepseek/deepseek-v4.1-flash-1017`.
+
+Google models are not used: they return HTTP 402 on this OpenRouter key (2026-11-23). Smoke and substitution:
+before the wave, one split talk trial and one commons talk trial per model on instance 12, which is not in the
+wave (plan `flotilla/plans/xm1s.json`, task sets `.flotilla-local/tasks/xm1s-split` and `xm1s-commons`). Smoke
+trials are never analysed. A new model whose 2 smoke trials both end in a Harbor, world, verifier or provider
+error, or that misses more than 25% of its smoke seat-rounds, is replaced by `openrouter/z-ai/glm-5.3` before the
+wave. Only those validity facts decide; deals and survival in the smoke trials do not.
+
+**Design.** 12 instances: `build_tasks.py --family split --difficulty b --seats 2 --instances 0-11 --conditions
+silent,talk,propose --round-seconds 240 --max-messages-per-round 2 --seed-of .flotilla-local/tasks/sp3/split --out
+.flotilla-local/tasks/xm1-split` (qa PASS). Instances 0-5 have the sp3 pots and outside options (checked); 6-11
+are new, and in each the outside option of one seat is above half the pot. 3 arms x 12 instances x 4 models = 144
+trials, 1 attempt each. Harbor is the fork `main` binary 6aeb609e, the same as in all earlier Flotilla runs
+(upstream #16-#22 not taken, so the harness does not change). Environment: Modal (`modal_vm_runtime`), not local
+Docker as in sections 4-14, so comparisons stay inside this wave. Order: `run_wave.py` with order seed 20261123
+shuffles the (family, instance) blocks of both families and the (arm, model) cells inside each block; up to 10
+trials run at once. The arms and models of one instance therefore run close in time, and no arm runs first.
+
+**Primary test (pass or fail; alpha 0.025, Bonferroni over the 2 family primaries).** `deal`, talk against silent,
+pooled over the 3 new models with the exact stratified conditional test: the strata are the models; under the
+null each model's b is Binomial(b + c, 1/2), independent across models; the two-sided p is the exact probability
+that the sum of b is at least as far from half of the discordant pairs as observed. Over complete valid pairs:
+
+- PASS: at least 24 complete valid pairs, sum of b greater than sum of c, and p <= 0.025.
+- FAIL: at least 24 complete valid pairs and not PASS. If sum of c > sum of b with p <= 0.025, the report says
+  that silent gave more deals.
+- INCONCLUSIVE: fewer than 24 complete valid pairs (for example, after a budget stop).
+
+**Secondary (reported; cannot rescue a failed primary).** Propose against silent, pooled the same way, alpha 0.05,
+with at least 18 pairs (same 3 labels). Per model: exact McNemar for talk vs silent and propose vs silent
+("replicates" if b > c and p <= 0.05). Talk minus propose deal rate per model with a 95% bootstrap interval over
+instances (no test). The replication stratum gets the same per-model lines.
+
+**Validity.** A trial is valid if it has a verifier score and a world state, and no Harbor, world, verifier or seat
+exception. A model-arm is valid if its missed seat-rounds (not passes) are at most 10% of its seat-rounds.
+Invalid model-arms are left out of the tests and reported. An invalid trial runs once more
+(`run_wave.py --retry-invalid`) if the budget allows; the first valid trial of a cell counts.
+
+**Reported, no test.** Efficiency, deal round, passes, misses, the strong seat's share of the surplus, whether a
+stated outside option was true (trajectory reading), proposals and their fates (accepted, replaced, lapsed,
+expired; feasible, and feasible but never seen), and the cost per model.
+
+**Predictions (from the library note; recorded, not gates).**
+
+1. Silent deals are at most 2 of 12 for each new model whose silent arm is valid.
+2. Talk deals are at least 8 of 12 for each new model whose talk arm is valid.
+3. GPT-OSS-120B misses more than 10% of seat-rounds on at least one split arm.
+4. Propose deals are at least talk deals minus 2 and at least silent deals plus 4, for models with valid arms.
+5. The strong seat's share of the surplus in talk deals is not near 0 outside DeepSeek: at least 0.25 for Qwen.
+6. In propose deals, the strong seat's surplus share is at least 0.10 above its talk share (models with at
+   least 4 deals in both arms).
+7. The DeepSeek replication stratum has at least 10 talk deals and at most 2 silent deals in 12.
+
+**Budget.** The smoke plan (8 trials) has a cap of $3 and the wave plan a cap of $20 of model spend. Each starts no
+trial when its spend plus $0.30 for each trial in flight and the next one would pass its cap, or when OpenRouter
+credit left is below $2. Model cost per trial is Harbor's recorded `cost_usd` (OpenRouter's billed cost per
+call); tokens times the catalog price frozen at the start are logged as a check. Modal cost is read with
+`modal billing report` before and after (estimate below $5).
+Commands: `keys run -- python3 flotilla/run_wave.py flotilla/plans/xm1s.json`, then `.../xm1.json`; analysis:
+`python3 flotilla/docs/results/scripts/xm_analysis.py .flotilla-local/jobs 'xm1-??????' --tasks
+.flotilla-local/tasks/xm1-split --tasks .flotilla-local/tasks/xm1-commons --new-models
+openrouter/qwen/qwen3.8-27b,openrouter/openai/gpt-oss-120b,openrouter/anthropic/claude-haiku-5.5
+--replication-model openrouter/deepseek/deepseek-v4.1-flash-1017`.
