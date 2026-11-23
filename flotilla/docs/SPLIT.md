@@ -582,3 +582,11 @@ game outcome of a smoke trial was read. The reasons are an independent pre-run r
 Predictions 1, 2, 3, 5 and 7 stand, read as rates: silent at most 20% deals, talk at least 65% deals, and the
 DeepSeek stratum talk at least 80% and silent at most 20%. The analysis command takes the final model list with
 `--new-models` and `--replication-model`.
+
+**Amendment 2 (2026-11-23, before the GPT-OSS split smoke trial and any second smoke trial finished).** If a new
+model of section 15 (GPT-OSS-120B or Claude Haiku 5.5) fails the smoke rule of Amendment 1,
+item 3, it is replaced by the candidate of Amendment 1, item 2 (`qwen3.8-flash` or `glm-5.3-flash`) that passes
+the smoke rule and is not already the third new model; `qwen3.8-flash` first, if it passes the rule and the cost
+bound. If no candidate is left, the wave runs with the new models that remain, and the pooled tests use them.
+If the DeepSeek stratum fails the rule, the wave runs without it. The validity check of the smoke trials printed
+the number of rounds each smoke game logged; no other game outcome was read.
