@@ -608,6 +608,51 @@ async def test_an_error_while_stopping_a_seat_does_not_fail_the_trial(
     assert _verified(trial)
 
 
+async def test_a_scripted_oracle_seat_that_exits_non_zero_is_recorded_and_graded(
+    tmp_path: Path,
+):
+    task_dir = _task_dir(tmp_path)
+    (task_dir / "solution").mkdir()
+    (task_dir / "solution" / "solve.sh").write_text("#!/bin/bash\nexit 3\n")
+    trial = await _seats_trial(
+        _config(
+            task_dir,
+            {"seat": "maya", "name": "oracle"},
+            {"seat": "raj", "name": "oracle"},
+            {"seat": "lee", "name": "oracle"},
+        )
+    )
+
+    async def solve_fails_in_maya(command: list[str], **kwargs: Any) -> ExecResult:
+        if command[0] == "exec" and "sh" in command:
+            service, _ = _service_and_user(command)
+            script = command[-1]
+            if service == "maya" and "solve.sh" in script and "chmod" not in script:
+                note("solve-failed", service)
+                return ExecResult(stdout="", return_code=3)
+        return await compose(command, **kwargs)
+
+    trial.agent_environment._run_docker_compose_command = AsyncMock(
+        side_effect=solve_fails_in_maya
+    )
+
+    result = await trial.run()
+
+    assert ("solve-failed", "maya") in EVENTS
+    seats = _seat_results(result)
+    maya = seats["maya"].exception_info
+    assert maya is not None and maya.exception_type == "NonZeroAgentExitCodeError"
+    assert "code 3" in maya.exception_message
+    assert seats["raj"].exception_info is None
+    assert seats["lee"].exception_info is None
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "NonZeroAgentExitCodeError"
+    assert result.exception_info.exception_message.startswith("Seat 'maya': ")
+    exit_code = trial.paths.trial_dir / "seats" / "maya" / "agent" / "exit-code.txt"
+    assert exit_code.read_text() == "3"
+    assert _verified(trial) and result.verifier_result is not None
+
+
 async def test_a_verifier_error_after_a_seat_error_is_the_trials_error(
     tmp_path: Path,
 ):
