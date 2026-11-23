@@ -851,6 +851,34 @@ def not_admitted(
     return True
 
 
+def owner_turn(
+    owner: Path, seat: str, prompt: str | None, meta: Row | None, launch: Row
+) -> Row:
+    turn = (
+        None
+        if meta is None or meta["reply_sha256"] is None
+        else {
+            "prompt_sha256": meta["prompt_sha256"],
+            "reply_sha256": meta["reply_sha256"],
+        }
+    )
+    need(
+        not present(owner / seat) or meta is None or meta["started_turn"],
+        "owner_without_turn",
+    )
+    tag = launch["tag"]
+    if tag == "live" and not_admitted(owner, seat, prompt, meta, launch):
+        return {"status": "not_admitted"}
+    if tag == "live":
+        return base.owner_turn(owner, seat, prompt, turn)
+    return control_turn(owner, seat, prompt, turn, MODES[tag], launch["world"])
+
+
+def distinct_sessions(rows: dict[str, Row]) -> None:
+    sessions = [r["receipt"]["session_sha256"] for r in rows.values() if "receipt" in r]
+    need(len(set(sessions)) == len(sessions), "shared_provider_session")
+
+
 def owner_turns(
     cell: Path,
     order: tuple[str, ...],
@@ -858,32 +886,12 @@ def owner_turns(
     metas: dict[str, Row | None],
     launch: Row,
 ) -> dict[str, Row]:
-    tag, world = launch["tag"], launch["world"]
     owner = cell / "owner"
     need(entries(owner) <= set(SEATS), "owner_entries")
-    rows: dict[str, Row] = {}
-    for seat in order:
-        meta = metas[seat]
-        turn = (
-            None
-            if meta is None or meta["reply_sha256"] is None
-            else {
-                "prompt_sha256": meta["prompt_sha256"],
-                "reply_sha256": meta["reply_sha256"],
-            }
-        )
-        need(
-            not present(owner / seat) or meta is None or meta["started_turn"],
-            "owner_without_turn",
-        )
-        if tag == "live" and not_admitted(owner, seat, plan[seat], meta, launch):
-            rows[seat] = {"status": "not_admitted"}
-        elif tag == "live":
-            rows[seat] = base.owner_turn(owner, seat, plan[seat], turn)
-        else:
-            rows[seat] = control_turn(owner, seat, plan[seat], turn, MODES[tag], world)
-    sessions = [r["receipt"]["session_sha256"] for r in rows.values() if "receipt" in r]
-    need(len(set(sessions)) == len(sessions), "shared_provider_session")
+    rows = {
+        seat: owner_turn(owner, seat, plan[seat], metas[seat], launch) for seat in order
+    }
+    distinct_sessions(rows)
     return rows
 
 
@@ -947,17 +955,7 @@ def replies_bound(
     return booked
 
 
-def incomplete_reason(
-    launch: Row,
-    result: Row,
-    order: tuple[str, ...],
-    metas: dict[str, Row | None],
-    raised: dict[str, bool],
-    rounds: list[Row],
-    state: Row,
-    reward: int | None,
-    owned: dict[str, Row],
-) -> str | None:
+def native_failure(launch: Row, result: Row) -> str | None:
     reason = launch_reason(launch)
     if reason is not None:
         return reason
@@ -970,6 +968,23 @@ def incomplete_reason(
         or result.get("agent_result") is not None
     ):
         return "native_trial_exception"
+    return None
+
+
+def incomplete_reason(
+    launch: Row,
+    result: Row,
+    order: tuple[str, ...],
+    metas: dict[str, Row | None],
+    raised: dict[str, bool],
+    rounds: list[Row],
+    state: Row,
+    reward: int | None,
+    owned: dict[str, Row],
+) -> str | None:
+    reason = native_failure(launch, result)
+    if reason is not None:
+        return reason
     for seat in order:
         meta = metas[seat]
         if raised[seat]:
@@ -1110,11 +1125,14 @@ def base_row(
     }
 
 
-def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
+Stock = tuple[Row, dict[str, list[int]], int, str]
+
+
+def staged(
+    cell: Path, world: int, arm: str, tag: str
+) -> tuple[bytes, Row, Path, Stock | None]:
     entries(cell)
     launch_raw, launch = launched(cell, world, arm, tag)
-    digests: Row = {"launch": packet._digest(launch_raw)}
-    row = base_row(world, arm, tag, cell, launch, digests)
     name = trial_name(world, arm, tag)
     trial = cell / "trials" / name
     need(
@@ -1124,7 +1142,7 @@ def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
     need(launch["result_present"] == present(trial / "result.json"), "launch_binding")
     if not launch["result_present"]:
         need(launch["error"] is not None, "launch_binding")
-        return row
+        return launch_raw, launch, trial, None
     need(
         None
         not in (launch["task_name"], launch["task_checksum"], launch["config_sha256"]),
@@ -1132,6 +1150,16 @@ def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
     )
     task, starts, target, calendar = stock_task(cell, world, launch)
     cfg = configured(cell, task, world, arm, tag, launch)
+    return launch_raw, launch, trial, (cfg, starts, target, calendar)
+
+
+def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
+    launch_raw, launch, trial, stock = staged(cell, world, arm, tag)
+    digests: Row = {"launch": packet._digest(launch_raw)}
+    row = base_row(world, arm, tag, cell, launch, digests)
+    if stock is None:
+        return row
+    cfg, starts, target, calendar = stock
     digests["config"] = launch["config_sha256"]
     row["claims"]["stock_source_verified"] = True
     row["source"]["calendar_sha256"] = calendar
@@ -1150,17 +1178,10 @@ def evidence_digests(trial: Path, digests: Row) -> None:
         )
 
 
-def trial_row(
-    row: Row,
-    cell: Path,
-    trial: Path,
-    cfg: Row,
-    launch: Row,
-    starts: dict[str, list[int]],
-    target: int,
-) -> None:
-    world, arm, tag = row["world"], row["arm"], row["tag"]
-    order = protocol.order(world)
+def observed(
+    row: Row, trial: Path, cfg: Row, launch: Row, starts: dict[str, list[int]]
+) -> Row:
+    order = protocol.order(row["world"])
     packet._directory(trial)
     result_raw = read(trial / "result.json")
     result = packet._object(packet._json(result_raw))
@@ -1173,21 +1194,63 @@ def trial_row(
         for seat in SEATS
     }
     messages = world_messages(trial)
-    rounds = exchange(messages, order, starts, arm)
+    rounds = exchange(messages, order, starts, row["arm"])
     state = timeline(trial, messages, rounds, order[0])
     plan = prompts(order, starts, rounds)
     for seat in order:
         bind_seat(seat, metas[seat], plan[seat], rounds, messages, state)
-    owned = owner_turns(cell, order, plan, metas, launch)
+    return {
+        "order": order,
+        "result": result,
+        "metas": metas,
+        "raised": raised,
+        "messages": messages,
+        "rounds": rounds,
+        "state": state,
+        "plan": plan,
+    }
+
+
+def trial_row(
+    row: Row,
+    cell: Path,
+    trial: Path,
+    cfg: Row,
+    launch: Row,
+    starts: dict[str, list[int]],
+    target: int,
+) -> None:
+    seen = observed(row, trial, cfg, launch, starts)
+    order, metas, rounds, state = (
+        seen["order"],
+        seen["metas"],
+        seen["rounds"],
+        seen["state"],
+    )
+    owned = owner_turns(cell, order, seen["plan"], metas, launch)
     owner_launch(cell, launch, rounds, metas)
     replies_bound(order, starts, rounds, owned, metas, state["submit"])
     reward = stock_reward(
-        trial, result, messages, state["submit"], world, order[0], target
+        trial,
+        seen["result"],
+        seen["messages"],
+        state["submit"],
+        row["world"],
+        order[0],
+        target,
     )
     reason = incomplete_reason(
-        launch, result, order, metas, raised, rounds, state, reward, owned
+        launch,
+        seen["result"],
+        order,
+        metas,
+        seen["raised"],
+        rounds,
+        state,
+        reward,
+        owned,
     )
-    finish_row(row, tag, reason, reward, order, rounds, state, owned)
+    finish_row(row, row["tag"], reason, reward, order, rounds, state, owned)
 
 
 def finish_row(

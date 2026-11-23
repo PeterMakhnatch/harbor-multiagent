@@ -7,8 +7,11 @@ from typing import Any, cast
 
 SEATS = ("p1", "p2", "p3", "p4")
 ARMS = ("all", "stop")
+RECOVERY_ARMS = ("abstain", "reduce")
 FIRST = 1200
 COUNT = 32
+PILOT_WORLDS = range(FIRST, FIRST + 8)
+RECOVERY_WORLDS = range(FIRST + 16, FIRST + 20)
 SLOTS = 35
 MAX_REPLY = 8192
 INPUT = "Input JSON: "
@@ -44,6 +47,16 @@ def order(world: int) -> tuple[str, str, str, str]:
     first = (world - FIRST) % len(SEATS)
     booker, a, b, c = (SEATS[(first + step) % len(SEATS)] for step in range(4))
     return booker, a, b, c
+
+
+def admitted(world: object, arm: object) -> bool:
+    if type(world) is not int:
+        return False
+    if arm in ARMS:
+        return world in PILOT_WORLDS
+    if arm in RECOVERY_ARMS:
+        return world in RECOVERY_WORLDS
+    return False
 
 
 def _ids(value: object) -> list[int]:
@@ -135,11 +148,11 @@ def outgoing(own: list[int], text: str) -> dict[str, Any]:
 
 
 def ask_next(arm: str, own: list[int], reports: list[dict[str, Any]]) -> bool:
-    if arm not in ARMS:
+    if arm not in ARMS and arm not in RECOVERY_ARMS:
         raise ValueError("unknown arm")
     remaining = set(_own(own))
     delivered = _reports(reports)
-    if arm == "all" or not all(report["exact"] for report in delivered):
+    if arm != "stop" or not all(report["exact"] for report in delivered):
         return True
     for report in delivered:
         remaining.intersection_update(report["starts"])

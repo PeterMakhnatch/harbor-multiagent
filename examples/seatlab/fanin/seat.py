@@ -301,7 +301,7 @@ class FanInSeat(BaseAgent):
     ) -> None:
         if (
             type(world) is not int
-            or arm not in p.ARMS
+            or not p.admitted(world, arm)
             or seat not in p.SEATS
             or model_name is not None
             or extra_env
