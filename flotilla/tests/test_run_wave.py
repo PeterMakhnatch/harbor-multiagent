@@ -1,0 +1,408 @@
+"""Seeded simulation of a paid wave: a fake Harbor, fake prices, and injected faults."""
+
+from __future__ import annotations
+
+import json
+import os
+import stat
+import subprocess
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+from conftest import FLOTILLA, load
+
+RUN = load(FLOTILLA / "run_wave.py")
+PRICING = load(FLOTILLA / "pricing.py")
+BUILD = load(FLOTILLA / "build_tasks.py")
+DEEPSEEK = "deepseek/deepseek-flash"
+OPENROUTER = "openrouter/qwen/qwen3.8-27b"
+OFF_PEAK = "2026-11-21T16:00:00+00:00"
+GIT = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+       "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+HARBOR_SCRIPT = r"""#!/usr/bin/env python3
+import json, os, sys, time
+from pathlib import Path
+args = sys.argv[1:]
+config = json.loads(Path(args[args.index("-c") + 1]).read_text())
+task = config["tasks"][0]["path"]
+model = config["participants"][0]["model_name"]
+control = json.loads(Path(os.environ["WAVE_CONTROL"]).read_text())
+spec = control[task + "|" + model]
+log = Path(os.environ["WAVE_HARBOR_LOG"])
+keys = sorted(name for name in os.environ if name.endswith("_API_KEY"))
+with log.open("a") as handle:
+    handle.write(json.dumps({"event": "start", "task": task, "model": model, "keys": keys,
+                             "job": config["job_name"], "concurrent": config["n_concurrent_trials"],
+                             "t": time.time()}) + "\n")
+if spec["behavior"] == "slow":
+    gate = Path(os.environ["WAVE_GATE"])
+    with gate.open("a") as handle:
+        handle.write("slow\n")
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        if gate.read_text().count("slow") >= 2:
+            break
+        time.sleep(0.01)
+if spec["behavior"] == "crash":
+    with log.open("a") as handle:
+        handle.write(json.dumps({"event": "end", "task": task, "model": model, "t": time.time()}) + "\n")
+    sys.exit(1)
+job = Path(config["jobs_dir"]) / config["job_name"] / "trial"
+job.mkdir(parents=True)
+tokens = spec["tokens"]
+result = {"started_at": spec["started_at"], "exception_info": spec.get("exception"),
+          "seat_results": [{"seat": "p1", "exception_info": spec.get("exception"),
+                            "agent_result": {"n_input_tokens": tokens["miss"], "n_cache_tokens": tokens["hit"],
+                                             "n_output_tokens": tokens["out"], "cost_usd": spec.get("cost_usd")}}]}
+(job / "result.json").write_text(json.dumps(result))
+if spec["behavior"] != "invalid":
+    (job / "verifier").mkdir()
+    (job / "verifier" / "score.json").write_text('{"error": null}')
+    (job / "verifier" / "world-state.json").write_text("{}")
+with log.open("a") as handle:
+    handle.write(json.dumps({"event": "end", "task": task, "model": model, "t": time.time()}) + "\n")
+"""
+
+
+def git(repo: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True,
+                            env={**os.environ, **GIT})
+    return result.stdout.strip()
+
+
+def init_repo(tmp: Path) -> Path:
+    repo = tmp / "repo"
+    repo.mkdir(parents=True)
+    git(repo, "init", "-b", "main")
+    return repo
+
+
+def commit_plan(repo: Path, plan: dict) -> Path:
+    (repo / "docs").mkdir()
+    (repo / "docs" / "plan.md").write_text("# How to run a wave\n")
+    path = repo / "plan.json"
+    path.write_text(json.dumps(plan))
+    git(repo, "add", "docs/plan.md", "plan.json")
+    git(repo, "commit", "-m", "plan")
+    plan["prereg"]["commit"] = git(repo, "rev-parse", "HEAD")
+    path.write_text(json.dumps(plan))
+    git(repo, "add", "plan.json")
+    git(repo, "commit", "-m", "cite prereg")
+    return path
+
+
+def task_tree(repo: Path, instances: list[int], arms: list[str]) -> None:
+    tasks: dict[str, dict] = {}
+    root = repo / "tasks"
+    for instance in instances:
+        for arm in arms:
+            name = f"t-{instance:06x}-{arm}"
+            folder = root / "split" / name
+            folder.mkdir(parents=True)
+            (folder / "task.toml").write_text("[agents]\np1 = {}\n")
+            tasks[f"flotilla/{name}"] = {"instance": instance, "condition": arm, "path": f"split/{name}"}
+    (root / "manifest.json").write_text(json.dumps({"format": "flotilla-manifest", "version": 1, "tasks": tasks}))
+
+
+def plan_for(instances, arms, models, *, concurrency=2, env="docker", cap=10.0, reserve=0.05, seed=1) -> dict:
+    floors = {}
+    if any(model.startswith("deepseek/") for model in models):
+        floors["deepseek"] = 1.0
+    if any(model.startswith("openrouter/") for model in models):
+        floors["openrouter"] = 1.0
+    return {
+        "name": "wave",
+        "prereg": {"commit": "placeholder", "doc": "docs/plan.md", "section": "How to run a wave"},
+        "task_sets": [{"tasks_dir": "tasks", "manifest": "tasks/manifest.json", "instances": instances, "arms": arms}],
+        "models": models, "agent": "terminus-2",
+        "make_jobs": {"max_turns": 4, "env": env, "concurrency": concurrency},
+        "budget": {"cap_usd": cap, "reserve_per_trial_usd": reserve, "provider_floors": floors},
+        "order_seed": seed,
+    }
+
+
+def write_executable(path: Path, text: str) -> None:
+    path.write_text(text)
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+class Sources:
+    def __init__(self, prices: dict, balance):
+        self._prices = prices
+        self._balance = balance
+        self.price_calls = 0
+        self.balance_calls = []
+
+    def prices(self, models):
+        self.price_calls += 1
+        return self._prices
+
+    def balance(self, provider):
+        self.balance_calls.append(provider)
+        return self._balance(provider, len(self.balance_calls))
+
+
+def catalog() -> dict:
+    return {OPENROUTER: {"prompt": "0.0000001", "completion": "0.000002", "input_cache_read": "0.00000001"}}
+
+
+def spec_for(behavior: str, *, cost_usd=0.02, miss=1_000) -> dict:
+    return {"behavior": behavior, "started_at": OFF_PEAK, "cost_usd": cost_usd,
+            "tokens": {"hit": 0, "miss": miss, "out": 0},
+            "exception": "boom" if behavior == "invalid" else None}
+
+
+def namer_box(tmp: Path) -> int:
+    counter = tmp / "names"
+    value = int(counter.read_text()) + 1 if counter.is_file() else 1
+    counter.write_text(str(value))
+    return value
+
+
+def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, **extra):
+    repo = init_repo(tmp)
+    task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"])
+    path = commit_plan(repo, plan)
+    harbor, wrapper = tmp / "harbor", tmp / "wrapper"
+    write_executable(harbor, HARBOR_SCRIPT)
+    write_executable(wrapper, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$WAVE_WRAPPER_LOG\"\nexec \"$@\"\n")
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, repo))
+    mapped = {cell["task"] + "|" + cell["model"]: behaviors[cell["key"]] for cell in order}
+    (tmp / "control.json").write_text(json.dumps(mapped))
+    (tmp / "gate").write_text("")
+    env = {"PATH": os.environ["PATH"], "WAVE_CONTROL": str(tmp / "control.json"),
+           "WAVE_HARBOR_LOG": str(tmp / "harbor.jsonl"), "WAVE_WRAPPER_LOG": str(tmp / "wrapper.log"),
+           "WAVE_GATE": str(tmp / "gate"), "DEEPSEEK_API_KEY": "ds", "OPENROUTER_API_KEY": "or",
+           "OPENAI_API_KEY": "no"}
+    events = RUN.run(path, run_dir=tmp / "run", jobs_dir=tmp / "jobs", harbor=harbor, wrapper=wrapper,
+                     sources=sources, base_env=env, namer=lambda _n: f"{namer_box(tmp):06x}", **extra)
+    return events, order, path, env
+
+
+def assert_invariants(events, *, concurrency: int, cap: float, reserve: float) -> None:
+    in_flight = 0
+    for event in events:
+        if event["kind"] == "start":
+            in_flight += 1
+            assert event["in_flight"] == in_flight
+            assert in_flight <= concurrency
+            assert event["projected"] <= cap + 1e-9
+        elif event["kind"] == "end":
+            in_flight -= 1
+            assert in_flight >= 0
+
+
+def test_order_is_a_function_of_the_seed_and_blocks_stay_together():
+    plan = plan_for([0, 1], ["silent", "talk"], [DEEPSEEK, OPENROUTER], seed=1)
+    plan["task_sets"].append({**plan["task_sets"][0], "tasks_dir": "other", "manifest": "other/manifest.json"})
+    first = RUN.order_of(plan)
+    assert RUN.order_of(plan) == first
+    assert RUN.order_of({**plan, "order_seed": 2}) != first
+    seen = []
+    for cell in first:
+        block = (cell["task_set"], cell["instance"])
+        if not seen or seen[-1] != block:
+            assert block not in seen
+            seen.append(block)
+    assert any(blocks_of(seed) != sorted(blocks_of(seed)) for seed in range(1, 30))
+
+
+def blocks_of(seed: int) -> list[tuple[int, int]]:
+    plan = plan_for([0, 1], ["silent", "talk"], [DEEPSEEK, OPENROUTER], seed=seed)
+    plan["task_sets"].append({**plan["task_sets"][0], "tasks_dir": "other", "manifest": "other/manifest.json"})
+    blocks = []
+    for cell in RUN.order_of(plan):
+        block = (cell["task_set"], cell["instance"])
+        if not blocks or blocks[-1] != block:
+            blocks.append(block)
+    return blocks
+
+
+def test_simulation_holds_the_invariants(tmp_path):
+    plan = plan_for([0, 1], ["silent", "talk"], [DEEPSEEK, OPENROUTER], concurrency=2, cap=10.0, reserve=0.05)
+    repo = init_repo(tmp_path / "preview")
+    task_tree(repo, [0, 1], ["silent", "talk"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, repo))
+    behaviors = {cell["key"]: spec_for("ok", cost_usd=0.02) for cell in order}
+    behaviors[order[0]["key"]] = spec_for("slow")
+    behaviors[order[1]["key"]] = spec_for("slow")
+    behaviors[order[2]["key"]] = spec_for("crash")
+    behaviors[order[3]["key"]] = spec_for("invalid", cost_usd=0.03)
+    behaviors[order[4]["key"]] = spec_for("spike", cost_usd=0.40, miss=2_000_000)
+    sources = Sources(catalog(), lambda _provider, n: 10.0 if n < 7 else 0.2)
+    events, order, _path, _env = launch(tmp_path / "sim", plan, behaviors, sources)
+    assert_invariants(events, concurrency=2, cap=10.0, reserve=0.05)
+    starts = [event for event in events if event["kind"] == "start"]
+    ends = {event["key"]: event for event in events if event["kind"] == "end"}
+    assert [event["key"] for event in starts] == [cell["key"] for cell in order[:6]]
+    assert max(event["in_flight"] for event in starts) == 2
+    assert events[-1]["reason"] == "floor"
+    assert sources.price_calls == 1
+    assert ends[order[2]["key"]]["valid"] is False and ends[order[2]["key"]]["source"] == "reserve"
+    assert ends[order[3]["key"]]["valid"] is False
+    spike = ends[order[4]["key"]]
+    if order[4]["model"] == OPENROUTER:
+        assert spike["cost"] == 0.40 and spike["source"] == "recorded" and spike["estimate"] != 0.40
+    else:
+        expected = PRICING.deepseek_cost({"hit": 0, "miss": 2_000_000, "out": 0}, datetime.fromisoformat(OFF_PEAK))
+        assert spike["cost"] == expected and spike["source"] == "deepseek"
+    harbor_log = [json.loads(line) for line in (tmp_path / "sim" / "harbor.jsonl").read_text().splitlines()]
+    assert all(row["keys"] == ["DEEPSEEK_API_KEY", "OPENROUTER_API_KEY"] for row in harbor_log if row["event"] == "start")
+    assert all(row["concurrent"] == 1 for row in harbor_log if row["event"] == "start")
+    spans = {}
+    for row in harbor_log:
+        spans.setdefault(row["task"] + "|" + row["model"], {})[row["event"]] = row["t"]
+    left, right = order[0], order[1]
+    a, b = spans[left["task"] + "|" + left["model"]], spans[right["task"] + "|" + right["model"]]
+    assert a["start"] < b["end"] and b["start"] < a["end"]
+    assert str(tmp_path / "sim" / "harbor") in (tmp_path / "sim" / "wrapper.log").read_text()
+    assert all(event["command"][0] == str(tmp_path / "sim" / "wrapper") for event in starts)
+    missing = plan_for([0], ["silent"], [OPENROUTER], concurrency=1, cap=1.0, reserve=0.01)
+    probe = Sources(catalog(), lambda *_args: 10.0)
+    preview = init_repo(tmp_path / "missing-preview")
+    task_tree(preview, [0], ["silent"])
+    only = RUN.order_of(missing, RUN.resolve_paths(missing, preview))
+    flagged, _order, _path, _env = launch(
+        tmp_path / "missing", missing, {only[0]["key"]: spec_for("ok", cost_usd=0, miss=1_000)}, probe)
+    end = next(event for event in flagged if event["kind"] == "end")
+    assert end["source"] == "token-estimate" and end["flag"] == "missing-recorded"
+    assert end["cost"] == PRICING.openrouter_cost(OPENROUTER, {"hit": 0, "miss": 1_000, "out": 0}, catalog())
+
+
+def test_cap_stops_before_a_start_and_resume_skips_finished_cells(tmp_path):
+    plan = plan_for([0, 1, 2], ["silent", "talk"], [DEEPSEEK], concurrency=1, cap=0.25, reserve=0.10)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0, 1, 2], ["silent", "talk"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    behaviors = {cell["key"]: spec_for("ok", miss=1_000) for cell in order}
+    behaviors[order[0]["key"]] = spec_for("crash")
+    behaviors[order[1]["key"]] = spec_for("invalid", miss=333_333)
+    behaviors[order[2]["key"]] = spec_for("spike", miss=2_000_000)
+    events, order, path, env = launch(tmp_path / "cap", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert_invariants(events, concurrency=1, cap=0.25, reserve=0.10)
+    assert events[-1]["reason"] == "cap"
+    assert len([event for event in events if event["kind"] == "start"]) == 3
+    assert events[-1]["spent"] > 0.25
+    before = (tmp_path / "cap" / "harbor.jsonl").read_text().count('"event": "start"')
+    again = RUN.run(path, run_dir=tmp_path / "cap" / "run", jobs_dir=tmp_path / "cap" / "jobs",
+                    harbor=tmp_path / "cap" / "harbor", wrapper=tmp_path / "cap" / "wrapper",
+                    sources=Sources({}, lambda *_args: 10.0), base_env=env,
+                    namer=lambda _n: f"{namer_box(tmp_path / 'cap'):06x}")
+    assert again[-1]["reason"] == "cap"
+    assert [event for event in again if event["kind"] == "start"] == []
+    assert (tmp_path / "cap" / "harbor.jsonl").read_text().count('"event": "start"') == before
+
+
+def test_retry_invalid_reruns_only_invalid_cells(tmp_path):
+    plan = plan_for([0], ["silent", "talk"], [DEEPSEEK], concurrency=1, cap=5.0, reserve=0.05)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0], ["silent", "talk"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    behaviors = {order[0]["key"]: spec_for("invalid"), order[1]["key"]: spec_for("ok")}
+    events, order, path, env = launch(tmp_path / "retry", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert events[-1]["reason"] == "done"
+    skipped = RUN.run(path, run_dir=tmp_path / "retry" / "run", jobs_dir=tmp_path / "retry" / "jobs",
+                      harbor=tmp_path / "retry" / "harbor", wrapper=tmp_path / "retry" / "wrapper",
+                      sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000099")
+    assert [event for event in skipped if event["kind"] == "start"] == []
+    env = {**env, "WAVE_HARBOR_LOG": str(tmp_path / "retry" / "retry.jsonl")}
+    retried = RUN.run(path, run_dir=tmp_path / "retry" / "run", jobs_dir=tmp_path / "retry" / "jobs",
+                      harbor=tmp_path / "retry" / "harbor", wrapper=tmp_path / "retry" / "wrapper",
+                      sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000100",
+                      retry_invalid=True)
+    assert [event["key"] for event in retried if event["kind"] == "start"] == [order[0]["key"]]
+
+
+def test_modal_is_not_wrapped_and_may_exceed_two(tmp_path):
+    plan = plan_for([0], ["silent"], [OPENROUTER], concurrency=12, env="modal", cap=1.0, reserve=0.01)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0], ["silent"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    events, _order, _path, _env = launch(
+        tmp_path / "modal", plan, {order[0]["key"]: spec_for("ok", cost_usd=0.01)},
+        Sources(catalog(), lambda *_args: 10.0))
+    assert events[-1]["reason"] == "done"
+    assert events[0]["command"][0].endswith("harbor")
+    assert not (tmp_path / "modal" / "wrapper.log").exists()
+
+
+def test_refuses_uncommitted_plan_and_a_prereg_that_is_not_an_ancestor(tmp_path):
+    repo = init_repo(tmp_path)
+    task_tree(repo, [0], ["silent"])
+    plan = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1)
+    path = commit_plan(repo, plan)
+    path.write_text(path.read_text() + "\n")
+    try:
+        RUN.run(path, run_dir=tmp_path / "run", jobs_dir=tmp_path / "jobs")
+    except SystemExit as exc:
+        assert "differs from HEAD" in str(exc)
+    else:
+        raise AssertionError("an uncommitted plan must be refused")
+    path.write_text(json.dumps(plan))
+    git(repo, "checkout", "-b", "side")
+    (repo / "docs" / "plan.md").write_text("# How to run a wave\nside\n")
+    git(repo, "add", "docs/plan.md")
+    git(repo, "commit", "-m", "side")
+    side = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "main")
+    plan["prereg"]["commit"] = side
+    path.write_text(json.dumps(plan))
+    git(repo, "add", "plan.json")
+    git(repo, "commit", "-m", "bad prereg")
+    try:
+        RUN.run(path, run_dir=tmp_path / "run2", jobs_dir=tmp_path / "jobs")
+    except SystemExit as exc:
+        assert "not an ancestor" in str(exc)
+    else:
+        raise AssertionError("a prereg commit that is not an ancestor must be refused")
+
+
+def test_docker_concurrency_above_two_is_refused(tmp_path):
+    blob = tmp_path / "plan.json"
+    blob.write_text(json.dumps(plan_for([0], ["silent"], [DEEPSEEK], concurrency=3)))
+    try:
+        RUN.load_plan(blob)
+    except SystemExit as exc:
+        assert "concurrency must be <= 2" in str(exc)
+    else:
+        raise AssertionError("docker concurrency 3 must be refused")
+
+
+def test_openrouter_model_is_passed_through_to_terminus(tmp_path):
+    out = tmp_path / "tasks"
+    BUILD.build("schedule", [0], 2, "easy", 1, ("talk",), out)
+    subprocess.run(
+        [sys.executable, str(FLOTILLA / "make_jobs.py"), "--tasks", str(out / "*" / "*"), "--agent", "terminus-2",
+         "--model", "openrouter/deepseek/deepseek-v4-flash", "--name", "check", "--max-turns", "40",
+         "--out", str(tmp_path / "configs"), "--jobs-dir", str(tmp_path / "jobs")],
+        check=True, capture_output=True, text=True)
+    config = json.loads(next((tmp_path / "configs").glob("*.json")).read_text())
+    assert config["participants"]
+    assert all(seat["model_name"] == "openrouter/deepseek/deepseek-v4-flash" for seat in config["participants"])
+    assert all(seat["name"] == "terminus-2" for seat in config["participants"])
+    assert "base_url" not in config["participants"][0]
+
+
+def test_missing_cache_price_charges_the_input_price():
+    tokens = {"hit": 1_000, "miss": 2_000, "out": 3}
+    prices = {"openai/gpt-oss-120b": {"prompt": "0.0000002", "completion": "0.000001"}}
+    assert PRICING.openrouter_cost("openrouter/openai/gpt-oss-120b", tokens, prices) == (
+        1_000 * 0.0000002 + 2_000 * 0.0000002 + 3 * 0.000001)
+    payload = {"data": [{"id": "openai/gpt-oss-120b", "pricing": {"prompt": "0.0000002", "completion": "0.000001"}}]}
+    assert "input_cache_read" not in PRICING.parse_openrouter_models(payload)["openai/gpt-oss-120b"]
+    assert PRICING.parse_deepseek_balance({"balance_infos": [{"total_balance": "2.54"}]}) == 2.54
+    assert PRICING.parse_openrouter_credits({"data": {"total_credits": 50, "total_usage": 27.5}}) == 22.5
+    peak = datetime(2026, 11, 23, 2, 30, tzinfo=UTC)
+    off = datetime(2026, 11, 21, 16, 0, tzinfo=UTC)
+    assert PRICING.peak_factor(peak) == 2.0 and PRICING.peak_factor(off) == 1.0
+
+
+def test_help_and_example_dry_run():
+    help_run = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--help"], capture_output=True, text=True)
+    assert help_run.returncode == 0 and "dry-run" in help_run.stdout
+    dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run",
+                          str(FLOTILLA / "plans" / "example.json")], capture_output=True, text=True)
+    assert dry.returncode == 0, dry.stderr
+    assert "reserve $0.10 per trial" in dry.stdout
+    assert "openrouter/qwen/qwen3.8-27b" in dry.stdout
