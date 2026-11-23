@@ -323,8 +323,37 @@ Freeze 4 MNL companies indexed 0–3. Use SHA-256 of `seatlab/resume-landing/v1/
 
 **Decision rule.** If all 4 companies and both negative controls complete, call a landing delay material on this panel if the mean absolute difference between zero and 24 months of delay reaches 0.03 on the live score, and at least 2 of 4 company differences reach 0.03. Give all signed differences, including improvements on delay. A failing negative control makes the comparison uninterpretable. This tests software timing under a fixed schedule, not wall time by itself, agent quality, or the full benchmark grade.
 
+**Result: the arrival time changed the live score in 2 of 4 companies.** All 14 runs reached 1,095 simulated days. The 2 fixed-reference controls produced identical financial and software histories. None of the 518 monthly calls timed out or froze. The following are native **live company scores**, not full Seed to Profit grades and not model-team results.
+
+| Company | Land after month 13 | Land after month 17 | No landing before the end |
+|---|---:|---:|---:|
+| 0 | 0.0000 | 0.0000 | 0.0000 |
+| 1 | 0.0000 | 0.0000 | 0.0000 |
+| 2 | 0.3407 | 0.2855 | 0.0000 |
+| 3 | 0.2637 | 0.1064 | 0.0000 |
+
+The mean absolute endpoint difference was 0.1511. Exactly 2 of 4 differences exceeded 0.03, so the fixed criterion passed. A separate calculation checked the program digest in each monthly snapshot against the upstream files. It recomputed every grade from terminal company value. The [14 redacted receipts](results/continuation-software-arrival.json) include terminal values as well as grades; a zero grade does not by itself mean bankruptcy.
+
+**Use.** Record the simulated month in which the new program first ran, not just the time an agent regained its session. Restoring a full agent budget need not restore the opportunity to deploy. This test measures the consequence of a scheduled delay with 2 known official programs. It does not estimate the typical delay of a service or the performance of a resumed model team.
+
+To replay 1 case, use a non-root Python 3.12 environment with the stock versions `numpy==2.1.3` and `PyYAML==6.0.2`. Do not run a program submitted by a model. This runner accepts only the pinned benchmark sources:
+
+```sh
+env -u PYTHONPATH -u PYTHONHOME "$STOCK_PYTHON" -B \
+  -m examples.seatlab.continuation.resume_months "$BESPOKE_ROOT" --case 2 --delay 4
+```
+
 ## Is a prompt-level recheck enough when a peer's write is late?
 
 **Registered before counting races.** In two independent implementations of Abrahamsson et al.'s E1 study, look for a seat that lists the shared store in the same round its partner first successfully writes the particular value its task needs. Compare lists applied just before the write (miss) with lists applied just after it (hit). Use each focal seat once, its earliest qualifying list. Resolve ordering only with non-tied server timestamps; report ties separately. Use shared cells 1–4, 9 and 10. Use a list racing an unrelated seat's first write as a placebo. Use only valid worlds, and report all launches. Count actual later reads of the required partner value before submission. Do not use model narratives or pool model calls as independent samples.
 
 **Decision rule.** Require at least 20 misses and 20 hits in the explicitly prompted cells **in each implementation**, plus direct evidence that reference lists can expose same-round writes. Below the minimum, the archive cannot support a synchronization recommendation. Above it, report descriptive read-rate gaps by implementation and prompt condition, actual visibility, missing submits, and placebo gaps. Treat a partner gap of at least 20 percentage points in both implementations, each at least 10 points larger than its placebo, as grounds for a *prospective* scheduling test. It is not proof of a causal effect: model choice, latency and other writes can differ. Do not change the cutoff after scoring. The frozen primary data source is the authors' [Zenodo package](https://zenodo.org/records/24273453), SHA-256 `6a9b3cc1af01a65daae70869296aa9a99980c04c8c40c5cc7d8d6a0bc8e2458e`.
+
+**Result: do not infer a need for a barrier from these logs.** The 12 cells contain 600 launched worlds, 568 valid worlds, and 1,136 eligible seats. In the prompted cells, the reference implementation had 0 hits and 6 narrow misses. The independent implementation had 5 hits and 3 narrow misses. Neither met the required 20 of each. The persist-only cells had 1 hit and 2 misses in the reference implementation and 2 hits and 2 misses in the independent one. No observed same-round lists tied on applied time. A second calculation joined the raw first successful partner write to the focal seat's list in SQL. It reproduced all 4 pairs of counts.
+
+This result does not contradict the authors' prompting result. It answers a narrower question: *were enough agents already listing when their partner's required value arrived to compare timing?* They were not. The archive does not establish that making those agents wait would improve a task result. Record receipt and the next decision in a prospective task instead. The [count-only report](results/continuation-store-races.json) includes the denominators, current task key, unrelated-writer control and unavailable fields. It publishes no model text or keys.
+
+```sh
+python3.12 -BS -m examples.seatlab.continuation.store_races "$REPLICATION_ZIP" \
+  | cmp - examples/seatlab/results/continuation-store-races.json
+```
