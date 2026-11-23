@@ -13,3 +13,22 @@ Registered on November 23, 2026 before joining the native and replay grades acro
 **Pass/fail test.** Flag a task for native-only confirmation if its mean excess disagreement is at least 0.10 on the normalized grade scale and its upper-tail conditional permutation p-value is at most 0.025. Both requirements must pass. Treat each draw in turn as the native draw within its world, preserving all literal ties. Combine those finite null distributions exactly across worlds. The test assumes native labels are exchangeable within each world and label assignments across worlds are independent under the null. A common provider change or a shared source of world error can break those assumptions. No warning means **screen only**, not statistical equivalence. Missing identity evidence means **not evaluable**, never a zero grade.
 
 **Cost.** No new model call, Docker run or provider access is needed for this audit. The outputs grade the receiver of a fixed transcript. They do not estimate how earlier seats would react to an intervention in a live team.
+
+## Result: screen changes offline and confirm them in Harbor
+
+All 32 registered worlds joined. The report contains 32 native receivers and 96 separate replay calls. Neither task met the warning threshold. On Calendar, 3 native grades fell outside both replay grades. A worker can screen a final-message change this way. Do not publish a team reward from fixed-prompt replays.
+
+| Task | Worlds | Replays per world | Native mean grade | Replay mean grade | Native–replay disagreement | Replay–replay disagreement | Excess | Upper-tail p | Native outside replay range |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Dispatch | 8 | 6 | 0.7500 | 0.7431 | 0.0903 | 0.0917 | −0.0014 | 0.5421 | 0/8 |
+| Calendar | 24 | 2 | 0.4167 | 0.3958 | 0.2292 | 0.2083 | +0.0208 | 0.5318 | 3/24 |
+
+To reproduce the [exact results and source identities](results/receiver-replay-fidelity.json) from the fork root:
+
+```sh
+python3.12 -BS -m examples.seatlab.replay_fidelity examples/seatlab/results
+```
+
+No key, Harbor installation, or private transcript is required. Use `--task dispatch` or `--task calendar` for one study. The command rejects a changed evidence file instead of scoring it. The result lists each input hash, receiver draw, served model string, and exact fraction.
+
+The public Calendar native export does not contain the user-prompt digest. That link comes from the original export on the private native host. The public Calendar replay grades link to settled calls by run name. Neither adapter proves that the system prompts, model weights or sampling settings were identical. A future native team can also change earlier messages. Those limits matter more than the small difference between the two means.

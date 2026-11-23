@@ -42,6 +42,8 @@ For an end-to-end test, [run both seats in native Harbor](examples/seatlab/repli
 
 To diagnose a failed booking, [replay a receiver's question, the sender's answer, and the final choice separately](examples/seatlab/calendar-notice-result.md#does-the-local-sender-check-help-a-whole-team). On 25 recorded states, [letting the receiver ask once more](examples/seatlab/calendar-notice-result.md#should-the-receiver-stop-after-a-verified-rejection) raised correct choices from 9 to 22. This used more communication; these were not new team rewards.
 
+Before substituting a replay for a team, [compare native grades with repeated calls on the same receiver prompt](examples/seatlab/receiver-replay-fidelity.md#result-screen-changes-offline-and-confirm-them-in-harbor). The 32 matched worlds support screening, not replacing native confirmation.
+
 Other starting points: [36 teams exchanging meeting proposals](examples/seatlab/native-model-results.md#does-sending-a-short-proposal-change-the-native-team-reward) and [import a role observation from an Inspect log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/71).
 
 ## SeatLab: decide which multi-agent team to continue
