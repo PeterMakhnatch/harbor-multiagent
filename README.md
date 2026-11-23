@@ -32,6 +32,8 @@ This does not switch branches or fetch model data. Live trials also need the for
 
 To use your own seat programs, follow the [four-program calendar example](examples/seatlab/external-seats.md#run-one-team). Each process reads a seat prompt and returns one answer. Harbor grades the team. The connector records what crossed each socket; it does not guess the model, the token count or the bill.
 
+To let **two operators collect separate four-seat teams**, use the [campaign commands](examples/seatlab/reporter-campaign.md#start-two-independent-operators). The workers share one private directory. A valid grade of 0 releases the next arm. An interruption preserves the first attempt and leaves unrelated calendars available. The [eight-calendar reporter study](examples/seatlab/certified-reporters.md) shows why you should measure client tokens as well as the number of sessions.
+
 The fork homepage and default branch do not include the workbench yet. Use the `experiments/seatlab-workbench` branch above.
 
 ## SeatLab: test what a receiver can do with a peer report

@@ -185,3 +185,9 @@ python3.12 -BS -m "$m.delivery" "$d" "$w/live" \
 Replace each `argv` with your own absolute executable and its arguments. A live program receives one JSON line with `schema: "seatlab.seat-turn/v1"` and `prompt`. It returns one JSON line, for example `{"text":"{\"pick\":1}"}`. `env` names host variables to pass to that role only. Never put secret values in `argv`. A failed process or an invalid reply does not receive a default decision.
 
 The runner now rejects an invalid command file before it creates trial state. In the same staged world, we rejected a malformed configuration, supplied the valid commands, and completed native trial `115d041e-2aba-486d-87c7-d07ac7dce497`. Both the stock scorer and Harbor returned `0.2598390734632193`. This was a fixed-program diagnostic, not another model sample.
+
+## Can another operator reproduce the native outcomes without the original trial directories?
+
+**Registered before the new runs.** From an anonymous, shallow HTTPS checkout, stage and run all 12 companies in both arms. Start 24 new native trials. Include the 2 published anchor trials as new executions, not as reused receipts. Use only the released first replies from sales and finance. Do not start models. A grader run uses the published payoff table, not a fresh 3-year company simulation.
+
+**Pass/fail.** Require 24 native IDs that differ from each other and from every original. For all 48 seats, match the delivered prompts and the choices. Also require all 24 native rewards, company prefixes and selected stock outcomes to match. Withhold the full-panel conclusion if an arm is absent or if one comparison fails. Keep every first attempt. Separately, require the workstation's portable gate to admit business and calendar workers without changing their interfaces. Preserve the site's existing 2-trial cap on every Docker command.
