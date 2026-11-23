@@ -99,3 +99,37 @@ Run the same `one` command from a second shell to take an available world. Both 
 The owner publishes a permanent `.issued` record **before** starting a trial. A stopped or incomplete first attempt blocks new arms on that world. Do not remove the record to make the counts look complete. Other worlds remain eligible. `status` shows completed arms, unresolved worlds, and the next eligible arm for each world. Exit 3 from `one` means the worker could not claim work now; inspect `status`, not the exit code, to decide whether the study is complete. This design prevents duplicate issuance. It does not promise that every issued attempt will finish.
 
 **Checked with real processes.** Two simultaneous invocations took worlds 408 and 409. Both native controls completed. A later invocation on shard `0/8` took the next arm of world 408 and earned another stock grade of 1. In separate campaigns we stopped the owner after issuance, once before the child started and once after Harbor's native configuration existed. Both worlds stayed unresolved. Neither could be issued again, and neither interruption was counted as a completed team. These checks used no model turns.
+
+## Run the same comparison on eight new worlds
+
+Choose the seed and eight consecutive indices **before** you inspect any model output. Make a new private directory. In the stock generation command above, replace `--instances 408-415 --seed 579409134` with, for example, `--instances 832-839 --seed 124331903`. Do not reuse old task or campaign directories. Keep the `schedule/easy/talk`, two-seat and timeout settings unchanged.
+
+```sh
+manifest="$cache/operator-calendar.json"
+python3.12 -BS -m examples.seatlab.calendar_notices.transfer_registration freeze \
+  "$tasks" --start 832 --count 8 --seed 124331903 > "$manifest"
+digest=$(shasum -a 256 "$manifest" | cut -d' ' -f1)
+```
+
+Pass this manifest and digest to `worker` or `campaign one`. Each new campaign verifies all eight local worlds. It also regenerates the manifest from the pinned stock Git object before issuing a first attempt. A matching checksum from a modified generator is not enough. The campaign stores its own read-only copy of the manifest. `campaign status` does not need Git, Docker, or access to the original task directory. A completed or interrupted first attempt cannot be reassigned by changing the seed.
+
+Use a new directory and `--agy "$AGY"` for live teams. To summarize their receipts without copying them by hand:
+
+```sh
+python3.12 -BS -m examples.seatlab.wait_peer.panel \
+  --from-campaign "$cache/my-live-campaign" --manifest "$manifest" --sha256 "$digest"
+```
+
+The panel marks an operator cohort as exploratory, even if every team completes. It lists missing pairs rather than assigning them zero reward. A successful control does not count as a live team. Pass a separate `--control-receipt FILE` for each matching control you want to include. The published cohort still works with the original command.
+
+**Observed on the new cohort.** A signed-in two-seat team booked world 832 correctly. Its three distinct first sessions reported 25,688 tokens. The three typed controls earned 1, 0 and 0. A second worker took the next authorized arm of the negative-control campaign. The [panel](results/wait-for-peer/operator-example/calendar-panel.json) reports one live result, 23 missing cells, all three controls verified, and **no conclusion about an intervention**.
+
+```sh
+d=examples/seatlab/results/wait-for-peer/operator-example
+python3.12 -BS -m examples.seatlab.wait_peer.panel "$d/calendar-rows.json" \
+  --manifest "$d/calendar-registration.json" \
+  --sha256 928d2a53d733ee01e8a200508db1fa6ef164a933aadb81672bd9d65154138f12 \
+  | cmp - "$d/calendar-panel.json"
+```
+
+The owner also replayed the 24 original live trials and 3 original controls from their native files. All 27 receipts matched their published bytes. A wrong digest, swapped stock commitments, and a missing eighth world each failed before any attempt was issued. Copying an authentic receipt into a directory without its issue record did not make it part of a campaign.

@@ -10,7 +10,6 @@ from typing import Any
 ARMS = ("auto", "neutral", "remind")
 PHASES = ("report", "open", "book")
 ORDERS = tuple(itertools.permutations(ARMS))
-FIRST = 408
 COUNT = 8
 SLOTS = 35
 
@@ -26,14 +25,16 @@ def sha(text: str) -> str:
 
 
 def role_ids(world: int) -> tuple[str, str]:
-    if type(world) is not int or not FIRST <= world < FIRST + COUNT:
-        raise ValueError("world is outside the registered panel")
+    if type(world) is not int or world < 0:
+        raise ValueError("world must be a nonnegative integer")
     return ("p1", "p2") if world % 2 == 0 else ("p2", "p1")
 
 
-def ordered_arms(world: int) -> tuple[str, ...]:
+def ordered_arms(world: int, first: int) -> tuple[str, ...]:
     role_ids(world)
-    return ORDERS[(world - FIRST) % len(ORDERS)]
+    if type(first) is not int or first < 0 or not first <= world < first + COUNT:
+        raise ValueError("world is outside the operator cohort")
+    return ORDERS[(world - first) % len(ORDERS)]
 
 
 def allowed(arm: str, requested: bool) -> bool:
