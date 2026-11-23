@@ -81,3 +81,21 @@ python3.12 -BS -m examples.seatlab.wait_peer.worker "$tasks" "$manifest" \
 ```
 
 The worker leaves `receipt.json` in the output directory. It will not reuse that directory. For a subscription run, use a new output directory and replace `--control correct` with `--agy "$AGY"`. `AGY` must be an absolute path to the supported signed-in CLI. The registered adapter checks version 1.5.15, the personal plan, model quota, and disabled AI-credit fallback. It does not ask the operator to change account settings or supply an API key. Its 3 one-use owner sockets are private. The native task does not get the account directory. The worker keeps its private owner records outside the repository. Publish the checked receipts, not the raw owner or Harbor directories.
+
+## Let independent workers continue the same campaign
+
+Use `campaign one` instead of choosing the next world yourself. Each invocation can issue **one** of the 24 registered first attempts. Give each worker the same private directory on the same machine. The study still requires the external Docker slot wrapper; the campaign lock is not a host-wide Docker limit.
+
+```sh
+campaign="$cache/my-control-campaign"
+python3.12 -BS -m examples.seatlab.wait_peer.campaign one "$campaign" \
+  --tasks "$tasks" --manifest "$manifest" --sha256 "$digest" \
+  --slot "$DOCKER_SLOT" --harbor-python "$HARBOR_PYTHON" --control correct
+python3.12 -BS -m examples.seatlab.wait_peer.campaign status "$campaign"
+```
+
+Run the same `one` command from a second shell to take an available world. Both shells must use the same absolute paths. Each world follows its registered arm order. To assign fixed parts to 2 workers, add `--shard 0/2` or `--shard 1/2`. Use a different campaign directory for live teams or negative controls. A mode change in an existing campaign is refused.
+
+The owner publishes a permanent `.issued` record **before** starting a trial. A stopped or incomplete first attempt blocks new arms on that world. Do not remove the record to make the counts look complete. Other worlds remain eligible. `status` shows completed arms, unresolved worlds, and the next eligible arm for each world. Exit 3 from `one` means the worker could not claim work now; inspect `status`, not the exit code, to decide whether the study is complete. This design prevents duplicate issuance. It does not promise that every issued attempt will finish.
+
+**Checked with real processes.** Two simultaneous invocations took worlds 408 and 409. Both native controls completed. A later invocation on shard `0/8` took the next arm of world 408 and earned another stock grade of 1. In separate campaigns we stopped the owner after issuance, once before the child started and once after Harbor's native configuration existed. Both worlds stayed unresolved. Neither could be issued again, and neither interruption was counted as a completed team. These checks used no model turns.

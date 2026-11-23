@@ -1,0 +1,65 @@
+{
+  "schema": "seatlab.wait-peer-campaign-proof/v1",
+  "registration": {
+    "sha256": "bdf26d746f16a27e3b5120cf94c8af48a03f7df8ec56ab43c8431badcdf18bbc",
+    "tag": "control-ok"
+  },
+  "seat_mode": "typed-control-correct, no model seats",
+  "external_concurrent_trials_limit": 2,
+  "concurrent_claims": [
+    "w408-auto",
+    "w409-auto"
+  ],
+  "next_on_shard_0_of_8": "w408-neutral",
+  "complete": [
+    {
+      "world": 408,
+      "arm": "auto",
+      "arm_position": 0,
+      "trial_uuid": "e0b6f5c9-a14c-4740-8ce7-8fc8d59c71e9",
+      "complete": true,
+      "native_reward": 1
+    },
+    {
+      "world": 408,
+      "arm": "neutral",
+      "arm_position": 1,
+      "trial_uuid": "64af907c-ec7e-4174-a52d-e4b75bd9ea3f",
+      "complete": true,
+      "native_reward": 1
+    },
+    {
+      "world": 409,
+      "arm": "auto",
+      "arm_position": 0,
+      "trial_uuid": "209ae03b-002a-4915-baa4-8a3b21114a31",
+      "complete": true,
+      "native_reward": 1
+    }
+  ],
+  "verified_after_three": {
+    "auto": 2,
+    "neutral": 1,
+    "remind": 0
+  },
+  "mode_mismatch": "registration_mismatch",
+  "interruptions": [
+    {
+      "point": "after_issue_before_spawn",
+      "blocked_world": 408,
+      "issued": 1,
+      "worker_spawned": false,
+      "terminated": false,
+      "next_issue_exit": 3
+    },
+    {
+      "point": "native_config_exists",
+      "blocked_world": 411,
+      "issued": 1,
+      "worker_spawned": true,
+      "terminated": true,
+      "next_issue_exit": 3
+    }
+  ],
+  "limits": "Same host and owner, supported manifests and seat modes only; no completion guarantee after the first issue. Positive controls and interruptions are not part of the 24 real teams."
+}
