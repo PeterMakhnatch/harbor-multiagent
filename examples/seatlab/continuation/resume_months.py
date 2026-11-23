@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import importlib.abc
 import importlib.util
+import itertools
 import json
 import os
 import stat
@@ -15,7 +16,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, override
 
 from . import resume_clock
 
@@ -81,15 +82,23 @@ CREATE_FLAGS = (
 LIMITATIONS = (
     "months advance by calling stock live.month in sequence; the market office wall clock and hub are not run",
     "landing delay is counted in live months; no outage, checkpoint, or restart is simulated",
-    "the program folder is a plain folder (the stock local-check path), so stock log commits are null; "
-    "the executed program is read from the stock per-month snapshot tar",
-    "live_score is stock scoring.world_score on stock live.result with research spend 0; the grader's "
-    "replay minimum, playbook half, office research ledger, and forecast are not run",
-    "not root: stock runner makes no separate user, and its seccomp filter is Linux only, so the two official "
-    "programs run unsandboxed on macOS",
+    (
+        "the program folder is a plain folder (the stock local-check path), so stock log commits are null; "
+        "the executed program is read from the stock per-month snapshot tar"
+    ),
+    (
+        "live_score is stock scoring.world_score on stock live.result with research spend 0; the grader's "
+        "replay minimum, playbook half, office research ledger, and forecast are not run"
+    ),
+    (
+        "not root: stock runner makes no separate user, and its seccomp filter is Linux only, so the two official "
+        "programs run unsandboxed on macOS"
+    ),
     "numpy and pyyaml are pinned by version, not by file bytes",
-    "the stock software limits are wall clock (60 s per month, 20 s per call); host load can freeze a month, "
-    "and software_frozen is reported per month",
+    (
+        "the stock software limits are wall clock (60 s per month, 20 s per call); host load can freeze a month, "
+        "and software_frozen is reported per month"
+    ),
 )
 
 
@@ -191,6 +200,7 @@ class _PinnedPackage(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         self.staged = staged
         self.sources = sources
 
+    @override
     def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
         if fullname != PACKAGE and not fullname.startswith(PACKAGE + "."):
             return None
@@ -205,18 +215,21 @@ class _PinnedPackage(importlib.abc.MetaPathFinder, importlib.abc.Loader):
             submodule_search_locations=[str(self.staged)] if package else None,
         )
 
+    @override
     def create_module(self, spec: Any) -> None:
         return None
 
+    @override
     def exec_module(self, module: ModuleType) -> None:
         spec = module.__spec__
-        _require(
-            spec is not None and spec.origin is not None, "stock module has no origin"
-        )
-        data = self.sources[spec.name]
-        leaf = Path(spec.origin).stem
+        if spec is None or spec.origin is None:
+            raise AssertionError("stock module has no origin")
+        name: str = spec.name
+        origin: str = spec.origin
+        data = self.sources[name]
+        leaf = Path(origin).stem
         _require(_sha(data) == MODULES[leaf], "stock bytes changed after verification")
-        exec(compile(data, spec.origin, "exec", dont_inherit=True), module.__dict__)  # noqa: S102
+        exec(compile(data, origin, "exec", dont_inherit=True), module.__dict__)  # noqa: S102
 
 
 def _write_new(path: Path, data: bytes) -> None:
@@ -381,7 +394,12 @@ def _executed(
             "snapshot dir type",
         )
         _require(all(members[n].isfile() for n in files), "snapshot file type")
-        blobs = {n: tf.extractfile(members[n]).read(SOURCE_LIMIT + 1) for n in files}
+        blobs: dict[str, bytes] = {}
+        for n in files:
+            handle = tf.extractfile(members[n])
+            if handle is None:
+                raise AssertionError("snapshot file type")
+            blobs[n] = handle.read(SOURCE_LIMIT + 1)
     ops_sha = _sha(blobs["ops/autopilot.py"])
     executed = next(
         (label for label, rel in PROGRAMS.items() if PINNED[rel] == ops_sha), "unknown"
@@ -438,7 +456,7 @@ def _observed(
 ) -> dict[str, Any]:
     executed = [r["executed"] for r in rows]
     first = executed.index("reference") if "reference" in executed else None
-    switches = sum(1 for a, b in zip(executed, executed[1:]) if a != b)
+    switches = sum(1 for a, b in itertools.pairwise(executed) if a != b)
     state_ok = all(
         (r["executed"] != "starter" or not r["reference_state_kept"])
         and (

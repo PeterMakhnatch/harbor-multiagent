@@ -12,7 +12,7 @@ import sys
 import zipfile
 import zlib
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -126,7 +126,7 @@ SELF_CONTAINED = "self_contained"
 TIMESTAMP = re.compile(
     r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?\+00:00"
 )
-EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 TIMINGS = ("hit", "miss", "tie")
 READS = ("read", "not_read", "no_submission", "unknown")
 FINALS = ("correct", "incorrect", "no_submission", "unknown")
@@ -262,9 +262,10 @@ def _index(value: Any, bound: int, reason: str) -> int:
 def _micros(text: Any) -> int:
     _require(type(text) is str, "timestamp")
     match = TIMESTAMP.fullmatch(text)
-    _require(match is not None, "timestamp")
+    if match is None:
+        raise Refusal("timestamp")
     parts = [int(match[position]) for position in range(1, 7)]
-    moment = datetime(*parts, tzinfo=timezone.utc)
+    moment = datetime(*parts, tzinfo=UTC)
     fraction = int((match[7] or "").ljust(6, "0"))
     return (moment - EPOCH) // timedelta(microseconds=1) + fraction
 
@@ -316,7 +317,10 @@ def _reference_pair(
             return None
         if type(produces) is not dict or len(produces) != 1:
             return None
-        terms[index] = (needs[0], next(iter(produces)), link["group_id"])
+        produced = next(iter(produces))
+        if not isinstance(produced, str):
+            return None
+        terms[index] = (needs[0], produced, link["group_id"])
     first, second = pair
     if terms[first][0] != terms[second][1] or terms[second][0] != terms[first][1]:
         return None
