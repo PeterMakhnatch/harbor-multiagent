@@ -1,7 +1,7 @@
 {
   "name": "example",
   "prereg": {
-    "commit": "d27ba89ea9b337a53ed84d7af6830b891b83b3a2",
+    "commit": "f2b035a3",
     "doc": "flotilla/docs/NEXT-WAVE.md",
     "section": "How to run a wave"
   },
