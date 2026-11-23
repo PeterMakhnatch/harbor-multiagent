@@ -1,0 +1,35 @@
+{
+ "name": "lws",
+ "prereg": {
+  "commit": "20af5154238e76777a1b3a06e85cb37cbccef0fd",
+  "doc": "flotilla/docs/SPLIT.md",
+  "section": "## 19. Listening wave lw1"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/lw1s-split",
+   "manifest": ".flotilla-local/tasks/lw1s-split/manifest.json",
+   "instances": [12, 33],
+   "arms": ["gated"]
+  }
+ ],
+ "models": [
+  "openrouter/anthropic/claude-haiku-5.5",
+  "openrouter/openai/gpt-6-luna",
+  "openrouter/deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 60,
+  "env": "modal",
+  "concurrency": 3
+ },
+ "budget": {
+  "cap_usd": 1.0,
+  "reserve_per_trial_usd": 0.3,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261124
+}
