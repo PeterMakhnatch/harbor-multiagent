@@ -1,0 +1,77 @@
+{
+  "computed_worlds": 12,
+  "holdout": "holdout",
+  "inputs": "freeze.json",
+  "new_model_calls": 0,
+  "new_provider_cost_usd": "0",
+  "overlap_between_computed_worlds": [],
+  "resume": {
+    "already_complete": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "computed": []
+  },
+  "schema": "seatlab.market-operations-local-workers/v1",
+  "scope": "2 independent local POSIX processes on one campaign directory",
+  "workers": [
+    {
+      "already_complete": [],
+      "busy": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11
+      ],
+      "command": "work",
+      "computed": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "freeze_sha256": "bb348e0da7579fcc218a849db341bc3445eb997240509d74a1c82e0579aca467",
+      "limit": 12,
+      "split": "holdout",
+      "unvisited": []
+    },
+    {
+      "already_complete": [],
+      "busy": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "command": "work",
+      "computed": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11
+      ],
+      "freeze_sha256": "bb348e0da7579fcc218a849db341bc3445eb997240509d74a1c82e0579aca467",
+      "limit": 12,
+      "split": "holdout",
+      "unvisited": []
+    }
+  ]
+}
