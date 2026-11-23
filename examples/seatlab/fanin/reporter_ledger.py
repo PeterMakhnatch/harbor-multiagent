@@ -23,7 +23,7 @@ EXTERNAL, PROVENANCE = "external.json", "provenance.json"
 NATIVE, OWNERS = "native", "owners"
 STAGING = ".register-"
 ARMS = protocol.ARMS
-MODES = ("correct", "personal")
+MODES = ("correct", "inexact", "personal")
 STATES = ("missing", "issued", "reported", "mismatch")
 GRADES = (0, 1)
 FIRST = protocol.FIRST
@@ -290,6 +290,11 @@ def reported(child: Path, reg: dict[str, Any], world: int, arm: str) -> Cell:
         return MISMATCH
     if not has_external:
         return MISMATCH if has_provenance else ISSUED
+    control = child / "control"
+    if os.path.lexists(control) != (reg["mode"] == "inexact"):
+        return MISMATCH
+    if reg["mode"] == "inexact" and not owned_dir(control, PRIVATE_DIR):
+        return MISMATCH
     if personal and not has_provenance:
         return ISSUED
     raw = sealed(child / EXTERNAL)

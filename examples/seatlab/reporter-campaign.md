@@ -13,3 +13,7 @@ The trusted unit is one workstation, one user and one private filesystem. This i
 ## Separate personal-client acceptance check
 
 Can a second invocation use an earlier model team's actual native and client receipts to unlock the other arm? On the previously unused world 1250, register `personal` and run each arm once in order. Use the existing personal subscription reporter, never an API key or paid-credit fallback. Require two separately graded native teams, distinct native IDs and matching owner receipts for every requested reporter. A confirmed skip must have neither a client request nor an owner record. If the client refuses or any required receipt is missing, retain the attempt and mark this check inconclusive. Do not replace it. This is a two-cell operator check, not another estimate of a policy effect.
+
+## Negative grade acceptance check
+
+A finished wrong team must still unlock the next arm. On world 1252, register `inexact` and issue the two arms once in order. The first arm asks all three reporters. Its first reporter must send an inexact list. Require no submission, a native grade of 0, a reported state and an eligible second arm. Keep the second arm's actual grade. A missing grade must not count as 0. This typed control starts no model.

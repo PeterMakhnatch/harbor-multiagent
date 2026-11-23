@@ -1,10 +1,10 @@
 """Run a bounded four-seat reporter campaign by hand, one cell per command.
 
 python3.12 -BS -m examples.seatlab.fanin.reporter_queue init ROOT --first N --count N \\
-  --mode correct|personal
+  --mode correct|inexact|personal
 python3.12 -BS -m examples.seatlab.fanin.reporter_queue status ROOT [--sha256 DIGEST]
 python3.12 -BS -m examples.seatlab.fanin.reporter_queue one ROOT --sha256 DIGEST \\
-  [--shard I/N] --harbor-python ABS --slot ABS (--control correct | --agy ABS)
+  [--shard I/N] --harbor-python ABS --slot ABS (--control correct|inexact | --agy ABS)
 
 Run it from the checkout root. ROOT is a canonical private directory outside the checkout.
 `one` takes the first world of its shard ((world - first) % N == I) whose nonblocking
@@ -13,8 +13,8 @@ missing, the second only when the first is reported (also with grade 0). It publ
 ROOT/wW-ARM.issued before it starts reporter_worker into ROOT/wW-ARM, holds the world
 lock until the worker exits, and never issues a marked cell again. Worker output stays in
 private ROOT/wW-ARM.out and ROOT/wW-ARM.log; ROOT/wW-ARM.exit records the return code.
-`--control correct` needs a `correct` campaign and `--agy` a `personal` one; the worker
-gets only HOME, PATH, LANG, TMPDIR and a local DOCKER_HOST. Locks are local to one host.
+`--control` must match the registered typed control. `--agy` requires a personal campaign.
+The worker gets only HOME, PATH, LANG, TMPDIR and a local DOCKER_HOST. Locks are host-local.
 
 Stdout is one path-free JSON line. Exit 0: initialized, viewed or reported. Exit 1: issued
 but unresolved. Exit 2: refused before issuance. Exit 3: no available work in the shard.
@@ -44,7 +44,7 @@ SCHEMA = "seatlab.fanin-reporter-queue/v1"
 PROG = "python3.12 -BS -m examples.seatlab.fanin.reporter_queue"
 LOWER = ("-BS", "-m", "examples.seatlab.fanin.reporter_worker")
 LOCK = "queue.lock"
-MODES = ("correct", "personal")
+MODES = ledger.MODES
 MAX_SHARDS = 64
 SUMMARY = ("outcome", "reason", "reward", "complete")
 SUMMARY_BYTES = 1 << 16
@@ -107,7 +107,7 @@ def lower_argv(args: argparse.Namespace, world: int, arm: str, out: Path) -> lis
 
 
 def runnable(args: argparse.Namespace, reg: dict[str, Any]) -> None:
-    if reg["mode"] != ("personal" if args.agy is not None else "correct"):
+    if reg["mode"] != ("personal" if args.agy is not None else args.control):
         raise Refused("mode_mismatch")
     worker.executable(Path(sys.executable), "python_invalid")
     worker.executable(args.harbor_python, "harbor_python_invalid")
@@ -230,7 +230,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     run.add_argument("--harbor-python", type=Path, required=True)
     run.add_argument("--slot", type=Path, required=True)
     seat = run.add_mutually_exclusive_group(required=True)
-    seat.add_argument("--control", choices=("correct",))
+    seat.add_argument("--control", choices=reporter_worker.CONTROLS)
     seat.add_argument("--agy", type=Path)
     return parser.parse_args(argv)
 
