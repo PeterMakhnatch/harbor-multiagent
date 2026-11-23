@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import threading
 import time
 from fractions import Fraction
@@ -119,6 +120,7 @@ def test_split_pass_blocks_the_deal_and_only_the_first_action_in_a_round_counts(
     log = admin["game"]["log"]
     assert log[0]["passed"] == ["p1"] and log[0]["missed"] == []
     assert log[-1]["agreed"] and log[-1]["passed"] == [] and log[-1]["missed"] == []
+    assert [record["inactive"] for record in log] == [record["missed"] for record in log]
     score = SPLIT.score_game(params, log)
     assert score["deal_round"] == 3 and score["over_claim_rounds"] == 0
     assert score["passed"] == score["missed"] == 1 / 6
@@ -141,7 +143,9 @@ def test_an_accepted_split_proposal_settles_immediately_and_scores_as_one_deal(s
         assert world.seat(seat, "GET", "/state")[1]["proposals"] == [public]
     accept = {"id": proposal["id"]}
     assert world.seat("p1", "POST", "/accept", accept)[0] == 409
+    assert world.seat("p2", "POST", "/claim", {"amount": 72})[0] == 201
     assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 201
+    assert world.seat("p1", "GET", "/state")[1]["round"] == 1
     assert world.seat("p2", "POST", "/accept", accept) == (201, {**accept, "accepted": True})
     for seat in params["seats"]:
         view = world.seat(seat, "GET", "/state")[1]
@@ -216,6 +220,7 @@ def test_every_other_seat_must_accept_the_same_split_proposal(start_world, tmp_p
     assert status == 201
     assert world.seat("p3", "POST", "/accept", {"id": second["id"]})[0] == 201
     assert world.seat("p3", "POST", "/accept", {"id": second["id"]})[0] == 409
+    assert world.seat("p3", "POST", "/decline", {"id": second["id"]})[0] == 409
     assert not world.seat("p1", "GET", "/state")[1]["season_over"]
     assert world.seat("p2", "POST", "/accept", {"id": first["id"]})[0] == 201
     assert not world.seat("p1", "GET", "/state")[1]["season_over"]
@@ -229,12 +234,9 @@ def test_every_other_seat_must_accept_the_same_split_proposal(start_world, tmp_p
 def test_a_claim_deal_can_end_the_propose_game(start_world, tmp_path):
     world, params = split_world(start_world, tmp_path)
     everyone_calls(world)
-    split = {"p1": 70, "p2": 10}
-    assert world.seat("p1", "POST", "/propose", {"split": split})[0] == 201
     assert world.seat("p2", "POST", "/claim", {"pass": True})[0] == 201
     assert world.seat("p1", "POST", "/claim", {"amount": 60})[0] == 201
     assert world.seat("p2", "GET", "/state")[1]["round"] == 2
-    assert world.seat("p2", "POST", "/propose", {"split": split})[0] == 201
     assert world.seat("p1", "POST", "/claim", {"amount": 20})[0] == 201
     assert world.seat("p2", "POST", "/claim", {"amount": 60})[0] == 201
     assert world.seat("p2", "GET", "/state")[1]["season_over"]
@@ -242,8 +244,8 @@ def test_a_claim_deal_can_end_the_propose_game(start_world, tmp_path):
     score = SPLIT.score_game(params, log)
     assert log[0]["passed"] == ["p2"] and not log[0]["agreed"]
     assert score["via"] == "claim" and score["deal_round"] == 2 and score["totals"] == {"p1": 20, "p2": 60}
-    assert score["proposals"] == 2 and score["acceptances"] == 0
-    assert score["expired"] == 2 and score["accepted"] == score["replaced"] == score["lapsed"] == 0
+    assert score["proposals"] == score["acceptances"] == 0
+    assert score["declined"] == score["expired"] == score["accepted"] == 0
 
 
 def test_a_round_1_proposal_can_be_accepted_in_round_2_while_it_still_fits(start_world, tmp_path, monkeypatch):
@@ -266,6 +268,8 @@ def test_a_round_1_proposal_can_be_accepted_in_round_2_while_it_still_fits(start
     assert score["via"] == "proposal" and score["deal_round"] == 2 and score["totals"] == split
     assert score["accepted"] == 1 and score["lapsed"] == score["replaced"] == score["expired"] == 0
     assert score["feasible"] == 1 and score["feasible_unseen"] == 0
+    assert [record["inactive"] for record in log] == [["p2"], ["p1"]]
+    assert score["inactive"] == 0.5
     seen = [event for event in world.events() if event["kind"] == "seen"]
     assert [(event["seat"], event["data"]["id"]) for event in seen] == [("p2", proposal["id"])]
 
@@ -337,7 +341,85 @@ def test_the_season_ends_after_its_secret_length_and_no_reply_states_it(start_wo
         else:
             assert set(reply) == {"round", "amount"}
     admin = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert admin["world_version"] == 9 and len(admin["game"]["log"]) == 3
+    assert admin["world_version"] == 10 and len(admin["game"]["log"]) == 3
+
+
+def test_seeded_proposal_round_closes(start_world, tmp_path, monkeypatch):
+    for seed in (17, 91, 247):
+        rng = random.Random(seed)
+        world, params = split_world(start_world, tmp_path)
+        clock = 0.0
+        monkeypatch.setattr(world.module, "now", lambda: clock)
+        monkeypatch.setattr(world.module, "WAIT_SECONDS", 0)
+        everyone_calls(world)
+        policies = ["timer", "timer_idle", "decline", "decline_idle", "claim", "claim"]
+        rng.shuffle(policies)
+        pot = params["capacity"]
+        declines = []
+        for number, policy in enumerate(policies, 1):
+            proposer, other = rng.sample(params["seats"], 2)
+            pending = []
+            if policy != "claim":
+                for author in (proposer, other)[:1 + (policy == "decline")]:
+                    amount = rng.randrange(pot + 1)
+                    split = {proposer: amount, other: pot - amount}
+                    status, post = world.seat(author, "POST", "/propose", {"split": split})
+                    assert status == 201
+                    pending.append((author, post["id"]))
+                    assert world.seat(author, "GET", "/state")[1]["round"] == number
+            actions = {proposer: {"pass": True}, other: {"amount": rng.randrange(pot + 1)}}
+            order = [] if policy.endswith("_idle") else rng.sample(params["seats"], 2)
+            for i, seat in enumerate(order):
+                assert world.seat(seat, "POST", "/claim", actions[seat]) == (201, {"round": number, **actions[seat]})
+                game = world.request("GET", "/admin/state", token=world.admin)[1]["game"]
+                assert len(game["log"]) == (number - 1 if i == 0 or pending else number)
+            if pending:
+                clock += 29.0
+                path = f"/wait?round={number}"
+                for _ in range(2):
+                    view = world.seat(other, "GET", path)[1]
+                    assert view["round"] == number and view["stock"] == pot
+                    assert {item["id"] for item in view["proposals"]} == {pid for _, pid in pending}
+                if policy.startswith("timer"):
+                    clock += 1.0
+                    assert len(world.seat(other, "GET", path)[1]["closed_rounds"]) == number
+                else:
+                    rng.shuffle(pending)
+                    for i, (author, pid) in enumerate(pending):
+                        responder = other if author == proposer else proposer
+                        body = {"id": pid}
+                        for action in ("/decline", "/accept"):
+                            assert world.seat(author, "POST", action, body)[0] == 409
+                        assert world.seat(responder, "POST", "/decline", body) == (201, {**body, "declined": True})
+                        declines.append((pid, responder, number, clock))
+                        for action in ("/decline", "/accept"):
+                            assert world.seat(responder, "POST", action, body)[0] == 409
+                        view = world.seat(author, "GET", "/state")[1]
+                        assert len(view["closed_rounds"]) == (number if order and i == 1 else number - 1)
+                    if not order:
+                        clock += 1.0
+                        assert len(world.seat(other, "GET", path)[1]["closed_rounds"]) == number
+            view = world.seat(proposer, "GET", "/state")[1]
+            pot = pot * 4 // 5
+            assert len(view["closed_rounds"]) == number and view["stock"] == pot
+            assert view["season_over"] == (number == params["rounds"]) and not view["proposals"]
+            events = world.events()
+            if pending:
+                pid = next(pid for author, pid in pending if author == proposer)
+                looks = [e for e in events if e["kind"] == "seen" and e["data"]["id"] == pid]
+                assert len(looks) == 1 and looks[0]["seat"] == other
+                if policy.startswith("timer"):
+                    assert looks[0]["t"] == clock - 1.0
+            assert [(e["data"]["id"], e["seat"], e["data"]["round"], e["t"])
+                    for e in events if e["kind"] == "decline"] == declines
+            log = world.request("GET", "/admin/state", token=world.admin)[1]["game"]["log"]
+            inactive = [other] if policy == "timer_idle" else []
+            assert log[-1]["inactive"] == inactive
+            assert [e for e in events if e["kind"] == "close"][-1]["data"]["inactive"] == inactive
+            assert SPLIT.score_game(params, log)["declined"] == len(declines)
+            assert {offer["id"]: offer["decline"] for offer in log[-1]["offers"] if offer["fate"] == "declined"} == {
+                pid: {"seat": seat, "round": r, "time": t} for pid, seat, r, t in declines
+            }
 
 
 def test_wait_returns_when_the_round_closes(start_world, tmp_path):

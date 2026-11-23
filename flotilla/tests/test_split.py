@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -99,7 +100,7 @@ def test_standing_offer_scores_use_the_latest_ledger_and_old_logs_omit_them():
         {"id": "1-2", "proposer": "p2", "split": {"p1": 40, "p2": 40}, "round": 1, "time": 1.0,
          "seen": {"p1": 2.0}, "fate": "replaced"},
         {"id": "2-1", "proposer": "p2", "split": {"p1": 55, "p2": 25}, "round": 2, "time": 3.0,
-         "seen": {"p1": 4.0}, "fate": "accepted"},
+         "seen": {}, "fate": "accepted"},
     ]
     log = [
         {"round": 1, "stock": 100, "requests": {"p1": 0, "p2": 0}, "agreed": False, "missed": [],
@@ -135,10 +136,24 @@ def test_seats_never_read_the_other_outside_option_or_a_steering_word():
     propose = SPLIT.instruction_text(params, "p2", "propose", 400, 2)
     assert '`{"split": {"p1": <points>, "p2": <points>}}` to `POST /propose`' in propose
     assert '`{"id": "<id>"}` to `POST /accept`' in propose
+    assert '`{"id": "<id>"}` to `POST /decline`' in propose
     assert "/messages" not in propose
     assert "stays open in later rounds" in propose
     assert "expire when their round closes" not in propose
     assert "feasible" not in propose.lower()
+
+
+@pytest.mark.parametrize(("arm", "digest"), [
+    ("silent", "10b9499f6eb0df8dc2258b47e7a3617cda05b9072050fade1ec1753cd279385d"),
+    ("talk", "bbac9f3e34d0eee4e0c5cad149c287cbe3b377c55f059cb1302415d038807d3f"),
+    ("open", "50800e2a87ee992f96238757ff0859b27ac3488adbedd0f2ef77775197a2b258"),
+])
+def test_non_propose_instructions_match_world_v9_bytes(arm, digest):
+    text = "\0".join(
+        SPLIT.instruction_text(SPLIT.generate(17377, 5, seats, "b"), f"p{s}", arm, 4000, 2)
+        for seats in (2, 3) for s in range(1, seats + 1)
+    )
+    assert hashlib.sha256(text.encode()).hexdigest() == digest
 
 
 @pytest.mark.parametrize("outside", [{"p1": 30, "p2": 20}, {"p1": 30, "p2": 20, "p3": 11}])

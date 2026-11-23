@@ -37,13 +37,14 @@ Build all 3 arms with `--conditions silent,talk,open`. To add only `open`, use `
 `propose`: no messages, and outside options stay private. Each seat can post up to 2 splits per round with
 `POST /propose`. Each split gives a whole number of points (0 or more) to each seat and cannot exceed the pot
 at the time it is posted. At most 1 proposal per seat stays open: a newer proposal from that seat replaces the
-older one. `/state` shows every seat the same open proposals: the ID, the proposer, the split, and the round
-it was posted. A proposal stays open in later rounds until every other seat accepts it (a deal at that split,
-and the game ends), its proposer posts a newer one, or a round starts with a pot smaller than its total (it
-lapses). Open proposals at the end of the game expire. An accept of a replaced, lapsed, or unknown ID is
-refused. Claims and passes still close the round as before. The score counts proposals, accepted, replaced,
-lapsed and expired, plus how many were feasible (each seat gets at least its outside option; seats never see
-that) and how many of those no other seat saw on `/state`.
+older one. `/state` and `/wait` show the same open proposals: the ID, proposer, split, and round posted. When
+all other seats accept a proposal, the game ends at that split. Any other seat can decline it with
+`POST /decline {"id": "<id>"}`. A decline closes the proposal for every seat. In world v10, a pending
+proposal prevents claims and passes from closing the round early, but the timer still closes it. An
+unanswered proposal survives that close if its split fits the new pot. Otherwise it lapses. Open proposals
+expire at game end. The score counts proposals by fate, feasible proposals (each seat gets at least its
+outside option), and feasible proposals that no other seat saw or accepted. Seats do not see these counts.
+The round log records `inactive`: seats that neither claim, pass, post, accept, nor decline in that round.
 
 ## 3. Measures
 

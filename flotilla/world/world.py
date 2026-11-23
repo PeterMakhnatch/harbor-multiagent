@@ -44,7 +44,7 @@ from urllib.parse import parse_qs, urlsplit
 # note_look(seat, time) on GET /state, settle_standing(next_stock, ended, round) before the round
 # log line, and drain_events() for offer fates. A round still closes when every seat has acted
 # or the round's time ends.
-WORLD_VERSION = 9
+WORLD_VERSION = 10
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -106,6 +106,7 @@ if ROUND_PROTOCOL is not None:
 
 START = time.monotonic()
 LOCK = threading.Lock()
+_PROTOCOL_ACTORS: set[str] = set()
 STATE: dict[str, Any] = {
     "messages": [],  # {"id", "from", "to", "text", "t"}
     "submissions": [],  # {"n", "seat", "answer", "t"}
@@ -231,6 +232,8 @@ def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
     actions = game["requests"] if agreement is None else agreement
     requests = {seat: actions.get(seat) or 0 for seat in SEATS}
     missed = [seat for seat in SEATS if seat not in actions]
+    inactive = [seat for seat in SEATS if seat not in game["requests"] and seat not in _PROTOCOL_ACTORS]
+    _PROTOCOL_ACTORS.clear()
     pass_data = {}
     if GAME_ALLOWS_PASS:
         pass_data["passed"] = [seat for seat in SEATS if seat in actions and actions[seat] is None]
@@ -243,10 +246,10 @@ def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
             settle(result["next_stock"], ended, game["round"])
         _drain_protocol(None)
         extra = ROUND_PROTOCOL.close_round()
-    game["log"].append({"round": game["round"], "missed": missed, "opened": game["opened"], "closed": round(at, 3),
-                        **pass_data, **result, **extra})
-    record("close", None, {"round": game["round"], "missed": missed, "collapsed": result["collapsed"],
-                           **pass_data, **extra})
+    game["log"].append({"round": game["round"], "missed": missed, "inactive": inactive,
+                        "opened": game["opened"], "closed": round(at, 3), **pass_data, **result, **extra})
+    record("close", None, {"round": game["round"], "missed": missed, "inactive": inactive,
+                           "collapsed": result["collapsed"], **pass_data, **extra})
     if ended:  # a deal, a collapse, or the deadline
         game["over"], game["stock"] = True, result["next_stock"]  # the state shows the lake after the season
         record("season-over", None, {"rounds": game["round"], "collapsed": result["collapsed"]})
@@ -551,6 +554,13 @@ class World(BaseHTTPRequestHandler):
         self._reply(200, {"accepted": True})
 
 
+    def _close_if_ready(self, at: float | None = None) -> None:
+        if len(STATE["game"]["requests"]) != len(SEATS):
+            return
+        if ROUND_PROTOCOL is not None and ROUND_PROTOCOL.blocks_early_close():
+            return
+        close_round(now() if at is None else at)
+
     def _harvest(self, seat: str, body: dict[str, Any]) -> None:
         passing = GAME_ALLOWS_PASS and "pass" in body
         amount = body.get("amount")
@@ -580,8 +590,7 @@ class World(BaseHTTPRequestHandler):
             game["requests"][seat] = None if passing else amount
             number = game["round"]
             record("pass" if passing else "request", seat, {"round": number, **action})
-            if len(game["requests"]) == len(SEATS):
-                close_round(now())
+            self._close_if_ready()
         # The reply must not say how many seats have requested: in `silent` that count is a channel.
         self._reply(201, {"round": number, **action})
 
@@ -603,6 +612,7 @@ class World(BaseHTTPRequestHandler):
             number = game["round"]
             status, reply, agreement = ROUND_PROTOCOL.act(path, seat, body, game["stock"], number, at)
             if status == 201:
+                _PROTOCOL_ACTORS.add(seat)
                 record(path.removeprefix("/"), seat, {"round": number, **reply})
             else:
                 record("invalid" if status == 400 else "denied", seat,
@@ -610,6 +620,8 @@ class World(BaseHTTPRequestHandler):
             _drain_protocol(seat)
             if agreement is not None:
                 close_round(at, agreement=agreement)
+            elif status == 201:
+                self._close_if_ready(at)
         self._reply(status, reply)
 
     def _wait(self, seat: str) -> None:
@@ -625,6 +637,7 @@ class World(BaseHTTPRequestHandler):
                 closed = game["over"] or (game["opened"] is not None and game["round"] > number)
                 if closed or time.monotonic() >= deadline:
                     record("wait", seat, {"round": number, "closed": closed})
+                    _note_look(seat)
                     view = game_view(seat)
                     break
             time.sleep(0.1)
