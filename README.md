@@ -44,6 +44,10 @@ To diagnose a failed booking, [replay a receiver's question, the sender's answer
 
 Other starting points: [36 teams exchanging meeting proposals](examples/seatlab/native-model-results.md#does-sending-a-short-proposal-change-the-native-team-reward) and [import a role observation from an Inspect log](https://github.com/PeterMakhnatch/harbor-multiagent/pull/71).
 
+## SeatLab: decide which multi-agent team to continue
+
+Give an independent supervisor [the first hour of 3 real Bespoke teams](examples/seatlab/continuation-study.md#give-another-supervisor-a-real-decision). Keep the final grades on the owner's machine. Multiple workers can take disjoint sets. Check their choices against the released four-hour outcomes without an API key. In [54 blind calls](examples/seatlab/continuation-study.md#result-do-not-stop-a-team-on-this-evidence), the message text did not justify stopping a team.
+
 ## Install
 
 ```bash

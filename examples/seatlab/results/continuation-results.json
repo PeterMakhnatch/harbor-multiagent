@@ -1,0 +1,459 @@
+{
+  "arms": {
+    "activity": {
+      "coverage": {
+        "cohorts": 9,
+        "cohorts_fully_valid": 9,
+        "cohorts_with_votes": 9,
+        "complete": true,
+        "expected": 27,
+        "invalid": 0,
+        "missing": 0,
+        "received": 27,
+        "valid": 27
+      },
+      "owner_sha256": "30d13093caebfe7673909955e92eeb1db698d9a362a64384b55ddfcb0e146b02",
+      "pick_positions": {
+        "1": 10,
+        "2": 10,
+        "3": 7
+      },
+      "primary": {
+        "alpha": 0.05,
+        "assignment_null": "conditional on each cohort's vote tallies and its three finals, cards map to outcomes uniformly at random, independently across cohorts; with s tied plurality winners each of the C(3,s) outcome subsets is equally likely and scores their mean final; p is the probability that the summed plurality finals reach the observed sum",
+        "assignment_p": 0.05486968449931413,
+        "assignment_p_exact": "40/729",
+        "assignment_passes": false,
+        "assignment_test": "exact one-sided randomization test of the sum of plurality finals; computed only when all 9 cohorts are complete, otherwise null",
+        "cohorts": 9,
+        "complete": true,
+        "mean_paired_improvement": 0.026625925925925924,
+        "mean_paired_improvement_exact": "7189/270000",
+        "mean_passes": false,
+        "metric": "per-cohort plurality final minus uniform expected final; cohorts are the units",
+        "negative": 2,
+        "p_passes": false,
+        "pass": false,
+        "positive": 6,
+        "sign_p": 0.14453125,
+        "sign_p_exact": "37/256",
+        "test": "exact one-sided sign test, zero deltas omitted, H0 equal sign probability",
+        "threshold_mean": 0.03,
+        "ties": 1,
+        "verdict": "fail"
+      },
+      "replies_sha256": "3b17c1c10ede7a3571c29de9d6391eee5769a2113f75492e7e075744cab0eb18",
+      "score_file_sha256": "9badabdc1bbc9b81edf259bff8bad2081365e8a4577d4474ddc6bd5cd304611e",
+      "sets": [
+        {
+          "busiest_posts_final": 0.5056,
+          "key": "gemini-4-argon:k2",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5056,
+          "plurality_final": 0.5056,
+          "plurality_run_ids": [
+            "gemini-4-argon-k2-r3"
+          ],
+          "uniform_final": 0.5008333333333334
+        },
+        {
+          "busiest_posts_final": 0.5004,
+          "key": "gemini-4-argon:k4",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5004,
+          "plurality_final": 0.5004,
+          "plurality_run_ids": [
+            "gemini-4-argon-k4-r1"
+          ],
+          "uniform_final": 0.47846666666666665
+        },
+        {
+          "busiest_posts_final": 0.5517,
+          "key": "gemini-4-argon:k8",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5517,
+          "plurality_final": 0.5517,
+          "plurality_run_ids": [
+            "gemini-4-argon-k8-r3"
+          ],
+          "uniform_final": 0.4939
+        },
+        {
+          "busiest_posts_final": 0.35033333333333333,
+          "key": "gpt-6-1-sol:k2",
+          "largest_vote_fraction": 0.3333333333333333,
+          "oracle_final": 0.5051,
+          "plurality_final": 0.35033333333333333,
+          "plurality_run_ids": [
+            "gpt-6-1-sol-k2-r1",
+            "gpt-6-1-sol-k2-r2",
+            "gpt-6-1-sol-k2-r3"
+          ],
+          "uniform_final": 0.35033333333333333
+        },
+        {
+          "busiest_posts_final": 0.5024,
+          "key": "gpt-6-1-sol:k4",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5024,
+          "plurality_final": 0.5024,
+          "plurality_run_ids": [
+            "gpt-6-1-sol-k4-r3"
+          ],
+          "uniform_final": 0.38283333333333336
+        },
+        {
+          "busiest_posts_final": 0.4487,
+          "key": "gpt-6-1-sol:k8",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.4487,
+          "plurality_final": 0.4487,
+          "plurality_run_ids": [
+            "gpt-6-1-sol-k8-r2"
+          ],
+          "uniform_final": 0.4112
+        },
+        {
+          "busiest_posts_final": 0.4838,
+          "key": "opus-5-5:k2",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5017,
+          "plurality_final": 0.4838,
+          "plurality_run_ids": [
+            "opus-5-5-k2-r2"
+          ],
+          "uniform_final": 0.47483333333333333
+        },
+        {
+          "busiest_posts_final": 0.4505,
+          "key": "opus-5-5:k4",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5333,
+          "plurality_final": 0.4505,
+          "plurality_run_ids": [
+            "opus-5-5-k4-r2"
+          ],
+          "uniform_final": 0.4543
+        },
+        {
+          "busiest_posts_final": 0.5071,
+          "key": "opus-5-5:k8",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5452,
+          "plurality_final": 0.5071,
+          "plurality_run_ids": [
+            "opus-5-5-k8-r3"
+          ],
+          "uniform_final": 0.5142
+        }
+      ],
+      "strategies": {
+        "busiest_posts": 0.47783703703703706,
+        "highest_mark60": 0.4512111111111111,
+        "oracle": 0.5104555555555556,
+        "plurality": 0.47783703703703706,
+        "uniform": 0.4512111111111111
+      }
+    },
+    "posts": {
+      "coverage": {
+        "cohorts": 9,
+        "cohorts_fully_valid": 9,
+        "cohorts_with_votes": 9,
+        "complete": true,
+        "expected": 27,
+        "invalid": 0,
+        "missing": 0,
+        "received": 27,
+        "valid": 27
+      },
+      "owner_sha256": "a9525af0c5de643b7898dedf9eb7931c4215531f0f810280bf78df99439b7c79",
+      "pick_positions": {
+        "1": 11,
+        "2": 8,
+        "3": 8
+      },
+      "primary": {
+        "alpha": 0.05,
+        "assignment_null": "conditional on each cohort's vote tallies and its three finals, cards map to outcomes uniformly at random, independently across cohorts; with s tied plurality winners each of the C(3,s) outcome subsets is equally likely and scores their mean final; p is the probability that the summed plurality finals reach the observed sum",
+        "assignment_p": 0.5133363816491389,
+        "assignment_p_exact": "3368/6561",
+        "assignment_passes": false,
+        "assignment_test": "exact one-sided randomization test of the sum of plurality finals; computed only when all 9 cohorts are complete, otherwise null",
+        "cohorts": 9,
+        "complete": true,
+        "mean_paired_improvement": 0.002648148148148148,
+        "mean_paired_improvement_exact": "143/54000",
+        "mean_passes": false,
+        "metric": "per-cohort plurality final minus uniform expected final; cohorts are the units",
+        "negative": 2,
+        "p_passes": false,
+        "pass": false,
+        "positive": 6,
+        "sign_p": 0.14453125,
+        "sign_p_exact": "37/256",
+        "test": "exact one-sided sign test, zero deltas omitted, H0 equal sign probability",
+        "threshold_mean": 0.03,
+        "ties": 1,
+        "verdict": "fail"
+      },
+      "replies_sha256": "3730cfd71b47a4530d24b6cc0b108b0a3e241e1122ee48697db436c26fa4825b",
+      "score_file_sha256": "1b4a8c483fdb3b4441b376ee9ae783eb7baab6270defa8e4bf843be4c25a7073",
+      "sets": [
+        {
+          "busiest_posts_final": 0.5056,
+          "key": "gemini-4-argon:k2",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5056,
+          "plurality_final": 0.4996,
+          "plurality_run_ids": [
+            "gemini-4-argon-k2-r1"
+          ],
+          "uniform_final": 0.5008333333333334
+        },
+        {
+          "busiest_posts_final": 0.5004,
+          "key": "gemini-4-argon:k4",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5004,
+          "plurality_final": 0.5004,
+          "plurality_run_ids": [
+            "gemini-4-argon-k4-r1"
+          ],
+          "uniform_final": 0.47846666666666665
+        },
+        {
+          "busiest_posts_final": 0.5517,
+          "key": "gemini-4-argon:k8",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5517,
+          "plurality_final": 0.5517,
+          "plurality_run_ids": [
+            "gemini-4-argon-k8-r3"
+          ],
+          "uniform_final": 0.4939
+        },
+        {
+          "busiest_posts_final": 0.35033333333333333,
+          "key": "gpt-6-1-sol:k2",
+          "largest_vote_fraction": 0.3333333333333333,
+          "oracle_final": 0.5051,
+          "plurality_final": 0.35033333333333333,
+          "plurality_run_ids": [
+            "gpt-6-1-sol-k2-r1",
+            "gpt-6-1-sol-k2-r2",
+            "gpt-6-1-sol-k2-r3"
+          ],
+          "uniform_final": 0.35033333333333333
+        },
+        {
+          "busiest_posts_final": 0.5024,
+          "key": "gpt-6-1-sol:k4",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5024,
+          "plurality_final": 0.1855,
+          "plurality_run_ids": [
+            "gpt-6-1-sol-k4-r1"
+          ],
+          "uniform_final": 0.38283333333333336
+        },
+        {
+          "busiest_posts_final": 0.4487,
+          "key": "gpt-6-1-sol:k8",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.4487,
+          "plurality_final": 0.4349,
+          "plurality_run_ids": [
+            "gpt-6-1-sol-k8-r1"
+          ],
+          "uniform_final": 0.4112
+        },
+        {
+          "busiest_posts_final": 0.4838,
+          "key": "opus-5-5:k2",
+          "largest_vote_fraction": 1.0,
+          "oracle_final": 0.5017,
+          "plurality_final": 0.4838,
+          "plurality_run_ids": [
+            "opus-5-5-k2-r2"
+          ],
+          "uniform_final": 0.47483333333333333
+        },
+        {
+          "busiest_posts_final": 0.4505,
+          "key": "opus-5-5:k4",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5333,
+          "plurality_final": 0.5333,
+          "plurality_run_ids": [
+            "opus-5-5-k4-r3"
+          ],
+          "uniform_final": 0.4543
+        },
+        {
+          "busiest_posts_final": 0.5071,
+          "key": "opus-5-5:k8",
+          "largest_vote_fraction": 0.6666666666666666,
+          "oracle_final": 0.5452,
+          "plurality_final": 0.5452,
+          "plurality_run_ids": [
+            "opus-5-5-k8-r2"
+          ],
+          "uniform_final": 0.5142
+        }
+      ],
+      "strategies": {
+        "busiest_posts": 0.47783703703703706,
+        "highest_mark60": 0.4512111111111111,
+        "oracle": 0.5104555555555556,
+        "plurality": 0.45385925925925924,
+        "uniform": 0.4512111111111111
+      }
+    }
+  },
+  "checkpoint": "strictly before minute 60",
+  "content_control": {
+    "activity_replies_sha256": "3b17c1c10ede7a3571c29de9d6391eee5769a2113f75492e7e075744cab0eb18",
+    "cohorts": [
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "gemini-4-argon-k2-r3"
+        ],
+        "cohort": "gemini-4-argon:k2",
+        "posts_minus_activity": -0.006,
+        "posts_valid": 3,
+        "posts_winners": [
+          "gemini-4-argon-k2-r1"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "gemini-4-argon-k4-r1"
+        ],
+        "cohort": "gemini-4-argon:k4",
+        "posts_minus_activity": 0.0,
+        "posts_valid": 3,
+        "posts_winners": [
+          "gemini-4-argon-k4-r1"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "gemini-4-argon-k8-r3"
+        ],
+        "cohort": "gemini-4-argon:k8",
+        "posts_minus_activity": 0.0,
+        "posts_valid": 3,
+        "posts_winners": [
+          "gemini-4-argon-k8-r3"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "gpt-6-1-sol-k2-r1",
+          "gpt-6-1-sol-k2-r2",
+          "gpt-6-1-sol-k2-r3"
+        ],
+        "cohort": "gpt-6-1-sol:k2",
+        "posts_minus_activity": 0.0,
+        "posts_valid": 3,
+        "posts_winners": [
+          "gpt-6-1-sol-k2-r1",
+          "gpt-6-1-sol-k2-r2",
+          "gpt-6-1-sol-k2-r3"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "gpt-6-1-sol-k4-r3"
+        ],
+        "cohort": "gpt-6-1-sol:k4",
+        "posts_minus_activity": -0.3169,
+        "posts_valid": 3,
+        "posts_winners": [
+          "gpt-6-1-sol-k4-r1"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "gpt-6-1-sol-k8-r2"
+        ],
+        "cohort": "gpt-6-1-sol:k8",
+        "posts_minus_activity": -0.0138,
+        "posts_valid": 3,
+        "posts_winners": [
+          "gpt-6-1-sol-k8-r1"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "opus-5-5-k2-r2"
+        ],
+        "cohort": "opus-5-5:k2",
+        "posts_minus_activity": 0.0,
+        "posts_valid": 3,
+        "posts_winners": [
+          "opus-5-5-k2-r2"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "opus-5-5-k4-r2"
+        ],
+        "cohort": "opus-5-5:k4",
+        "posts_minus_activity": 0.0828,
+        "posts_valid": 3,
+        "posts_winners": [
+          "opus-5-5-k4-r3"
+        ]
+      },
+      {
+        "activity_valid": 3,
+        "activity_winners": [
+          "opus-5-5-k8-r3"
+        ],
+        "cohort": "opus-5-5:k8",
+        "posts_minus_activity": 0.0381,
+        "posts_valid": 3,
+        "posts_winners": [
+          "opus-5-5-k8-r2"
+        ]
+      }
+    ],
+    "complete_pairs": 9,
+    "index_sha256": "68cc6ae215bd81fb94ac88ae43d42387409d1eb6f6bb7fff40b2923870295282",
+    "mean_difference": -0.02397777777777778,
+    "mean_difference_exact": "-1079/45000",
+    "negative": 3,
+    "one_sided_sign_p": "13/16",
+    "positive": 2,
+    "posts_replies_sha256": "3730cfd71b47a4530d24b6cc0b108b0a3e241e1122ee48697db436c26fa4825b",
+    "schema": "seatlab.continuation-content/v1",
+    "ties": 4,
+    "verdict": "fail"
+  },
+  "input_receipt": "continuation-inputs.json",
+  "primary_view": "posts",
+  "resource": {
+    "basis": "recorded team wall-clock runtime per cohort; every arm uses the same team size k within a cohort; not measured compute, tokens or money",
+    "cohorts": 9,
+    "continued_minutes": 180,
+    "continued_runs": 1,
+    "full_team_minutes": 720,
+    "ratio": 0.5,
+    "screen_minutes_each": 60,
+    "screen_runs": 3,
+    "strategy_team_minutes": 360,
+    "total_full_team_minutes": 6480,
+    "total_strategy_team_minutes": 3240
+  },
+  "schema": "seatlab.bespoke-continuations/v1"
+}

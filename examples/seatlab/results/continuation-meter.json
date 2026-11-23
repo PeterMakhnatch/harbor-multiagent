@@ -1,0 +1,521 @@
+{
+  "arms": {
+    "activity": {
+      "calls": [
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-1803e8a1af63ffeaad6cc4a4",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-b058f475473f835f511c7781",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-e0729ca0ea9a16e270438dd9",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-4699d6de65f79af4e569388b",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-eecf51e4bbab30f1f9638d17",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-be483976c79622b04e5932b6",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-f39dd220b5a98168dcf6ca28",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-5fea9b491bfcb32e7fea22ba",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-03a9fed703684b458aedaa84",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-7f849fbf9900ae05b5b7dc61",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-2a5286bf02c2d361511d36bc",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 633,
+          "estimated_usd_high": "0.000098550",
+          "estimated_usd_low": "0.000098550",
+          "output": 6,
+          "request_id": "cont-6ad8bff1fb949208cc7050bb",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-cb31a6a92f8736eaea71a071",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-0f78e465f9d49b50264d8549",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-53f69064ee7222acb3a4adac",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-e5adeb0a1cfb0242ca77f5f3",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-dfe5fb327b0169fce8e95055",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-d53f2c92eb7227527ab3303b",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-f8f8917200ca015168cb192f",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-16541e4f8db4d19496167578",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-88b0a22bd7bcf7b6c6d0c8d7",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 505,
+          "estimated_usd_high": "0.000079734",
+          "estimated_usd_low": "0.000079734",
+          "output": 6,
+          "request_id": "cont-4564d82f30073220f141e73c",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-4eb1bb99e19d781ce261c57a",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 346,
+          "estimated_usd_high": "0.000055884",
+          "estimated_usd_low": "0.000055884",
+          "output": 6,
+          "request_id": "cont-cb0f7990bcf1e4a2754b8ff0",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 218,
+          "estimated_usd_high": "0.000037068",
+          "estimated_usd_low": "0.000037068",
+          "output": 6,
+          "request_id": "cont-291f1a9f87d9139b2f0c2610",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 218,
+          "estimated_usd_high": "0.000037068",
+          "estimated_usd_low": "0.000037068",
+          "output": 6,
+          "request_id": "cont-6c77a64f59ce78dec64be75d",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 377,
+          "estimated_usd_high": "0.000060918",
+          "estimated_usd_low": "0.000060918",
+          "output": 6,
+          "request_id": "cont-0c55b460a01c93ded19f4cb2",
+          "served_model": "deepseek-flash"
+        }
+      ],
+      "study": "bespoke-checkpoint-activity-nov23",
+      "tokens": {
+        "cache_hit": 4992,
+        "cache_miss": 11622,
+        "output": 162
+      },
+      "unsettled": 0,
+      "usd_low": "0.001855476",
+      "usd_upper": "0.001855476"
+    },
+    "posts": {
+      "calls": [
+        {
+          "cache_hit": 256,
+          "cache_miss": 1232,
+          "estimated_usd_high": "0.000189168",
+          "estimated_usd_low": "0.000189168",
+          "output": 6,
+          "request_id": "cont-4b6af3c7bd5bd864bf2b3859",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1846,
+          "estimated_usd_high": "0.000280884",
+          "estimated_usd_low": "0.000280884",
+          "output": 6,
+          "request_id": "cont-e3d2b4ec59bec725b0f205c9",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1698,
+          "estimated_usd_high": "0.000258684",
+          "estimated_usd_low": "0.000258684",
+          "output": 6,
+          "request_id": "cont-a95ce34d3f1e710838464a79",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1797,
+          "estimated_usd_high": "0.000273534",
+          "estimated_usd_low": "0.000273534",
+          "output": 6,
+          "request_id": "cont-a790ee24010c014f2fc78415",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1497,
+          "estimated_usd_high": "0.000228534",
+          "estimated_usd_low": "0.000228534",
+          "output": 6,
+          "request_id": "cont-0ac392bfb49f081d406c9543",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1846,
+          "estimated_usd_high": "0.000280884",
+          "estimated_usd_low": "0.000280884",
+          "output": 6,
+          "request_id": "cont-4311426101acdf50307e0694",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1497,
+          "estimated_usd_high": "0.000228534",
+          "estimated_usd_low": "0.000228534",
+          "output": 6,
+          "request_id": "cont-daa0478d53f539218b20ff74",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1689,
+          "estimated_usd_high": "0.000257334",
+          "estimated_usd_low": "0.000257334",
+          "output": 6,
+          "request_id": "cont-74595ab1b32d94fd70544a1f",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1360,
+          "estimated_usd_high": "0.000207984",
+          "estimated_usd_low": "0.000207984",
+          "output": 6,
+          "request_id": "cont-8c2a274597697784bab9367f",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1698,
+          "estimated_usd_high": "0.000258684",
+          "estimated_usd_low": "0.000258684",
+          "output": 6,
+          "request_id": "cont-f16fe905e30ec47d5154c412",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1689,
+          "estimated_usd_high": "0.000257334",
+          "estimated_usd_low": "0.000257334",
+          "output": 6,
+          "request_id": "cont-14f69baf162789e298116cc8",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1689,
+          "estimated_usd_high": "0.000257334",
+          "estimated_usd_low": "0.000257334",
+          "output": 6,
+          "request_id": "cont-c488a6a7c2178fbee3cd10ce",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 218,
+          "estimated_usd_high": "0.000037068",
+          "estimated_usd_low": "0.000037068",
+          "output": 6,
+          "request_id": "cont-60635e45788d18ccb03dd21e",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1846,
+          "estimated_usd_high": "0.000280884",
+          "estimated_usd_low": "0.000280884",
+          "output": 6,
+          "request_id": "cont-d54759fe2f8f59aef9f49ffa",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 346,
+          "estimated_usd_high": "0.000055884",
+          "estimated_usd_low": "0.000055884",
+          "output": 6,
+          "request_id": "cont-9e5e1fc5296e993d83f20839",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 0,
+          "cache_miss": 1963,
+          "estimated_usd_high": "0.000298050",
+          "estimated_usd_low": "0.000298050",
+          "output": 6,
+          "request_id": "cont-99cf514a2ff2d2745b627076",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1835,
+          "estimated_usd_high": "0.000279234",
+          "estimated_usd_low": "0.000279234",
+          "output": 6,
+          "request_id": "cont-57914502cca48def7713a627",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 256,
+          "cache_miss": 218,
+          "estimated_usd_high": "0.000037068",
+          "estimated_usd_low": "0.000037068",
+          "output": 6,
+          "request_id": "cont-60ce6031846cce71669caf39",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1599,
+          "estimated_usd_high": "0.000243834",
+          "estimated_usd_low": "0.000243834",
+          "output": 6,
+          "request_id": "cont-b91b6d1ce966e6db967ceea9",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1497,
+          "estimated_usd_high": "0.000228534",
+          "estimated_usd_low": "0.000228534",
+          "output": 6,
+          "request_id": "cont-e319d504083d6fd96155b97d",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1797,
+          "estimated_usd_high": "0.000273534",
+          "estimated_usd_low": "0.000273534",
+          "output": 6,
+          "request_id": "cont-28d8ec6583ab601b710f7302",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1599,
+          "estimated_usd_high": "0.000243834",
+          "estimated_usd_low": "0.000243834",
+          "output": 6,
+          "request_id": "cont-9aaa68fa7ca7f4485c44ad65",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1360,
+          "estimated_usd_high": "0.000207984",
+          "estimated_usd_low": "0.000207984",
+          "output": 6,
+          "request_id": "cont-fffd528201f5dc16424bd0d4",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1835,
+          "estimated_usd_high": "0.000279234",
+          "estimated_usd_low": "0.000279234",
+          "output": 6,
+          "request_id": "cont-0a571a14f64884b56aa61125",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1698,
+          "estimated_usd_high": "0.000258684",
+          "estimated_usd_low": "0.000258684",
+          "output": 6,
+          "request_id": "cont-467514b81fa56d7ba6eef383",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1797,
+          "estimated_usd_high": "0.000273534",
+          "estimated_usd_low": "0.000273534",
+          "output": 6,
+          "request_id": "cont-a49f7d525264a61175678cce",
+          "served_model": "deepseek-flash"
+        },
+        {
+          "cache_hit": 128,
+          "cache_miss": 1599,
+          "estimated_usd_high": "0.000243834",
+          "estimated_usd_low": "0.000243834",
+          "output": 6,
+          "request_id": "cont-54f81efbe36a358e830c0be9",
+          "served_model": "deepseek-flash"
+        }
+      ],
+      "study": "bespoke-checkpoint-posts-nov23",
+      "tokens": {
+        "cache_hit": 3712,
+        "cache_miss": 40745,
+        "output": 162
+      },
+      "unsettled": 0,
+      "usd_low": "0.006220086",
+      "usd_upper": "0.006220086"
+    }
+  },
+  "currency": "USD",
+  "endpoint": "https://api.deepseek.com",
+  "price_source": "https://api-docs.deepseek.com/quick_start/pricing",
+  "schema": "seatlab.continuation-token-receipt/v1",
+  "usd_total": "0.008075562"
+}

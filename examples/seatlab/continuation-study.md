@@ -21,3 +21,44 @@ Study contract, 2026-11-23. This is a retrospective selection experiment on **Se
 **First worker.** Use DeepSeek direct Flash through the existing SeatLab meter. Reserve at most $0.27 for 27 turns at its $0.01 hold per turn. Stop on a provider or balance failure. Record actual cache-hit, cache-miss and completion tokens. Other workers can return the same request envelope without this provider. Never send `owner.json` or a source cache to a blind worker.
 
 Source: [Bespoke release](https://benchmarks.bespokelabs.ai/multi-agent-coordination-bench/) and [stock business task](https://github.com/bespokelabsai/multi-agent-coordination-bench/tree/dbec43ff757c86c17077e61b37c7f584c880bdee/tasks/seed-to-profit). The public viewer shortens messages. This study makes no claim about unpublished messages, dollar savings or the causal effect of team communication.
+
+## Result: do not stop a team on this evidence
+
+All 54 first replies were valid. With public messages, the supervisor selected companies with a mean grade of **0.45386**, versus **0.45121** for uniform selection. The gain was 0.00265, below the required 0.03. The exact assignment test gave p=0.5133. There were 6 gains, 2 losses and 1 tie; the sign test gave p=0.1445. A single loss on a four-seat set outweighed several small gains.
+
+| What the selector could see | Mean selected grade | Difference from uniform |
+|---|---:|---:|
+| Nothing: uniform choice | 0.45121 | 0 |
+| First-hour activity and message text: Flash | 0.45386 | +0.00265 |
+| First-hour activity, no message text: Flash | 0.47784 | +0.02663 |
+| Public post counts only: busiest team | 0.47784 | +0.02663 |
+| First-hour verifier grade, unavailable to Flash | 0.45121 | 0 |
+| Final grade, unavailable before time ran out | 0.51046 | +0.05924 |
+
+The activity-only supervisor selected the busiest board in all 9 sets, including ties. Adding text changed the selected grade in 5 sets: 2 gains and 3 losses. The other 4 tied. The mean difference was −0.02398; the one-sided sign test for a benefit gave p=0.8125. All 27 first-hour verifier grades were zero. These observations do not show that chat harms teams. We changed the **supervisor's input**, not communication between the original agents. None of these policies qualifies for autonomous budget allocation.
+
+The [54 first-call costs](results/continuation-meter.json) total **$0.008075562**. The [derived results](results/continuation-results.json) include every set. The [input receipt](results/continuation-inputs.json) was public before the first model call. Public files contain choices and hashes, not the source messages.
+
+## Give another supervisor a real decision
+
+From the fork checkout, run this with Python 3.12 or later. It needs no Harbor install, model key or Docker. `fetch` downloads the Bespoke release once. After that the scoring path is offline.
+
+```sh
+w=$(mktemp -d)
+m=examples.seatlab.continuation
+python3.12 -BS -m "$m" fetch "$w/cache"
+for view in posts activity; do
+  python3.12 -BS -m "$m" prepare "$w/cache" "$w/$view" --view "$view"
+  python3.12 -BS -m "$m" score "$w/$view" \
+    "examples/seatlab/results/continuation-$view-first.jsonl" > "$w/$view.json"
+done
+python3.12 -BS -m "$m.contrast" "$w/posts.json" "$w/activity.json"
+```
+
+For a new supervisor, emit one shard per worker. Send **only** its JSONL, not the checkout, source cache or owner directory. Keep the 3 presentations of a set on one shard. Use independent first turns without memory between presentations. Return `{"id":...,"prompt_sha256":...,"reply":"{\"pick\":2}"}` per request. The scorer checks for duplicate IDs and stale prompts, and lists missing decisions instead of filling them in.
+
+```sh
+python3.12 -BS -m "$m" emit "$w/posts" --shard 0/3 > "$w/worker-0.jsonl"
+```
+
+Use `1/3` and `2/3` for the other workers. Pass their reply files as separate arguments to `score`. Never rerun a failed first attempt to improve coverage. The optional `python -m examples.seatlab.continuation.direct --help` worker uses a private host ledger, records the first reply, and enforces a campaign limit. Restarting with the same book skips closed requests. An attempt interrupted after its claim remains unknown; it is not billed again by that book. The worker is not a background service.
