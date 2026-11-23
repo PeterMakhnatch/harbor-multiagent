@@ -94,6 +94,7 @@ def test_messaging_works_in_every_talk_condition(start_world, condition):
 
 def test_delivery_events_name_the_messages_each_seat_received(start_world):
     world = start_world("talk", ("p1", "p2", "p3"))
+    world.ordered = True  # world v11 records a delivery after its reply: wait for each handler
     m1 = world.seat("p1", "POST", "/messages", {"to": "all", "text": "to everyone"})[1]["id"]
     m2 = world.seat("p1", "POST", "/messages", {"to": "p2", "text": "only for p2"})[1]["id"]
     assert m1 != m2
@@ -216,6 +217,7 @@ def test_unknown_paths_and_wrong_methods_are_logged_as_probes(start_world):
 
 def test_each_ordinary_api_request_leaves_an_event(start_world):
     world = start_world("talk")
+    world.ordered = True
     calls = [
         ("GET", "/whoami", "p1", None), ("POST", "/messages", "p1", {"to": "all", "text": "x"}),
         ("POST", "/messages", "p1", {"to": "p9", "text": "x"}), ("POST", "/messages", "p1", {"text": ""}),

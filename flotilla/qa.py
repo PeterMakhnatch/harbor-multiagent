@@ -65,8 +65,8 @@ RULES: dict[str, tuple[str, str]] = {
                                "repository, where the public generator computes the answer key from the seed")),
     "opaque-names": ("FAIL", ("a task built with opaque names has a task or folder name that is not t-<12 hex>, "
                               "or that names a condition, its family or its variant")),
-    "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart (talk and talk-liar, "
-                               "talk-warned and talk-liar-warned)")),
+    "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart in what it reads (talk and "
+                               "talk-liar, talk-warned and talk-liar-warned, talk and gated)")),
     "seat-network": ("FAIL", "a seat is not alone with main on a network of its own"),
     "seat-secrets": ("FAIL", ("a seat gets the answer key, the build's seed, task.json, task.toml, the build "
                               "manifest, a world, family or score file, the admin token or another seat's token")),

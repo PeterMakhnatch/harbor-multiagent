@@ -52,6 +52,7 @@ class World:
     tokens: dict[str, str]
     admin: str
     logs: Path
+    ordered: bool = False  # wait for each handler to return (connection closed): for tests of event order
 
     @property
     def url(self) -> str:
@@ -59,9 +60,9 @@ class World:
 
     def request(self, method: str, path: str, token: str | None = None, body: Any = None,
                 raw: bytes | None = None, headers: dict[str, str] | None = None) -> tuple[int, Any, dict[str, str]]:
-        """(status, parsed JSON reply or None, reply headers). Never raises for an HTTP error status. Returns only
-        after the server closed the connection, so the request's handler has returned (world v11 records a delivery
-        after the reply is written)."""
+        """(status, parsed JSON reply or None, reply headers). Never raises for an HTTP error status. With `ordered`,
+        returns only after the server closed the connection, so the request's handler has returned (world v11 records
+        a delivery after the reply is written); a normal client returns once it has read the body."""
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         sent = dict(headers or {})
         if token is not None:
@@ -72,7 +73,7 @@ class World:
         done = None
         try:
             connection.request(method, path, body=data, headers=sent)
-            done = connection.sock.dup()
+            done = connection.sock.dup() if self.ordered else None
             response = connection.getresponse()
             payload = response.read()
             return response.status, (json.loads(payload) if payload else None), dict(response.getheaders())
@@ -93,14 +94,18 @@ class World:
 
 
 def wait_for_close(sock: socket.socket, limit: int = 64) -> None:
-    """Read until the peer closes the connection (at most `limit` reads of 10 seconds each), then close."""
+    """Read until the peer closes the connection, then close; a peer that keeps it open for 10 seconds (or sends
+    more than `limit` reads) fails the test."""
     try:
         sock.settimeout(10)
         for _ in range(limit):
             if not sock.recv(4096):
-                break
-    except OSError:
-        pass
+                return
+        raise AssertionError("the world sent data after its reply and did not close the connection")
+    except ConnectionResetError:
+        return
+    except TimeoutError as exc:
+        raise AssertionError("the world did not close the connection within 10 seconds") from exc
     finally:
         sock.close()
 

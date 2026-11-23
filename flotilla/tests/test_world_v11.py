@@ -15,13 +15,16 @@ AMOUNT_ERROR = 'send {"amount": <a whole number from 0 to 1000000>}'
 _FILES = itertools.count()
 
 
-def split_world(start_world, tmp_path, monkeypatch, condition, seats=("p1", "p2"), game=None, start=True):
-    """A split world on a pot of 100, its clock fixed at 0; with `start`, every seat has called once."""
+def split_world(start_world, tmp_path, monkeypatch, condition, seats=("p1", "p2"), game=None, start=True,
+                ordered=True):
+    """A split world on a pot of 100, its clock fixed at 0; with `start`, every seat has called once. With `ordered`,
+    each request returns after its handler did (the tests read the event log); without it, as a normal client."""
     params = SPLIT._params(100, Fraction(4, 5), dict.fromkeys(seats, 20))
     path = tmp_path / f"split-{next(_FILES)}.json"
     path.write_text(json.dumps(params))
     world = start_world(condition, seats, FLOTILLA_GAME=str(game or FLOTILLA / "games" / "split.py"),
                         FLOTILLA_GAME_PARAMS=str(path), FLOTILLA_ROUND_SECONDS="30")
+    world.ordered = ordered
     monkeypatch.setattr(world.module, "now", lambda: 0.0)
     for seat in seats if start else ():
         assert world.seat(seat, "GET", "/state")[0] == 200
@@ -354,17 +357,125 @@ def test_the_gate_holds_a_decline_with_and_without_a_counter(start_world, tmp_pa
     assert data(world, "decline")[-1] == {"round": 1, "id": "1-2", "declined": True, "counter": "1-3", "unread": 0}
 
 
-def test_a_message_sent_before_the_season_holds_the_first_valid_action(start_world, tmp_path, monkeypatch):
-    world = split_world(start_world, tmp_path, monkeypatch, "gated", start=False)
-    assert not world.seat("p1", "GET", "/state")[1]["season_started"]
-    early = send(world, "p1", "hello before the start")
-    assert world.seat("p1", "POST", "/claim", {"amount": 10})[0] == 409  # early: refused before the gate
-    assert "early" in world.kinds() and "gated" not in world.kinds()
-    status, reply = world.seat("p2", "POST", "/claim", {"amount": 10})  # p2's first call starts the season
+def test_a_message_sent_before_the_season_is_held_back_until_the_first_valid_action(start_world, tmp_path,
+                                                                                   monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated", seats=("p1", "p2", "p3"), start=False)
+    for seat in ("p1", "p2"):  # p3 has not called: the season stays closed
+        assert not world.seat(seat, "GET", "/state")[1]["season_started"]
+    early = send(world, "p2", "hello before the start")
+    status, reply = world.seat("p1", "POST", "/claim", {"amount": 10})  # p1 has an unread message
+    assert status == 409 and reply["error"].startswith("the season has not started") and "messages" not in reply
+    assert "early" in world.kinds() and "gated" not in world.kinds() and "deliver" not in world.kinds()
+    assert world.module.STATE["delivered"]["p1"] == {}
+    assert world.seat("p3", "GET", "/state")[1]["season_started"]
+    status, reply = world.seat("p1", "POST", "/claim", {"amount": 10})
     assert status == 409 and reply == {"error": world.module.gate_error(1), "round": 1, "messages": [early]}
-    assert world.seat("p2", "POST", "/claim", {"amount": 10})[0] == 201
-    assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 201  # a pass blocks the deal: round 2 opens
+    assert world.seat("p1", "POST", "/claim", {"amount": 10})[0] == 201
+    assert world.seat("p3", "POST", "/claim", {"amount": 10})[0] == 409  # a message to all reaches p3 too
+    assert world.seat("p3", "POST", "/claim", {"amount": 10})[0] == 201
+    assert world.seat("p2", "POST", "/claim", {"pass": True})[0] == 201  # a pass blocks the deal: round 2 opens
     later = send(world, "p2", "round 2")
     status, reply = world.seat("p1", "POST", "/claim", {"amount": 10})
     assert status == 409 and reply["round"] == 2 and "not recorded in round 2:" in reply["error"]
     assert reply["messages"] == [later]
+
+
+def test_a_failed_delivery_log_write_leaves_the_messages_unread(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated")
+    message = send(world, "p2", "read me")
+    original = world.module.record
+    broken = [True]
+
+    def record(kind, seat, data=None):
+        if kind == "deliver" and broken[0]:
+            broken[0] = False
+            raise OSError("injected: the event log cannot be written")
+        original(kind, seat, data)
+
+    monkeypatch.setattr(world.module, "record", record)
+    assert world.seat("p1", "GET", "/messages") == (200, {"messages": [message]})  # written, then the log failed
+    assert "deliver" not in world.kinds() and world.module.STATE["delivered"]["p1"] == {}
+    status, reply = world.seat("p1", "POST", "/claim", {"amount": 40})
+    assert status == 409 and reply["messages"] == [message]
+    assert data(world, "deliver") == [{"ids": [message["id"]], "via": "gate"}]
+    assert world.seat("p1", "POST", "/claim", {"amount": 40})[0] == 201
+
+
+def hold_commit(monkeypatch, world, predicate):
+    """After a reply that matches predicate is fully written, hold its handler before it records the delivery,
+    until `release` is set; `written` is set then, and `committed` once the held delivery is recorded."""
+    written, release, committed = threading.Event(), threading.Event(), threading.Event()
+    original_reply, original_deliver = world.module.World._reply, world.module._deliver
+    holder = []
+
+    def reply(self, status, body, headers=None):
+        original_reply(self, status, body, headers)
+        if not holder and predicate(self, status, body):
+            holder.append(threading.current_thread())
+            written.set()
+            assert release.wait(10)
+
+    def deliver(seat, ids, via=""):
+        original_deliver(seat, ids, via)
+        if holder and threading.current_thread() is holder[0]:
+            committed.set()
+
+    monkeypatch.setattr(world.module.World, "_reply", reply)
+    monkeypatch.setattr(world.module, "_deliver", deliver)
+    return written, release, committed
+
+
+@pytest.mark.parametrize("first", ["read", "gate"])
+def test_a_retry_before_the_delivery_is_recorded_is_refused_once_more_never_applied(start_world, tmp_path,
+                                                                                   monkeypatch, first):
+    """A normal client has the whole reply before the handler records the delivery: a retry in that window is
+    held once more, with the same message; once the delivery is recorded the retry is applied."""
+    world = split_world(start_world, tmp_path, monkeypatch, "gated", ordered=False)
+    message = send(world, "p2", "read me")
+    written, release, committed = hold_commit(
+        monkeypatch, world, is_messages_read if first == "read" else is_gate_reply)
+    try:
+        if first == "read":
+            assert world.seat("p1", "GET", "/messages") == (200, {"messages": [message]})
+        else:
+            assert world.seat("p1", "POST", "/claim", {"amount": 40})[1]["messages"] == [message]
+        assert written.wait(10)
+        status, reply = world.seat("p1", "POST", "/claim", {"amount": 40})
+        assert status == 409 and reply["messages"] == [message]  # refused once more, never applied
+        assert world.module.STATE["game"]["requests"] == {}
+    finally:
+        release.set()
+    assert committed.wait(10)
+    assert world.seat("p1", "POST", "/claim", {"amount": 40}) == (201, {"round": 1, "amount": 40})
+    events = world.events()
+    applied = next(event["seq"] for event in events if event["kind"] == "request")
+    assert any(event["kind"] == "deliver" and message["id"] in event["data"]["ids"] and event["seq"] < applied
+               for event in events)
+
+
+def test_with_normal_clients_a_retry_is_refused_at_most_once_more(start_world, tmp_path, monkeypatch):
+    """Clients that return once they read the body, as a seat's curl does: after a successful GET or 409, the next
+    claim is applied or held once more for the same message; an applied claim always follows a logged delivery."""
+    world = split_world(start_world, tmp_path, monkeypatch, "gated", ordered=False)
+    extra = []
+    for number in range(1, 6):
+        message = send(world, "p2", f"round {number}")
+        if number % 2:
+            assert world.seat("p1", "GET", "/messages")[0] == 200
+        else:
+            assert world.seat("p1", "POST", "/claim", {"amount": 10})[1]["messages"] == [message]
+        refusals = 0
+        while (reply := world.seat("p1", "POST", "/claim", {"amount": 10}))[0] == 409:
+            assert reply[1]["messages"] == [message] and refusals == 0
+            refusals += 1
+        assert reply == (201, {"round": number, "amount": 10})
+        extra.append(refusals)
+        assert world.seat("p2", "POST", "/claim", {"pass": True}) == (201, {"round": number, "pass": True})
+    assert all(count <= 1 for count in extra)
+    events = world.events()
+    for request in (event for event in events if event["kind"] == "request"):
+        assert request["data"]["unread"] == 0
+        delivered = {i for e in events if e["kind"] == "deliver" and e["seq"] < request["seq"]
+                     for i in e["data"]["ids"]}
+        sent = {e["data"]["id"] for e in events if e["kind"] == "send" and e["seq"] < request["seq"]}
+        assert sent <= delivered, request["data"]["round"]

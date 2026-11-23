@@ -330,12 +330,20 @@ messages in the format of `GET /messages`. A message cannot arrive between the c
 sends the action again; if a round closed meanwhile, the retry applies to the round that is then open.
 
 **Delivery after the write.** On `GET /messages` and on a gate refusal, the world takes the messages under its
-lock, writes the reply outside the lock (at most 5 seconds for the write), and only then records `deliver` and
-marks the messages delivered. A failed or timed-out write records nothing, so the messages stay undelivered and
-the next action is held again. An action that arrives while such a reply is still being written is held again,
-which is harmless. World version 10 recorded `deliver` before the write. **A delivery is not proof that the model
-read the message**: it means the world wrote the bytes to the seat's connection. Whether the agent's terminal
-showed them, and whether the model used them, is the analysis' question (`analysis`, `listening.py`).
+lock, writes the reply outside the lock, and only then, under the lock again, appends the `deliver` event and
+then marks the messages delivered (a log write that fails ends the request and marks nothing). The 5-second bound
+applies to each socket write (the headers and the body are separate writes), not to the whole reply. A failed or
+timed-out write records nothing, so the messages stay undelivered and the next action is held again. A seat's
+client has the whole reply before the world records the delivery, so an action sent at once can be held once
+more for the same messages (harmless: it is never applied before the delivery is recorded). World version 10
+recorded `deliver` before the write. There is one `deliver` event per successful reply, so one message id can
+appear in several events (a GET and a gate refusal, or two refusals); `delivered` in `/admin/state` keeps the
+world time of the first recorded delivery, which need not be the first socket write. The other replies of a game
+action (late, early, repeat and the protocol's refusals), `/state`, `/wait`, `/admin/state` and the 201 of an
+applied action are written as in world version 10, some while the world holds its lock and without the 5-second
+bound. **A delivery is not proof that the model read the message**: it means the world wrote the bytes to the
+seat's connection. Whether the agent's terminal showed them, and whether the model used them, is the analysis'
+question (`analysis`, `listening.py`).
 
 **Events.** `gated` (`data.round`, `data.path`, `data.ids`, `data.action`: the claim, pass or protocol body,
 `data.unread`), then, after a successful write, `deliver` (`data.ids`, `data.via: "gate"`). Every action event
