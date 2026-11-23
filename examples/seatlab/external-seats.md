@@ -25,7 +25,7 @@ This section shows how to run one team after the registration above. It is not a
    git fetch --depth 1 origin 71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
    ```
 
-   We ran this command once in a fresh shallow HTTPS clone. The driver then generated the real four-seat stock task for world 1208.
+   We ran this command once in a fresh shallow HTTPS clone and then generated the real four-seat stock task for world 1208.
 3. Choose a new result path `OUT` outside the repository. Never reuse a path.
 
 ### Seats and roles
@@ -55,7 +55,7 @@ The last prompt line starts with `Input JSON: `. A reporter gets `{"own":[...]}`
 {"text":"{\"starts\":[3,17]}"}
 ```
 
-A booker reply text is `{"slot":N}`. The text can have at most 8192 bytes. Do not add other fields. A reply has no model, session, token, cost or provider field. If the program sends no reply or exits with a nonzero status, no answer is sent for it. The relay gives the program 70 seconds.
+A booker reply text is `{"slot":N}`. The text can have at most 8192 bytes. Do not add other fields. An empty reply or a nonzero exit leaves the request unanswered. Allow less than 64 seconds for the external round trip. The enclosing owner relay has a 70-second limit.
 
 [`fanin/example_owner.py`](fanin/example_owner.py) is a typed example owner. It checks the prompt with the existing SeatLab parser and writes no file. A reporter lists its own starts in every mode. `--mode` changes only what happens after a valid request:
 
@@ -67,7 +67,7 @@ The example does not know the world, the target or the answer. For the registere
 
 - Case 1: use `correct` on all four seats for world 1208, arm `serial`. For world 1209, arm `parallel`, use `wrong` on booker seat `p2` and `correct` on the other seats.
 - Case 2: on world 1210, arm `parallel`, use your signed-in programs on seats `p3` (booker) and `p4` (first reporter). On world 1211, arm `serial`, use them on seats `p4` (booker) and `p1` (first reporter). Use the example owner in `correct` mode on the other seats.
-- Case 3: choose and record the world, the arm and one seat before the run. Use `decline` on that seat.
+- Case 3 used world 1212, arm `serial`. Its booker, `p1`, received the valid native prompt and then declined.
 
 ### Trust and telemetry
 
@@ -140,3 +140,19 @@ exit "$status"
 ```
 
 The evidence reader binds each seat's request and reply to the native team and prints one redacted row. It keeps a missing reply as missing and keeps the native reward. A wrong but complete booking is a complete team with reward 0. Keep the row for every first attempt, also when the team is incomplete.
+
+## Result: five teams, three distinct outcomes
+
+All five registered cases ran through the four independent listeners and Harbor's stock verifier. The [native rows](results/external-seats/rows.json) contain no model identity or token counts.
+
+| Outside owner programs | World | Bound program replies | Submissions | Native reward | Evidence complete |
+|---|---:|---:|---:|---:|---|
+| Four reference programs | 1208 | 4 | 1 | 1 | Yes |
+| Wrong reference booker | 1209 | 4 | 1 | 0 | Yes |
+| Reference booker declined | 1212 | 3 | 0 | 0 | No: booker unanswered |
+| Signed-in booker and first reporter | 1210 | 4 | 1 | 1 | Yes |
+| Signed-in booker and first reporter | 1211 | 4 | 1 | 1 | Yes |
+
+The two mixed teams used four distinct signed-in sessions. The [separate owner receipts](results/external-seats/client-receipts.json) matched each prompt and reply to its own connector record. The clients reported 47,838 tokens in total. The provider did not independently identify the served model. The connector itself claims neither the session count nor the tokens.
+
+Missing listeners, an aliased listener, a symlink, a directory with the wrong permissions, and an extra entry all failed before the driver created a native output. The deliberately declined turn kept its real request but had no reply record. The wrong booking had both records and still received the stock zero. Do not group those two zeros as the same failure.
