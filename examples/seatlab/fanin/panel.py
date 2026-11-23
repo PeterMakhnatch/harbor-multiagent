@@ -19,7 +19,7 @@ COMMIT = "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3"
 SEED = 1709000311
 LIVE = "live"
 CONTROL_TAGS = ("control-correct", "control-inexact", "control-wrong")
-STATUSES = ("absent", "unanswered", "bound", "answered_unused")
+STATUSES = ("absent", "not_admitted", "unanswered", "bound", "answered_unused")
 MAX_BYTES = 4 << 20
 MAX_LIVE = len(WORLDS) * len(protocol.ARMS)
 MAX_CONTROLS = MAX_LIVE * len(CONTROL_TAGS)
@@ -120,6 +120,10 @@ def _turn(raw: object, position: int, seat: str, live: bool) -> dict[str, Any]:
     require(turn["role"] == ("booker" if position == 0 else "reporter"), "turn_role")
     require(turn["status"] in STATUSES, "turn_status")
     digest, tokens = turn["session_sha256"], turn["total_tokens"]
+    require(
+        turn["status"] != "not_admitted" or (digest is None and tokens is None),
+        "not_admitted_with_session",
+    )
     if not live:
         require(digest is None and tokens is None, "control_claims_session_or_tokens")
         return turn
@@ -388,6 +392,14 @@ def _totals(cells: list[dict[str, Any]], arm: str) -> dict[str, Any]:
     return total
 
 
+def _grades(cells: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    counts = {arm: {"0": 0, "1": 0, "null": 0} for arm in protocol.ARMS}
+    for cell in cells:
+        grade = cell["native_reward"]
+        counts[cell["arm"]]["null" if grade is None else str(grade)] += 1
+    return counts
+
+
 def _controls(cells: dict[tuple[int, str, str], dict[str, Any]]) -> dict[str, Any]:
     by_tag = {
         tag: {
@@ -469,7 +481,9 @@ def summarize(envelope: object) -> dict[str, Any]:
     categories: dict[str, int] = {}
     for pair in pairs:
         categories[pair["category"]] = categories.get(pair["category"], 0) + 1
-    totals = {arm: _totals(list(cells.values()), arm) for arm in protocol.ARMS}
+    observed = list(cells.values())
+    complete = [c for c in observed if c["authenticated"]]
+    totals = {arm: _totals(complete, arm) for arm in protocol.ARMS}
     verdict, reasons, saved = _verdict(pairs, totals["all"], totals["stop"])
     return {
         "schema": OUTPUT,
@@ -483,25 +497,15 @@ def summarize(envelope: object) -> dict[str, Any]:
             for c in cells.values()
             if not c["authenticated"]
         ],
-        "native_reward_counts": {
-            arm: {
-                str(v): sum(
-                    c["arm"] == arm and c["native_reward"] == v for c in cells.values()
-                )
-                for v in (0, 1)
-            }
-            | {
-                "null": sum(
-                    c["arm"] == arm and c["native_reward"] is None
-                    for c in cells.values()
-                )
-            }
-            for arm in protocol.ARMS
-        },
+        "native_grades_all_first_attempts": _grades(observed),
+        "native_grades_complete_cells": _grades(complete),
         "reporter_sessions_saved": saved,
         "pairs": pairs,
         "categories": dict(sorted(categories.items())),
-        "totals": totals,
+        "complete_cell_totals": totals,
+        "observed_first_attempt_totals": {
+            arm: _totals(observed, arm) for arm in protocol.ARMS
+        },
         "controls": _controls(control_cells),
         "claims": {
             "throughput": False,

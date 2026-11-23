@@ -64,11 +64,14 @@ def _reporter(mode: str, first: bool, prompt: str) -> dict[str, Any]:
     return {"starts": own[:-1] if mode == "inexact" and first else own}
 
 
-def _booker(mode: str, prompt: str) -> dict[str, Any]:
+def _booker(mode: str, prompt: str, reporters: tuple[str, ...]) -> dict[str, Any]:
     view = _view(prompt)
-    if (
-        set(view) != {"own", "reports"}
-        or protocol.book_prompt(view["own"], view["reports"]) != prompt
+    if set(view) != {"own", "reports"}:
+        raise ValueError("not a known booking prompt")
+    own, reports = view["own"], view["reports"]
+    if protocol.book_prompt(own, reports) != prompt and (
+        [report["seat"] for report in reports] != list(reporters)
+        or protocol.book_prompt(own, reports, canonical_order=True) != prompt
     ):
         raise ValueError("not a known booking prompt")
     remaining = set(view["own"])
@@ -86,7 +89,7 @@ def answer(mode: str, world: int, seat: str, prompt: str) -> str:
     if mode not in MODES or seat not in roles:
         raise ValueError("unknown mode or seat")
     if seat == roles[0]:
-        reply = _booker(mode, prompt)
+        reply = _booker(mode, prompt, roles[1:])
     else:
         reply = _reporter(mode, seat == roles[1], prompt)
     return json.dumps(reply, separators=(",", ":"))

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from itertools import pairwise
 from typing import Any, cast
 
 SEATS = ("p1", "p2", "p3", "p4")
 ARMS = ("all", "stop")
+TIMING_ARMS = ("serial", "parallel")
 FIRST = 1200
 COUNT = 32
 SLOTS = 35
@@ -23,13 +25,20 @@ _REPORT = (
     "Another person books for the team and asks for your report. "
     'Use this JSON shape: {"starts":[...]}. The list holds every start ID in own.\n'
 )
-_BOOK = (
-    "You book for the team. Field reports lists the reports delivered to you, in the order received. "
+_BOOK_HEAD = "You book for the team. Field reports lists the reports delivered to you, "
+_RECEIVED_ORDER = "in the order received. "
+_CYCLIC_ORDER = (
+    "sorted in cyclic seat order (p1, p2, p3, p4, then p1 again) starting from the seat "
+    "after yours, not in the order received. "
+)
+_BOOK_TAIL = (
     "In each report, seat names the sender. Field starts is the sender's reported list of start IDs "
     "that fit its calendar, or null if its reply could not be read. Field exact is true only when "
     "that list matched the sender's own calendar check.\n"
     'Book exactly one start. Use this JSON shape: {"slot":<start ID>}.\n'
 )
+_BOOK = _BOOK_HEAD + _RECEIVED_ORDER + _BOOK_TAIL
+_CANONICAL_BOOK = _BOOK_HEAD + _CYCLIC_ORDER + _BOOK_TAIL
 
 
 def wire(obj: object) -> str:
@@ -93,8 +102,25 @@ def report_prompt(own: list[int]) -> str:
     return _SETUP + _REPORT + _CLOSE + INPUT + wire({"own": _own(own)})
 
 
-def book_prompt(own: list[int], reports: list[dict[str, Any]]) -> str:
-    view = {"own": _own(own), "reports": _reports(reports)}
+def _cyclic(reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seats = [SEATS.index(report["seat"]) for report in reports]
+    if len(seats) != len(SEATS) - 1 or any(
+        (later - earlier) % len(SEATS) != 1 for earlier, later in pairwise(seats)
+    ):
+        raise ValueError("canonical reports must be complete and in cyclic seat order")
+    return reports
+
+
+def book_prompt(
+    own: list[int], reports: list[dict[str, Any]], *, canonical_order: bool = False
+) -> str:
+    if type(canonical_order) is not bool:
+        raise ValueError("canonical_order flag")
+    delivered = _reports(reports)
+    if canonical_order:
+        view = {"own": _own(own), "reports": _cyclic(delivered)}
+        return _SETUP + _CANONICAL_BOOK + _CLOSE + INPUT + wire(view)
+    view = {"own": _own(own), "reports": delivered}
     return _SETUP + _BOOK + _CLOSE + INPUT + wire(view)
 
 
@@ -135,11 +161,11 @@ def outgoing(own: list[int], text: str) -> dict[str, Any]:
 
 
 def ask_next(arm: str, own: list[int], reports: list[dict[str, Any]]) -> bool:
-    if arm not in ARMS:
+    if arm not in ARMS and arm not in TIMING_ARMS:
         raise ValueError("unknown arm")
     remaining = set(_own(own))
     delivered = _reports(reports)
-    if arm == "all" or not all(report["exact"] for report in delivered):
+    if arm != "stop" or not all(report["exact"] for report in delivered):
         return True
     for report in delivered:
         remaining.intersection_update(report["starts"])

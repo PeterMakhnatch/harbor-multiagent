@@ -17,6 +17,7 @@ from ..calendar_notices.seat import _send_next
 from ..visibility import calendar_protocol, local_seat, seat_command
 from ..visibility.calendar_seat import _message, _request, _SeatError, _send
 from . import protocol as p
+from . import transport
 
 AGENT_NAME = "seatlab-fanin-seat"
 AGENT_VERSION = "1.0.0"
@@ -40,6 +41,7 @@ _EXEC_TIMEOUT_SEC = 8
 _POLL_INTERVAL_SEC = 1
 _REPORT_WAIT_SEC = 150
 _COMMAND_WAIT_SEC = 330
+_GATHER_WAIT_SEC = (len(p.SEATS) - 1) * _REPORT_WAIT_SEC
 _MAX_COMMAND_ID = 2 * len(p.SEATS) - 3
 _COMMAND_ID = re.compile(r"m[1-9][0-9]?")
 _COMMANDS: dict[str, seat_command.CommandSeat] = {}
@@ -301,7 +303,7 @@ class FanInSeat(BaseAgent):
     ) -> None:
         if (
             type(world) is not int
-            or arm not in p.ARMS
+            or (arm not in p.ARMS and arm not in p.TIMING_ARMS)
             or seat not in p.SEATS
             or model_name is not None
             or extra_env
@@ -336,9 +338,9 @@ class FanInSeat(BaseAgent):
     async def setup(self, environment: BaseEnvironment) -> None:
         pass
 
-    async def _book(
+    async def _gather_serial(
         self, environment: SeatEnvironment, own: list[int], metadata: dict[str, Any]
-    ) -> None:
+    ) -> list[dict[str, Any]]:
         log: list[dict[str, Any]] = []
         reports: list[dict[str, Any]] = []
         asking = True
@@ -363,7 +365,47 @@ class FanInSeat(BaseAgent):
             )
             log.append(reply)
             reports.append(_delivered(reporter, reply["text"]))
-        text = await _turn(self._seat, p.book_prompt(own, reports), "booking", metadata)
+        return reports
+
+    async def _gather_parallel(
+        self, environment: SeatEnvironment, metadata: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        action = ACTIONS[0]
+        command = p.wire({"action": action})
+        sent: list[dict[str, Any]] = []
+        metadata["stage"] = "requesting"
+        for reporter in self._reporters:
+            message = await transport.send_fresh(
+                environment, reporter, command, after=sent[-1] if sent else None
+            )
+            metadata["sent"] += 1
+            sent.append(message)
+            metadata["commands"].append(action)
+        metadata["stage"] = "waiting_report"
+        replies = await transport.gather(
+            environment,
+            sent,
+            wait_sec=_GATHER_WAIT_SEC,
+            poll_sec=_POLL_INTERVAL_SEC,
+            metadata=metadata,
+        )
+        if set(replies) != set(self._reporters):
+            raise _SeatError("invalid_transport")
+        return [
+            _delivered(reporter, replies[reporter]["text"])
+            for reporter in self._reporters
+        ]
+
+    async def _book(
+        self, environment: SeatEnvironment, own: list[int], metadata: dict[str, Any]
+    ) -> None:
+        timing = self._arm in p.TIMING_ARMS
+        if self._arm == p.TIMING_ARMS[1]:
+            reports = await self._gather_parallel(environment, metadata)
+        else:
+            reports = await self._gather_serial(environment, own, metadata)
+        prompt = p.book_prompt(own, reports, canonical_order=timing)
+        text = await _turn(self._seat, prompt, "booking", metadata)
         slot = p.parse_book(text)
         if slot is None:
             raise _SeatError("book_invalid")
@@ -380,12 +422,17 @@ class FanInSeat(BaseAgent):
         action = _action(command["text"])
         metadata["commands"].append(action)
         if action == ACTIONS[1]:
+            if self._arm in p.TIMING_ARMS:
+                raise _SeatError("invalid_transport")
             return
         text = await _turn(self._seat, p.report_prompt(own), "reporting", metadata)
         metadata["stage"] = "replying"
-        mid = f"m{int(command['id'][1:]) + 1}"
         reply = p.wire(p.outgoing(own, text))
-        await _send_next(environment, mid, self._booker, reply, after=command)
+        if self._arm == p.TIMING_ARMS[1]:
+            await transport.send_fresh(environment, self._booker, reply, after=command)
+        else:
+            mid = f"m{int(command['id'][1:]) + 1}"
+            await _send_next(environment, mid, self._booker, reply, after=command)
         metadata["sent"] += 1
 
     @override

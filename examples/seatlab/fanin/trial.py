@@ -42,6 +42,7 @@ GENERATOR = (
 SEED = 1709000311
 PLAY_SECONDS = 600
 WORLDS = range(protocol.FIRST, protocol.FIRST + 8)
+TIMING_WORLDS = range(protocol.FIRST + 8, protocol.FIRST + 16)
 CONTROLS = ("correct", "inexact", "wrong")
 LIVE_TAG = "live"
 OWNER_ENV = ("HOME", "PATH", "LANG", "TMPDIR")
@@ -105,6 +106,12 @@ class Plan:
     def trial_name(self) -> str:
         return f"sf4-{self.world}-{self.arm}-{self.tag}"
 
+    @property
+    def admission(self) -> Path | None:
+        if self.agy is None or self.arm not in protocol.TIMING_ARMS:
+            return None
+        return self.out / "admission"
+
 
 def _interrupt(signum: int, frame: FrameType | None) -> None:
     raise KeyboardInterrupt()
@@ -114,13 +121,21 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     parser = _Parser(
         prog="python -B -m examples.seatlab.fanin.trial", allow_abbrev=False
     )
-    parser.add_argument("--world", type=int, required=True, choices=WORLDS)
-    parser.add_argument("--arm", required=True, choices=protocol.ARMS)
+    parser.add_argument(
+        "--world", type=int, required=True, choices=(*WORLDS, *TIMING_WORLDS)
+    )
+    parser.add_argument(
+        "--arm", required=True, choices=(*protocol.ARMS, *protocol.TIMING_ARMS)
+    )
     parser.add_argument("--out", type=Path, required=True)
     seat = parser.add_mutually_exclusive_group(required=True)
     seat.add_argument("--control", choices=CONTROLS)
     seat.add_argument("--agy", type=Path)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    timing = args.arm in protocol.TIMING_ARMS
+    if args.world not in (TIMING_WORLDS if timing else WORLDS):
+        parser.error("arm_world_mismatch")
+    return args
 
 
 def regular(path: Path, reason: str) -> Path:
@@ -351,6 +366,9 @@ def stage(plan: Plan, task: Path) -> tuple[Path, str]:
 def owner_argv(plan: Plan, seat: str) -> list[str]:
     record = str(plan.out / "owner" / seat)
     if plan.agy is not None:
+        note: tuple[str, ...] = ()
+        if plan.admission is not None:
+            note = ("--admission-note", str(plan.admission / f"{seat}.json"))
         return [
             str(plan.python),
             "-IS",
@@ -360,6 +378,7 @@ def owner_argv(plan: Plan, seat: str) -> list[str]:
             str(plan.agy),
             "--record",
             record,
+            *note,
         ]
     if plan.control is None:
         raise Failed("seat_unset")
@@ -526,6 +545,8 @@ def run_team(plan: Plan, config: Path, tasks: Path, status: dict[str, Any]) -> N
 
 def execute(plan: Plan, status: dict[str, Any]) -> None:
     private_directory(plan.out / "owner")
+    if plan.admission is not None:
+        private_directory(plan.admission)
     tasks = plan.out / "tasks"
     task = generate(plan.python, tasks, plan.world)
     wait_run.isolate(plan.out)
