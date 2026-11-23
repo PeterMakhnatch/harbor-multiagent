@@ -8,11 +8,15 @@
 
 **Pass test.** Both seats must return a valid first choice to the native task. Require separate provider sessions and a model identity for both. State whether the service reports a served model or only echoes the client selection. Bind each input and answer to the two Harbor seat records. Finance must receive the actual choice made by sales before finance acts. The native verifier and the released stock payoff must agree for that choice. Count an incomplete trial separately. A successful container launch is not a result. This test does not establish the quality of either agent.
 
+**Measured.** [Trial `544059c3`](results/wait-for-peer/market-subscription.json) passed. Sales chose option 1. Finance received that choice and chose option 3. The stock payoff and native verifier both gave `0.1879657612700142`. The owner verified 2 distinct sessions, 2 first-answer hashes and 2 exact role inputs. The CLI reported 24,550 tokens and no tool actions. It echoed the requested model but did **not** attest the served model. Neither role received an API key. AI credit fallback was disabled. This is evidence about running external seats, not about this model's business skill.
+
 ## Does a reminder improve on an optional peer read?
 
 **Operator decision.** Should the harness remind an agent to open a teammate's report, or actually deliver the report before the final decision? A real sender may publish an incomplete report. Report receipt and correct booking are different outcomes.
 
 Use 8 fresh Flotilla `schedule` worlds, instances 408–415, 2 seats, `easy`, `talk`, stock generator `71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3`, seed `579409134`, game timeout 600 seconds. The sender is `p1` in even worlds and `p2` in odd worlds. Each seat sees exactly the valid 2-hour start IDs on **its own** calendar. Neither sees the stock answer. No program written by a model runs. There is one correct joint booking in each world.
+
+The [calendar manifest](results/wait-for-peer/calendar-registration.json) pins the world and stock semantics separately. Its SHA-256 is `bdf26d746f16a27e3b5120cf94c8af48a03f7df8ec56ab43c8431badcdf18bbc`. The archive contains no seat tokens or calendar answers.
 
 **Three native teams per world.** A new sender submits its own list. The task sends a ready notice with no list. A new receiver chooses `open` or `skip`. The sender returns the report or a content-free acknowledgement over the stock message channel. The receiver then books 1 slot. Use a fresh `gemini-4-carbon-low` session for each of the 3 model turns. Do not repair the first answer. Do not share sender replies across teams. Keep incomplete attempts with no grade; never replace them.
 
