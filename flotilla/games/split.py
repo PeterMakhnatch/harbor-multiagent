@@ -37,7 +37,7 @@ ActionResult = tuple[int, dict[str, Any], dict[str, int] | None]
 
 
 class ProposalRound:
-    paths = ("/propose", "/accept")
+    paths = ("/propose", "/accept", "/decline")
 
     def __init__(self, seats: Sequence[str]):
         self.seats = frozenset(seats)
@@ -53,6 +53,9 @@ class ProposalRound:
 
     def view(self) -> dict[str, Any]:
         return {"proposals": [self._public(offer) for offer in self.open.values()]}
+
+    def blocks_early_close(self) -> bool:
+        return bool(self.open)
 
     def note_look(self, seat: str, at: float) -> None:
         for offer in self.open.values():
@@ -76,8 +79,8 @@ class ProposalRound:
     def act(self, path: str, seat: str, body: dict[str, Any], stock: int, number: int, at: float) -> ActionResult:
         if path == "/propose":
             return self._propose(seat, body, stock, number, at)
-        assert path == "/accept"
-        return self._accept(seat, body, number)
+        assert path in ("/accept", "/decline")
+        return self._respond(seat, body, number, at, decline=path == "/decline")
 
     def close_round(self) -> Round:
         extra: Round = {
@@ -123,7 +126,7 @@ class ProposalRound:
             reply["replaced"] = replaced
         return 201, reply, None
 
-    def _accept(self, seat: str, body: dict[str, Any], number: int) -> ActionResult:
+    def _respond(self, seat: str, body: dict[str, Any], number: int, at: float, *, decline: bool) -> ActionResult:
         proposal_id = body.get("id")
         if body.keys() != {"id"} or not isinstance(proposal_id, str) or not proposal_id:
             return 400, {"error": "send the proposal ID as a string"}, None
@@ -136,11 +139,22 @@ class ProposalRound:
             return 409, {"error": "that proposal lapsed"}, None
         if offer["fate"] == "expired":
             return 409, {"error": "that proposal expired"}, None
+        if offer["fate"] == "declined":
+            return 409, {"error": "that proposal was declined"}, None
+        if offer["fate"] == "accepted":
+            return 409, {"error": "that proposal was accepted"}, None
+        if seat not in self.seats:
+            return 409, {"error": "only an addressee can answer a proposal"}, None
         if offer["proposer"] == seat:
-            return 409, {"error": "you cannot accept your own proposal"}, None
+            action = "decline" if decline else "accept"
+            return 409, {"error": f"you cannot {action} your own proposal"}, None
         accepted = self.accepted[proposal_id]
         if seat in accepted:
             return 409, {"error": "you already accepted that proposal"}, None
+        if decline:
+            offer["decline"] = {"seat": seat, "round": number, "time": at}
+            self._mark(offer, "declined", number)
+            return 201, {"id": proposal_id, "declined": True}, None
         accepted.add(seat)
         self.accepts_round += 1
         agreement = None
@@ -168,6 +182,7 @@ class ProposalRound:
                 "id": offer["id"], "proposer": offer["proposer"], "split": dict(offer["split"]),
                 "round": offer["round"], "time": offer["time"], "seen": dict(offer["seen"]),
                 "fate": offer["fate"],
+                **({"decline": offer["decline"]} if "decline" in offer else {}),
             }
             for offer in self.ledger
         ]
@@ -278,8 +293,10 @@ def _proposal_instruction(seats: Sequence[str]) -> list[str]:
         'To accept another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /accept`.',
         "A proposal is binding when all players other than the player who posted it accept it. "
         "Then the game ends at once. Each player gets the points in that proposal.",
-        "A proposal stays open in later rounds until it is accepted, replaced by its proposer's newer "
-        "proposal, or the pot becomes smaller than its total.",
+        "A proposal stays open in later rounds until it is accepted, declined, replaced by its proposer's "
+        "newer proposal, or the pot becomes smaller than its total.",
+        'To decline another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /decline`.',
+        "Until its timer ends, the round cannot close by claims or passes while a proposal needs an answer.",
         "Claims and passes do not stop a deal by proposal.",
     ]
 
@@ -358,7 +375,8 @@ def _offer_counts(log: Sequence[Round], outside: Mapping[str, int]) -> dict[str,
     ledgers = [record["offers"] for record in log if isinstance(record.get("offers"), list)]
     if not ledgers:
         return None
-    counts = {"accepted": 0, "replaced": 0, "lapsed": 0, "expired": 0, "feasible": 0, "feasible_unseen": 0}
+    counts = {"accepted": 0, "declined": 0, "replaced": 0, "lapsed": 0, "expired": 0,
+              "feasible": 0, "feasible_unseen": 0}
     for offer in ledgers[-1]:
         fate = offer.get("fate")
         if fate in counts:
@@ -366,7 +384,7 @@ def _offer_counts(log: Sequence[Round], outside: Mapping[str, int]) -> dict[str,
         split = offer.get("split") or {}
         if all(split.get(seat, 0) >= outside[seat] for seat in outside):
             counts["feasible"] += 1
-            if not offer.get("seen"):
+            if fate != "accepted" and not offer.get("seen"):
                 counts["feasible_unseen"] += 1
     return counts
 
@@ -406,6 +424,8 @@ def score_game(params: Mapping[str, Any], log: Sequence[Round]) -> dict[str, Any
         "over_claim_rounds": sum(1 for record in log
                                  if not (record.get("agreed") or record.get("missed") or record.get("passed"))),
     }
+    if seat_rounds and all("inactive" in record for record in log):
+        score["inactive"] = sum(len(record["inactive"]) for record in log) / seat_rounds
     counts = _offer_counts(log, outside)
     if counts is not None:
         score.update(counts)
