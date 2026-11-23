@@ -1,6 +1,6 @@
 """The per-model mixed-motive scorecard (docs/results/scripts/scorecard.py) on seeded synthetic Harbor trial folders:
-the table numbers against an independent count, an invalid model-arm, a truncated trial, speech rates, cost, and the
-comma-separated job pattern."""
+the table numbers against an independent count, an invalid model-arm, a truncated trial, speech rates, the listening
+share, cost, and the comma-separated job pattern."""
 
 from __future__ import annotations
 
@@ -170,3 +170,32 @@ def test_comma_separated_pattern_reads_each_glob_once_and_skips_the_smoke_jobs(t
     assert sorted(r["model"] for r in rows) == ["m/xm1", "m/xm1g"]
     rows, _unmapped = SC.read_suite(suite.jobs, SC.patterns_of("xm1*"), tasks)
     assert len(rows) == 3
+
+
+def world_events(trial, seats):
+    events = [("start", None, {"condition": "talk", "seats": seats}), ("open", None, {"round": 1, "stock": 9}),
+              ("send", "p2", {"id": "m-1", "to": "p1", "chars": 4}), ("request", "p1", {"round": 1, "amount": 3}),
+              ("deliver", "p1", {"ids": ["m-1"]}), ("request", "p1", {"round": 2, "amount": 3}),
+              ("request", "p2", {"round": 1, "amount": 3})]
+    path = trial / "artifacts" / "logs" / "world" / "events.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps({"kind": kind, "seat": seat, "data": data, "seq": n, "t": float(n)}) + "\n"
+                            for n, (kind, seat, data) in enumerate(events, start=1)))
+
+
+def test_listening_share_of_the_counted_talk_trials(tmp_path, capsys):
+    suite = Suite(tmp_path)
+    for instance in range(3):
+        for arm in ("silent", "talk"):
+            params, log = split_game(instance, True)
+            trial = suite.trial("split", instance, arm, "m/a", params, log)
+            if arm == "talk":
+                world_events(trial, params["seats"])
+    suite.manifest()
+    SC.main([str(suite.jobs), "xm1-*", "--tasks", str(suite.tasks), "--new-models", "m/a",
+             "--replication-model", "none", "--json", str(tmp_path / "out.json")])
+    line = json.loads((tmp_path / "out.json").read_text())["models"][0]
+    assert line["split_listening"] == {"exposed": 6, "exposed_unread": 3, "share": 0.5}
+    assert line["commons_listening"] == {"exposed": 0, "exposed_unread": 0, "share": None}
+    row = next(text for text in capsys.readouterr().out.splitlines() if text.startswith("| m/a |"))
+    assert "| 0.500 (3/6) | – |" in row
