@@ -57,6 +57,7 @@ from harbor.tasks.client import TaskClient, TaskDownloadResult, TaskIdType
 from harbor.telemetry import capture_job_finished_async, record_command_job_id
 from harbor.trial.hooks import HookCallback, TrialEvent, TrialHookEvent
 from harbor.trial.queue import TrialQueue
+from harbor.trial.seats import check_job_seats
 from harbor.utils.logger import logger
 from harbor.utils.pass_at_k import compute_pass_at_k_by_evals
 
@@ -122,6 +123,9 @@ class Job:
                 if not trial.is_regrade and trial.agent not in inference_agents:
                     inference_agents.append(trial.agent)
             self._preflight_agents(config, inference_agents)
+        # A roster that does not fit a task fails here, before any trial
+        # starts, not in that task's Trial.create in the middle of the job.
+        check_job_seats(self._trial_configs, self._task_download_results)
         if self.config.is_regrade:
             self._ensure_regrade_metrics()
 
@@ -181,7 +185,16 @@ class Job:
         EnvironmentFactory.validate_options(config.environment)
         cls._resolve_agent_skills(config)
         if not config.source_jobs:
-            cls._preflight_agents(config, config.participants or config.agents)
+            if config.participants:
+                # A seat task runs the participants, never agents or
+                # user_agent; Job.__init__ refuses a seat job that sets those.
+                AgentFactory.run_participants_preflight(
+                    config.participants,
+                    skip_credential_checks=config.skip_credential_checks
+                    or config.install_only,
+                )
+            else:
+                cls._preflight_agents(config, config.agents)
         task_configs = await cls._resolve_task_configs(config)
         EnvironmentFactory.validate_resource_policies(config.environment)
         transfer_id = str(uuid4())
