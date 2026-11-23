@@ -357,3 +357,13 @@ This result does not contradict the authors' prompting result. It answers a narr
 python3.12 -BS -m examples.seatlab.continuation.store_races "$REPLICATION_ZIP" \
   | cmp - examples/seatlab/results/continuation-store-races.json
 ```
+
+## Is there a real launch decision worth spending two agents on?
+
+The stock business office keeps a supplier audit private to the ordering seat. A shared receipt could help a launch planner, but only if the information could change a consequential decision. Do this screening test **before** using any model for this design.
+
+**Screen.** Generate 6 fresh MNL companies. Use the lower-case SHA-256 of `seatlab/private-supplier/v1/screen/{i}/{purpose}` for `i=0..5` and `purpose=world|truth`. Use the fixed official reference code and plan in both arms. In A, use supplier A for all 10 reference products. In B, change only those 10 suppliers to B. Both arms incur the same 20 official audit fees: one A and one B audit for each product. This is simulated business spending, not an API charge. Commit the numeric stock quote, terminal company value, all actual monthly plan digests and stock live score after fees. Do not substitute full benchmark grades.
+
+**Pass test.** Each supplier must beat the other by at least 0.01 in 2 or more companies. The per-company oracle must beat the best single supplier by at least 0.02 on mean stock live score. Report all 12 outcomes and ties. If either test fails, **do not run model-team trials of this supplier choice.** The counterfactual screen can rule out this design; it cannot show that agents can exploit the opportunity.
+
+**Separate ownership check.** Use the unmodified official office tools and a simulated clock. Show whether an ordering seat can obtain one completed supplier report that a non-ordering seat cannot obtain directly. If feasible, let that seat send the report through the stock board and verify what the other inbox returned. Use only a public product, an isolated temporary office and the stock finite report. An access denial, an early pending result, a completed private result, a board send, and a receiver inbox return are distinct observations. No generated Python or live credentials go to the office.
