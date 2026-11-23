@@ -14,6 +14,7 @@ from harbor.models.model_api_format import ModelApiFormat
 from harbor.models.task.task import Task
 from harbor.models.trial.config import AgentConfig, TaskConfig, TrialConfig
 from harbor.server.models import APIError
+from harbor.trial.seats import check_seats
 
 
 def relay_agent_config(config: AgentConfig, base_url: str, token: str) -> AgentConfig:
@@ -76,6 +77,7 @@ async def validate_trials(
 ) -> None:
     downloads = await JobPlan.cache_tasks([config.task for config in configs])
     limits: dict[str, int] = {}
+    checked_participants = None
     for config, lock in zip(configs, locks, strict=True):
         if lock.schema_version != 2:
             raise APIError("BadRequest", "TrialLock schema_version must be 2.")
@@ -86,6 +88,7 @@ async def validate_trials(
             if key in limits and limits[key] != config.agent.n_concurrent:
                 raise APIError("BadRequest", "Conflicting agent concurrency limits.")
             limits[key] = config.agent.n_concurrent
+        # The relay serves agent only; it raises for a seat job's default agent.
         agent = (
             relay_agent_config(
                 config.agent, "http://relay.invalid/inference", "preflight"
@@ -93,18 +96,28 @@ async def validate_trials(
             if relay_inference
             else config.agent
         )
-        AgentFactory.run_preflight(
-            agent,
-            bridge=config.user_agent.bridge.kind if config.user_agent else None,
-            skip_credential_checks=skip_credential_checks,
-        )
-        if config.user_agent is not None:
+        if config.participants:
+            # A seat task runs the participants, never agent or user_agent;
+            # check_seats refuses a seat trial that sets those. Every trial of
+            # a job has the job's participants; check them once.
+            if config.participants != checked_participants:
+                AgentFactory.run_participants_preflight(
+                    config.participants, skip_credential_checks=skip_credential_checks
+                )
+                checked_participants = config.participants
+        else:
             AgentFactory.run_preflight(
-                config.user_agent, skip_credential_checks=skip_credential_checks
+                agent,
+                bridge=config.user_agent.bridge.kind if config.user_agent else None,
+                skip_credential_checks=skip_credential_checks,
             )
+            if config.user_agent is not None:
+                AgentFactory.run_preflight(
+                    config.user_agent, skip_credential_checks=skip_credential_checks
+                )
         EnvironmentFactory.validate_resource_policies(config.environment)
         download = downloads[config.task.get_task_id()]
-        Task(
+        task = Task(
             download.path,
             extra_instruction_paths=config.extra_instruction_paths,
             extra_instructions=config.extra_instructions,
@@ -117,6 +130,7 @@ async def validate_trials(
                 f"Inputs changed for task {lock.task.name!r}.",
                 409,
             )
+        check_seats(config, task)
         # Bulk validation must leave room for reads and controls on other jobs.
         await asyncio.sleep(0)
 

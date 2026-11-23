@@ -97,6 +97,20 @@ def _write_text(path: Path, value: str) -> None:
     temporary.replace(path)
 
 
+def _runtime_envs(model: TrialConfig | TrialLock) -> dict[str, dict[str, str]]:
+    """The private env of a trial config or lock, by the names runtime_env
+    keeps it under: agent, user_agent, environment and verifier, and each
+    participant as participants.<seat>. The dicts are the model's own."""
+    envs: dict[str, dict[str, str]] = {
+        name: component.env
+        for name in ("agent", "user_agent", "environment", "verifier")
+        if (component := getattr(model, name)) is not None
+    }
+    for participant in model.participants:
+        envs[f"participants.{participant.seat}"] = participant.env
+    return envs
+
+
 class Service:
     """Durable dispatch and controls; only active trials live in memory."""
 
@@ -399,11 +413,7 @@ class Service:
             config=config,
             runtime_env=parent.runtime_env
             if parent is not None
-            else {
-                name: component.env
-                for name in ("agent", "user_agent", "environment", "verifier")
-                if (component := getattr(config, name)) is not None and component.env
-            },
+            else {name: env for name, env in _runtime_envs(config).items() if env},
             lock=lock,
             uri=storage_uri,
             created_at=(created_at := datetime.now(UTC)),
@@ -758,9 +768,10 @@ class Service:
             config.job_id = rollout.job_id
             lock = rollout.lock.model_copy(deep=True)
             # Restore private inputs only in execution copies; persisted configs stay redacted.
-            for name, env in rollout.runtime_env.items():
-                for model in (config, lock):
-                    getattr(model, name).env.update(env)
+            for model in (config, lock):
+                envs = _runtime_envs(model)
+                for name, env in rollout.runtime_env.items():
+                    envs[name].update(env)
             # Validate submitted inputs before applying relay routing or credentials.
             await validate_trials(
                 [config],
