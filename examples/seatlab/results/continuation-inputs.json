@@ -1,0 +1,21 @@
+{
+  "cohorts": 9,
+  "cutoff_exclusive_minutes": 60,
+  "original_teams": 27,
+  "private_posts_excluded_before_cutoff": 1375,
+  "protocol_revision": "78dfa6377503bc5858755e3b3c1b4efc4a9028f8",
+  "public_posts_before_cutoff": 1357,
+  "schema": "seatlab.continuation-preregistration/v1",
+  "source_index_sha256": "68cc6ae215bd81fb94ac88ae43d42387409d1eb6f6bb7fff40b2923870295282",
+  "task": "seed-to-profit",
+  "views": {
+    "activity": {
+      "owner.json": "1cb8c9de31432f9edb583a190d20e9bedffe2b02a293e034aa27236a0168235f",
+      "requests.jsonl": "206a3cec56dfa836114777a64c561ec9b8247b754d4045aa9b4df041d097bdcc"
+    },
+    "posts": {
+      "owner.json": "f08aba1e02892f9f12513fa24ea3de540eaf537b7ea618bd5bff29f6f17df23b",
+      "requests.jsonl": "ae6a083f0a72aac28defe7a24c6fd1d67f763ce7bf7f4b9fdbec0d35096397e2"
+    }
+  }
+}
