@@ -857,6 +857,18 @@ class SeatConfig(BaseModel):
             "under test has ended; the others never hold it open."
         ),
     )
+    kill_leftovers: bool = Field(
+        default=True,
+        description=(
+            "Whether play's end kills every process in this seat but the "
+            "service's own, those it ran before the agent was installed: what "
+            "the agent left running, including processes reparented to PID 1, "
+            "whether or not the agent was still running. Set it to false when "
+            "the verifier needs a process the agent left behind; only the "
+            "exec-started processes of an agent still running when play ends "
+            "are then killed."
+        ),
+    )
     mcp_servers: list[MCPServerConfig] = Field(
         default_factory=list,
         description="Added to [environment] mcp_servers for this seat's agent.",

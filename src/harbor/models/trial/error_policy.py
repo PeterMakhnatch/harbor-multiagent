@@ -80,6 +80,7 @@ _POLICY_GROUPS: Final[dict[ErrorPolicy, tuple[str, ...]]] = {
         "RewardFileNotFoundError",
         "RewardFileEmptyError",
         "VerifierOutputParseError",
+        "SeatEndOfPlayError",
     ),
     ErrorPolicy(should_retry=False, should_grade=False, has_valid_reward=False): (
         "AgentAuthenticationError",

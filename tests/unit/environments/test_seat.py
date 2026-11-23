@@ -296,3 +296,78 @@ async def test_base_environment_refuses_service_uploads(temp_dir):
     with pytest.raises(ServiceOperationsUnsupportedError):
         await env.service_upload_dir("a", "/a", service="maya")
     await env.service_upload_file("a", "/a", service="main")
+
+
+async def test_service_processes_are_recorded_as_root_by_pid_and_start_time(
+    project, seat
+):
+    project._run_docker_compose_command.return_value = ExecResult(
+        stdout="1:100\n7:101\n", stderr="", return_code=0
+    )
+
+    await seat.record_service_processes()
+
+    assert _commands(project)[-1][:4] == ["exec", "-u", "root", "maya"]
+    assert seat.service_processes == {"1:100", "7:101"}
+
+
+@pytest.mark.parametrize(
+    "stdout, return_code",
+    [("", 0), ("1:100\n", 1), ("1:100\nsleep\n", 0)],
+    ids=["empty", "failed", "garbled"],
+)
+async def test_an_unreadable_process_list_fails_the_record(
+    project, seat, stdout, return_code
+):
+    project._run_docker_compose_command.return_value = ExecResult(
+        stdout=stdout, stderr="", return_code=return_code
+    )
+
+    with pytest.raises(RuntimeError, match="'maya': could not list its processes"):
+        await seat.record_service_processes()
+    assert seat.service_processes is None
+
+
+async def test_leftovers_are_killed_as_root_sparing_the_service_processes(
+    project, seat
+):
+    seat.service_processes = frozenset({"7:101", "1:100"})
+    project._run_docker_compose_command.return_value = ExecResult(
+        stdout="killed=3 left=\n", stderr="", return_code=0
+    )
+
+    assert await seat.kill_leftover_processes() == (3, [])
+
+    command = _commands(project)[-1]
+    assert command[:4] == ["exec", "-u", "root", "maya"]
+    assert command[-1].startswith("spare=' 1:100 7:101 '\n")
+
+
+async def test_processes_left_after_the_kill_are_listed(project, seat):
+    seat.service_processes = frozenset({"1:100"})
+    project._run_docker_compose_command.return_value = ExecResult(
+        stdout="killed=3 left=41 42\n", stderr="", return_code=0
+    )
+
+    assert await seat.kill_leftover_processes() == (3, [41, 42])
+
+
+@pytest.mark.parametrize(
+    "stdout, return_code",
+    [("killed=3 left=\n", 1), ("", 0), ("killed=x left=\n", 0)],
+    ids=["failed", "empty", "garbled"],
+)
+async def test_a_kill_that_cannot_be_read_fails(project, seat, stdout, return_code):
+    seat.service_processes = frozenset({"1:100"})
+    project._run_docker_compose_command.return_value = ExecResult(
+        stdout=stdout, stderr="", return_code=return_code
+    )
+
+    with pytest.raises(RuntimeError, match="could not kill its leftover processes"):
+        await seat.kill_leftover_processes()
+
+
+async def test_leftovers_are_not_killed_without_the_service_processes(project, seat):
+    with pytest.raises(RuntimeError, match="its own processes were not recorded"):
+        await seat.kill_leftover_processes()
+    assert _commands(project) == []

@@ -7,6 +7,7 @@ project's per-service operations; starting and stopping belong to the project.
 """
 
 import logging
+import re
 import shlex
 from pathlib import Path
 from typing import override
@@ -40,6 +41,86 @@ while :; do
 done
 """
 
+# Reads one process's state, parent and start time (clock ticks after boot)
+# from /proc/<pid>/stat: the fields after the last ")", which a process name
+# cannot fake. Then records the ancestry of this shell, which an exec started.
+_PROCESS_TABLE = r"""
+info() {
+  stat=
+  while IFS= read -r line || [ -n "$line" ]; do stat="$stat $line"; done < "/proc/$1/stat" || return 1
+  case $stat in *") "*) ;; *) return 1 ;; esac
+  set -- ${stat##*) }
+  state=$1 parent=$2 start=${20}
+}
+own=" "
+pid=$$
+while [ "$pid" -gt 0 ]; do own="$own$pid "; info "$pid" 2>/dev/null || break; pid=$parent; done
+"""
+
+# Prints pid:start for every live process but this exec's own: the service's
+# processes before an agent is installed.
+_SERVICE_PROCESSES = (
+    _PROCESS_TABLE
+    + r"""
+for dir in /proc/[0-9]*; do
+  p=${dir#/proc/}
+  case "$own" in *" $p "*) continue ;; esac
+  info "$p" 2>/dev/null || continue
+  case $state in Z | X) continue ;; esac
+  echo "$p:$start"
+done
+"""
+)
+
+# Kills, as root, every live process but PID 1, this exec's own, and the
+# service's (pid:start in $spare) with their descendants: what an exec
+# started, and what an agent left under PID 1 with setsid, nohup or a double
+# fork. It repeats until none is left, at most 50 times, then lists the
+# processes that are still left: none when the seat has stopped.
+_KILL_LEFTOVERS = (
+    _PROCESS_TABLE
+    + r"""
+target() {
+  [ "$1" -gt 1 ] || return 1
+  info "$1" 2>/dev/null || return 1
+  case $state in Z | X) return 1 ;; esac
+  pid=$1
+  while :; do
+    case "$own" in *" $pid "*) return 1 ;; esac
+    case "$spare" in *" $pid:$start "*) return 1 ;; esac
+    [ "$parent" -le 1 ] && return 0
+    pid=$parent
+    info "$pid" 2>/dev/null || return 0
+  done
+}
+killed=" "
+round=0
+while [ "$round" -lt 50 ]; do
+  round=$((round + 1))
+  targets=
+  for dir in /proc/[0-9]*; do
+    p=${dir#/proc/}
+    target "$p" || continue
+    targets="$targets $p"
+    case "$killed" in *" $p "*) ;; *) killed="$killed$p " ;; esac
+  done
+  [ -z "$targets" ] && break
+  kill -9 $targets 2>/dev/null
+  sleep 0.1 2>/dev/null || :
+done
+left=
+for dir in /proc/[0-9]*; do
+  p=${dir#/proc/}
+  target "$p" && left="$left $p"
+done
+set -- $killed
+echo "killed=$# left=${left# }"
+"""
+)
+_PROCESS = re.compile(r"\d+:\d+")
+_KILLED = re.compile(r"killed=(\d+) left=([\d ]*)")
+_KILL_LEFTOVERS_TIMEOUT_SEC = 60
+
 
 class SeatEnvironment(BaseEnvironment):
     """The seat's image, resources, env, user and workdir are its service's, in
@@ -58,6 +139,7 @@ class SeatEnvironment(BaseEnvironment):
     ):
         self.project = project
         self.service = service
+        self.service_processes: frozenset[str] | None = None
         super().__init__(
             environment_dir=project.environment_dir,
             environment_name=project.environment_name,
@@ -142,6 +224,55 @@ class SeatEnvironment(BaseEnvironment):
                 f"Seat {self.service!r}: could not kill its agent's processes: "
                 f"{result.stdout}{result.stderr or ''}"
             )
+
+    async def record_service_processes(self) -> None:
+        """Record, by PID and start time, the processes the service runs
+        before an agent is installed: PID 1, the service's command and what
+        they started. kill_leftover_processes spares them and their
+        descendants; a PID that a later process reuses is not spared."""
+        with self.project.scoped_output_callback(self._output_callback()):
+            result = await self.project.service_exec(
+                _SERVICE_PROCESSES, service=self.service, user="root"
+            )
+        processes = (result.stdout or "").split()
+        if (
+            result.return_code != 0
+            or not processes
+            or not all(_PROCESS.fullmatch(process) for process in processes)
+        ):
+            raise RuntimeError(
+                f"Seat {self.service!r}: could not list its processes: "
+                f"{result.stdout}{result.stderr or ''}"
+            )
+        self.service_processes = frozenset(processes)
+
+    async def kill_leftover_processes(self) -> tuple[int, list[int]]:
+        """Kill every process in the seat but the service's own, as
+        record_service_processes found them, and their descendants: what an
+        exec started, and what an agent left behind under PID 1, for example
+        with ``setsid nohup``. Then list the processes that are still alive
+        and would be killed. Return how many processes were killed and the
+        PIDs still alive, which is empty when the seat has stopped.
+        Zombies, which cannot act, are not counted."""
+        if self.service_processes is None:
+            raise RuntimeError(
+                f"Seat {self.service!r}: its own processes were not recorded."
+            )
+        spare = shlex.quote(f" {' '.join(sorted(self.service_processes))} ")
+        with self.project.scoped_output_callback(self._output_callback()):
+            result = await self.project.service_exec(
+                f"spare={spare}\n{_KILL_LEFTOVERS}",
+                service=self.service,
+                user="root",
+                timeout_sec=_KILL_LEFTOVERS_TIMEOUT_SEC,
+            )
+        counts = _KILLED.fullmatch((result.stdout or "").strip())
+        if result.return_code != 0 or counts is None:
+            raise RuntimeError(
+                f"Seat {self.service!r}: could not kill its leftover processes "
+                f"(exit {result.return_code}): {result.stdout}{result.stderr or ''}"
+            )
+        return int(counts[1]), [int(pid) for pid in counts[2].split()]
 
     @override
     async def upload_file(self, source_path: Path | str, target_path: str):
