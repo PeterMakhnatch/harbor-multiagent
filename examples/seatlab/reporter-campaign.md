@@ -9,3 +9,7 @@ Freeze a local control cohort beginning at 1244 with 2 worlds. Give two processe
 On a separate private registration beginning at 1246, interrupt the first process after it publishes an issue. Require a replacement to leave the original issue untouched, collect a different world and report the stranded world by name. Do not automatically retry. Invalid or conflicting registration, a wrong digest and a reporter mode that disagrees with the registration must not start a team. These checks use typed controls, not language-model performance estimates.
 
 The trusted unit is one workstation, one user and one private filesystem. This is an operator for a fixed campaign, not a distributed lock service or a daemon. The stock simulator, Harbor verifier and the one-team runner do not change.
+
+## Separate personal-client acceptance check
+
+Can a second invocation use an earlier model team's actual native and client receipts to unlock the other arm? On the previously unused world 1250, register `personal` and run each arm once in order. Use the existing personal subscription reporter, never an API key or paid-credit fallback. Require two separately graded native teams, distinct native IDs and matching owner receipts for every requested reporter. A confirmed skip must have neither a client request nor an owner record. If the client refuses or any required receipt is missing, retain the attempt and mark this check inconclusive. Do not replace it. This is a two-cell operator check, not another estimate of a policy effect.
