@@ -564,3 +564,33 @@ def test_gated_vs_talk_is_a_primary_contrast_present_only_with_gated_trials(caps
     assert pooled(result)[0]["pairs"] == 24
     XM.report(result, [])
     assert "gated" not in capsys.readouterr().out
+
+
+def test_missed_cutoff_one_keeps_a_gated_arm_that_missed_30_percent(capsys):
+    rows = []
+    for model in NEW:
+        mine = pair_rows("split", model, outcomes(3, 0, ties=5), first="gated", second="talk", seat_rounds=10)
+        for r in mine:
+            r["missed"] = 3 if r["arm"] == "gated" else 0
+        rows += mine
+    rows += [row("split", 8, "gated", "m/a", True, valid=False), row("split", 8, "talk", "m/a", False, seat_rounds=10)]
+    strict = XM.analyse(rows, NEW, REPLICATION)
+    assert strict == XM.analyse(rows, NEW, REPLICATION, missed_cutoff=0.10) and "missed_cutoff" not in strict
+    test, lines = pooled(strict, "split", "gated", "talk")
+    assert (test["pairs"], test["decision"]) == (0, "INCONCLUSIVE")
+    assert lines["m/a"]["excluded"] == ["gated missed share 0.300 > 0.1"]
+    loose = XM.analyse(rows, NEW, REPLICATION, missed_cutoff=1.0)
+    assert loose["missed_cutoff"] == 1.0
+    test, lines = pooled(loose, "split", "gated", "talk")
+    assert (test["pairs"], test["b"], test["c"], test["decision"]) == (24, 9, 0, "PASS")
+    assert lines["m/a"]["excluded"] == [] and lines["m/a"]["pairs"] == 8
+    gated = next(a for a in loose["arms"] if (a["model"], a["arm"]) == ("m/a", "gated"))
+    assert gated["arm_valid"] and gated["missed_share"] == 0.3 and (gated["trials"], gated["valid"]) == (9, 8)
+    assert [r["instance"] for r in loose["invalid"]] == [8]
+    XM.report(loose, [])
+    assert "model-arm validity: missed share at most 1.0 (--missed-cutoff" in capsys.readouterr().out
+    XM.report(strict, [])
+    assert "model-arm validity" not in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        XM.main(["jobs", "x-*", "--tasks", "t", "--new-models", "m/a", "--replication-model", "m/rep",
+                 "--missed-cutoff", "1.5"])

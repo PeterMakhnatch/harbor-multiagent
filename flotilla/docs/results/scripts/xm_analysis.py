@@ -24,7 +24,8 @@ outside options; per split model-arm the counted trials and deals by window (1 f
 in which a seat got less than its own outside option, and the rational deals (every seat at least its outside
 option). Split gated vs talk (world v11; talk plus a read gate) is a primary contrast like talk vs silent (b = only
 gated dealt, c = only talk dealt); it and its first-attempt sensitivity appear only when the data hold a gated trial.
-Standard library only.
+--missed-cutoff (default 0.10) sets the model-arm missed-share cutoff; a non-default value is printed and saved, and
+1.0 excludes no model-arm for missed seat-rounds (harness-invalid trials stay out). Standard library only.
 """
 
 from __future__ import annotations
@@ -318,7 +319,7 @@ def secondary(family: str, counted: list[dict]) -> dict[str, Any]:
             **{key: sum(m.get(key, 0) for m in found) for key in PROPOSAL_KEYS if any(key in m for m in found)}}
 
 
-def arm_table(rows: list[dict], counted: dict[tuple, dict]) -> dict[tuple, dict]:
+def arm_table(rows: list[dict], counted: dict[tuple, dict], missed_cutoff: float = MAX_MISSED) -> dict[tuple, dict]:
     """Per (family, model, arm): trial counts, and over counted trials the missed and passed seat-rounds, validity,
     truncated trials, successes and the secondary measures."""
     table: dict[tuple, dict] = {}
@@ -333,7 +334,7 @@ def arm_table(rows: list[dict], counted: dict[tuple, dict]) -> dict[tuple, dict]
                       "valid": sum(r["valid"] for r in mine), "counted": len(chosen), "seat_rounds": seat_rounds,
                       "missed": missed, "passed": passed, "missed_share": missed_share,
                       "passed_share": passed / seat_rounds if seat_rounds else None,
-                      "arm_valid": missed_share is not None and missed_share <= MAX_MISSED,
+                      "arm_valid": missed_share is not None and missed_share <= missed_cutoff,
                       "truncated": sum(r["truncated"] for r in chosen),
                       "successes": sum(r["success"] for r in chosen), "secondary": secondary(family, chosen)}
     return table
@@ -380,10 +381,10 @@ def role(model: str, new_models: tuple[str, ...], replication: str) -> str:
     return "new" if model in new_models else "replication" if model == replication else "other"
 
 
-def arm_problem(arm_row: dict | None, arm: str) -> str | None:
+def arm_problem(arm_row: dict | None, arm: str, missed_cutoff: float = MAX_MISSED) -> str | None:
     if arm_row is None or not arm_row["counted"]:
         return f"no counted {arm} trials"
-    return None if arm_row["arm_valid"] else f"{arm} missed share {arm_row['missed_share']:.3f} > {MAX_MISSED}"
+    return None if arm_row["arm_valid"] else f"{arm} missed share {arm_row['missed_share']:.3f} > {missed_cutoff}"
 
 
 def consistency(pool: list[dict]) -> dict[str, Any]:
@@ -397,12 +398,13 @@ def consistency(pool: list[dict]) -> dict[str, Any]:
 
 
 def contrast(counted: dict, table: dict, models: list[str], spec: tuple[str, str, str, str],
-             new_models: tuple[str, ...], replication: str) -> dict[str, Any]:
+             new_models: tuple[str, ...], replication: str, missed_cutoff: float = MAX_MISSED) -> dict[str, Any]:
     family, first, second, kind = spec
     lines = []
     for model in models:
         pairs = pairs_of(counted, table, family, model, first, second)
-        excluded = [why for arm in (first, second) if (why := arm_problem(table.get((family, model, arm)), arm))]
+        excluded = [why for arm in (first, second)
+                    if (why := arm_problem(table.get((family, model, arm)), arm, missed_cutoff))]
         line: dict[str, Any] = {"model": model, "role": role(model, new_models, replication), "pairs": len(pairs),
                                 "excluded": excluded}
         if kind == "reported":
@@ -433,8 +435,8 @@ def contrast(counted: dict, table: dict, models: list[str], spec: tuple[str, str
 
 
 def run_contrasts(rows: list[dict], counted: dict[tuple, dict], specs: tuple, new_models: tuple[str, ...],
-                  replication: str) -> list[dict]:
-    table = arm_table(rows, counted)
+                  replication: str, missed_cutoff: float = MAX_MISSED) -> list[dict]:
+    table = arm_table(rows, counted, missed_cutoff)
     found = []
     for spec in specs:
         family, arms = spec[0], spec[1:3]
@@ -442,7 +444,7 @@ def run_contrasts(rows: list[dict], counted: dict[tuple, dict], specs: tuple, ne
         absent = [arm for arm in arms if arm in OPTIONAL_ARMS
                   and not any((r["family"], r["arm"]) == (family, arm) for r in rows)]
         if models and not absent:
-            found.append(contrast(counted, table, models, spec, new_models, replication))
+            found.append(contrast(counted, table, models, spec, new_models, replication, missed_cutoff))
     return found
 
 
@@ -507,23 +509,29 @@ def split_descriptive(rows: list[dict], counted: dict[tuple, dict]) -> dict[str,
             "below_outside_all": below_outside_all(rows, list(counted.values()))}
 
 
-def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str) -> dict[str, Any]:
+def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str,
+            missed_cutoff: float = MAX_MISSED) -> dict[str, Any]:
+    """`missed_cutoff` is the largest missed share of a valid model-arm; a non-default value is recorded in the
+    result (1.0 excludes no model-arm for missed seat-rounds)."""
     assert replication and replication not in new_models, "the replication model must be set and not a new model"
+    assert 0 <= missed_cutoff <= 1, missed_cutoff
     counted, duplicates = choose(rows)
     primaries = tuple(spec for spec in CONTRASTS if spec[3] == "primary")
     fewer_missed = {key: row for key, row in counted.items()
                     if key[0] != "commons" or row["missed"] <= MAX_SENSITIVITY_MISSED}
     sensitivity = {
-        "first_attempt": run_contrasts(rows, first_attempts(rows), primaries, new_models, replication),
+        "first_attempt": run_contrasts(rows, first_attempts(rows), primaries, new_models, replication, missed_cutoff),
         "commons_at_most_2_missed": run_contrasts(rows, fewer_missed, tuple(s for s in primaries if s[0] == "commons"),
-                                                  new_models, replication)}
-    return {"new_models": list(new_models), "replication_model": replication, "rows": rows,
-            "counted": [f"{r['job']}/{r['trial']}" for r in counted.values()],
-            "invalid": [r for r in rows if not r["valid"]], "duplicates": duplicates,
-            "truncated": [r for r in rows if r["truncated"]], "arms": list(arm_table(rows, counted).values()),
-            "contrasts": run_contrasts(rows, counted, CONTRASTS, new_models, replication),
-            "sensitivity": sensitivity, "cost": costs_of(rows), "total_cost": sum(r["cost"] for r in rows),
-            "split_descriptive": split_descriptive(rows, counted)}
+                                                  new_models, replication, missed_cutoff)}
+    result = {"new_models": list(new_models), "replication_model": replication, "rows": rows,
+              "counted": [f"{r['job']}/{r['trial']}" for r in counted.values()],
+              "invalid": [r for r in rows if not r["valid"]], "duplicates": duplicates,
+              "truncated": [r for r in rows if r["truncated"]],
+              "arms": list(arm_table(rows, counted, missed_cutoff).values()),
+              "contrasts": run_contrasts(rows, counted, CONTRASTS, new_models, replication, missed_cutoff),
+              "sensitivity": sensitivity, "cost": costs_of(rows), "total_cost": sum(r["cost"] for r in rows),
+              "split_descriptive": split_descriptive(rows, counted)}
+    return result if missed_cutoff == MAX_MISSED else result | {"missed_cutoff": missed_cutoff}
 
 
 def fmt(value: Any, digits: int = 3) -> str:
@@ -575,6 +583,9 @@ def report(result: dict, unmapped: list[str]) -> None:
           f"not in any manifest {len(unmapped)}")
     print(f"new models (pooled): {result['new_models']}; replication model (per model only): "
           f"{result['replication_model']}")
+    if "missed_cutoff" in result:
+        print(f"model-arm validity: missed share at most {result['missed_cutoff']} (--missed-cutoff; the "
+              f"pre-registered cutoff is {MAX_MISSED})")
     for row in result["invalid"]:
         print(f"invalid: {row['job']}/{row['trial']} {row['family']} {row['instance']} {row['arm']} {row['model']}: "
               f"{'; '.join(row['reasons'])}")
@@ -666,16 +677,20 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--replication-model", required=True, help="per-model lines only, never pooled")
     parser.add_argument("--allow-other", action="store_true", help="report other models per model instead of failing")
     parser.add_argument("--json", type=Path)
+    parser.add_argument("--missed-cutoff", type=float, default=MAX_MISSED,
+                        help=f"largest missed share of a valid model-arm (default {MAX_MISSED}; 1.0 excludes none)")
     args = parser.parse_args(argv)
     new_models = tuple(m for m in args.new_models.split(",") if m)
     if not new_models or args.replication_model in new_models:
         parser.error("--new-models needs at least one model, and not the --replication-model")
+    if not 0 <= args.missed_cutoff <= 1:
+        parser.error("--missed-cutoff must be between 0 and 1")
     rows, unmapped = read_trials(args.jobs, args.pattern, load_manifests(args.tasks))
     other = sorted({r["model"] for r in rows} - {*new_models, args.replication_model})
     if other and not args.allow_other:
         parser.error(f"trials use models in neither --new-models nor --replication-model: {other} "
                      "(add them to a list, or pass --allow-other to report them under 'other')")
-    result = analyse(rows, new_models, args.replication_model)
+    result = analyse(rows, new_models, args.replication_model, args.missed_cutoff)
     report(result, unmapped)
     if args.json:
         args.json.write_text(json.dumps(result | {"unmapped": unmapped}, indent=1, sort_keys=True) + "\n")
