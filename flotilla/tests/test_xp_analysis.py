@@ -173,3 +173,49 @@ def test_seeded_cross_play_waves_keep_their_invariants(tmp_path):
             assert [x["adv"] for x in one["instances"]] == [-x["adv"] for x in other["instances"]]
         cells = arm["matrix"]["cells"]
         assert sum(c["trials"] for c in cells.values()) == len(result["counted"])
+
+
+def test_deal_quality_per_ordered_cell_and_self_against_cross_play(tmp_path, capsys):
+    wave = Wave(tmp_path, instances=3)
+
+    def under(instance):
+        outside = wave.params[instance]["outside"]
+        strong = max(outside, key=outside.get)
+        return tuple(outside[seat] - (seat == strong) for seat in ("p1", "p2")), strong
+
+    wave.trial(0, (A, A), deal=True, claims=under(0)[0])
+    wave.trial(0, (A, B), deal=True)
+    wave.trial(1, (A, B), deal=True, claims=under(1)[0])
+    wave.trial(1, (B, A), deal=False)
+    wave.trial(2, (B, B), deal=True)
+    wave.trial(2, (B, B), deal=True, claims=under(2)[0])
+    result = wave.analyse()
+    quality = result["arms"][0]["deal_quality"]
+    cells = {(c["p1"], c["p2"]): c for c in quality["cells"]}
+    assert (cells[(A, A)]["deals"], cells[(A, A)]["below_outside"], cells[(A, A)]["rational_deals"]) == (1, 1, 0)
+    assert tuple(cells[(A, B)][k] for k in ("trials", "deals", "below_outside", "rational_deals")) == (2, 2, 1, 1)
+    assert cells[(B, A)]["rational_rate"] == 0.0 and cells[(B, A)]["rational_share_of_deals"] is None
+    assert (cells[(B, B)]["trials"], cells[(B, B)]["below_outside"]) == (1, 0)
+    play = {p["play"]: p for p in quality["play"]}
+    assert tuple(play["self"][k] for k in ("trials", "deals", "below_outside", "rational_deals")) == (2, 2, 1, 1)
+    assert tuple(play["cross"][k] for k in ("trials", "deals", "below_outside", "rational_deals")) == (3, 2, 1, 1)
+    windows = {w["instance"]: {k: v for k, v in w.items() if k != "instance"} for w in result["split_windows"]}
+    assert windows == {i: XP.XM.window_of("split", wave.params[i]) for i in range(3)}
+    for kind in play.values():
+        expected = {bucket: {"trials": 0, "deals": 0} for bucket in XP.XM.WINDOW_BUCKETS}
+        for row in (r for r in result["rows"] if f"{r['job']}/{r['trial']}" in result["counted"]):
+            if (row["pair"][0] == row["pair"][1]) == (kind["play"] == "self"):
+                entry = expected[XP.XM.window_bucket(windows[row["instance"]]["feasible_rounds"])]
+                entry["trials"] += 1
+                entry["deals"] += row["success"]
+        assert kind["by_window"] == expected
+    below = [(e["instance"], e["seats"], e["counted"]) for e in result["below_outside_all"]]
+    expected = []
+    for instance in range(3):
+        strong = under(instance)[1]
+        outside = wave.params[instance]["outside"][strong]
+        expected.append((instance, [{"seat": strong, "payoff": outside - 1, "outside": outside}], instance != 2))
+    assert below == expected
+    XP.report(result, [], 0)
+    printed = capsys.readouterr().out
+    assert "| self play | - | 2 | 2 |" in printed and "## feasibility windows and below-outside deals" in printed

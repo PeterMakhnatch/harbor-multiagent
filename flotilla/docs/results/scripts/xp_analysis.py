@@ -17,7 +17,9 @@ Mapping, validity, truncation, missed seat-rounds and the counted trial per cell
 Over all arms: per model and arm, the missed share over every seat the model played (at most 10%, as in
 xm_analysis.py); a failing model-arm is listed and every cell with that model is left out of 2 and 3. And the
 outside-option statements of the messages (speech_acts.py) per speaker and listener model: true, inflated or deflated.
-Standard library only.
+Descriptive only (added after the pre-registration; no test): per instance the feasibility window (xm_analysis.py),
+and per arm, per ordered cell and for self against cross play, the counted trials and deals by window, the
+below-outside deals and the rational deals. Standard library only.
 """
 
 from __future__ import annotations
@@ -89,7 +91,8 @@ def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
            "model": " vs ".join(pair), "seats": seats, "valid": not reasons, "reasons": reasons, "cost": cost,
            "unpriced_seats": unpriced, "tokens": tokens, "capacity": params["capacity"],
            "outside": params.get("outside"), "seat_rounds": 0, "missed": 0, "seat_missed": {}, "truncated": False,
-           "success": None, "totals": None, "speech": {}}
+           "success": None, "totals": None, "speech": {}, "window": XM.window_of(task["family"], params),
+           "below_outside": []}
     if reasons:
         return row
     log = (state.get("game") or {}).get("log") or []
@@ -100,7 +103,8 @@ def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
     assert sum(seat_missed.values()) == found["missed"], (seat_missed, found["missed"])
     return row | {"seat_rounds": found["seat_rounds"], "missed": found["missed"], "seat_missed": seat_missed,
                   "truncated": found["truncated"], "success": found["success"], "totals": score["totals"],
-                  "speech": speech(state.get("messages") or [], params["outside"], seats)}
+                  "speech": speech(state.get("messages") or [], params["outside"], seats),
+                  "below_outside": found["below_outside"]}
 
 
 def model_arms(counted: list[dict]) -> dict[tuple[str, str], dict]:
@@ -213,6 +217,16 @@ def speech_table(counted: list[dict]) -> list[dict[str, Any]]:
             for (speaker, listener), counts in sorted(table.items()) if sum(counts.values())]
 
 
+def deal_quality(counted: list[dict], arm: str) -> dict[str, Any]:
+    """Descriptive, over counted trials: xm_analysis.py's deal quality per ordered cell and for self and cross play."""
+    rows = [r for r in counted if r["arm"] == arm]
+    cells = [{"p1": first, "p2": second, **XM.deal_quality([r for r in rows if r["pair"] == [first, second]])}
+             for first, second in sorted({tuple(r["pair"]) for r in rows})]
+    play = [{"play": kind, **XM.deal_quality([r for r in rows if (r["pair"][0] == r["pair"][1]) == (kind == "self")])}
+            for kind in ("self", "cross")]
+    return {"cells": cells, "play": play}
+
+
 def analyse(rows: list[dict]) -> dict[str, Any]:
     assert all(r["family"] == "split" for r in rows), "pass split trials only"
     counted_map, duplicates = XM.choose(rows)
@@ -225,13 +239,15 @@ def analyse(rows: list[dict]) -> dict[str, Any]:
         instances = sorted({r["instance"] for r in rows if r["arm"] == arm})
         found.append({"arm": arm, "matrix": matrix(counted, arm),
                       "self_vs_cross": self_vs_cross(included, instances, arm),
-                      "advantage": advantage(included, arm), "role_shares": role_shares(included, arm)})
+                      "advantage": advantage(included, arm), "role_shares": role_shares(included, arm),
+                      "deal_quality": deal_quality(counted, arm)})
     return {"rows": rows, "counted": [f"{r['job']}/{r['trial']}" for r in counted],
             "invalid": [r for r in rows if not r["valid"]], "duplicates": duplicates,
             "truncated": [r for r in rows if r["truncated"]],
             "model_arms": sorted(table.values(), key=lambda entry: (entry["arm"], entry["model"])),
             "excluded": [list(key) for key in excluded], "arms": found, "speech": speech_table(counted),
-            "total_cost": sum(r["cost"] for r in rows)}
+            "total_cost": sum(r["cost"] for r in rows), "split_windows": XM.instance_windows(rows),
+            "below_outside_all": XM.below_outside_all(rows, counted)}
 
 
 def fmt(value: Any) -> str:
@@ -258,6 +274,13 @@ def print_arm(found: dict) -> None:
     print("\n| model | play | seat | n | mean payoff share |\n|---|---|---|---|---|")
     for entry in found["role_shares"]:
         print(f"| {entry['model']} | {entry['play']} | {entry['role']} | {entry['n']} | {entry['mean_share']:.3f} |")
+    quality = found["deal_quality"]
+    print(f"\nDeal quality over counted trials (descriptive)\n\n| p1 | p2 | trials | deals | {XM.QUALITY_COLUMNS} |\n"
+          + "|---" * 10 + "|")
+    for entry in quality["cells"]:
+        print(f"| {entry['p1']} | {entry['p2']} | {entry['trials']} | {entry['deals']} | {XM.quality_cells(entry)}")
+    for entry in quality["play"]:
+        print(f"| {entry['play']} play | - | {entry['trials']} | {entry['deals']} | {XM.quality_cells(entry)}")
 
 
 def report(result: dict, unmapped: list[str], other: int) -> None:
@@ -280,6 +303,9 @@ def report(result: dict, unmapped: list[str], other: int) -> None:
               f"{'valid' if entry['valid'] else 'EXCLUDED from self/cross and advantage'} |")
     for found in result["arms"]:
         print_arm(found)
+    print("\n## feasibility windows and below-outside deals (descriptive; added after the pre-registration, no test)")
+    XM.print_windows(result["split_windows"])
+    XM.print_below(result["below_outside_all"])
     print("\n## outside-option statements (speech_acts.py)\n\n| speaker | listener | true | inflated | deflated |"
           "\n|---|---|---|---|---|")
     for entry in result["speech"]:
