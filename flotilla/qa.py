@@ -98,7 +98,7 @@ SOURCE_WORDS = ("flotilla", "harbor-multiagent")  # the software's name and its 
 MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no seat may get (seat-secrets)
 DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
 DOCUMENTED_SEED = re.compile(r"(?<![A-Za-z0-9_])seed\W{0,3}(\d+)", re.IGNORECASE)  # --seed 1, seed 1, "seed": 1
-TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"))  # each pair must look the same to a seat
+TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"), ("talk", "gated"))  # each pair looks the same
 REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned")
 LIAR = re.compile(r"(?<![a-z])liars?(?![a-z])", re.IGNORECASE)
 WARNED = re.compile(r"(?<![a-z])warned(?![a-z])", re.IGNORECASE)
@@ -968,8 +968,8 @@ def describe_difference(name: str, mine: str | None, theirs: str | None, twin: s
 
 
 def check_twins(tasks: list[Task]) -> Iterator[Finding]:
-    """talk and talk-liar (and talk-warned and talk-liar-warned) differ only in the scripted peer's script: each seat
-    under test reads the same bytes in both, apart from its token."""
+    """talk and talk-liar (and talk-warned and talk-liar-warned) differ only in the scripted peer's script, and talk
+    and gated only in the world's read gate: each seat under test reads the same bytes in both, apart from its token."""
     groups: dict[tuple[str, str, int], dict[str, Task]] = defaultdict(dict)
     for task in tasks:
         if task.instance is not None and task.condition:

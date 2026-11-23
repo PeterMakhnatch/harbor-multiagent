@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import itertools
 import json
+import threading
 from fractions import Fraction
 
+import pytest
 from conftest import FLOTILLA, load
 
 SPLIT = load(FLOTILLA / "games" / "split.py", "flotilla_test_game_split_v11")
@@ -13,17 +15,36 @@ AMOUNT_ERROR = 'send {"amount": <a whole number from 0 to 1000000>}'
 _FILES = itertools.count()
 
 
-def split_world(start_world, tmp_path, monkeypatch, condition, seats=("p1", "p2"), game=None):
-    """A split world on a pot of 100, its clock fixed at 0."""
+def split_world(start_world, tmp_path, monkeypatch, condition, seats=("p1", "p2"), game=None, start=True):
+    """A split world on a pot of 100, its clock fixed at 0; with `start`, every seat has called once."""
     params = SPLIT._params(100, Fraction(4, 5), dict.fromkeys(seats, 20))
     path = tmp_path / f"split-{next(_FILES)}.json"
     path.write_text(json.dumps(params))
     world = start_world(condition, seats, FLOTILLA_GAME=str(game or FLOTILLA / "games" / "split.py"),
                         FLOTILLA_GAME_PARAMS=str(path), FLOTILLA_ROUND_SECONDS="30")
     monkeypatch.setattr(world.module, "now", lambda: 0.0)
-    for seat in seats:
+    for seat in seats if start else ():
         assert world.seat(seat, "GET", "/state")[0] == 200
     return world
+
+
+def hook_replies(monkeypatch, world, hook):
+    """Run hook(handler, status, body) before each reply is written; the hook may raise or wait."""
+    original = world.module.World._reply
+
+    def reply(self, status, body, headers=None):
+        hook(self, status, body)
+        original(self, status, body, headers)
+
+    monkeypatch.setattr(world.module.World, "_reply", reply)
+
+
+def is_messages_read(handler, _status, _body):
+    return handler.command == "GET" and handler.path == "/messages"
+
+
+def is_gate_reply(_handler, status, body):
+    return status == 409 and "messages" in body
 
 
 def proposals_with_talk(tmp_path):
@@ -49,7 +70,8 @@ def test_the_gate_holds_a_claim_until_the_seat_has_read_and_shows_the_messages(s
     assert world.events()[0]["data"]["read_gate"] is True and world.events()[0]["data"]["world_version"] == 11
     to_all = send(world, "p2", "I claim 50")
     status, reply = world.seat("p1", "POST", "/claim", {"amount": 40})
-    assert status == 409 and reply == {"error": world.module.GATE_ERROR, "messages": [to_all]}
+    assert status == 409 and reply == {"error": world.module.gate_error(1), "round": 1, "messages": [to_all]}
+    assert "round 1" in reply["error"] and "gated" not in json.dumps(reply)
     assert data(world, "gated") == [{"round": 1, "path": "/claim", "ids": [to_all["id"]], "action": {"amount": 40},
                                      "unread": 1}]
     assert data(world, "deliver") == [{"ids": [to_all["id"]], "via": "gate"}]
@@ -125,7 +147,7 @@ def test_the_gate_holds_round_protocol_actions_after_their_own_checks(start_worl
     assert "gated" not in world.kinds()
     split = {"split": {"p1": 50, "p2": 50}}
     assert world.seat("p1", "POST", "/propose", split) == (
-        409, {"error": world.module.GATE_ERROR, "messages": [message]})
+        409, {"error": world.module.gate_error(1), "round": 1, "messages": [message]})
     assert data(world, "gated") == [{"round": 1, "path": "/propose", "ids": [message["id"]], "action": split,
                                      "unread": 1}]
     status, offer = world.seat("p1", "POST", "/propose", split)
@@ -209,3 +231,140 @@ def test_a_gate_off_talk_round_logs_what_world_10_logged_plus_unread(start_world
                                                          {"round": 1, "amount": 50, "unread": 0}]
     assert set(events[0]["data"]) == {"condition", "seats", "world_version", "limits", "game", "round_seconds",
                                       "max_messages_per_round", "read_gate"}
+
+
+def fail_once(predicate):
+    """A reply hook that breaks the first reply matching predicate, as a reset connection would."""
+    armed = [True]
+
+    def hook(handler, status, body):
+        if armed[0] and predicate(handler, status, body):
+            armed[0] = False
+            raise BrokenPipeError("injected")
+
+    return hook
+
+
+def test_a_failed_messages_reply_delivers_nothing_and_the_next_action_is_held(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated")
+    message = send(world, "p2", "read me")
+    hook_replies(monkeypatch, world, fail_once(is_messages_read))
+    with pytest.raises(ConnectionError):
+        world.seat("p1", "GET", "/messages")
+    assert "deliver" not in world.kinds() and world.module.STATE["delivered"]["p1"] == {}
+    status, reply = world.seat("p1", "POST", "/claim", {"amount": 40})
+    assert status == 409 and reply["messages"] == [message]
+    assert data(world, "deliver") == [{"ids": [message["id"]], "via": "gate"}]
+    assert world.seat("p1", "POST", "/claim", {"amount": 40}) == (201, {"round": 1, "amount": 40})
+
+
+def test_a_failed_gate_reply_delivers_nothing_and_the_retry_is_held_again(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated")
+    message = send(world, "p2", "read me")
+    hook_replies(monkeypatch, world, fail_once(is_gate_reply))
+    with pytest.raises(ConnectionError):
+        world.seat("p1", "POST", "/claim", {"amount": 40})
+    assert world.kinds()[-1] == "gated" and "deliver" not in world.kinds() and "request" not in world.kinds()
+    status, reply = world.seat("p1", "POST", "/claim", {"pass": True})
+    assert status == 409 and reply["messages"] == [message]
+    assert [entry["action"] for entry in data(world, "gated")] == [{"amount": 40}, {"pass": True}]
+    assert data(world, "deliver") == [{"ids": [message["id"]], "via": "gate"}]
+    assert world.seat("p1", "POST", "/claim", {"pass": True}) == (201, {"round": 1, "pass": True})
+    assert data(world, "pass") == [{"round": 1, "pass": True, "unread": 0}]
+
+
+def blocked_replies(monkeypatch, world, predicate):
+    """Hold every reply that matches predicate until `release` is set; `entered` is set when one waits."""
+    entered, release = threading.Event(), threading.Event()
+
+    def hook(handler, status, body):
+        if predicate(handler, status, body):
+            entered.set()
+            assert release.wait(10)
+
+    hook_replies(monkeypatch, world, hook)
+    return entered, release
+
+
+def in_thread(call):
+    results = []
+    thread = threading.Thread(target=lambda: results.append(call()), daemon=True)
+    thread.start()
+    return thread, results
+
+
+def test_a_messages_reply_still_being_written_does_not_let_a_claim_through(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated")
+    message = send(world, "p2", "read me")
+    entered, release = blocked_replies(monkeypatch, world, is_messages_read)
+    reader, results = in_thread(lambda: world.seat("p1", "GET", "/messages"))
+    try:
+        assert entered.wait(10)
+        status, reply = world.seat("p1", "POST", "/claim", {"amount": 40})  # the GET's write holds no lock
+        assert status == 409 and reply["messages"] == [message]
+        assert "request" not in world.kinds()
+    finally:
+        release.set()
+        reader.join(10)
+    assert results == [(200, {"messages": [message]})]
+    assert data(world, "deliver") == [{"ids": [message["id"]], "via": "gate"}, {"ids": [message["id"]]}]
+    assert world.seat("p1", "POST", "/claim", {"amount": 40})[0] == 201
+
+
+def test_a_gate_reply_is_written_outside_the_lock_and_delivers_after_it(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated")
+    message = send(world, "p2", "read me")
+    entered, release = blocked_replies(monkeypatch, world, is_gate_reply)
+    claimer, results = in_thread(lambda: world.seat("p1", "POST", "/claim", {"amount": 40}))
+    try:
+        assert entered.wait(10)
+        assert world.seat("p2", "POST", "/claim", {"pass": True}) == (201, {"round": 1, "pass": True})
+        assert world.seat("p2", "GET", "/state")[0] == 200
+    finally:
+        release.set()
+        claimer.join(10)
+    assert results[0][0] == 409 and results[0][1]["messages"] == [message]
+    kinds = [kind for kind in world.kinds() if kind in ("gated", "pass", "deliver")]
+    assert kinds == ["gated", "pass", "deliver"]
+
+
+def test_the_gate_holds_a_decline_with_and_without_a_counter(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated", game=proposals_with_talk(tmp_path))
+    assert world.seat("p1", "POST", "/propose", {"split": {"p1": 60, "p2": 40}})[0] == 201
+    note = send(world, "p1", "take it")
+    bad = {"id": "1-1", "counter": {"split": {"p1": 90, "p2": 90}}}
+    assert world.seat("p2", "POST", "/decline", bad)[0] == 400  # refused before the gate
+    assert "gated" not in world.kinds()
+    status, reply = world.seat("p2", "POST", "/decline", {"id": "1-1"})
+    assert status == 409 and reply["round"] == 1 and reply["messages"] == [note]
+    assert [offer["id"] for offer in world.seat("p2", "GET", "/state")[1]["proposals"]] == ["1-1"]
+    assert "decline" not in world.kinds() and "declined" not in world.kinds()
+    assert world.seat("p2", "POST", "/decline", {"id": "1-1"}) == (201, {"id": "1-1", "declined": True})
+
+    assert world.seat("p1", "POST", "/propose", {"split": {"p1": 55, "p2": 45}})[0] == 201
+    second = send(world, "p1", "or this")
+    body = {"id": "1-2", "counter": {"split": {"p1": 45, "p2": 55}}}
+    status, reply = world.seat("p2", "POST", "/decline", body)
+    assert status == 409 and reply["messages"] == [second]
+    assert data(world, "gated")[-1] == {"round": 1, "path": "/decline", "ids": [second["id"]], "action": body,
+                                        "unread": 1}
+    assert [offer["id"] for offer in world.seat("p2", "GET", "/state")[1]["proposals"]] == ["1-2"]
+    status, reply = world.seat("p2", "POST", "/decline", body)
+    assert status == 201 and reply["counter"]["id"] == "1-3"
+    assert data(world, "decline")[-1] == {"round": 1, "id": "1-2", "declined": True, "counter": "1-3", "unread": 0}
+
+
+def test_a_message_sent_before_the_season_holds_the_first_valid_action(start_world, tmp_path, monkeypatch):
+    world = split_world(start_world, tmp_path, monkeypatch, "gated", start=False)
+    assert not world.seat("p1", "GET", "/state")[1]["season_started"]
+    early = send(world, "p1", "hello before the start")
+    assert world.seat("p1", "POST", "/claim", {"amount": 10})[0] == 409  # early: refused before the gate
+    assert "early" in world.kinds() and "gated" not in world.kinds()
+    status, reply = world.seat("p2", "POST", "/claim", {"amount": 10})  # p2's first call starts the season
+    assert status == 409 and reply == {"error": world.module.gate_error(1), "round": 1, "messages": [early]}
+    assert world.seat("p2", "POST", "/claim", {"amount": 10})[0] == 201
+    assert world.seat("p1", "POST", "/claim", {"pass": True})[0] == 201  # a pass blocks the deal: round 2 opens
+    later = send(world, "p2", "round 2")
+    status, reply = world.seat("p1", "POST", "/claim", {"amount": 10})
+    assert status == 409 and reply["round"] == 2 and "not recorded in round 2:" in reply["error"]
+    assert reply["messages"] == [later]

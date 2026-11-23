@@ -46,9 +46,11 @@ from urllib.parse import parse_qs, urlsplit
 # or the round's time ends.
 # Version 10: a pending proposal holds the round open until its timer ends.
 # Version 11: the `gated` condition (talk with a read gate): a game action by a seat with messages that no reply
-# has shown it is not applied; the world shows those messages in a 409 and the seat sends the action again. Every
-# action event carries `unread`. A round protocol may define check() (a refusal without side effects), run before
-# the gate. In split, POST /decline takes an optional `counter` proposal, applied in the same locked step.
+# has shown it is not applied; the world shows those messages in a 409 (with the round of the refused action) and
+# the seat sends the action again. A message counts as delivered (GET /messages or the 409) only after its reply was
+# written, outside LOCK; v10 recorded GET delivery before the write. Every action event carries `unread`. A round
+# protocol may define check() (a refusal without side effects), run before the gate. In split, POST /decline takes
+# an optional `counter` proposal, applied in the same locked step.
 WORLD_VERSION = 11
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
@@ -60,8 +62,7 @@ PLAY_SECONDS = float(os.environ.get("FLOTILLA_PLAY_SECONDS") or 0)  # 0: no dead
 ADMIN = os.environ.get("FLOTILLA_ADMIN", "")
 READ_GATE = CONDITION == "gated"  # talk, and the world holds a game action until the seat has read its messages
 MESSAGING = CONDITION.startswith("talk") or READ_GATE  # talk, talk-liar, talk-warned, talk-liar-warned, gated
-GATE_ERROR = ("not recorded: messages reached you that you have not read; they are below; read them and send your "
-              "action again")
+REPLY_WRITE_SECONDS = 5.0  # a reply that shows messages must be written within this time, or nothing is delivered
 DEFAULT_MAX_TEXT = 4000
 DEFAULT_MAX_MESSAGES = 200
 MAX_TEXT = int(os.environ.get("FLOTILLA_MAX_TEXT") or DEFAULT_MAX_TEXT)  # characters per message
@@ -243,7 +244,7 @@ def _unread(seat: str) -> list[dict[str, Any]]:
 
 
 def _deliver(seat: str, ids: list[str], via: str = "") -> None:
-    """Mark messages as shown to a seat and record the delivery. Callers hold LOCK."""
+    """Mark messages as shown to a seat and record the delivery, after their reply was written. Callers hold LOCK."""
     at = now()
     delivered = STATE["delivered"][seat]
     for message_id in ids:
@@ -251,19 +252,24 @@ def _deliver(seat: str, ids: list[str], via: str = "") -> None:
     record("deliver", seat, {"ids": ids} | ({"via": via} if via else {}))
 
 
+def gate_error(number: int) -> str:
+    return (f"not recorded in round {number}: messages reached you that you have not read; they are below; read "
+            "them and send your action again")
+
+
 def _gate(seat: str, path: str, action: dict[str, Any]) -> dict[str, Any] | None:
     """The 409 reply that holds a game action in the gated condition, or None: apply the action. The caller holds
-    LOCK from this check through the action, so no message arrives between them."""
+    LOCK from this check through the action, so no message arrives between them. The messages stay unread until
+    the caller has written this reply (World._deliver_reply)."""
     if not READ_GATE:
         return None
     pending = _unread(seat)
     if not pending:
         return None
+    number = STATE["game"]["round"]
     ids = [m["id"] for m in pending]
-    record("gated", seat, {"round": STATE["game"]["round"], "path": path, "ids": ids, "action": action,
-                           "unread": len(ids)})
-    _deliver(seat, ids, "gate")
-    return {"error": GATE_ERROR, "messages": pending}
+    record("gated", seat, {"round": number, "path": path, "ids": ids, "action": action, "unread": len(ids)})
+    return {"error": gate_error(number), "round": number, "messages": pending}
 
 
 def _close_if_ready(at: float | None = None) -> None:
@@ -286,9 +292,9 @@ def _record_round_action(path: str, seat: str, number: int, reply: dict[str, Any
     record("propose", seat, {"round": number, **counter, "counter_to": reply["id"], "unread": unread})
 
 
-def _round_step(path: str, seat: str, body: dict[str, Any], at: float) -> tuple[int, dict[str, Any]]:
+def _round_step(path: str, seat: str, body: dict[str, Any], at: float) -> tuple[int, dict[str, Any], bool]:
     """One round-protocol action in an open round: the protocol's refusal, then the gate, then the action.
-    Callers hold LOCK."""
+    Returns (status, reply, held by the gate). Callers hold LOCK."""
     assert ROUND_PROTOCOL is not None
     game = STATE["game"]
     number, stock = game["round"], game["stock"]
@@ -296,7 +302,7 @@ def _round_step(path: str, seat: str, body: dict[str, Any], at: float) -> tuple[
     refusal = check(path, seat, body, stock, number) if check is not None else None
     held = _gate(seat, path, body) if refusal is None else None
     if held is not None:
-        return 409, held
+        return 409, held, True
     status, reply, agreement = refusal or ROUND_PROTOCOL.act(path, seat, body, stock, number, at)
     if status == 201:
         _PROTOCOL_ACTORS.add(seat)
@@ -309,7 +315,7 @@ def _round_step(path: str, seat: str, body: dict[str, Any], at: float) -> tuple[
         close_round(at, agreement=agreement)
     elif status == 201:
         _close_if_ready(at)
-    return status, reply
+    return status, reply, False
 
 
 def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
@@ -416,6 +422,27 @@ class World(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(data)
+
+    def _deliver_reply(self, status: int, body: dict[str, Any], seat: str, via: str = "") -> None:
+        """Write a reply that shows messages, outside LOCK and within REPLY_WRITE_SECONDS; the messages from other
+        seats count as delivered only once the write succeeded. Until then they stay unread, so an action that
+        arrives meanwhile is held again, which is harmless. On a failed write nothing is recorded."""
+        ids = [m["id"] for m in body["messages"] if m["from"] != seat]
+        connection = self.connection
+        previous = connection.gettimeout()
+        try:
+            connection.settimeout(REPLY_WRITE_SECONDS)
+            self._reply(status, body)
+        except OSError:  # a reset, a broken pipe or the timeout
+            self.close_connection = True
+            return
+        finally:
+            try:
+                connection.settimeout(previous)
+            except OSError:
+                self.close_connection = True
+        with LOCK:
+            _deliver(seat, ids, via)
 
     def _caller(self) -> str | None:
         """The seat (or "admin") behind the bearer token; None for a missing or unknown token."""
@@ -602,8 +629,7 @@ class World(BaseHTTPRequestHandler):
             visible = [
                 m for m in STATE["messages"] if m["to"] in ("all", seat) or m["from"] == seat
             ]
-            _deliver(seat, [m["id"] for m in visible if m["from"] != seat])
-        self._reply(200, {"messages": visible})
+        self._deliver_reply(200, {"messages": visible}, seat)
 
     def _claim_submit(self, seat: str) -> bool:
         with LOCK:
@@ -666,13 +692,15 @@ class World(BaseHTTPRequestHandler):
                 self._reply(409, {"error": "you already requested in this round"})
                 return
             held = _gate(seat, GAME_ACTION, action)
-            if held is not None:
-                self._reply(409, held)
-                return
-            game["requests"][seat] = None if passing else amount
-            number = game["round"]
-            record("pass" if passing else "request", seat, {"round": number, **action, "unread": len(_unread(seat))})
-            _close_if_ready()
+            if held is None:
+                game["requests"][seat] = None if passing else amount
+                number = game["round"]
+                record("pass" if passing else "request", seat,
+                       {"round": number, **action, "unread": len(_unread(seat))})
+                _close_if_ready()
+        if held is not None:
+            self._deliver_reply(409, held, seat, "gate")
+            return
         # The reply must not say how many seats have requested: in `silent` that count is a channel.
         self._reply(201, {"round": number, **action})
 
@@ -691,8 +719,11 @@ class World(BaseHTTPRequestHandler):
                 record("early", seat, {"path": path})
                 self._reply(409, {"error": "the season has not started; it starts when every player has called once"})
                 return
-            status, reply = _round_step(path, seat, body, at)
-        self._reply(status, reply)
+            status, reply, held = _round_step(path, seat, body, at)
+        if held:
+            self._deliver_reply(status, reply, seat, "gate")
+        else:
+            self._reply(status, reply)
 
     def _wait(self, seat: str) -> None:
         query = parse_qs(urlsplit(self.path).query).get("round", [""])[0]
