@@ -840,9 +840,119 @@ the seats played:
 1. **A talk arm tests communication only if the seats read before they act.** Haiku and Luna mostly do not: their
    talk arm is send-only. Record "claims made with unread messages" per arm as a validity measure, and deliver new
    messages inside the `/state` and `/wait` replies instead of only through `GET /messages`.
-2. **The feasibility window decides many outcomes.** With a 20% shrink per round, 4 of 7 xm1 instances and 4 of 6
-   pv10 instances have one feasible round. Report deal rates by window, or build instances with a fixed window.
+2. **The feasibility window decides many outcomes.** With a 20% shrink per round, 4 of the 7 xm1 instances and 4 of
+   the 6 pv10 instances that ran have one feasible round. Report deal rates by window, or build instances with a
+   fixed window.
 3. Count deals below an outside option apart from agreements: they are errors.
 4. World v11, propose arm: make "decline and counter" one action, or keep the round open for a short grace after a
    decline.
 5. World: state the 10**6 amount limit in the error reply; log a message in the round in which it was sent.
+
+## 19. Listening wave lw1: does a read gate make talk work? (pre-registration)
+
+Written on 2026-11-23 before any lw1 trial, smoke included. Motivation: section 18 and FINDINGS 2026-11-23 16:40
+ET. Haiku and Luna act while a message from the other seat is unread, so their talk arm is mostly send-only.
+`listening.py` on the interim data, exposed split claims made with an unread message: xm1 Haiku 49 of 51, Luna
+22 of 31, DeepSeek 9 of 28; xp1 Haiku 47 of 49, Luna 36 of 38, DeepSeek 5 of 39. This wave tests one
+intervention: a world that refuses an action while a message is unread and hands the message over in the
+refusal. It measures the effect of that gate on deals, not the effect of reading as such. It is a new wave and
+does not change xm1, pv10 or xp1: when credit returns, those 3 resume first, to full size, and lw1 starts only
+after they end.
+
+**World v11 (commits 5cd4854b, dfb2f995 and e421940f; on `flotilla/lab` at cfa5ace1).** New split condition
+`gated`: talk plus a read gate. While a message from the other seat is undelivered to a seat, the world does not
+record that seat's claim, pass, proposal, accept or decline. It replies 409 with the undelivered messages and the
+round of the refused action, and the seat then sends its action again. A message counts as delivered only after a
+reply that carries it (`GET /messages` or the 409) was written to the seat without error; that proves neither
+that the model read it nor that it used it. Checks that would refuse the action anyway (late, early, repeat,
+invalid) run first, so a refused action is never gated. Seat instructions for `gated` are byte-identical to
+`talk` (equal instructions_sha256 on all 32 instance pairs, and equal to xm1's talk files on the 16 shared
+instances); the seats never see the word "gated"; only the 409 reply tells a seat about the gate. A built `gated`
+task differs from its `talk` twin only in the world's condition name, `read_gate`, the Harbor task name and
+description, and the random tokens; `qa.py` compares every seat view of each twin pair. Every action event records
+`unread` in both arms. v11 also lets `/decline` carry a counter-proposal (the propose arm, not used here) and
+names the amount limit in its error reply. Section 18 suggested pushing new messages into the `/state` and `/wait`
+replies; a seat that claims without calling them first would still act unread, which is the common pattern, so
+v11 delivers at the point of action instead.
+
+Review: GPT-6.2 Sol reviewed v11 and found 2 blockers (delivery was recorded before the reply was written; the
+gated-vs-talk contrast was missing from the analysis on the branch). Both were fixed, and a focused re-review
+found no remaining code blocker; its smaller items were fixed in e421940f. 2 known costs stay and are measured:
+after a successful reply, a fast retry can be refused once more before the delivery is recorded (never applied
+before it); and a refused action that is sent again after the round closed applies to the next round's smaller
+pot (the 409 names the round).
+
+**Design.**
+- Family split, regime b, world v11. Instances 0-11 and 13-32 (32 instances; 0-11 and 13-16 are the xm1
+  instances, 17-32 are new), built with the xm1 options and seed: `python3 flotilla/build_tasks.py --family
+  split --difficulty b --seats 2 --instances 0-11,13-32 --conditions talk,gated --round-seconds 240
+  --max-messages-per-round 2 --seed-of .flotilla-local/tasks/xm1-split/split --out
+  .flotilla-local/tasks/lw1-split`. On the 16 xm1 instances the pots, outside options and talk instructions equal
+  xm1's (checked). Feasible rounds per instance: 1 round on 6 instances, 2 on 22, 3 on 4. `qa.py`: no FAIL; every
+  task embeds the world file of cfa5ace1.
+- Arms: `talk` (messages only through `GET /messages`, as in v9 and v10) and `gated`.
+- Primary plan `lw1`: Claude Haiku 5.5 and gpt-6-luna on all 32 instances, both arms: 128 trials, 64 pairs.
+  Control plan `lwc`: DeepSeek V4.1 Flash (it mostly reads before it claims) on the 16 xm1 instances, both arms:
+  32 trials. Smoke plan `lws`: `gated` on instances 12 and 33 (not in lw1; same build options, folder
+  `lw1s-split`), all 3 models: 6 trials.
+- terminus-2, at most 60 turns per seat, Modal, OpenRouter; runner order seed 20261124.
+- Budget: caps lws $1, lw1 $4, lwc $3; OpenRouter floor $2; reserve $0.30 per trial. Expected about $1.8 (lw1)
+  plus $1.5 (lwc) plus $0.2 (lws) plus Modal.
+- Power (simulated, exact two-sided test at alpha 0.025, no or moderate correlation within an instance): with 64
+  pairs, a `gated` deal rate of 0.75 against 0.43 (Haiku and Luna talk in interim xm1) gives power 0.90 to 0.97;
+  0.65 against 0.43 gives 0.53 to 0.72. With the 32 pairs of an earlier draft, power at 0.75 was only 0.54 to 0.71,
+  so the primary plan uses 32 instances.
+- Smoke rule, per model, before lw1 and lwc: the model passes if its seats miss at most 10% of seat-rounds and
+  every gated seat later makes a recorded action, in the same round or a later one (both counts reported). If no
+  gate fires in its 2 smoke trials, the model passes on validity alone and the log says "gate not seen in smoke".
+  A model that fails is dropped before its plan starts, and the drop is logged. If a primary model is dropped,
+  H1 tests the other model alone on its 32 pairs, and the report says so.
+- Order: lws, then lw1, then lwc, all after xm1, pv10 and xp1 end.
+
+**Primary test (H1).** Pooled over Haiku and Luna, paired by (model, instance): b = pairs where `gated` makes a
+deal and `talk` does not; c = the reverse. Exact two-sided sign test on b and c, stratified over the 2 models
+(`xm_analysis.py`, the gated-vs-talk contrast line only; other contrast lines the tool prints do not count), alpha
+0.025 (the threshold the tool applies to every primary contrast). H1 uses every harness-valid pair: the gate can
+itself cause missed rounds, so the 10% missed seat-round cutoff is not applied (`--missed-cutoff 1.0`); the same
+test with the 10% cutoff is a sensitivity check. At least 24 complete pairs are needed; with fewer, the result is
+INCONCLUSIVE. PASS if p < 0.025 and b > c. The reading is "consistent" if b > c in both models.
+
+**Secondary (descriptive; no test).**
+1. Per model: b, c and the exact p.
+2. DeepSeek control: b and c.
+3. Manipulation check (`listening.py`): refusals per seat; the share of exposed claims made with an unread message
+   in `talk`.
+4. Mean deal round; deals by feasibility window (1 feasible round against 2 or more); rational deals (both seats
+   get at least their outside options); deals below an outside option; the strong seat's surplus share.
+5. Cost of the gate: missed seat-rounds, turns per seat, refused actions that were sent again in a later round,
+   and repeat refusals for the same message (a read guard in MAMUBench raised deadline expiries from 1 of 142 to
+   12 of 142; see the research library note on the read gate).
+6. Honesty: outside-option statements and their truth per arm (`speech_acts.py`); the gate also pushes a lie into
+   the other seat's context.
+7. Trajectory reading of every discordant pair: did the seat's reasoning use the delivered message?
+
+**Validity.** As xm1 for the harness: an invalid trial is retried once; a truncated game is no deal and its
+unplayed seat-rounds count as missed; a pair is complete if both arms have a valid trial. The 10% missed
+seat-round rule is reported per model-arm and used only in the sensitivity check.
+
+**Predictions (registered).**
+1. H1 PASS.
+2. `gated` deal rate at least 0.75 for Haiku and for Luna.
+3. DeepSeek control: |b - c| at most 2.
+4. In `talk`, the share of exposed claims with an unread message is at least 0.7 for Haiku and at least 0.5 for
+   Luna.
+5. The mean deal round is lower in `gated` than in `talk` for Haiku and Luna pooled.
+6. Missed seat-rounds in `gated` stay at or below 10% for every model.
+
+**Reading rule.** If H1 passes, the gate raises deals for these models; with item 3 this supports the reading that
+their xm1 talk results measured inbox use more than the value of talk. If b and c are close, the gate does not
+raise deals in this game; that does not rule out a benefit from reading in another form or another game. Either
+way, every later Flotilla talk arm reports its listening share next to its effect.
+
+Commands (after xm1, pv10 and xp1 end), each followed by the same command with `--retry-invalid`: `keys run --
+python3 flotilla/run_wave.py flotilla/plans/lws.json --run-dir .flotilla-local/runs/lws`, then `lw1.json` and
+`lwc.json` with their own run dirs. Analysis (H1): `python3 flotilla/docs/results/scripts/xm_analysis.py
+.flotilla-local/jobs 'lw[1c]-??????' --tasks .flotilla-local/tasks/lw1-split --new-models
+openrouter/anthropic/claude-haiku-5.5,openrouter/openai/gpt-6-luna --replication-model
+openrouter/deepseek/deepseek-v4.1-flash-1017 --missed-cutoff 1.0`; sensitivity: the same without
+`--missed-cutoff`; `listening.py` with the same jobs and tasks.

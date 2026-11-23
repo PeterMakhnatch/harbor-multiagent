@@ -402,7 +402,13 @@ Observed:
   round 1 (`xm1-82a31c` p1). DeepSeek trades messages for 60 to 100 s and claims after (`xm1-e966e8`).
 - Commons talk: in all 7 Haiku talk lakes every seat requested in round 1 with 0 messages seen; `xm1-e2a62b` p1
   saw 0 of the 13 messages sent to it. In xp1 the median round-1 claim came at 6.6 s (Haiku), 5.8 s (Luna) and
-  61.6 s (DeepSeek), and DeepSeek called `/messages` 105 times against 40 (Luna) and 25 (Haiku).
+  61.6 s (DeepSeek), and the world served `GET /messages` 103 times to DeepSeek seats, 38 to Luna and 25 to Haiku
+  (the seats issued 105, 40 and 25; 4 commands never reached the world).
+- `listening.py` (added after this entry) reproduces the hand counts exactly. Share of exposed actions taken with
+  an unread message: xm1 split talk Haiku 53/55, Luna 28/37, DeepSeek 12/33; xm1 commons talk Haiku 85/101, Luna
+  66/148, DeepSeek 79/173; xp1 Haiku 47/49, Luna 36/38, DeepSeek 16/51. Seats that saw none of the messages sent to
+  them: xp1 Haiku 17 of 23, Luna 16 of 24, DeepSeek 0 of 23. All 3 models read once at the start (median first read
+  0 to 1 s after round 1 opened), before most messages exist.
 - Outcomes follow: DeepSeek split talk dealt 5 of 7 (4 in round 1); Haiku 2 of 7 and Luna 4 of 7, the same as or
   below their silent arms. The 3 round-1 deals in 23 cross-play trials all had DeepSeek as the weak seat, reading
   the strong seat's message before it claimed.
@@ -411,9 +417,11 @@ Inferred:
 
 - For seats that act before they read, a pull-only channel turns the talk arm into a send-only arm, and a talk
   versus silent test then measures whether a model polls its inbox, not whether communication helps.
-- This is a property of the world interface as much as of the model. Delivering new messages inside the replies
-  that every seat already reads (`/state`, `/wait`, the claim reply) would remove most of it; measuring "claims
-  with unread messages" per arm says how much of an arm was communication.
+- This is a property of the world interface as much as of the model. Putting new messages into `/state` and
+  `/wait` replies would not reach a seat that claims without calling them first, which is the common pattern.
+  World v11 therefore adds a `gated` condition that delivers at the point of action: an action by a seat with an
+  undelivered message is refused with 409, and the reply carries the messages. Wave lw1 (SPLIT.md section 19)
+  tests `gated` against `talk`. Every talk arm should report its listening share next to its effect.
 
 Lesson: before reading a talk effect, check that the messages were read. Make the world hand messages to the
 seats; do not wait for the seats to fetch them.

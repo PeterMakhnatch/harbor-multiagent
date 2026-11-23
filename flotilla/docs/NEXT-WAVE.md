@@ -73,7 +73,23 @@ froze at the start. DeepSeek direct cost is the published token price.
   in 72 minutes and all 3 running waves stopped at the $2 floor with a third of their trials done. Check
   `/api/v1/credits` and the trend before a wave, and keep the floor: a stop is resumable (run the same command
   again), a 402 in the middle of a trial is not.
+- **Listening check for every talk arm.** Run `docs/results/scripts/listening.py <jobs> '<pattern>' --tasks <dirs>`
+  next to the effect. It reports the share of exposed actions taken while a message to the seat was unread. In
+  xm1 split and xp1 this share was 0.76 to 0.96 for Haiku and Luna: their talk arm was mostly send-only.
 
+### Queue after the credit stop of 2026-11-23
+
+Run these in order from the `lab` checkout once the OpenRouter account has credit (about $6 for the first 3,
+about $4 for the last 3). The runner resumes from the `state.json` in its run dir; the run dirs of 2026-11-23 were
+copied from `/tmp/flotilla/<name>` to `.flotilla-local/runs/<name>`, so use those. Follow each command with the
+same command plus `--retry-invalid`.
+
+1. `keys run -- python3 flotilla/run_wave.py flotilla/plans/xm1.json --run-dir .flotilla-local/runs/xm1`
+2. `keys run -- python3 flotilla/run_wave.py flotilla/plans/pv10.json --run-dir .flotilla-local/runs/pv10`
+3. `keys run -- python3 flotilla/run_wave.py flotilla/plans/xp1.json --run-dir .flotilla-local/runs/xp1`
+4. The read-gate wave (SPLIT.md section 19): `flotilla/plans/lws.json` (smoke), then `lw1.json`, then `lwc.json`,
+   each with run dir `.flotilla-local/runs/<plan name>`. Apply the smoke rule of section 19 before lw1 and lwc; a
+   model that fails it is dropped (edit the plan's `models`, commit, log the drop).
 
 ## Recommended experiments, in order of value per dollar
 
