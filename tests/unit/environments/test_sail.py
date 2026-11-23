@@ -2,8 +2,10 @@
 
 import asyncio
 import base64
+import contextlib
 import json
 import logging
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -213,6 +215,7 @@ def sdk(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     sailbox.terminate.aio = AsyncMock()
     sailbox.sleep.aio = AsyncMock()
     sailbox.fs.mkdir.aio = AsyncMock()
+    sailbox.fs.read.aio = AsyncMock(return_value=b"ssh-ed25519 AAAA test-host\n")
     sailbox.fs.upload_file.aio = AsyncMock()
     sailbox.fs.download_file.aio = AsyncMock()
     sailbox.fs.upload_dir.aio = AsyncMock()
@@ -271,10 +274,10 @@ class TestCapabilities:
     def test_network_policies_in_both_modes(self, temp_dir):
         caps = _make_env(temp_dir).capabilities
         compose_caps = _make_env(temp_dir, compose=True).capabilities
-        assert compose_caps.model_copy(update={"stream": True}) == caps
+        assert compose_caps == caps
         assert caps.docker_compose is True
         assert caps.stream is True
-        assert compose_caps.stream is False
+        assert compose_caps.stream is True
         assert caps.network_allowlist is True
         assert caps.dynamic_network_policy is True
 
@@ -639,16 +642,27 @@ class TestDirectStart:
 
 
 class TestSSHStream:
+    @pytest.mark.parametrize("compose", [False, True])
     async def test_stream_start_enables_native_ssh_and_exports_handle(
-        self, temp_dir, sdk
+        self, temp_dir, sdk, compose
     ):
-        env = _make_env(temp_dir, workdir="/app", environment_kwargs={"stream": True})
+        env = _make_env(
+            temp_dir,
+            compose=compose,
+            workdir="/app",
+            environment_kwargs={"stream": True},
+        )
 
         await env.start(force_build=False)
 
         sdk.sailbox.enable_ssh.aio.assert_awaited_once_with()
         assert env.stream_handle == StreamHandle(
-            provider="sail", reference={"sailbox_id": "sbx_123"}, workspace="/app"
+            provider="sail",
+            reference={
+                "sailbox_id": "sbx_123",
+                **({"project": "harbor", "service": "main"} if compose else {}),
+            },
+            workspace="/app",
         )
 
     async def test_without_stream_does_not_enable_ssh(self, temp_dir, sdk):
@@ -679,10 +693,6 @@ class TestSSHStream:
 
         sdk.sailbox.terminate.aio.assert_awaited_once()
         assert env._sailbox is None
-
-    def test_compose_refuses_ssh_stream_mode(self, temp_dir):
-        with pytest.raises(ValueError, match="does not support stream mode"):
-            _make_env(temp_dir, compose=True, environment_kwargs={"stream": True})
 
     def test_handle_requires_started_sailbox(self, temp_dir):
         with pytest.raises(RuntimeError, match="start the environment first"):
@@ -734,6 +744,7 @@ class TestSSHStream:
             assert config.connection.host == "ssh.example.com"
             assert config.connection.port == 2222
             assert config.connection.user == "root"
+            assert config.connection.host_key == "ssh-ed25519 AAAA"
             assert config.workspace == "/app"
             identity = Path(config.connection.identity.file)
             assert identity.exists()
@@ -746,6 +757,9 @@ class TestSSHStream:
         ssh.access.__aexit__.assert_awaited_once()
         sdk.Sailbox.get.aio.assert_awaited_once_with("sbx_123")
         sdk.sailbox.listener.aio.assert_awaited_once_with(22, protocol="tcp")
+        sdk.sailbox.fs.read.aio.assert_awaited_once_with(
+            "/etc/ssh/ssh_host_ed25519_key.pub"
+        )
         sail_mod.httpx.AsyncClient.assert_called_once_with()
         ssh.client.post.assert_awaited_once_with(
             "https://sail.example/v1/ssh/certificate",
@@ -804,6 +818,143 @@ class TestSSHStream:
         ssh.access_cls.assert_not_called()
         identity = Path(sail_mod.run_local.await_args.args[-1])
         assert not identity.exists()
+
+    @pytest.mark.parametrize("workspace", [None, "/task workdir"])
+    async def test_compose_connect_runs_inside_service_with_its_default_user(
+        self, sdk, ssh, workspace
+    ):
+        ssh.access.run = AsyncMock(side_effect=[b"abc123\n", b'"/home/player"\n'])
+        commands = []
+        process = MagicMock(returncode=0)
+        process.communicate = AsyncMock(return_value=(b"output", b""))
+
+        @contextlib.asynccontextmanager
+        async def host_process(command, **kwargs):
+            commands.append((command, kwargs))
+            yield process
+
+        ssh.access.process = host_process
+        handle = StreamHandle(
+            provider="sail",
+            reference={
+                "sailbox_id": "sbx_123",
+                "project": "harbor",
+                "service": "player",
+            },
+            workspace=workspace,
+        )
+        command = "printf '%s' \"a'b\"; cat"
+        async with SailEnvironment.connect_ssh(handle) as access:
+            assert isinstance(access, sail_mod._SailComposeSSHAccess)
+            assert access.config.workspace == (workspace or "/home/player")
+            assert await access.run(command, input=b"payload") == b"output"
+
+        assert shlex.split(commands[0][0]) == [
+            "/usr/bin/docker",
+            "exec",
+            "-i",
+            "-w",
+            workspace or "/home/player",
+            "abc123",
+            "sh",
+            "-c",
+            command,
+        ]
+        assert commands[0][1] == {}
+        process.communicate.assert_awaited_once_with(b"payload")
+        assert shlex.split(ssh.access.run.await_args_list[0].args[0]) == [
+            "/usr/bin/docker",
+            "ps",
+            "-q",
+            "--filter",
+            "label=com.docker.compose.project=harbor",
+            "--filter",
+            "label=com.docker.compose.service=player",
+        ]
+        assert ssh.access.run.await_count == (2 if workspace is None else 1)
+        assert ssh.access_cls.call_args.args[0].workspace == "/"
+        ssh.access.__aexit__.assert_awaited_once()
+
+    @pytest.mark.parametrize("containers", [b"", b"abc\ndef\n"])
+    async def test_compose_requires_exactly_one_running_service_container(
+        self, sdk, ssh, containers
+    ):
+        ssh.access.run = AsyncMock(return_value=containers)
+        handle = StreamHandle(
+            provider="sail",
+            reference={
+                "sailbox_id": "sbx_123",
+                "project": "harbor",
+                "service": "player",
+            },
+        )
+
+        with pytest.raises(SSHAccessError, match="exactly one running container"):
+            async with SailEnvironment.connect_ssh(handle):
+                pytest.fail("Ambiguous service container was accepted")
+
+        ssh.access.__aexit__.assert_awaited_once()
+
+    async def test_compose_forwarding_is_explicitly_unsupported(self, sdk, ssh):
+        ssh.access.run = AsyncMock(return_value=b"abc123\n")
+        handle = StreamHandle(
+            provider="sail",
+            reference={"sailbox_id": "sbx_123", "project": "harbor", "service": "main"},
+            workspace="/app",
+        )
+
+        async with SailEnvironment.connect_ssh(handle) as access:
+            with pytest.raises(
+                SSHAccessError,
+                match="service container; port forwarding is not supported",
+            ):
+                async with access.process("serve", forward=(12345, 54321)):
+                    pytest.fail("Compose port forwarding was accepted")
+
+        ssh.access.process.assert_not_called()
+
+    async def test_each_connection_pins_the_current_box_host_key(self, sdk, ssh):
+        sdk.sailbox.fs.read.aio.side_effect = [
+            b"ssh-ed25519 AAAA first\n",
+            b"ssh-ed25519 BBBB second\n",
+        ]
+        for key in ["AAAA", "BBBB"]:
+            async with SailEnvironment.connect_ssh(
+                StreamHandle(provider="sail", reference={"sailbox_id": "sbx_123"})
+            ):
+                assert (
+                    ssh.access_cls.call_args.args[0].connection.host_key
+                    == f"ssh-ed25519 {key}"
+                )
+
+    async def test_missing_host_key_never_disables_verification(self, sdk, ssh):
+        sdk.sailbox.fs.read.aio.side_effect = FileNotFoundError("host key missing")
+        with pytest.raises(FileNotFoundError, match="host key missing"):
+            async with SailEnvironment.connect_ssh(
+                StreamHandle(provider="sail", reference={"sailbox_id": "sbx_123"})
+            ):
+                pytest.fail("SSH connected without a pinned host key")
+        ssh.access_cls.assert_not_called()
+        ssh.client.post.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "reference",
+        [
+            {"project": "harbor"},
+            {"service": "player"},
+            {"project": "harbor", "service": "player; echo bad"},
+        ],
+    )
+    async def test_compose_reference_is_validated_before_lookup(self, sdk, reference):
+        handle = StreamHandle(
+            provider="sail", reference={"sailbox_id": "sbx_123", **reference}
+        )
+
+        with pytest.raises(ValueError):
+            async with SailEnvironment.connect_ssh(handle):
+                pytest.fail("Invalid Compose reference was accepted")
+
+        sdk.Sailbox.get.aio.assert_not_awaited()
 
 
 class TestExec:

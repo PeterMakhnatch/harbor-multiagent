@@ -5,6 +5,7 @@ timeout cases rely on time.
 """
 
 import asyncio
+import contextlib
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -213,6 +214,70 @@ async def test_trial_create_keeps_ordinary_tasks_single_step(tmp_path: Path):
         await Trial.create(
             plain.model_copy(update={"participants": [_participant("maya")]})
         )
+
+
+@pytest.mark.parametrize("ending", ["normal", "timeout", "cancel", "error"])
+async def test_seat_trajectory_sync_wraps_play_and_finishes_before_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ending: str
+):
+    hold = ending in {"timeout", "cancel"}
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.2 if ending == "timeout" else 30),
+            _participant("maya", hold=hold, fail="crash" if ending == "error" else ""),
+            _participant("raj", hold=hold),
+            _participant("lee", hold=True),
+        )
+    )
+    active = set()
+    by_environment = {seat.environment: seat for seat in trial.seats}
+
+    @contextlib.asynccontextmanager
+    async def sync(environment, agent, directory):
+        seat = by_environment[environment]
+        assert agent is seat.agent
+        assert directory == seat.paths.agent_dir
+        active.add(seat.name)
+        note("sync-start", seat.name)
+        try:
+            yield
+        finally:
+            active.remove(seat.name)
+            note("sync-stop", seat.name)
+
+    monkeypatch.setattr("harbor.trial.seats.sync_trajectory", sync)
+    original_run = ScriptedAgent.run
+
+    async def run_agent(self, instruction, environment, context):
+        assert environment.service in active
+        await original_run(self, instruction, environment, context)
+
+    monkeypatch.setattr(ScriptedAgent, "run", run_agent)
+    run = asyncio.create_task(trial.run())
+    if ending == "cancel":
+        await seen("run", "maya", "You are maya.")
+        await seen("run", "raj", "You are raj.")
+        await seen("run", "lee", "You are lee.")
+        run.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+    else:
+        await run
+
+    assert not active
+    for seat in trial.seats:
+        assert (
+            index("sync-start", seat.name)
+            < index("run", seat.name, seat.instruction)
+            < index("sync-stop", seat.name)
+        )
+        download = (
+            "compose",
+            "cp",
+            f"{seat.name}:/logs/agent/.",
+            str(seat.paths.agent_dir),
+        )
+        assert index("sync-stop", seat.name) < index(*download)
 
 
 async def test_regrade_refuses_seat_tasks(tmp_path: Path):

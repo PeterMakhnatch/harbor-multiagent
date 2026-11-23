@@ -37,6 +37,7 @@ from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
+from harbor.trial.sync_trajectory import sync_trajectory
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
 
 
@@ -345,11 +346,14 @@ class SeatsTrial(SingleStepTrial):
         try:
             with seat.environment.scoped_exec_env(seat.agent.extra_env):
                 with self._log_context("agent", seat.environment):
-                    await seat.agent.run(
-                        instruction=seat.instruction,
-                        environment=seat.environment,
-                        context=context,
-                    )
+                    async with sync_trajectory(
+                        seat.environment, seat.agent, seat.paths.agent_dir
+                    ):
+                        await seat.agent.run(
+                            instruction=seat.instruction,
+                            environment=seat.environment,
+                            context=context,
+                        )
         except Exception as exc:
             if seat.stopped:
                 seat.logger.warning(f"Seat {seat.name!r} failed while stopping: {exc}")

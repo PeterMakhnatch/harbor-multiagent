@@ -13,6 +13,7 @@ from harbor.environments.base import (
 )
 from harbor.environments.docker.docker import DockerEnvironment
 from harbor.environments.seat import SeatEnvironment
+from harbor.environments.ssh import StreamHandle
 from harbor.models.task.config import EnvironmentConfig
 from harbor.models.trial.paths import TrialPaths
 
@@ -111,6 +112,79 @@ async def test_seat_reports_what_agents_read(seat, temp_dir):
     assert seat.trial_paths.agent_dir == temp_dir / "trial" / "seats" / "maya" / "agent"
     assert seat.session_id == "hello__abc__env__maya"
     assert seat.os == seat.project.os
+
+
+def test_streaming_requires_project_stream_and_service_aware_handle(project, seat):
+    assert seat.stream_enabled is False
+    project._stream_handle = StreamHandle(
+        provider="sail", reference={"sailbox_id": "sb_test", "service": "main"}
+    )
+    assert seat.stream_enabled is False
+
+    project._stream = True
+    assert seat.stream_enabled is True
+
+    project._stream = False
+    assert seat.stream_enabled is False
+
+
+def test_stream_handle_scopes_a_copy_to_each_seat(project, seat, temp_dir):
+    handle = StreamHandle(
+        provider="sail",
+        reference={"sailbox_id": "sb_test", "service": "main"},
+        workspace="/workspace",
+    )
+    project._stream_handle = handle
+    other = SeatEnvironment(
+        project,
+        "raj",
+        session_id="hello__abc__env__raj",
+        trial_paths=TrialPaths(trial_dir=temp_dir / "trial" / "seats" / "raj"),
+    )
+
+    assert seat.stream_handle == handle.model_copy(
+        update={
+            "reference": {"sailbox_id": "sb_test", "service": "maya"},
+            "workspace": None,
+        }
+    )
+    assert other.stream_handle.reference["service"] == "raj"
+    assert other.stream_handle.workspace is None
+    assert project.stream_handle is handle
+    assert handle.reference["service"] == "main"
+    assert handle.workspace == "/workspace"
+
+
+async def test_streaming_keeps_service_user_and_workdir_instead_of_main(project, seat):
+    project._stream = True
+    project.default_user = "root"
+    project._stream_handle = StreamHandle(
+        provider="sail",
+        reference={"sailbox_id": "sb_test", "service": "main"},
+        workspace="/main-workdir",
+    )
+    seat.default_user = 1000
+
+    await seat.exec("pwd; id")
+
+    command = _commands(project)[-1]
+    assert command[:2] == ["exec", "maya"]
+    assert "-u" not in command
+    assert "-w" not in command
+    assert seat.stream_enabled is True
+    assert seat.stream_handle.workspace is None
+    assert seat.stream_handle.reference["service"] == "maya"
+
+
+def test_streaming_stays_unsupported_without_a_service_selector(project, seat):
+    project._stream = True
+    project._stream_handle = StreamHandle(
+        provider="docker", reference={"container_name": "main"}
+    )
+
+    assert seat.stream_enabled is False
+    with pytest.raises(NotImplementedError, match="seat does not provide SSH access"):
+        _ = seat.stream_handle
 
 
 async def test_uploads_target_the_seat(project, seat, temp_dir):

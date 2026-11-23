@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, cast, override
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from harbor.constants import MAIN_SERVICE_NAME
 from harbor.environments.base import (
@@ -697,7 +697,7 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         # An egress policy covers the whole VM, so compose services are
         # restricted the same way as a directly run task.
         return EnvironmentCapabilities(
-            stream=not self._compose_mode,
+            stream=True,
             disable_internet=True,
             network_allowlist=True,
             network_allowlist_hostnames=True,
@@ -999,9 +999,14 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
     @property
     @override
     def stream_handle(self) -> StreamHandle:
+        reference = {"sailbox_id": self._require_sailbox().sailbox_id}
+        if isinstance(self._strategy, _SailDinD):
+            reference.update(
+                project=self._strategy._PROJECT_NAME, service=MAIN_SERVICE_NAME
+            )
         return StreamHandle(
             provider=self.type().value,
-            reference={"sailbox_id": self._require_sailbox().sailbox_id},
+            reference=reference,
             workspace=self.task_env_config.workdir,
         )
 
@@ -1092,6 +1097,118 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
 class SailStreamReference(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
     sailbox_id: str = Field(min_length=1, max_length=256, pattern=r"^[\w.-]+$")
+    project: str | None = Field(
+        default=None, min_length=1, max_length=256, pattern=r"^[a-z0-9][a-z0-9_-]*$"
+    )
+    service: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$",
+    )
+
+    @model_validator(mode="after")
+    def require_compose_project_and_service(self) -> SailStreamReference:
+        if (self.project is None) != (self.service is None):
+            raise ValueError("Compose SSH access requires both project and service")
+        return self
+
+
+class _SailComposeSSHAccess(SSHAccess):
+    def __init__(
+        self, config: ASPConfig, reference: SailStreamReference, workspace: str | None
+    ):
+        super().__init__(config)
+        self._host = SSHAccess(config.model_copy(update={"workspace": "/"}))
+        self._reference = reference
+        self._workspace = workspace
+        self._container: str | None = None
+
+    @override
+    async def __aenter__(self) -> _SailComposeSSHAccess:
+        await self._host.__aenter__()
+        try:
+            containers = (
+                (
+                    await self._host.run(
+                        shlex.join(
+                            [
+                                "/usr/bin/docker",
+                                "ps",
+                                "-q",
+                                "--filter",
+                                f"label=com.docker.compose.project={self._reference.project}",
+                                "--filter",
+                                f"label=com.docker.compose.service={self._reference.service}",
+                            ]
+                        )
+                    )
+                )
+                .decode()
+                .split()
+            )
+            if len(containers) != 1:
+                raise SSHAccessError(
+                    "Compose SSH access requires exactly one running container for the service"
+                )
+            self._container = containers[0]
+            workspace = self._workspace
+            if workspace is None:
+                workspace = (
+                    json.loads(
+                        (
+                            await self._host.run(
+                                shlex.join(
+                                    [
+                                        "/usr/bin/docker",
+                                        "inspect",
+                                        "--format",
+                                        "{{json .Config.WorkingDir}}",
+                                        self._container,
+                                    ]
+                                )
+                            )
+                        ).decode()
+                    )
+                    or "/"
+                )
+            self.config = self.config.model_copy(update={"workspace": workspace})
+            return self
+        except BaseException:
+            await self._host.__aexit__(None, None, None)
+            raise
+
+    @override
+    async def __aexit__(self, *exc: object) -> None:
+        self._container = None
+        await self._host.__aexit__(*exc)
+
+    @contextlib.asynccontextmanager
+    @override
+    async def process(
+        self, command: str, *, forward: tuple[int, int] | None = None
+    ) -> AsyncIterator[asyncio.subprocess.Process]:
+        if self._container is None:
+            raise SSHAccessError("Compose SSH access must be opened before use")
+        if forward is not None:
+            raise SSHAccessError(
+                "Sail Compose stream access runs commands in the service container; port forwarding is not supported"
+            )
+        wrapped = shlex.join(
+            [
+                "/usr/bin/docker",
+                "exec",
+                "-i",
+                "-w",
+                self.config.workspace,
+                self._container,
+                "sh",
+                "-c",
+                command,
+            ]
+        )
+        async with self._host.process(wrapped) as process:
+            yield process
 
 
 @contextlib.asynccontextmanager
@@ -1106,6 +1223,7 @@ async def _connect_ssh(handle: StreamHandle) -> AsyncIterator[SSHAccess]:
         raise SSHAccessError(
             "Sail SSH access is unavailable. Start the trial with --stream."
         )
+    host_key = await sailbox.fs.read.aio("/etc/ssh/ssh_host_ed25519_key.pub")
     config = Config.from_env()
     with tempfile.TemporaryDirectory(prefix="harbor-sail-ssh-") as temporary:
         identity = Path(temporary) / "identity"
@@ -1130,8 +1248,14 @@ async def _connect_ssh(handle: StreamHandle) -> AsyncIterator[SSHAccess]:
                 port=endpoint.port,
                 user="root",
                 identity=ASPIdentityFile(file=str(identity)),
+                host_key=" ".join(host_key.decode().split()[:2]),
             ),
             workspace=handle.workspace or "/",
         )
-        async with SSHAccess(access_config) as access:
+        access = (
+            _SailComposeSSHAccess(access_config, reference, handle.workspace)
+            if reference.service is not None
+            else SSHAccess(access_config)
+        )
+        async with access:
             yield access
