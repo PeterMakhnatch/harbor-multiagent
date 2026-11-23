@@ -44,6 +44,8 @@ PREFIX_DAYS = 90
 NATIVE_DAYS = 1095
 PUBLIC_RANK = 10
 CHOICES = ((1, 1.0), (2, 1.15), (3, 0.85))
+PLAIN_PRODUCT = {"price": 1.0, "social": 0.0, "sponsored": 30.0}
+PLAIN_RULES = {"cover": 30, "batch": 60, "first": 2, "credit": 250_000}
 RESEARCH_SPENT = 0.0
 MAX_FILE_BYTES = 1 << 22
 GIT_TIMEOUT_SECONDS = 60
@@ -191,31 +193,47 @@ def fingerprint(market: Any) -> str:
     )
 
 
-def run_prefix(
-    stock: SimpleNamespace, arm: str, world: int
-) -> tuple[Any, dict[str, Any]]:
+def start_market(
+    stock: SimpleNamespace, world_seed: str, truth_seed: str, shape: str
+) -> Any:
     policy = stock.policies.plain_rules()
     market = stock.sim.Sim(
         policy.plan,
-        stock.truth.run_truth(stock_seed(arm, world, "truth")),
-        stock.worlds.make_world(stock_seed(arm, world, "world"), SHAPES[world]),
+        stock.truth.run_truth(truth_seed),
+        stock.worlds.make_world(world_seed, shape),
         policy,
     )
     assert market.days == NATIVE_DAYS and market.next_day == 0
-    window = SalesWindow()
     market.start()
     _require_running(market)
+    return market
+
+
+def advance_prefix(market: Any, window: SalesWindow | None) -> None:
     for _ in range(PREFIX_DAYS):
         before = market.next_day
         alive = market.advance(1)
         _require_running(market)
         assert market.next_day in (before, before + 1)
-        if market.next_day > before:
+        if window is not None and market.next_day > before:
             window.add(market.observe())
         if not alive:
             break
     market.stop_software()
     assert market.ended or market.next_day == PREFIX_DAYS
+
+
+def run_prefix(
+    stock: SimpleNamespace, arm: str, world: int
+) -> tuple[Any, dict[str, Any]]:
+    window = SalesWindow()
+    market = start_market(
+        stock,
+        stock_seed(arm, world, "world"),
+        stock_seed(arm, world, "truth"),
+        SHAPES[world],
+    )
+    advance_prefix(market, window)
     views = window.finish()
     assert views.keys() == {"sales", "finance"}
     assert isinstance(views["sales"], dict) and isinstance(views["finance"], dict)
@@ -236,34 +254,53 @@ def run_prefix(
     return market, receipt
 
 
-def continuation_policy(stock: SimpleNamespace, price: float) -> Any:
+def stock_policy(
+    stock: SimpleNamespace, product: dict[str, float], rules: dict[str, int]
+) -> Any:
+    assert product.keys() <= PLAIN_PRODUCT.keys()
+    assert rules.keys() <= {"cover", "batch"}
     base = stock.policies.plain_rules()
     assert list(base.prm["products"]) == stock.policies.public_rank(PUBLIC_RANK)
-    assert all(knobs["price"] == 1.0 for knobs in base.prm["products"].values())
+    assert all(knobs == PLAIN_PRODUCT for knobs in base.prm["products"].values())
+    assert {key: value for key, value in base.prm.items() if key != "products"} == (
+        PLAIN_RULES
+    )
     params = copy.deepcopy(base.prm)
     for knobs in params["products"].values():
-        knobs["price"] = price
+        knobs.update(product)
+    params.update(rules)
     policy = stock.policies.RulePolicy(params, base.name)
     assert policy.plan == base.plan
-    assert {key: value for key, value in params.items() if key != "products"} == {
-        key: value for key, value in base.prm.items() if key != "products"
+    assert {
+        key: value
+        for key, value in params.items()
+        if key != "products" and key not in rules
+    } == {
+        key: value
+        for key, value in base.prm.items()
+        if key != "products" and key not in rules
     }
     return policy
 
 
-def option(stock: SimpleNamespace, pick: int, result: dict[str, Any]) -> dict[str, Any]:
+def continuation_policy(stock: SimpleNamespace, price: float) -> Any:
+    return stock_policy(stock, {"price": price}, {})
+
+
+def scores(stock: SimpleNamespace, result: dict[str, Any]) -> dict[str, float]:
     return {
-        "pick": pick,
         "world_score": float(stock.scoring.world_score(result, RESEARCH_SPENT)),
         "multiple": float(stock.scoring.multiple(result["value"], RESEARCH_SPENT)),
     }
 
 
-def continue_choice(
-    stock: SimpleNamespace, checkpoint: Any, pick: int, price: float
-) -> dict[str, Any]:
+def option(stock: SimpleNamespace, pick: int, result: dict[str, Any]) -> dict[str, Any]:
+    return {"pick": pick, **scores(stock, result)}
+
+
+def continue_with(checkpoint: Any, policy: Any) -> dict[str, Any]:
     branch = copy.deepcopy(checkpoint)
-    branch.policy = continuation_policy(stock, price)
+    branch.policy = policy
     assert branch.policy.plan == branch.plan
     branch.start_software(None)
     _require_running(branch)
@@ -275,7 +312,15 @@ def continue_choice(
     assert branch.ended and (
         branch.bankrupt_day is not None or branch.next_day == NATIVE_DAYS
     )
-    return option(stock, pick, branch.result())
+    return branch.result()
+
+
+def continue_choice(
+    stock: SimpleNamespace, checkpoint: Any, pick: int, price: float
+) -> dict[str, Any]:
+    return option(
+        stock, pick, continue_with(checkpoint, continuation_policy(stock, price))
+    )
 
 
 def run_finish(
@@ -343,13 +388,18 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def outside_upstream(upstream: Path, output: Path) -> tuple[Path, Path]:
+    root, resolved = upstream.resolve(strict=True), output.resolve()
+    if resolved == root or root in resolved.parents:
+        raise SystemExit(
+            f"{resolved}: output must stay outside the read-only upstream root"
+        )
+    return root, resolved
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
-    root, output = args.upstream_root.resolve(strict=True), args.output.resolve()
-    if output == root or root in output.parents:
-        raise SystemExit(
-            f"{output}: output must stay outside the read-only upstream root"
-        )
+    root, output = outside_upstream(args.upstream_root, args.output)
     try:
         stock = load_stock(root)
         output.mkdir(parents=True, exist_ok=True)
