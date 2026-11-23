@@ -25,6 +25,8 @@ STUDY_WORLDS = tuple(world for _, worlds in ADMISSION for world in worlds)
 assert len(set(STUDY_ARMS)) == len(STUDY_ARMS)
 assert len(set(STUDY_WORLDS)) == len(STUDY_WORLDS)
 assert set(STUDY_WORLDS) <= set(range(FIRST, FIRST + COUNT))
+EXTERNAL_WORLDS = range(FIRST, 1_000_000)
+EXTERNAL_ARMS = (*ARMS, *TIMING_ARMS)
 SLOTS = 35
 MAX_REPLY = 8192
 INPUT = "Input JSON: "
@@ -67,8 +69,17 @@ def admitted(world: object, arm: object) -> bool:
     return any(arm in arms and world in worlds for arms, worlds in ADMISSION)
 
 
+def external_admitted(world: object, arm: object) -> bool:
+    return (
+        type(world) is int
+        and world in EXTERNAL_WORLDS
+        and type(arm) is str
+        and arm in EXTERNAL_ARMS
+    )
+
+
 def order(world: int) -> tuple[str, str, str, str]:
-    if type(world) is not int or not FIRST <= world < FIRST + COUNT:
+    if type(world) is not int or world not in EXTERNAL_WORLDS:
         raise ValueError("world is outside the registered screen")
     first = (world - FIRST) % len(SEATS)
     booker, a, b, c = (SEATS[(first + step) % len(SEATS)] for step in range(4))

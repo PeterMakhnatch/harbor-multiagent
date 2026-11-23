@@ -43,7 +43,6 @@ GENERATOR = (
 )
 SEED = 1709000311
 PLAY_SECONDS = 600
-WORLDS = protocol.STUDY_WORLDS
 TIMING_WORLDS = protocol.TIMING_WORLDS
 CONTROLS = ("correct", "inexact", "wrong")
 RECOVERY_CONTROLS = ("correct", "inexact")
@@ -128,7 +127,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     parser = _Parser(
         prog="python -B -m examples.seatlab.fanin.trial", allow_abbrev=False
     )
-    parser.add_argument("--world", type=int, required=True, choices=WORLDS)
+    parser.add_argument("--world", type=int, required=True)
     parser.add_argument("--arm", required=True, choices=protocol.STUDY_ARMS)
     parser.add_argument("--out", type=Path, required=True)
     seat = parser.add_mutually_exclusive_group(required=True)
@@ -136,14 +135,17 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     seat.add_argument("--agy", type=Path)
     seat.add_argument("--sockets", type=Path)
     args = parser.parse_args(argv)
-    if not protocol.admitted(args.world, args.arm) or (
+    if args.sockets is None:
+        if not protocol.admitted(args.world, args.arm) or (
+            args.arm in protocol.RECOVERY_ARMS
+            and args.control is not None
+            and args.control not in RECOVERY_CONTROLS
+        ):
+            raise Failed("invalid_arguments")
+    elif (
         args.arm in protocol.RECOVERY_ARMS
-        and args.control is not None
-        and args.control not in RECOVERY_CONTROLS
-    ):
-        raise Failed("invalid_arguments")
-    if args.sockets is not None and (
-        args.arm in protocol.RECOVERY_ARMS or not args.sockets.is_absolute()
+        or not protocol.external_admitted(args.world, args.arm)
+        or not args.sockets.is_absolute()
     ):
         raise Failed("invalid_arguments")
     return args
