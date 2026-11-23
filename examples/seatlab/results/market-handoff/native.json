@@ -1,0 +1,202 @@
+{
+  "meter": {
+    "calls": [
+      {
+        "cache_hit": 384,
+        "cache_miss": 148,
+        "output": 6,
+        "role": "sales",
+        "served_model": "deepseek-flash",
+        "trial_id": "3b0c3396-0ffa-4dfd-8b5b-a88726fcc5a5",
+        "usd": "0.000026952"
+      },
+      {
+        "cache_hit": 384,
+        "cache_miss": 198,
+        "output": 6,
+        "role": "finance",
+        "served_model": "deepseek-flash",
+        "trial_id": "3b0c3396-0ffa-4dfd-8b5b-a88726fcc5a5",
+        "usd": "0.000034452"
+      },
+      {
+        "cache_hit": 384,
+        "cache_miss": 148,
+        "output": 6,
+        "role": "sales",
+        "served_model": "deepseek-flash",
+        "trial_id": "1b8a7470-8df3-4a2c-b607-a8e11336e855",
+        "usd": "0.000026952"
+      },
+      {
+        "cache_hit": 384,
+        "cache_miss": 197,
+        "output": 6,
+        "role": "finance",
+        "served_model": "deepseek-flash",
+        "trial_id": "1b8a7470-8df3-4a2c-b607-a8e11336e855",
+        "usd": "0.000034302"
+      }
+    ],
+    "currency": "USD",
+    "price_source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "total_usd": "0.000122658"
+  },
+  "protocol": "1c98e6a",
+  "schema": "seatlab.market-native-sample/v1",
+  "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+  "trials": [
+    {
+      "arm": "own",
+      "choices": {
+        "finance": 3,
+        "sales": 3
+      },
+      "grade": 0.0,
+      "kind": "deepseek",
+      "multiple": 0.454592985,
+      "prefix_fingerprint": "ae46d2e16fd27d195d8a41e28497bcf64216035668e7804df16c80c5762b5023",
+      "schema": "seatlab.market-native-receipt/v1",
+      "seats": {
+        "finance": {
+          "pick": 3,
+          "prompt_sha256": "f210d0b1bde6ab3876d801e038b9fdb1f1f0123caf77f2f68957cc180cd16a69",
+          "served_model": "deepseek-flash",
+          "source": "deepseek",
+          "view_sha256": "b0353a8c4414884ffd9fceed93df651bad0bcff24844dab2c070acce7f1bce12"
+        },
+        "sales": {
+          "pick": 3,
+          "prompt_sha256": "a0ad8f0ba83b6addc1245f9de3033b24038f01b7eb39d5c9d41474d530b70a5f",
+          "served_model": "deepseek-flash",
+          "source": "deepseek",
+          "view_sha256": "504d74baf4d001309309822147970fd66b671a93f1a298231b43d88c28ef6db2"
+        }
+      },
+      "sha256": {
+        "config": "859b8bc5cfb8de2af9a1382616a4ac0e1bcd54c4b0687fab1f586ae1ee8dee22",
+        "evidence": "e373d93189d9a104a0b085d3168bee686ffcccc13716c87fdc3d31d95779b539",
+        "payoffs": "55928086f45cea41d1753ec7480ad9d5c3bafd7d66868dd37d14a377b5d3555c",
+        "result": "0d85075d98964b9c89d9224747ecea251c26a040d712cc833febcc9d9c3e5a73"
+      },
+      "task_name": "harbor/seatlab-market-native",
+      "trial_id": "3b0c3396-0ffa-4dfd-8b5b-a88726fcc5a5",
+      "trial_name": "market-00-own-deepseek",
+      "world": 0
+    },
+    {
+      "arm": "own",
+      "choices": {
+        "finance": 1,
+        "sales": 1
+      },
+      "grade": 0.0,
+      "kind": "replay",
+      "multiple": 0.65863638,
+      "prefix_fingerprint": "ae46d2e16fd27d195d8a41e28497bcf64216035668e7804df16c80c5762b5023",
+      "schema": "seatlab.market-native-receipt/v1",
+      "seats": {
+        "finance": {
+          "pick": 1,
+          "prompt_sha256": "4e5a7c46228e307b3e62490ebf4d7f7133aa7d92f2f3fc9e1a9a5e025b323723",
+          "served_model": null,
+          "source": "replay",
+          "view_sha256": "3dccd9413d81b620cd859cae388caabde81ca24d5a72e9a7c857f0216272c1be"
+        },
+        "sales": {
+          "pick": 1,
+          "prompt_sha256": "a0ad8f0ba83b6addc1245f9de3033b24038f01b7eb39d5c9d41474d530b70a5f",
+          "served_model": null,
+          "source": "replay",
+          "view_sha256": "504d74baf4d001309309822147970fd66b671a93f1a298231b43d88c28ef6db2"
+        }
+      },
+      "sha256": {
+        "config": "92b76c56b5a5a3442b1bdc040eef8a017e2c77b3bd1d288ffb262ba6e0f59c61",
+        "evidence": "a7ca893250238849f5ae0a4a30865bd4ad0e8f904db1a28005887b2c76d9a4cb",
+        "payoffs": "55928086f45cea41d1753ec7480ad9d5c3bafd7d66868dd37d14a377b5d3555c",
+        "result": "5942afd8314adbca1c7905cd552e004116d3d4a724d67f33ba6e236ebc81b643"
+      },
+      "task_name": "harbor/seatlab-market-native",
+      "trial_id": "7e864552-c358-40c6-8c5b-f729635c602c",
+      "trial_name": "market-00-own-replay",
+      "world": 0
+    },
+    {
+      "arm": "donor",
+      "choices": {
+        "finance": 1,
+        "sales": 1
+      },
+      "grade": 0.2598390734632193,
+      "kind": "deepseek",
+      "multiple": 2.46091592,
+      "prefix_fingerprint": "4bf89580eeab6f14fef53dc06bc18741f220c1831b8e8a5e3a9e5c216494a98c",
+      "schema": "seatlab.market-native-receipt/v1",
+      "seats": {
+        "finance": {
+          "pick": 1,
+          "prompt_sha256": "9135fb7caca47470c7fa6e1279b8ce669a38a9cc1f811e4d2e4e564a00fbc7f5",
+          "served_model": "deepseek-flash",
+          "source": "deepseek",
+          "view_sha256": "ab4b9eb74524a86326b9a36070685fcc32c7c83a1a326fbf7c0fc6d0726fa256"
+        },
+        "sales": {
+          "pick": 1,
+          "prompt_sha256": "61c54c7fd964fdd51b15f814f6b4bb6768fe9b7e5389715e7f92d7657adb51d6",
+          "served_model": "deepseek-flash",
+          "source": "deepseek",
+          "view_sha256": "45289f1fae3fa26d0c0083389e7aef3bbe71c5f7d6b2be3669d8a83f39193699"
+        }
+      },
+      "sha256": {
+        "config": "8b7709ed5961b92844be7104f235ca69ff71ba2bc6a1e8c5d677aca0c40e2e8e",
+        "evidence": "b10a336155ac7224f55a0bc18ef7c2f06462455e4962adb42ed2591e434af59a",
+        "payoffs": "f6c5c27bac95281ea0414fa5d1369250291019a0bbad676e8f0102816f623af1",
+        "result": "c5c5b3615fd3ec05e93c75449af16537699051fd7d2c6ec726fde7aa9948c692"
+      },
+      "task_name": "harbor/seatlab-market-native",
+      "trial_id": "1b8a7470-8df3-4a2c-b607-a8e11336e855",
+      "trial_name": "market-01-donor-deepseek",
+      "world": 1
+    },
+    {
+      "arm": "donor",
+      "choices": {
+        "finance": 3,
+        "sales": 3
+      },
+      "grade": 0.1879657612700142,
+      "kind": "replay",
+      "multiple": 1.918300595,
+      "prefix_fingerprint": "4bf89580eeab6f14fef53dc06bc18741f220c1831b8e8a5e3a9e5c216494a98c",
+      "schema": "seatlab.market-native-receipt/v1",
+      "seats": {
+        "finance": {
+          "pick": 3,
+          "prompt_sha256": "cb6f1bec5f282ab2045dcd2d5ea70b8612fcd5e3ef61145bbdf08b3fec1c36be",
+          "served_model": null,
+          "source": "replay",
+          "view_sha256": "e06fdd4d715af83da7a12fbaf6db870fafd458b41f98feb6181cb09882c4891e"
+        },
+        "sales": {
+          "pick": 3,
+          "prompt_sha256": "61c54c7fd964fdd51b15f814f6b4bb6768fe9b7e5389715e7f92d7657adb51d6",
+          "served_model": null,
+          "source": "replay",
+          "view_sha256": "45289f1fae3fa26d0c0083389e7aef3bbe71c5f7d6b2be3669d8a83f39193699"
+        }
+      },
+      "sha256": {
+        "config": "42f2c1f19136f66f851ba10db4690b7e883e61e0a1265b2488d2b8b4e92a5d78",
+        "evidence": "c36604246fbe53be48ca0134b83875f5a498bd2452c1a5266d043b55f1e2ed3d",
+        "payoffs": "f6c5c27bac95281ea0414fa5d1369250291019a0bbad676e8f0102816f623af1",
+        "result": "a646bef46a05720bdc866f2517adde94335e97884304df2486fce3750e4e6fc4"
+      },
+      "task_name": "harbor/seatlab-market-native",
+      "trial_id": "a70a130a-43a8-4c23-86f7-28ee59503347",
+      "trial_name": "market-01-donor-replay",
+      "world": 1
+    }
+  ]
+}

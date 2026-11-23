@@ -13,7 +13,7 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 Give your own agent one input from a real 2-seat Harbor task. Change the peer’s report without changing the receiver’s local information. Score the first reply with the stock task. The public Dispatch example needs Python 3.12 or later, but no API key, Docker, or Harbor install.
 
 ```sh
-git clone --depth 1 --branch experiments/seatlab-live-confirmation https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch experiments/seatlab-bespoke-continuations https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
 python3.12 -BS -m examples.seatlab.dispatch_peer_case check
 python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm shown
@@ -47,6 +47,8 @@ Other starting points: [36 teams exchanging meeting proposals](examples/seatlab/
 ## SeatLab: decide which multi-agent team to continue
 
 Give an independent supervisor [the first hour of 3 real Bespoke teams](examples/seatlab/continuation-study.md#give-another-supervisor-a-real-decision). Keep the final grades on the owner's machine. Multiple workers can take disjoint sets. Check their choices against the released four-hour outcomes without an API key. In [54 blind calls](examples/seatlab/continuation-study.md#result-do-not-stop-a-team-on-this-evidence), the message text did not justify stopping a team.
+
+To run your own two-seat business task, [stage a real market in local Harbor](examples/seatlab/market-handoff.md#run-one-business-team-in-harbor). Sales sees demand and competition. Finance sees the company's cash and the sales recommendation. Replay needs no key. [Score 12 matched companies](examples/seatlab/market-handoff.md#result-the-correct-sales-recommendation-did-not-pass) without Docker, a simulator install, or a paid call.
 
 ## Install
 

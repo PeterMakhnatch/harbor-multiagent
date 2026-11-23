@@ -1,0 +1,307 @@
+{
+  "attribution": [
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "235880684a5535dfac5c9014e65a272e2b277d3b83c635df2fc8d5ea5902c1ab",
+      "prefix_fingerprint": "4ce5adf3c35fc96e88c13c25d04289bd78af5f213a0f77502bcce9fa35b00c78",
+      "regret": 0.0,
+      "shape": "mnl",
+      "terminal": false,
+      "world": 0,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "c3c1a7885c7541b68e199c48072fab8b296d90ecf9365600c50a3b6451f64028",
+      "prefix_fingerprint": "9d1bd633f879eb90d50d20dbefa3657d152d572360d73f61b9025533cc0aceeb",
+      "regret": 0.0,
+      "shape": "nested",
+      "terminal": false,
+      "world": 1,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "b56b58189011e66dbdb0c292509a23edf2ec8dd1cf796e304c07a18a3e906276",
+      "prefix_fingerprint": "958f711f5944661edf79c1b3f312149dcb3732a975037568d9c6aca08a6dba9e",
+      "regret": 0.0,
+      "shape": "wom",
+      "terminal": false,
+      "world": 2,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "26d35932182ebbc44f59360b94fa885fc9d1fded64bb9e23a7b254d8969ab84a",
+      "prefix_fingerprint": "188eb8c3315a0ee5fe736492add82af7d51b012872037f2fe63b2cf6b1a524fb",
+      "regret": 0.0,
+      "shape": "mnl",
+      "terminal": false,
+      "world": 3,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "99944f2643d33fe2a111333dcfaca291223d1cc7b79a2bcf33ef96fb91e1419b",
+      "prefix_fingerprint": "558c443bf1b7b4a85f60bf20adbd7f2b19739cffe806b4b84ee0d9799e23daf5",
+      "regret": 0.0,
+      "shape": "nested",
+      "terminal": false,
+      "world": 4,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "e1483a74b11698e911bd45da26ef9ac21b8a979fba545a37fe78f120773143ed",
+      "prefix_fingerprint": "fb8a0909fb0daa7dbf00168d6f882f164341d298136e7b3e343f21eeed30945d",
+      "regret": 0.0,
+      "shape": "wom",
+      "terminal": false,
+      "world": 5,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "c88750ef1980a3a7d8a068e516baad7fac014b9c6951ec1e074eccb05c368661",
+      "prefix_fingerprint": "5913aa0f9ff1dd6117e1ec9e61f4da6e5f87cc655f771dc8f07f3b328915f405",
+      "regret": 0.0,
+      "shape": "mnl",
+      "terminal": false,
+      "world": 6,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "b003e9f85d782b0c4bbd79ba6e39a014b370831b68113606191c91376aecd813",
+      "prefix_fingerprint": "e77ea580e6fe4aea51d8f9696ffef5db62707a597a7e4199d19d6910343d1817",
+      "regret": 0.0,
+      "shape": "nested",
+      "terminal": false,
+      "world": 7,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.11048025726573858,
+      "oracle": 0.1133416075073592,
+      "oracle_picks": [
+        2
+      ],
+      "payoffs_sha256": "7706dff164633dc8df85edae93298b0a73c8ad1f31b4f7cf1de7d7255a5e66b7",
+      "prefix_fingerprint": "dd486511b7e381589fd5f5eb2e2683631293094ded864b68efdd2098e834dc2b",
+      "regret": 0.00286135024162062,
+      "shape": "wom",
+      "terminal": false,
+      "world": 8,
+      "world_score": {
+        "1": 0.11048025726573858,
+        "2": 0.1133416075073592,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.2933960000304223,
+      "oracle": 0.2933960000304223,
+      "oracle_picks": [
+        1
+      ],
+      "payoffs_sha256": "e97a0176f7896b25638c0487aaf54253c62c2e2ea422c0c9ea623e2735f9b114",
+      "prefix_fingerprint": "8e116fb27c7951968b11512391c436c745d93dc70d31d4c417dff5e77e207789",
+      "regret": 0.0,
+      "shape": "delayed_ads",
+      "terminal": false,
+      "world": 9,
+      "world_score": {
+        "1": 0.2933960000304223,
+        "2": 0.27748093038321814,
+        "3": 0.2087856040700263
+      }
+    },
+    {
+      "fixed": 0.0,
+      "oracle": 0.0,
+      "oracle_picks": [
+        1,
+        2,
+        3
+      ],
+      "payoffs_sha256": "61bce94b995691751792145000a3fbe91c05e6b12c3f043b4b1a5293af0e5972",
+      "prefix_fingerprint": "e7e1396a9382dc5b70ecab15eba3d742352e9d32607b8b9097e4ffdff4463c2d",
+      "regret": 0.0,
+      "shape": "deal_seekers",
+      "terminal": false,
+      "world": 10,
+      "world_score": {
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0
+      }
+    },
+    {
+      "fixed": 0.22874914774977967,
+      "oracle": 0.30292126922776125,
+      "oracle_picks": [
+        2
+      ],
+      "payoffs_sha256": "8c7b0fe9b551264f2d9ed469f3306778d69f6d987c610c30497171f1ba0c0af4",
+      "prefix_fingerprint": "035eb0699d08625488cd9c5870ddb17b399eacebbc22372328089118c40b22c6",
+      "regret": 0.07417212147798158,
+      "shape": "delayed_ads",
+      "terminal": false,
+      "world": 11,
+      "world_score": {
+        "1": 0.22874914774977967,
+        "2": 0.30292126922776125,
+        "3": 0.0
+      }
+    }
+  ],
+  "calibration": {
+    "arm": "target",
+    "deployed_pick": 1,
+    "means": {
+      "1": 0.10395054127098269,
+      "2": 0.07430844335714867,
+      "3": 0.06873102664217545
+    },
+    "rule": "highest_mean_fixed_pick_lowest_on_tie"
+  },
+  "denominators": {
+    "calibration_worlds": 12,
+    "enrolled": 12,
+    "equal_every_option": 9,
+    "heldout_worlds": 12,
+    "oracle_ties": 9,
+    "regret_positive": 2,
+    "zero_every_option": 9
+  },
+  "heldout": {
+    "arm": "donor",
+    "deployed_pick": 1,
+    "fixed_mean": 0.05271878375382838,
+    "gap": 0.006419455976633516,
+    "gap_exact": "385167358598011/60000000000000000",
+    "oracle_mean": 0.059138239730461895,
+    "reading": "no_agent_on_this_menu_can_reach_threshold_on_this_panel",
+    "sufficient": false,
+    "threshold": "3/100"
+  },
+  "inspection_only": {
+    "changes_deployed": false,
+    "heldout_means": {
+      "1": 0.05271878375382838,
+      "2": 0.05781198392652821,
+      "3": 0.01739880033916886
+    },
+    "hindsight_best_fixed_pick": 2
+  },
+  "numpy_version": "2.1.3",
+  "payoffs_set_sha256": "a14bea9e7b91939c71c621958bc94991d33894af0146b18d8524d025c06e3154",
+  "payoffs_sha256": {
+    "donor-00.payoffs.json": "235880684a5535dfac5c9014e65a272e2b277d3b83c635df2fc8d5ea5902c1ab",
+    "donor-01.payoffs.json": "c3c1a7885c7541b68e199c48072fab8b296d90ecf9365600c50a3b6451f64028",
+    "donor-02.payoffs.json": "b56b58189011e66dbdb0c292509a23edf2ec8dd1cf796e304c07a18a3e906276",
+    "donor-03.payoffs.json": "26d35932182ebbc44f59360b94fa885fc9d1fded64bb9e23a7b254d8969ab84a",
+    "donor-04.payoffs.json": "99944f2643d33fe2a111333dcfaca291223d1cc7b79a2bcf33ef96fb91e1419b",
+    "donor-05.payoffs.json": "e1483a74b11698e911bd45da26ef9ac21b8a979fba545a37fe78f120773143ed",
+    "donor-06.payoffs.json": "c88750ef1980a3a7d8a068e516baad7fac014b9c6951ec1e074eccb05c368661",
+    "donor-07.payoffs.json": "b003e9f85d782b0c4bbd79ba6e39a014b370831b68113606191c91376aecd813",
+    "donor-08.payoffs.json": "7706dff164633dc8df85edae93298b0a73c8ad1f31b4f7cf1de7d7255a5e66b7",
+    "donor-09.payoffs.json": "e97a0176f7896b25638c0487aaf54253c62c2e2ea422c0c9ea623e2735f9b114",
+    "donor-10.payoffs.json": "61bce94b995691751792145000a3fbe91c05e6b12c3f043b4b1a5293af0e5972",
+    "donor-11.payoffs.json": "8c7b0fe9b551264f2d9ed469f3306778d69f6d987c610c30497171f1ba0c0af4",
+    "target-00.payoffs.json": "55928086f45cea41d1753ec7480ad9d5c3bafd7d66868dd37d14a377b5d3555c",
+    "target-01.payoffs.json": "f6c5c27bac95281ea0414fa5d1369250291019a0bbad676e8f0102816f623af1",
+    "target-02.payoffs.json": "479e0f5f712175a237b2bc18f1d2fe7fc649dee85dc63a1c0c1b016bca4f2cf9",
+    "target-03.payoffs.json": "8d5a2a2d78ce28bdfb8fa6bbe3f653aeebd50f3406ead8e8e2b7ba963f4c298b",
+    "target-04.payoffs.json": "4fa3b00255ea3b94cf05cc45b4fc925679218ee4e0bdb535882abcb2ba9c8bcf",
+    "target-05.payoffs.json": "0a9da9e262b87867c243e5f29756f3be19c058156f4104e3bab0dc05e0131813",
+    "target-06.payoffs.json": "8a170a9022d2a6f64ded7fbaf0de08636d964266a49bca890082b3ddb0958923",
+    "target-07.payoffs.json": "b4626e1f3ddd3f08f24c187d354a1a74af2e870238248247eb2460eb0bec4833",
+    "target-08.payoffs.json": "cd67ad01784fafcd83bc7e3dd81ef77b878450eeb911f865f445386f9e809065",
+    "target-09.payoffs.json": "9938a3eac0427aeb877bf5918efdda8bac7e4b7cb66526da500a3d15e87c147f",
+    "target-10.payoffs.json": "429fb972733fbe2469f7d670a5bc96480e938eb31997886b8c638623770c7a9e",
+    "target-11.payoffs.json": "9d18a1dbce06c150e1477a6c6ec92030c50036f9dfd6c91ff5a66856eae8f7bf"
+  },
+  "schema": "seatlab.market-ceiling/v1",
+  "source": "dbec43ff757c86c17077e61b37c7f584c880bdee"
+}

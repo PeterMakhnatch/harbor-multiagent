@@ -47,3 +47,34 @@ python3.12 -BS -m examples.seatlab.market_handoff.decisions score \
 ## Holdout: is the price menu worth another model campaign?
 
 Protocol before scoring any donor company: keep the one price with the highest mean on the 12 targets. That price is option 1, unchanged. Use the separate 12 donors, with disjoint state fingerprints and matched market shapes. Run the same three 1,005-day continuations for each donor. No model is called. Do not replace a zero or a tie. Compare the mean best possible score with that frozen default on the 12 donors. If the gap is below 0.03, no agent with this menu can achieve the target improvement on this panel. If the gap is at least 0.03, the menu has room, not evidence that an agent can exploit it. Keep the original 12-pair test separate.
+
+**Result: stop buying calls for this price menu.** Keeping prices earned **0.05272** on the 12 held-out companies. The best price, chosen with hindsight for each company, earned **0.05914**. The maximum possible gain was **0.00642**, below 0.03. Nine companies scored zero at all 3 prices. Keeping prices was optimal or tied for optimal in 10 of 12. The [receipt](results/market-handoff/ceiling.json) includes all 36 held-out outcomes and the input hashes.
+
+```sh
+python3.12 -BS -m examples.seatlab.market_handoff.ceiling examples/seatlab/results/market-handoff
+```
+
+## Run one business team in Harbor
+
+You can stage any of the 12 companies in Peter's Olam fork. The sales seat reads the selected sales view and submits one recommendation. The finance seat must wait for it. Finance then sees its own view and the recommendation, but not the sales view. The verifier maps the finance choice to the frozen stock outcome. Neither seat receives the menu of outcomes. The same task can replay sealed choices without a model or ask 2 live DeepSeek seats. This tests one checkpoint decision, not a team operating a company for 3 years.
+
+Start in the root of this branch. Use Python 3.12 for staging, the fork's Python environment for Harbor, and a running local Docker engine.
+
+```sh
+d=examples/seatlab/results/market-handoff
+out=$(mktemp -d)
+python3.12 -BS -m examples.seatlab.market_handoff.native_stage stage "$d" "$out" \
+  --world 1 --arm donor --mode replay \
+  --sales-replies "$d/sales-first.jsonl" --finance-replies "$d/finance-first.jsonl"
+"$HARBOR_PYTHON" -B -m examples.seatlab.market_handoff.native_run "$out"
+python3.12 -BS -m examples.seatlab.market_handoff.native_receipt "$out"
+```
+
+Set `HARBOR_PYTHON` to the absolute path of the Python executable in the fork's environment. On Peter's machine, run the middle command through `/tmp/crucible-docker-slot.sh`. Use a new output directory for each trial. The receipt checks both submitted views, prompts and choices, then matches the actual Harbor reward against the stock outcome. Missing evidence is an error; a measured reward of zero is not.
+
+| Staged team | Replay: sales → finance | Replay reward | Fresh seats: sales → finance | Fresh reward |
+|---|---:|---:|---:|---:|
+| World 0, own sales view | 1 → 1 | 0.00000 | 3 → 3 | 0.00000 |
+| World 1, donor sales view | 3 → 3 | 0.18797 | 1 → 1 | 0.25984 |
+
+Both replays and both fresh teams completed in Harbor. [Four native receipts and their token costs](results/market-handoff/native.json) identify the trials. The fresh teams used 4 new calls and cost **$0.000122658**. The replay rows used no model calls. These 2 different worlds test transport and grading; they are not a paired estimate of the handoff effect.

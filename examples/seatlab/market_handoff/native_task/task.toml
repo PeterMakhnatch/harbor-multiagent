@@ -1,0 +1,27 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/market.json"]
+
+[task]
+name = "harbor/seatlab-market-native"
+description = "A sales analyst recommends and a finance director chooses one price level for a simulated retail company."
+keywords = ["seats", "docker-compose", "multi-agent", "seatlab"]
+
+[metadata]
+difficulty = "medium"
+category = "example"
+tags = ["seats", "coordination", "handoff"]
+
+[verifier]
+timeout_sec = 30.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 120.0
+
+[agents.sales]
+under_test = true
+
+[agents.finance]
+under_test = true
