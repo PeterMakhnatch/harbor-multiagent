@@ -5,6 +5,7 @@ from typing import Literal
 
 Kind = Literal[
     "native-model-team",
+    "native-hybrid-team",
     "partial-native-operator-cohort",
     "stock-business-counterfactual",
 ]
@@ -38,6 +39,28 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/peer-fanin/panel.json",
         exit_code=0,
         sha256="ff13d085734c2c9f056ebc6bf92be3b311c75a3db975f0ca47d5fa4f861e9b20",
+    ),
+    Study(
+        id="gather-time",
+        question="How much native waiting can three independent reporters overlap?",
+        kind="native-model-team",
+        guide="examples/seatlab/gather-time.md",
+        module="examples.seatlab.fanin.fanout_panel",
+        argv=(f"{_RESULTS}/gather-time/rows.json",),
+        report=f"{_RESULTS}/gather-time/panel.json",
+        exit_code=0,
+        sha256="1b6fddeb382fef63e7c3db49dc65ca2ba10604a8be42b55784eb0fd1eef7611d",
+    ),
+    Study(
+        id="join-recovery",
+        question="Can a team finish from verified reports when its booker model is withheld?",
+        kind="native-hybrid-team",
+        guide="examples/seatlab/join-recovery.md",
+        module="examples.seatlab.fanin.join_panel",
+        argv=(f"{_RESULTS}/join-recovery/rows.json",),
+        report=f"{_RESULTS}/join-recovery/panel.json",
+        exit_code=0,
+        sha256="8c988df0ad8f5c25633225e65e1d6ef33042cc76e027369fa612adbcfe26d10c",
     ),
     Study(
         id="calendar-recheck",

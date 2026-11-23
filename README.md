@@ -20,9 +20,15 @@ python3.12 -BS -m examples.seatlab.workbench verify
 
 `verify` checks every registered study. `list` shows the studies. `verify peer-fanin private-pricing` checks only the named studies. After the clone, the workbench works offline. It needs no Harbor install, Docker, model key, or model call.
 
-A verified release means that the published report files match the released bytes. It is not a positive study result, and it is not a new native trial. Each study report states its own finding.
+A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
 
-To run new trials, use [Run the same comparison on eight new worlds](examples/seatlab/shared-read.md#run-the-same-comparison-on-eight-new-worlds) for a new calendar cohort. For the business study, use [How independent workers run this study](examples/seatlab/market-operations.md#how-independent-workers-run-this-study). These workflows have their own setup requirements.
+To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
+
+```sh
+git fetch --depth 1 origin 71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+```
+
+This does not switch branches or fetch model data. Live trials also need the fork's Python environment, local Docker and a slot wrapper. Use the [new-cohort commands](examples/seatlab/shared-read.md#run-the-same-comparison-on-eight-new-worlds) to divide calendars among workers. Use the [business worker commands](examples/seatlab/market-operations.md#how-independent-workers-run-this-study) to divide companies. The offline replay does not need these steps.
 
 The fork homepage and default branch do not include the workbench yet. Use the `experiments/seatlab-workbench` branch above.
 

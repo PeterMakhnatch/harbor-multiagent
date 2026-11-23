@@ -17,3 +17,33 @@ Use the next four stock Flotilla calendars, 1216–1219, from the frozen 32-worl
 **Pass for this four-world pilot:** all three typed controls match. All eight hybrid attempts have bound native outcomes, all 24 independent reporter sessions return, no model books, and every world changes from reward 0 without a submission to reward 1 with exactly one submission. A missing outcome or reporter makes the test inconclusive. If inputs and native outcomes are accounted for but a reward or a submission violates the rule, the test fails. Publish the native grades for incomplete attempts too.
 
 The result cannot establish that fallback works for open-ended decisions, that a business agent should trust an unverified message, or that altering an old score is justified. The exact flag is produced by this task's local reporter adapter. Most tasks do not supply this fact.
+
+## Result: four correct bookings without another model
+
+**The registered pilot passed.** All eight native attempts finished in their registered order. Every reporter returned its full local list. None of the eight booking seats started a model session.
+
+| Final seat policy | Native teams | Distinct reporter sessions | Client-reported reporter tokens | Bookings submitted | Correct native bookings |
+|---|---:|---:|---:|---:|---:|
+| Abstain | 4 | 12 | 83,645 | 0 | 0 |
+| Reduce exact reports | 4 | 12 | 83,699 | 4 | 4 |
+
+The three typed controls earned 0, 1 and 0, respectively. One inexact report prevented the reducer from submitting, even though all three reporters had replied. An independent check reconstructed the four successful intersections from the booking seats' actual requests. It matched each native submission. Neither the reducer nor a replacement model read the other calendars.
+
+Use this policy for a decision that has a checkable local rule. Do not use it to guess an open-ended answer. This study injected an unavailable final model. It did not observe four real provider failures, reduce reporter costs, or change a previous grade.
+
+Rebuild the [registered panel](results/join-recovery/panel.json) from the [published rows](results/join-recovery/rows.json). The command needs Python 3.12 and no account or Docker daemon.
+
+```sh
+d=examples/seatlab/results/join-recovery
+python3.12 -BS -m examples.seatlab.fanin.join_panel "$d/rows.json" | cmp - "$d/panel.json"
+```
+
+For a new native control, use the [fork environment, historical generator and Docker slot setup](shared-read.md#run-one-team-on-your-own-machine). Choose a fresh absolute `OUT` outside the checkout.
+
+```sh
+export PYTHONPATH="$PWD:$PWD/src:$PWD/examples:$PWD/examples/seatlab"
+"$DOCKER_SLOT" "$HARBOR_PYTHON" -B -m examples.seatlab.fanin.trial \
+  --world 1216 --arm reduce --control correct --out "$OUT"
+python3.12 -BS -m examples.seatlab.fanin.join_evidence "$OUT" \
+  --world 1216 --arm reduce --tag control-correct
+```
