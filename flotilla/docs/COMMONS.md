@@ -507,3 +507,50 @@ unplayed seat-rounds counted as missed; the "consistent" reading rule for a pool
 power note (about 0.53 to 0.59 at the predicted gap with 48 pairs). The predictions stand as rates: talk minus
 silent survival at least 25 points per new model; talk survival at most 85% per new model; DeepSeek talk at
 least 80% and silent at most 60%.
+
+## 20. Cross-model wave xm1 (commons part): interim result at the credit stop
+
+The wave stopped at 3:50 PM ET on 2026-11-23, when the shared OpenRouter account ran out (SPLIT.md section 18).
+The interim rule was logged before any outcome was read: the numbers below cannot change a plan, and with fewer
+complete pairs than the 24 of section 19 every decision is INCONCLUSIVE. 43 commons trials ran (silent on
+instances 2, 4, 8, 13, 14, 15, 16; talk on these and 9), all valid, 0 truncated, missed seat-rounds at most 2.3%
+per model-arm. Numbers: `xm_analysis.py`, re-derived independently (see SPLIT.md section 18).
+
+| Model | Silent survived | Talk survived | Pairs | b | c | Exact p | Over-use silent / talk | Sustained share silent / talk |
+|---|---|---|---|---|---|---|---|---|
+| Claude Haiku 5.5 (new) | 1 of 7 | 3 of 7 | 7 | 3 | 1 | 0.625 | 0.82 / 0.75 | 0.33 / 0.40 |
+| gpt-6-luna (new) | 1 of 7 | 5 of 8 | 7 | 4 | 1 | 0.375 | 0.56 / 0.30 | 0.34 / 0.68 |
+| DeepSeek V4.1 Flash (replication) | 3 of 7 | 7 of 7 | 7 | 4 | 0 | 0.125 | 0.24 / 0.00 | 0.42 / 1.00 |
+
+Pooled over the 2 new models: 14 pairs, b = 7, c = 2, p = 0.18: INCONCLUSIVE (fewer than 24 pairs). The
+direction is "consistent" (b > c in both new models, no reversal). Interim predictions (section 19 as amended):
+talk minus silent survival is 29 points (Haiku) and 48 points (Luna), above 25; talk survival is at most 85% for
+both; DeepSeek talk 100% and silent 43%. Prediction 4 fails narrowly for Luna (talk over-use 0.30 against half of
+0.56).
+
+How the seats played (an independent reading of all 43 trials by a separate agent, with quotes):
+
+1. **The first over-use is mostly an arithmetic error, not greed.** A seat takes the group's sustainable catch as
+   its own: Luna `xm1-29073a` p3, round 1, "Request 46 fish, approximately one third of the full stock"; Haiku
+   `xm1-6573c7` p1, "taking 36 from 109 leaves 73, which regrows to 109 each round". A second seat then grabs what
+   is left (Luna requests of 1,000,000 in 3 lakes), often on old or mistimed information.
+2. **Haiku misreads the regrowth rule and does not read its messages.** In round 1, 14 of 21 Haiku talk seats asked
+   for more than the fair share, all before they saw any message (silent: 20 of 21). `xm1-e2a62b` p1 saw 0 of 13
+   messages sent to it. Some seats learn late that "at total harvest T per round the stock settles near 3T" and then
+   hold the lake at the low level instead of rebuilding it.
+3. **DeepSeek talk lakes survive without negotiation.** In all 7, every seat proposes and requests exactly the fair
+   share (`xm1-418224` p1: "each round we all request floor(stock/9)"); in 6 of 7 at least 2 seats requested it
+   before they saw any message. All 4 DeepSeek silent collapses are one seat that takes the whole lake in round 1:
+   `xm1-47ecb4` p3, "a request for the entire stock is a weakly dominant one-round strategy". Writing a proposal
+   seems to put the seat in a coordination frame; the effect of the talk arm here is not the content of messages.
+4. **Measurement flags.** "Survived" includes depleted lakes (3 Haiku talk survivals end at 28 of 74 and falling,
+   79 of 128, 51 of 127). Over-use counts unequal splits whose total is safe (10 of 13 such seat-rounds in
+   `xm1-e7b37e`). A message sent just after a round closes is logged in the next round, so a per-round pledge
+   check can show a broken pledge that was not made (`xm1-e0d035`). The world rejects requests above 10**6
+   without saying so; `xm1-47ecb4` p1 then sent 1 as a test, which counted as its round-1 request (the lake
+   collapsed anyway). DeepSeek read the stock "109" as 1e9 in both instance-4 trials. No seat read another seat's
+   data; DeepSeek silent seats searched the container and found only their own briefing.
+
+Inferred: across 3 model families the talk arm raises survival in direction, but the mechanism is not the one
+the arm names. Most seats act before they read; talk helps where the seats share a sustainable rule or adopt a
+coordination frame, and fails where one seat misreads the rule and never reads the correction.

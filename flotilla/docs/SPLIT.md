@@ -739,3 +739,110 @@ cross-play; outside-option statements true, inflated or deflated by speaker and 
 Commands: `keys run -- python3 flotilla/run_wave.py flotilla/plans/xp1.json`, then the same with
 `--retry-invalid`; analysis: `python3 flotilla/docs/results/scripts/xp_analysis.py .flotilla-local/jobs
 'xp1-??????' --tasks .flotilla-local/tasks/xm1-split`.
+
+## 18. Interim results at the credit stop (xm1 split, pv10, xp1)
+
+At 3:50 PM ET on 2026-11-23 the shared OpenRouter account ran out (other users spent about $15 in the 72 minutes
+before). The 3 runners stopped at their $2 floor and finished the trials in flight: xm1 85 of 192 trials, pv10 33
+of 96, xp1 35 of 144; all valid, none truncated. At 4:18 PM ET, before any outcome was read, the log recorded the
+interim rule: these numbers cannot change a plan; if credit is added, all 3 waves resume to full size whatever
+they show; and with fewer complete pairs than the pre-registered minimums every decision is INCONCLUSIVE. The
+numbers below are descriptions. Each wave was read trial by trial by a separate agent (quotes below). An
+independent check re-derived every count, pair and p value below from the raw files with code that shares
+nothing with the analysis scripts (written by Gemini 4 Carbon, validated on sp3 and w1, run by a separate agent):
+0 mismatches, also for the commons part (COMMONS.md section 20). It also found every deal below an outside
+option listed below, and the recorded costs (xm1 $1.85, pv10 $1.03, xp1 $0.50).
+
+### xm1, split part (instances 0, 3, 4, 5, 7, 10, 11)
+
+| Model | Silent deals | Talk deals | Pairs | b | c | Exact p |
+|---|---|---|---|---|---|---|
+| Claude Haiku 5.5 (new) | 3 of 7 | 2 of 7 | 7 | 0 | 1 | 1 |
+| gpt-6-luna (new) | 4 of 7 | 4 of 7 | 7 | 2 | 2 | 1 |
+| DeepSeek V4.1 Flash (replication) | 2 of 7 | 5 of 7 | 7 | 3 | 0 | 0.25 |
+
+Pooled over the new models: 14 pairs, b = 2, c = 3, p = 1: INCONCLUSIVE (fewer than 24 pairs). Missed seat-rounds
+at most 4.2% per model-arm. How the seats played:
+
+1. **One feasible round in most instances.** After a failed round the pot is floor(0.8 x pot). A split that pays
+   both outside options exists in round 1 of every instance, but in round 2 only of instances 0, 3 and 5.
+2. **Silent Haiku and Luna follow one 2-step rule.** In round 1 the strong seat claims exactly its outside option
+   (Haiku 7 of 7 silent games, Luna 6 of 7; `xm1-3456b7` p2: "Claim 57, my outside option") and the weak seat
+   claims about half. In round 2 the weak seat claims the rest (`xm1-3456b7` p1: "the most I can get is 76 - 57 =
+   19, which is still above my outside option of 7"). Both models deal on exactly the 3 instances where round 2 is
+   feasible, and the strong seat gets exactly its outside option.
+3. **Haiku and Luna do not read before they claim.** Of the claims made after the other seat had sent a message,
+   the claimer had an unread message in Haiku 49 of 51, Luna 22 of 31, DeepSeek 9 of 28. Haiku and Luna send a
+   message and claim in one command, 20 to 35 s into round 1. DeepSeek trades messages for 60 to 100 s and then
+   claims (`xm1-e966e8`: "My outside option is 43. I propose a round-1 deal: I claim 44, you claim 20" / "I accept.
+   I will claim 20"): 4 of its 5 talk deals came in round 1. On instance 0 the weak Haiku and Luna seats posted
+   their own split and ignored the strong seat's message, so talk lost the deal that silent made.
+4. **2 deals are mistakes.** `xm1-0bd19d` (Luna silent): the strong seat ends with 49 against an outside option of
+   80. `xm1-82a31c` (Luna talk): the strong seat (outside option 77) proposes and claims an equal 56: "My outside
+   option is 77, so I should seek a mutually acceptable deal". Without them Luna has 3 deals in each arm. The 2
+   instance-0 silent deals pay exactly the outside options (no gain).
+5. Every outside option stated in a talk message was true (Haiku 4 seats, Luna 5). DeepSeek silent seats searched
+   the container for the other seat's value and found only their own briefing; Haiku and Luna did not search.
+6. DeepSeek silent made 2 deals in 7 here against 0 in 6 in sp3. The seat instructions are byte-identical (same
+   sha256), and world versions 8 and 9 change only the propose arm; the route (OpenRouter against DeepSeek
+   direct) and the environment (Modal against Docker) differ. The 2 deals come from single moves (a strong seat
+   that opened at its outside option; a weak seat that guessed low) and look like chance.
+
+### pv10, propose (world v10) against silent (instances 3, 4, 6, 11, 13, 16)
+
+| Model | Silent deals | Propose deals | Pairs | b | c | Exact p |
+|---|---|---|---|---|---|---|
+| Claude Haiku 5.5 | 2 of 5 | 5 of 6 | 5 | 2 | 0 | 0.5 |
+| gpt-6-luna | 2 of 6 | 3 of 5 | 5 | 2 | 0 | 0.5 |
+| DeepSeek V4.1 Flash | 0 of 5 | 2 of 6 | 5 | 2 | 0 | 0.5 |
+
+Pooled over the 3 models: 15 pairs, b = 6, c = 0, p = 0.031, b > c in 3 of 3 models: INCONCLUSIVE (fewer than 24
+pairs). How the seats played:
+
+1. 4 of the 6 instances allow a deal only in round 1.
+2. **Haiku:** the strong seat posted all 5 accepted proposals, at exactly its outside option (3) or 8 above (2):
+   `pv10-96ecff` p2, "Post a proposal of {p1: 24, p2: 44}, which gives me my outside option and uses the full pot".
+   The weak seat accepted 4 to 8 s after its first look.
+3. **The hold works.** It saved 3 deals whose claims did not fit (`pv10-96ecff`, `pv10-2d8a96`, `pv10-054c34`). In
+   3 other proposal deals the claims in the same round fitted too. No seat ran out of turns (at most 34 of 80) or
+   play time (at most 812 of 1800 s). No world or scorer bug was found.
+4. **DeepSeek:** 35 proposals, 1 accepted. 3 of its 8 feasible proposals lapsed at the round-1 timer because the
+   other seat answered too slowly or kept the offer "as a fallback" (`pv10-73c642` p1 accepted 3.7 s after the
+   timer). Other causes: extreme first offers in 4 of 6 trials, 3 feasible offers declined, rival proposals, and
+   1 seat that read a lapse as a decline and then ran an automatic decline loop.
+5. **A new failure:** a decline releases the hold and closes the round at once, so a counter-proposal sent in the
+   same command is rejected in the next, smaller pot. This lost 2 feasible splits (`pv10-3a76d8`, `pv10-4ef276`).
+6. The silent arm repeats xm1 silent on the shared instances (Luna 3 of 3, Haiku 2 of 2, DeepSeek 2 of 2).
+   `pv10-ccc521` (Haiku silent) is a deal 1 point below the weak seat's outside option, by a misread payoff.
+
+### xp1, cross-play (instances 1, 4, 9, 14; 35 of 36 cells, DeepSeek-Haiku on 14 missing)
+
+27 of 35 trials made a deal; all 8 non-deals are on instance 4, where only round 1 is feasible. Self-play made 10
+deals in 12 trials and cross-play 17 in 23 (mean per instance 0.833 and 0.750); the only instance with a
+difference is instance 4 (n+ = 1, n- = 0, 3 ties): INCONCLUSIVE (4 instances, the minimum is 12). Role-balanced
+advantages rest on 2 or 3 usable instances per pair: INCONCLUSIVE (the minimum is 8). How
+the seats played:
+
+1. Every pair follows the 2-step rule of xm1 silent. Only 3 of 23 cross-play trials dealt in round 1; in all 3
+   DeepSeek was the weak seat and the strong seat had spoken first. Median time to the round-1 claim: Haiku 6.6 s,
+   Luna 5.8 s, DeepSeek 61.6 s. DeepSeek read messages 105 times, Luna 40, Haiku 25.
+2. DeepSeek gains as the weak seat by waiting and reading, not by bargaining harder (instance 1: 44 points where
+   Haiku took 16). Haiku's lead over Luna rests on 2 Luna errors (`xp1-04396f`, `xp1-0be483`).
+3. **The one lie had no effect.** `xp1-51586c` p2 DeepSeek (outside option 13): "My outside option is 60, so I will
+   not accept less"; its own reasoning: "We falsely claimed outside option 60". Luna had claimed 100 s earlier and
+   never read the message; the split (96/44) equals the trial without the lie.
+4. 6 deals give a seat less than its outside option, 5 of them in self-play (2 independent equal-split claims that
+   happen to fit). They make self-play look faster and fairer to the weak seat.
+5. No seat named or guessed the other seat's model family.
+
+### What this changes for the next wave (inferred)
+
+1. **A talk arm tests communication only if the seats read before they act.** Haiku and Luna mostly do not: their
+   talk arm is send-only. Record "claims made with unread messages" per arm as a validity measure, and deliver new
+   messages inside the `/state` and `/wait` replies instead of only through `GET /messages`.
+2. **The feasibility window decides many outcomes.** With a 20% shrink per round, 4 of 7 xm1 instances and 4 of 6
+   pv10 instances have one feasible round. Report deal rates by window, or build instances with a fixed window.
+3. Count deals below an outside option apart from agreements: they are errors.
+4. World v11, propose arm: make "decline and counter" one action, or keep the round open for a short grace after a
+   decline.
+5. World: state the 10**6 amount limit in the error reply; log a message in the round in which it was sent.
