@@ -40,7 +40,8 @@ USER_AGENT = "seatlab-continuation-source/1"
 
 MEMBER_PATTERN = re.compile(
     r"public-rollout-data/(?:index\.json"
-    r"|trajectories/seed-to-profit/[a-z0-9]+(?:-[a-z0-9]+)*/board\.json\.gz)"
+    r"|trajectories/seed-to-profit/[a-z0-9]+(?:-[a-z0-9]+)*/board\.json\.gz"
+    r"|trajectories/seed-to-profit/(?:opus-5-5|gpt-6-1-sol|gemini-4-argon)-k2-r[123]/agent-[12]\.json\.gz)"
 )
 GZIP_MAGIC = b"\x1f\x8b"
 

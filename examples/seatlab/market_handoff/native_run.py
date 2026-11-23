@@ -61,9 +61,6 @@ def main() -> int:
         out = args.stage.resolve(strict=True)
         config, mode = checked_stage(out, args.allow_deepseek, args.seat_commands is not None)
         harbor = calendar_driver._entrypoint(Path(sys.executable).parent / "harbor")
-        env = calendar_driver._native_env(out)
-        root = Path(__file__).resolve().parents[3]
-        env["PYTHONPATH"] = str(root / "src") + os.pathsep + env["PYTHONPATH"]
         if mode == "deepseek":
             from ..visibility import deepseek, spend
 
@@ -75,6 +72,9 @@ def main() -> int:
             from . import command_host
 
             command_host.bind(args.seat_commands)
+        env = calendar_driver._native_env(out)
+        root = Path(__file__).resolve().parents[3]
+        env["PYTHONPATH"] = str(root / "src") + os.pathsep + env["PYTHONPATH"]
         os.environ.clear()
         os.environ.update(env)
         sys.path[:0] = env["PYTHONPATH"].split(os.pathsep)
