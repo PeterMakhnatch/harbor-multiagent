@@ -1,5 +1,6 @@
 """The pre-registered cross-model analysis (docs/results/scripts/xm_analysis.py) on seeded synthetic waves: the exact
-stratified test, the decision boundaries, model-arm validity, duplicates and the replication stratum."""
+stratified test, the decision boundaries, model-arm validity, truncation, duplicates, the replication stratum, the
+consistency label and the sensitivity analyses."""
 
 from __future__ import annotations
 
@@ -9,17 +10,19 @@ import math
 import random
 from fractions import Fraction
 
+import pytest
 from conftest import FLOTILLA, load
 
 XM = load(FLOTILLA / "docs" / "results" / "scripts" / "xm_analysis.py", "flotilla_test_xm_analysis")
 SPLIT = load(FLOTILLA / "games" / "split.py", "flotilla_test_xm_split")
+COMMONS = load(FLOTILLA / "games" / "commons.py", "flotilla_test_xm_commons")
 NEW = ("m/a", "m/b", "m/c")
 REPLICATION = "m/rep"
 SIMULATION_SEEDS = (1, 7, 20261123, 424242)
 
 
 def row(family, instance, arm, model, success, *, valid=True, started="2026-11-24T01:00:00Z", missed=0,
-        seat_rounds=12, job=None):
+        seat_rounds=12, job=None, truncated=False):
     measures = ({"sustained_share": 0.5, "collapsed_in": None if success else 3, "over_use": 0.1}
                 if family == "commons" else
                 {"efficiency": 0.9, "deal_round": 1 if success else None, "via": "claim" if success else None,
@@ -28,8 +31,8 @@ def row(family, instance, arm, model, success, *, valid=True, started="2026-11-2
             "family": family, "instance": instance, "arm": arm, "model": model, "valid": valid,
             "reasons": [] if valid else ["no verifier score"], "cost": 0.01, "unpriced_seats": 0,
             "tokens": {"input": 10, "cache": 4, "output": 3}, "seat_rounds": seat_rounds if valid else 0,
-            "missed": missed if valid else 0, "passed": 0, "success": success if valid else None,
-            "measures": measures if valid else {}, "score": {}}
+            "missed": missed if valid else 0, "passed": 0, "truncated": truncated and valid,
+            "success": success if valid else None, "measures": measures if valid else {}, "score": {}}
 
 
 def outcomes(b, c, ties=0, neither=0):
@@ -44,8 +47,9 @@ def pair_rows(family, model, pairs, first="talk", second="silent", start=0, **kw
     return rows
 
 
-def pooled(result, family="split", first="talk", second="silent"):
-    found = next(c for c in result["contrasts"] if (c["family"], c["a"], c["b_arm"]) == (family, first, second))
+def pooled(result, family="split", first="talk", second="silent", contrasts=None):
+    found = next(c for c in (result["contrasts"] if contrasts is None else contrasts)
+                 if (c["family"], c["a"], c["b_arm"]) == (family, first, second))
     return found["pooled"], {line["model"]: line for line in found["models"]}
 
 
@@ -196,6 +200,133 @@ def test_seeded_waves_keep_every_invariant():
                             for arm in (found["a"], found["b_arm"]))
                 assert valid == (not line["excluded"])
         assert math.isclose(result["total_cost"], 0.01 * len(rows))
+        by_cell = {XM.cell(r): r for r in counted}
+        assert all(by_cell[key] is r for key, r in XM.first_attempts(rows).items())
+        for found in result["contrasts"]:
+            if found["kind"] != "reported":
+                same = found["pooled"]["consistency"]
+                assert same["label"] == ("consistent" if same["positive"] >= 2 and not same["reversed"]
+                                         else "driven by fewer models")
+
+
+def test_truncated_split_counts_unplayed_seat_rounds_as_missed_and_no_deal():
+    params = SPLIT.generate(1, 8, 2, "b")
+    claim_all = {seat: SPLIT.fixed_policy(params["capacity"]) for seat in params["seats"]}
+    short = SPLIT.play(params, claim_all, rounds=1)
+    found = XM.played("split", params, short, SPLIT.score_game(params, short))
+    assert found["truncated"] and (found["seat_rounds"], found["missed"], found["success"]) == (12, 10, False)
+    empty = XM.played("split", params, [], SPLIT.score_game(params, []))
+    assert empty["truncated"] and (empty["seat_rounds"], empty["missed"], empty["success"]) == (12, 12, False)
+    full = SPLIT.play(params, claim_all)
+    found = XM.played("split", params, full, SPLIT.score_game(params, full))
+    assert not found["truncated"] and (found["seat_rounds"], found["missed"], found["success"]) == (12, 0, False)
+    deal = SPLIT.play(params, {seat: SPLIT.fixed_policy(params["outside"][seat]) for seat in params["seats"]})
+    found = XM.played("split", params, deal, SPLIT.score_game(params, deal))
+    assert not found["truncated"] and (found["seat_rounds"], found["missed"], found["success"]) == (2, 0, True)
+
+
+def test_truncated_commons_survives_when_no_played_round_collapsed():
+    params = COMMONS.generate(1, 4, 3, "b")
+    planned, seats = params["rounds"], len(params["seats"])
+    fair = {seat: COMMONS.fair_policy(params) for seat in params["seats"]}
+    short = COMMONS.play(params, fair, rounds=3)
+    score = COMMONS.score_game(params, short)
+    assert not score["survived"] and score["collapsed_in"] is None and score["truncated"]
+    found = XM.played("commons", params, short, score)
+    assert found["truncated"] and found["success"]
+    assert (found["seat_rounds"], found["missed"]) == (planned * seats, (planned - 3) * seats)
+    greedy = COMMONS.play(params, {seat: COMMONS.greedy_policy() for seat in params["seats"]}, rounds=1)
+    found = XM.played("commons", params, greedy, COMMONS.score_game(params, greedy))
+    assert not found["truncated"] and (found["seat_rounds"], found["missed"], found["success"]) == (seats, 0, False)
+    whole = COMMONS.play(params, fair)
+    found = XM.played("commons", params, whole, COMMONS.score_game(params, whole))
+    assert not found["truncated"] and found["success"] and found["seat_rounds"] == planned * seats
+
+
+def test_seeded_truncation_keeps_its_invariants():
+    for seed in SIMULATION_SEEDS:
+        rng = random.Random(seed)
+        for _ in range(40):
+            family = rng.choice(("split", "commons"))
+            game = SPLIT if family == "split" else COMMONS
+            params = (SPLIT.generate(seed, rng.randrange(12), 2, "b") if family == "split"
+                      else COMMONS.generate(seed, rng.randrange(12), 3, "b"))
+            top = params["capacity"] if family == "split" else 2 * params["fair_share"]
+            policies = {seat: game.fixed_policy(rng.randint(0, top)) for seat in params["seats"]}
+            log = [] if rng.random() < 0.1 else game.play(params, policies, rng.randint(1, params["rounds"]))
+            if log and rng.random() < 0.3:
+                log[0]["missed"] = [params["seats"][0]]
+            score = game.score_game(params, log)
+            found = XM.played(family, params, log, score)
+            planned, seats = params["rounds"], len(params["seats"])
+            ended = any(record.get("agreed") or record.get("collapsed") for record in log)
+            assert found["truncated"] == (not ended and len(log) < planned)
+            assert found["seat_rounds"] == (planned if found["truncated"] else len(log)) * seats
+            assert (planned - len(log)) * seats * found["truncated"] <= found["missed"] <= found["seat_rounds"]
+            if family == "split":
+                assert found["success"] == score["agreed"]
+            else:
+                assert found["success"] == (score["collapsed_in"] is None)
+
+
+def test_missed_share_and_truncated_counts_use_counted_trials_only():
+    rows = pair_rows("split", "m/a", outcomes(4, 0, ties=4))
+    rows[0] |= {"truncated": True, "missed": 1}
+    late = row("split", 0, "talk", "m/a", True, started="2026-11-24T02:00:00Z", missed=12, truncated=True)
+    result = XM.analyse([*rows, late], NEW, REPLICATION)
+    talk = next(a for a in result["arms"] if (a["model"], a["arm"]) == ("m/a", "talk"))
+    assert (talk["trials"], talk["valid"], talk["counted"], talk["truncated"]) == (9, 9, 8, 1)
+    assert talk["missed_share"] == 1 / 96 and talk["arm_valid"]
+    assert len(result["truncated"]) == 2 and result["duplicates"] == [late]
+
+
+def test_consistency_label_needs_two_valid_new_models_and_no_significant_reversal():
+    def label(*per_model, invalid=None):
+        rows = []
+        for model, pairs in zip(NEW, per_model, strict=True):
+            mine = pair_rows("split", model, pairs)
+            if model == invalid:
+                for r in mine:
+                    r["missed"] = 3 if r["arm"] == "talk" else 0
+            rows += mine
+        test = pooled(XM.analyse(rows, NEW, REPLICATION))[0]
+        return test["decision"], test["consistency"]
+    decision, same = label(outcomes(12, 0), outcomes(0, 1, ties=5), outcomes(0, 1, ties=5))
+    assert decision == "PASS" and (same["positive"], same["label"]) == (1, "driven by fewer models")
+    _decision, same = label(outcomes(4, 0, ties=4), outcomes(4, 0, ties=4), outcomes(0, 0, ties=8))
+    assert (same["valid_models"], same["positive"], same["label"]) == (3, 2, "consistent")
+    _decision, same = label(outcomes(10, 0), outcomes(10, 0), outcomes(0, 6, ties=2))
+    assert same["reversed"] == ["m/c"] and same["label"] == "driven by fewer models"
+    _decision, same = label(outcomes(4, 0, ties=4), outcomes(0, 0, ties=8), outcomes(4, 0, ties=4), invalid="m/c")
+    assert (same["valid_models"], same["positive"], same["label"]) == (2, 1, "driven by fewer models")
+
+
+def test_first_attempt_sensitivity_drops_pairs_whose_first_attempt_was_invalid(capsys):
+    rows = [r for model in NEW for r in pair_rows("split", model, outcomes(3, 0, ties=5))]
+    retried = row("split", 0, "talk", "m/a", True, valid=False, started="2026-11-24T00:30:00Z")
+    later = row("split", 1, "talk", "m/b", False, started="2026-11-24T03:00:00Z")
+    result = XM.analyse([*rows, retried, later], NEW, REPLICATION)
+    main = pooled(result)[0]
+    assert (main["pairs"], main["b"], main["decision"]) == (24, 9, "PASS")
+    first, lines = pooled(result, contrasts=result["sensitivity"]["first_attempt"])
+    assert (first["pairs"], first["b"], first["c"], first["decision"]) == (23, 8, 0, "INCONCLUSIVE")
+    assert lines["m/b"]["b"] == 3 and {c["family"] for c in result["sensitivity"]["first_attempt"]} == {"split"}
+    XM.report(result, [])
+    printed = capsys.readouterr().out
+    assert "## Sensitivity (reported only; cannot change any decision)" in printed
+    assert "INCONCLUSIVE (23 complete valid pairs, fewer than 24) (sensitivity; reported only)" in printed
+    assert "(secondary; cannot change the primary decision)" in printed
+
+
+def test_commons_sensitivity_drops_trials_with_more_than_two_missed_seat_rounds():
+    rows = [r for model in NEW for r in pair_rows("commons", model, outcomes(3, 0, ties=5))]
+    rows[0]["missed"], rows[2]["missed"] = 3, 2
+    result = XM.analyse(rows, NEW, REPLICATION)
+    assert pooled(result, "commons")[0]["pairs"] == 24
+    fewer = result["sensitivity"]["commons_at_most_2_missed"]
+    assert [c["family"] for c in fewer] == ["commons"]
+    test, _lines = pooled(result, "commons", contrasts=fewer)
+    assert (test["pairs"], test["b"], test["c"]) == (23, 8, 0)
 
 
 def write(path, data):
@@ -203,7 +334,7 @@ def write(path, data):
     path.write_text(json.dumps(data))
 
 
-def harbor_trial(jobs, tasks, name, arm, model, log, *, exception=None):
+def harbor_trial(jobs, tasks, name, arm, model, log, *, exception=None, instance=0):
     task_dir = tasks / "split" / f"t-{name}"
     trial = jobs / f"xm1-{name}" / f"t-{name}__x"
     config = {"task": {"path": str(task_dir)},
@@ -215,7 +346,7 @@ def harbor_trial(jobs, tasks, name, arm, model, log, *, exception=None):
         "seat_results": [{"seat": seat, "exception_info": None, "agent_result": {
             "n_input_tokens": 100, "n_cache_tokens": 40, "n_output_tokens": 10, "cost_usd": 0.002}}
             for seat in ("p1", "p2")]})
-    write(trial / "verifier" / "score.json", {"error": None, "instance": 0, "condition": arm})
+    write(trial / "verifier" / "score.json", {"error": None, "instance": instance, "condition": arm})
     write(trial / "verifier" / "world-state.json", {"game": {"log": log}})
 
 
@@ -226,24 +357,39 @@ def test_reads_harbor_trial_folders_by_manifest_and_participant_model(tmp_path, 
     stuck[0]["missed"] = ["p1"]
     tasks, jobs = tmp_path / "tasks", tmp_path / "jobs"
     entries = {}
-    for name, arm in (("aaa", "talk"), ("bbb", "silent"), ("ccc", "talk")):
+    for name, arm, instance in (("aaa", "talk", 0), ("bbb", "silent", 0), ("ccc", "talk", 0), ("eee", "silent", 1)):
         write(tasks / "split" / f"t-{name}" / "environment" / "task.json", {"game": params})
-        entries[f"flotilla/t-{name}"] = {"family": "split", "instance": 0, "condition": arm, "path": f"split/t-{name}"}
+        entries[f"flotilla/t-{name}"] = {"family": "split", "instance": instance, "condition": arm,
+                                         "path": f"split/t-{name}"}
     write(tasks / "manifest.json", {"format": "flotilla-manifest", "tasks": entries})
     harbor_trial(jobs, tasks, "aaa", "talk", "openrouter/x/y", deal)
     harbor_trial(jobs, tasks, "bbb", "silent", "openrouter/x/y", stuck)
     harbor_trial(jobs, tasks, "ccc", "talk", "openrouter/x/y", deal, exception="AgentTimeoutError")
+    harbor_trial(jobs, tasks, "eee", "silent", "openrouter/x/y", stuck[:2], instance=1)
     harbor_trial(jobs, tmp_path / "elsewhere", "ddd", "talk", "openrouter/x/y", deal)
     rows, unmapped = XM.read_trials(jobs, "xm1-*", XM.load_manifests([tasks]))
     by = {r["job"]: r for r in rows}
-    assert unmapped == ["xm1-ddd/t-ddd__x"] and set(by) == {"xm1-aaa", "xm1-bbb", "xm1-ccc"}
+    assert unmapped == ["xm1-ddd/t-ddd__x"] and set(by) == {"xm1-aaa", "xm1-bbb", "xm1-ccc", "xm1-eee"}
     assert by["xm1-aaa"]["success"] is True and by["xm1-aaa"]["model"] == "openrouter/x/y"
     assert by["xm1-bbb"]["success"] is False and by["xm1-bbb"]["seat_rounds"] == 12 and by["xm1-bbb"]["missed"] == 1
+    assert not by["xm1-bbb"]["truncated"] and by["xm1-eee"]["truncated"]
+    assert (by["xm1-eee"]["seat_rounds"], by["xm1-eee"]["missed"], by["xm1-eee"]["success"]) == (12, 9, False)
     assert not by["xm1-ccc"]["valid"] and by["xm1-ccc"]["reasons"] == ["harbor exception AgentTimeoutError"]
     assert by["xm1-aaa"]["cost"] == 0.004 and by["xm1-aaa"]["tokens"] == {"input": 200, "cache": 80, "output": 20}
     out = tmp_path / "out.json"
-    XM.main([str(jobs), "xm1-*", "--tasks", str(tasks), "--new-models", "openrouter/x/y", "--json", str(out)])
+    base = [str(jobs), "xm1-*", "--tasks", str(tasks)]
+    with pytest.raises(SystemExit):
+        XM.main(base + ["--new-models", "openrouter/x/y"])
+    with pytest.raises(SystemExit):
+        XM.main(base + ["--new-models", "m/a", "--replication-model", "m/rep"])
+    capsys.readouterr()
+    XM.main(base + ["--new-models", "openrouter/x/y", "--replication-model", "m/rep", "--json", str(out)])
     printed = capsys.readouterr().out
-    assert "invalid 1" in printed and "| openrouter/x/y | new | 1 | 1 | 0 | 1 | does not replicate |" in printed
+    excluded = "| 0 | 0 | 0 | 1 | excluded: silent missed share 0.417 > 0.1 |"
+    assert "invalid 1" in printed and f"| openrouter/x/y | new {excluded}" in printed
+    assert "truncated: xm1-eee/t-eee__x split 1 silent openrouter/x/y: 2 of 6 rounds logged, agreed False" in printed
+    assert "| openrouter/x/y | silent | 2 | 2 | 2 | 1 | 0.417 |" in printed and "Sensitivity" in printed
     saved = json.loads(out.read_text())
     assert saved["unmapped"] == unmapped and len(saved["duplicates"]) == 1
+    XM.main(base + ["--new-models", "m/a", "--replication-model", "m/rep", "--allow-other"])
+    assert f"| openrouter/x/y | other {excluded}" in capsys.readouterr().out

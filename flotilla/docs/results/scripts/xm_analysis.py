@@ -2,17 +2,23 @@
 and the commons family (arms silent, talk) with every seat of a trial on one model.
 
     python3 flotilla/docs/results/scripts/xm_analysis.py .flotilla-local/jobs 'xm1-??????' \
-        --tasks .flotilla-local/tasks/<split build> --tasks .flotilla-local/tasks/<commons build> [--json out.json]
+        --tasks .flotilla-local/tasks/<split build> --tasks .flotilla-local/tasks/<commons build> \
+        --new-models m1,m2,m3 --replication-model m4 [--allow-other] [--json out.json]
 
 Each trial folder of the matching jobs gets its family, instance and arm from the manifest.json of a --tasks folder
-(by task folder name) and its model from the trial config (the participants' model_name). Every measure is recomputed
-from the frozen round log with the family's score_game. A trial is valid when the verifier wrote a score without an
-error and Harbor recorded no exception. In each (family, instance, arm, model) cell the first valid trial by start time
-counts. A model-arm is valid when missed seat-rounds are at most 10% of its valid trials' seat-rounds; the tests use
-only counted trials of valid model-arms. Primary contrasts (talk vs silent, both families): exact stratified test
-pooled over the new models, alpha 0.025, at least 24 pairs. Secondary (split propose vs silent): alpha 0.05, at least
-18 pairs. Reported (split talk vs propose): the paired deal difference with a 95% bootstrap interval. Every model,
-the replication model too, also gets its own exact McNemar line. Standard library only.
+(by task folder name) and its model from the trial config (the participants' model_name). Every trial's model must be
+a new model or the replication model; --allow-other reports any other model per model only. Every measure is
+recomputed from the frozen round log with the family's score_game. A trial is valid when the verifier wrote a score
+without an error and Harbor recorded no exception. A truncated trial (no deal, no collapse, fewer rounds logged than
+planned) counts every unplayed seat-round as missed; split scores it as no deal, commons as survived when no played
+round collapsed. In each (family, instance, arm, model) cell the first valid trial by start time counts. A model-arm is
+valid when missed seat-rounds are at most 10% of its counted trials' seat-rounds; the tests use only counted trials of
+valid model-arms. Primary contrasts (talk vs silent, both families): exact stratified test pooled over the new models,
+alpha 0.025, at least 24 pairs, with a consistency label across the new models. Secondary (split propose vs silent):
+alpha 0.05, at least 18 pairs; it cannot change a primary decision. Reported (split talk vs propose): the paired deal
+difference with a 95% bootstrap interval. Every model also gets its own exact McNemar line. Sensitivity (reported
+only): the primaries on first attempts only, and the commons primary without trials that missed more than 2
+seat-rounds. Standard library only.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ import json
 import math
 import statistics
 import sys
+from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -40,8 +47,8 @@ def _load(name: str, path: Path):
 WAVE = _load("xm_wave", HERE.parent / "commons_wave.py")
 SCORERS = {family: _load(f"xm_{family}", HERE.parents[3] / "games" / f"{family}.py").score_game
            for family in ("split", "commons")}
-NEW_MODELS = ("openrouter/qwen/qwen3.8-27b", "openrouter/openai/gpt-oss-120b", "openrouter/anthropic/claude-haiku-5.5")
-REPLICATION_MODEL = "openrouter/deepseek/deepseek-v4.1-flash-1017"
+MAX_SENSITIVITY_MISSED = 2
+CONSISTENT_MIN_MODELS = 2
 MAX_MISSED = 0.10
 PER_MODEL_ALPHA = 0.05
 SUCCESS = {"split": ("agreed", "deals"), "commons": ("survived", "survived")}
@@ -146,17 +153,33 @@ def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
     row = {"job": trial.parent.name, "trial": trial.name, "started": (result or {}).get("started_at") or "",
            "family": task["family"], "instance": task["instance"], "arm": task["arm"], "model": model,
            "valid": not reasons, "reasons": reasons, "cost": cost, "unpriced_seats": unpriced, "tokens": tokens,
-           "seat_rounds": 0, "missed": 0, "passed": 0, "success": None, "measures": {}, "score": {}}
+           "seat_rounds": 0, "missed": 0, "passed": 0, "truncated": False, "success": None, "measures": {},
+           "score": {}}
     if reasons:
         return row
     params = read_json(Path(task["task_dir"]) / "environment" / "task.json")["game"]
     log = (state.get("game") or {}).get("log") or []
-    score = SCORERS[task["family"]](params, log)
-    seat_rounds = len(log) * len(params.get("players") or params["seats"])
-    return row | {"seat_rounds": seat_rounds, "missed": round(score["missed"] * seat_rounds),
-                  "passed": round(score.get("passed", 0.0) * seat_rounds),
-                  "success": bool(score[SUCCESS[task["family"]][0]]), "measures": measures(task["family"], score),
-                  "score": score}
+    return row | played(task["family"], params, log, SCORERS[task["family"]](params, log))
+
+
+def played(family: str, params: dict, log: list[dict], score: dict) -> dict[str, Any]:
+    """Seat-rounds, missed and passed seat-rounds, truncation and success of a scored trial. A truncated game counts
+    every unplayed seat-round as missed: split as no deal, commons as survived when no played round collapsed (the
+    unplayed rounds would have zero catch)."""
+    seats, planned = len(params.get("players") or params["seats"]), params["rounds"]
+    ended = any(record.get("agreed") or record.get("collapsed") for record in log)
+    truncated = not ended and len(log) < planned
+    assert score.get("truncated", truncated) == truncated, (score.get("truncated"), truncated)
+    logged = len(log) * seats
+    unplayed = (planned - len(log)) * seats if truncated else 0
+    if family == "split":
+        success = bool(score["agreed"])
+    else:
+        success = score["collapsed_in"] is None if truncated else bool(score["survived"])
+    assert not (truncated and family == "split" and success)
+    return {"seat_rounds": logged + unplayed, "missed": round(score["missed"] * logged) + unplayed,
+            "passed": round(score.get("passed", 0.0) * logged), "truncated": truncated, "success": success,
+            "measures": measures(family, score), "score": score}
 
 
 def read_trials(jobs: Path, pattern: str, tasks: dict[str, dict]) -> tuple[list[dict], list[str]]:
@@ -176,11 +199,20 @@ def cell(row: dict) -> tuple[str, int, str, str]:
     return row["family"], row["instance"], row["arm"], row["model"]
 
 
+def start_key(row: dict) -> tuple:
+    """Start time order; a trial without a start time (no result.json) sorts last."""
+    started = row["started"]
+    when = datetime.fromisoformat(started) if started else None
+    if when is not None and when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when is None, when or datetime.min.replace(tzinfo=UTC), row["job"], row["trial"]
+
+
 def choose(rows: list[dict]) -> tuple[dict[tuple, dict], list[dict]]:
     """The counted trial of each cell (the first valid one by start time) and every other trial of a cell that has
     several."""
     counted: dict[tuple, dict] = {}
-    for row in sorted(rows, key=lambda r: (r["started"], r["job"], r["trial"])):
+    for row in sorted(rows, key=start_key):
         if row["valid"] and cell(row) not in counted:
             counted[cell(row)] = row
     sizes: dict[tuple, int] = {}
@@ -188,6 +220,14 @@ def choose(rows: list[dict]) -> tuple[dict[tuple, dict], list[dict]]:
         sizes[cell(row)] = sizes.get(cell(row), 0) + 1
     duplicates = [row for row in rows if sizes[cell(row)] > 1 and counted.get(cell(row)) is not row]
     return counted, duplicates
+
+
+def first_attempts(rows: list[dict]) -> dict[tuple, dict]:
+    """The earliest trial of each cell, valid or not; a cell whose first attempt is invalid has no counted trial."""
+    first: dict[tuple, dict] = {}
+    for row in sorted(rows, key=start_key):
+        first.setdefault(cell(row), row)
+    return {key: row for key, row in first.items() if row["valid"]}
 
 
 def mean(values: list) -> float | None:
@@ -209,25 +249,26 @@ def secondary(family: str, counted: list[dict]) -> dict[str, Any]:
     return {"mean_efficiency": mean([m["efficiency"] for m in found]),
             "mean_deal_round": mean([m["deal_round"] for m in found]),
             "mean_strong_share": mean([m["strong_share"] for m in found]), "via": vias,
-            **{key: sum(m[key] for m in found) for key in PROPOSAL_KEYS if found and all(key in m for m in found)}}
+            **{key: sum(m.get(key, 0) for m in found) for key in PROPOSAL_KEYS if any(key in m for m in found)}}
 
 
 def arm_table(rows: list[dict], counted: dict[tuple, dict]) -> dict[tuple, dict]:
-    """Per (family, model, arm): trial counts, missed and passed seat-rounds over valid trials, validity, successes
-    and the secondary measures over counted trials."""
+    """Per (family, model, arm): trial counts, and over counted trials the missed and passed seat-rounds, validity,
+    truncated trials, successes and the secondary measures."""
     table: dict[tuple, dict] = {}
     for key in sorted({(r["family"], r["model"], r["arm"]) for r in rows}):
         family, model, arm = key
         mine = [r for r in rows if (r["family"], r["model"], r["arm"]) == key]
-        valid = [r for r in mine if r["valid"]]
         chosen = [r for (f, _i, a, m), r in counted.items() if (f, m, a) == key]
-        seat_rounds = sum(r["seat_rounds"] for r in valid)
-        missed, passed = sum(r["missed"] for r in valid), sum(r["passed"] for r in valid)
+        seat_rounds = sum(r["seat_rounds"] for r in chosen)
+        missed, passed = sum(r["missed"] for r in chosen), sum(r["passed"] for r in chosen)
         missed_share = missed / seat_rounds if seat_rounds else None
-        table[key] = {"family": family, "model": model, "arm": arm, "trials": len(mine), "valid": len(valid),
-                      "counted": len(chosen), "seat_rounds": seat_rounds, "missed": missed, "passed": passed,
-                      "missed_share": missed_share, "passed_share": passed / seat_rounds if seat_rounds else None,
+        table[key] = {"family": family, "model": model, "arm": arm, "trials": len(mine),
+                      "valid": sum(r["valid"] for r in mine), "counted": len(chosen), "seat_rounds": seat_rounds,
+                      "missed": missed, "passed": passed, "missed_share": missed_share,
+                      "passed_share": passed / seat_rounds if seat_rounds else None,
                       "arm_valid": missed_share is not None and missed_share <= MAX_MISSED,
+                      "truncated": sum(r["truncated"] for r in chosen),
                       "successes": sum(r["success"] for r in chosen), "secondary": secondary(family, chosen)}
     return table
 
@@ -269,18 +310,28 @@ def pairs_of(counted: dict[tuple, dict], table: dict[tuple, dict], family: str, 
             for i in instances]
 
 
-def role(model: str, new_models: tuple[str, ...], replication: str | None) -> str:
+def role(model: str, new_models: tuple[str, ...], replication: str) -> str:
     return "new" if model in new_models else "replication" if model == replication else "other"
 
 
 def arm_problem(arm_row: dict | None, arm: str) -> str | None:
-    if arm_row is None or not arm_row["valid"]:
-        return f"no valid {arm} trials"
+    if arm_row is None or not arm_row["counted"]:
+        return f"no counted {arm} trials"
     return None if arm_row["arm_valid"] else f"{arm} missed share {arm_row['missed_share']:.3f} > {MAX_MISSED}"
 
 
+def consistency(pool: list[dict]) -> dict[str, Any]:
+    """How many valid new models point the pooled way (b_m > c_m) and which reverse with p <= 0.05."""
+    valid = [line for line in pool if not line["excluded"]]
+    positive = sum(line["b"] > line["c"] for line in valid)
+    reversed_models = [line["model"] for line in valid if line["c"] > line["b"] and line["p"] <= PER_MODEL_ALPHA]
+    label = ("consistent" if positive >= CONSISTENT_MIN_MODELS and not reversed_models
+             else "driven by fewer models")
+    return {"valid_models": len(valid), "positive": positive, "reversed": reversed_models, "label": label}
+
+
 def contrast(counted: dict, table: dict, models: list[str], spec: tuple[str, str, str, str],
-             new_models: tuple[str, ...], replication: str | None) -> dict[str, Any]:
+             new_models: tuple[str, ...], replication: str) -> dict[str, Any]:
     family, first, second, kind = spec
     lines = []
     for model in models:
@@ -310,19 +361,23 @@ def contrast(counted: dict, table: dict, models: list[str], spec: tuple[str, str
         p = stratified_p([(line["b"], line["c"]) for line in pool])
         decision, reason = decide(n_pairs, b, c, p, alpha, min_pairs)
         found["pooled"] = {"models": [line["model"] for line in pool], "pairs": n_pairs, "b": b, "c": c, "p": p,
-                           "alpha": alpha, "min_pairs": min_pairs, "decision": decision, "reason": reason}
+                           "alpha": alpha, "min_pairs": min_pairs, "decision": decision, "reason": reason,
+                           "consistency": consistency(pool)}
     return found
 
 
-def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str | None) -> dict[str, Any]:
-    assert replication not in new_models, "the replication model cannot be a new model"
-    counted, duplicates = choose(rows)
+def run_contrasts(rows: list[dict], counted: dict[tuple, dict], specs: tuple, new_models: tuple[str, ...],
+                  replication: str) -> list[dict]:
     table = arm_table(rows, counted)
-    contrasts = []
-    for spec in CONTRASTS:
+    found = []
+    for spec in specs:
         models = sorted({r["model"] for r in rows if r["family"] == spec[0]})
         if models:
-            contrasts.append(contrast(counted, table, models, spec, new_models, replication))
+            found.append(contrast(counted, table, models, spec, new_models, replication))
+    return found
+
+
+def costs_of(rows: list[dict]) -> dict[str, dict]:
     costs: dict[str, dict] = {}
     for r in rows:
         entry = costs.setdefault(r["model"], {"trials": 0, "cost": 0.0, "unpriced_seats": 0,
@@ -332,11 +387,25 @@ def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str | No
         entry["unpriced_seats"] += r["unpriced_seats"]
         for key in entry["tokens"]:
             entry["tokens"][key] += r["tokens"][key]
+    return costs
+
+
+def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str) -> dict[str, Any]:
+    assert replication and replication not in new_models, "the replication model must be set and not a new model"
+    counted, duplicates = choose(rows)
+    primaries = tuple(spec for spec in CONTRASTS if spec[3] == "primary")
+    fewer_missed = {key: row for key, row in counted.items()
+                    if key[0] != "commons" or row["missed"] <= MAX_SENSITIVITY_MISSED}
+    sensitivity = {
+        "first_attempt": run_contrasts(rows, first_attempts(rows), primaries, new_models, replication),
+        "commons_at_most_2_missed": run_contrasts(rows, fewer_missed, tuple(s for s in primaries if s[0] == "commons"),
+                                                  new_models, replication)}
     return {"new_models": list(new_models), "replication_model": replication, "rows": rows,
             "counted": [f"{r['job']}/{r['trial']}" for r in counted.values()],
             "invalid": [r for r in rows if not r["valid"]], "duplicates": duplicates,
-            "arms": list(table.values()), "contrasts": contrasts, "cost": costs,
-            "total_cost": sum(r["cost"] for r in rows)}
+            "truncated": [r for r in rows if r["truncated"]], "arms": list(arm_table(rows, counted).values()),
+            "contrasts": run_contrasts(rows, counted, CONTRASTS, new_models, replication),
+            "sensitivity": sensitivity, "cost": costs_of(rows), "total_cost": sum(r["cost"] for r in rows)}
 
 
 def fmt(value: Any, digits: int = 3) -> str:
@@ -344,17 +413,17 @@ def fmt(value: Any, digits: int = 3) -> str:
 
 
 def print_arms(result: dict, family: str) -> None:
-    print(f"\n## {family}\n\n| model | arm | trials | valid | counted | missed share | passes share | "
-          f"{SUCCESS[family][1]} | model-arm | secondary |\n|---|---|---|---|---|---|---|---|---|---|")
+    print(f"\n## {family}\n\n| model | arm | trials | valid | counted | truncated | missed share | passes share | "
+          f"{SUCCESS[family][1]} | model-arm | secondary |\n|---|---|---|---|---|---|---|---|---|---|---|")
     for arm in (a for a in result["arms"] if a["family"] == family):
         extra = ", ".join(f"{key} {fmt(value) if not isinstance(value, dict) else value}"
                           for key, value in arm["secondary"].items())
         print(f"| {arm['model']} | {arm['arm']} | {arm['trials']} | {arm['valid']} | {arm['counted']} | "
-              f"{fmt(arm['missed_share'])} | {fmt(arm['passed_share'])} | {arm['successes']} of {arm['counted']} | "
-              f"{'valid' if arm['arm_valid'] else 'INVALID'} | {extra} |")
+              f"{arm['truncated']} | {fmt(arm['missed_share'])} | {fmt(arm['passed_share'])} | "
+              f"{arm['successes']} of {arm['counted']} | {'valid' if arm['arm_valid'] else 'INVALID'} | {extra} |")
 
 
-def print_contrast(found: dict) -> None:
+def print_contrast(found: dict, note: str = "") -> None:
     first, second, kind = found["a"], found["b_arm"], found["kind"]
     if kind == "reported":
         print(f"\n{found['family']} {first} - {second} (reported, no test): paired "
@@ -372,9 +441,13 @@ def print_contrast(found: dict) -> None:
         print(f"| {line['model']} | {line['role']} | {line['pairs']} | {line['b']} | {line['c']} | "
               f"{line['p']:.5g} | {line['label']} |")
     pooled = found["pooled"]
+    note = note or ("(secondary; cannot change the primary decision)" if kind == "secondary" else "")
     print(f"Pooled over the new models {pooled['models']} (exact stratified test, alpha {pooled['alpha']}, at least "
           f"{pooled['min_pairs']} pairs): {pooled['pairs']} pairs, b = {pooled['b']}, c = {pooled['c']}, "
-          f"p = {pooled['p']:.5g}: {pooled['decision']} ({pooled['reason']})")
+          f"p = {pooled['p']:.5g}: {pooled['decision']} ({pooled['reason']})" + (f" {note}" if note else ""))
+    same = pooled["consistency"]
+    print(f"Consistency: b_m > c_m in {same['positive']} of {same['valid_models']} valid new models; reversed with "
+          f"p <= {PER_MODEL_ALPHA}: {same['reversed'] or 'none'}: {same['label']}")
 
 
 def report(result: dict, unmapped: list[str]) -> None:
@@ -390,6 +463,10 @@ def report(result: dict, unmapped: list[str]) -> None:
     for row in result["duplicates"]:
         print(f"duplicate, not counted: {row['job']}/{row['trial']} {row['family']} {row['instance']} {row['arm']} "
               f"{row['model']} (valid {row['valid']}, started {row['started']})")
+    for row in result["truncated"]:
+        print(f"truncated: {row['job']}/{row['trial']} {row['family']} {row['instance']} {row['arm']} {row['model']}: "
+              f"{row['score']['rounds_played']} of {row['score']['rounds_planned']} rounds logged, "
+              f"{SUCCESS[row['family']][0]} {row['success']}")
     for name in unmapped:
         print(f"not in any manifest: {name}")
     for family in SUCCESS:
@@ -398,6 +475,7 @@ def report(result: dict, unmapped: list[str]) -> None:
             for found in result["contrasts"]:
                 if found["family"] == family:
                     print_contrast(found)
+    print_sensitivity(result["sensitivity"])
     print("\n## cost (recorded cost_usd summed over seats, every trial)\n\n| model | trials | cost USD | seats without "
           "cost | input tokens | cached input | output tokens |\n|---|---|---|---|---|---|---|")
     for model, entry in sorted(result["cost"].items()):
@@ -407,18 +485,37 @@ def report(result: dict, unmapped: list[str]) -> None:
     print(f"Total: ${result['total_cost']:.4f}")
 
 
+def print_sensitivity(sensitivity: dict) -> None:
+    print("\n## Sensitivity (reported only; cannot change any decision)\n\n### Primaries on first attempts only (the "
+          "earliest trial of each cell, valid or not; an invalid first attempt drops the pair)")
+    for found in sensitivity["first_attempt"]:
+        print_contrast(found, "(sensitivity; reported only)")
+    print(f"\n### Commons primary without trials that missed more than {MAX_SENSITIVITY_MISSED} seat-rounds")
+    for found in sensitivity["commons_at_most_2_missed"]:
+        print_contrast(found, "(sensitivity; reported only)")
+    if not sensitivity["commons_at_most_2_missed"]:
+        print("No commons trials.")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("jobs", type=Path)
     parser.add_argument("pattern")
     parser.add_argument("--tasks", type=Path, action="append", required=True)
-    parser.add_argument("--new-models", default=",".join(NEW_MODELS))
-    parser.add_argument("--replication-model", default=REPLICATION_MODEL)
+    parser.add_argument("--new-models", required=True, help="comma-separated; the models of the pooled tests")
+    parser.add_argument("--replication-model", required=True, help="per-model lines only, never pooled")
+    parser.add_argument("--allow-other", action="store_true", help="report other models per model instead of failing")
     parser.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
     new_models = tuple(m for m in args.new_models.split(",") if m)
+    if not new_models or args.replication_model in new_models:
+        parser.error("--new-models needs at least one model, and not the --replication-model")
     rows, unmapped = read_trials(args.jobs, args.pattern, load_manifests(args.tasks))
-    result = analyse(rows, new_models, args.replication_model or None)
+    other = sorted({r["model"] for r in rows} - {*new_models, args.replication_model})
+    if other and not args.allow_other:
+        parser.error(f"trials use models in neither --new-models nor --replication-model: {other} "
+                     "(add them to a list, or pass --allow-other to report them under 'other')")
+    result = analyse(rows, new_models, args.replication_model)
     report(result, unmapped)
     if args.json:
         args.json.write_text(json.dumps(result | {"unmapped": unmapped}, indent=1, sort_keys=True) + "\n")
