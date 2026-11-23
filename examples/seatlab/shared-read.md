@@ -30,6 +30,28 @@ Keep the final prompt and call limits identical for identical delivered informat
 
 **Pass test.** Treat the reminder as useful here only if all 24 teams are measured, it adds at least 2 opens in 8 worlds, and it adds at least 1 correct native booking over `neutral`. Report differences paired by world, including ties and losses. Report `auto` separately: it is a positive control for delivery, not a guarantee of a good decision. For a claim that automatic delivery helped on this panel, require correct delivery in 8/8 `auto` teams and at least 2 more correct bookings than `neutral`. Report partial coverage without choosing an arm if the study stops. Eight worlds do not support a claim about every model. Require a verified correct and wrong native control before starting this cohort.
 
+### Result: the neutral teams already opened every report
+
+All 24 teams finished on their first attempt. Neither reminder text nor automatic delivery improved the native reward. There was no missed read left to fix on these calendars. This result does **not** show that a reminder is useless when a team must handle an out-of-date report, a read cost, or a tight deadline.
+
+| Arm | Teams | Sender reported its exact feasible starts | Receiver requested report | Report delivered before final decision | Correct native booking |
+|---|---:|---:|---:|---:|---:|
+| Neutral offer | 8 | 8 | 8 | 8 | 8 |
+| Reminder | 8 | 8 | 8 | 8 | 8 |
+| Automatic delivery | 8 | 8 | 8 | 8 | 8 |
+
+Every paired comparison had 8 ties. The forced-delivery control still delivered the report when the typed receiver **did not** request it; that receiver booked a wrong slot and scored 0. The optional no-request control did not deliver the report and also scored 0. The positive control requested, received, booked correctly and scored 1. These checks separate a working delivery mechanism from a useful intervention.
+
+The owner independently reconstructed the 72 first inputs and replies and the 24 grades from the native trials. It found 72 different session commitments, no reported tool actions, and no payment fallback. The client reported 499,001 tokens. No direct model API or paid container ran. The service did not attest which model served the requests. Do not treat the token count as a cash bill. The 24 native trials used 18.2 team-minutes. The first start to last finish took 9.9 minutes with at most 2 local Docker trials.
+
+The [public rows](results/wait-for-peer/calendar-subscription-rows.json) contain the 24 checked trials and 3 separate controls. They do not include private owner requests or server session IDs. Rebuild the [paired decision](results/wait-for-peer/calendar-panel.json) without Docker, a subscription, or a model key:
+
+```sh
+python3.12 -BS -m examples.seatlab.wait_peer.panel \
+  examples/seatlab/results/wait-for-peer/calendar-subscription-rows.json \
+  | cmp - examples/seatlab/results/wait-for-peer/calendar-panel.json
+```
+
 ## Run one team on your own machine
 
 Use a checkout of this fork, Python 3.12, the fork's Harbor environment, and a local Docker daemon. Run the commands from the checkout root. The stock generator lives in the fork's history. The generated tasks and private trial outputs belong outside the checkout.
