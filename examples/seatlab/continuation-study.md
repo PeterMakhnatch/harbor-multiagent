@@ -76,3 +76,23 @@ Registered before reading the 2-hour and 3-hour grades of these multi-seat teams
 **Diagnostics:** for those pairs also compute the mean grade from uniform selection at 1 hour and the best possible 3-hour selection with hindsight. Separately, start 3 teams for 60 minutes each and keep one for 60 more. Use the published supervisor's sealed choice and its **2-hour** grade. Compare this with the busiest board, uniform choice and perfect 2-hour hindsight in each set. Average all tied winners. Do not choose a better threshold, branch count, cutoff or selector after reading those grades.
 
 All 3 schedules use 240 cumulative team-minutes. They finish after 240, 180 and 120 wall-clock minutes respectively, assuming enough compute. They do not necessarily cost the same in tokens or dollars. The checkpoint grades evaluate published work. No sandbox was resumed, no job was canceled, and the hypothetical supervisor cannot use hindsight.
+
+**Result: give one team the full time on this task.** The busiest-board policy won in 1 set and lost in 8. Its mean grade was 0.34789 against 0.45121 for one full run. The difference was −0.10332; p=511/512 in the registered direction. Even an operator who knew which smaller run would finish best could not recover the mean four-hour grade. This bound applies to the released teams and these schedules. It is not a claim that early stopping always loses.
+
+| Plan using 240 team-minutes | Time to result | Grade with the stated rule | Best possible grade for that plan |
+|---|---:|---:|---:|
+| Run one team to completion, chosen uniformly at the start | 240 min | 0.45121 | Not applicable: one output |
+| Start 2 teams; keep the busiest after 1 hour | 180 min | 0.34789 | 0.38016 |
+| Start 3 teams; keep the supervisor's choice after 1 hour | 120 min | 0.08830 | 0.16019 |
+
+The 120-minute plan is faster. It does not give the same score. The time column is a scheduled limit, not measured active worker time. The release does not provide token or dollar totals at the intermediate marks. It also does not provide seed IDs: a source repeat is not proof of an independent world.
+
+Recompute every comparison from the pinned public cache and the sealed replies. This does not need a provider, a container, or a simulator.
+
+```sh
+d=examples/seatlab/results
+python3.12 -BS -m examples.seatlab.continuation.equal_time "$w/cache" \
+  "$d/continuation-inputs.json" "$d/continuation-posts-first.jsonl"
+```
+
+The [full result](results/continuation-equal-time.json) gives the selected teams, their checkpoint grades, and tie handling for every set.

@@ -11,6 +11,8 @@ import tempfile
 import urllib.error
 import urllib.request
 import zlib
+from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, override
 
@@ -24,6 +26,9 @@ ROLLOUTS = (1, 2, 3)
 MARK_HOURS = (0.5, 1, 2, 3, 4)
 MARK60_HOUR = 1
 FINAL_HOUR = 4
+CURVE_HOURS = (1, 2, 3, 4)
+TEAM_RUNS = len(MODELS) * len(TEAM_SIZES) * len(ROLLOUTS)
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 CUTOFF_MINUTE = 60
 EVERYONE = "everyone"
 BOARD_SCHEMA = "message board of the team"
@@ -172,7 +177,7 @@ def _seats_and_board(
     return tuple(seats), steps
 
 
-def _grades(run: dict[str, Any], expected: str) -> tuple[float | int, float | int]:
+def _marks(run: dict[str, Any], expected: str) -> list[float | int]:
     where = f"index.{expected}.metrics"
     marks = _field(
         _field(run, "metrics", dict, f"index.{expected}"), "marks", list, where
@@ -182,7 +187,29 @@ def _grades(run: dict[str, Any], expected: str) -> tuple[float | int, float | in
     for mark in marks:
         if not 0 <= _number(mark, f"{where}.marks[]") <= 1:
             raise SourceError(f"{where}.marks[]: outside [0, 1]")
+    return marks
+
+
+def _grades(run: dict[str, Any], expected: str) -> tuple[float | int, float | int]:
+    marks = _marks(run, expected)
     return marks[MARK_HOURS.index(MARK60_HOUR)], marks[MARK_HOURS.index(FINAL_HOUR)]
+
+
+def _exact(value: float) -> Fraction:
+    if isinstance(value, float):
+        return Fraction(Decimal(repr(value)))
+    return Fraction(value)
+
+
+def _curve(run: dict[str, Any], expected: str) -> dict[int, Fraction]:
+    marks = _marks(run, expected)
+    _, final = _grades(run, expected)
+    curve = {hour: _exact(marks[MARK_HOURS.index(hour)]) for hour in CURVE_HOURS}
+    if not all(0 <= grade <= 1 for grade in curve.values()):
+        raise SourceError(f"index.{expected}.metrics.marks[]: outside [0, 1]")
+    if curve[CURVE_HOURS[-1]] != _exact(final) or _exact(marks[-1]) != _exact(final):
+        raise SourceError(f"index.{expected}: last mark is not the release score")
+    return curve
 
 
 def parse_index(data: bytes) -> list[tuple[str, int, list[dict[str, Any]]]]:
@@ -321,6 +348,32 @@ def load(cache: Path) -> dict[str, Any]:
             }
         )
     return {"index_sha256": _sha256(index_bytes), "cohorts": cohorts}
+
+
+def load_curves(
+    cache: Path, expected_index_sha256: str
+) -> dict[str, dict[int, Fraction]]:
+    if not isinstance(expected_index_sha256, str) or not SHA256_PATTERN.fullmatch(
+        expected_index_sha256
+    ):
+        raise SourceError("expected_index_sha256: expected 64 lowercase hex digits")
+    if CURVE_HOURS[-1] != FINAL_HOUR or MARK_HOURS[-1] != FINAL_HOUR:
+        raise SourceError("curve hours must end at the release score hour")
+    index_bytes = _read_member(Path(cache), INDEX_MEMBER, INDEX_MAX_BYTES)
+    actual = _sha256(index_bytes)
+    if actual != expected_index_sha256:
+        raise SourceError(f"index sha256 {actual} != {expected_index_sha256}")
+    models = _models(_json(index_bytes, "index"))
+    curves: dict[str, dict[int, Fraction]] = {}
+    for model in MODELS:
+        for team_size in TEAM_SIZES:
+            for rollout in ROLLOUTS:
+                expected, run = _find_run(models, model, team_size, rollout)
+                _seats_and_board(run, expected, team_size)
+                curves[expected] = _curve(run, expected)
+    if len(curves) != TEAM_RUNS or any(size < 2 for size in TEAM_SIZES):
+        raise SourceError(f"expected {TEAM_RUNS} distinct team runs")
+    return curves
 
 
 class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
