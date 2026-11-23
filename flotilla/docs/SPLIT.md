@@ -52,7 +52,10 @@ seat's share of the surplus, seats that took less than their outside option, and
 The scorer counts rounds whose claims did not fit when every seat claimed. The log records explicit passes in
 `passed` and seats that did not act in `missed`. Each share uses all played seat-rounds as its denominator. Older logs
 do not record passes, so a refusal by not claiming still counts as a miss. From the talk messages, read by hand:
-what each seat says about its outside option (true, false, or not stated).
+what each seat says about its outside option (true, false, or not stated). `docs/results/scripts/speech_acts.py`
+(exploratory, no test) does this without a reader: outside-option statements (true, inflated, deflated), text splits
+("I claim 57 and you claim 39"), the last textual agreement, and whether the last round's claims honored it. On sp2
+and sp3 talk it matches the hand reading (sp3: 6 seats stated, all true; sp2: 1 weak seat inflated, 25 against 6).
 
 ## 4. Pilot pre-registration
 

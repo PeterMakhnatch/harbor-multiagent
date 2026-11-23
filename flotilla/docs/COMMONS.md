@@ -171,6 +171,12 @@ seats of one trial are not independent.
 | response | Over-use events: a seat requests above `H*(S) / N`. Response: the share of those events after which another seat, acting in both rounds, raises its request in the next round. |
 | shell model | Whether a seat simulated the lake with code (from its trajectory), and whether that predicts survival. |
 
+`docs/results/scripts/speech_acts.py` (exploratory, no test) is a tighter reading than the `pledge()` upper bound
+(section 13): it keeps own pledges ("I will also request 0") apart from group proposals and reports, resolves each
+against the seat's request in its round (kept, broken, unresolved), and checks whether a group proposal's sender
+stays at or below it. On wave 1 talk, all 101 statements read by hand: precision 1.0 for both kinds; the one broken
+pledge is instance 4 (section 15).
+
 `reward.json` keeps exactly one key (CONTRACT section 6): `reward` = sustained share. The totals per
 seat go to `score.json`.
 
