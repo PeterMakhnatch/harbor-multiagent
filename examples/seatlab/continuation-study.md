@@ -96,3 +96,11 @@ python3.12 -BS -m examples.seatlab.continuation.equal_time "$w/cache" \
 ```
 
 The [full result](results/continuation-equal-time.json) gives the selected teams, their checkpoint grades, and tie handling for every set.
+
+## What if all the smaller teams finish?
+
+This is a separate **retrospective** resource check, not a test on unseen teams. The 4-hour grades were already published and used above. Unlike early screening, every team in this comparison runs for 4 hours. Ask whether two isolated half-size teams offer enough extra reward to justify testing a selector that does not see the final verifier grade.
+
+Use each of the 3 original models with a total budget of 4 or 8 seats. In each of the 6 settings compare the mean final grade of one full-size team with all 3 unordered pairs of half-size teams. A pair uses the same seat count and 4-hour clock. Grade uniform output selection, the output of the team with more first-hour public posts (average ties), and perfect output selection. Average the 3 pairs first, then weight the 6 settings equally. Report each model and seat budget separately. The 4-seat source teams appear on both sides of different settings. There are no paired seeds. Do not assign an independence-based p-value or claim equal tokens or spending.
+
+Before calculating this comparison, set a spending gate: only design a paid, blinded selector if perfect selection gains at least 0.03 over one full-size team on average and is better in at least 4 of 6 settings. This is a feasibility bound, not a result about what an actual selector knows. If the bound passes, require any later selector to beat the uniform and count-only controls as well as the single full-size team. Do not use the released final grade to make an operator decision.
