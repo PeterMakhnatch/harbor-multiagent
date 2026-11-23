@@ -11,18 +11,24 @@ from ..visibility import calendar_driver
 from . import decisions, native_stage
 
 
-def checked_stage(out: Path, allow_deepseek: bool) -> tuple[Path, str]:
+def checked_stage(out: Path, allow_deepseek: bool,
+                  seat_commands: bool = False) -> tuple[Path, str]:
+    assert type(allow_deepseek) is bool and type(seat_commands) is bool
+    if allow_deepseek and seat_commands:
+        raise ValueError("--allow-deepseek and --seat-commands are incompatible")
     config_path = out / "config.json"
     config = decisions.decode(decisions.read_text(config_path))
     if not isinstance(config, dict) or not isinstance(config.get("trial_name"), str):
         raise TypeError("not a staged market trial")
     name = config["trial_name"]
-    match = re.fullmatch(r"market-(0[0-9]|1[01])-(own|donor)-(replay|deepseek)", name)
+    match = re.fullmatch(r"market-(0[0-9]|1[01])-(own|donor)-(replay|deepseek|command)", name)
     if not match:
         raise ValueError("not a registered market trial")
     mode = match[3]
     if (mode == "deepseek") != allow_deepseek:
         raise ValueError("--allow-deepseek is required only for a paid stage")
+    if (mode == "command") != seat_commands:
+        raise ValueError("--seat-commands is required only for a command stage")
     picks = None
     if mode == "replay":
         picks = {r["seat"]: r["kwargs"]["pick"] for r in config["participants"]}
@@ -49,10 +55,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run one staged market trial in local Harbor.")
     parser.add_argument("stage", type=Path)
     parser.add_argument("--allow-deepseek", action="store_true")
+    parser.add_argument("--seat-commands", type=Path)
     args = parser.parse_args()
     try:
         out = args.stage.resolve(strict=True)
-        config, mode = checked_stage(out, args.allow_deepseek)
+        config, mode = checked_stage(out, args.allow_deepseek, args.seat_commands is not None)
         harbor = calendar_driver._entrypoint(Path(sys.executable).parent / "harbor")
         env = calendar_driver._native_env(out)
         root = Path(__file__).resolve().parents[3]
@@ -64,6 +71,10 @@ def main() -> int:
                 raise ValueError("direct mode requires a host key and private spend ledger")
             deepseek.bind_host_key()
             spend.bind_host_spend_dir()
+        if mode == "command":
+            from . import command_host
+
+            command_host.bind(args.seat_commands)
         os.environ.clear()
         os.environ.update(env)
         sys.path[:0] = env["PYTHONPATH"].split(os.pathsep)

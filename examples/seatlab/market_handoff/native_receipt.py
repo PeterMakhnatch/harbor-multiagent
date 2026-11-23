@@ -19,7 +19,7 @@ SCENARIO_KEYS = {"schema", "completed_days", *ROLES}
 CONFIG_KEYS = {"schema_version", "task", "trial_name", "trials_dir", "agent_timeout_multiplier",
                "environment", "verifier", "participants"}
 PARTICIPANT_KEYS = {"seat", "name", "import_path", "model_name", "kwargs"}
-TRIAL = re.compile(r"market-(\d{2})-(own|donor)-(replay|deepseek)")
+TRIAL = re.compile(r"market-(\d{2})-(own|donor)-(replay|deepseek|command)")
 Record = dict[str, Any]
 
 
@@ -64,12 +64,13 @@ def load(path: Path) -> tuple[str, Record]:
 
 
 def participant_ok(row: Record, mode: str, name: str) -> bool:
+    assert mode in native_stage.MODES
     replay = mode == "replay"
     kwargs = row.get("kwargs")
     keys = {"source", "run_id", "pick"} if replay else {"source", "run_id"}
     return (row.keys() == PARTICIPANT_KEYS and row["name"] is None
             and row["import_path"] == native_stage.SEAT_IMPORT
-            and row["model_name"] == (None if replay else native_stage.DECLARED_MODEL)
+            and row["model_name"] == (native_stage.DECLARED_MODEL if mode == "deepseek" else None)
             and isinstance(kwargs, dict) and kwargs.keys() == keys
             and kwargs["source"] == mode and kwargs["run_id"] == name
             and (not replay or pick_ok(kwargs["pick"])))
@@ -243,8 +244,8 @@ def native_seats(native: Record, mode: str, declared_seats: dict[str, Record],
             "under_test": seat.get("under_test") is True,
             "exception_info": "exception_info" in seat and seat["exception_info"] is None,
             "metadata": metadata == expected and pick_ok(metadata["pick"]),
-            "served_model": served is None if mode == "replay"
-            else isinstance(served, str) and served.strip() != "",
+            "served_model": isinstance(served, str) and served.strip() != ""
+            if mode == "deepseek" else served is None,
             "replay_pick": mode != "replay"
             or rebuilt[role]["pick"] == declared_seats[role]["kwargs"]["pick"],
         })

@@ -176,6 +176,20 @@ python3.12 -BS -m "$m" score "$d/continuation-equal-time.json" "$d/continuation-
   cmp - "$d/continuation-mark-selector.json"
 ```
 
+#### Read marks from your own Bespoke jobs
+
+Use two owner checkpoint manifests from the same task and 4-hour design. Set `TASK_ENV` to the environment identifier recorded by your harness. Matching this identifier does not verify the task revision or infrastructure. Check those independently. The `mark-h03` directory is a link created by the [stock checkpoint writer](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/harness/src/multi_agent_harness/harbor/checkpoint.py#L110-L140).
+
+```sh
+python3.12 -BS -m examples.seatlab.continuation.owner_mark --task "$TASK_ENV" \
+  east "$JOB_A.checkpoints/$TRIAL_A/mark-h03/manifest.json" \
+  west "$JOB_B.checkpoints/$TRIAL_B/mark-h03/manifest.json"
+```
+
+The command opens only the 2 manifests. It returns the eligible team IDs, the pick and the input hashes. A tie allows both teams. If a grade is missing, pending or failed, the command makes no pick. It also makes no pick if the harness pinned the mark at or after hour 4. A measured zero remains a grade. A resumed run or mismatched task is an input error. The mark's recorded time is when the harness pinned the submission, not when the owner received the grade.
+
+The public release has no owner manifests. We exercised the [stock producer](results/owner-mark-stock-writer.json) with controlled job records and 2 published grade values. The selector waited through the pending and partly graded states. It chose the higher mark only after both grade updates. This is a file compatibility check, not two new team trials.
+
 ### Does the same signal transfer when there is no team chat?
 
 We inspected the release labels, but not the grades of the following 18 runs for this analysis. Register this test before scoring the coordinated-team mark selector. Use the remaining 9 single-agent runs and 9 eight-seat runs labeled `Without communication`. Each of the 3 models has 3 runs per design. In this business task, the board-off policy refuses messages; the 8 seats still share the company and repository. Do not describe them as 8 independent businesses.
@@ -206,4 +220,34 @@ Register this resource check before calculating the cost ratios. The terminal gr
 
 Call seat-time a close match for reported model cost here only if the pair/full ratio is between 0.90 and 1.10 inclusive in at least 5 of 6 settings, and its unweighted mean across settings is also within that range. Report both mean costs in each setting and the 3-hour rule's known terminal grade. Separately count settings where the pair costs no more and grades no worse, with one strict improvement. Overlapping runs are not independent.
 
-These are publisher-reported terminal amounts, not invoices, infrastructure charges or a measurement at hour 3. The published index does not give the billing route or a per-mark cost series. The stock harness can [price subscription usage at API rates and omit fees](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/harness/docs/proxy.md#budget-and-pricing). Do not claim that a job can enforce a future budget with terminal observations. Missing, invalid or zero-denominator evidence makes the result incomplete.
+These are publisher-reported terminal amounts, not invoices, infrastructure charges or a measurement at hour 3. The published index does not give the billing route or a per-mark cost series. The stock harness can [price a subscription at API rates](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/harness/docs/proxy.md#L60-L64) and [omit fees](https://github.com/bespokelabsai/multi-agent-coordination-bench/blob/dbec43ff757c86c17077e61b37c7f584c880bdee/harness/docs/proxy.md#L15-L19). Do not claim that a job can enforce a future budget with terminal observations. Missing, invalid or zero-denominator evidence makes the result incomplete.
+
+**Result: equal seat-time did not reliably match reported cost.** The mean ratio was 1.0355, but only 4 of 6 settings were within 10%. The registered minimum was 5. The 2 smaller teams cost less and produced a higher selected grade in 2 settings: Sol with 8 total seats and Argon with 4. Both smaller teams completed in every comparison.
+
+| Model | Total seats | Both smaller teams, USD | Full team, USD | Pair / full | Selected grade minus full grade |
+|---|---:|---:|---:|---:|---:|
+| Opus | 4 | 210.39 | 171.90 | 1.224 | +0.03547 |
+| Opus | 8 | 343.81 | 327.03 | 1.051 | −0.00850 |
+| Sol | 4 | 192.33 | 171.29 | 1.123 | +0.02827 |
+| Sol | 8 | 342.58 | 364.08 | 0.941 | +0.07727 |
+| Argon | 4 | 53.57 | 57.96 | 0.924 | +0.02513 |
+| Argon | 8 | 115.93 | 122.07 | 0.950 | −0.00230 |
+
+Use the public cache from the transfer study to reproduce the [27 reported costs, 18 pair sums and 6 setting comparisons](results/continuation-reported-costs.json). This reads released data. It does not run a team or charge an account.
+
+```sh
+python3.12 -BS -m examples.seatlab.continuation.reported_costs "$w/cache" |
+  cmp - examples/seatlab/results/continuation-reported-costs.json
+```
+
+## What changes when the owner resumes a team after an interruption?
+
+Before running the stock code, fix the saved point at 2 hours of a 4-hour Seed to Profit run. Compare restarting immediately with restarting after 2 more hours of wall time. Keep the saved office, completed months and checkpointed agent clock identical. Use the stock market scheduler and the stock checkpoint time calculation. This control passes only if both restarts have the same remaining agent time **and** the same number of company months due. Do not run agent-written software or infer a terminal reward. Report months due separately from months actually run.
+
+## Does a return message prove the receiver saw the first one?
+
+**Question, fixed before reading the receiver files.** Can an outside operator use a message in the reverse direction within 10 minutes as evidence that the receiver saw the original? Use all 9 released two-seat communicating businesses. Rollout 1 of each model is for format calibration only. Rollouts 2 and 3 of each model are the held-out comparison. Both seats face the same partner, even when they use “everyone.”
+
+Count each original board message once. Restrict the primary denominator to messages at or before minute 230, giving each a 10-minute window in the scheduled run. Require an actual later post from the other seat within that window. Count a confirmed observation only when that seat's own successful board tool return contains the original message. Match its sender and exact message text to the board. Also verify its audience when the observation exposes it. Do not equate a board row number with a hub sequence number. Do not guess from paraphrases or text in another tool's result. If a return and the reverse post share a timestamp, require independent ordering or leave the order unknown.
+
+Use the unambiguous, source-backed lower bound: report the proportion with visible receipt evidence **before** the reverse message. Require at least 80% overall and at least 80% in each held-out model with 10 or more qualifying messages. Require at least 2 eligible models. Otherwise do not recommend the proxy. Also report receipt evidence for messages with no timely return post. Withhold a result if a selected file is missing or cannot be decoded. Shortened tool output and unseen tools leave receipts unknown, not false. Never publish private messages, receiver observations or seat names. An observation does not prove comprehension, action, or a reward effect.

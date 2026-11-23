@@ -31,7 +31,7 @@ SEAT_IMPORT = "examples.seatlab.market_handoff.native_seat:MarketSeat"
 DECLARED_MODEL = "deepseek/deepseek-flash"
 ROLES = ("sales", "finance")
 ARMS = ("own", "donor")
-MODES = ("replay", "deepseek")
+MODES = ("replay", "deepseek", "command")
 SALES_SOURCE = {"own": "target", "donor": "donor"}
 MAX_TEMPLATE_BYTES = 1 << 20
 CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
@@ -81,7 +81,7 @@ def scenario(cells: decisions.Cells, world: int, arm: str) -> dict[str, Any]:
 
 
 def participants(mode: str, name: str, picks: dict[str, int] | None) -> list[dict[str, Any]]:
-    assert (mode == "replay") == (picks is not None)
+    assert mode in MODES and (mode == "replay") == (picks is not None)
     rows = []
     for role in ROLES:
         kwargs: dict[str, Any] = {"source": mode, "run_id": name}
@@ -149,8 +149,10 @@ def write_task(task: Path, files: dict[str, bytes]) -> None:
 
 def stage(args: argparse.Namespace) -> dict[str, Any]:
     replies = (args.sales_replies, args.finance_replies)
-    if args.mode == "deepseek" and any(path is not None for path in replies):
-        fail("deepseek mode refuses replay replies")
+    if args.mode not in MODES:
+        fail(f"unknown market mode: {args.mode!r}")
+    if args.mode != "replay" and any(path is not None for path in replies):
+        fail(f"{args.mode} mode refuses replay replies")
     if args.mode == "replay" and any(path is None for path in replies):
         fail("replay mode requires --sales-replies and --finance-replies")
     data = args.data.expanduser().resolve(strict=True)

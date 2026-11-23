@@ -56,7 +56,7 @@ python3.12 -BS -m examples.seatlab.market_handoff.ceiling examples/seatlab/resul
 
 ## Run one business team in Harbor
 
-You can stage any of the 12 companies in Peter's Olam fork. The sales seat reads the selected sales view and submits one recommendation. The finance seat must wait for it. Finance then sees its own view and the recommendation, but not the sales view. The verifier maps the finance choice to the frozen stock outcome. Neither seat receives the menu of outcomes. The same task can replay sealed choices without a model or ask 2 live DeepSeek seats. This tests one checkpoint decision, not a team operating a company for 3 years.
+You can stage any of the 12 companies in Peter's Olam fork. Sales submits one recommendation. Finance must wait for it. Finance sees its own view and the recommendation, but not the sales view. Neither seat receives the payoff table. The verifier maps the finance choice to the frozen stock outcome. Use recorded choices, live DeepSeek seats, or [your own trusted role programs](#bring-your-own-live-seat-programs). This tests one checkpoint decision, not a team operating a company for 3 years.
 
 Start in the root of this branch. Use Python 3.12 for staging, the fork's Python environment for Harbor, and a running local Docker engine.
 
@@ -121,3 +121,65 @@ For the published campaign, a third worker examined both shards after completion
 **Acceptance test, fixed before running outside policies.** First, two separate programs answer the published role prompts with the fixed keep-price policy. The programs get prompt packets only. Prepare the finance packets only after the sales replies arrive. On world 1 with the company's own sales view, require both first picks to be 1. Require both native prompt hashes to match the actual outside requests, and the native reward to match the offline stock grade. This is not a replication with new model draws.
 
 Next, give a native trial two operator-supplied programs. In worlds 1 and 2, keep the inputs and the finance program fixed. In one arm, sales recommends keeping prices (1). In the other, it recommends discounting (3). Finance must return the recommendation from its *delivered* prompt. No answer or precomputed finance pick may be present in the native configuration. Pass only if all 4 trials finish, each role sees the expected prompt, the 2 finance prompts per world differ, and every reward equals the stock payoff for its delivered choice. Report even equal payoffs. Refuse invalid replies rather than choosing a default. These programs use no model; they test live orchestration, not team quality.
+
+**Result: both delivery tests passed.** Two independent processes returned 24 sales decisions and then 24 finance decisions from prompt packets alone. The native replay of world 1 used their actual requests and choices. Both chose 1; the native verifier returned **0.25984**.
+
+In 4 separate native trials, sales and finance ran as programs while the trial was active. The sales input stayed identical across arms in each world. The changed recommendation reached finance each time. All 8 role inputs and choices matched an independent reconstruction.
+
+| Business | Keep: sales → finance | Native reward | Discount: sales → finance | Native reward |
+|---|---:|---:|---:|---:|
+| World 1 | 1 → 1 | 0.25984 | 3 → 3 | 0.18797 |
+| World 2 | 1 → 1 | 0.00000 | 3 → 3 | 0.00000 |
+
+The [5-trial evidence](results/market-handoff/external-seat-proof.json) includes trial IDs, both input digests per trial, and actual verifier rewards. A real change of decision did not require a change of reward. These were fixed policies, not 5 fresh LLM teams.
+
+### Bring your own packet workers
+
+Start at the fork root with Python 3.12. Keep the payoff files on the owner's machine. Give a sales worker only `sales.requests`. Give a finance worker only `finance.requests`, after sales returns. The included [reference worker](market_handoff/reference_seat.py) uses no model or network.
+
+```sh
+set -eu
+m=examples.seatlab.market_handoff
+d="$PWD/examples/seatlab/results/market-handoff"
+policy="$PWD/examples/seatlab/market_handoff/reference_seat.py"
+w=$(mktemp -d)
+mkdir "$w/prefixes"
+cp "$d"/*.prefix.json "$w/prefixes/"
+python3.12 -BS -m "$m.decisions" emit-sales "$w/prefixes" > "$w/sales.requests"
+python3.12 -IS "$policy" packet keep < "$w/sales.requests" > "$w/sales.replies"
+python3.12 -BS -m "$m.decisions" emit-finance "$w/prefixes" "$w/sales.replies" > "$w/finance.requests"
+python3.12 -IS "$policy" packet keep < "$w/finance.requests" > "$w/finance.replies"
+python3.12 -BS -m "$m.decisions" score "$d" "$w/sales.replies" "$w/finance.replies"
+```
+
+For native confirmation, set `HARBOR_PYTHON` and `SLOT_WRAPPER` as [above](#run-one-business-team-in-harbor). The comparison accepts your own first replies, not only the published model's decisions.
+
+```sh
+mkdir "$w/replay"
+python3.12 -BS -m "$m.native_stage" stage "$d" "$w/replay" --world 1 --arm own --mode replay \
+  --sales-replies "$w/sales.replies" --finance-replies "$w/finance.replies"
+"$SLOT_WRAPPER" "$HARBOR_PYTHON" -B -m "$m.native_run" "$w/replay"
+python3.12 -BS -m "$m.delivery" "$d" "$w/replay" \
+  --sales-replies "$w/sales.replies" --finance-replies "$w/finance.replies"
+```
+
+`delivery` returns 0 for a match, 1 for a measured mismatch, and 2 for invalid or missing input. It binds the two prompt hashes, view hashes, choices and verifier reward. It reports the supplied dataset hash, not proof of who produced a private dataset.
+
+### Bring your own live seat programs
+
+Use only programs you trust. The programs run on the host as your user, with separate temporary working directories. This is **not** an operating-system sandbox. A program can read same-user files or use the network. Harbor cannot meter an arbitrary program's model bill. Keep the command file private; the staged task contains no program paths, keys, or preselected actions.
+
+Reuse `d`, `m`, `w` and `policy` from the packet example. This example requires `jq`. Finance reads the recommendation from its actual turn; it has no configured choice.
+
+```sh
+jq -n --arg py "$(command -v python3.12)" --arg policy "$policy" \
+  '{sales:{argv:[$py,"-IS",$policy,"turn","keep"],env:[]},
+    finance:{argv:[$py,"-IS",$policy,"turn","follow-sales"],env:[]}}' > "$w/commands.json"
+mkdir "$w/live"
+python3.12 -BS -m "$m.native_stage" stage "$d" "$w/live" --world 1 --arm own --mode command
+"$SLOT_WRAPPER" "$HARBOR_PYTHON" -B -m "$m.native_run" "$w/live" --seat-commands "$w/commands.json"
+python3.12 -BS -m "$m.delivery" "$d" "$w/live" \
+  --sales-replies "$w/sales.replies" --finance-replies "$w/finance.replies"
+```
+
+Replace each `argv` with your own absolute executable and its arguments. A live program receives one JSON line with `schema: "seatlab.seat-turn/v1"` and `prompt`. It returns one JSON line, for example `{"text":"{\"pick\":1}"}`. `env` names host variables to pass to that role only. Never put secret values in `argv`. A failed process or an invalid reply does not receive a default decision.

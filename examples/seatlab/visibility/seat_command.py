@@ -8,13 +8,16 @@ import os
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any, cast
 
+_MAX_CONFIG_BYTES = 64 * 1024
 _MAX_TEXT_BYTES = 8192
 # Allow six bytes per escaped byte of text, plus JSON framing and padding.
 _MAX_REPLY_BYTES = 6 * _MAX_TEXT_BYTES + 256
@@ -192,9 +195,7 @@ class CommandSeat:
         environ: Mapping[str, str] | None = None,
         timeout: float = 90.0,
     ) -> None:
-        if isinstance(argv, (str, bytes)):
-            raise ValueError("invalid seat command argv")
-        args = tuple(argv)
+        args = () if isinstance(argv, (str, bytes)) else tuple(argv)
         if (
             not args
             or not all(_process_text(arg) for arg in args)
@@ -222,9 +223,9 @@ class CommandSeat:
 
     def __call__(self, prompt: str) -> str:
         deadline = time.monotonic() + self._timeout
-        if not isinstance(prompt, str):
-            raise ValueError("invalid seat command prompt")
         try:
+            if not isinstance(prompt, str):
+                raise TypeError
             request = (
                 json.dumps(
                     {"schema": "seatlab.seat-turn/v1", "prompt": prompt},
@@ -232,7 +233,7 @@ class CommandSeat:
                 )
                 + "\n"
             ).encode("utf-8")
-        except UnicodeError:
+        except (TypeError, UnicodeError):
             raise ValueError("invalid seat command prompt") from None
         try:
             with _command_line(
@@ -250,12 +251,14 @@ class CommandSeat:
             raise ValueError("seat command could not complete") from None
 
 
-def _configured_seat(spec: object) -> CommandSeat:
-    if not isinstance(spec, dict) or set(spec) != {"argv", "env"}:
-        raise ValueError("invalid seat command role")
-    argv, names = spec["argv"], spec["env"]
-    if not isinstance(argv, list) or not isinstance(names, list):
-        raise ValueError("invalid seat command role")
+def _string_argv(values: list[Any]) -> list[str]:
+    argv = [value for value in values if isinstance(value, str)]
+    if len(argv) != len(values):
+        raise ValueError("invalid seat command argv")
+    return argv
+
+
+def _host_environ(names: list[Any]) -> dict[str, str]:
     environ: dict[str, str] = {}
     for name in names:
         if not isinstance(name, str) or not _allowed_env_name(name) or name in environ:
@@ -264,7 +267,38 @@ def _configured_seat(spec: object) -> CommandSeat:
         if value is None:
             raise ValueError("required seat command environment variable is missing")
         environ[name] = value
-    return CommandSeat(argv, environ=environ)
+    return environ
+
+
+def _configured_seat(spec: object) -> CommandSeat:
+    if not isinstance(spec, dict) or set(spec) != {"argv", "env"}:
+        raise ValueError("invalid seat command role")
+    fields = cast("dict[str, object]", spec)
+    match fields["argv"], fields["env"]:
+        case list() as values, list() as names:
+            environ = _host_environ(names)
+            return CommandSeat(_string_argv(values), environ=environ)
+        case _:
+            raise ValueError("invalid seat command role")
+
+
+def _config_text(path: Path) -> str:
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        status = os.fstat(fd)
+        if not stat.S_ISREG(status.st_mode) or status.st_size > _MAX_CONFIG_BYTES:
+            raise ValueError("invalid seat command config")
+        data = bytearray()
+        while len(data) <= _MAX_CONFIG_BYTES:
+            chunk = os.read(fd, _MAX_CONFIG_BYTES + 1 - len(data))
+            if not chunk:
+                break
+            data.extend(chunk)
+    finally:
+        os.close(fd)
+    if len(data) > _MAX_CONFIG_BYTES:
+        raise ValueError("invalid seat command config")
+    return data.decode("utf-8", errors="strict")
 
 
 def load_commands(
@@ -276,11 +310,11 @@ def load_commands(
         raise ValueError("expected two different seat roles")
     try:
         config = json.loads(
-            path.read_text(encoding="utf-8"),
+            _config_text(path),
             object_pairs_hook=_unique_object,
             parse_constant=_reject_constant,
         )
-    except (OSError, ValueError, RecursionError):
+    except (OSError, TypeError, ValueError, RecursionError):
         raise ValueError("invalid seat command config") from None
     if not isinstance(config, dict) or set(config) != {first, second}:
         raise ValueError("invalid seat command config")

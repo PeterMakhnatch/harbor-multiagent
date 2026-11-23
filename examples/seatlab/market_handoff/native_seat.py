@@ -7,7 +7,7 @@ from typing import Any, Never, override
 
 from examples.seatlab import seat_agent
 from examples.seatlab.capsule import view_hash
-from examples.seatlab.market_handoff import decisions
+from examples.seatlab.market_handoff import command_host, decisions
 from examples.seatlab.visibility import deepseek, spend
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
@@ -15,7 +15,7 @@ from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 
 DECLARED_MODEL = "deepseek/deepseek-flash"
-SOURCES = ("replay", "deepseek")
+SOURCES = ("replay", "deepseek", "command")
 _PERSONAS = {"sales": "sales analyst", "finance": "finance director"}
 _LEDGER_ROLES = {"sales": "analyst_1", "finance": "decision_maker"}
 _WORLD_ERRORS = (RuntimeError, OSError, ValueError, RecursionError)
@@ -128,6 +128,19 @@ async def _ask(prompt: str, role: str, run_id: str, metadata: dict[str, Any],
     return turn.text
 
 
+async def _command(prompt: str, role: str, metadata: dict[str, Any]) -> str:
+    assert role in command_host.ROLES and isinstance(prompt, str)
+    metadata["phase"] = "command_pending"
+    try:
+        return await asyncio.to_thread(command_host.turn, role, prompt)
+    except command_host.CommandUnavailable:
+        _fail(metadata, "command_unavailable")
+    except TimeoutError:
+        _fail(metadata, "command_timeout")
+    except ValueError:
+        _fail(metadata, "command_failed")
+
+
 class MarketSeat(BaseAgent):
     def __init__(
         self,
@@ -144,12 +157,15 @@ class MarketSeat(BaseAgent):
         if kwargs or extra_env:
             raise ValueError("Market seat does not accept overrides")
         if source not in SOURCES:
-            raise ValueError("Market seat source must be replay or deepseek")
+            raise ValueError("Market seat source must be replay, deepseek or command")
         if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id):
             raise ValueError("Market seat requires a host trial slug")
         if source == "replay":
             if type(pick) is not int or pick not in decisions.PICKS or model_name is not None:
                 raise ValueError("Replay market seat requires only a supplied pick")
+        elif source == "command":
+            if pick is not None or model_name is not None:
+                raise ValueError("Command market seat does not accept a pick or model")
         elif pick is not None or model_name not in (None, DECLARED_MODEL):
             raise ValueError("DeepSeek market seat does not accept a pick or model override")
         super().__init__(
@@ -212,11 +228,16 @@ class MarketSeat(BaseAgent):
         if self._source == "replay":
             pick = self._pick
         else:
-            text = await _ask(prompt, role, self._run_id, metadata, context)
+            if self._source == "command":
+                text = await _command(prompt, role, metadata)
+                invalid_reply = "invalid_command_reply"
+            else:
+                text = await _ask(prompt, role, self._run_id, metadata, context)
+                invalid_reply = "invalid_model_reply"
             try:
                 pick = _reply_pick(text)
             except (ValueError, RecursionError):
-                _fail(metadata, "invalid_model_reply")
+                _fail(metadata, invalid_reply)
         assert type(pick) is int and pick in decisions.PICKS
         metadata["phase"] = "submission_pending"
         try:

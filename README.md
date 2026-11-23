@@ -54,6 +54,10 @@ To run your own two-seat business task, [stage a real market in local Harbor](ex
 
 For a local campaign, [give independent workers the same sealed market panel](examples/seatlab/market-operations.md#how-independent-workers-run-this-study). They claim different companies and resume after an interruption. To test your own output selector, [split 18 completed-team pairs among blind workers](examples/seatlab/continuation-study.md#give-completed-team-pairs-to-independent-workers). The example runs without an API key.
 
+To test **your own sales and finance agents**, [send blind packets or connect two live programs](examples/seatlab/market-handoff.md#can-an-operator-bring-new-sales-and-finance-seats). Compare the native result with the actual prompts and first replies. The reference programs run without an API key.
+
+Already running 2 Bespoke teams? [Read their owner-side 3-hour marks](examples/seatlab/continuation-study.md#read-marks-from-your-own-bespoke-jobs) without reading their private work. Use the [reported model costs](examples/seatlab/continuation-study.md#does-equal-seat-time-also-match-the-publishers-reported-model-cost) before treating equal seat-time as equal spending.
+
 **Do not use an interim business mark as a final reward.** The [stock verifier uses different measures](examples/seatlab/continuation-study.md#is-screening-worth-doing-at-equal-cumulative-team-time). The public archive cannot say what the final reward would have been if a team stopped early.
 
 ## Install
