@@ -4,9 +4,9 @@ python3 flotilla/docs/results/scripts/egress_audit.py <jobs_dir> '<pattern>'
 
 Seats have network access. A request to any host but `world` (the game service) could fetch public facts,
 for example this repository's published pots and outside options. A host counts when it follows a URL scheme
-or a fetch command (curl, wget, git clone, ...) and ends in a public top-level domain; a private address is
-reported as `internal:<ip>`. Prints one line per trial with such a host, then a total. Exit code 1 if any
-trial names a public host."""
+or a fetch command (curl, wget, git clone, ...) and ends in a public top-level domain; a private address or a
+name without a dot (another container) is reported as `internal:<name>`. Prints one line per trial with such a
+host, then a total. Exit code 1 if any trial names a public host."""
 import json
 import re
 import sys
@@ -41,9 +41,9 @@ def hosts_in(text: str) -> set[str]:
     result = set()
     for host in found:
         name = host.split(":")[0]
-        if name in ALLOWED or name.startswith("world.") or name.endswith(FILE_SUFFIXES):
+        if not name or name in ALLOWED or name.startswith("world.") or name.endswith(FILE_SUFFIXES):
             continue
-        result.add(f"internal:{name}" if PRIVATE.match(name) else name)
+        result.add(f"internal:{name}" if PRIVATE.match(name) or "." not in name else name)
     return result
 
 
