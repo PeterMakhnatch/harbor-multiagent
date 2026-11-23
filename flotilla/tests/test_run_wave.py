@@ -560,7 +560,7 @@ def test_xm1_dry_run_alternates_families():
         if not sets or sets[-1] != cell["task_set"]:
             sets.append(cell["task_set"])
     assert sets == [sets[0], 1 - sets[0]] * (len(sets) // 2)
-    assert len(sets) == 24
+    assert len(sets) == sum(len(task_set["instances"]) for task_set in plan["task_sets"])
     dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run",
                           str(FLOTILLA / "plans" / "xm1.json")], capture_output=True, text=True)
     assert dry.returncode == 0, dry.stderr
@@ -573,5 +573,5 @@ def test_xm1_dry_run_alternates_families():
         else:
             families[-1][1] += 1
     assert [item[0] for item in families] == sets
-    assert {item[1] for item in families} == {12, 8}
+    assert {item[1] for item in families} == {len(task_set["arms"]) * len(plan["models"]) for task_set in plan["task_sets"]}
 
