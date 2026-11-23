@@ -23,6 +23,7 @@ from harbor.agents.installed.base import (
 )
 from harbor.agents.installed.codex import Codex
 from harbor.environments.base import BaseEnvironment, ExecResult
+from harbor.environments import seat as seat_module
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.job.result import JobStats
@@ -42,6 +43,10 @@ from harbor.trial.trial import Trial
 EVENTS: list[tuple[str, ...]] = []
 WAITERS: dict[tuple[str, ...], asyncio.Event] = {}
 RELEASE: defaultdict[str, asyncio.Event] = defaultdict(asyncio.Event)
+KILLS: dict[str, ExecResult] = {}
+SERVICE_PROCESSES = seat_module._SERVICE_PROCESSES
+KILL_LEFTOVERS = seat_module._KILL_LEFTOVERS
+KILL_EXEC_PROCESSES = seat_module._KILL_EXEC_PROCESSES
 
 
 def note(*event: str) -> None:
@@ -111,7 +116,9 @@ class ScriptedAgent(BaseAgent):
 AGENT = f"{__name__}:ScriptedAgent"
 
 
-def _task_dir(root: Path, timeout_sec: float = 30, extra: str = "") -> Path:
+def _task_dir(
+    root: Path, timeout_sec: float = 30, extra: str = "", lee: str = ""
+) -> Path:
     task_dir = root / "hello"
     (task_dir / "environment").mkdir(parents=True)
     (task_dir / "environment" / "docker-compose.yaml").write_text(
@@ -125,6 +132,7 @@ def _task_dir(root: Path, timeout_sec: float = 30, extra: str = "") -> Path:
     (task_dir / "task.toml").write_text(
         f"[agent]\ntimeout_sec = {timeout_sec}\n{extra}\n"
         "[agents.maya]\n[agents.raj]\n[agents.lee]\nunder_test = false\n"
+        f"{lee}\n"
     )
     return task_dir
 
@@ -154,6 +162,11 @@ async def compose(command: list[str], **_: Any) -> ExecResult:
         return ExecResult(stdout="", return_code=0)
     if command[-1] == "exec bash -c 'id -u'":
         return ExecResult(stdout="1000\n", return_code=0)
+    if command[-1] == SERVICE_PROCESSES:
+        return ExecResult(stdout="1:100\n7:101\n", return_code=0)
+    if command[-1].endswith(KILL_LEFTOVERS):
+        service, _ = _service_and_user(command)
+        return KILLS.get(service, ExecResult(stdout="killed=1 left=\n", return_code=0))
     return ExecResult(stdout="", return_code=0)
 
 
@@ -161,6 +174,7 @@ async def _seats_trial(config: TrialConfig) -> SeatsTrial:
     EVENTS.clear()
     WAITERS.clear()
     RELEASE.clear()
+    KILLS.clear()
     trial = await Trial.create(config)
     assert isinstance(trial, SeatsTrial)
     project = trial.agent_environment
@@ -565,9 +579,21 @@ async def test_override_error_policy_reaches_every_seat_error(tmp_path: Path):
     assert not _verified(trial)
 
 
-async def test_stopped_seats_have_their_processes_killed_before_collection(
+def _execs(script: str) -> list[tuple[str, ...]]:
+    return [
+        e for e in EVENTS if e[:2] == ("compose", "exec") and e[-1].endswith(script)
+    ]
+
+
+def _seat_of(event: tuple[str, ...]) -> str:
+    return _service_and_user(list(event[1:]))[0]
+
+
+async def test_every_seat_has_its_leftovers_killed_before_collection(
     tmp_path: Path,
 ):
+    """Seats whose agents ended before play did are stopped too, not only
+    the seats the trial cancelled."""
     trial = await _seats_trial(
         _config(
             _task_dir(tmp_path),
@@ -580,12 +606,175 @@ async def test_stopped_seats_have_their_processes_killed_before_collection(
     result = await trial.run()
 
     assert result.exception_info is None
-    kills = [e for e in EVENTS if e[:2] == ("compose", "exec") and "/proc/" in e[-1]]
-    assert [_service_and_user(list(e[1:])) for e in kills] == [("lee", "root")]
-    lee = trial.seats[2]
-    download = ("compose", "cp", "lee:/logs/agent/.", str(lee.paths.agent_dir))
-    assert index("stopped", "lee") < index(*kills[0]) < index(*download)
-    assert index(*download) < index("verify")
+    kills = {_seat_of(e): e for e in _execs(KILL_LEFTOVERS)}
+    assert sorted(kills) == ["lee", "maya", "raj"]
+    assert not _execs(KILL_EXEC_PROCESSES)
+    for seat in trial.seats:
+        kill = kills[seat.name]
+        assert _service_and_user(list(kill[1:])) == (seat.name, "root")
+        assert kill[-1].startswith("spare=' 1:100 7:101 '\n")
+        download = ("compose", "cp", f"{seat.name}:/logs/agent/.")
+        download += (str(seat.paths.agent_dir),)
+        assert index("stopped", "lee") < index(*kill) < index(*download)
+        assert index(*download) < index("verify")
+        end = _seat_results(result)[seat.name].end_of_play
+        assert end is not None and end.exception_info is None
+        assert (end.killed, end.left) == (1, [])
+    assert result.reward_valid
+
+
+async def test_each_seat_records_its_own_processes_before_its_agent_is_installed(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+
+    await trial.run()
+
+    records = {_seat_of(e): e for e in _execs(SERVICE_PROCESSES)}
+    for seat in trial.seats:
+        assert _service_and_user(list(records[seat.name][1:])) == (seat.name, "root")
+        assert index(*records[seat.name]) < index("setup", seat.name)
+        assert seat.environment.service_processes == {"1:100", "7:101"}
+
+
+async def test_a_seat_with_processes_left_after_the_kill_is_graded_without_a_valid_reward(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", hold=True),
+        )
+    )
+    KILLS["raj"] = ExecResult(stdout="killed=2 left=41 42\n", return_code=0)
+
+    result = await trial.run()
+
+    raj = _seat_results(result)["raj"]
+    assert raj.exception_info is None
+    end = raj.end_of_play
+    assert end is not None and (end.killed, end.left) == (2, [41, 42])
+    assert end.exception_info is not None
+    assert end.exception_info.exception_type == "SeatEndOfPlayError"
+    assert result.exception_info is not None
+    assert result.exception_info.exception_message == (
+        "Seat 'raj': 2 processes still run after the kill: [41, 42]"
+    )
+    assert _verified(trial) and result.verifier_result is not None
+    assert not result.reward_valid
+    stats = JobStats()
+    stats.increment(result)
+    assert stats.n_errored_trials == 1
+
+
+async def test_a_failed_kill_is_recorded_and_the_trial_is_still_graded(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", hold=True),
+        )
+    )
+    KILLS["lee"] = ExecResult(stdout="", stderr="gone", return_code=1)
+
+    result = await trial.run()
+
+    end = _seat_results(result)["lee"].end_of_play
+    assert end is not None and (end.killed, end.left) == (None, None)
+    assert end.exception_info is not None
+    assert end.exception_info.exception_message.startswith(
+        "could not stop its processes: RuntimeError: Seat 'lee': could not kill"
+    )
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "SeatEndOfPlayError"
+    assert _verified(trial)
+    assert not result.reward_valid
+
+
+async def test_override_error_policy_can_skip_grading_after_a_failed_kill(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            override_error_policy={"SeatEndOfPlayError": {"should_grade": False}},
+        )
+    )
+    KILLS["lee"] = ExecResult(stdout="", stderr="gone", return_code=1)
+
+    result = await trial.run()
+
+    assert result.exception_info is not None
+    assert result.exception_info.policy.should_grade is False
+    assert not _verified(trial)
+
+
+async def test_an_agent_error_comes_before_an_end_of_play_error(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj", fail="exit"),
+            _participant("lee"),
+        )
+    )
+    KILLS["maya"] = ExecResult(stdout="killed=1 left=41\n", return_code=0)
+
+    result = await trial.run()
+
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "NonZeroAgentExitCodeError"
+    assert [e.exception_type for e in result.recorded_exceptions()] == [
+        "NonZeroAgentExitCodeError",
+        "NonZeroAgentExitCodeError",
+        "SeatEndOfPlayError",
+    ]
+
+
+@pytest.mark.parametrize("hold", [True, False], ids=["stopped", "ended"])
+async def test_a_seat_that_keeps_its_leftovers_gets_only_the_stopped_agent_kill(
+    tmp_path: Path, hold: bool
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, lee="kill_leftovers = false"),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", hold=hold),
+        )
+    )
+
+    result = await trial.run()
+
+    assert result.exception_info is None
+    assert sorted(_seat_of(e) for e in _execs(KILL_LEFTOVERS)) == ["maya", "raj"]
+    assert sorted(_seat_of(e) for e in _execs(SERVICE_PROCESSES)) == ["maya", "raj"]
+    upstream_kills = [_seat_of(e) for e in _execs(KILL_EXEC_PROCESSES)]
+    lee = _seat_results(result)["lee"]
+    if hold:
+        assert upstream_kills == ["lee"]
+        assert lee.end_of_play is not None
+        assert (lee.end_of_play.killed, lee.end_of_play.left) == (None, None)
+        assert lee.end_of_play.exception_info is None
+    else:
+        assert upstream_kills == []
+        assert lee.end_of_play is None
 
 
 async def test_an_error_while_stopping_a_seat_does_not_fail_the_trial(

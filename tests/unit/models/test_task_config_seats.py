@@ -59,6 +59,17 @@ def test_seats_parse_with_graded_default_and_mcp():
     assert [server.name for server in config.agents["raj"].mcp_servers] == ["notes"]
 
 
+def test_seats_kill_their_leftovers_unless_the_task_keeps_them():
+    config = TaskConfig.model_validate_toml(
+        SEATS_TOML.replace(
+            "under_test = false", "under_test = false\nkill_leftovers = false"
+        )
+    )
+
+    assert config.agents["maya"].kill_leftovers is True
+    assert config.agents["raj"].kill_leftovers is False
+
+
 def test_task_without_seats_dumps_no_agents_table():
     config = TaskConfig.model_validate_toml("[agent]\ntimeout_sec = 10\n")
 
