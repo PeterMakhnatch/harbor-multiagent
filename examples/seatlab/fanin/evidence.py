@@ -831,17 +831,37 @@ def control_turn(
     return {"status": "bound" if turn is not None else "answered_unused", "text": text}
 
 
+def not_admitted(
+    owner: Path, seat: str, prompt: str | None, meta: Row | None, launch: Row
+) -> bool:
+    directory = owner / seat
+    if not present(directory) or entries(directory):
+        return False
+    need(
+        stat.S_IMODE(directory.lstat().st_mode) == 0o700
+        and prompt is not None
+        and meta is not None
+        and meta["started_turn"] is True
+        and meta["error"] == "turn_failed"
+        and meta["stage"] != "done"
+        and meta["reply_sha256"] is None
+        and launch["owners"][seat]["accepted"] is True,
+        "owner_entries",
+    )
+    return True
+
+
 def owner_turns(
     cell: Path,
     order: tuple[str, ...],
     plan: dict[str, str | None],
     metas: dict[str, Row | None],
-    tag: str,
-    world: int,
+    launch: Row,
 ) -> dict[str, Row]:
+    tag, world = launch["tag"], launch["world"]
     owner = cell / "owner"
     need(entries(owner) <= set(SEATS), "owner_entries")
-    rows = {}
+    rows: dict[str, Row] = {}
     for seat in order:
         meta = metas[seat]
         turn = (
@@ -856,7 +876,9 @@ def owner_turns(
             not present(owner / seat) or meta is None or meta["started_turn"],
             "owner_without_turn",
         )
-        if tag == "live":
+        if tag == "live" and not_admitted(owner, seat, plan[seat], meta, launch):
+            rows[seat] = {"status": "not_admitted"}
+        elif tag == "live":
             rows[seat] = base.owner_turn(owner, seat, plan[seat], turn)
         else:
             rows[seat] = control_turn(owner, seat, plan[seat], turn, MODES[tag], world)
@@ -1156,7 +1178,7 @@ def trial_row(
     plan = prompts(order, starts, rounds)
     for seat in order:
         bind_seat(seat, metas[seat], plan[seat], rounds, messages, state)
-    owned = owner_turns(cell, order, plan, metas, tag, world)
+    owned = owner_turns(cell, order, plan, metas, launch)
     owner_launch(cell, launch, rounds, metas)
     replies_bound(order, starts, rounds, owned, metas, state["submit"])
     reward = stock_reward(
