@@ -28,6 +28,37 @@ through OpenRouter, from the observed cost per trial; Modal adds about $0.01 per
 5. **Analyse.** `cd flotilla/analysis && python3 -m flotilla_analysis <jobs> --tasks <out> --family-hooks ../families`,
    then `python3 flotilla/docs/results/scripts/power.py <jobs>` to see whether the next question is resolved.
 
+## How to run a wave
+
+Use `flotilla/run_wave.py`. It runs one Harbor job per cell. A cell is one task set, one instance, one arm,
+and one model. Copy `flotilla/plans/example.json`.
+
+1. Commit the plan. The runner refuses a plan that is not at HEAD.
+2. Set `prereg.commit` to the commit that records the question. That commit must be an ancestor of HEAD.
+3. Preview the order. This command does not call Harbor:
+
+```bash
+python3 flotilla/run_wave.py --dry-run flotilla/plans/example.json
+```
+
+4. Run the wave. Keys come from the `keys` store. The runner passes only the keys the plan's models need.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/<name>.json --run-dir /tmp/flotilla/<name>
+```
+
+Docker allows at most 2 jobs at once. Each Docker job goes through `/tmp/crucible-docker-slot.sh`. Modal does
+not use that wrapper. Modal can run about 12 jobs at once. A plan can mix families. Each task set has its own
+manifest, instances, and arms. The order seed shuffles the blocks, then the cells inside each block.
+
+The runner stops before a new job when spend plus the reserve for the in-flight jobs and the next job would
+pass the cap. It also stops when a provider balance is below its floor. Run the same command again to skip
+finished cells. Add `--retry-invalid` to rerun a cell that has no valid trial.
+
+OpenRouter cost is Harbor's recorded `cost_usd`. The runner also logs the token price from the catalog it
+froze at the start. DeepSeek direct cost is the published token price.
+
+
 ## Recommended experiments, in order of value per dollar
 
 | # | Question | Arms | Instances, models | Cost |

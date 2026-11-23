@@ -1,5 +1,5 @@
 """Commons wave analysis (docs/COMMONS.md section 14, pre-registered): the primary test, the secondary measures and
-the real cost from tokens.
+the real cost. DeepSeek direct uses the published token price. OpenRouter uses Harbor's recorded cost_usd.
 
     python3 flotilla/docs/results/scripts/commons_wave.py .flotilla-local/jobs 'w1-*'
 
@@ -22,10 +22,11 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-# deepseek-flash (DeepSeek-V4.1-Flash), USD per million tokens, off-peak, checked 2026-11-20 on
-# api-docs.deepseek.com/quick_start/pricing. Peak rates are double: 01:00-04:00 and 06:00-10:00 UTC, Monday to Friday.
-OFF_PEAK = {"hit": 0.003, "miss": 0.15, "out": 0.60}
-PEAK_HOURS_UTC = ((1, 4), (6, 10))
+_PRICE = importlib.util.spec_from_file_location("flotilla_pricing", Path(__file__).resolve().parents[3] / "pricing.py")
+PRICING = importlib.util.module_from_spec(_PRICE)  # type: ignore[arg-type]
+_PRICE.loader.exec_module(PRICING)  # type: ignore[union-attr]
+OFF_PEAK = PRICING.OFF_PEAK
+PEAK_HOURS_UTC = PRICING.PEAK_HOURS_UTC
 ARMS = ("solo", "silent", "talk")
 MIN_PAIRS = 10
 _SPEC = importlib.util.spec_from_file_location("commons", Path(__file__).resolve().parents[3] / "games" / "commons.py")
@@ -35,24 +36,21 @@ _SPEC.loader.exec_module(COMMONS)  # type: ignore[union-attr]
 
 def rate(started: datetime) -> float:
     """1 off-peak, 2 at peak (Chinese public holidays, which are off-peak, are not modelled: an upper bound)."""
-    hour = started.hour + started.minute / 60
-    return 2.0 if started.weekday() < 5 and any(a <= hour < b for a, b in PEAK_HOURS_UTC) else 1.0
+    return PRICING.peak_factor(started)
 
 
-def tokens_and_cost(result: dict) -> tuple[dict[str, int], float]:
+def tokens_and_cost(result: dict, prices: dict | None = None) -> tuple[dict[str, int], float]:
     started = result.get("started_at")
     when = datetime.fromisoformat(started).astimezone(UTC) if started else datetime.now(UTC)
-    tokens = {"hit": 0, "miss": 0, "out": 0}
-    for seat in result.get("seat_results") or []:
-        usage = seat.get("agent_result") or {}
-        cached, total = usage.get("n_cache_tokens") or 0, usage.get("n_input_tokens") or 0
-        tokens["hit"] += cached
-        tokens["miss"] += max(0, total - cached)  # Harbor's input count includes the cached tokens
-        tokens["out"] += usage.get("n_output_tokens") or 0
-    return tokens, rate(when) * sum(tokens[k] * OFF_PEAK[k] for k in tokens) / 1e6
+    tokens = PRICING.tokens_of(result)
+    model = PRICING.model_id(result)
+    if PRICING.is_deepseek_direct(model):
+        return tokens, PRICING.deepseek_cost(tokens, when)
+    charged, _estimate, _source = PRICING.openrouter_spend(result, model, prices)
+    return tokens, charged
 
 
-def trials(jobs: Path, pattern: str, scorer=None) -> list[dict]:
+def trials(jobs: Path, pattern: str, scorer=None, prices=None) -> list[dict]:
     """Every trial of the matching jobs; `scorer` recomputes the measures (default: commons score_game)."""
     scorer = scorer or COMMONS.score_game
     found = []
@@ -60,7 +58,7 @@ def trials(jobs: Path, pattern: str, scorer=None) -> list[dict]:
         if not (trial / "result.json").is_file():
             continue
         result = json.loads((trial / "result.json").read_text())
-        tokens, cost = tokens_and_cost(result)
+        tokens, cost = tokens_and_cost(result, prices)
         score_path, state_path = trial / "verifier" / "score.json", trial / "verifier" / "world-state.json"
         verdict = json.loads(score_path.read_text()) if score_path.is_file() else {}
         failed = [seat.get("seat") for seat in result.get("seat_results") or [] if seat.get("exception_info")]
