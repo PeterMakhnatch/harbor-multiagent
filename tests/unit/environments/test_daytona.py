@@ -1,6 +1,7 @@
 """Unit tests for DaytonaEnvironment strategy selection and DinD compose logic."""
 
 import asyncio
+import base64
 import atexit
 import json
 import logging
@@ -82,6 +83,7 @@ def _make_env(
     auto_stop_interval_mins: Any = _UNSET,
     ttl_minutes: Any = _UNSET,
     task_env: dict[str, str] | None = None,
+    registry_mirrors: Any = _UNSET,
 ):
     """Create a DaytonaEnvironment with a minimal valid setup."""
     env_dir = temp_dir / "environment"
@@ -126,6 +128,8 @@ def _make_env(
         kwargs["auto_stop_interval_mins"] = auto_stop_interval_mins
     if ttl_minutes is not _UNSET:
         kwargs["ttl_minutes"] = ttl_minutes
+    if registry_mirrors is not _UNSET:
+        kwargs["registry_mirrors"] = registry_mirrors
 
     return DaytonaEnvironment(
         environment_dir=env_dir,
@@ -2908,3 +2912,313 @@ class TestRetainedSandbox:
 
         sandbox.set_autostop_interval.assert_not_awaited()
         sandbox.set_ttl.assert_not_awaited()
+
+
+# ── DinD registry mirrors and snapshot resources ──────────────────────
+
+
+class _DockerdStarted(Exception):
+    pass
+
+
+_MISSING = ExecResult(stdout="", stderr="", return_code=3)
+_OK = ExecResult(stdout="", stderr="", return_code=0)
+
+
+async def _start_until_dockerd(
+    env: DaytonaEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+    daemon_json: ExecResult = _MISSING,
+) -> list[str]:
+    """Run the DinD start up to the dockerd launch; return the VM commands."""
+    strategy = env._strategy
+    assert isinstance(strategy, _DaytonaDinD)
+    commands: list[str] = []
+
+    async def fake_get_instance():
+        return SimpleNamespace()
+
+    async def fake_create_sandbox(*, params: Any, daytona: Any = None) -> None:
+        env._sandbox = cast(Any, SimpleNamespace(cpu=1, memory=1, disk=3))
+
+    async def vm_exec(command: str, **kwargs: Any) -> ExecResult:
+        commands.append(command)
+        if command.startswith("dockerd-entrypoint.sh"):
+            raise _DockerdStarted
+        if command.startswith("if [ -e /etc/docker/daemon.json ]"):
+            return daemon_json
+        return _OK
+
+    monkeypatch.setattr(DaytonaClientManager, "get_instance", fake_get_instance)
+    monkeypatch.setattr(env, "_configure_daytona_client", AsyncMock())
+    monkeypatch.setattr(env, "_create_sandbox", fake_create_sandbox)
+    monkeypatch.setattr(strategy, "_vm_exec", vm_exec)
+
+    with pytest.raises(_DockerdStarted):
+        await strategy.start(force_build=False)
+    return commands
+
+
+def _written_daemon_json(commands: list[str]) -> dict[str, Any]:
+    (write,) = [command for command in commands if "base64 -d" in command]
+    parts = shlex.split(write)
+    content = parts[parts.index("%s") + 1]
+    return json.loads(base64.b64decode(content))
+
+
+class TestDinDRegistryMirrors:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ("https://mirror.gcr.io", ["https://mirror.gcr.io"]),
+            (
+                "https://mirror.gcr.io, http://10.0.0.5:5000",
+                ["https://mirror.gcr.io", "http://10.0.0.5:5000"],
+            ),
+            (["https://mirror.gcr.io/"], ["https://mirror.gcr.io/"]),
+            (None, []),
+        ],
+    )
+    def test_option_accepts_a_url_a_list_or_none(self, temp_dir, value, expected):
+        env = _make_env(temp_dir, compose=True, registry_mirrors=value)
+
+        assert env.options.registry_mirrors == expected
+
+    def test_option_defaults_to_no_mirrors(self, temp_dir):
+        assert _make_env(temp_dir, compose=True).options.registry_mirrors == []
+
+    @pytest.mark.parametrize(
+        "url, problem",
+        [
+            ("ftp://mirror.example", "https:// or http://"),
+            ("mirror.gcr.io", "https:// or http://"),
+            ("https://", "https:// or http://"),
+            ("https://mirror.example/v2", "path, query or fragment"),
+            ("https://mirror.example?x=1", "path, query or fragment"),
+            ("https://mirror.example:99999", "invalid port"),
+        ],
+    )
+    def test_invalid_mirrors_are_refused(self, temp_dir, url, problem):
+        with pytest.raises(ValueError, match=problem):
+            _make_env(temp_dir, compose=True, registry_mirrors=[url])
+
+    @pytest.mark.parametrize(
+        "url", ["https://user:hunter2@mirror.example", "user:hunter2@mirror.example"]
+    )
+    def test_a_mirror_with_credentials_is_refused_without_echoing_it(
+        self, temp_dir, url
+    ):
+        with pytest.raises(ValueError, match="must not contain credentials") as error:
+            _make_env(temp_dir, compose=True, registry_mirrors=[url])
+
+        assert "hunter2" not in str(error.value)
+
+    @pytest.mark.parametrize("dind_snapshot", [None, "dind-mirror"])
+    async def test_daemon_json_is_written_before_dockerd_starts(
+        self, temp_dir, monkeypatch, dind_snapshot
+    ):
+        env = _make_env(
+            temp_dir,
+            compose=True,
+            registry_mirrors="https://mirror.gcr.io",
+            dind_snapshot=dind_snapshot,
+        )
+
+        commands = await _start_until_dockerd(env, monkeypatch)
+
+        read, write, dockerd = commands
+        assert read.startswith("if [ -e /etc/docker/daemon.json ]")
+        assert write.endswith(
+            "> /etc/docker/daemon.json.harbor "
+            "&& mv /etc/docker/daemon.json.harbor /etc/docker/daemon.json"
+        )
+        assert dockerd.startswith("dockerd-entrypoint.sh dockerd")
+        assert _written_daemon_json(commands) == {
+            "registry-mirrors": ["https://mirror.gcr.io"]
+        }
+
+    async def test_an_existing_daemon_json_is_merged_not_replaced(
+        self, temp_dir, monkeypatch
+    ):
+        env = _make_env(
+            temp_dir,
+            compose=True,
+            registry_mirrors=["https://mirror.gcr.io"],
+            dind_snapshot="dind-mirror",
+        )
+        existing = {
+            "log-level": "warn",
+            "registry-mirrors": ["https://own.example", "https://mirror.gcr.io"],
+        }
+
+        commands = await _start_until_dockerd(
+            env,
+            monkeypatch,
+            ExecResult(stdout=json.dumps(existing), stderr="", return_code=0),
+        )
+
+        assert _written_daemon_json(commands) == {
+            "log-level": "warn",
+            "registry-mirrors": ["https://mirror.gcr.io", "https://own.example"],
+        }
+        assert commands[-1].startswith("dockerd-entrypoint.sh dockerd")
+
+    async def test_a_blank_daemon_json_counts_as_empty(self, temp_dir, monkeypatch):
+        env = _make_env(temp_dir, compose=True, registry_mirrors="https://m.example")
+
+        commands = await _start_until_dockerd(
+            env, monkeypatch, ExecResult(stdout="\n", stderr="", return_code=0)
+        )
+
+        assert _written_daemon_json(commands) == {
+            "registry-mirrors": ["https://m.example"]
+        }
+
+    @pytest.mark.parametrize(
+        "content, problem",
+        [
+            ('{"auths": {"x": "secret-token"', "is not valid JSON"),
+            ('["https://m.example"]', "is not a JSON object"),
+            ('{"registry-mirrors": "https://m.example"}', "is not a list of URLs"),
+        ],
+    )
+    async def test_an_unusable_daemon_json_fails_before_dockerd_starts(
+        self, temp_dir, monkeypatch, content, problem
+    ):
+        env = _make_env(temp_dir, compose=True, registry_mirrors="https://m.example")
+        strategy = env._strategy
+        assert isinstance(strategy, _DaytonaDinD)
+        commands: list[str] = []
+
+        async def vm_exec(command: str, **kwargs: Any) -> ExecResult:
+            commands.append(command)
+            return ExecResult(stdout=content, stderr="", return_code=0)
+
+        monkeypatch.setattr(strategy, "_vm_exec", vm_exec)
+
+        with pytest.raises(RuntimeError, match=problem) as error:
+            await strategy._configure_registry_mirrors()
+
+        assert "secret-token" not in str(error.value)
+        assert len(commands) == 1
+
+    async def test_a_failed_read_or_write_fails_the_start(self, temp_dir, monkeypatch):
+        env = _make_env(temp_dir, compose=True, registry_mirrors="https://m.example")
+        strategy = env._strategy
+        assert isinstance(strategy, _DaytonaDinD)
+        failed = ExecResult(stdout="", stderr="read-only", return_code=1)
+        monkeypatch.setattr(strategy, "_vm_exec", AsyncMock(return_value=failed))
+        with pytest.raises(RuntimeError, match="Could not read"):
+            await strategy._configure_registry_mirrors()
+
+        monkeypatch.setattr(
+            strategy, "_vm_exec", AsyncMock(side_effect=[_MISSING, failed])
+        )
+        with pytest.raises(RuntimeError, match="Could not write"):
+            await strategy._configure_registry_mirrors()
+
+    async def test_no_mirrors_leave_the_daemon_config_alone(
+        self, temp_dir, monkeypatch
+    ):
+        env = _make_env(temp_dir, compose=True)
+
+        commands = await _start_until_dockerd(env, monkeypatch)
+
+        assert len(commands) == 1
+        assert commands[0].startswith("dockerd-entrypoint.sh dockerd")
+
+    def test_a_single_container_task_warns_that_mirrors_do_not_apply(
+        self, temp_dir, caplog
+    ):
+        with caplog.at_level(logging.WARNING):
+            _make_env(temp_dir, registry_mirrors="https://m.example")
+
+        assert any(
+            "registry_mirrors applies to docker-compose" in rec.message
+            for rec in caplog.records
+        )
+
+
+class TestDinDSnapshotResources:
+    def test_resources_a_snapshot_does_not_apply_are_named_in_a_warning(
+        self, temp_dir, caplog
+    ):
+        with caplog.at_level(logging.WARNING):
+            env = _make_env(temp_dir, compose=True, dind_snapshot="dind-mirror")
+
+        assert env._dind_snapshot_unapplied_resources() == {
+            "cpus": 2,
+            "memory_mb": 4096,
+        }
+        messages = [rec.message for rec in caplog.records]
+        assert any(
+            "dind_snapshot='dind-mirror'" in message
+            and "cpus=2, memory_mb=4096" in message
+            for message in messages
+        )
+
+    @pytest.mark.parametrize(
+        "cpu_mode, memory_mode, refused",
+        [
+            (ResourceMode.REQUEST, ResourceMode.AUTO, "CPU"),
+            (ResourceMode.AUTO, ResourceMode.REQUEST, "memory"),
+            (ResourceMode.REQUEST, ResourceMode.REQUEST, "CPU or memory"),
+        ],
+    )
+    def test_a_resource_request_is_refused_with_a_snapshot(
+        self, temp_dir, cpu_mode, memory_mode, refused
+    ):
+        with pytest.raises(ValueError, match=f"cannot request {refused} resources"):
+            _make_env(
+                temp_dir,
+                compose=True,
+                dind_snapshot="dind-mirror",
+                cpu_mode=cpu_mode,
+                memory_mode=memory_mode,
+            )
+
+    def test_the_same_request_without_a_snapshot_is_accepted(self, temp_dir):
+        env = _make_env(
+            temp_dir,
+            compose=True,
+            cpu_mode=ResourceMode.REQUEST,
+            memory_mode=ResourceMode.REQUEST,
+        )
+
+        assert env._sandbox_resources() is not None
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"compose": True},
+            {"dind_snapshot": "dind-mirror"},
+            {
+                "compose": True,
+                "dind_snapshot": "dind-mirror",
+                "cpu_mode": ResourceMode.IGNORE,
+                "memory_mode": ResourceMode.IGNORE,
+            },
+        ],
+        ids=["image", "single-container", "ignored"],
+    )
+    def test_no_warning_when_every_resource_is_applied_or_ignored(
+        self, temp_dir, caplog, kwargs
+    ):
+        with caplog.at_level(logging.WARNING):
+            env = _make_env(temp_dir, **kwargs)
+
+        assert env._dind_snapshot_unapplied_resources() == {}
+        assert not any("dind_snapshot" in rec.message for rec in caplog.records)
+
+    async def test_the_snapshot_sandbox_size_is_logged(
+        self, temp_dir, monkeypatch, caplog
+    ):
+        env = _make_env(temp_dir, compose=True, dind_snapshot="dind-mirror")
+
+        with caplog.at_level(logging.INFO):
+            await _start_until_dockerd(env, monkeypatch)
+
+        assert any(
+            "has the snapshot's size: cpu=1, memory=1 GiB, disk=3 GiB" in rec.message
+            for rec in caplog.records
+        )
