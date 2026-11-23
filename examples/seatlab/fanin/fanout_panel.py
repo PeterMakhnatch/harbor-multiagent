@@ -374,6 +374,36 @@ def _rewards(cells: list[Row], arm: str) -> Row:
     return counts | {"null": sum(c["native_reward"] is None for c in chosen)}
 
 
+def _measured(cells: dict[tuple[int, str], Row]) -> Row:
+    by_arm: Row = {}
+    for arm in ARMS:
+        chosen = [c for c in cells.values() if c["arm"] == arm]
+        by_arm[arm] = {}
+        for key in ("gather_ms", "submit_ms", "native_wall_ms"):
+            values = [Fraction(c[key]) for c in chosen if c[key] is not None]
+            by_arm[arm][key] = {"n": len(values), "median": _ratio(_median(values))}
+    paired = []
+    for world in WORLDS:
+        serial, parallel = cells.get((world, "serial")), cells.get((world, "parallel"))
+        if serial is None or parallel is None:
+            continue
+        if serial["gather_ms"] is None or parallel["gather_ms"] is None:
+            continue
+        paired.append((serial["gather_ms"], parallel["gather_ms"]))
+    reductions = [1 - Fraction(p, s) for s, p in paired if s > 0]
+    return {
+        "used_in_verdict": False,
+        "basis": "live first attempts with observed stock event times, complete or not; null values are excluded, never counted as 0",
+        "by_arm": by_arm,
+        "paired_gather": {
+            "worlds": len(paired),
+            "parallel_faster_worlds": sum(p < s for s, p in paired),
+            "worlds_with_defined_reduction": len(reductions),
+            "median_reduction": _ratio(_median(reductions)),
+        },
+    }
+
+
 def summarize(envelope: object) -> Row:
     body = panel._fields(envelope, {"schema", "rows", "controls"}, "envelope_fields")
     require(body["schema"] == ENVELOPE, "envelope_schema")
@@ -413,6 +443,7 @@ def summarize(envelope: object) -> Row:
         ],
         "statistics": stats
         | {"median_gather_reduction": _ratio(stats["median_gather_reduction"])},
+        "measured_intervals": _measured(cells),
         "thresholds": {
             "median_gather_reduction": float(MIN_REDUCTION),
             "parallel_faster_worlds": MIN_FASTER,
