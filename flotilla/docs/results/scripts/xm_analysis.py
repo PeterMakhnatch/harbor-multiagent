@@ -22,7 +22,9 @@ seat-rounds. Descriptive only (added after the pre-registration; no test, no dec
 feasibility window, the rounds whose pot (split.py settle, from the task.json parameters) is at least the sum of the
 outside options; per split model-arm the counted trials and deals by window (1 feasible round, 2 or more), the deals
 in which a seat got less than its own outside option, and the rational deals (every seat at least its outside
-option). Standard library only.
+option). Split gated vs talk (world v11; talk plus a read gate) is a primary contrast like talk vs silent (b = only
+gated dealt, c = only talk dealt); it and its first-attempt sensitivity appear only when the data hold a gated trial.
+Standard library only.
 """
 
 from __future__ import annotations
@@ -59,7 +61,9 @@ PER_MODEL_ALPHA = 0.05
 SUCCESS = {"split": ("agreed", "deals"), "commons": ("survived", "survived")}
 TESTS = {"primary": (0.025, 24), "secondary": (0.05, 18)}
 CONTRASTS = (("split", "talk", "silent", "primary"), ("split", "propose", "silent", "secondary"),
-             ("split", "talk", "propose", "reported"), ("commons", "talk", "silent", "primary"))
+             ("split", "talk", "propose", "reported"), ("split", "gated", "talk", "primary"),
+             ("commons", "talk", "silent", "primary"))
+OPTIONAL_ARMS = ("gated",)
 PROPOSAL_KEYS = ("proposals", "acceptances", "accepted", "replaced", "lapsed", "expired", "feasible", "feasible_unseen")
 BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED = 10_000, 1
 WINDOW_BUCKETS = ("0", "1", "2+")
@@ -433,8 +437,11 @@ def run_contrasts(rows: list[dict], counted: dict[tuple, dict], specs: tuple, ne
     table = arm_table(rows, counted)
     found = []
     for spec in specs:
-        models = sorted({r["model"] for r in rows if r["family"] == spec[0]})
-        if models:
+        family, arms = spec[0], spec[1:3]
+        models = sorted({r["model"] for r in rows if r["family"] == family})
+        absent = [arm for arm in arms if arm in OPTIONAL_ARMS
+                  and not any((r["family"], r["arm"]) == (family, arm) for r in rows)]
+        if models and not absent:
             found.append(contrast(counted, table, models, spec, new_models, replication))
     return found
 

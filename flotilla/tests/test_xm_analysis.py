@@ -532,3 +532,35 @@ def test_seeded_waves_keep_deal_quality_invariants():
             assert entry["by_window"]["0"] == {"trials": 0, "deals": 0}
         counted = sum(entry["counted"] for entry in result["split_descriptive"]["below_outside_all"])
         assert counted == sum(entry["below_outside"] for entry in result["split_descriptive"]["model_arms"])
+
+
+def test_gated_vs_talk_is_a_primary_contrast_present_only_with_gated_trials(capsys):
+    new = [r for model in NEW for r in pair_rows("split", model, outcomes(3, 0, ties=5), first="gated",
+                                                 second="talk")]
+    rows = [*new, *pair_rows("split", REPLICATION, outcomes(0, 4, ties=4), first="gated", second="talk")]
+    result = XM.analyse(rows, NEW, REPLICATION)
+    test, lines = pooled(result, "split", "gated", "talk")
+    assert (test["pairs"], test["b"], test["c"], test["alpha"], test["min_pairs"]) == (24, 9, 0, 0.025, 24)
+    assert test["decision"] == "PASS" and test["p"] == XM.stratified_p([(3, 0)] * 3)
+    assert test["models"] == list(NEW) and test["consistency"]["label"] == "consistent"
+    assert lines[REPLICATION]["role"] == "replication" and (lines[REPLICATION]["b"], lines[REPLICATION]["c"]) == (0, 4)
+    assert pooled(result, "split", "gated", "talk", contrasts=result["sensitivity"]["first_attempt"])[0] == test
+    short = pooled(XM.analyse(new[:-2], NEW, REPLICATION), "split", "gated", "talk")[0]
+    assert (short["pairs"], short["decision"]) == (23, "INCONCLUSIVE")
+    reversed_wave = [r for model in NEW for r in pair_rows("split", model, outcomes(0, 8), first="gated",
+                                                           second="talk")]
+    assert pooled(XM.analyse(reversed_wave, NEW, REPLICATION), "split", "gated", "talk")[0]["reason"].startswith(
+        "reversed")
+    quality = {(e["model"], e["arm"]): e for e in result["split_descriptive"]["model_arms"]}
+    assert (quality[("m/a", "gated")]["trials"], quality[("m/a", "gated")]["deals"]) == (8, 8)
+    assert (quality[("m/a", "talk")]["trials"], quality[("m/a", "talk")]["deals"]) == (8, 5)
+    XM.report(result, [])
+    assert "split gated vs talk (primary; b = only gated succeeded, c = only talk succeeded" in capsys.readouterr().out
+    without = [r for r in rows if r["arm"] != "gated"]
+    without += [row("split", r["instance"], "silent", r["model"], False) for r in without]
+    result = XM.analyse(without, NEW, REPLICATION)
+    contrasts = result["contrasts"] + result["sensitivity"]["first_attempt"]
+    assert contrasts and all("gated" not in (c["a"], c["b_arm"]) for c in contrasts)
+    assert pooled(result)[0]["pairs"] == 24
+    XM.report(result, [])
+    assert "gated" not in capsys.readouterr().out
