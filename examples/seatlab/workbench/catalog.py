@@ -8,11 +8,13 @@ Kind = Literal[
     "native-hybrid-team",
     "partial-native-operator-cohort",
     "stock-business-counterfactual",
+    "native-replay-team",
 ]
 
 _RESULTS = "examples/seatlab/results"
 _WAIT = f"{_RESULTS}/wait-for-peer"
 _OPERATOR = f"{_WAIT}/operator-example"
+_HANDOFF = f"{_RESULTS}/market-handoff"
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +124,17 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/deploy-queue-panel.json",
         exit_code=1,
         sha256="bdb23fae12e691cbd2a7a32001cbadc168d5d23ef427d020163d39c2333ced1d",
+    ),
+    Study(
+        id="native-business-replay",
+        question="Do 24 recorded sales and finance teams keep their grades in native Harbor?",
+        kind="native-replay-team",
+        guide="examples/seatlab/market-handoff.md",
+        module="examples.seatlab.market_handoff.native_panel",
+        argv=("score", _HANDOFF, f"{_HANDOFF}/native-panel.json"),
+        report=f"{_HANDOFF}/native-panel-score.json",
+        exit_code=0,
+        sha256="6f88f500316f8f8439e304d25e6efb131034d73d1b94ac2d9195ae9f1253a08d",
     ),
 )
 

@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""local-slot: run one command in one of 2 per-account local slots.
+
+Usage: local-slot /absolute/executable [args...]
+
+local-slot takes an exclusive flock on one of 2 lock files in
+<canonical home>/.seatlab-local-slots, then execs the executable in place.
+The executable inherits the locked file descriptor. The slot stays held while
+the process, or any descendant that keeps the inherited descriptor, is alive.
+It is released when the last holder exits, or when local-slot cannot exec.
+local-slot prints nothing on success. The exit status and termination signal
+are those of the executable, because no supervisor process stays behind.
+
+The home is the real path of the passwd entry for the current UID, not $HOME,
+so every checkout and worker of one account shares the one 2-slot pool.
+There is no option or variable that selects a different pool.
+
+Exit status of local-slot itself (written with a "local-slot:" stderr line):
+  64   usage error: no executable, relative path, or not an executable file
+  75   both slots stayed busy for 900 s; wait for a running job, then rerun
+  77   unsafe state: home or slot directory or lock file has the wrong
+       type, owner, mode, link count, or was replaced while in use
+  126  exec failed; 127 executable disappeared before exec
+
+Limits:
+  - The pool is per account and per host. Other users, other hosts, and
+    containers that do not share this home path see a separate pool.
+  - Same-UID processes are trusted. They can delete or change the files.
+  - A daemonized descendant that keeps the inherited descriptor keeps the
+    slot after the parent exits. A child that closes inherited descriptors
+    releases the slot early.
+  - A supervisor that restarts the command must call local-slot again for
+    each start. A nested local-slot call takes a second slot.
+  - flock is not reliable on some network file systems (for example NFS homes).
+"""
+
+from __future__ import annotations
+
+import fcntl
+import os
+import pwd
+import stat
+import sys
+import time
+from typing import NoReturn
+
+SLOTS = 2
+STATE_NAME = ".seatlab-local-slots"
+WAIT_SECONDS = 900.0
+POLL_SECONDS = 0.5
+MAX_POLLS = int(WAIT_SECONDS / POLL_SECONDS) + 2
+EX_USAGE = 64
+EX_TEMPFAIL = 75
+EX_NOPERM = 77
+
+
+class Unsafe(Exception):
+    pass
+
+
+def _fail(code: int, message: str) -> NoReturn:
+    sys.stderr.write(f"local-slot: {message}\n")
+    sys.stderr.flush()
+    os._exit(code)
+
+
+def _check_dir(fd: int, owners: tuple[int, ...], private: bool) -> None:
+    info = os.fstat(fd)
+    if not stat.S_ISDIR(info.st_mode):
+        raise Unsafe("not a directory")
+    if info.st_uid not in owners:
+        raise Unsafe(f"directory owner {info.st_uid} is not in {owners}")
+    mode = stat.S_IMODE(info.st_mode)
+    if private and mode != 0o700:
+        raise Unsafe(f"slot directory mode {mode:o} is not 700")
+    if mode & 0o022:
+        raise Unsafe(f"directory mode {mode:o} is group or world writable")
+
+
+def _open_state(uid: int) -> tuple[int, int]:
+    home = os.path.realpath(pwd.getpwuid(uid).pw_dir)
+    home_fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    _check_dir(home_fd, (uid, 0), private=False)
+    created = False
+    try:
+        os.mkdir(STATE_NAME, 0o700, dir_fd=home_fd)
+        created = True
+    except FileExistsError:
+        pass
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    state_fd = os.open(STATE_NAME, flags, dir_fd=home_fd)
+    if created:
+        os.fchmod(state_fd, 0o700)
+    _check_dir(state_fd, (uid,), private=True)
+    return home_fd, state_fd
+
+
+def _open_lock(state_fd: int, name: str, uid: int) -> int:
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    try:
+        fd = os.open(name, flags | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=state_fd)
+        os.fchmod(fd, 0o600)
+    except FileExistsError:
+        fd = os.open(name, flags, dir_fd=state_fd)
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode):
+        raise Unsafe(f"{name} is not a regular file")
+    if info.st_uid != uid or info.st_nlink != 1:
+        raise Unsafe(f"{name} has owner {info.st_uid} and {info.st_nlink} links")
+    if stat.S_IMODE(info.st_mode) != 0o600:
+        raise Unsafe(f"{name} mode {stat.S_IMODE(info.st_mode):o} is not 600")
+    return fd
+
+
+def _same(dir_fd: int, name: str, fd: int) -> bool:
+    try:
+        linked = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    held = os.fstat(fd)
+    return (linked.st_dev, linked.st_ino) == (held.st_dev, held.st_ino)
+
+
+def _try_slots(home_fd: int, state_fd: int, locks: list[tuple[str, int]]) -> int | None:
+    for name, fd in locks:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            continue
+        if not (_same(state_fd, name, fd) and _same(home_fd, STATE_NAME, state_fd)):
+            raise Unsafe(f"{name} or {STATE_NAME} was replaced while in use")
+        return fd
+    return None
+
+
+def _acquire(uid: int) -> int:
+    home_fd, state_fd = _open_state(uid)
+    names = [f"slot-{index}.lock" for index in range(SLOTS)]
+    locks = [(name, _open_lock(state_fd, name, uid)) for name in names]
+    deadline = time.monotonic() + WAIT_SECONDS
+    held = None
+    for _ in range(MAX_POLLS):
+        held = _try_slots(home_fd, state_fd, locks)
+        remaining = deadline - time.monotonic()
+        if held is not None or remaining <= 0:
+            break
+        time.sleep(min(POLL_SECONDS, remaining))
+    for _, fd in locks:
+        if fd != held:
+            os.close(fd)
+    os.close(state_fd)
+    os.close(home_fd)
+    if held is None:
+        _fail(EX_TEMPFAIL, f"both {SLOTS} local slots stayed busy for {WAIT_SECONDS:.0f} s; "
+              "wait for a running job to finish, then rerun")
+    return held
+
+
+def main(argv: list[str]) -> None:
+    if len(argv) == 2 and argv[1] in ("-h", "--help"):
+        sys.stdout.write(__doc__)
+        sys.stdout.flush()
+        os._exit(0)
+    if len(argv) < 2:
+        _fail(EX_USAGE, "usage: local-slot /absolute/executable [args...]")
+    executable = argv[1]
+    if not os.path.isabs(executable):
+        _fail(EX_USAGE, f"executable must be an absolute path: {executable!r}")
+    if not os.path.isfile(executable) or not os.access(executable, os.X_OK):
+        _fail(EX_USAGE, f"not an executable file: {executable}")
+    uid = os.getuid()
+    try:
+        fd = _acquire(uid)
+    except (Unsafe, OSError, KeyError) as error:
+        _fail(EX_NOPERM, f"unsafe slot state in home of uid {uid}: {error}")
+    os.set_inheritable(fd, True)
+    try:
+        os.execv(executable, [executable, *argv[2:]])
+    except OSError as error:
+        os.close(fd)
+        code = 127 if isinstance(error, FileNotFoundError) else 126
+        _fail(code, f"cannot exec {executable}: {error}")
+
+
+if __name__ == "__main__":
+    main(sys.argv)
