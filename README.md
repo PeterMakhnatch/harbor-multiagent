@@ -8,13 +8,31 @@ support.
 
 By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
+## SeatLab workbench
+
+Check the published SeatLab study reports from one fresh checkout. Start here:
+
+```sh
+git clone --depth 1 --branch experiments/seatlab-workbench https://github.com/PeterMakhnatch/harbor-multiagent.git
+cd harbor-multiagent
+python3.12 -BS -m examples.seatlab.workbench verify
+```
+
+`verify` checks every registered study. `list` shows the studies. `verify peer-fanin private-pricing` checks only the named studies. After the clone, the workbench works offline. It needs no Harbor install, Docker, model key, or model call.
+
+A verified release means that the published report files match the released bytes. It is not a positive study result, and it is not a new native trial. Each study report states its own finding.
+
+To run new trials, use [Run the same comparison on eight new worlds](examples/seatlab/shared-read.md#run-the-same-comparison-on-eight-new-worlds) for a new calendar cohort. For the business study, use [How independent workers run this study](examples/seatlab/market-operations.md#how-independent-workers-run-this-study). These workflows have their own setup requirements.
+
+The fork homepage and default branch do not include the workbench yet. Use the `experiments/seatlab-workbench` branch above.
+
 ## SeatLab: test what a receiver can do with a peer report
 
 Give your own agent one input from a real 2-seat Harbor task. Change the peer’s report without changing the receiver’s local information. Score the first reply with the stock task. The public Dispatch example needs Python 3.12 or later, but no API key, Docker, or Harbor install.
 
+Run these commands from the same checkout:
+
 ```sh
-git clone --depth 1 --branch experiments/seatlab-bespoke-continuations https://github.com/PeterMakhnatch/harbor-multiagent.git
-cd harbor-multiagent
 python3.12 -BS -m examples.seatlab.dispatch_peer_case check
 python3.12 -BS -m examples.seatlab.dispatch_peer_case prompt --world 6801 --arm shown
 ```
