@@ -58,6 +58,22 @@ finished cells. Add `--retry-invalid` to rerun a cell that has no valid trial.
 OpenRouter cost is Harbor's recorded `cost_usd`. The runner also logs the token price from the catalog it
 froze at the start. DeepSeek direct cost is the published token price.
 
+### Cross-play and the per-model suite
+
+- **Cross-play.** A plan with `seat_assignments` (a list of per-seat model lists, ordered p1, p2, ...) instead of
+  `models` gives each seat of a trial its own model; see `flotilla/plans/xp1.json`. Analyse it with
+  `docs/results/scripts/xp_analysis.py` (deal matrix, self- against cross-play, role-balanced surplus advantage).
+- **One model's mixed-motive scorecard.** Split and commons regime b, silent and talk, 16 instances each: copy
+  `flotilla/plans/xm1.json`, keep the task sets, set `models` to the model, run it, then
+  `docs/results/scripts/scorecard.py <jobs> '<pattern>' --tasks .flotilla-local/tasks/xm1-split --tasks
+  .flotilla-local/tasks/xm1-commons --new-models <model> --replication-model none`. Recorded OpenRouter cost of
+  the 64 trials on 2026-11-23: gpt-6-luna about $0.40, Claude Haiku 5.5 about $1.05, DeepSeek V4.1 Flash about
+  $2.50 (its reasoning tokens make it the dearest of the three).
+- **Shared credit.** The OpenRouter account is shared by every agent. On 2026-11-23 other users spent about $15
+  in 72 minutes and all 3 running waves stopped at the $2 floor with a third of their trials done. Check
+  `/api/v1/credits` and the trend before a wave, and keep the floor: a stop is resumable (run the same command
+  again), a 402 in the middle of a trial is not.
+
 
 ## Recommended experiments, in order of value per dollar
 
