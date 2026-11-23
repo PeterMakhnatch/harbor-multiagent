@@ -593,3 +593,15 @@ the smoke rule and is not already the third new model; `qwen3.8-flash` first, if
 bound. If no candidate is left, the wave runs with the new models that remain, and the pooled tests use them.
 If the DeepSeek stratum fails the rule, the wave runs without it. The validity check of the smoke trials printed
 the number of rounds each smoke game logged; no other game outcome was read.
+
+**Amendment 3 (2026-11-23, after these smoke facts and before the glm-5.3-flash smoke trials finished).** Smoke
+facts, validity and cost only: Claude Haiku 5.5 and DeepSeek pass (4 valid trials, 0 missed seat-rounds). GPT-OSS-120B
+fails: its split smoke game stopped after 5 of 6 rounds with 5 of 10 played seat-rounds missed (with the unplayed
+round, 7 of 12), so 9 of its 24 smoke seat-rounds are missed. `qwen3.8-flash` fails: both trials ended at once with an
+OpenRouter error (no endpoint meets the account's zero-data-retention setting; the setting is not changed). So at
+most 2 new models would remain. Two more candidates, in this order, get the same 2 smoke trials and the same rules
+(Amendment 1, items 2 and 3): `openrouter/openai/gpt-6-luna` and `openrouter/meta/muse-ember`. The new models of the
+wave are Claude Haiku 5.5 and then, in this order, those of `glm-5.3-flash`, `gpt-6-luna` and `muse-ember` that pass,
+up to 3 new models in all. The pooled tests use the new models that run. Disclosure: at about 2:50 PM ET the
+worker that calibrated `speech_acts.py` read the talk messages of the first 8 smoke trials; its report to the
+operator quoted one Qwen3.8-27B pledge (that model had already left the wave). No other smoke outcome was read.
