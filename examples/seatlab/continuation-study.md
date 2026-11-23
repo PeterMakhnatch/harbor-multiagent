@@ -154,3 +154,11 @@ The owner joins each first reply to its request ID and prompt digest. Missing or
 Use the same 18 pairs in 6 model/seat-budget settings as the full-length comparison. Both teams work for all 4 hours. Once both 3-hour marks exist, choose the company with the higher mark. Average the candidates on a tie. Missing or invalid marks make the comparison incomplete; a missing mark is not zero. Do not use 1-hour, 2-hour or 4-hour values in the decision. Do not forward either mark to the teams.
 
 Evaluate only with the 4-hour terminal verifier. Average the 3 pairs per setting, then average the 6 settings. Pass only if the mean gains at least 0.03 over one full-size team, beats uniform and first-hour count selection, and beats the full-size team in at least 4 of 6 settings. Report ties and all 6 setting results. Do not infer a p-value from overlapping pairs, equal dollar cost, or what would happen if a team stopped early.
+
+### Does the same signal transfer when there is no team chat?
+
+We inspected the release labels, but not the grades of the following 18 runs for this analysis. Register this test before scoring the coordinated-team mark selector. Use the remaining 9 single-agent runs and 9 eight-seat runs labeled `Without communication`. Each of the 3 models has 3 runs per design. In this business task, the board-off policy refuses messages; the 8 seats still share the company and repository. Do not describe them as 8 independent businesses.
+
+In each of the 6 model/design settings, keep all 3 unordered pairs. Both candidates work for 4 hours. Choose the higher 3-hour live mark; average a tie. Grade only the 4-hour terminal result. Compare with uniform choice between **the same 2 candidates**. A missing mark or final reward makes the test incomplete. Do not choose another cutoff.
+
+Pass the transfer test if the equally weighted mean gain over uniform is at least 0.03 and positive in at least 4 of 6 settings. Report the attainable gain from perfect choice and the reward of each design separately. This tests output selection in another cohort. It does not compare against one larger team, estimate the effect of disabling communication, or estimate a dollar saving.
