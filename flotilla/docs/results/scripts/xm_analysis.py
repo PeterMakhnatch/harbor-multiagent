@@ -29,6 +29,7 @@ import json
 import math
 import statistics
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
@@ -107,7 +108,9 @@ def usage(result: dict) -> tuple[float, int, dict[str, int]]:
     return cost, unpriced, tokens
 
 
-def problems(result: dict | None, verdict: dict | None, state: dict | None, task: dict, model: str) -> list[str]:
+def harness_problems(result: dict | None, verdict: dict | None, state: dict | None, task: dict) -> list[str]:
+    """Why a trial is invalid apart from its seat models: no result, Harbor or seat exceptions, verifier or world
+    errors, a score for another task, no world state."""
     if result is None:
         return ["no result.json"]
     found = []
@@ -123,7 +126,12 @@ def problems(result: dict | None, verdict: dict | None, state: dict | None, task
         found.append(f"score is for instance {verdict.get('instance')} {verdict.get('condition')}, not the manifest's")
     if state is None:
         found.append("no world state")
-    if "+" in model or model == "unknown":
+    return found
+
+
+def problems(result: dict | None, verdict: dict | None, state: dict | None, task: dict, model: str) -> list[str]:
+    found = harness_problems(result, verdict, state, task)
+    if result is not None and ("+" in model or model == "unknown"):
         found.append(f"seat model {model}")
     return found
 
@@ -137,12 +145,17 @@ def measures(family: str, score: dict) -> dict[str, Any]:
     return found | {key: score[key] for key in PROPOSAL_KEYS if key in score}
 
 
-def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
-    """One trial; None when its task is in no manifest."""
+def locate(trial: Path, tasks: dict[str, dict]) -> tuple[dict, dict | None, dict | None]:
+    """A trial folder's config, result (None without result.json) and manifest task (None when in no manifest)."""
     config = read_json(trial / "config.json") or {}
     result = read_json(trial / "result.json")
     config = (result or {}).get("config") or config
-    task = tasks.get(Path(((config.get("task") or {}).get("path")) or "").name)
+    return config, result, tasks.get(Path(((config.get("task") or {}).get("path")) or "").name)
+
+
+def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
+    """One trial; None when its task is in no manifest."""
+    config, result, task = locate(trial, tasks)
     if task is None:
         return None
     verdict = read_json(trial / "verifier" / "score.json")
@@ -186,12 +199,15 @@ def played(family: str, params: dict, log: list[dict], score: dict) -> dict[str,
             "measures": measures(family, score), "score": score}
 
 
-def read_trials(jobs: Path, pattern: str, tasks: dict[str, dict]) -> tuple[list[dict], list[str]]:
+def read_trials(jobs: Path, pattern: str, tasks: dict[str, dict],
+                reader: Callable[[Path, dict[str, dict]], dict | None] | None = None) -> tuple[list[dict], list[str]]:
+    """Every trial folder of the matching jobs, read by `reader` (default trial_row; None means in no manifest)."""
+    reader = reader or trial_row
     rows, unmapped = [], []
     for trial in sorted(jobs.glob(f"{pattern}/*/")):
         if not (trial / "config.json").is_file() and not (trial / "result.json").is_file():
             continue
-        row = trial_row(trial, tasks)
+        row = reader(trial, tasks)
         if row is None:
             unmapped.append(f"{trial.parent.name}/{trial.name}")
         else:
