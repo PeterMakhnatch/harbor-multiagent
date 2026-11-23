@@ -27,8 +27,9 @@ args = sys.argv[1:]
 config = json.loads(Path(args[args.index("-c") + 1]).read_text())
 task = config["tasks"][0]["path"]
 model = config["participants"][0]["model_name"]
+names = [item["model_name"] for item in config["participants"]]
 control = json.loads(Path(__CONTROL__).read_text())
-spec = control[task + "|" + model]
+spec = control[task + "|" + "|".join(names)]
 log = Path(__LOG__)
 gate = Path(__GATE__)
 keys = sorted(name for name in os.environ if name.endswith("_API_KEY"))
@@ -64,7 +65,15 @@ if spec["behavior"] != "invalid":
         score["instance"] = spec["instance"] + 1
     if spec["behavior"] == "wrong-model":
         used = "other/model"
-    (job / "config.json").write_text(json.dumps({"participants": [{"seat": "p1", "model_name": used}]}))
+    assigned = spec.get("assignment")
+    if assigned:
+        used_models = list(assigned)
+        if spec["behavior"] == "wrong-model":
+            used_models[0] = "other/model"
+        rows = [{"seat": f"p{index}", "model_name": item} for index, item in enumerate(used_models, 1)]
+    else:
+        rows = [{"seat": "p1", "model_name": used}]
+    (job / "config.json").write_text(json.dumps({"participants": rows}))
     (job / "verifier" / "score.json").write_text(json.dumps(score))
     (job / "verifier" / "world-state.json").write_text("{}")
 with log.open("a") as handle:
@@ -99,16 +108,18 @@ def commit_plan(repo: Path, plan: dict) -> Path:
     return path
 
 
-def task_tree(repo: Path, instances: list[int], arms: list[str]) -> None:
+def task_tree(repo: Path, instances: list[int], arms: list[str], seats: tuple[str, ...] = ("p1",)) -> None:
     tasks: dict[str, dict] = {}
     root = repo / "tasks"
+    agents = "[agents]\n" + "".join(f"{seat} = {{}}\n" for seat in seats)
     for instance in instances:
         for arm in arms:
             name = f"t-{instance:06x}-{arm}"
             folder = root / "split" / name
             folder.mkdir(parents=True)
-            (folder / "task.toml").write_text("[agents]\np1 = {}\n")
-            tasks[f"flotilla/{name}"] = {"instance": instance, "condition": arm, "path": f"split/{name}"}
+            (folder / "task.toml").write_text(agents)
+            tasks[f"flotilla/{name}"] = {"instance": instance, "condition": arm, "path": f"split/{name}",
+                                         "seats": list(seats)}
     (root / "manifest.json").write_text(json.dumps({"format": "flotilla-manifest", "version": 1, "tasks": tasks}))
 
 
@@ -167,9 +178,10 @@ def namer_box(tmp: Path) -> int:
     return value
 
 
-def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, **extra):
+def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, seats: tuple[str, ...] = ("p1",),
+            **extra):
     repo = init_repo(tmp)
-    task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"])
+    task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"], seats=seats)
     path = commit_plan(repo, plan)
     harbor, wrapper = tmp / "harbor", tmp / "wrapper"
     script = (HARBOR_SCRIPT.replace("__CONTROL__", json.dumps(str(tmp / "control.json")))
@@ -183,7 +195,10 @@ def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, 
         spec = dict(behaviors[cell["key"]])
         spec["instance"] = cell["instance"]
         spec["arm"] = cell["arm"]
-        mapped[cell["task"] + "|" + cell["model"]] = spec
+        if cell.get("assignment"):
+            spec["assignment"] = cell["assignment"]
+        models = cell.get("assignment") or [cell["model"]]
+        mapped[cell["task"] + "|" + "|".join(models)] = spec
     (tmp / "control.json").write_text(json.dumps(mapped))
     (tmp / "gate").write_text("")
     env = {"PATH": os.environ["PATH"], "HOME": str(tmp), "LC_ALL": "C", "MODAL_TOKEN_ID": "modal",
@@ -560,7 +575,7 @@ def test_xm1_dry_run_alternates_families():
         if not sets or sets[-1] != cell["task_set"]:
             sets.append(cell["task_set"])
     assert sets == [sets[0], 1 - sets[0]] * (len(sets) // 2)
-    assert len(sets) == sum(len(task_set["instances"]) for task_set in plan["task_sets"])
+    assert len(sets) == sum(len(item["instances"]) for item in plan["task_sets"])
     dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run",
                           str(FLOTILLA / "plans" / "xm1.json")], capture_output=True, text=True)
     assert dry.returncode == 0, dry.stderr
@@ -573,5 +588,136 @@ def test_xm1_dry_run_alternates_families():
         else:
             families[-1][1] += 1
     assert [item[0] for item in families] == sets
-    assert {item[1] for item in families} == {len(task_set["arms"]) * len(plan["models"]) for task_set in plan["task_sets"]}
+    expected = {len(item.get("arms") or item["conditions"]) * len(plan["models"]) for item in plan["task_sets"]}
+    assert {item[1] for item in families} == expected
+
+
+
+def assignment_plan(seed: int = 1) -> dict:
+    plan = plan_for([0, 1], ["silent", "talk"], [DEEPSEEK], seed=seed)
+    plan["seat_assignments"] = [[DEEPSEEK, OPENROUTER], [OPENROUTER, DEEPSEEK],
+                                [DEEPSEEK, DEEPSEEK], [OPENROUTER, OPENROUTER]]
+    plan["task_sets"].append({**plan["task_sets"][0], "tasks_dir": "other", "manifest": "other/manifest.json"})
+    return plan
+
+
+def test_assignments_replace_models_and_stay_inside_blocks():
+    plan = assignment_plan(3)
+    first = RUN.order_of(plan)
+    assert RUN.order_of(plan) == first
+    assert RUN.order_of({**plan, "order_seed": 9}) != first
+    assert len(first) == 2 * 2 * 2 * 4
+    assert all("assignment" in cell for cell in first)
+    counts = {}
+    blocks = []
+    for cell in first:
+        counts[tuple(cell["assignment"])] = counts.get(tuple(cell["assignment"]), 0) + 1
+        block = (cell["task_set"], cell["instance"])
+        if not blocks or blocks[-1][0] != block:
+            blocks.append([block, []])
+        blocks[-1][1].append(tuple(cell["assignment"]))
+    assert set(counts.values()) == {8}
+    assert len(blocks) == 4
+    assert all(len(item[1]) == 8 for item in blocks)
+    sets = [item[0][0] for item in blocks]
+    assert sets == [sets[0], 1 - sets[0]] * (len(sets) // 2)
+    plain = plan_for([0], ["silent"], [DEEPSEEK, OPENROUTER])
+    assert "assignment" not in RUN.order_of(plain)[0]
+
+
+def test_unknown_plan_keys_and_unpriced_models_are_refused(tmp_path):
+    plan = plan_for([0], ["silent"], [DEEPSEEK])
+    plan["extra"] = 1
+    blob = tmp_path / "plan.json"
+    blob.write_text(json.dumps(plan))
+    try:
+        RUN.load_plan(blob)
+    except SystemExit as exc:
+        assert "unknown plan field extra" in str(exc)
+    else:
+        raise AssertionError("an unknown plan field must be refused")
+    del plan["extra"]
+    plan["seat_assignments"] = [["not-a-model", DEEPSEEK]]
+    blob.write_text(json.dumps(plan))
+    try:
+        RUN.load_plan(blob)
+    except SystemExit as exc:
+        assert "pricing.py" in str(exc)
+    else:
+        raise AssertionError("a model pricing.py cannot price must be refused")
+
+
+def test_assignment_length_is_refused_before_a_trial(tmp_path):
+    plan = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1, cap=1.0, reserve=0.05)
+    plan["budget"]["provider_floors"]["openrouter"] = 1.0
+    plan["seat_assignments"] = [[DEEPSEEK, OPENROUTER]]
+    repo = init_repo(tmp_path / "bad")
+    task_tree(repo, [0], ["silent"])
+    path = commit_plan(repo, plan)
+    try:
+        RUN.run(path, run_dir=tmp_path / "bad" / "run", jobs_dir=tmp_path / "bad" / "jobs",
+                harbor=tmp_path / "missing-harbor", wrapper=tmp_path / "missing-wrapper")
+    except SystemExit as exc:
+        assert "has 1 seats" in str(exc)
+    else:
+        raise AssertionError("a short assignment must be refused")
+    assert not (tmp_path / "bad" / "harbor.jsonl").exists()
+
+
+def test_a_seat_on_the_wrong_model_is_invalid(tmp_path):
+    plan = plan_for([0], ["talk"], [DEEPSEEK], concurrency=1, cap=1.0, reserve=0.05)
+    plan["budget"]["provider_floors"]["openrouter"] = 1.0
+    plan["seat_assignments"] = [[DEEPSEEK, OPENROUTER]]
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0], ["talk"], seats=("p1", "p2"))
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    events, _order, path, env = launch(
+        tmp_path / "cross", plan, {order[0]["key"]: spec_for("wrong-model")}, Sources({}, lambda *_args: 10.0),
+        seats=("p1", "p2"))
+    assert next(event for event in events if event["kind"] == "end")["valid"] is False
+    saved = json.loads((tmp_path / "cross" / "run" / "state.json").read_text())
+    assert saved["order"][0]["assignment"] == [DEEPSEEK, OPENROUTER]
+    assert "models p1=" in (tmp_path / "cross" / "run" / "progress.log").read_text()
+    config = json.loads(next((tmp_path / "cross" / "run" / "configs").glob("*.json")).read_text())
+    assert [row["model_name"] for row in config["participants"]] == [DEEPSEEK, OPENROUTER]
+    assert all(row["kwargs"]["max_turns"] == 4 for row in config["participants"])
+    matched = {order[0]["key"]: spec_for("ok")}
+    again = RUN.run(path, run_dir=tmp_path / "cross" / "run", jobs_dir=tmp_path / "cross" / "jobs",
+                    harbor=tmp_path / "cross" / "harbor", wrapper=tmp_path / "cross" / "wrapper",
+                    sources=Sources({}, lambda *_args: 10.0), base_env=env, namer=lambda _n: "000200",
+                    retry_invalid=True)
+    assert [event["key"] for event in again if event["kind"] == "start"] == [order[0]["key"]]
+
+
+def test_the_estimate_prices_each_seat():
+    haiku, luna = "openrouter/anthropic/claude-haiku-5.5", "openrouter/openai/gpt-6-luna"
+    prices = {haiku: {"prompt": "0.000001", "completion": "0.000001"},
+              luna: {"prompt": "0.000002", "completion": "0.000002"}}
+    result = {"started_at": "2026-11-21T16:00:00+00:00", "seat_results": [
+        {"seat": "p1", "agent_result": {"n_input_tokens": 1_000, "n_cache_tokens": 0, "n_output_tokens": 0,
+                                        "cost_usd": 0.02}},
+        {"seat": "p2", "agent_result": {"n_input_tokens": 2_000, "n_cache_tokens": 0, "n_output_tokens": 0,
+                                        "cost_usd": 0.03}},
+    ]}
+    cell = {"model": haiku, "assignment": [haiku, luna]}
+    bill = RUN.charge(cell, result, prices, 0.10)
+    assert bill["cost"] == 0.05
+    assert bill["estimate"] == 1_000 * 0.000001 + 2_000 * 0.000002
+    assert bill["source"] == "recorded"
+
+
+def test_seat_agent_override_keeps_max_turns(tmp_path):
+    out = tmp_path / "tasks"
+    BUILD.build("schedule", [0], 2, "easy", 1, ("talk",), out)
+    subprocess.run(
+        [sys.executable, str(FLOTILLA / "make_jobs.py"), "--tasks", str(out / "*" / "*"), "--agent", "terminus-2",
+         "--model", "openrouter/anthropic/claude-haiku-5.5", "--name", "cross", "--max-turns", "40",
+         "--seat-agent", "p2=terminus-2:openrouter/openai/gpt-6-luna",
+         "--out", str(tmp_path / "configs"), "--jobs-dir", str(tmp_path / "jobs")],
+        check=True, capture_output=True, text=True)
+    config = json.loads(next((tmp_path / "configs").glob("*.json")).read_text())
+    by_seat = {row["seat"]: row for row in config["participants"]}
+    assert by_seat["p2"]["model_name"] == "openrouter/openai/gpt-6-luna"
+    assert by_seat["p1"]["kwargs"]["max_turns"] == 40
+    assert by_seat["p2"]["kwargs"]["max_turns"] == 40
 

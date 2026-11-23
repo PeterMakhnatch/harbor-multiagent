@@ -48,6 +48,17 @@ _SPEC = importlib.util.spec_from_file_location("flotilla_pricing", ROOT / "prici
 PRICING = importlib.util.module_from_spec(_SPEC)  # type: ignore[arg-type]
 assert _SPEC and _SPEC.loader
 _SPEC.loader.exec_module(PRICING)
+_JOBS = importlib.util.spec_from_file_location("flotilla_make_jobs", ROOT / "make_jobs.py")
+JOBS = importlib.util.module_from_spec(_JOBS)  # type: ignore[arg-type]
+assert _JOBS and _JOBS.loader
+_JOBS.loader.exec_module(JOBS)
+PLAN_KEYS = frozenset({
+    "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
+})
+PREREG_KEYS = frozenset({"commit", "doc", "section"})
+JOB_KEYS = frozenset({"max_turns", "env", "concurrency"})
+BUDGET_KEYS = frozenset({"cap_usd", "reserve_per_trial_usd", "provider_floors"})
+SET_KEYS = frozenset({"tasks_dir", "manifest", "instances", "arms", "conditions"})
 
 
 def provider_of(model: str) -> str:
@@ -58,15 +69,40 @@ def provider_of(model: str) -> str:
     raise SystemExit(f"refused: {model} is not a deepseek/ or openrouter/ model")
 
 
-def cell_key(task_set: int, instance: int, arm: str, model: str) -> str:
+def cell_key(task_set: int, instance: int, arm: str, model) -> str:
     return json.dumps([task_set, instance, arm, model], separators=(",", ":"))
+
+
+def refuse_unknown(data: dict, known: frozenset[str], where: str) -> None:
+    extra = sorted(set(data) - known)
+    if extra:
+        raise SystemExit(f"refused: unknown {where} field {extra[0]}")
+
+
+def used_models(plan: dict) -> list[str]:
+    rows = plan.get("seat_assignments")
+    if not rows:
+        return list(plan["models"])
+    found = []
+    for row in rows:
+        for model in row:
+            if model not in found:
+                found.append(model)
+    return found
 
 
 def load_plan(path: Path) -> dict:
     plan = json.loads(path.read_text())
-    for field in ("name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed"):
+    refuse_unknown(plan, PLAN_KEYS, "plan")
+    required = ["name", "prereg", "task_sets", "agent", "make_jobs", "budget", "order_seed"]
+    if "seat_assignments" not in plan:
+        required.append("models")
+    for field in required:
         if field not in plan:
             raise SystemExit(f"refused: plan missing {field}")
+    refuse_unknown(plan["prereg"], PREREG_KEYS, "prereg")
+    refuse_unknown(plan["make_jobs"], JOB_KEYS, "make_jobs")
+    refuse_unknown(plan["budget"], BUDGET_KEYS, "budget")
     for field in ("commit", "doc", "section"):
         if field not in plan["prereg"]:
             raise SystemExit(f"refused: prereg missing {field}")
@@ -83,16 +119,29 @@ def load_plan(path: Path) -> dict:
         raise SystemExit("refused: concurrency must be an integer >= 1")
     if options["env"] == "docker" and options["concurrency"] > 2:
         raise SystemExit("refused: docker concurrency must be <= 2")
-    if not plan["models"] or not plan["task_sets"]:
+    if not plan["task_sets"] or not used_models(plan):
         raise SystemExit("refused: plan has no models or no task sets")
     if any(word in plan["name"] for word in LEAKY):
         raise SystemExit(f"refused: plan name {plan['name']} contains a condition or model word")
+    rows = plan.get("seat_assignments")
+    if rows is not None:
+        if not isinstance(rows, list) or not rows:
+            raise SystemExit("refused: seat_assignments is empty")
+        width = len(rows[0])
+        for index, row in enumerate(rows):
+            if not isinstance(row, list) or not row or len(row) != width:
+                raise SystemExit(f"refused: seat_assignments[{index}] is not a model list")
+            if any(not PRICING.known_model(model) for model in row):
+                raise SystemExit(f"refused: seat_assignments[{index}] has a model pricing.py cannot price")
     floors = plan["budget"]["provider_floors"]
-    for model in plan["models"]:
+    for model in used_models(plan):
+        if not PRICING.known_model(model):
+            raise SystemExit(f"refused: {model} is not a model pricing.py can price")
         provider = provider_of(model)
         if provider not in floors:
             raise SystemExit(f"refused: no floor for {provider}")
     for index, task_set in enumerate(plan["task_sets"]):
+        refuse_unknown(task_set, SET_KEYS, f"task set {index}")
         for field in ("tasks_dir", "manifest", "instances"):
             if field not in task_set:
                 raise SystemExit(f"refused: task set {index} missing {field}")
@@ -102,11 +151,12 @@ def load_plan(path: Path) -> dict:
 
 
 def repo_of(path: Path) -> Path:
-    result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"], cwd=path.parent, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise SystemExit("refused: plan is not in a git checkout")
-    return Path(result.stdout.strip())
+    for start in (path.parent, Path.cwd()):
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], cwd=start, capture_output=True, text=True)
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+    raise SystemExit("refused: plan is not in a git checkout")
 
 
 def assert_committed(plan_path: Path, repo: Path) -> None:
@@ -138,6 +188,19 @@ def arms_of(task_set: dict) -> list[str]:
     return list(task_set.get("arms") or task_set["conditions"])
 
 
+def choices_of(plan: dict) -> list:
+    if plan.get("seat_assignments"):
+        return list(plan["seat_assignments"])
+    return list(plan["models"])
+
+
+def label_of(cell: dict) -> str:
+    assignment = cell.get("assignment")
+    if assignment:
+        return "models " + ",".join(f"p{index}={model}" for index, model in enumerate(assignment, 1))
+    return cell["model"]
+
+
 def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None) -> list[list[list[dict]]]:
     """Blocks grouped by task set. A block is one (task set, instance). paths is None for a dry run."""
     grouped = []
@@ -146,10 +209,15 @@ def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None) -> list
         for instance in task_set["instances"]:
             block = []
             for arm in arms_of(task_set):
-                for model in plan["models"]:
+                for choice in choices_of(plan):
                     task = "" if paths is None else paths[(index, instance, arm)]
-                    block.append({"task_set": index, "instance": instance, "arm": arm, "model": model,
-                                  "task": task, "key": cell_key(index, instance, arm, model)})
+                    assignment = choice if isinstance(choice, list) else None
+                    model = choice if assignment is None else choice[0]
+                    cell = {"task_set": index, "instance": instance, "arm": arm, "model": model,
+                            "task": task, "key": cell_key(index, instance, arm, choice)}
+                    if assignment is not None:
+                        cell["assignment"] = list(assignment)
+                    block.append(cell)
             blocks.append(block)
         grouped.append(blocks)
     return grouped
@@ -216,10 +284,38 @@ def seats_of(task: str) -> tuple[str, ...]:
     return seats
 
 
-def job_config(job: str, jobs_dir: Path, task: str, agent: str, model: str, max_turns: int, env: str) -> dict:
-    participant = {"name": agent, "model_name": model}
-    if max_turns:
-        participant["kwargs"] = {"max_turns": max_turns}
+def assert_assignment_seats(plan: dict, repo: Path) -> None:
+    rows = plan.get("seat_assignments")
+    if not rows:
+        return
+    for index, task_set in enumerate(plan["task_sets"]):
+        manifest = json.loads((repo / task_set["manifest"]).read_text())
+        wanted = {(instance, arm) for instance in task_set["instances"] for arm in arms_of(task_set)}
+        counts = set()
+        for entry in manifest["tasks"].values():
+            if (entry.get("instance"), entry.get("condition")) not in wanted:
+                continue
+            seats = entry.get("seats")
+            if not seats:
+                raise SystemExit(f"refused: task set {index} manifest entry has no seats")
+            counts.add(len(seats))
+        if len(counts) != 1:
+            raise SystemExit(f"refused: task set {index} has no uniform seat count")
+        count = counts.pop()
+        for row in rows:
+            if len(row) != count:
+                raise SystemExit(f"refused: assignment has {len(row)} models, task set {index} has {count} seats")
+
+
+def job_config(job: str, jobs_dir: Path, task: str, agent: str, model: str, max_turns: int, env: str,
+               assignment: list[str] | None = None) -> dict:
+    seats = seats_of(task)
+    specs = []
+    if assignment:
+        if len(assignment) != len(seats):
+            raise SystemExit(f"refused: assignment has {len(assignment)} models, {task} has {len(seats)} seats")
+        specs = [f"{seat}={agent}:{item}" for seat, item in zip(seats, assignment)]
+        model = assignment[0]
     environment = {"type": env, "force_build": False, "delete": True}
     if env == "modal":
         environment["kwargs"] = {"modal_vm_runtime": True, "app_name": "flotilla"}
@@ -231,7 +327,7 @@ def job_config(job: str, jobs_dir: Path, task: str, agent: str, model: str, max_
         "n_concurrent_trials": 1,
         "quiet": True,
         "environment": environment,
-        "participants": [{"seat": seat, **participant} for seat in seats_of(task)],
+        "participants": JOBS.participants(seats, agent, model, max_turns, specs),
         "tasks": [{"path": task}],
     }
 
@@ -277,7 +373,7 @@ def print_dry_run(plan: dict, order: list[dict]) -> None:
     print(f"{plan['name']}: {len(order)} cells, reserve ${reserve:.2f} per trial, cap ${cap:.2f}, "
           f"reserve if every cell starts ${reserve * len(order):.2f}")
     for index, cell in enumerate(order, 1):
-        print(f"{index}. set {cell['task_set']} instance {cell['instance']} {cell['arm']} {cell['model']}")
+        print(f"{index}. set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
 
 
 class HttpSources:
@@ -352,9 +448,14 @@ def trial_valid(trial: Path | None, result: dict | None, cell: dict) -> bool:
     if (verdict.get("instance"), verdict.get("condition")) != (cell["instance"], cell["arm"]):
         return False
     participants = trial_config(trial, result).get("participants") or []
-    if not participants or any(seat.get("model_name") != cell["model"] for seat in participants):
+    if not participants:
         return False
-    return True
+    assignment = cell.get("assignment")
+    if assignment:
+        expected = {f"p{index}": model for index, model in enumerate(assignment, 1)}
+        actual = {seat.get("seat"): seat.get("model_name") for seat in participants}
+        return len(participants) == len(assignment) and all(actual.get(seat) == model for seat, model in expected.items())
+    return all(seat.get("model_name") == cell["model"] for seat in participants)
 
 
 def attempts_of(row: dict | None) -> list[dict]:
@@ -374,9 +475,25 @@ def when_of(result: dict) -> datetime:
     return datetime.fromisoformat(started).astimezone(UTC) if started else datetime.now(UTC)
 
 
+def assigned_charge(cell: dict, result: dict, prices: dict, reserve: float) -> dict:
+    mapping = {f"p{index}": model for index, model in enumerate(cell["assignment"], 1)}
+    try:
+        estimate = PRICING.estimate_seats(result, mapping, when_of(result), prices)
+    except KeyError:
+        return {"cost": reserve, "estimate": None, "source": "reserve", "flag": "no-price"}
+    recorded = PRICING.recorded_cost(result)
+    tokens = PRICING.tokens_of(result)
+    count = tokens["hit"] + tokens["miss"] + tokens["out"]
+    if recorded is None or (recorded == 0 and count > 0):
+        return {"cost": estimate, "estimate": estimate, "source": "token-estimate", "flag": "missing-recorded"}
+    return {"cost": recorded, "estimate": estimate, "source": "recorded", "flag": None}
+
+
 def charge(cell: dict, result: dict | None, prices: dict, reserve: float) -> dict:
     if result is None:
         return {"cost": reserve, "estimate": None, "source": "reserve", "flag": "no-result"}
+    if cell.get("assignment"):
+        return assigned_charge(cell, result, prices, reserve)
     if PRICING.is_deepseek_direct(cell["model"]):
         amount = PRICING.deepseek_cost(PRICING.tokens_of(result), when_of(result))
         return {"cost": amount, "estimate": amount, "source": "deepseek", "flag": None}
@@ -414,7 +531,7 @@ def pending_of(order: list[dict], finished: dict, retry_invalid: bool) -> list[d
 def log_order(run_dir: Path, order: list[dict]) -> None:
     log(run_dir, f"order {len(order)} cells")
     for index, cell in enumerate(order, 1):
-        log(run_dir, f"order {index} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {cell['model']}")
+        log(run_dir, f"order {index} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
 
 
 def check_resume(state: dict, plan: dict, order: list[dict], digest: str) -> None:
@@ -467,13 +584,14 @@ def account(future, futures, state, events, jobs_dir, reserve, run_dir, lock: th
         attempts.append(attempt)
         state["finished"][cell["key"]] = {
             "attempts": attempts, "valid": any(item["valid"] for item in attempts), "job": job,
+            "models": label_of(cell),
         }
         save_state(run_dir / "state.json", state)
         spent = state["spent_usd"]
     estimate = bill["estimate"]
     estimate_text = "none" if estimate is None else f"${estimate:.4f}"
     flag = f" flagged {bill['flag']}" if bill["flag"] else ""
-    log(run_dir, f"end {job} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {cell['model']} "
+    log(run_dir, f"end {job} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)} "
                  f"exit {exit_code} valid {valid} cost ${bill['cost']:.4f} estimate {estimate_text} "
                  f"source {bill['source']}{flag} spent ${spent:.4f}")
     events.append({"kind": "end", "key": cell["key"], "job": job, "valid": valid, "cost": bill["cost"],
@@ -513,6 +631,20 @@ def wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap
         drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
     return None
 
+def cell_gate(cell: dict, floors: dict, sources, sleep):
+    seen = {}
+    for model in cell.get("assignment") or [cell["model"]]:
+        provider = provider_of(model)
+        if provider in seen:
+            continue
+        money, error = read_balance(sources, provider, sleep)
+        if error is not None:
+            return "balance", provider, money
+        if money < float(floors[provider]):
+            return "floor", provider, money
+        seen[provider] = money
+    return None, None, None
+
 
 def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, wrapper, env, repo, sources, namer,
              sleep):
@@ -536,18 +668,17 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             if wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap) == "cap":
                 stop = "cap"
                 break
-            provider = provider_of(cell["model"])
-            money, error = read_balance(sources, provider, sleep)
+            kind, provider, money = cell_gate(cell, floors, sources, sleep)
             drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
             if len(futures) >= concurrency or over_cap(state["spent_usd"], len(futures), reserve, cap):
                 continue
-            if error is not None:
+            if kind == "balance":
                 if futures:
                     stop = "balance"
                     log(run_dir, f"stop: {provider} balance read failed; draining in-flight jobs")
                     break
-                raise SystemExit(f"refused: could not read {provider} balance ({type(error).__name__})")
-            if money < float(floors[provider]):
+                raise SystemExit(f"refused: could not read {provider} balance")
+            if kind == "floor":
                 stop = "floor"
                 log(run_dir, f"stop: {provider} balance ${money:.2f} is below floor ${float(floors[provider]):.2f}")
                 break
@@ -555,9 +686,10 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             config_path = run_dir / "configs" / f"{job}.json"
             config_path.parent.mkdir(parents=True, exist_ok=True)
             config_path.write_text(json.dumps(job_config(
-                job, jobs_dir, cell["task"], plan["agent"], cell["model"], options["max_turns"], options["env"]), indent=2) + "\n")
+                job, jobs_dir, cell["task"], plan["agent"], cell["model"], options["max_turns"], options["env"],
+                cell.get("assignment")), indent=2) + "\n")
             command = harbor_command(options["env"], harbor, config_path, wrapper)
-            log(run_dir, f"start {job} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {cell['model']}")
+            log(run_dir, f"start {job} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
             submit(pool, futures, events, cell, job, command, run_dir / f"{job}.log", env, repo,
                    state["spent_usd"], reserve, cap, concurrency)
             index += 1
@@ -574,6 +706,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     plan = load_plan(plan_path)
     repo = repo_of(plan_path)
     assert_prereg(plan, repo)
+    assert_assignment_seats(plan, repo)
     if dry_run:
         print_dry_run(plan, order_of(plan))
         return []
@@ -596,11 +729,11 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         check_resume(state, plan, order, digest)
         log(run_dir, f"resume {len(state['finished'])} finished")
     sources = sources or HttpSources(base_env or dict(os.environ))
-    freeze_prices(sources, plan["models"], state)
+    freeze_prices(sources, used_models(plan), state)
     save_state(state_path, state)
     pending = pending_of(order, state["finished"], retry_invalid)
     events: list[dict] = []
-    env = harbor_env(base_env or dict(os.environ), plan["models"])
+    env = harbor_env(base_env or dict(os.environ), used_models(plan))
     with ThreadPoolExecutor(max_workers=plan["make_jobs"]["concurrency"]) as pool:
         reason = schedule(plan, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
                           harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
