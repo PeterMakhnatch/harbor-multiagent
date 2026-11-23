@@ -15,3 +15,8 @@ class VerifierTimeoutError(asyncio.TimeoutError):
 
 class EnvironmentStartTimeoutError(asyncio.TimeoutError):
     pass
+
+
+class SeatEndOfPlayError(Exception):
+    """A seat's processes could not be stopped, or proven stopped, when play
+    ended, so they may have acted after play."""

@@ -90,6 +90,22 @@ class StepResult(BaseModel):
     verifier: TimingInfo | None = None
 
 
+class SeatEndOfPlay(BaseModel):
+    """How a seat was stopped when play ended. ``killed`` counts the processes
+    killed and ``left`` lists the PIDs of the seat's processes still alive
+    after the kill: empty when the seat stopped. Both are None for a seat with
+    ``kill_leftovers = false``, whose exec-started processes are killed only
+    when the trial stopped its agent. ``exception_info`` is a
+    SeatEndOfPlayError when the kill failed or left a process alive; it counts
+    in TrialResult.recorded_exceptions, so its policy decides whether the trial
+    is graded and whether its reward is valid."""
+
+    finished_at: datetime
+    killed: int | None = None
+    left: list[int] | None = None
+    exception_info: ExceptionInfo | None = None
+
+
 class SeatResult(BaseModel):
     """One seat's agent run, recorded like a step's."""
 
@@ -99,6 +115,7 @@ class SeatResult(BaseModel):
     agent_result: AgentContext | None = None
     agent_setup: TimingInfo | None = None
     agent_execution: TimingInfo | None = None
+    end_of_play: SeatEndOfPlay | None = None
     exception_info: ExceptionInfo | None = None
 
 
@@ -142,7 +159,8 @@ class TrialResult(BaseModel):
     )
 
     def recorded_exceptions(self) -> list[ExceptionInfo]:
-        """Trial-level exception first, then step or seat exceptions in order.
+        """Trial-level exception first, then step or seat exceptions in order,
+        then the seats' end-of-play errors.
 
         Multi-step and multi-agent trials record handled failures on each step
         or seat as well.
@@ -153,6 +171,9 @@ class TrialResult(BaseModel):
         for step in [*(self.step_results or []), *(self.seat_results or [])]:
             if step.exception_info is not None:
                 exceptions.append(step.exception_info)
+        for seat in self.seat_results or []:
+            if seat.end_of_play is not None and seat.end_of_play.exception_info:
+                exceptions.append(seat.end_of_play.exception_info)
         return exceptions
 
     @computed_field

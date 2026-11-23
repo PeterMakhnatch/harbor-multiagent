@@ -31,9 +31,18 @@ from harbor.models.task.verifier_mode import (
 )
 from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
-from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
+from harbor.models.trial.result import (
+    ExceptionInfo,
+    SeatEndOfPlay,
+    SeatResult,
+    TimingInfo,
+)
 from harbor.tasks.client import TaskDownloadResult
-from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
+from harbor.trial.errors import (
+    AgentSetupTimeoutError,
+    AgentTimeoutError,
+    SeatEndOfPlayError,
+)
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
@@ -253,10 +262,13 @@ class SeatsTrial(SingleStepTrial):
             setup.finished_at = self._now()
 
     async def _install_seat(self, seat: Seat) -> None:
-        """Set the seat's Compose user as its default_user, so agents' file
+        """Record the service's own processes for the kill at the end of play,
+        set the seat's Compose user as its default_user, so agents' file
         ownership fixes target that uid, create /logs/agent, then run the
         agent's own setup."""
         environment = seat.environment
+        if self.task.config.agents[seat.name].kill_leftovers:
+            await environment.record_service_processes()
         ids = await environment.exec("id -u")
         uid = (ids.stdout or "").strip()
         if ids.return_code != 0 or not uid.isdecimal():
@@ -307,10 +319,11 @@ class SeatsTrial(SingleStepTrial):
         """Start every seat at once. Play ends when every agent under test has
         ended or the agent timeout ([agent] timeout_sec) runs out; the runs
         still going are then cancelled, as Trial cancels a single agent at its
-        timeout, and their processes in the seat are killed so nothing acts
-        during collection and verification. The containers stay up. A seat's
-        error is recorded on the seat and does not stop the others; the trial
-        then grades by its error policy, as a single-agent trial does."""
+        timeout. Then every seat is stopped (_end_seat), so nothing an agent
+        left running acts during collection and verification. The containers
+        stay up. A seat's error is recorded on the seat and does not stop the
+        others; the trial then grades by its error policy, as a single-agent
+        trial does."""
         timeout_sec = self._agent_timeout_sec
         tasks = {
             seat.name: asyncio.create_task(self._play_seat(seat)) for seat in self.seats
@@ -331,9 +344,36 @@ class SeatsTrial(SingleStepTrial):
                     seat.stopped = True
                     tasks[seat.name].cancel()
             await asyncio.gather(*tasks.values(), return_exceptions=True)
-        for seat in self.seats:
-            if seat.stopped:
+        await asyncio.gather(*(self._end_seat(seat) for seat in self.seats))
+
+    async def _end_seat(self, seat: Seat) -> None:
+        """Stop what the seat's agent left running and record it in the seat's
+        end_of_play. With kill_leftovers (the default) every seat is treated,
+        whether or not its agent was still running: every process but the
+        service's own is killed, then the seat is checked for survivors. A
+        seat without it gets only its exec-started processes killed, and only
+        when its agent was stopped. A failed kill or a survivor is a
+        SeatEndOfPlayError, graded by its error policy like a seat's error."""
+        keep_leftovers = not self.task.config.agents[seat.name].kill_leftovers
+        if keep_leftovers and not seat.stopped:
+            return
+        record = SeatEndOfPlay(finished_at=self._now())
+        seat.result.end_of_play = record
+        problem = None
+        try:
+            if keep_leftovers:
                 await seat.environment.kill_exec_processes()
+            else:
+                killed, left = await seat.environment.kill_leftover_processes()
+                record.killed, record.left = killed, left
+                if left:
+                    problem = f"{len(left)} processes still run after the kill: {left}"
+        except Exception as exc:
+            problem = f"could not stop its processes: {type(exc).__name__}: {exc}"
+        record.finished_at = self._now()
+        if problem is not None:
+            seat.logger.warning(f"Seat {seat.name!r}: {problem}")
+            record.exception_info = self._exception_info(SeatEndOfPlayError(problem))
 
     async def _play_seat(self, seat: Seat) -> None:
         """Mirrors Trial._run_agent_phase for one seat, without a timeout of
@@ -406,15 +446,21 @@ class SeatsTrial(SingleStepTrial):
     def _record_seat_errors(self) -> None:
         """Put a seat's error on the trial, as SingleStepTrial._run_agent
         records an agent's error and then grades by its policy: the first one
-        whose policy skips grading, else the first one. Every seat keeps its
-        own in seat_results. The message names the seat, and is also written
-        to the trial's exception.txt as Trial writes its own."""
+        whose policy skips grading, else the first one. Agent errors come
+        before end-of-play errors. Every seat keeps its own in seat_results.
+        The message names the seat, and is also written to the trial's
+        exception.txt as Trial writes its own."""
         if self.result.exception_info is not None:
             return
         errors = [
             (seat, seat.result.exception_info)
             for seat in self.seats
             if seat.result.exception_info is not None
+        ] + [
+            (seat, seat.result.end_of_play.exception_info)
+            for seat in self.seats
+            if seat.result.end_of_play is not None
+            and seat.result.end_of_play.exception_info is not None
         ]
         if not errors:
             return
