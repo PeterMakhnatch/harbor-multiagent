@@ -1,0 +1,79 @@
+{
+  "name": "xm1g",
+  "prereg": {
+    "commit": "db31aebe6867fd982fcfd6029ad0c367623e5b74",
+    "doc": "flotilla/docs/SPLIT.md",
+    "section": "Amendment 4 (2026-11-23, 3:05 PM ET"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1-split",
+      "manifest": ".flotilla-local/tasks/xm1-split/manifest.json",
+      "instances": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16
+      ],
+      "arms": [
+        "silent",
+        "talk"
+      ]
+    },
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1-commons",
+      "manifest": ".flotilla-local/tasks/xm1-commons/manifest.json",
+      "instances": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16
+      ],
+      "arms": [
+        "silent",
+        "talk"
+      ]
+    }
+  ],
+  "models": [
+    "openrouter/z-ai/glm-5.3-flash"
+  ],
+  "agent": "terminus-2",
+  "make_jobs": {
+    "max_turns": 40,
+    "env": "modal",
+    "concurrency": 4
+  },
+  "budget": {
+    "cap_usd": 3.0,
+    "reserve_per_trial_usd": 0.3,
+    "provider_floors": {
+      "openrouter": 2.0
+    }
+  },
+  "order_seed": 20261123
+}
