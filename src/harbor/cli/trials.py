@@ -871,20 +871,24 @@ def start(
 
     if config.source_trial is None:
         try:
-            if config.user_agent is not None:
+            if config.participants:
+                # A seat task runs the participants, never agent or
+                # user_agent; Trial.create refuses a seat trial that sets those.
+                AgentFactory.run_participants_preflight(
+                    config.participants, skip_credential_checks=config.install_only
+                )
+            elif config.user_agent is not None:
                 AgentFactory.run_preflight(
                     config.agent,
                     bridge=config.user_agent.bridge.kind,
                     skip_credential_checks=config.install_only,
                 )
-            else:
-                for agent in config.participants or [config.agent]:
-                    AgentFactory.run_preflight(
-                        agent, skip_credential_checks=config.install_only
-                    )
-            if config.user_agent is not None:
                 AgentFactory.run_preflight(
                     config.user_agent, skip_credential_checks=config.install_only
+                )
+            else:
+                AgentFactory.run_preflight(
+                    config.agent, skip_credential_checks=config.install_only
                 )
         except (TypeError, ValueError) as exc:
             console.print(f"[red]Error:[/red] {exc}")
