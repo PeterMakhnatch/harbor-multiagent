@@ -66,3 +66,13 @@ python3.12 -BS -m "$m" emit "$w/posts" --shard 0/3 > "$w/worker-0.jsonl"
 ```
 
 Use `1/3` and `2/3` for the other workers. Pass their reply files as separate arguments to `score`. Never rerun a failed first attempt to improve coverage. The optional `python -m examples.seatlab.continuation.direct --help` worker uses a private host ledger, records the first reply, and enforces a campaign limit. Restarting with the same book skips closed requests. An attempt interrupted after its claim remains unknown; it is not billed again by that book. The worker is not a background service.
+
+## Is screening worth doing at equal cumulative team time?
+
+Registered before reading the 2-hour and 3-hour grades of these multi-seat teams. This is a retrospective analysis of the same release. Its 1-hour and 4-hour results are already known. The question is whether an operator with **240 team-minutes** should start several teams or give one team all 4 hours. Compare policies only within the same model and team size. Keep all 9 sets of 3 runs. A seat-minute is one team-minute times the number of seats in that team.
+
+**Primary comparison:** start 2 teams for 60 minutes each. Keep the one with more public first-hour posts for another 120 minutes. Use its recorded **3-hour** grade. Average tied selections instead of choosing a favorable run. Average over all 3 possible pairs within each set, then give each of the 9 sets equal weight. Compare with a uniformly chosen team run for 4 hours. Require a mean gain of at least 0.03 and a one-sided exact sign test across sets of p≤0.05 before recommending a prospective replication. The 27 pairs are not independent.
+
+**Diagnostics:** for those pairs also compute the mean grade from uniform selection at 1 hour and the best possible 3-hour selection with hindsight. Separately, start 3 teams for 60 minutes each and keep one for 60 more. Use the published supervisor's sealed choice and its **2-hour** grade. Compare this with the busiest board, uniform choice and perfect 2-hour hindsight in each set. Average all tied winners. Do not choose a better threshold, branch count, cutoff or selector after reading those grades.
+
+All 3 schedules use 240 cumulative team-minutes. They finish after 240, 180 and 120 wall-clock minutes respectively, assuming enough compute. They do not necessarily cost the same in tokens or dollars. The checkpoint grades evaluate published work. No sandbox was resumed, no job was canceled, and the hypothetical supervisor cannot use hindsight.
