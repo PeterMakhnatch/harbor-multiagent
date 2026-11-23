@@ -133,6 +133,48 @@ names the agent's error in `exception_info`; the agent's timing stays in
 | `src/harbor/trial/trial.py` | `_run_step_verifier` records the verifier's exception on the step whether or not the step's agent raised. |
 | `tests/unit/test_single_step_trial.py`, `tests/unit/test_multi_step_run_step.py` | Cover a verifier timeout after an agent timeout, in both verifier modes. |
 
+## Wrapped secrets in trial output
+
+Harbor scrubs a trial directory by replacing exact copies of each secret, so a
+secret that wrapped output broke across lines stays in the trial directory
+(harbor-framework/harbor#3961; harbor-framework/harbor#3964 proposes a
+different matcher). mini-swe-agent produces such a break: when a key is
+selected with `model_api_key_name`, or the model name is opaque or its
+provider unknown, Harbor's adapter passes the key as a
+`-c model.model_kwargs.api_key=...` spec, and mini-swe-agent prints its spec
+list, wrapped at 80 columns, into `mini-swe-agent.txt`. A key longer than about
+51 characters (an OpenRouter key has 73) breaks across 2 lines there and stays
+in the log. Exec environment forwarding does not cover it, because the key is a
+command argument of mini-swe-agent, not an exec environment value.
+
+Here the adapter writes the same setting to `api-key.yaml` in a private
+`mktemp -d` directory and passes that file as the spec, as Harbor's Aider
+adapter does with its model settings; mini-swe-agent prints only the path, and
+the launch shell removes the directory when it exits. The key still reaches
+LiteLLM as `model_kwargs.api_key`, so key names, API formats and base URLs
+behave as before. `scrub_file_text` also replaces a secret of 16 or more
+characters that a line break splits, with the spaces, tabs and CRs around the
+break, raw or JSON-escaped at any depth; the line break goes with the secret.
+Digit-only secrets, and secrets that hold whitespace or a backslash, still
+match only unbroken, and binary files are still skipped. One pass per file
+rules out the secrets that the file cannot hold however it is wrapped; only the
+others get a regex scan, and each wrap is bounded so a scan stays linear.
+
+Tradeoff: the key is in a file in the environment's `/tmp` while the agent
+runs, and a launch killed by SIGKILL leaves the file there. Scrubbing a 50 MB
+file takes 0.2 to 0.4 s of CPU where Harbor takes 0.04 s, and a secret broken
+by anything other than whitespace (a box border, a terminal escape code) still
+stays.
+
+The upstream files changed for this behavior are:
+
+| Files | Change |
+|---|---|
+| `src/harbor/agents/installed/mini_swe_agent.py` | Passes a selected model key in a file spec instead of a `-c` argument. |
+| `src/harbor/utils/redaction.py` | `scrub_file_text` also replaces a secret that a line break splits. |
+| `tests/unit/agents/installed/test_opaque_litellm_credentials.py` | Cover the private key file spec. |
+| `tests/unit/utils/test_redaction.py`, `tests/unit/test_single_step_trial.py` | Cover wrapped secrets, raw and JSON-escaped, the secrets that still match only unbroken, and a CPU-time guard on hostile input. |
+
 ## New files
 
 | File | What |

@@ -970,6 +970,7 @@ class MiniSweAgent(BaseInstalledAgent):
             )
 
         # Common connection settings must win over native config files.
+        key_config_setup = ""
         if (
             uses_litellm
             and access.api_key is not None
@@ -979,12 +980,25 @@ class MiniSweAgent(BaseInstalledAgent):
                 or access.provider is None
             )
         ):
-            # JSON quoting preserves arbitrary keys through mini's YAML parser;
-            # shell expansion keeps the credential out of logged commands.
-            env["MINI_SWE_AGENT_MODEL_API_KEY_JSON"] = json.dumps(access.api_key)
-            config_flags += (
-                '-c "model.model_kwargs.api_key=$MINI_SWE_AGENT_MODEL_API_KEY_JSON" '
+            # mini-swe-agent prints its -c specs, wrapped at 80 columns, so a
+            # key=value spec would put the credential in the agent log. A
+            # config file spec prints only its path. The launch shell writes
+            # that file from the environment, which keeps the credential out
+            # of command logs; mktemp makes its directory private, and the
+            # shell removes it on success or failure.
+            env["MINI_SWE_AGENT_MODEL_API_KEY_CONFIG"] = yaml.safe_dump(
+                {"model": {"model_kwargs": {"api_key": access.api_key}}},
+                default_flow_style=True,
+                default_style='"',
+                width=float("inf"),
+            ).strip()
+            key_config_setup = (
+                "key_config_dir=$(mktemp -d /tmp/mswea-model-key.XXXXXX) || exit $?; "
+                "trap 'rm -rf \"$key_config_dir\"' EXIT; "
+                "printf '%s' \"$MINI_SWE_AGENT_MODEL_API_KEY_CONFIG\" "
+                '> "$key_config_dir/api-key.yaml" || exit $?; '
             )
+            config_flags += '-c "$key_config_dir/api-key.yaml" '
         if self._model_api_format is not None:
             config_flags += f"-c model.model_kwargs.custom_llm_provider={model_name.partition('/')[0]} "
         if access.model_api_format is not None:
@@ -1008,6 +1022,7 @@ class MiniSweAgent(BaseInstalledAgent):
             command=(
                 'if [ -f "$HOME/.local/bin/env" ]; then . "$HOME/.local/bin/env"; '
                 'else export PATH="$HOME/.local/bin:$PATH"; fi; '
+                f"{key_config_setup}"
                 f"mini-swe-agent --yolo --model={shlex.quote(model_name)} --task={escaped_instruction} "
                 f"--output={self._mini_swe_agent_trajectory_path} {extra_flags}"
                 f"{config_flags}"
