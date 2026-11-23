@@ -39,6 +39,10 @@ The activity-only supervisor selected the busiest board in all 9 sets, including
 
 The [54 first-call costs](results/continuation-meter.json) total **$0.008075562**. The [derived results](results/continuation-results.json) include every set. The [input receipt](results/continuation-inputs.json) was public before the first model call. Public files contain choices and hashes, not the source messages.
 
+**What would this cost an operator?** Starting one team at minute 0 and keeping it costs 240 team-minutes. Screening 3 teams, then keeping one, costs 360: **50% more than the uniform baseline**. Finishing all 3 costs 720. These are cumulative team-minutes, not elapsed minutes, tokens, or dollars. At a fixed team size of 2, 4, or 8, multiply by that size to get seat-minutes. The archived trials do not measure actual savings.
+
+**What can the comparison establish?** There are 9 sets, one task, one supervisor and one draw for each presentation. One set changes the sign test substantially. A failed gate does not establish that boards are useless. The text arm and masked arm also have different lengths. Even random text-driven choices could appear better than a poorly performing masked policy. Treat that contrast as descriptive, not as a causal estimate of the value of words. For deployment, the LLM must beat the free count-only selector, not just a uniform choice. Its observed score was below the count-only selector. Its gain over uniform did not pass the gate. Public posts can contain self-reported results; these are not independently verified grades.
+
 ## Give another supervisor a real decision
 
 From the fork checkout, run this with Python 3.12 or later. It needs no Harbor install, model key or Docker. `fetch` downloads the Bespoke release once. After that the scoring path is offline.
