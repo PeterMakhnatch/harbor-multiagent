@@ -39,6 +39,21 @@ def opaque(task_dir: Path) -> bool:
     return bool(OPAQUE_NAME.match(task_dir.name)) and name == f"flotilla/{task_dir.name}"
 
 
+def participants(seats: tuple[str, ...], agent: str, model: str | None, max_turns: int | None,
+                 seat_agent: list[str]) -> list[dict]:
+    base = {"name": agent} | ({"model_name": model} if model else {})
+    if max_turns:
+        base["kwargs"] = {"max_turns": max_turns}
+    overrides = {}
+    for spec in seat_agent:
+        seat, _, rest = spec.partition("=")
+        name, _, over_model = rest.partition(":")
+        over = {"name": name} | ({"model_name": over_model} if over_model else {})
+        if "kwargs" in base:
+            over["kwargs"] = dict(base["kwargs"])
+        overrides[seat] = over
+    return [{"seat": seat, **overrides.get(seat, base)} for seat in seats]
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tasks", required=True, help="glob of task directories")
@@ -76,14 +91,7 @@ def main() -> None:
         sys.exit(2)
     args.out.mkdir(parents=True, exist_ok=True)
     for seats, tasks in sorted(groups.items()):
-        participant = {"name": args.agent} | ({"model_name": args.model} if args.model else {})
-        if args.max_turns:
-            participant["kwargs"] = {"max_turns": args.max_turns}
-        overrides = {}
-        for spec in args.seat_agent:
-            seat, _, agent = spec.partition("=")
-            name, _, model = agent.partition(":")
-            overrides[seat] = {"name": name} | ({"model_name": model} if model else {})
+        participant_rows = participants(seats, args.agent, args.model, args.max_turns, args.seat_agent)
         config = {
             "job_name": f"{args.name}-{len(seats)}seat",
             "jobs_dir": args.jobs_dir,
@@ -93,7 +101,7 @@ def main() -> None:
             "quiet": True,
             "environment": {"type": args.env, "force_build": False, "delete": True}
             | ({"kwargs": {"modal_vm_runtime": True, "app_name": "flotilla"}} if args.env == "modal" else {}),
-            "participants": [{"seat": seat, **overrides.get(seat, participant)} for seat in seats],
+            "participants": participant_rows,
             "tasks": [{"path": task} for task in tasks],
         }
         out = args.out / f"{args.name}-{len(seats)}seat.json"

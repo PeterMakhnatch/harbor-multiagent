@@ -47,6 +47,23 @@ def is_deepseek_direct(model: str) -> bool:
     return model.startswith("deepseek/")
 
 
+def known_model(model: str) -> bool:
+    return isinstance(model, str) and bool(model) and (
+        model.startswith("deepseek/") or model.startswith("openrouter/"))
+
+
+def usage_tokens(usage: dict) -> dict[str, int]:
+    cached = int(usage.get("n_cache_tokens") or 0)
+    total = int(usage.get("n_input_tokens") or 0)
+    return {"hit": cached, "miss": max(0, total - cached), "out": int(usage.get("n_output_tokens") or 0)}
+
+
+def estimate_seats(result: dict, models_by_seat: dict[str, str], started: datetime, prices: dict | None) -> float:
+    total = 0.0
+    for seat in result.get("seat_results") or []:
+        total += cost(models_by_seat[seat["seat"]], usage_tokens(seat.get("agent_result") or {}), started, prices)
+    return total
+
 def model_id(result: dict) -> str:
     """LiteLLM id from a trial result. Missing model info stays on the DeepSeek direct id, which is what
     every priced wave before this module used."""
