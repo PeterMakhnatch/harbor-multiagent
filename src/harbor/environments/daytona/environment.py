@@ -535,6 +535,7 @@ class _DaytonaDinD(DinDComposeOps, _DaytonaStrategy):
         env_vars.update(
             legacy_log_mount_env_vars(self._resolve_volumes(), host_value="target")
         )
+        env_vars["COMPOSE_BAKE"] = "false"
         return env_vars
 
     def _compose_env_vars(self) -> dict[str, str]:

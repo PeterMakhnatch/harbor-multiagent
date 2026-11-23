@@ -133,6 +133,30 @@ names the agent's error in `exception_info`; the agent's timing stays in
 | `src/harbor/trial/trial.py` | `_run_step_verifier` records the verifier's exception on the step whether or not the step's agent raised. |
 | `tests/unit/test_single_step_trial.py`, `tests/unit/test_multi_step_run_step.py` | Cover a verifier timeout after an agent timeout, in both verifier modes. |
 
+## Daytona Compose builds without Bake
+
+Harbor's Daytona Docker-in-Docker strategy runs `docker compose build` with
+Compose's default builder, Bake, which hands every build target to
+`docker buildx bake` in one request. A multi-agent task builds one target per
+seat, usually the same image:
+at 120 seats (121 targets) the build failed in 3 of 4 trials (2 vCPU / 4 GiB
+and 4 vCPU / 8 GiB sandboxes) with `NotFound: forwarding Ping: no such job`,
+and with `COMPOSE_BAKE=false` it passed 5 of 5 on 4 vCPU / 8 GiB. Harbor's
+Kernel Docker environment already sets `COMPOSE_BAKE=false` for every compose
+command.
+
+Here the Daytona DinD strategy sets it the same way, as an infrastructure
+variable, so a task's `[environment.env]` cannot turn Bake back on.
+
+Tradeoff: Compose builds the targets through its classic builder instead of
+one Bake request; in those runs the median build at 120 seats took 14 s, the
+same as at 8 seats with Bake.
+
+| Files | Change |
+|---|---|
+| `src/harbor/environments/daytona/environment.py` | `_DaytonaDinD._infra_env_vars` sets `COMPOSE_BAKE=false`. |
+| `tests/unit/environments/test_daytona.py` | Cover the value, that a task env value cannot override it, and that `docker compose build` receives it. |
+
 ## New files
 
 | File | What |

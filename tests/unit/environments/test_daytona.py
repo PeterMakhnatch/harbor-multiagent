@@ -1544,6 +1544,24 @@ class TestDinDComposeEnvVars:
         assert env_vars["MAIN_IMAGE_NAME"] == "hb__test-task"
         assert any("CPUS" in rec.message for rec in caplog.records)
 
+    def test_compose_bake_is_off(self, dind):
+        assert dind._compose_env_vars()["COMPOSE_BAKE"] == "false"
+
+    def test_task_env_cannot_turn_compose_bake_on(self, dind):
+        dind._resolved_task_env = {"COMPOSE_BAKE": "true"}
+
+        assert dind._compose_env_vars()["COMPOSE_BAKE"] == "false"
+
+    async def test_compose_build_runs_without_bake(self, dind):
+        dind._vm_exec = AsyncMock(return_value=ExecResult(return_code=0))
+
+        await dind._compose_exec(["build"])
+
+        command = dind._vm_exec.call_args.args[0]
+        env = dind._vm_exec.call_args.kwargs["env"]
+        assert command.endswith(" build")
+        assert env["COMPOSE_BAKE"] == "false"
+
 
 # ── DinD log path mapping ─────────────────────────────────────────────
 
