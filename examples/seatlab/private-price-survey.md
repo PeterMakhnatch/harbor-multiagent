@@ -1,0 +1,15 @@
+# Does a private demand survey justify a pricing handoff?
+
+The [earlier sales handoff](market-handoff.md) changed which price teams chose, but always using the stock price scored better. This study asks a different question: does changing *relative* prices across products give a research seat useful information to send to an operating seat? First test the action with exact information, before asking agents to acquire noisy information.
+
+## Protocol fixed before scoring
+
+Use the 24 released day-90 companies: target and donor indices 0–11. Use the stock Seed to Profit source `dbec43ff757c86c17077e61b37c7f584c880bdee`. For every branch, rebuild the prefix, match its existing bytes, replace the rule policy, and continue the stock simulator to day 1,095 or bankruptcy. Preserve the catalogue, product selection, channel mix, credit, reorder and advertising rules. Score with the official world score; this is not the full benchmark grade. Keep every zero and tie.
+
+* `K`: keep every price at 1.00 times the typical price; use the published outcome. Re-run targets 1 and 7 and donors 9 and 11. Require the identical stored prefix bytes and exact stored K payoff on all four before running C or T.
+* `C`: use the public product cost term only, at no research charge. For each of the ten active products define `c = (standard landed cost + product marketplace fulfilment + 0.1 × return shipping) / ((1 − public referral fee − 0.1) × typical price)`. Use the stock policy's public 10% return allowance. Do not use company truth in C.
+* `T`: use `c + 1 / (beta × typical price)`, where `beta` is the exact stock survey price-response coefficient for this company and product. This is an **owner-only diagnostic**, not an allowed source of evidence for a model. Charge $60,000 of simulated research spend once in the official world score, the price of ten n=800 surveys. Do not also debit working capital. For C and T, subtract the mean of the ten terms, add 1.00, and clip each product to [0.85, 1.15]. Apply these multipliers every day. Clipping need not preserve the mean.
+
+Select one free comparator for every company: the higher panel mean of K and C (K wins an exact tie). Proceed only if the mean advantage of T over that comparator is at least 0.03 world-score units, and T wins at least 3 more companies than it loses. This is a screen for this action rule, **not** an upper bound for all pricing policies. No statistical discovery claim follows from reusing these 24 known companies.
+
+Only after that gate passes, run `S` on the same 24 companies. Buy one stock n=800 general-panel survey per product at 0.70 and 1.30 times the typical price. Use stable test IDs 1–10 in sorted product-ID order. For each price use `(would_buy + 0.5) / (asked + 1)`; estimate epsilon from the logit difference divided by 0.60, and clip it to [0.5, 6]. Apply the T rule with this estimate and the same $60,000 charge. S must beat the free comparator by at least 0.03, give a one-sided exact paired sign-test p≤0.05, and beat C by at least 0.01. Otherwise do not open live research and operating seats. An S pass is a reason to test a team, not a measured model effect.
