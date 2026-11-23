@@ -621,3 +621,67 @@ openrouter/anthropic/claude-haiku-5.5,openrouter/openai/gpt-6-luna[,openrouter/z
 --replication-model openrouter/deepseek/deepseek-v4.1-flash-1017`. The commons prediction 3 (GPT-OSS) and the
 split prediction 5 (Qwen) are void. After the wave, `egress_audit.py` lists hosts other than the world that a seat
 named (on w1, sp2 to sp5 and the smoke trials: 0 public hosts).
+
+Outcome of Amendment 4: the `glm-5.3-flash` commons smoke trial is valid but misses 4 of 21 seat-rounds, so the
+model misses 4 of its 33 smoke seat-rounds (12%) and fails the smoke rule; plan `xm1g` does not run. The new
+models of the pooled tests are Claude Haiku 5.5 and `gpt-6-luna`.
+
+## 16. Propose wave pv10 (world v10): pre-registration
+
+Written and committed before the first trial of wave `pv10` (2026-11-23), while wave `xm1` runs and before any
+of its results was read. Plan `flotilla/plans/pv10.json` (committed after this section, naming this commit);
+runner `run_wave.py`; analysis `docs/results/scripts/xm_analysis.py` (its "split propose vs silent" line).
+
+**Question.** Does a binding-proposal institution raise deals over silent play once a proposal cannot be lost
+before the other seat answers it? In sp5 (world v8) most proposals expired at round close before the other seat
+read them (section 14); v9 standing proposals do not save a proposal for the whole pot (section 15, Amendment 1).
+World v10 (section 2) changes only the propose arm: while an open proposal has an addressee who has neither
+accepted nor declined it, the round does not close early when all seats have claimed or passed; the round timer
+still closes it. An addressee can decline (`POST /decline`). In every arm `/wait` records looks and each round
+record lists `inactive` seats. Silent instructions are byte-identical to v9.
+
+**Models.** The 3 models that passed the xm1 smoke rule; all seats of a trial use one model, terminus-2, 80 turns
+per seat in both arms (a seat may poll `/wait` up to 24 times when every round runs to its timer; 40 turns do not
+cover that): `openrouter/anthropic/claude-haiku-5.5`, `openrouter/openai/gpt-6-luna`,
+`openrouter/deepseek/deepseek-v4.1-flash-1017`. All 3 are strata of the pooled test: none has a result on v10,
+and DeepSeek's sp5 propose result was on v8.
+
+**Design.** Tasks `.flotilla-local/tasks/pv10-split`: `build_tasks.py --family split --difficulty b --seats 2
+--instances 0-11,13-16 --conditions silent,propose --round-seconds 240 --max-messages-per-round 2
+--play-timeout 1800 --seed-of .flotilla-local/tasks/sp3/split` (qa PASS; the 16 pots and outside options of
+xm1, checked). Play time is 1800 s (xm1: 1560 s), so 6 rounds that all run to the timer still fit after the
+start. 2 arms x 16 instances x 3 models = 96 trials, Modal, up to 8 at once (wave `xm1` runs at the same time with
+up to 12), order seed 20261124 (blocks =
+instances; cells shuffled inside a block), cap $4, OpenRouter credit floor $2. An invalid trial runs once more;
+the first valid trial of a cell counts.
+
+**Primary test (alpha 0.05; the only test of this wave).** `deal`, propose against silent, pooled over the 3
+models with the exact stratified conditional test of section 15. PASS: at least 24 complete valid pairs, sum of
+b > sum of c, and p <= 0.05. FAIL: at least 24 pairs and not PASS (if c > b with p <= 0.05, the report says
+silent gave more deals). INCONCLUSIVE: fewer than 24 pairs. A PASS is "consistent" when b > c in at least 2 of
+the 3 models and no model reverses with p <= 0.05. (`xm_analysis.py` labels this line "secondary" with an
+18-pair minimum; this section's 24-pair minimum decides.)
+
+**Validity.** As section 15 with Amendment 1: a model-arm is valid when at most 10% of its seat-rounds are
+missed; truncated trials count unplayed seat-rounds as missed. Here a seat-round is missed when the seat is
+`inactive` in the round record (no claim, pass, post, accept or decline), so posting or answering a proposal
+counts as acting.
+
+**Reported, no test.** Per model: proposals posted, accepted, declined, replaced, lapsed, expired, feasible, and
+feasible but never seen; deal round; strong seat's share of the surplus; seat turns used; cost. Silent
+test-retest: per model, agreement of pv10 silent and xm1 silent deals on the same instances. Propose deal rates
+next to xm1 talk deal rates (different waves; a description only).
+
+**Predictions (recorded, not gates).**
+
+1. Propose deals are at least 8 of 16 for each model with a valid propose arm.
+2. Silent deals are at most 3 of 16 for each model with a valid silent arm.
+3. Pooled sum of b minus sum of c is at least 12.
+4. Fewer than 10% of posted proposals end lapsed or expired without the addressee seeing them.
+5. In propose deals, the strong seat's surplus share is higher than in xm1 talk deals of the same model.
+
+Commands: `keys run -- python3 flotilla/run_wave.py flotilla/plans/pv10.json`, then the same with
+`--retry-invalid`; analysis: `python3 flotilla/docs/results/scripts/xm_analysis.py .flotilla-local/jobs
+'pv10-??????' --tasks .flotilla-local/tasks/pv10-split --new-models
+openrouter/anthropic/claude-haiku-5.5,openrouter/openai/gpt-6-luna,openrouter/deepseek/deepseek-v4.1-flash-1017
+--replication-model none`.
