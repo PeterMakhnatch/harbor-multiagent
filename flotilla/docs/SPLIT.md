@@ -685,3 +685,57 @@ Commands: `keys run -- python3 flotilla/run_wave.py flotilla/plans/pv10.json`, t
 'pv10-??????' --tasks .flotilla-local/tasks/pv10-split --new-models
 openrouter/anthropic/claude-haiku-5.5,openrouter/openai/gpt-6-luna,openrouter/deepseek/deepseek-v4.1-flash-1017
 --replication-model none`.
+
+## 17. Cross-play wave xp1: pre-registration
+
+Written and committed before the first trial of wave `xp1` (2026-11-23), while waves `xm1` and `pv10` run and
+before any of their results was read. Plan `flotilla/plans/xp1.json` (committed after this section, naming this
+commit); runner `run_wave.py` with `seat_assignments` (each seat of a trial gets its own model); analysis
+`docs/results/scripts/xp_analysis.py`.
+
+**Question.** Seats in shared worlds will often run different models. In split with talk: (A) do mixed-model
+pairs reach deals as often as same-model pairs, and (B) does one model take more of the pot than another when the
+seat roles are balanced? Prior work on chat-only negotiation games found cross-play agreement rates rising for
+most models (Davidson et al., ICLR 2024, arXiv 2401.04536) and mixed pairs beating the best self-play pair in 4
+of 9 clembench games (Role-Specific Strengths and Alignment in LLM Cross-Play and Self-Play, 2026,
+aclanthology.org/2026.lmplayschool-1.4). Here the seats are tool-using agents in a shared world with private
+outside options.
+
+**Models and design.** `openrouter/anthropic/claude-haiku-5.5` (H), `openrouter/openai/gpt-6-luna` (L) and
+`openrouter/deepseek/deepseek-v4.1-flash-1017` (D), the 3 models that passed the xm1 smoke rule. All 9 ordered
+(p1, p2) pairs, arm talk only, on the 16 xm1 split instances (`.flotilla-local/tasks/xm1-split`, instances 0-11
+and 13-16, world v9, unchanged): 144 trials, terminus-2, 40 turns per seat, Modal, up to 8 at once, order seed
+20261125 (blocks = instances; cells shuffled inside a block), cap $3, OpenRouter credit floor $2. An invalid
+trial runs once more; the first valid trial of a cell counts. The self-play cells (HH, LL, DD) repeat xm1 talk
+cells; they enter the tests of this wave only.
+
+**Primary A (alpha 0.025).** Per instance i: self_i = mean deal over its valid self-play cells, cross_i = mean
+deal over its valid cross-play cells, d_i = self_i - cross_i. Exact two-sided sign test on the non-zero d_i.
+"Cross-play lowers deals" if n+ > n- and p <= 0.025; "cross-play raises deals" if n- > n+ and p <= 0.025;
+otherwise "no difference detected". INCONCLUSIVE if fewer than 12 instances have a valid self-play and a valid
+cross-play cell.
+
+**Primary B (alpha 0.025 / 3 = 0.0083 per pair).** For each unordered pair {A, B}, on the instances where both
+(A, B) and (B, A) reached a deal: adv_i = (A's payoff share in both cells) - (B's payoff share in both cells),
+with shares of the pot. Exact two-sided sign test on the non-zero adv_i. "A takes more" if n+ > n- and p <=
+0.0083 (and "B takes more" for the reverse); otherwise "no advantage detected". INCONCLUSIVE for the pair if
+fewer than 8 instances are usable.
+
+**Validity.** A model is valid if at most 10% of the seat-rounds it played (over all seats and cells) are
+missed, with truncated trials counted as in section 15, Amendment 1. A model that fails is left out of A and B
+(every cell with it) and reported.
+
+**Reported, no test.** The 3 x 3 deal matrix; each model's payoff share as strong and as weak seat, in self- and
+cross-play; outside-option statements true, inflated or deflated by speaker and listener model
+(`speech_acts.py`); agreement of the self-play cells with the xm1 talk cells (test-retest); deal round; cost.
+
+**Predictions (recorded, not gates).**
+
+1. Deal rates are at least 80% in self-play and in cross-play.
+2. Primary A: no difference detected.
+3. Primary B: at least one pair has a mean role-balanced advantage of at least 0.05 of the pot.
+4. In cross-play, the weak seat states a false outside option more often to a different model than to its own.
+
+Commands: `keys run -- python3 flotilla/run_wave.py flotilla/plans/xp1.json`, then the same with
+`--retry-invalid`; analysis: `python3 flotilla/docs/results/scripts/xp_analysis.py .flotilla-local/jobs
+'xp1-??????' --tasks .flotilla-local/tasks/xm1-split`.
