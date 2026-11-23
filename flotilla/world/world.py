@@ -244,12 +244,14 @@ def _unread(seat: str) -> list[dict[str, Any]]:
 
 
 def _deliver(seat: str, ids: list[str], via: str = "") -> None:
-    """Mark messages as shown to a seat and record the delivery, after their reply was written. Callers hold LOCK."""
+    """Record the delivery of messages whose reply was written, then mark them as shown to the seat. The event is
+    appended first: if the log write raises, as in every record() call, the request fails and the messages stay
+    unread, so the in-memory state never holds a delivery that the log lacks. Callers hold LOCK."""
     at = now()
+    record("deliver", seat, {"ids": ids} | ({"via": via} if via else {}))
     delivered = STATE["delivered"][seat]
     for message_id in ids:
         delivered.setdefault(message_id, at)
-    record("deliver", seat, {"ids": ids} | ({"via": via} if via else {}))
 
 
 def gate_error(number: int) -> str:
