@@ -29,6 +29,7 @@ import json
 import math
 import statistics
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
