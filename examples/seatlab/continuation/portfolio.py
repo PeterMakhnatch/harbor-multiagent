@@ -14,8 +14,8 @@ from . import __main__ as cli
 from . import equal_time, score, source
 
 SCHEMA = "seatlab.continuation-portfolio/v1"
-INPUT_SHA256 = "bfc0d88061046e4a829247327126bfd0ffac7d1e6fce9771b89625f36955e691"
-INPUT_COMMIT = "2ae698a5d339bc6f1abe693e55b7f3722388b4f4"
+INPUT_SHA256 = "2df38400d5bf18b405662e2d6d7668a2040cca3b04fe15d17f9232effc596ba1"
+INPUT_COMMIT = "1b1676f5cc51d20f0c5ba888890ba7875768cf3b"
 REGISTRATION_COMMIT = "65aff2acbb4e38090a465213c7033ba2cd9c5e1c"
 REGISTRATION = "examples/seatlab/continuation-study.md: What if all the smaller teams finish?"
 INPUT_MAX_BYTES = 64 * 1024

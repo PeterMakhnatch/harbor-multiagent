@@ -155,6 +155,27 @@ Use the same 18 pairs in 6 model/seat-budget settings as the full-length compari
 
 Evaluate only with the 4-hour terminal verifier. Average the 3 pairs per setting, then average the 6 settings. Pass only if the mean gains at least 0.03 over one full-size team, beats uniform and first-hour count selection, and beats the full-size team in at least 4 of 6 settings. Report ties and all 6 setting results. Do not infer a p-value from overlapping pairs, equal dollar cost, or what would happen if a team stopped early.
 
+**Result: the 3-hour mark ranked teams well, but did not clear the allocation threshold.** Its selected mean was **0.48171**, versus 0.44027 for uniform choice and 0.45347 for first-hour message counts. It chose the better terminal result in 15 of 18 pairs; there were no ties. It beat one full-size team by **0.02589**, not the required 0.03. Both small teams still ran to completion.
+
+| Model | Total seats | Selected small team | One full-size team | Difference |
+|---|---:|---:|---:|---:|
+| Opus | 4 | 0.48977 | 0.45430 | +0.03547 |
+| Opus | 8 | 0.50570 | 0.51420 | −0.00850 |
+| Sol | 4 | 0.41110 | 0.38283 | +0.02827 |
+| Sol | 8 | 0.48847 | 0.41120 | +0.07727 |
+| Argon | 4 | 0.50360 | 0.47847 | +0.02513 |
+| Argon | 8 | 0.49160 | 0.49390 | −0.00230 |
+
+For two jobs already running, an owner can compare completed marks without reading either team's private work. Use decimal marks from the same task and hour. `choose` returns both eligible IDs and a uniformly sampled pick on a tie. It does not cancel jobs or grant permission to launch a second team. To reproduce the [scored comparison](results/continuation-mark-selector.json), run:
+
+```sh
+m=examples.seatlab.continuation.mark_selector
+d=examples/seatlab/results
+python3.12 -BS -m "$m" choose team-east 0.61 team-west 0.44
+python3.12 -BS -m "$m" score "$d/continuation-equal-time.json" "$d/continuation-portfolio.json" |
+  cmp - "$d/continuation-mark-selector.json"
+```
+
 ### Does the same signal transfer when there is no team chat?
 
 We inspected the release labels, but not the grades of the following 18 runs for this analysis. Register this test before scoring the coordinated-team mark selector. Use the remaining 9 single-agent runs and 9 eight-seat runs labeled `Without communication`. Each of the 3 models has 3 runs per design. In this business task, the board-off policy refuses messages; the 8 seats still share the company and repository. Do not describe them as 8 independent businesses.
@@ -162,3 +183,19 @@ We inspected the release labels, but not the grades of the following 18 runs for
 In each of the 6 model/design settings, keep all 3 unordered pairs. Both candidates work for 4 hours. Choose the higher 3-hour live mark; average a tie. Grade only the 4-hour terminal result. Compare with uniform choice between **the same 2 candidates**. A missing mark or final reward makes the test incomplete. Do not choose another cutoff.
 
 Pass the transfer test if the equally weighted mean gain over uniform is at least 0.03 and positive in at least 4 of 6 settings. Report the attainable gain from perfect choice and the reward of each design separately. This tests output selection in another cohort. It does not compare against one larger team, estimate the effect of disabling communication, or estimate a dollar saving.
+
+**Result: positive in all 6 settings, below the registered threshold.** The selected mean was **0.47299**. Uniform choice scored **0.44707**, a gain of **0.02592**. Perfect final selection scored 0.47736. Its maximum possible gain over uniform was only 0.03028. The 3-hour mark chose the better terminal result in 15 of 18 pairs, without a tie.
+
+| Previously unused design | Completed runs | 3-hour selection | Uniform choice | Perfect selection |
+|---|---:|---:|---:|---:|
+| Single agent | 9 | 0.46660 | 0.44448 | 0.47031 |
+| 8 seats, no board messages | 9 | 0.47938 | 0.44967 | 0.48440 |
+
+Use a same-hour company mark as evidence when comparing existing candidates. Do not use either cohort to promise a 0.03 gain, savings or a benefit from disabling the board. To verify the [transfer result](results/continuation-mark-transfer.json), use the same public cache as the blind board workers:
+
+```sh
+w=$(mktemp -d)
+python3.12 -BS -m examples.seatlab.continuation fetch "$w/cache" || exit 1
+python3.12 -BS -m examples.seatlab.continuation.mark_transfer "$w/cache" |
+  cmp - examples/seatlab/results/continuation-mark-transfer.json
+```
