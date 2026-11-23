@@ -1,0 +1,346 @@
+{
+  "descriptive": {
+    "agreement": {
+      "donor": 0.75,
+      "own": 0.9166666666666666
+    },
+    "different_advice": {
+      "mean_delta": 0.0018627385931066064,
+      "n": 8
+    },
+    "donor_mean": 0.09012904001148901,
+    "hold_mean": 0.10395054127098269,
+    "multiple_gain": -0.0028600050000000287,
+    "oracle_mean": 0.11153745236450918,
+    "own_mean": 0.09467521665834168,
+    "shared_advice": {
+      "mean_delta": 0.0099130527543448,
+      "n": 4
+    },
+    "uniform_mean": 0.08233000375676894
+  },
+  "finance": {
+    "emitted": 24,
+    "malformed": 0,
+    "missing": 0,
+    "skipped_pairs": 0,
+    "valid": 24
+  },
+  "groups": [
+    {
+      "advice": {
+        "donor": 1,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 1,
+        "own": 1
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 0.65863638,
+        "own": 0.65863638
+      },
+      "prefix_fingerprint": "ae46d2e16fd27d195d8a41e28497bcf64216035668e7804df16c80c5762b5023",
+      "shape": "mnl",
+      "terminal": false,
+      "world": 0,
+      "world_score": {
+        "donor": 0.0,
+        "own": 0.0
+      }
+    },
+    {
+      "advice": {
+        "donor": 3,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 3,
+        "own": 3
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 1.918300595,
+        "own": 1.918300595
+      },
+      "prefix_fingerprint": "4bf89580eeab6f14fef53dc06bc18741f220c1831b8e8a5e3a9e5c216494a98c",
+      "shape": "nested",
+      "terminal": false,
+      "world": 1,
+      "world_score": {
+        "donor": 0.1879657612700142,
+        "own": 0.1879657612700142
+      }
+    },
+    {
+      "advice": {
+        "donor": 2,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 2,
+        "own": 1
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 0.208630985,
+        "own": 0.22100825
+      },
+      "prefix_fingerprint": "2493c50d405239dc52c326e66030ce191d25d40c86bed1ff0bcaabe13f473386",
+      "shape": "wom",
+      "terminal": false,
+      "world": 2,
+      "world_score": {
+        "donor": 0.0,
+        "own": 0.0
+      }
+    },
+    {
+      "advice": {
+        "donor": 3,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 2,
+        "own": 1
+      },
+      "delta": 0.016961883473038536,
+      "multiple": {
+        "donor": 1.476019165,
+        "own": 1.56538863
+      },
+      "prefix_fingerprint": "585c9c1eadf658bd7871870cd1f10a0d421c5167438f3c0d37b5e179b0ade7cb",
+      "shape": "mnl",
+      "terminal": false,
+      "world": 3,
+      "world_score": {
+        "donor": 0.11234229076624117,
+        "own": 0.1293041742392797
+      }
+    },
+    {
+      "advice": {
+        "donor": 3,
+        "own": 3
+      },
+      "complete": true,
+      "decision": {
+        "donor": 2,
+        "own": 3
+      },
+      "delta": 0.0396522110173792,
+      "multiple": {
+        "donor": 2.4362704500000003,
+        "own": 2.795168685
+      },
+      "prefix_fingerprint": "6e8f7b9e4dba67d1023b3e6af3f14dcc6e4f8c91c08a24fdc1d9dd3b1921feb4",
+      "shape": "nested",
+      "terminal": false,
+      "world": 4,
+      "world_score": {
+        "donor": 0.25693485909681874,
+        "own": 0.29658707011419794
+      }
+    },
+    {
+      "advice": {
+        "donor": 1,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 1,
+        "own": 1
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 2.49935762,
+        "own": 2.49935762
+      },
+      "prefix_fingerprint": "8bebf394cb0afbdfa7699a3d5c5528bd1ac6d92e12bba255b1ad3e303d601f83",
+      "shape": "wom",
+      "terminal": false,
+      "world": 5,
+      "world_score": {
+        "donor": 0.26431146877531375,
+        "own": 0.26431146877531375
+      }
+    },
+    {
+      "advice": {
+        "donor": 1,
+        "own": 3
+      },
+      "complete": true,
+      "decision": {
+        "donor": 1,
+        "own": 3
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 0.89862752,
+        "own": 0.61831914
+      },
+      "prefix_fingerprint": "a0eb44fd3efc88341f9b6ca2559ae8df5dd35145f325b7dc2113d4d2a9abc1f3",
+      "shape": "mnl",
+      "terminal": false,
+      "world": 6,
+      "world_score": {
+        "donor": 0.0,
+        "own": 0.0
+      }
+    },
+    {
+      "advice": {
+        "donor": 1,
+        "own": 3
+      },
+      "complete": true,
+      "decision": {
+        "donor": 1,
+        "own": 3
+      },
+      "delta": 0.05450383389057464,
+      "multiple": {
+        "donor": 1.2247252800000001,
+        "own": 1.479364275
+      },
+      "prefix_fingerprint": "10da2fbf6db2e71bd266dee8b7ae034a3431a787e15e0532db9326a3d5bba51b",
+      "shape": "nested",
+      "terminal": false,
+      "world": 7,
+      "world_score": {
+        "donor": 0.05849163447743708,
+        "own": 0.11299546836801172
+      }
+    },
+    {
+      "advice": {
+        "donor": 1,
+        "own": 3
+      },
+      "complete": true,
+      "decision": {
+        "donor": 3,
+        "own": 3
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 0.668988625,
+        "own": 0.668988625
+      },
+      "prefix_fingerprint": "d2c5c8eb44b87eaf163ee6a3fa4e3b2da6678241eb3235c3d6580e2d2ad642a0",
+      "shape": "wom",
+      "terminal": false,
+      "world": 8,
+      "world_score": {
+        "donor": 0.0,
+        "own": 0.0
+      }
+    },
+    {
+      "advice": {
+        "donor": 1,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 1,
+        "own": 1
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 1.65254927,
+        "own": 1.65254927
+      },
+      "prefix_fingerprint": "7e63583b85b398f9d831b22144c81eedad13f431f45c797abfeed5e42c12b5d2",
+      "shape": "delayed_ads",
+      "terminal": false,
+      "world": 9,
+      "world_score": {
+        "donor": 0.14493865713328283,
+        "own": 0.14493865713328283
+      }
+    },
+    {
+      "advice": {
+        "donor": 1,
+        "own": 3
+      },
+      "complete": true,
+      "decision": {
+        "donor": 1,
+        "own": 3
+      },
+      "delta": -0.05656380861876033,
+      "multiple": {
+        "donor": 1.2165697549999999,
+        "own": 0.67453577
+      },
+      "prefix_fingerprint": "f3aeb614d956856cb08980a9cdc345d4aee097e5fd109b0c15673b4a6b827442",
+      "shape": "deal_seekers",
+      "terminal": false,
+      "world": 10,
+      "world_score": {
+        "donor": 0.05656380861876033,
+        "own": 0.0
+      }
+    },
+    {
+      "advice": {
+        "donor": 3,
+        "own": 1
+      },
+      "complete": true,
+      "decision": {
+        "donor": 3,
+        "own": 1
+      },
+      "delta": 0.0,
+      "multiple": {
+        "donor": 0.52667626,
+        "own": 0.599414605
+      },
+      "prefix_fingerprint": "260fb67220b21c99f099f6499b06b2de210aa44f488596e5b583a162f336cf81",
+      "shape": "delayed_ads",
+      "terminal": false,
+      "world": 11,
+      "world_score": {
+        "donor": 0.0,
+        "own": 0.0
+      }
+    }
+  ],
+  "inputs": {
+    "finance_replies_sha256": "e4fafc537dea3c295f1f830d32660e0a91f6c64bda30d4e1ccc25c05d78da1ce",
+    "prefixes_sha256": "b841fbc98c725fab5b9bd4e9e01ceeaad422e74a8f069c55296eae45ce08faca",
+    "sales_replies_sha256": "67256254b2c480d6c5d48f41863dbf8792ea94abf17f78042858745333af2219"
+  },
+  "numpy_version": "2.1.3",
+  "primary": {
+    "alpha": 0.05,
+    "complete": 12,
+    "losses": 1,
+    "mean_delta": 0.004546176646852671,
+    "min_delta": 0.03,
+    "p_one_sided": 0.3125,
+    "passed": false,
+    "required": 12,
+    "ties": 8,
+    "ties_rule": "excluded_from_sign_test",
+    "wins": 3
+  },
+  "sales": {
+    "emitted": 24,
+    "malformed": 0,
+    "missing": 0,
+    "valid": 24
+  },
+  "schema": "seatlab.market-handoff-score/v1",
+  "source": "dbec43ff757c86c17077e61b37c7f584c880bdee"
+}

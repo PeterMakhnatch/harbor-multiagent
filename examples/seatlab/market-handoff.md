@@ -19,3 +19,31 @@ Source: [released Seed to Profit task and simulator](https://github.com/bespokel
 Question: does Olam Harbor deliver the same sales message to the finance seat and return the selected stock reward? Test world 0 with its own sales agent and world 1 with a donor. These cells are fixed before inspecting any target payoff. Start a real local Docker session for each cell. First use the sealed picks; then use one fresh direct Flash turn per seat if the shared meter permits. Do not retry a model to match an earlier choice. This is a transport test, not a second efficacy estimate.
 
 A cell passes only if Harbor records 2 successful seats, the world records both first submissions, and the verifier returns the selected option's stock `world_score`. The sales prompt must match its sealed prefix. The finance prompt must match the target finance prefix and the sales choice **actually delivered in that session**. Both checks compare SHA-256 digests. A fresh model may change its choice without failing the transport test. Each paid cell has 2 calls and at most $0.02 reserved. Payoffs travel only with the verifier; neither seat sees them. The result page lists replay separately from new model sessions.
+
+## Result: the correct sales recommendation did not pass
+
+All 48 first model replies were valid. We [sealed both roles and all 24 prefixes](https://github.com/PeterMakhnatch/harbor-multiagent/commit/565d69d1d78483266b56859c415c206bd8ca4eb0) before running any target payoff. At day 90, all 3 continuations start with the same company and reset the stock policy's private history. This applies even to keeping prices unchanged. We measured the released simulator's world score with zero research spend, not the full benchmark grade.
+
+| Decision on the 12 target markets | Mean world score |
+|---|---:|
+| Director with its own sales agent | 0.09468 |
+| Director with the other company's sales agent | 0.09013 |
+| Pick uniformly from the 3 prices | 0.08233 |
+| Keep prices unchanged on every company | 0.10395 |
+| Best possible price with knowledge of the future | 0.11154 |
+
+The correct handoff won 3 times, lost once and tied 8 times. Its mean gain was **0.00455**, below the registered 0.03; the one-sided exact sign test gave p=0.3125. The advice differed in 8 of 12 pairs. Directors followed their own agent in 11 of 12 cases and the donor in 9 of 12. The founder-value multiple changed by −0.00286 on average. Four targets scored zero at every price; 8 had at least 2 different scores. Advice changed decisions, but the study does not show a reliable increase in business value.
+
+**A stronger limit.** Even a perfect selector could beat keeping prices by only **0.00759** on these 12 targets. That is not enough for a 0.03 improvement against this free policy. This is a limit for this menu and these companies, not for all sales agents. The 48 calls cost [$0.003498624](results/market-handoff/meter.json). The simulation used local CPU only.
+
+Score the sealed replies at no cost. No provider, Docker, simulator checkout or NumPy is required:
+
+```sh
+d=examples/seatlab/results/market-handoff
+python3.12 -BS -m examples.seatlab.market_handoff.decisions score \
+  "$d" "$d/sales-first.jsonl" "$d/finance-first.jsonl"
+```
+
+## Holdout: is the price menu worth another model campaign?
+
+Protocol before scoring any donor company: keep the one price with the highest mean on the 12 targets. That price is option 1, unchanged. Use the separate 12 donors, with disjoint state fingerprints and matched market shapes. Run the same three 1,005-day continuations for each donor. No model is called. Do not replace a zero or a tie. Compare the mean best possible score with that frozen default on the 12 donors. If the gap is below 0.03, no agent with this menu can achieve the target improvement on this panel. If the gap is at least 0.03, the menu has room, not evidence that an agent can exploit it. Keep the original 12-pair test separate.
