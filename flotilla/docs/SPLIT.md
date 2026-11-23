@@ -533,3 +533,52 @@ Commands: `keys run -- python3 flotilla/run_wave.py flotilla/plans/xm1s.json`, t
 .flotilla-local/tasks/xm1-split --tasks .flotilla-local/tasks/xm1-commons --new-models
 openrouter/qwen/qwen3.8-27b,openrouter/openai/gpt-oss-120b,openrouter/anthropic/claude-haiku-5.5
 --replication-model openrouter/deepseek/deepseek-v4.1-flash-1017`.
+
+**Amendment 1 (2026-11-23, before the first wave trial).** The 8 smoke trials started at 2:28 PM ET. Before this
+amendment, only their runner lines were read: exit code, validity and recorded cost. No deal, survival or other
+game outcome of a smoke trial was read. The reasons are an independent pre-run review (Gemini 4 Neon,
+`/tmp/flotilla/xm1/review-neon.md`, 2 blockers and 15 should-fix items) and the smoke costs. Changes:
+
+1. **Arm `propose` leaves this wave.** In world v9 a proposal for the whole pot lapses when the round closes,
+   because the next pot is smaller; most sp5 proposals were of that kind. So v9 does not remove the sp5 failure,
+   and the arm needs a new design before a test. The propose secondary test and predictions 4 and 6 are withdrawn.
+2. **Qwen3.8-27B leaves the wave on cost.** Its 2 smoke trials cost $0.196 (split) and $0.559 (commons), against
+   $0.015 to $0.06 for the other models; 64 trials would pass the budget alone. Rule, fixed before the next smoke
+   trials: 1 split talk and 1 commons talk smoke trial on instance 12 each for `openrouter/qwen/qwen3.8-flash`
+   and `openrouter/z-ai/glm-5.3-flash`. The third new model is `qwen3.8-flash` if both of its smoke trials are
+   valid, it misses at most 10% of its smoke seat-rounds, and its mean recorded cost is at most $0.10 per trial.
+   Otherwise it is `glm-5.3-flash` if that model meets the same validity rule. Otherwise the wave runs with 2 new
+   models. Only validity and cost decide.
+3. **Smoke validity rule.** A model passes when each of its smoke trials is valid and its missed seat-rounds over
+   its smoke trials are at most 10% (was 25%, now the same bound as the wave). This applies to all models.
+4. **Instances: 16 per family,** 0-11 and 13-16 (12 is the smoke instance), rebuilt with the same commands and
+   `--instances 0-11,13-16`, arms silent and talk (qa PASS). Split 13-16 are new, each with one outside option
+   above half the pot. Commons 13-15 are wave 1 lakes; 16 is new. With 4 models: 128 split trials and 128
+   commons trials.
+5. **Truncated trials** (the game did not end and fewer rounds were logged than planned, because every seat
+   stopped calling or the world froze): each unplayed seat-round counts as missed, with the planned rounds in
+   the denominator. A truncated split game is no deal. A truncated commons lake counts as survived if it did not
+   collapse in the played rounds (the unplayed rounds have zero catch). Truncated trials are counted and listed
+   for each model and arm.
+6. **How to read a pooled PASS.** The report says "consistent" when talk wins (b > c) in at least 2 of the valid
+   new models and no valid new model shows the reverse with p <= 0.05. Otherwise it says the pooled effect comes
+   from fewer models. Only a consistent PASS supports "the effect holds for other model families".
+7. **Sensitivity checks (reported only):** the primaries on first attempts only; commons without trials that
+   missed more than 2 seat-rounds.
+8. **Order and runner.** Blocks of the two families alternate (the seed picks the first family and shuffles the
+   blocks of each); up to 12 trials run at once. The runner waits for trials in flight before it stops at the
+   cap, retries a failed balance read, passes only an allowlist of variables to Harbor, and keeps at most 2
+   attempts per cell.
+9. **Budget.** Wave cap $12 of model spend and OpenRouter credit floor $2. The OpenRouter account is shared:
+   its usage rose by $4.65 between 1:50 and 2:41 PM ET, of which these smoke trials were $0.90.
+10. **Power.** At the predicted commons gap (talk 75% vs silent 50%, or 83% vs 58%, independent outcomes), the
+   pooled commons test at alpha 0.025 has an exact power of 0.53 to 0.59 with 48 pairs (0.23 to 0.25 with 24). A
+   commons FAIL then means "not detected at this size", not "no effect".
+11. **Limits added.** OpenRouter may route a model to different providers during the wave; temperature and
+   reasoning effort are the providers' defaults; neither is recorded per call. The pots and outside options of
+   instances 0-5 are public in this repository, and seats have network access; after the wave, the seat command
+   logs are searched for requests to hosts other than the world.
+
+Predictions 1, 2, 3, 5 and 7 stand, read as rates: silent at most 20% deals, talk at least 65% deals, and the
+DeepSeek stratum talk at least 80% and silent at most 20%. The analysis command takes the final model list with
+`--new-models` and `--replication-model`.

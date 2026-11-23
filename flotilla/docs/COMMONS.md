@@ -492,3 +492,12 @@ instances 0-11 (same lakes, DeepSeek direct, local Docker), without a test.
 3. GPT-OSS-120B results are readable only if its missed seat-rounds stay at or below 10%.
 4. Talk over-use is at most half of silent over-use on models where talk survives in at least 4 more instances.
 5. The DeepSeek replication stratum: talk survives in at least 10 of 12, silent in at most 7 of 12.
+
+**Amendment 1 (2026-11-23, before the first wave trial).** SPLIT.md section 15, Amendment 1, applies to this part
+too: Qwen3.8-27B is replaced by a cheaper model chosen by a fixed validity-and-cost rule; 16 instances (0-11 and
+13-16; 13-15 are wave 1 lakes, 16 is new); truncated lakes that did not collapse count as survived, with the
+unplayed seat-rounds counted as missed; the "consistent" reading rule for a pooled PASS; sensitivity checks
+(first attempts only; without trials that missed more than 2 seat-rounds); alternating family blocks; and the
+power note (about 0.53 to 0.59 at the predicted gap with 48 pairs). The predictions stand as rates: talk minus
+silent survival at least 25 points per new model; talk survival at most 85% per new model; DeepSeek talk at
+least 80% and silent at most 60%.
