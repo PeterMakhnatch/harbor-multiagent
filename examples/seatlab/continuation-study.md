@@ -314,3 +314,113 @@ python3.12 -BS -m examples.seatlab.continuation.owner_inbox \
 ```
 
 The [stock-board control](results/owner-inbox-stock.json) produced 5 teammate messages for 7 individual recipients across those sends. The board confirmed 3 recipient edges in inbox returns. A history call returned 4 rows, but did not identify those rows in the log. The tool did not count a harness notification or infer a receipt from the history call. `not_confirmed` is **not** “unread.” A server-side inbox return does not prove that the client received it, the model used it, or the team earned a reward.
+
+## What does an interrupted company actually lose?
+
+**Question.** A 2-hour interruption at mid-run makes 24 more company months due. If a team lands different software only after some of those months run, can its live company outcome change? The delay is a controlled intervention, not measured worker latency. No released team grade or earlier model response is reused.
+
+Freeze 4 MNL companies indexed 0–3. Use SHA-256 of `seatlab/resume-landing/v1/{index}/{purpose}` with `world` and `truth`. Each company starts with the official starter autopilot and reference plan. Land the untouched reference autopilot after 13, 17 or 37 months. Compare the stock live company grade after all 37 months or a verified terminal bankruptcy. Use the same simulated company and daily randomness in every schedule. Record which software actually ran each month. On case 0, also run fixed reference software with the two endpoint schedules. Their outcomes and software histories must agree. This is a negative control, not evidence about live agents. Do not execute team-written code.
+
+**Decision rule.** If all 4 companies and both negative controls complete, call a landing delay material on this panel if the mean absolute difference between zero and 24 months of delay reaches 0.03 on the live score, and at least 2 of 4 company differences reach 0.03. Give all signed differences, including improvements on delay. A failing negative control makes the comparison uninterpretable. This tests software timing under a fixed schedule, not wall time by itself, agent quality, or the full benchmark grade.
+
+**Result: the arrival time changed the live score in 2 of 4 companies.** All 14 runs reached 1,095 simulated days. The 2 fixed-reference controls produced identical financial and software histories. None of the 518 monthly calls timed out or froze. The following are native **live company scores**, not full Seed to Profit grades and not model-team results.
+
+| Company | Land after month 13 | Land after month 17 | No landing before the end |
+|---|---:|---:|---:|
+| 0 | 0.0000 | 0.0000 | 0.0000 |
+| 1 | 0.0000 | 0.0000 | 0.0000 |
+| 2 | 0.3407 | 0.2855 | 0.0000 |
+| 3 | 0.2637 | 0.1064 | 0.0000 |
+
+The mean absolute endpoint difference was 0.1511. Exactly 2 of 4 differences exceeded 0.03, so the fixed criterion passed. A separate calculation checked the program digest in each monthly snapshot against the upstream files. It recomputed every grade from terminal company value. The [14 redacted receipts](results/continuation-software-arrival.json) include terminal values as well as grades; a zero grade does not by itself mean bankruptcy.
+
+**Use.** Record the simulated month in which the new program first ran, not just the time an agent regained its session. Restoring a full agent budget need not restore the opportunity to deploy. This test measures the consequence of a scheduled delay with 2 known official programs. It does not estimate the typical delay of a service or the performance of a resumed model team.
+
+To replay 1 case, use a non-root Python 3.12 environment with the stock versions `numpy==2.1.3` and `PyYAML==6.0.2`. Do not run a program submitted by a model. This runner accepts only the pinned benchmark sources:
+
+```sh
+env -u PYTHONPATH -u PYTHONHOME "$STOCK_PYTHON" -B \
+  -m examples.seatlab.continuation.resume_months "$BESPOKE_ROOT" --case 2 --delay 4
+```
+
+## Is a prompt-level recheck enough when a peer's write is late?
+
+**Registered before counting races.** In two independent implementations of Abrahamsson et al.'s E1 study, look for a seat that lists the shared store in the same round its partner first successfully writes the particular value its task needs. Compare lists applied just before the write (miss) with lists applied just after it (hit). Use each focal seat once, its earliest qualifying list. Resolve ordering only with non-tied server timestamps; report ties separately. Use shared cells 1–4, 9 and 10. Use a list racing an unrelated seat's first write as a placebo. Use only valid worlds, and report all launches. Count actual later reads of the required partner value before submission. Do not use model narratives or pool model calls as independent samples.
+
+**Decision rule.** Require at least 20 misses and 20 hits in the explicitly prompted cells **in each implementation**, plus direct evidence that reference lists can expose same-round writes. Below the minimum, the archive cannot support a synchronization recommendation. Above it, report descriptive read-rate gaps by implementation and prompt condition, actual visibility, missing submits, and placebo gaps. Treat a partner gap of at least 20 percentage points in both implementations, each at least 10 points larger than its placebo, as grounds for a *prospective* scheduling test. It is not proof of a causal effect: model choice, latency and other writes can differ. Do not change the cutoff after scoring. The frozen primary data source is the authors' [Zenodo package](https://zenodo.org/records/24273453), SHA-256 `6a9b3cc1af01a65daae70869296aa9a99980c04c8c40c5cc7d8d6a0bc8e2458e`.
+
+**Result: do not infer a need for a barrier from these logs.** The 12 cells contain 600 launched worlds, 568 valid worlds, and 1,136 eligible seats. In the prompted cells, the reference implementation had 0 hits and 6 narrow misses. The independent implementation had 5 hits and 3 narrow misses. Neither met the required 20 of each. The persist-only cells had 1 hit and 2 misses in the reference implementation and 2 hits and 2 misses in the independent one. No observed same-round lists tied on applied time. A second calculation joined the raw first successful partner write to the focal seat's list in SQL. It reproduced all 4 pairs of counts.
+
+This result does not contradict the authors' prompting result. It answers a narrower question: *were enough agents already listing when their partner's required value arrived to compare timing?* They were not. The archive does not establish that making those agents wait would improve a task result. Record receipt and the next decision in a prospective task instead. The [count-only report](results/continuation-store-races.json) includes the denominators, current task key, unrelated-writer control and unavailable fields. It publishes no model text or keys.
+
+```sh
+python3.12 -BS -m examples.seatlab.continuation.store_races "$REPLICATION_ZIP" \
+  | cmp - examples/seatlab/results/continuation-store-races.json
+```
+
+## Is there a real launch decision worth spending two agents on?
+
+The stock business office keeps a supplier audit private to the ordering seat. A shared receipt could help a launch planner, but only if the information could change a consequential decision. Do this screening test **before** using any model for this design.
+
+**Screen.** Generate 6 fresh MNL companies. Use the lower-case SHA-256 of `seatlab/private-supplier/v1/screen/{i}/{purpose}` for `i=0..5` and `purpose=world|truth`. Use the fixed official reference code and plan in both arms. In A, use supplier A for all 10 reference products. In B, change only those 10 suppliers to B. Both arms incur the same 20 official audit fees: one A and one B audit for each product. This is simulated business spending, not an API charge. Commit the numeric stock quote, terminal company value, all actual monthly plan digests and stock live score after fees. Do not substitute full benchmark grades.
+
+**Pass test.** Each supplier must beat the other by at least 0.01 in 2 or more companies. The per-company oracle must beat the best single supplier by at least 0.02 on mean stock live score. Report all 12 outcomes and ties. If either test fails, **do not run model-team trials of this supplier choice.** The counterfactual screen can rule out this design; it cannot show that agents can exploit the opportunity.
+
+**Separate ownership check.** Use the unmodified official office tools and a simulated clock. Show whether an ordering seat can obtain one completed supplier report that a non-ordering seat cannot obtain directly. If feasible, let that seat send the report through the stock board and verify what the other inbox returned. Use only a public product, an isolated temporary office and the stock finite report. An access denial, an early pending result, a completed private result, a board send, and a receiver inbox return are distinct observations. No generated Python or live credentials go to the office.
+
+### Result: do not buy model turns for the two uniform supplier plans
+
+Supplier A won by at least 0.01 in 3 companies. Supplier B won in 0. The other 3 grades tied at zero. Mean stock live grade was 0.06089 for A and 0.01426 for B. An oracle that saw all 12 endings could not beat always using A. The eligibility test failed. We ran **no model teams on this supplier choice**. This does not rule out product-specific suppliers or other research questions.
+
+The [12 outcomes](results/continuation-private-supplier.json) include terminal values, actual plan and program hashes from 444 stock months, and the stock quotes. All 12 companies completed 37 months. Neither arm froze. Each arm deducted the same 60,000 simulated dollars when computing the live grade. We recomputed each grade from the terminal value and checked each snapshot digest chain.
+
+The [separate office control](results/continuation-office-private-handoff.json) **did** show a real information boundary. The stock office quoted and committed 3,000 simulated dollars for one audit. The orderer saw no result 1 simulated second before release. At 360 simulated seconds it received the report. The other seat could not obtain it from the office, even after release. After the orderer sent the report, the other seat's stock inbox returned message 1. The same report digest appeared at 5 boundaries, from office computation to receiver inbox. We exercised the stock methods, not an MCP network call or a model's understanding.
+
+```sh
+"$STOCK_PYTHON" -B -m examples.seatlab.continuation.supplier_screen \
+  "$BESPOKE_ROOT" --case 2 --supplier B
+"$STOCK_PYTHON" -B -m examples.seatlab.continuation.office_handoff \
+  "$BESPOKE_ROOT" | cmp - examples/seatlab/results/continuation-office-private-handoff.json
+```
+
+## Should two operators use a teammate's evidence to assign one early deployment?
+
+A resource limit creates a different decision from choosing one supplier for every product. A supervisor has 2 companies and 1 early deployment of the official reference program. The other company must wait 4 months. The exercise uses real stock companies, programs, books and live scores. The deployment limit is our operator rule, **not** a rule of Bespoke's benchmark.
+
+**Preregistered opportunity check.** Use 8 pairs indexed `0..7`, with sides `X` and `Y`. For each company, use the lower-case SHA-256 of `seatlab/deploy-queue/v1/pair/{i}/{side}/{purpose}`, with `purpose=world|truth`. Each starts with the stock reference plan and stock starter program. Run both landings: first 13 months on starter or first 17 on starter, then reference through month 37. Charge no research fee. Require both stock outcomes per company and matching month-13 books between treatments. Admit only public `month`, `revenue`, `cash_at_end` from the first 13 completed months of the stock `live.books` view. Never pass private company value, scores, world keys or later months to a seat. Keep an invalid trajectory in the denominator.
+
+Score an assignment as the mean of the 2 terminal stock live grades. Compare a hindsight oracle with 4 fixed policies: always X, always Y, higher last-month revenue, and lower last-month revenue. Break both revenue ties toward X. Do not run model teams unless all 32 counterfactuals are valid, the oracle advantage over the best fixed policy is at least 0.015, and each side wins by at least 0.01 on at least 2 pairs. Count ties. An oracle that only beats a bad baseline does not justify adding a supervisor.
+
+**Conditional model comparison.** Only if the check passes: run 2 fresh subscription teams per pair, independent first answers and no game tools. A remote analyst sees only Y's stock public books and returns a bounded urgency estimate and its most recent revenue and cash estimates. A planner sees only X's books. In `shared` it receives the analyst's actual numeric report. In `private` it receives a content-free notice; the analyst still runs. Alternate which arm runs first by pair. Accept one X/Y assignment. Favor sharing only if its mean reward exceeds private by at least 0.015, it has at least 2 more wins than losses across the 8 pairs, and it exceeds the best fixed policy. Report actual completions and receipt binding; do not replace an invalid first answer. This is a stock-business allocation experiment, not an official two-seat benchmark score.
+
+### Result: do not buy model turns to assign this deployment
+
+All 32 stock runs produced a valid outcome. The 2 landings had identical public books through month 13 for every company. The runs cover 1,175 simulated company-months. Thirty-one companies reached month 37. Pair 6, company X, went bankrupt at month 28 under the later deployment. We kept that result.
+
+| Assignment policy | Mean grade across 8 pairs |
+|---|---:|
+| Always give X the early deployment | 0.07735 |
+| Always give Y the early deployment | 0.04885 |
+| Give it to the company with higher last-month revenue | 0.04950 |
+| Give it to the company with lower last-month revenue | 0.07670 |
+| Choose after seeing both endings | 0.08311 |
+
+The hindsight advantage over the best fixed policy was **0.00576**, below the registered **0.015**. X won by at least 0.01 on 1 pair; Y won on 2. Of the other 5 pairs, 4 tied exactly. Pair 6 did have a large local effect: its assignment grade was 0.26889 with X early and 0 with Y early. That single example does not justify a team on this panel. We released no role prompts and ran no model teams for this choice.
+
+The [32 original cells](results/deploy-queue-cells) include the public books and stock program digests for every completed month. The [complete panel](results/deploy-queue-panel.json) names every cell, policy, threshold and denominator. Recompute it with Python 3.12 and no installed packages. Exit 1 means the opportunity test did not pass; it is not a missing result.
+
+```sh
+out=$(mktemp)
+rc=0
+python3.12 -BS -m examples.seatlab.continuation.deploy_queue \
+  panel examples/seatlab/results/deploy-queue-cells >"$out" || rc=$?
+test "$rc" -eq 1 && cmp "$out" examples/seatlab/results/deploy-queue-panel.json
+```
+
+To regenerate one stock outcome instead of reading the release, use the trusted Bespoke checkout and its Python environment:
+
+```sh
+env -u PYTHONPATH -u PYTHONHOME "$STOCK_PYTHON" -B \
+  -m examples.seatlab.continuation.deploy_queue_cell "$BESPOKE_ROOT" \
+  --pair 6 --side X --landing 17
+```
