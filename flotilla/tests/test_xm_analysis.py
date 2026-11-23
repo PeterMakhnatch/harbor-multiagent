@@ -19,10 +19,18 @@ COMMONS = load(FLOTILLA / "games" / "commons.py", "flotilla_test_xm_commons")
 NEW = ("m/a", "m/b", "m/c")
 REPLICATION = "m/rep"
 SIMULATION_SEEDS = (1, 7, 20261123, 424242)
+OUTSIDE_SUM_FOR_WINDOW = {0: 101, 1: 81, 2: 65, 3: 52}
+
+
+def window(feasible_rounds):
+    needed = OUTSIDE_SUM_FOR_WINDOW[feasible_rounds]
+    params = {"capacity": 100, "shrink": [4, 5], "rounds": 6, "seats": ["p1", "p2"],
+              "outside": {"p1": needed - 10, "p2": 10}}
+    return XM.window_of("split", params)
 
 
 def row(family, instance, arm, model, success, *, valid=True, started="2026-11-24T01:00:00Z", missed=0,
-        seat_rounds=12, job=None, truncated=False):
+        seat_rounds=12, job=None, truncated=False, feasible_rounds=1, below=()):
     measures = ({"sustained_share": 0.5, "collapsed_in": None if success else 3, "over_use": 0.1}
                 if family == "commons" else
                 {"efficiency": 0.9, "deal_round": 1 if success else None, "via": "claim" if success else None,
@@ -32,7 +40,10 @@ def row(family, instance, arm, model, success, *, valid=True, started="2026-11-2
             "reasons": [] if valid else ["no verifier score"], "cost": 0.01, "unpriced_seats": 0,
             "tokens": {"input": 10, "cache": 4, "output": 3}, "seat_rounds": seat_rounds if valid else 0,
             "missed": missed if valid else 0, "passed": 0, "truncated": truncated and valid,
-            "success": success if valid else None, "measures": measures if valid else {}, "score": {}}
+            "success": success if valid else None, "measures": measures if valid else {}, "score": {},
+            "window": window(feasible_rounds) if family == "split" else None,
+            "below_outside": ([{"seat": seat, "payoff": 1, "outside": 2} for seat in below]
+                              if valid and success else [])}
 
 
 def outcomes(b, c, ties=0, neither=0):
@@ -406,5 +417,150 @@ def test_reads_harbor_trial_folders_by_manifest_and_participant_model(tmp_path, 
     assert "| openrouter/x/y | silent | 2 | 2 | 2 | 1 | 0.417 |" in printed and "Sensitivity" in printed
     saved = json.loads(out.read_text())
     assert saved["unmapped"] == unmapped and len(saved["duplicates"]) == 1
+    assert by["xm1-aaa"]["window"] == by["xm1-ccc"]["window"] == XM.window_of("split", params)
+    assert by["xm1-aaa"]["below_outside"] == [] and "## split: feasibility windows and deal quality" in printed
+    assert [entry["instance"] for entry in saved["split_descriptive"]["instances"]] == [0, 1]
     XM.main(base + ["--new-models", "m/a", "--replication-model", "m/rep", "--allow-other"])
     assert f"| openrouter/x/y | other {excluded}" in capsys.readouterr().out
+
+
+def test_feasibility_window_counts_the_rounds_whose_pot_covers_both_outside_options():
+    params = {"capacity": 100, "shrink": [4, 5], "rounds": 6, "seats": ["p1", "p2"], "outside": {"p1": 50, "p2": 30}}
+    found = XM.window_of("split", params)
+    assert found["pots"] == [100, 80, 64, 51, 40, 32] and found["outside_sum"] == 80
+    assert (found["feasible"], found["feasible_rounds"]) == ([1, 2], 2)
+    for outside, rounds in ((81, 1), (100, 1), (101, 0), (64, 3), (32, 6), (0, 6)):
+        params["outside"] = {"p1": outside // 2, "p2": outside - outside // 2}
+        assert XM.window_of("split", params)["feasible_rounds"] == rounds, outside
+    assert XM.window_of("commons", params) is None and XM.window_of("split", None) is None
+    assert [XM.window_bucket(n) for n in (0, 1, 2, 3, 6)] == ["0", "1", "2+", "2+", "2+"]
+    with pytest.raises(AssertionError):
+        XM.window_bucket(-1)
+
+
+def test_seeded_windows_match_the_world_pot_and_the_outside_option_deal():
+    for seed in SIMULATION_SEEDS:
+        rng = random.Random(seed)
+        for instance in range(30):
+            params = SPLIT.generate(seed, instance, 2, rng.choice(("a", "b")))
+            found = XM.window_of("split", params)
+            never = SPLIT.play(params, {seat: SPLIT.fixed_policy(params["capacity"] + 1) for seat in params["seats"]})
+            assert [record["stock"] for record in never] == found["pots"]
+            for number, pot in enumerate(found["pots"], 1):
+                fits = SPLIT.settle(pot, params["outside"], params)["agreed"]
+                assert fits == (number in found["feasible"]), (seed, instance, number)
+            assert found["feasible"] == list(range(1, found["feasible_rounds"] + 1))
+            assert found["feasible_rounds"] >= 1
+
+
+def test_below_outside_flags_a_deal_under_a_seats_own_outside_option():
+    params = SPLIT.generate(1, 8, 2, "b")
+    outside = params["outside"]
+    strong = max(outside, key=outside.get)
+    under = {seat: SPLIT.fixed_policy(outside[seat] - (seat == strong)) for seat in params["seats"]}
+    log = SPLIT.play(params, under)
+    found = XM.played("split", params, log, SPLIT.score_game(params, log))
+    assert found["success"] and found["below_outside"] == [
+        {"seat": strong, "payoff": outside[strong] - 1, "outside": outside[strong]}]
+    exact = SPLIT.play(params, {seat: SPLIT.fixed_policy(outside[seat]) for seat in params["seats"]})
+    assert XM.played("split", params, exact, SPLIT.score_game(params, exact))["below_outside"] == []
+    stuck = SPLIT.play(params, {seat: SPLIT.fixed_policy(0 if seat == strong else params["capacity"] + 1)
+                                for seat in params["seats"]})
+    assert XM.played("split", params, stuck, SPLIT.score_game(params, stuck))["below_outside"] == []
+    commons = COMMONS.generate(1, 4, 3, "b")
+    whole = COMMONS.play(commons, {seat: COMMONS.fair_policy(commons) for seat in commons["seats"]})
+    assert XM.played("commons", commons, whole, COMMONS.score_game(commons, whole))["below_outside"] == []
+    for seed in SIMULATION_SEEDS:
+        rng = random.Random(seed)
+        for _ in range(40):
+            params = SPLIT.generate(seed, rng.randrange(20), 2, rng.choice(("a", "b")))
+            claims = {seat: rng.randint(0, params["capacity"] // 2) for seat in params["seats"]}
+            log = SPLIT.play(params, {seat: SPLIT.fixed_policy(n) for seat, n in claims.items()})
+            found = XM.played("split", params, log, SPLIT.score_game(params, log))
+            expected = [seat for seat in params["seats"] if found["success"] and claims[seat] < params["outside"][seat]]
+            assert [entry["seat"] for entry in found["below_outside"]] == expected
+
+
+def test_deal_quality_per_model_arm_splits_deals_by_window_and_counts_rational_deals(capsys):
+    plan = ((0, 1, True, ()), (1, 1, True, ("p1",)), (2, 2, False, ()), (3, 3, True, ()), (4, 0, False, ()))
+    rows = [row("split", instance, "talk", "m/a", success, feasible_rounds=rounds, below=below)
+            for instance, rounds, success, below in plan]
+    rows += [row("split", instance, "silent", "m/a", False, feasible_rounds=rounds) for instance, rounds, *_ in plan]
+    late = row("split", 3, "talk", "m/a", True, feasible_rounds=3, below=("p2",), started="2026-11-24T05:00:00Z",
+               job="xm1-late")
+    commons = row("commons", 0, "talk", "m/a", True)
+    result = XM.analyse([*rows, late, commons], NEW, REPLICATION)
+    found = result["split_descriptive"]
+    assert [(w["instance"], w["feasible_rounds"]) for w in found["instances"]] == [(0, 1), (1, 1), (2, 2), (3, 3),
+                                                                                   (4, 0)]
+    talk = next(entry for entry in found["model_arms"] if entry["arm"] == "talk")
+    assert (talk["trials"], talk["deals"], talk["below_outside"], talk["rational_deals"]) == (5, 3, 1, 2)
+    assert talk["by_window"] == {"0": {"trials": 1, "deals": 0}, "1": {"trials": 2, "deals": 2},
+                                 "2+": {"trials": 2, "deals": 1}}
+    assert talk["rational_rate"] == 2 / 5 and talk["rational_share_of_deals"] == 2 / 3
+    assert [entry["instance"] for entry in talk["below_outside_trials"]] == [1]
+    silent = next(entry for entry in found["model_arms"] if entry["arm"] == "silent")
+    assert (silent["deals"], silent["rational_deals"], silent["rational_rate"]) == (0, 0, 0.0)
+    assert silent["rational_share_of_deals"] is None
+    below = [(entry["job"], entry["counted"]) for entry in found["below_outside_all"]]
+    assert below == [(rows[1]["job"], True), ("xm1-late", False)]
+    XM.report(result, [])
+    printed = capsys.readouterr().out
+    assert "| m/a | talk | 5 | 3 | 0 of 1 | 2 of 2 | 1 of 2 | 1 | 2 | 0.400 |" in printed
+    assert "- xm1-late/t instance 3 talk m/a: p2 1 < 2 (not counted)" in printed
+
+
+def test_seeded_waves_keep_deal_quality_invariants():
+    for seed in SIMULATION_SEEDS:
+        rng = random.Random(seed)
+        rows = [r | {"window": window(rng.choice((1, 2, 3))) if r["family"] == "split" else None}
+                for r in random_wave(rng)]
+        windows = {}
+        for r in rows:
+            if r["family"] == "split":
+                r["window"] = windows.setdefault(r["instance"], r["window"])
+                if r["success"] and rng.random() < 0.3:
+                    r["below_outside"] = [{"seat": "p1", "payoff": 1, "outside": 2}]
+        result = XM.analyse(rows, NEW, REPLICATION)
+        arms = {(a["model"], a["arm"]): a for a in result["arms"] if a["family"] == "split"}
+        for entry in result["split_descriptive"]["model_arms"]:
+            assert entry["trials"] == arms[(entry["model"], entry["arm"])]["counted"]
+            assert entry["deals"] == arms[(entry["model"], entry["arm"])]["successes"]
+            assert entry["below_outside"] + entry["rational_deals"] == entry["deals"]
+            assert sum(b["trials"] for b in entry["by_window"].values()) == entry["trials"]
+            assert sum(b["deals"] for b in entry["by_window"].values()) == entry["deals"]
+            assert entry["by_window"]["0"] == {"trials": 0, "deals": 0}
+        counted = sum(entry["counted"] for entry in result["split_descriptive"]["below_outside_all"])
+        assert counted == sum(entry["below_outside"] for entry in result["split_descriptive"]["model_arms"])
+
+
+def test_gated_vs_talk_is_a_primary_contrast_present_only_with_gated_trials(capsys):
+    new = [r for model in NEW for r in pair_rows("split", model, outcomes(3, 0, ties=5), first="gated",
+                                                 second="talk")]
+    rows = [*new, *pair_rows("split", REPLICATION, outcomes(0, 4, ties=4), first="gated", second="talk")]
+    result = XM.analyse(rows, NEW, REPLICATION)
+    test, lines = pooled(result, "split", "gated", "talk")
+    assert (test["pairs"], test["b"], test["c"], test["alpha"], test["min_pairs"]) == (24, 9, 0, 0.025, 24)
+    assert test["decision"] == "PASS" and test["p"] == XM.stratified_p([(3, 0)] * 3)
+    assert test["models"] == list(NEW) and test["consistency"]["label"] == "consistent"
+    assert lines[REPLICATION]["role"] == "replication" and (lines[REPLICATION]["b"], lines[REPLICATION]["c"]) == (0, 4)
+    assert pooled(result, "split", "gated", "talk", contrasts=result["sensitivity"]["first_attempt"])[0] == test
+    short = pooled(XM.analyse(new[:-2], NEW, REPLICATION), "split", "gated", "talk")[0]
+    assert (short["pairs"], short["decision"]) == (23, "INCONCLUSIVE")
+    reversed_wave = [r for model in NEW for r in pair_rows("split", model, outcomes(0, 8), first="gated",
+                                                           second="talk")]
+    assert pooled(XM.analyse(reversed_wave, NEW, REPLICATION), "split", "gated", "talk")[0]["reason"].startswith(
+        "reversed")
+    quality = {(e["model"], e["arm"]): e for e in result["split_descriptive"]["model_arms"]}
+    assert (quality[("m/a", "gated")]["trials"], quality[("m/a", "gated")]["deals"]) == (8, 8)
+    assert (quality[("m/a", "talk")]["trials"], quality[("m/a", "talk")]["deals"]) == (8, 5)
+    XM.report(result, [])
+    assert "split gated vs talk (primary; b = only gated succeeded, c = only talk succeeded" in capsys.readouterr().out
+    without = [r for r in rows if r["arm"] != "gated"]
+    without += [row("split", r["instance"], "silent", r["model"], False) for r in without]
+    result = XM.analyse(without, NEW, REPLICATION)
+    contrasts = result["contrasts"] + result["sensitivity"]["first_attempt"]
+    assert contrasts and all("gated" not in (c["a"], c["b_arm"]) for c in contrasts)
+    assert pooled(result)[0]["pairs"] == 24
+    XM.report(result, [])
+    assert "gated" not in capsys.readouterr().out

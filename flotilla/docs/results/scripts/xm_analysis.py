@@ -18,7 +18,13 @@ alpha 0.025, at least 24 pairs, with a consistency label across the new models. 
 alpha 0.05, at least 18 pairs; it cannot change a primary decision. Reported (split talk vs propose): the paired deal
 difference with a 95% bootstrap interval. Every model also gets its own exact McNemar line. Sensitivity (reported
 only): the primaries on first attempts only, and the commons primary without trials that missed more than 2
-seat-rounds. Standard library only.
+seat-rounds. Descriptive only (added after the pre-registration; no test, no decision): per split instance the
+feasibility window, the rounds whose pot (split.py settle, from the task.json parameters) is at least the sum of the
+outside options; per split model-arm the counted trials and deals by window (1 feasible round, 2 or more), the deals
+in which a seat got less than its own outside option, and the rational deals (every seat at least its outside
+option). Split gated vs talk (world v11; talk plus a read gate) is a primary contrast like talk vs silent (b = only
+gated dealt, c = only talk dealt); it and its first-attempt sensitivity appear only when the data hold a gated trial.
+Standard library only.
 """
 
 from __future__ import annotations
@@ -46,8 +52,8 @@ def _load(name: str, path: Path):
 
 
 WAVE = _load("xm_wave", HERE.parent / "commons_wave.py")
-SCORERS = {family: _load(f"xm_{family}", HERE.parents[3] / "games" / f"{family}.py").score_game
-           for family in ("split", "commons")}
+GAMES = {family: _load(f"xm_{family}", HERE.parents[3] / "games" / f"{family}.py") for family in ("split", "commons")}
+SCORERS = {family: game.score_game for family, game in GAMES.items()}
 MAX_SENSITIVITY_MISSED = 2
 CONSISTENT_MIN_MODELS = 2
 MAX_MISSED = 0.10
@@ -55,9 +61,12 @@ PER_MODEL_ALPHA = 0.05
 SUCCESS = {"split": ("agreed", "deals"), "commons": ("survived", "survived")}
 TESTS = {"primary": (0.025, 24), "secondary": (0.05, 18)}
 CONTRASTS = (("split", "talk", "silent", "primary"), ("split", "propose", "silent", "secondary"),
-             ("split", "talk", "propose", "reported"), ("commons", "talk", "silent", "primary"))
+             ("split", "talk", "propose", "reported"), ("split", "gated", "talk", "primary"),
+             ("commons", "talk", "silent", "primary"))
+OPTIONAL_ARMS = ("gated",)
 PROPOSAL_KEYS = ("proposals", "acceptances", "accepted", "replaced", "lapsed", "expired", "feasible", "feasible_unseen")
 BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED = 10_000, 1
+WINDOW_BUCKETS = ("0", "1", "2+")
 
 
 def read_json(path: Path) -> dict | None:
@@ -145,6 +154,42 @@ def measures(family: str, score: dict) -> dict[str, Any]:
     return found | {key: score[key] for key in PROPOSAL_KEYS if key in score}
 
 
+def pot_sequence(params: dict) -> list[int]:
+    """The pot of each planned round while no round ends in a deal, by split.py's settle (the world's rule)."""
+    seats, stock, pots = list(params["seats"]), params["capacity"], []
+    for _number in range(params["rounds"]):
+        pots.append(stock)
+        stock = GAMES["split"].settle(stock, dict.fromkeys(seats, 0), params, missed=seats)["next_stock"]
+    return pots
+
+
+def window_of(family: str, params: dict | None) -> dict[str, Any] | None:
+    """A split instance's feasibility window: the rounds whose pot is at least the sum of the outside options."""
+    if family != "split" or params is None:
+        return None
+    pots, needed = pot_sequence(params), sum(params["outside"].values())
+    feasible = [number for number, pot in enumerate(pots, 1) if pot >= needed]
+    assert feasible == list(range(1, len(feasible) + 1)), (pots, needed)
+    return {"pots": pots, "outside": dict(params["outside"]), "outside_sum": needed, "feasible": feasible,
+            "feasible_rounds": len(feasible)}
+
+
+def window_bucket(feasible_rounds: int) -> str:
+    assert feasible_rounds >= 0, feasible_rounds
+    return WINDOW_BUCKETS[min(feasible_rounds, len(WINDOW_BUCKETS) - 1)]
+
+
+def below_outside(family: str, score: dict) -> list[dict[str, Any]]:
+    """The seats of a split deal whose payoff is below their own outside option."""
+    if family != "split" or not score["agreed"]:
+        return []
+    totals, outside = score["totals"], score["outside"]
+    found = [{"seat": seat, "payoff": totals[seat], "outside": outside[seat]}
+             for seat in sorted(outside) if totals[seat] < outside[seat]]
+    assert {entry["seat"] for entry in found} == set(score["below_outside"]), (found, score["below_outside"])
+    return found
+
+
 def locate(trial: Path, tasks: dict[str, dict]) -> tuple[dict, dict | None, dict | None]:
     """A trial folder's config, result (None without result.json) and manifest task (None when in no manifest)."""
     config = read_json(trial / "config.json") or {}
@@ -163,14 +208,15 @@ def trial_row(trial: Path, tasks: dict[str, dict]) -> dict | None:
     model = trial_model(config, result or {})
     reasons = problems(result, verdict, state, task, model)
     cost, unpriced, tokens = usage(result or {})
+    params = (read_json(Path(task["task_dir"]) / "environment" / "task.json") or {}).get("game")
     row = {"job": trial.parent.name, "trial": trial.name, "started": (result or {}).get("started_at") or "",
            "family": task["family"], "instance": task["instance"], "arm": task["arm"], "model": model,
            "valid": not reasons, "reasons": reasons, "cost": cost, "unpriced_seats": unpriced, "tokens": tokens,
            "seat_rounds": 0, "missed": 0, "passed": 0, "truncated": False, "success": None, "measures": {},
-           "score": {}}
+           "score": {}, "window": window_of(task["family"], params), "below_outside": []}
     if reasons:
         return row
-    params = read_json(Path(task["task_dir"]) / "environment" / "task.json")["game"]
+    assert params is not None, f"no game parameters in {task['task_dir']}"
     log = (state.get("game") or {}).get("log") or []
     return row | played(task["family"], params, log, SCORERS[task["family"]](params, log))
 
@@ -196,7 +242,7 @@ def played(family: str, params: dict, log: list[dict], score: dict) -> dict[str,
     assert not (truncated and family == "split" and success)
     return {"seat_rounds": logged + unplayed, "missed": missed + unplayed,
             "passed": round(score.get("passed", 0.0) * logged), "truncated": truncated, "success": success,
-            "measures": measures(family, score), "score": score}
+            "measures": measures(family, score), "score": score, "below_outside": below_outside(family, score)}
 
 
 def read_trials(jobs: Path, pattern: str, tasks: dict[str, dict],
@@ -391,8 +437,11 @@ def run_contrasts(rows: list[dict], counted: dict[tuple, dict], specs: tuple, ne
     table = arm_table(rows, counted)
     found = []
     for spec in specs:
-        models = sorted({r["model"] for r in rows if r["family"] == spec[0]})
-        if models:
+        family, arms = spec[0], spec[1:3]
+        models = sorted({r["model"] for r in rows if r["family"] == family})
+        absent = [arm for arm in arms if arm in OPTIONAL_ARMS
+                  and not any((r["family"], r["arm"]) == (family, arm) for r in rows)]
+        if models and not absent:
             found.append(contrast(counted, table, models, spec, new_models, replication))
     return found
 
@@ -410,6 +459,54 @@ def costs_of(rows: list[dict]) -> dict[str, dict]:
     return costs
 
 
+def below_entry(row: dict) -> dict[str, Any]:
+    return {"job": row["job"], "trial": row["trial"], "instance": row["instance"], "arm": row["arm"],
+            "model": row["model"], "seats": row["below_outside"]}
+
+
+def deal_quality(rows: list[dict]) -> dict[str, Any]:
+    """Descriptive, over counted split trials: trials and deals by feasibility window, the deals in which a seat got
+    less than its own outside option, and the rational deals (every seat at least its outside option)."""
+    deals = [r for r in rows if r["success"]]
+    below = [r for r in deals if r["below_outside"]]
+    rational = len(deals) - len(below)
+    window = {bucket: {"trials": 0, "deals": 0} for bucket in WINDOW_BUCKETS}
+    for r in rows:
+        assert r["window"] is not None, f"split trial {r['job']}/{r['trial']} without a window"
+        entry = window[window_bucket(r["window"]["feasible_rounds"])]
+        entry["trials"] += 1
+        entry["deals"] += bool(r["success"])
+    return {"trials": len(rows), "deals": len(deals), "by_window": window, "below_outside": len(below),
+            "below_outside_trials": [below_entry(r) for r in below], "rational_deals": rational,
+            "rational_rate": rational / len(rows) if rows else None,
+            "rational_share_of_deals": rational / len(deals) if deals else None}
+
+
+def instance_windows(rows: list[dict]) -> list[dict[str, Any]]:
+    """Each split instance's feasibility window; every trial of an instance has the same one."""
+    found: dict[int, dict] = {}
+    for r in rows:
+        if r["family"] == "split" and r["window"] is not None:
+            known = found.setdefault(r["instance"], r["window"])
+            assert known == r["window"], f"split instance {r['instance']} has two parameter sets"
+    return [{"instance": instance, **window} for instance, window in sorted(found.items())]
+
+
+def below_outside_all(rows: list[dict], counted: list[dict]) -> list[dict[str, Any]]:
+    """Every valid split trial with a below-outside deal, counted or not."""
+    chosen = {id(r) for r in counted}
+    return [below_entry(r) | {"counted": id(r) in chosen} for r in rows if r["valid"] and r["below_outside"]]
+
+
+def split_descriptive(rows: list[dict], counted: dict[tuple, dict]) -> dict[str, Any]:
+    table = []
+    for model, arm in sorted({(r["model"], r["arm"]) for r in rows if r["family"] == "split"}):
+        chosen = [r for (f, _i, a, m), r in counted.items() if (f, m, a) == ("split", model, arm)]
+        table.append({"model": model, "arm": arm, **deal_quality(chosen)})
+    return {"instances": instance_windows(rows), "model_arms": table,
+            "below_outside_all": below_outside_all(rows, list(counted.values()))}
+
+
 def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str) -> dict[str, Any]:
     assert replication and replication not in new_models, "the replication model must be set and not a new model"
     counted, duplicates = choose(rows)
@@ -425,7 +522,8 @@ def analyse(rows: list[dict], new_models: tuple[str, ...], replication: str) -> 
             "invalid": [r for r in rows if not r["valid"]], "duplicates": duplicates,
             "truncated": [r for r in rows if r["truncated"]], "arms": list(arm_table(rows, counted).values()),
             "contrasts": run_contrasts(rows, counted, CONTRASTS, new_models, replication),
-            "sensitivity": sensitivity, "cost": costs_of(rows), "total_cost": sum(r["cost"] for r in rows)}
+            "sensitivity": sensitivity, "cost": costs_of(rows), "total_cost": sum(r["cost"] for r in rows),
+            "split_descriptive": split_descriptive(rows, counted)}
 
 
 def fmt(value: Any, digits: int = 3) -> str:
@@ -496,6 +594,8 @@ def report(result: dict, unmapped: list[str]) -> None:
                 if found["family"] == family:
                     print_contrast(found)
     print_sensitivity(result["sensitivity"])
+    if result["split_descriptive"]["instances"]:
+        print_split_descriptive(result["split_descriptive"])
     print("\n## cost (recorded cost_usd summed over seats, every trial)\n\n| model | trials | cost USD | seats without "
           "cost | input tokens | cached input | output tokens |\n|---|---|---|---|---|---|---|")
     for model, entry in sorted(result["cost"].items()):
@@ -515,6 +615,46 @@ def print_sensitivity(sensitivity: dict) -> None:
         print_contrast(found, "(sensitivity; reported only)")
     if not sensitivity["commons_at_most_2_missed"]:
         print("No commons trials.")
+
+
+QUALITY_COLUMNS = ("deals of trials, 0 feasible rounds | 1 feasible round | 2+ feasible rounds | below-outside deals | "
+                   "rational deals | rational deals / trials")
+
+
+def quality_cells(entry: dict) -> str:
+    window = entry["by_window"]
+    return (" | ".join(f"{window[b]['deals']} of {window[b]['trials']}" for b in WINDOW_BUCKETS)
+            + f" | {entry['below_outside']} | {entry['rational_deals']} | {fmt(entry['rational_rate'])} |")
+
+
+def print_windows(instances: list[dict]) -> None:
+    print("\n### Feasibility window per split instance (the rounds whose pot is at least the sum of the outside "
+          "options)\n\n| instance | pot by round | outside options | outside sum | feasible rounds |\n"
+          "|---|---|---|---|---|")
+    for window in instances:
+        outside = ", ".join(f"{seat} {value}" for seat, value in sorted(window["outside"].items()))
+        print(f"| {window['instance']} | {' '.join(map(str, window['pots']))} | {outside} | {window['outside_sum']} | "
+              f"{window['feasible_rounds']} |")
+
+
+def print_below(entries: list[dict]) -> None:
+    print("\nBelow-outside deals (a seat's payoff below its own outside option), every valid trial:")
+    for entry in entries:
+        seats = ", ".join(f"{seat['seat']} {seat['payoff']} < {seat['outside']}" for seat in entry["seats"])
+        print(f"- {entry['job']}/{entry['trial']} instance {entry['instance']} {entry['arm']} {entry['model']}: "
+              f"{seats}{'' if entry['counted'] else ' (not counted)'}")
+    if not entries:
+        print("- none")
+
+
+def print_split_descriptive(found: dict) -> None:
+    print("\n## split: feasibility windows and deal quality (descriptive; added after the pre-registration, no test)")
+    print_windows(found["instances"])
+    print(f"\n### Counted trials per model-arm\n\n| model | arm | trials | deals | {QUALITY_COLUMNS} |\n"
+          + "|---" * 10 + "|")
+    for entry in found["model_arms"]:
+        print(f"| {entry['model']} | {entry['arm']} | {entry['trials']} | {entry['deals']} | {quality_cells(entry)}")
+    print_below(found["below_outside_all"])
 
 
 def main(argv: list[str] | None = None) -> None:
