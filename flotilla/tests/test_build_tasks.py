@@ -106,7 +106,7 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
             assert json.loads(env["SEAT_BRIEFING"]) == json.loads(json.dumps(expected))
         task_json = json.loads((task / "environment" / "task.json").read_text())
         assert task_json["answer_key"] == inst["answer_key"] and task_json["seats"] == seats
-        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (10, 4000, 200)
+        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (11, 4000, 200)
         assert task_json["seed"] == meta["seed"] == 1
         for script in (task / "tests" / "test.sh", task / "solution" / "solve.sh"):
             assert script.stat().st_mode & 0o111
@@ -403,3 +403,27 @@ def test_a_small_seed_is_said_to_be_public(tmp_path):
                         "--out", str(tmp_path / "b"))
     assert given.stdout.splitlines()[2] == (
         "seed: given with --seed (only the manifest, task.toml and task.json record it)")
+
+
+def test_a_gated_split_task_looks_like_talk_to_its_seats_and_turns_the_read_gate_on(tmp_path):
+    BUILD.build("split", [0, 1], 2, "a", 1, ("talk", "gated", "propose"), tmp_path)
+    tasks = by_task(tmp_path)
+    manifest = json.loads((tmp_path / BUILD.MANIFEST).read_text())["tasks"]
+    sha = {(entry["instance"], entry["condition"]): entry["instructions_sha256"] for entry in manifest.values()}
+    for i in (0, 1):
+        talk, gated = tasks[("split", i, "talk")], tasks[("split", i, "gated")]
+        assert sha[(i, "gated")] == sha[(i, "talk")]
+        for seat in ("p1", "p2"):
+            text = (talk / "instructions" / f"{seat}.md").read_bytes()
+            assert (gated / "instructions" / f"{seat}.md").read_bytes() == text
+        services = {name: compose_services((task / "environment" / "docker-compose.yaml").read_text())
+                    for name, task in (("talk", talk), ("gated", gated))}
+        assert services["gated"]["main"]["env"]["FLOTILLA_CONDITION"] == "gated"
+        for seat in ("p1", "p2"):
+            assert services["gated"][seat]["env"]["SEAT_BRIEFING"] == services["talk"][seat]["env"]["SEAT_BRIEFING"]
+            assert not any("gated" in text for text in seat_visible_texts(gated, seat, services["gated"]))
+        for condition, task in (("talk", talk), ("gated", gated), ("propose", tasks[("split", i, "propose")])):
+            task_json = json.loads((task / "environment" / "task.json").read_text())
+            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 11)
+            assert "WORLD_VERSION = 11\n" in (task / "environment" / "world.py").read_text()
+            assert ('"counter"' in (task / "instructions" / "p1.md").read_text()) == (condition == "propose")

@@ -44,7 +44,12 @@ from urllib.parse import parse_qs, urlsplit
 # note_look(seat, time) on GET /state, settle_standing(next_stock, ended, round) before the round
 # log line, and drain_events() for offer fates. A round still closes when every seat has acted
 # or the round's time ends.
-WORLD_VERSION = 10
+# Version 10: a pending proposal holds the round open until its timer ends.
+# Version 11: the `gated` condition (talk with a read gate): a game action by a seat with messages that no reply
+# has shown it is not applied; the world shows those messages in a 409 and the seat sends the action again. Every
+# action event carries `unread`. A round protocol may define check() (a refusal without side effects), run before
+# the gate. In split, POST /decline takes an optional `counter` proposal, applied in the same locked step.
+WORLD_VERSION = 11
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -53,7 +58,10 @@ _TOKEN_PAIRS = [pair.split(":", 1) for pair in os.environ.get("FLOTILLA_TOKENS",
 TOKENS = {pair[1]: pair[0] for pair in _TOKEN_PAIRS if len(pair) == 2}
 PLAY_SECONDS = float(os.environ.get("FLOTILLA_PLAY_SECONDS") or 0)  # 0: no deadline of the world's own
 ADMIN = os.environ.get("FLOTILLA_ADMIN", "")
-MESSAGING = CONDITION.startswith("talk")  # talk, talk-liar, talk-warned, talk-liar-warned
+READ_GATE = CONDITION == "gated"  # talk, and the world holds a game action until the seat has read its messages
+MESSAGING = CONDITION.startswith("talk") or READ_GATE  # talk, talk-liar, talk-warned, talk-liar-warned, gated
+GATE_ERROR = ("not recorded: messages reached you that you have not read; they are below; read them and send your "
+              "action again")
 DEFAULT_MAX_TEXT = 4000
 DEFAULT_MAX_MESSAGES = 200
 MAX_TEXT = int(os.environ.get("FLOTILLA_MAX_TEXT") or DEFAULT_MAX_TEXT)  # characters per message
@@ -116,6 +124,7 @@ STATE: dict[str, Any] = {
     "bad_token_requests": 0,
     "invalid_http_requests": 0,
     "first_call": None,  # world time of the first authorized seat request
+    "delivered": {seat: {} for seat in SEATS},  # message id -> world time a reply first showed it to the seat
 }
 if GAME is not None:
     STATE["game"] = {
@@ -224,6 +233,83 @@ def _note_look(seat: str) -> None:
     if note is not None:
         note(seat, now())
     _drain_protocol(seat)
+
+
+def _unread(seat: str) -> list[dict[str, Any]]:
+    """Messages from another seat, to this seat or to all, that no reply has shown this seat. Callers hold LOCK."""
+    delivered = STATE["delivered"][seat]
+    return [m for m in STATE["messages"]
+            if m["from"] != seat and m["to"] in ("all", seat) and m["id"] not in delivered]
+
+
+def _deliver(seat: str, ids: list[str], via: str = "") -> None:
+    """Mark messages as shown to a seat and record the delivery. Callers hold LOCK."""
+    at = now()
+    delivered = STATE["delivered"][seat]
+    for message_id in ids:
+        delivered.setdefault(message_id, at)
+    record("deliver", seat, {"ids": ids} | ({"via": via} if via else {}))
+
+
+def _gate(seat: str, path: str, action: dict[str, Any]) -> dict[str, Any] | None:
+    """The 409 reply that holds a game action in the gated condition, or None: apply the action. The caller holds
+    LOCK from this check through the action, so no message arrives between them."""
+    if not READ_GATE:
+        return None
+    pending = _unread(seat)
+    if not pending:
+        return None
+    ids = [m["id"] for m in pending]
+    record("gated", seat, {"round": STATE["game"]["round"], "path": path, "ids": ids, "action": action,
+                           "unread": len(ids)})
+    _deliver(seat, ids, "gate")
+    return {"error": GATE_ERROR, "messages": pending}
+
+
+def _close_if_ready(at: float | None = None) -> None:
+    """Close the round when every seat has acted and no proposal holds it. Callers hold LOCK."""
+    if len(STATE["game"]["requests"]) != len(SEATS):
+        return
+    if ROUND_PROTOCOL is not None and ROUND_PROTOCOL.blocks_early_close():
+        return
+    close_round(now() if at is None else at)
+
+
+def _record_round_action(path: str, seat: str, number: int, reply: dict[str, Any]) -> None:
+    """A decline with a counter is two events: `decline` names the counter, `propose` names the declined ID."""
+    unread = len(_unread(seat))
+    counter = reply.get("counter") if path == "/decline" else None
+    if counter is None:
+        record(path.removeprefix("/"), seat, {"round": number, **reply, "unread": unread})
+        return
+    record("decline", seat, {"round": number, **reply, "counter": counter["id"], "unread": unread})
+    record("propose", seat, {"round": number, **counter, "counter_to": reply["id"], "unread": unread})
+
+
+def _round_step(path: str, seat: str, body: dict[str, Any], at: float) -> tuple[int, dict[str, Any]]:
+    """One round-protocol action in an open round: the protocol's refusal, then the gate, then the action.
+    Callers hold LOCK."""
+    assert ROUND_PROTOCOL is not None
+    game = STATE["game"]
+    number, stock = game["round"], game["stock"]
+    check = getattr(ROUND_PROTOCOL, "check", None)
+    refusal = check(path, seat, body, stock, number) if check is not None else None
+    held = _gate(seat, path, body) if refusal is None else None
+    if held is not None:
+        return 409, held
+    status, reply, agreement = refusal or ROUND_PROTOCOL.act(path, seat, body, stock, number, at)
+    if status == 201:
+        _PROTOCOL_ACTORS.add(seat)
+        _record_round_action(path, seat, number, reply)
+    else:
+        record("invalid" if status == 400 else "denied", seat,
+               {"method": "POST", "path": path, "status": status, "reason": reply["error"]})
+    _drain_protocol(seat)
+    if agreement is not None:
+        close_round(at, agreement=agreement)
+    elif status == 201:
+        _close_if_ready(at)
+    return status, reply
 
 
 def close_round(at: float, *, agreement: dict[str, int] | None = None) -> None:
@@ -516,8 +602,7 @@ class World(BaseHTTPRequestHandler):
             visible = [
                 m for m in STATE["messages"] if m["to"] in ("all", seat) or m["from"] == seat
             ]
-            delivered = [m["id"] for m in visible if m["from"] != seat]
-            record("deliver", seat, {"ids": delivered})
+            _deliver(seat, [m["id"] for m in visible if m["from"] != seat])
         self._reply(200, {"messages": visible})
 
     def _claim_submit(self, seat: str) -> bool:
@@ -553,14 +638,6 @@ class World(BaseHTTPRequestHandler):
         # The reply must not say how many submissions exist: in `silent` that count is a channel.
         self._reply(200, {"accepted": True})
 
-
-    def _close_if_ready(self, at: float | None = None) -> None:
-        if len(STATE["game"]["requests"]) != len(SEATS):
-            return
-        if ROUND_PROTOCOL is not None and ROUND_PROTOCOL.blocks_early_close():
-            return
-        close_round(now() if at is None else at)
-
     def _harvest(self, seat: str, body: dict[str, Any]) -> None:
         passing = GAME_ALLOWS_PASS and "pass" in body
         amount = body.get("amount")
@@ -569,7 +646,8 @@ class World(BaseHTTPRequestHandler):
                 self._invalid(seat, "POST", GAME_ACTION, 400, "bad pass", 'send {"pass": true} by itself')
                 return
         elif isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 10**6:
-            self._invalid(seat, "POST", GAME_ACTION, 400, "bad amount", 'send {"amount": <a whole number, 0 or more>}')
+            self._invalid(seat, "POST", GAME_ACTION, 400, "bad amount",
+                          'send {"amount": <a whole number from 0 to 1000000>}')
             return
         action = {"pass": True} if passing else {"amount": amount}
         with LOCK:
@@ -587,10 +665,14 @@ class World(BaseHTTPRequestHandler):
                 record("repeat", seat, {"round": game["round"], **action})
                 self._reply(409, {"error": "you already requested in this round"})
                 return
+            held = _gate(seat, GAME_ACTION, action)
+            if held is not None:
+                self._reply(409, held)
+                return
             game["requests"][seat] = None if passing else amount
             number = game["round"]
-            record("pass" if passing else "request", seat, {"round": number, **action})
-            self._close_if_ready()
+            record("pass" if passing else "request", seat, {"round": number, **action, "unread": len(_unread(seat))})
+            _close_if_ready()
         # The reply must not say how many seats have requested: in `silent` that count is a channel.
         self._reply(201, {"round": number, **action})
 
@@ -609,19 +691,7 @@ class World(BaseHTTPRequestHandler):
                 record("early", seat, {"path": path})
                 self._reply(409, {"error": "the season has not started; it starts when every player has called once"})
                 return
-            number = game["round"]
-            status, reply, agreement = ROUND_PROTOCOL.act(path, seat, body, game["stock"], number, at)
-            if status == 201:
-                _PROTOCOL_ACTORS.add(seat)
-                record(path.removeprefix("/"), seat, {"round": number, **reply})
-            else:
-                record("invalid" if status == 400 else "denied", seat,
-                       {"method": "POST", "path": path, "status": status, "reason": reply["error"]})
-            _drain_protocol(seat)
-            if agreement is not None:
-                close_round(at, agreement=agreement)
-            elif status == 201:
-                self._close_if_ready(at)
+            status, reply = _round_step(path, seat, body, at)
         self._reply(status, reply)
 
     def _wait(self, seat: str) -> None:
@@ -655,7 +725,8 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
     with LOCK:
         record("start", None, {"condition": CONDITION, "seats": SEATS, "world_version": WORLD_VERSION,
                                "limits": limits()} | ({"game": PARAMS.get("family"), "round_seconds": ROUND_SECONDS,
-                                                      "max_messages_per_round": MAX_MESSAGES_PER_ROUND}
+                                                      "max_messages_per_round": MAX_MESSAGES_PER_ROUND,
+                                                      "read_gate": READ_GATE}
                                                      if GAME is not None else {}))
     return server
 
