@@ -29,3 +29,33 @@ The [calendar manifest](results/wait-for-peer/calendar-registration.json) pins t
 Keep the final prompt and call limits identical for identical delivered information. The operator must verify all 3 stock messages, the actual model inputs, the receiver's choice, and the stock reward. Rotate arm order through all 6 permutations in lexical order of `auto`, `neutral`, `remind`, indexed by `(instance − 408) mod 6`. Never start two trials on the same world at once.
 
 **Pass test.** Treat the reminder as useful here only if all 24 teams are measured, it adds at least 2 opens in 8 worlds, and it adds at least 1 correct native booking over `neutral`. Report differences paired by world, including ties and losses. Report `auto` separately: it is a positive control for delivery, not a guarantee of a good decision. For a claim that automatic delivery helped on this panel, require correct delivery in 8/8 `auto` teams and at least 2 more correct bookings than `neutral`. Report partial coverage without choosing an arm if the study stops. Eight worlds do not support a claim about every model. Require a verified correct and wrong native control before starting this cohort.
+
+## Run one team on your own machine
+
+Use a checkout of this fork, Python 3.12, the fork's Harbor environment, and a local Docker daemon. Run the commands from the checkout root. The stock generator lives in the fork's history. The generated tasks and private trial outputs belong outside the checkout.
+
+```sh
+set -eu
+umask 077
+cache=$(cd "$(mktemp -d)" && pwd -P)
+stock=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+git archive "$stock" flotilla | tar -x -C "$cache"
+python3.12 -B "$cache/flotilla/build_tasks.py" --family schedule --seats 2 \
+  --difficulty easy --conditions talk --instances 408-415 --seed 579409134 \
+  --play-timeout 600 --out "$cache/tasks"
+tasks="$cache/tasks/schedule"
+manifest="$(pwd -P)/examples/seatlab/results/wait-for-peer/calendar-registration.json"
+digest=bdf26d746f16a27e3b5120cf94c8af48a03f7df8ec56ab43c8431badcdf18bbc
+```
+
+Set `HARBOR_PYTHON` to the fork environment's absolute Python path. Set `DOCKER_SLOT` to your site's executable admission wrapper. It receives the native command and arguments. It must hold a slot until the command exits. Do not use an unbounded wrapper on a shared Docker host.
+
+Run this typed control first. It spends no model credits. A correct receiver on world 408 must earn a stock reward of 1. To check the negative path, use `--control wrong` and a new output directory. A wrong booking must earn 0.
+
+```sh
+python3.12 -BS -m examples.seatlab.wait_peer.worker "$tasks" "$manifest" \
+  --sha256 "$digest" --world 408 --arm neutral --out "$cache/control-correct" \
+  --slot "$DOCKER_SLOT" --harbor-python "$HARBOR_PYTHON" --control correct
+```
+
+The worker leaves `receipt.json` in the output directory. It will not reuse that directory. For a subscription run, use a new output directory and replace `--control correct` with `--agy "$AGY"`. `AGY` must be an absolute path to the supported signed-in CLI. The registered adapter checks version 1.5.15, the personal plan, model quota, and disabled AI-credit fallback. It does not ask the operator to change account settings or supply an API key. Its 3 one-use owner sockets are private. The native task does not get the account directory. The worker keeps its private owner records outside the repository. Publish the checked receipts, not the raw owner or Harbor directories.

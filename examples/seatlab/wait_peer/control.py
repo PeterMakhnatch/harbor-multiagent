@@ -7,7 +7,6 @@ import json
 import re
 import sys
 
-
 OWN = re.compile(r"Your own feasible start IDs: (\[[0-9,]+\])\.")
 PEER = re.compile(
     r"The report delivered from the other seat lists these feasible start IDs: (\[[0-9,]*\])\."

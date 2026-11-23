@@ -98,42 +98,50 @@ def _reject_constant(_: str) -> None:
     raise ValueError("nonfinite JSON constant")
 
 
-def _load_line(line: bytes, limit: int) -> object:
+def _load_line(line: bytes, limit: int) -> dict[str, object]:
     if len(line) > limit or not line.endswith(b"\n") or line.count(b"\n") != 1:
         raise ValueError("expected one JSON line")
-    return json.loads(
+    frame: object = json.loads(
         line.decode("utf-8"),
         object_pairs_hook=_unique_object,
         parse_constant=_reject_constant,
     )
+    if not isinstance(frame, dict):
+        raise TypeError("expected a JSON object")
+    fields: dict[str, object] = {}
+    for key, value in frame.items():
+        if not isinstance(key, str):
+            raise TypeError("expected string JSON keys")
+        fields[key] = value
+    return fields
 
 
 def _check_request(line: bytes) -> None:
     try:
         frame = _load_line(line, _MAX_REQUEST_BYTES)
+        prompt = frame.get("prompt")
         if (
-            not isinstance(frame, dict)
-            or set(frame) != {"schema", "prompt"}
+            set(frame) != {"schema", "prompt"}
             or frame["schema"] != _SCHEMA
-            or not isinstance(frame["prompt"], str)
+            or not isinstance(prompt, str)
         ):
             raise ValueError("invalid request")
-        frame["prompt"].encode("utf-8")
-    except (ValueError, RecursionError):
+        prompt.encode("utf-8")
+    except (TypeError, ValueError, RecursionError):
         raise _Fail(_BAD_REQUEST) from None
 
 
 def _check_reply(line: bytes) -> None:
     try:
         frame = _load_line(line, _MAX_REPLY_BYTES)
+        text = frame.get("text")
         if (
-            not isinstance(frame, dict)
-            or set(frame) != {"text"}
-            or not isinstance(frame["text"], str)
-            or len(frame["text"].encode("utf-8")) > _MAX_TEXT_BYTES
+            set(frame) != {"text"}
+            or not isinstance(text, str)
+            or len(text.encode("utf-8")) > _MAX_TEXT_BYTES
         ):
             raise ValueError("invalid reply")
-    except (ValueError, RecursionError):
+    except (TypeError, ValueError, RecursionError):
         raise _Fail(_OWNER_FAILED) from None
 
 
@@ -382,7 +390,7 @@ def _serve_reporting(raw_path: str, owner: list[str]) -> int:
         code, message = _TIMED_OUT, _MESSAGES[_TIMED_OUT]
     except OSError:
         code, message = _NATIVE_LOST, _MESSAGES[_NATIVE_LOST]
-    except Exception:
+    except (ValueError, RuntimeError):
         code, message = _INTERNAL, _MESSAGES[_INTERNAL]
     _say(message)
     return code
@@ -435,7 +443,7 @@ def _turn_quietly(raw_path: str) -> int:
         return 0
     except _Fail as failure:
         return failure.code
-    except BaseException:
+    except (OSError, ValueError, RuntimeError, KeyboardInterrupt):
         return _INTERNAL
 
 

@@ -45,11 +45,12 @@ def allowed(arm: str, requested: bool) -> bool:
 def _ids(value: object) -> list[int]:
     if not isinstance(value, list) or len(value) > SLOTS:
         raise ValueError("expected a list of slot IDs")
-    if not all(type(i) is int and 0 <= i < SLOTS for i in value) or len(
-        set(value)
-    ) != len(value):
-        raise ValueError("expected distinct slot IDs in range")
-    return list(value)
+    valid: list[int] = []
+    for slot in value:
+        if type(slot) is not int or not 0 <= slot < SLOTS or slot in valid:
+            raise ValueError("expected distinct slot IDs in range")
+        valid.append(slot)
+    return valid
 
 
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
