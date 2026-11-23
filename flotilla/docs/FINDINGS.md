@@ -351,3 +351,38 @@ Fix (a contract change: CONTRACT.md 2, 3 and 4; world version 3):
 > the analysis says only which build parameter of a rebuilt folder differs, never a seed.
 
 Lesson: when the generator is public, the seed is the answer key. Keep it as secret as the key.
+
+## 2026-11-23 16:30 ET — Most cheap models fail a 2-trial smoke rule; reasoning tokens decide the cost
+
+Run: smoke plans `xm1s`, `xm1s2`, `xm1s3` (instance 12 of split regime b and commons regime b, arm talk, 1
+trial per family and model, OpenRouter, Modal, world v9); waves `xm1`, `pv10`, `xp1` for the cost lines. Rule
+(SPLIT.md section 15, Amendments 1 to 4): each smoke trial valid, and at most 10% of the model's smoke
+seat-rounds missed. Only exit codes, validity, missed seat-rounds and cost were read before the waves.
+
+Observed:
+
+- 4 of 8 candidates failed. GPT-OSS-120B missed 9 of 24 smoke seat-rounds: its split game stopped after 5 of
+  6 rounds with 5 of 10 played seat-rounds missed (the same acting failure as on 2026-11-19, 04:25 ET).
+  GLM-5.3 Flash missed 4 of 33. Qwen3.8 Flash and Meta Muse Ember never started: OpenRouter returned 404, "0
+  endpoints ... matching your guardrail restrictions and data policy" (the account's zero-data-retention
+  setting excludes every endpoint of both models).
+- Claude Haiku 5.5, gpt-6-luna and DeepSeek V4.1 Flash (`-1017`) passed with 0 missed seat-rounds.
+- Qwen3.8-27B passed but cost $0.196 (split) and $0.559 (commons) per trial; its recorded cost was 2.3 times
+  the token estimate from the catalog prices, which do not see its reasoning tokens.
+- Mean recorded cost per valid wave trial (6 to 7 trials per cell): gpt-6-luna $0.004 (split) to $0.010
+  (commons talk); Claude Haiku 5.5 $0.013 to $0.021; DeepSeek V4.1 Flash $0.020 (split talk) to $0.052
+  (commons silent), 2 to 4 times its token estimate. Silent arms cost DeepSeek more than talk arms.
+- The shared OpenRouter account ran out at 3:50 PM ET: the 3 runners stopped at their $2 floor with 153 of
+  432 wave trials done and none invalid. Other users of the account spent about $15 in the 72 minutes before.
+
+Inferred:
+
+- A 2-trial smoke rule is cheap ($0.01 to $0.56 per model) and removes models whose arms would fail the 10%
+  validity bound in the wave. Without it, GPT-OSS-120B would have spent about $2.50 (64 trials at its smoke
+  cost) on arms that the pre-registered analysis would probably leave out.
+- Catalog prices times visible tokens understate the cost of reasoning models 2 to 4 times. Use the recorded
+  cost per trial (OpenRouter's billed cost through Harbor), and budget from smoke trials, not from the catalog.
+- A credit floor makes a stop resumable; a provider 402 in the middle of a trial would have made it invalid.
+
+Lesson: smoke every model on every family before a wave, and treat a shared credit pool as a resource that
+other agents spend.
