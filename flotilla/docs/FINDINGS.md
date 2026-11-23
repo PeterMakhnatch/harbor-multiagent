@@ -386,3 +386,34 @@ Inferred:
 
 Lesson: smoke every model on every family before a wave, and treat a shared credit pool as a resource that
 other agents spend.
+
+## 2026-11-23 16:40 ET — A talk arm is send-only when the seats act before they read
+
+Run: wave xm1 (interim, 85 trials) and xp1 (35 trials), world v9, OpenRouter, Modal; readings by separate agents
+(SPLIT.md section 18, COMMONS.md section 20). Messages reach a seat only through `GET /messages`; the world logs a
+`deliver` event with the ids it returned.
+
+Observed:
+
+- Split talk, claims made after the other seat had sent a message: the claimer still had an unread message in
+  Haiku 49 of 51, Luna 22 of 31, DeepSeek 9 of 28. In 3 Haiku and 2 Luna talk trials no seat ever received a
+  non-empty message list (`xm1-23594f`: p1 never called `/messages`).
+- Haiku and Luna write the message, POST the claim and call `/wait` in one keystroke batch, 20 to 35 s into
+  round 1 (`xm1-82a31c` p1). DeepSeek trades messages for 60 to 100 s and claims after (`xm1-e966e8`).
+- Commons talk: in all 7 Haiku talk lakes every seat requested in round 1 with 0 messages seen; `xm1-e2a62b` p1
+  saw 0 of the 13 messages sent to it. In xp1 the median round-1 claim came at 6.6 s (Haiku), 5.8 s (Luna) and
+  61.6 s (DeepSeek), and DeepSeek called `/messages` 105 times against 40 (Luna) and 25 (Haiku).
+- Outcomes follow: DeepSeek split talk dealt 5 of 7 (4 in round 1); Haiku 2 of 7 and Luna 4 of 7, the same as or
+  below their silent arms. The 3 round-1 deals in 23 cross-play trials all had DeepSeek as the weak seat, reading
+  the strong seat's message before it claimed.
+
+Inferred:
+
+- For seats that act before they read, a pull-only channel turns the talk arm into a send-only arm, and a talk
+  versus silent test then measures whether a model polls its inbox, not whether communication helps.
+- This is a property of the world interface as much as of the model. Delivering new messages inside the replies
+  that every seat already reads (`/state`, `/wait`, the claim reply) would remove most of it; measuring "claims
+  with unread messages" per arm says how much of an arm was communication.
+
+Lesson: before reading a talk effect, check that the messages were read. Make the world hand messages to the
+seats; do not wait for the seats to fetch them.
