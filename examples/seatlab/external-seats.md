@@ -39,7 +39,9 @@ Each socket belongs to one physical seat, `p1` to `p4`. The physical seat does n
 | 1210 | p3 | p4, p1, p2 |
 | 1211 | p4 | p1, p2, p3 |
 
-The driver admits only the existing arm and world pairs: `all` and `stop` on 1200–1207, and `serial` and `parallel` on 1208–1215. The held-final recovery arms are excluded. Every team gets the tag `external`. This tag is not `live` and not a control. The published panels do not accept it, and the evidence reader for those panels does not accept it.
+With `--sockets`, choose `all`, `stop`, `serial` or `parallel` and an integer world from 1200 through 999999. The driver keeps the same generator and seed. The held-final recovery arms are excluded. The five cases below used the original world ranges; the [new cohort](certified-reporters.md) uses different calendars.
+
+Every outside team gets the tag `external`. It is not a `live` or typed-control row from a published study. The original study commands and panels still accept only their registered worlds and tags.
 
 ### The owner protocol
 
