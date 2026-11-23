@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import override
 
 from harbor.environments.base import BaseEnvironment, ExecResult
+from harbor.environments.ssh import StreamHandle
 from harbor.models.task.config import EnvironmentConfig
 from harbor.models.trial.paths import TrialPaths
 
@@ -70,6 +71,27 @@ class SeatEnvironment(BaseEnvironment):
     @override
     def type() -> str:
         return "seat"
+
+    @property
+    @override
+    def stream_enabled(self) -> bool:
+        return (
+            self.project.stream_enabled
+            and "service" in self.project.stream_handle.reference
+        )
+
+    @property
+    @override
+    def stream_handle(self) -> StreamHandle:
+        handle = self.project.stream_handle
+        if "service" not in handle.reference:
+            return super().stream_handle
+        return handle.model_copy(
+            update={
+                "reference": {**handle.reference, "service": self.service},
+                "workspace": None,
+            }
+        )
 
     @override
     def _validate_definition(self):
