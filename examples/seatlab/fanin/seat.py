@@ -302,8 +302,7 @@ class FanInSeat(BaseAgent):
         override_setup_timeout_sec: float | None = None,
     ) -> None:
         if (
-            type(world) is not int
-            or (arm not in p.ARMS and arm not in p.TIMING_ARMS)
+            not p.admitted(world, arm)
             or seat not in p.SEATS
             or model_name is not None
             or extra_env

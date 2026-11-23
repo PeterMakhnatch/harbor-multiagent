@@ -9,8 +9,22 @@ from typing import Any, cast
 SEATS = ("p1", "p2", "p3", "p4")
 ARMS = ("all", "stop")
 TIMING_ARMS = ("serial", "parallel")
+RECOVERY_ARMS = ("abstain", "reduce")
 FIRST = 1200
 COUNT = 32
+PILOT_WORLDS = range(FIRST, FIRST + 8)
+TIMING_WORLDS = range(FIRST + 8, FIRST + 16)
+RECOVERY_WORLDS = range(FIRST + 16, FIRST + 20)
+ADMISSION = (
+    (ARMS, PILOT_WORLDS),
+    (TIMING_ARMS, TIMING_WORLDS),
+    (RECOVERY_ARMS, RECOVERY_WORLDS),
+)
+STUDY_ARMS = tuple(arm for arms, _ in ADMISSION for arm in arms)
+STUDY_WORLDS = tuple(world for _, worlds in ADMISSION for world in worlds)
+assert len(set(STUDY_ARMS)) == len(STUDY_ARMS)
+assert len(set(STUDY_WORLDS)) == len(STUDY_WORLDS)
+assert set(STUDY_WORLDS) <= set(range(FIRST, FIRST + COUNT))
 SLOTS = 35
 MAX_REPLY = 8192
 INPUT = "Input JSON: "
@@ -45,6 +59,12 @@ def wire(obj: object) -> str:
     return json.dumps(
         obj, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":")
     )
+
+
+def admitted(world: object, arm: object) -> bool:
+    if type(world) is not int:
+        return False
+    return any(arm in arms and world in worlds for arms, worlds in ADMISSION)
 
 
 def order(world: int) -> tuple[str, str, str, str]:
@@ -161,7 +181,7 @@ def outgoing(own: list[int], text: str) -> dict[str, Any]:
 
 
 def ask_next(arm: str, own: list[int], reports: list[dict[str, Any]]) -> bool:
-    if arm not in ARMS and arm not in TIMING_ARMS:
+    if arm not in STUDY_ARMS:
         raise ValueError("unknown arm")
     remaining = set(_own(own))
     delivered = _reports(reports)
