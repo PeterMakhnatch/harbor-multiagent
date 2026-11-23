@@ -133,6 +133,43 @@ names the agent's error in `exception_info`; the agent's timing stays in
 | `src/harbor/trial/trial.py` | `_run_step_verifier` records the verifier's exception on the step whether or not the step's agent raised. |
 | `tests/unit/test_single_step_trial.py`, `tests/unit/test_multi_step_run_step.py` | Cover a verifier timeout after an agent timeout, in both verifier modes. |
 
+## Daytona DinD registry mirrors and snapshot resources
+
+Harbor's Daytona environment runs a Compose task in a Docker-in-Docker
+sandbox, and every sandbox pulls the task's base images again. Many sandboxes
+share Daytona's egress addresses and so one anonymous Docker Hub pull limit;
+at a few hundred trials, `docker compose build` failed with `429 Too Many
+Requests` before any agent started. The only way around it was a custom
+`dind_snapshot` whose `daemon.json` names a mirror.
+
+Here `registry_mirrors` (a URL, comma-separated URLs or a JSON list, default
+none) puts `registry-mirrors` into `/etc/docker/daemon.json` in the sandbox
+before Harbor starts `dockerd`, on both the image and the snapshot path. A
+`daemon.json` the image or snapshot already has is merged, the requested
+mirrors first; a file that is not a JSON object, or whose `registry-mirrors`
+is not a list, stops the start with an error that does not repeat its
+content. A mirror must be an `https://` or `http://` URL with a host and no
+credentials, path, query or fragment, as Docker requires; an error never
+repeats a URL that holds credentials.
+
+A sandbox created from `dind_snapshot` gets the snapshot's size: Harbor did
+not pass the task's or the overrides' CPU, memory and disk, and still recorded
+them in the trial config without a word. It now warns in the trial log, naming
+the values that do not size the sandbox (Compose still applies CPU and memory
+to the task's containers inside it), logs the sandbox's actual size after
+creation, and refuses the `request` resource mode, which Daytona otherwise
+honors by sizing the sandbox. The trial result has no field for an
+environment's applied resources, so the log is the record.
+
+Tradeoff: two extra execs before `dockerd` starts when mirrors are set; when a
+mirror fails, Docker falls back to Docker Hub, as it does for any mirror.
+
+| Files | Change |
+|---|---|
+| `src/harbor/environments/daytona/environment.py` | `DaytonaOptions.registry_mirrors` and its validation, `_DaytonaDinD._configure_registry_mirrors`, and the `dind_snapshot` resource warning, refusal and size log. |
+| `docs-mintlify/sandboxes/pre-integrated-sandboxes.mdx` | Describes the pull limit, the option and the snapshot alternative. |
+| `tests/unit/environments/test_daytona.py` | Cover the option forms, the URL checks, the `daemon.json` content, merge and errors, the write before `dockerd` on both paths, and the snapshot resource warning, refusal and size log. |
+
 ## New files
 
 | File | What |

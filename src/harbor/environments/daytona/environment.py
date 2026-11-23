@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 import asyncio
 import atexit
 import contextlib
 import ipaddress
+import json
 import logging
 import math
 import os
@@ -16,6 +18,7 @@ from typing import TYPE_CHECKING, Any, TypeAlias, cast, override
 from uuid import uuid4
 
 from pydantic import Field, ValidationInfo, field_validator
+from urllib.parse import urlsplit
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from harbor.constants import MAIN_SERVICE_NAME
@@ -161,6 +164,8 @@ _ORPHAN_SWEEP_TIMEOUT_SEC = 60.0
 _DEFAULT_DOCKERD_WAIT_SEC = 60.0
 _DOCKERD_POLL_INTERVAL_SEC = 2.0
 _DOCKERD_LOG_TAIL_MAX_CHARS = 4_000
+_DOCKER_DAEMON_JSON = "/etc/docker/daemon.json"
+_DAEMON_JSON_MISSING = 3
 
 
 def _daytona_preflight() -> None:
@@ -175,6 +180,54 @@ def _daytona_preflight() -> None:
             "DAYTONA_JWT_TOKEN and DAYTONA_ORGANIZATION_ID, to be set. "
             "Please set the required environment variables and try again."
         )
+
+
+def _validate_registry_mirror(index: int, url: str) -> str:
+    """Return ``url`` if Docker accepts it as a registry mirror.
+
+    Errors never repeat the URL when it could hold credentials.
+    """
+    if "@" in url:
+        raise ValueError(f"registry_mirrors[{index}] must not contain credentials")
+    parsed = urlsplit(url)
+    try:
+        parsed.port
+    except ValueError:
+        raise ValueError(
+            f"registry_mirrors[{index}] {url!r} has an invalid port"
+        ) from None
+    if parsed.scheme not in ("https", "http") or not parsed.hostname:
+        raise ValueError(
+            f"registry_mirrors[{index}] {url!r} must be an https:// or http:// URL "
+            "with a host"
+        )
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise ValueError(
+            f"registry_mirrors[{index}] {url!r} must not have a path, query or fragment"
+        )
+    return url
+
+
+def _parse_daemon_json(text: str) -> dict[str, Any]:
+    """Parse an existing Docker ``daemon.json``; blank means no settings.
+
+    Errors name the position, never the content, which can hold credentials.
+    """
+    if not text.strip():
+        return {}
+    try:
+        config = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"{_DOCKER_DAEMON_JSON} in the DinD sandbox is not valid JSON "
+            f"({exc.msg} at line {exc.lineno} column {exc.colno}); fix the image "
+            "or snapshot, or leave registry_mirrors unset."
+        ) from None
+    if not isinstance(config, dict):
+        raise RuntimeError(
+            f"{_DOCKER_DAEMON_JSON} in the DinD sandbox is not a JSON object."
+        )
+    return config
 
 
 class DaytonaClientManager:
@@ -725,6 +778,55 @@ class _DaytonaDinD(DinDComposeOps, _DaytonaStrategy):
             await asyncio.sleep(2)
         raise RuntimeError(f"Main container not running after {timeout_sec}s")
 
+    async def _configure_registry_mirrors(self) -> None:
+        """Put ``registry_mirrors`` into the sandbox's Docker daemon config
+        before dockerd starts, merged into a ``daemon.json`` the image or
+        snapshot already has: the requested mirrors first, then its own."""
+        mirrors = self._env.options.registry_mirrors
+        if not mirrors:
+            return
+        path = shlex.quote(_DOCKER_DAEMON_JSON)
+        read = await self._vm_exec(
+            f"if [ -e {path} ]; then cat {path}; else exit {_DAEMON_JSON_MISSING}; fi",
+            timeout_sec=10,
+        )
+        if read.return_code == _DAEMON_JSON_MISSING:
+            config: dict[str, Any] = {}
+        elif read.return_code != 0:
+            raise RuntimeError(
+                f"Could not read {_DOCKER_DAEMON_JSON} in the DinD sandbox "
+                f"(exit {read.return_code}): {read.stderr or ''}"
+            )
+        else:
+            config = _parse_daemon_json(read.stdout or "")
+        existing = config.get("registry-mirrors", [])
+        if not isinstance(existing, list) or not all(
+            isinstance(mirror, str) for mirror in existing
+        ):
+            raise RuntimeError(
+                f'"registry-mirrors" in {_DOCKER_DAEMON_JSON} of the DinD sandbox '
+                "is not a list of URLs."
+            )
+        config["registry-mirrors"] = [
+            *mirrors,
+            *(mirror for mirror in existing if mirror not in mirrors),
+        ]
+        content = base64.b64encode(
+            (json.dumps(config, indent=2) + "\n").encode()
+        ).decode()
+        staged = shlex.quote(f"{_DOCKER_DAEMON_JSON}.harbor")
+        write = await self._vm_exec(
+            f"mkdir -p /etc/docker && printf %s {shlex.quote(content)} "
+            f"| base64 -d > {staged} && mv {staged} {path}",
+            timeout_sec=10,
+        )
+        if write.return_code != 0:
+            raise RuntimeError(
+                f"Could not write {_DOCKER_DAEMON_JSON} in the DinD sandbox "
+                f"(exit {write.return_code}): {write.stderr or ''}"
+            )
+        self._env.logger.info(f"Docker registry mirrors in the DinD sandbox: {mirrors}")
+
     @override
     async def start(self, force_build: bool) -> None:
         env = self._env
@@ -758,6 +860,16 @@ class _DaytonaDinD(DinDComposeOps, _DaytonaStrategy):
             )
 
         await env._create_sandbox(params=params)
+        if dind_snapshot and env._dind_snapshot_unapplied_resources():
+            sandbox = env._sandbox
+            env.logger.info(
+                f"DinD sandbox from snapshot {dind_snapshot!r} has the snapshot's "
+                f"size: cpu={getattr(sandbox, 'cpu', None)}, "
+                f"memory={getattr(sandbox, 'memory', None)} GiB, "
+                f"disk={getattr(sandbox, 'disk', None)} GiB."
+            )
+
+        await self._configure_registry_mirrors()
 
         # Start Docker daemon (the DinD image entrypoint isn't run by Daytona)
         env.logger.debug("Starting Docker daemon inside DinD sandbox...")
@@ -934,6 +1046,10 @@ class DaytonaOptions(EnvironmentOptions):
     dind_image: str = "docker:28.3.3-dind"
     dind_snapshot: str | None = None
     dockerd_wait_sec: float = _DEFAULT_DOCKERD_WAIT_SEC
+    registry_mirrors: list[str] = Field(
+        default_factory=list,
+        description="Docker registry mirrors for the Docker daemon in a DinD sandbox, written to ``registry-mirrors`` in ``/etc/docker/daemon.json`` before the daemon starts and merged into a file the image or snapshot already has. Each is an ``https://`` or ``http://`` URL without credentials, path, query or fragment; a string may list several, comma-separated.",
+    )
     connection_pool_maxsize: int | None = None
 
     @field_validator("dockerd_wait_sec", mode="before")
@@ -947,6 +1063,19 @@ class DaytonaOptions(EnvironmentOptions):
         ):
             raise ValueError("dockerd_wait_sec must be a finite number greater than 0")
         return float(value)
+
+    @field_validator("registry_mirrors", mode="before")
+    @classmethod
+    def validate_registry_mirrors(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = [part.strip() for part in value.split(",") if part.strip()]
+        if not isinstance(value, list) or not all(
+            isinstance(url, str) for url in value
+        ):
+            raise ValueError("registry_mirrors must be a URL or a list of URLs")
+        return [_validate_registry_mirror(i, url) for i, url in enumerate(value)]
 
     @field_validator("auto_stop_interval_mins", "ttl_minutes", mode="before")
     @classmethod
@@ -1073,6 +1202,11 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             dind_snapshot: Pre-created Daytona snapshot for faster DinD startup.
             dockerd_wait_sec: Maximum seconds to wait for the Docker daemon to
                 become responsive (default 60).
+            registry_mirrors: Docker registry mirror URLs for the sandbox's Docker
+                daemon, written to ``/etc/docker/daemon.json`` before it starts
+                (e.g. ``--ek registry_mirrors=https://mirror.gcr.io``). Docker
+                Hub pulls then go through the mirror, which avoids Docker Hub's
+                anonymous pull limit shared by many sandboxes. Default: none.
 
         Client-level kwargs (passed via ``--ek`` or config ``kwargs``):
             connection_pool_maxsize: Forwarded to ``DaytonaConfig`` when the
@@ -1182,6 +1316,12 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
                 "see the sandbox VM's filesystem."
             )
         self._expose_sandbox_id = expose_sandbox_id
+        if self.options.registry_mirrors and not self._compose_mode:
+            self.logger.warning(
+                "registry_mirrors applies to docker-compose (DinD) tasks only; "
+                "this single-container task does not use it."
+            )
+        self._check_dind_snapshot_resources()
         if network_block_all is not None:
             self._network_block_all = network_block_all
             expected = self._network_disabled
@@ -1319,6 +1459,49 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         for policy in (self.network_policy, *self._phase_network_policies):
             if policy.network_mode == NetworkMode.ALLOWLIST:
                 self._allowlist_targets(policy)
+
+    def _dind_snapshot_unapplied_resources(self) -> dict[str, int | float]:
+        """The task's resources that do not size a DinD sandbox created from
+        ``dind_snapshot``: such a sandbox gets the snapshot's size. Inside
+        it, compose still applies cpus and memory to the task's containers."""
+        if not (self._compose_mode and self.options.dind_snapshot):
+            return {}
+        values = {
+            "cpus": self._effective_cpus,
+            "memory_mb": self._effective_memory_mb,
+            "storage_mb": self._effective_storage_mb,
+        }
+        return {name: value for name, value in values.items() if value is not None}
+
+    def _check_dind_snapshot_resources(self) -> None:
+        """Refuse a CPU or memory request that a DinD snapshot sandbox cannot
+        size for, and warn about every other resource it does not apply."""
+        unapplied = self._dind_snapshot_unapplied_resources()
+        if not unapplied:
+            return
+        snapshot = self.options.dind_snapshot
+        requested = [
+            label
+            for label, name, mode in (
+                ("CPU", "cpus", self._cpu_resource_mode),
+                ("memory", "memory_mb", self._memory_resource_mode),
+            )
+            if name in unapplied and mode == ResourceMode.REQUEST
+        ]
+        if requested:
+            raise ValueError(
+                f"daytona environment with dind_snapshot={snapshot!r} cannot "
+                f"request {' or '.join(requested)} resources: a sandbox created "
+                "from a snapshot gets the snapshot's size. Leave dind_snapshot "
+                "unset, or use the auto or ignore resource mode."
+            )
+        listed = ", ".join(f"{name}={value}" for name, value in unapplied.items())
+        self.logger.warning(
+            f"dind_snapshot={snapshot!r}: the DinD sandbox gets the snapshot's "
+            f"size, so {listed} from the task or its overrides does not size it "
+            "(compose still applies cpus and memory to the task's containers "
+            "inside it). The trial config records the requested values."
+        )
 
     def _sandbox_resources(self) -> Resources | None:
         kwargs = {}

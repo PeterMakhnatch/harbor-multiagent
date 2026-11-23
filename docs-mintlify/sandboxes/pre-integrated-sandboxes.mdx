@@ -211,5 +211,36 @@ settings.
   Harbor rejects unsupported policies before trials start.
 </Accordion>
 
+<Accordion title="Daytona Docker Compose tasks: image pulls and snapshots">
+  Daytona runs a Docker Compose task in a Docker-in-Docker (DinD) sandbox, and
+  each sandbox pulls the task's base images again: nothing is cached between
+  sandboxes. Many sandboxes share Daytona's egress addresses and so share one
+  anonymous Docker Hub pull limit. At scale, `docker compose build` then fails
+  with `429 Too Many Requests` before any agent starts.
+
+  Pass a registry mirror to pull Docker Hub images through it instead:
+
+  ```bash
+  harbor run -e daytona --ek registry_mirrors=https://mirror.gcr.io ...
+  ```
+
+  Harbor writes `registry-mirrors` to `/etc/docker/daemon.json` in the sandbox
+  before it starts the Docker daemon. It adds the mirrors to a `daemon.json`
+  that the image or snapshot already has, and stops if that file is not valid
+  JSON. Pass several mirrors as a JSON list
+  (`--ek 'registry_mirrors=["https://a.example","https://b.example"]'`) or in a
+  job config's `environment.kwargs`. A mirror is an `https://` or `http://` URL
+  without credentials, path, query or fragment. Single-container tasks do not
+  use it.
+
+  Alternatively, build a Daytona snapshot from `docker:28.3.3-dind` with the
+  same `daemon.json` and pass it with `--ek dind_snapshot=<name>`. A sandbox
+  created from a snapshot gets the snapshot's CPU, memory and disk. When the
+  task or `--override-*` sets them, Harbor warns that they do not size the
+  sandbox (Compose still applies CPU and memory to the task's containers),
+  refuses `--cpus request` and `--memory request`, and logs the sandbox's
+  actual size. The trial config still records the requested values.
+</Accordion>
+
 The task's [environment definition](/tasks/environment) remains
 the same when switching providers, subject to these capabilities.
