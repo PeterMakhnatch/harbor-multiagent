@@ -244,6 +244,20 @@ python3.12 -BS -m examples.seatlab.continuation.reported_costs "$w/cache" |
 
 Before running the stock code, fix the saved point at 2 hours of a 4-hour Seed to Profit run. Compare restarting immediately with restarting after 2 more hours of wall time. Keep the saved office, completed months and checkpointed agent clock identical. Use the stock market scheduler and the stock checkpoint time calculation. This control passes only if both restarts have the same remaining agent time **and** the same number of company months due. Do not run agent-written software or infer a terminal reward. Report months due separately from months actually run.
 
+**Result: the 2 clocks diverge.** Both restarts kept 7,200 seconds of agent time. The immediate restart had 13 company months due and 13 recorded complete. The delayed restart had 37 due and the same 13 complete. Its 24 newly due months were not 24 completed or lost business decisions. We used the stock checkpoint writer and a stock office. We did not start a sandbox, execute a company month, or measure a final grade.
+
+Before comparing an interrupted job with an uninterrupted job, check the [owner diagnostic](continuation/resume_clock.py). Supply the stock files from the **same** snapshot, not team-written files. `--snapshot-at` is the Unix second when the owner saved the office. Without it, the command uses a conservative bound from the checkpoint. Exit 1 signals a clock mismatch; exit 2 rejects the input; exit 3 means the comparison is unavailable.
+
+```sh
+c=examples.seatlab.continuation
+python3.12 -BS -m "$c.resume_clock" --task seed-to-profit --resume-at "$resume_s" \
+  --snapshot-at "$snapshot_s" "$office/office.json" "$office/live/live.json" "$checkpoint/manifest.json"
+python3.12 -BS -m "$c.resume_stock_probe" "$BESPOKE_CHECKOUT" |
+  cmp - examples/seatlab/results/continuation-resume-clock.json
+```
+
+The [reproducible stock control](results/continuation-resume-clock.json) pins 3 Bespoke source files at `dbec43ff`. An equal amount of remaining agent time is not enough to match the experiments.
+
 ## Does a return message prove the receiver saw the first one?
 
 **Question, fixed before reading the receiver files.** Can an outside operator use a message in the reverse direction within 10 minutes as evidence that the receiver saw the original? Use all 9 released two-seat communicating businesses. Rollout 1 of each model is for format calibration only. Rollouts 2 and 3 of each model are the held-out comparison. Both seats face the same partner, even when they use “everyone.”
@@ -252,12 +266,51 @@ Count each original board message once. Restrict the primary denominator to mess
 
 Use the unambiguous, source-backed lower bound: report the proportion with visible receipt evidence **before** the reverse message. Require at least 80% overall and at least 80% in each held-out model with 10 or more qualifying messages. Require at least 2 eligible models. Otherwise do not recommend the proxy. Also report receipt evidence for messages with no timely return post. Withhold a result if a selected file is missing or cannot be decoded. Shortened tool output and unseen tools leave receipts unknown, not false. Never publish private messages, receiver observations or seat names. An observation does not prove comprehension, action, or a reward effect.
 
+**Held-out result: a reverse post does not establish a receipt.** In 6 new-to-this-analysis companies, 729 of 764 eligible posts had a reverse post within 10 minutes. The receiver's published tool output established that it saw the original before the reverse post in 126 of those 729 cases (17.3% lower bound). Even among the 2 harnesses with legible board returns, the bound was 126/273. The Sol wrapper did not expose trusted board returns. Its 0 confirmations in 456 cases are **not** 456 missed messages. The release also confirms 15 reads within 10 minutes among the 35 posts without a timely reverse post. Neither silence nor traffic is a delivery receipt.
+
+| Held-out model | Timely reverse posts | Receipt verified before reverse post |
+|---|---:|---:|
+| Opus | 168 | 96 |
+| Sol | 456 | 0 (unsupported return format) |
+| Argon | 105 | 30 |
+
+The [calibration](results/continuation-receiver-calibration.json) and [held-out result](results/continuation-receiver-heldout.json) contain counts and source hashes, not team messages. The [scorer](https://github.com/PeterMakhnatch/harbor-multiagent/commit/709b16d7b8bb22ccffe1280080caafa96509b477) was frozen before the held-out calculation. With the public cache from the first study:
+
+```sh
+c=examples.seatlab.continuation
+python3.12 -BS -m "$c.receipt_source" fetch "$w/cache" --split heldout
+python3.12 -BS -m "$c.receiver_receipts" "$w/cache" --split heldout |
+  cmp - examples/seatlab/results/continuation-receiver-heldout.json
+```
+
 ### Independent check: did the other seat read the message before writing a record?
 
-Use a second, independently released business benchmark: Gopnal Swamy's [shared-records artifact v2](https://zenodo.org/records/24226165). The data are CC BY 4.0. The authors report that some Study 1 outcomes depend on the harness. We use the actual server operation order, not the study's final score, as our primary endpoint. This is a different endpoint from the 10-minute Bespoke comparison.
+Use a second, independently released business benchmark: Sanjana Gopnal Swamy's [shared-records artifact v2](https://zenodo.org/records/24226165). The data are CC BY 4.0. The author reports that some Study 1 outcomes depend on the harness. We use the actual server operation order, not the study's final score, as our primary endpoint. This is a different endpoint from the 10-minute Bespoke comparison.
 
 Fix the population before scoring: Study 1, phase 1, `messages` only, 2 seats, all 6 models. Use seed 0 for format checks and report seed 1 separately as the 192-episode holdout. Both seeds use the same task families. A successful `send_message` must supply a message ID. Count it as received only when the intended seat's successful `read_messages` returns that ID, original author and exact text. Use ledger sequence order, not the model's claims or elapsed wall time. Do not export text.
 
 For each send, find the intended receiver's first later **committed** `update_record` or `claim`. If there is no such write, retain the send in a separate category. Among sends with a later write, measure the proportion received before that write. Recommend treating “sent” as “available to this decision” only if this proportion reaches 80% overall and in each model with at least 10 eligible sends. Require at least 3 eligible models. Otherwise require an actual read receipt. Report empty-send episodes, later reads and sends with no read. An absent input is not a negative result.
 
 As a descriptive check, group episodes with an eligible send by whether all, some, or none of those sends were read before their write. Report the released stale-overwrite and non-serializability counts in each group. Selection and task difficulty can explain these differences. Do not infer a benefit or cost of reading from them.
+
+**Held-out result: “sent” is not a safe guarantee before a write.** Across 192 held-out episodes, the teams sent 226 messages. In 96 cases the intended receiver later changed a record. It read 70 of those messages before its next change, 11 only afterward, and 15 not at all. The observed 72.9% missed the 80% requirement. Only 2 of the required 3 models had 10 eligible sends: Fable (15/24) and Argon (48/57). The other 130 sends had no later receiver write. In 134 episodes neither agent sent a message. These denominators answer different questions.
+
+Download `coordination-shared-records-v2.zip` from the author's record. The [local reader](continuation/record_receipts.py) checks the archive digest and requires all 192 episodes in a split. It does not extract or run any program. A separate SQL join verified all 6 model counts and all 3 outcome groups.
+
+```sh
+python3.12 -BS -m examples.seatlab.continuation.record_receipts \
+  "$RECORDS_ZIP" --split heldout | cmp - examples/seatlab/results/continuation-record-receipts.json
+```
+
+The [result](results/continuation-record-receipts.json) includes the 52 episodes in which at least 1 send qualified. Do not infer that checking messages prevents record errors from these small, selected groups.
+
+## Check a finished job's owner-side inbox without opening team transcripts
+
+Keep the raw `board-events.jsonl` private. Run this command locally. Omit `--closed-roster` if agents joined during the job. Omit `--complete-log` for a partial export. The command withholds broadcast totals that it cannot establish.
+
+```sh
+python3.12 -BS -m examples.seatlab.continuation.owner_inbox \
+  --complete-log --closed-roster "$job/board-events.jsonl"
+```
+
+The [stock-board control](results/owner-inbox-stock.json) produced 5 teammate messages for 7 individual recipients across those sends. The board confirmed 3 recipient edges in inbox returns. A history call returned 4 rows, but did not identify those rows in the log. The tool did not count a harness notification or infer a receipt from the history call. `not_confirmed` is **not** “unread.” A server-side inbox return does not prove that the client received it, the model used it, or the team earned a reward.

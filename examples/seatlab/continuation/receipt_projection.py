@@ -3,8 +3,21 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NoReturn, cast
+
+Record = dict[str, Any]
+Counts = dict[str, int]
+Seat = tuple[str, Record]
+Audience = str | frozenset[str]
+Message = tuple[int, str, str, bool, Audience | None, float | None]
+Output = tuple[int | None, list[Any]]
+ReadResult = tuple[int | None, list[Any] | None]
+Evidence = tuple[int, int, int | None]
+Reader = tuple[
+    Callable[[Record], bool], Callable[[list[Record], int, Counts], ReadResult]
+]
 
 BOARD_SCHEMA = "message board of the team"
 BOARD_KEYS = frozenset(
@@ -80,24 +93,26 @@ def _finite(value: Any) -> bool:
     )
 
 
-def _audience(value: Any) -> str | frozenset[str] | None:
+def _audience(value: Any) -> Audience | None:
     if value is None or value == EVERYONE:
         return EVERYONE
     if isinstance(value, str) and value:
         return frozenset({value})
-    if (
-        isinstance(value, list)
-        and 0 < len(value) <= MAX_OBJECTS_PER_OUTPUT
-        and all(isinstance(name, str) and name and name != EVERYONE for name in value)
-    ):
-        return frozenset(value)
+    if isinstance(value, list) and 0 < len(value) <= MAX_OBJECTS_PER_OUTPUT:
+        names: list[str] = [
+            name
+            for name in value
+            if isinstance(name, str) and name and name != EVERYONE
+        ]
+        if len(names) == len(value):
+            return frozenset(names)
     return None
 
 
-def _check_seats(seats: list[tuple[str, dict]]) -> tuple[str, str]:
+def _check_seats(seats: list[Seat]) -> tuple[str, str]:
     if not isinstance(seats, list) or len(seats) != 2:
         raise ValueError("seats: expected exactly two seats")
-    names = []
+    names: list[str] = []
     for slot, seat in enumerate(seats):
         if not isinstance(seat, tuple) or len(seat) != 2:
             raise ValueError(f"seats[{slot}]: expected (name, transcript)")
@@ -119,18 +134,19 @@ def _check_seats(seats: list[tuple[str, dict]]) -> tuple[str, str]:
 
 
 def _board_rows(
-    board: dict, names: tuple[str, str], counts: dict[str, int]
-) -> dict[int, dict]:
+    board: Record, names: tuple[str, str], counts: Counts
+) -> dict[int, Record]:
     if not isinstance(board, dict) or board.get("schema") != BOARD_SCHEMA:
         raise ValueError("board: unexpected schema")
     steps = board.get("steps")
     if not isinstance(steps, list) or len(steps) > MAX_STEPS:
         raise ValueError("board: expected bounded steps list")
-    rows: dict[int, dict] = {}
-    for index, step in enumerate(steps):
+    rows: dict[int, Record] = {}
+    for index, value in enumerate(steps):
         where = f"board.steps[{index}]"
-        if not isinstance(step, dict) or set(step) != BOARD_KEYS:
+        if not isinstance(value, dict) or set(value) != BOARD_KEYS:
             raise ValueError(f"{where}: unexpected keys")
+        step = cast(Record, value)
         row = step["step_id"]
         if isinstance(row, bool) or not isinstance(row, int) or row in rows:
             raise ValueError(f"{where}: step_id must be a unique integer")
@@ -156,9 +172,9 @@ def _board_rows(
 
 
 def _roster_rows(
-    rows: dict[int, dict], names: tuple[str, str], counts: dict[str, int]
-) -> dict[int, dict]:
-    kept: dict[int, dict] = {}
+    rows: dict[int, Record], names: tuple[str, str], counts: Counts
+) -> dict[int, Record]:
+    kept: dict[int, Record] = {}
     for row, item in rows.items():
         if item["kind"] != BOARD_KIND or item["source"] not in names:
             counts["rows_foreign"] += 1
@@ -179,7 +195,7 @@ def _roster_rows(
     return kept
 
 
-def _decode_body(body: str, counts: dict[str, int]) -> list[Any] | None:
+def _decode_body(body: str, counts: Counts) -> list[Any] | None:
     if SHORTENED.search(body) is not None:
         counts["outputs_shortened"] += 1
         return None
@@ -191,6 +207,7 @@ def _decode_body(body: str, counts: dict[str, int]) -> list[Any] | None:
     except (ValueError, RecursionError):
         counts["outputs_unrecognized"] += 1
         return None
+    items: list[Any]
     if (
         isinstance(parsed, dict)
         and set(parsed) == {WRAPPER_KEY}
@@ -209,15 +226,15 @@ def _decode_body(body: str, counts: dict[str, int]) -> list[Any] | None:
     return items
 
 
-def _reject_constant(name: str) -> Any:
+def _reject_constant(name: str) -> NoReturn:
     raise ValueError("non-finite JSON constant")
 
 
-def _is_claude_read(call: dict) -> bool:
+def _is_claude_read(call: Record) -> bool:
     return call.get("function_name") in CLAUDE_READ_TOOLS
 
 
-def _is_antigravity_read(call: dict) -> bool:
+def _is_antigravity_read(call: Record) -> bool:
     arguments = call.get("arguments")
     return (
         call.get("function_name") == ANTIGRAVITY_FUNCTION
@@ -227,9 +244,7 @@ def _is_antigravity_read(call: dict) -> bool:
     )
 
 
-def _claude_output(
-    steps: list, index: int, counts: dict[str, int]
-) -> tuple[int | None, list | None]:
+def _claude_output(steps: list[Record], index: int, counts: Counts) -> ReadResult:
     items = _decode_body(steps[index]["observation"], counts)
     if items is None:
         return None, None
@@ -246,9 +261,7 @@ def _claude_output(
     return following, items
 
 
-def _antigravity_output(
-    steps: list, index: int, counts: dict[str, int]
-) -> tuple[int | None, list | None]:
+def _antigravity_output(steps: list[Record], index: int, counts: Counts) -> ReadResult:
     observation = steps[index]["observation"]
     header = ANTIGRAVITY_HEADER.match(observation)
     if header is None:
@@ -270,25 +283,23 @@ def _antigravity_output(
     return completed, items
 
 
-READERS = {
+READERS: dict[str, Reader] = {
     CLAUDE: (_is_claude_read, _claude_output),
     ANTIGRAVITY: (_is_antigravity_read, _antigravity_output),
 }
 
 
-def _seat_outputs(
-    transcript: dict, counts: dict[str, int]
-) -> tuple[str, list[tuple[int | None, list]]]:
+def _seat_outputs(transcript: Record, counts: Counts) -> tuple[str, list[Output]]:
     agent = transcript.get("agent")
     harness = agent.get("harness") if isinstance(agent, dict) else None
-    steps = transcript["steps"]
+    steps: list[Record] = transcript["steps"]
     if harness not in READERS:
         counts["calls_unrecognized_harness"] += sum(
             1 for step in steps if isinstance(step.get("tool_calls"), list)
         )
         return UNKNOWN, []
     is_read, read_output = READERS[harness]
-    outputs: list[tuple[int | None, list]] = []
+    outputs: list[Output] = []
     reads = 0
     for index, step in enumerate(steps):
         calls = step.get("tool_calls")
@@ -298,9 +309,10 @@ def _seat_outputs(
             raise ValueError(
                 f"step[{index}].tool_calls: expected bounded non-empty list"
             )
-        if not all(isinstance(call, dict) for call in calls):
+        records: list[Record] = [call for call in calls if isinstance(call, dict)]
+        if len(records) != len(calls):
             raise ValueError(f"step[{index}].tool_calls: expected objects")
-        board_reads = sum(1 for call in calls if is_read(call))
+        board_reads = sum(1 for call in records if is_read(call))
         if board_reads == 0:
             continue
         reads += board_reads
@@ -322,7 +334,7 @@ def _seat_outputs(
     return harness, outputs
 
 
-def _message(item: Any) -> tuple | None:
+def _message(item: Any) -> Message | None:
     if not isinstance(item, dict):
         return None
     keys = set(item)
@@ -342,10 +354,10 @@ def _message(item: Any) -> tuple | None:
 
 
 def _match(
-    message: tuple,
+    message: Message,
     index: dict[tuple[str, str], list[int]],
-    rows: dict[int, dict],
-    counts: dict[str, int],
+    rows: dict[int, Record],
+    counts: Counts,
 ) -> int | None:
     _, sender, text, has_audience, audience, _ = message
     candidates = index.get((sender, text), [])
@@ -365,12 +377,12 @@ def _match(
 
 def _evidence(
     names: tuple[str, str],
-    seat_outputs: list[list[tuple[int | None, list]]],
-    rows: dict[int, dict],
-    counts: dict[str, int],
-) -> list[tuple[int, int, int | None]]:
-    by_seq: dict[int, set[tuple]] = {}
-    pending: list[tuple[int, int, int | None]] = []
+    seat_outputs: list[list[Output]],
+    rows: dict[int, Record],
+    counts: Counts,
+) -> list[Evidence]:
+    by_seq: dict[int, set[Message]] = {}
+    pending: list[Evidence] = []
     index: dict[tuple[str, str], list[int]] = {}
     for row, item in rows.items():
         index.setdefault((item["source"], item["message"]), []).append(row)
@@ -407,12 +419,12 @@ def _evidence(
     ]
 
 
-def project(board: dict, seats: list[tuple[str, dict]]) -> dict:
+def project(board: Record, seats: list[Seat]) -> Record:
     names = _check_seats(seats)
-    counts = dict.fromkeys(COUNTERS, 0)
+    counts: Counts = dict.fromkeys(COUNTERS, 0)
     rows = _board_rows(board, names, counts)
     framing: list[str] = []
-    seat_outputs: list[list[tuple[int | None, list]]] = []
+    seat_outputs: list[list[Output]] = []
     for _, transcript in seats:
         seat_framing, outputs = _seat_outputs(transcript, counts)
         framing.append(seat_framing)
@@ -426,7 +438,7 @@ def project(board: dict, seats: list[tuple[str, dict]]) -> dict:
             counts["bounds_before_sent"] += 1
         counts["receipts"] += 1
         reads[row].add(bound)
-    messages = [
+    messages: list[Record] = [
         {
             "row": row,
             "direction": rows[row]["direction"],

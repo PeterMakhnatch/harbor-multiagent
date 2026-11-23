@@ -58,6 +58,8 @@ To test **your own sales and finance agents**, [send blind packets or connect tw
 
 Already running 2 Bespoke teams? [Read their owner-side 3-hour marks](examples/seatlab/continuation-study.md#read-marks-from-your-own-bespoke-jobs) without reading their private work. Use the [reported model costs](examples/seatlab/continuation-study.md#does-equal-seat-time-also-match-the-publishers-reported-model-cost) before treating equal seat-time as equal spending.
 
+Need to know whether an agent actually received a message? [Check the owner's private board log locally](examples/seatlab/continuation-study.md#check-a-finished-jobs-owner-side-inbox-without-opening-team-transcripts). It exports counts, not text. If a job resumed after an interruption, [check the company clock separately from the agent timeout](examples/seatlab/continuation-study.md#what-changes-when-the-owner-resumes-a-team-after-an-interruption).
+
 **Do not use an interim business mark as a final reward.** The [stock verifier uses different measures](examples/seatlab/continuation-study.md#is-screening-worth-doing-at-equal-cumulative-team-time). The public archive cannot say what the final reward would have been if a team stopped early.
 
 ## Install
