@@ -367,3 +367,28 @@ The stock business office keeps a supplier audit private to the ordering seat. A
 **Pass test.** Each supplier must beat the other by at least 0.01 in 2 or more companies. The per-company oracle must beat the best single supplier by at least 0.02 on mean stock live score. Report all 12 outcomes and ties. If either test fails, **do not run model-team trials of this supplier choice.** The counterfactual screen can rule out this design; it cannot show that agents can exploit the opportunity.
 
 **Separate ownership check.** Use the unmodified official office tools and a simulated clock. Show whether an ordering seat can obtain one completed supplier report that a non-ordering seat cannot obtain directly. If feasible, let that seat send the report through the stock board and verify what the other inbox returned. Use only a public product, an isolated temporary office and the stock finite report. An access denial, an early pending result, a completed private result, a board send, and a receiver inbox return are distinct observations. No generated Python or live credentials go to the office.
+
+### Result: do not buy model turns for the two uniform supplier plans
+
+Supplier A won by at least 0.01 in 3 companies. Supplier B won in 0. The other 3 grades tied at zero. Mean stock live grade was 0.06089 for A and 0.01426 for B. An oracle that saw all 12 endings could not beat always using A. The eligibility test failed. We ran **no model teams on this supplier choice**. This does not rule out product-specific suppliers or other research questions.
+
+The [12 outcomes](results/continuation-private-supplier.json) include terminal values, actual plan and program hashes from 444 stock months, and the stock quotes. All 12 companies completed 37 months. Neither arm froze. Each arm deducted the same 60,000 simulated dollars when computing the live grade. We recomputed each grade from the terminal value and checked each snapshot digest chain.
+
+The [separate office control](results/continuation-office-private-handoff.json) **did** show a real information boundary. The stock office quoted and committed 3,000 simulated dollars for one audit. The orderer saw no result 1 simulated second before release. At 360 simulated seconds it received the report. The other seat could not obtain it from the office, even after release. After the orderer sent the report, the other seat's stock inbox returned message 1. The same report digest appeared at 5 boundaries, from office computation to receiver inbox. We exercised the stock methods, not an MCP network call or a model's understanding.
+
+```sh
+"$STOCK_PYTHON" -B -m examples.seatlab.continuation.supplier_screen \
+  "$BESPOKE_ROOT" --case 2 --supplier B
+"$STOCK_PYTHON" -B -m examples.seatlab.continuation.office_handoff \
+  "$BESPOKE_ROOT" | cmp - examples/seatlab/results/continuation-office-private-handoff.json
+```
+
+## Should two operators use a teammate's evidence to assign one early deployment?
+
+A resource limit creates a different decision from choosing one supplier for every product. A supervisor has 2 companies and 1 early deployment of the official reference program. The other company must wait 4 months. The exercise uses real stock companies, programs, books and live scores. The deployment limit is our operator rule, **not** a rule of Bespoke's benchmark.
+
+**Preregistered opportunity check.** Use 8 pairs indexed `0..7`, with sides `X` and `Y`. For each company, use the lower-case SHA-256 of `seatlab/deploy-queue/v1/pair/{i}/{side}/{purpose}`, with `purpose=world|truth`. Each starts with the stock reference plan and stock starter program. Run both landings: first 13 months on starter or first 17 on starter, then reference through month 37. Charge no research fee. Require both stock outcomes per company and matching month-13 books between treatments. Admit only public `month`, `revenue`, `cash_at_end` from the first 13 completed months of the stock `live.books` view. Never pass private company value, scores, world keys or later months to a seat. Keep an invalid trajectory in the denominator.
+
+Score an assignment as the mean of the 2 terminal stock live grades. Compare a hindsight oracle with 4 fixed policies: always X, always Y, higher last-month revenue, and lower last-month revenue. Break both revenue ties toward X. Do not run model teams unless all 32 counterfactuals are valid, the oracle advantage over the best fixed policy is at least 0.015, and each side wins by at least 0.01 on at least 2 pairs. Count ties. An oracle that only beats a bad baseline does not justify adding a supervisor.
+
+**Conditional model comparison.** Only if the check passes: run 2 fresh subscription teams per pair, independent first answers and no game tools. A remote analyst sees only Y's stock public books and returns a bounded urgency estimate and its most recent revenue and cash estimates. A planner sees only X's books. In `shared` it receives the analyst's actual numeric report. In `private` it receives a content-free notice; the analyst still runs. Alternate which arm runs first by pair. Accept one X/Y assignment. Favor sharing only if its mean reward exceeds private by at least 0.015, it has at least 2 more wins than losses across the 8 pairs, and it exceeds the best fixed policy. Report actual completions and receipt binding; do not replace an invalid first answer. This is a stock-business allocation experiment, not an official two-seat benchmark score.
