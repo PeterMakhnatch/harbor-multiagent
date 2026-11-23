@@ -31,6 +31,7 @@ ROOT = HERE.parents[2]
 RELAY = HERE.parent / "visibility" / "local_seat.py"
 AGY_SEAT = HERE.parent / "visibility" / "agy_seat.py"
 CONTROL = HERE / "control.py"
+JOIN_OWNER = HERE / "join_owner.py"
 COMMIT = "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3"
 GENERATOR = (
     "flotilla/build_tasks.py",
@@ -41,8 +42,10 @@ GENERATOR = (
 )
 SEED = 1709000311
 PLAY_SECONDS = 600
-WORLDS = range(protocol.FIRST, protocol.FIRST + 8)
+WORLDS = protocol.STUDY_WORLDS
+TIMING_WORLDS = protocol.TIMING_WORLDS
 CONTROLS = ("correct", "inexact", "wrong")
+RECOVERY_CONTROLS = ("correct", "inexact")
 LIVE_TAG = "live"
 OWNER_ENV = ("HOME", "PATH", "LANG", "TMPDIR")
 SOCKET_ROOT = "/tmp"
@@ -105,6 +108,12 @@ class Plan:
     def trial_name(self) -> str:
         return f"sf4-{self.world}-{self.arm}-{self.tag}"
 
+    @property
+    def admission(self) -> Path | None:
+        if self.agy is None or self.arm not in protocol.TIMING_ARMS:
+            return None
+        return self.out / "admission"
+
 
 def _interrupt(signum: int, frame: FrameType | None) -> None:
     raise KeyboardInterrupt()
@@ -115,12 +124,19 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
         prog="python -B -m examples.seatlab.fanin.trial", allow_abbrev=False
     )
     parser.add_argument("--world", type=int, required=True, choices=WORLDS)
-    parser.add_argument("--arm", required=True, choices=protocol.ARMS)
+    parser.add_argument("--arm", required=True, choices=protocol.STUDY_ARMS)
     parser.add_argument("--out", type=Path, required=True)
     seat = parser.add_mutually_exclusive_group(required=True)
     seat.add_argument("--control", choices=CONTROLS)
     seat.add_argument("--agy", type=Path)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not protocol.admitted(args.world, args.arm) or (
+        args.arm in protocol.RECOVERY_ARMS
+        and args.control is not None
+        and args.control not in RECOVERY_CONTROLS
+    ):
+        raise Failed("invalid_arguments")
+    return args
 
 
 def regular(path: Path, reason: str) -> Path:
@@ -166,6 +182,8 @@ def checked(args: argparse.Namespace) -> Plan:
             raise Failed("home_missing")
     else:
         regular(CONTROL, "control_missing")
+    if args.arm in protocol.RECOVERY_ARMS:
+        regular(JOIN_OWNER, "owner_missing")
     harbor = calendar_driver._entrypoint(Path(sys.executable).parent / "harbor")
     return Plan(
         world=args.world,
@@ -350,7 +368,22 @@ def stage(plan: Plan, task: Path) -> tuple[Path, str]:
 
 def owner_argv(plan: Plan, seat: str) -> list[str]:
     record = str(plan.out / "owner" / seat)
+    if plan.arm in protocol.RECOVERY_ARMS and seat == protocol.order(plan.world)[0]:
+        return [
+            str(plan.python),
+            "-IS",
+            str(JOIN_OWNER),
+            "--mode",
+            plan.arm,
+            "--booker",
+            seat,
+            "--record",
+            record,
+        ]
     if plan.agy is not None:
+        note: tuple[str, ...] = ()
+        if plan.admission is not None:
+            note = ("--admission-note", str(plan.admission / f"{seat}.json"))
         return [
             str(plan.python),
             "-IS",
@@ -360,6 +393,7 @@ def owner_argv(plan: Plan, seat: str) -> list[str]:
             str(plan.agy),
             "--record",
             record,
+            *note,
         ]
     if plan.control is None:
         raise Failed("seat_unset")
@@ -526,6 +560,8 @@ def run_team(plan: Plan, config: Path, tasks: Path, status: dict[str, Any]) -> N
 
 def execute(plan: Plan, status: dict[str, Any]) -> None:
     private_directory(plan.out / "owner")
+    if plan.admission is not None:
+        private_directory(plan.admission)
     tasks = plan.out / "tasks"
     task = generate(plan.python, tasks, plan.world)
     wait_run.isolate(plan.out)

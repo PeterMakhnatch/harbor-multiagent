@@ -1,6 +1,8 @@
 import argparse
 import stat
 import sys
+from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, NoReturn, override
 from uuid import UUID
@@ -34,7 +36,6 @@ SCHEMA = "seatlab.peer-fanin-evidence/v1"
 LAUNCH_SCHEMA = "seatlab.fanin-launch/v1"
 SEAT_IMPORT = "examples.seatlab.fanin.seat:FanInSeat"
 AGENT = ("seatlab-fanin-seat", "1.0.0", None)
-WORLDS = range(1200, 1208)
 SEATS = protocol.SEATS
 TAGS = ("live", "control-correct", "control-inexact", "control-wrong")
 MODES = {
@@ -510,12 +511,47 @@ def exchange(
     return rounds
 
 
-def causes(rounds: list[Row], booker: str) -> dict[str, tuple[str, str]]:
+def parallel_exchange(
+    messages: list[Row], order: tuple[str, ...], starts: dict[str, list[int]]
+) -> list[Row]:
+    booker, rounds = order[0], []
+    asked: dict[str, Row] = {}
+    for msg in messages:
+        if msg["from"] == booker:
+            need(
+                len(rounds) < len(order) - 1
+                and msg["to"] == order[1 + len(rounds)]
+                and COMMANDS.get(msg["text"]) == ACTIONS[0],
+                "command_binding",
+            )
+            entry: Row = {
+                "seat": msg["to"],
+                "action": ACTIONS[0],
+                "command": msg,
+                "reply": None,
+                "report": None,
+            }
+            rounds.append(entry)
+            asked[msg["to"]] = entry
+            continue
+        entry = asked.get(msg["from"], {})
+        need(
+            msg["to"] == booker and entry.get("reply", False) is None,
+            "reply_binding",
+        )
+        entry.update(
+            reply=msg,
+            report=report_value(msg["text"], msg["from"], starts[msg["from"]]),
+        )
+    return rounds
+
+
+def causes(rounds: list[Row], booker: str, arm: str) -> dict[str, tuple[str, str]]:
     needed: dict[str, tuple[str, str]] = {}
     for j, entry in enumerate(rounds):
         if entry["reply"] is not None:
             needed[entry["reply"]["id"]] = (entry["seat"], entry["command"]["id"])
-        if j and rounds[j - 1]["reply"] is not None:
+        if j and arm != "parallel" and rounds[j - 1]["reply"] is not None:
             needed[entry["command"]["id"]] = (booker, rounds[j - 1]["reply"]["id"])
     return needed
 
@@ -526,7 +562,9 @@ def settled(rounds: list[Row]) -> bool:
     )
 
 
-def timeline(trial: Path, messages: list[Row], rounds: list[Row], booker: str) -> Row:
+def timeline(
+    trial: Path, messages: list[Row], rounds: list[Row], booker: str, arm: str
+) -> Row:
     path = trial / "artifacts/logs/world/events.jsonl"
     state: Row = {
         "delivered": {seat: set() for seat in SEATS},
@@ -534,13 +572,14 @@ def timeline(trial: Path, messages: list[Row], rounds: list[Row], booker: str) -
         "identified": set(),
         "submit": None,
         "frozen": False,
+        "sent_at": {},
     }
     if not present(path):
         need(not messages, "missing_world_events")
         return state
     events = lines(read(path))
     need(events, "missing_world_events")
-    needed = causes(rounds, booker)
+    needed = causes(rounds, booker, arm)
     replies = {e["reply"]["id"] for e in rounds if e["reply"] is not None}
     sent, previous = 0, 0
     for i, event in enumerate(events, 1):
@@ -604,6 +643,7 @@ def world_action(
             ),
             "send_binding",
         )
+        state["sent_at"][msg["id"]] = t
         return sent + 1
     if kind == "deliver":
         ids = [msg["id"] for msg in messages[:sent] if msg["to"] == seat]
@@ -715,7 +755,7 @@ def stock_reward(
 
 
 def prompts(
-    order: tuple[str, ...], starts: dict[str, list[int]], rounds: list[Row]
+    order: tuple[str, ...], starts: dict[str, list[int]], rounds: list[Row], arm: str
 ) -> dict[str, str | None]:
     actions = {e["seat"]: e["action"] for e in rounds}
     plan: dict[str, str | None] = {
@@ -726,9 +766,88 @@ def prompts(
     }
     reports = [e["report"] for e in rounds if e["report"] is not None]
     plan[order[0]] = (
-        protocol.book_prompt(starts[order[0]], reports) if settled(rounds) else None
+        protocol.book_prompt(
+            starts[order[0]], reports, canonical_order=arm in protocol.TIMING_ARMS
+        )
+        if settled(rounds)
+        else None
     )
     return plan
+
+
+def admitted(world: int, arm: str) -> bool:
+    return arm in (*protocol.ARMS, *protocol.TIMING_ARMS) and protocol.admitted(
+        world, arm
+    )
+
+
+def millis(t: float) -> int:
+    value = Decimal(repr(t)) * 1000
+    need(value == value.to_integral_value(), "world_clock")
+    return int(value)
+
+
+def native_moment(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise Bad("native_timestamps")
+    try:
+        moment_at = datetime.fromisoformat(value)
+    except ValueError:
+        raise Bad("native_timestamps") from None
+    need(moment_at.utcoffset() == timedelta(0), "native_timestamps")
+    return moment_at
+
+
+def fanout_timing(
+    result: Row, messages: list[Row], rounds: list[Row], state: Row
+) -> Row:
+    commands = {e["command"]["id"] for e in rounds}
+    replies = {e["reply"]["id"] for e in rounds if e["reply"] is not None}
+    need(
+        {m["id"] for m in messages} == commands | replies
+        and set(state["sent_at"]) == commands | replies,
+        "world_log_binding",
+    )
+    issued = outstanding = peak = 0
+    before = None
+    for msg in messages:
+        if msg["id"] in commands:
+            issued += 1
+            outstanding += 1
+            peak = max(peak, outstanding)
+            continue
+        if before is None:
+            before = issued
+        outstanding -= 1
+        need(outstanding >= 0, "reply_binding")
+    sent_at = state["sent_at"]
+    first = min((millis(sent_at[mid]) for mid in commands), default=None)
+    gather: int | None = None
+    submit: int | None = None
+    if len(replies) == len(SEATS) - 1 and first is not None:
+        gather = max(millis(sent_at[mid]) for mid in replies) - first
+    if state["submit"] is not None and first is not None:
+        submit = millis(state["submit"][0]) - first
+    need(
+        (gather is None or gather >= 0)
+        and (submit is None or submit >= 0)
+        and (gather is None or submit is None or gather <= submit)
+        and (before is None or 1 <= before <= len(SEATS) - 1),
+        "timing_order",
+    )
+    started, finished = result.get("started_at"), result.get("finished_at")
+    begin, end = native_moment(started), native_moment(finished)
+    need(begin is None or end is None or begin <= end, "native_timestamps")
+    return {
+        "gather_ms": gather,
+        "submit_ms": submit,
+        "before_first_reply": before,
+        "max_outstanding": peak,
+        "native_started_at": started,
+        "native_finished_at": finished,
+    }
 
 
 def tolerant(meta: Row, key: str, actual: int) -> bool:
@@ -851,6 +970,34 @@ def not_admitted(
     return True
 
 
+def owner_turn(
+    owner: Path, seat: str, prompt: str | None, meta: Row | None, launch: Row
+) -> Row:
+    turn = (
+        None
+        if meta is None or meta["reply_sha256"] is None
+        else {
+            "prompt_sha256": meta["prompt_sha256"],
+            "reply_sha256": meta["reply_sha256"],
+        }
+    )
+    need(
+        not present(owner / seat) or meta is None or meta["started_turn"],
+        "owner_without_turn",
+    )
+    tag = launch["tag"]
+    if tag == "live" and not_admitted(owner, seat, prompt, meta, launch):
+        return {"status": "not_admitted"}
+    if tag == "live":
+        return base.owner_turn(owner, seat, prompt, turn)
+    return control_turn(owner, seat, prompt, turn, MODES[tag], launch["world"])
+
+
+def distinct_sessions(rows: dict[str, Row]) -> None:
+    sessions = [r["receipt"]["session_sha256"] for r in rows.values() if "receipt" in r]
+    need(len(set(sessions)) == len(sessions), "shared_provider_session")
+
+
 def owner_turns(
     cell: Path,
     order: tuple[str, ...],
@@ -858,32 +1005,12 @@ def owner_turns(
     metas: dict[str, Row | None],
     launch: Row,
 ) -> dict[str, Row]:
-    tag, world = launch["tag"], launch["world"]
     owner = cell / "owner"
     need(entries(owner) <= set(SEATS), "owner_entries")
-    rows: dict[str, Row] = {}
-    for seat in order:
-        meta = metas[seat]
-        turn = (
-            None
-            if meta is None or meta["reply_sha256"] is None
-            else {
-                "prompt_sha256": meta["prompt_sha256"],
-                "reply_sha256": meta["reply_sha256"],
-            }
-        )
-        need(
-            not present(owner / seat) or meta is None or meta["started_turn"],
-            "owner_without_turn",
-        )
-        if tag == "live" and not_admitted(owner, seat, plan[seat], meta, launch):
-            rows[seat] = {"status": "not_admitted"}
-        elif tag == "live":
-            rows[seat] = base.owner_turn(owner, seat, plan[seat], turn)
-        else:
-            rows[seat] = control_turn(owner, seat, plan[seat], turn, MODES[tag], world)
-    sessions = [r["receipt"]["session_sha256"] for r in rows.values() if "receipt" in r]
-    need(len(set(sessions)) == len(sessions), "shared_provider_session")
+    rows = {
+        seat: owner_turn(owner, seat, plan[seat], metas[seat], launch) for seat in order
+    }
+    distinct_sessions(rows)
     return rows
 
 
@@ -947,17 +1074,7 @@ def replies_bound(
     return booked
 
 
-def incomplete_reason(
-    launch: Row,
-    result: Row,
-    order: tuple[str, ...],
-    metas: dict[str, Row | None],
-    raised: dict[str, bool],
-    rounds: list[Row],
-    state: Row,
-    reward: int | None,
-    owned: dict[str, Row],
-) -> str | None:
+def native_failure(launch: Row, result: Row) -> str | None:
     reason = launch_reason(launch)
     if reason is not None:
         return reason
@@ -970,6 +1087,23 @@ def incomplete_reason(
         or result.get("agent_result") is not None
     ):
         return "native_trial_exception"
+    return None
+
+
+def incomplete_reason(
+    launch: Row,
+    result: Row,
+    order: tuple[str, ...],
+    metas: dict[str, Row | None],
+    raised: dict[str, bool],
+    rounds: list[Row],
+    state: Row,
+    reward: int | None,
+    owned: dict[str, Row],
+) -> str | None:
+    reason = native_failure(launch, result)
+    if reason is not None:
+        return reason
     for seat in order:
         meta = metas[seat]
         if raised[seat]:
@@ -1110,11 +1244,14 @@ def base_row(
     }
 
 
-def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
+Stock = tuple[Row, dict[str, list[int]], int, str]
+
+
+def staged(
+    cell: Path, world: int, arm: str, tag: str
+) -> tuple[bytes, Row, Path, Stock | None]:
     entries(cell)
     launch_raw, launch = launched(cell, world, arm, tag)
-    digests: Row = {"launch": packet._digest(launch_raw)}
-    row = base_row(world, arm, tag, cell, launch, digests)
     name = trial_name(world, arm, tag)
     trial = cell / "trials" / name
     need(
@@ -1124,7 +1261,7 @@ def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
     need(launch["result_present"] == present(trial / "result.json"), "launch_binding")
     if not launch["result_present"]:
         need(launch["error"] is not None, "launch_binding")
-        return row
+        return launch_raw, launch, trial, None
     need(
         None
         not in (launch["task_name"], launch["task_checksum"], launch["config_sha256"]),
@@ -1132,6 +1269,19 @@ def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
     )
     task, starts, target, calendar = stock_task(cell, world, launch)
     cfg = configured(cell, task, world, arm, tag, launch)
+    return launch_raw, launch, trial, (cfg, starts, target, calendar)
+
+
+def audit(cell: Path, world: int, arm: str, tag: str) -> Row:
+    need(admitted(world, arm) and tag in TAGS, "world_arm_pairing")
+    launch_raw, launch, trial, stock = staged(cell, world, arm, tag)
+    digests: Row = {"launch": packet._digest(launch_raw)}
+    row = base_row(world, arm, tag, cell, launch, digests)
+    if arm in protocol.TIMING_ARMS:
+        row["timing"] = None
+    if stock is None:
+        return row
+    cfg, starts, target, calendar = stock
     digests["config"] = launch["config_sha256"]
     row["claims"]["stock_source_verified"] = True
     row["source"]["calendar_sha256"] = calendar
@@ -1150,17 +1300,11 @@ def evidence_digests(trial: Path, digests: Row) -> None:
         )
 
 
-def trial_row(
-    row: Row,
-    cell: Path,
-    trial: Path,
-    cfg: Row,
-    launch: Row,
-    starts: dict[str, list[int]],
-    target: int,
-) -> None:
-    world, arm, tag = row["world"], row["arm"], row["tag"]
-    order = protocol.order(world)
+def observed(
+    row: Row, trial: Path, cfg: Row, launch: Row, starts: dict[str, list[int]]
+) -> Row:
+    arm = row["arm"]
+    order = protocol.order(row["world"])
     packet._directory(trial)
     result_raw = read(trial / "result.json")
     result = packet._object(packet._json(result_raw))
@@ -1173,21 +1317,57 @@ def trial_row(
         for seat in SEATS
     }
     messages = world_messages(trial)
-    rounds = exchange(messages, order, starts, arm)
-    state = timeline(trial, messages, rounds, order[0])
-    plan = prompts(order, starts, rounds)
+    if arm == "parallel":
+        rounds = parallel_exchange(messages, order, starts)
+    else:
+        rounds = exchange(messages, order, starts, arm)
+    state = timeline(trial, messages, rounds, order[0], arm)
+    plan = prompts(order, starts, rounds, arm)
     for seat in order:
         bind_seat(seat, metas[seat], plan[seat], rounds, messages, state)
-    owned = owner_turns(cell, order, plan, metas, launch)
+    return {
+        "order": order,
+        "result": result,
+        "metas": metas,
+        "raised": raised,
+        "messages": messages,
+        "rounds": rounds,
+        "state": state,
+        "plan": plan,
+    }
+
+
+def trial_row(
+    row: Row,
+    cell: Path,
+    trial: Path,
+    cfg: Row,
+    launch: Row,
+    starts: dict[str, list[int]],
+    target: int,
+) -> None:
+    seen = observed(row, trial, cfg, launch, starts)
+    order, metas, rounds, state = (
+        seen["order"],
+        seen["metas"],
+        seen["rounds"],
+        seen["state"],
+    )
+    result, messages = seen["result"], seen["messages"]
+    owned = owner_turns(cell, order, seen["plan"], metas, launch)
     owner_launch(cell, launch, rounds, metas)
     replies_bound(order, starts, rounds, owned, metas, state["submit"])
     reward = stock_reward(
-        trial, result, messages, state["submit"], world, order[0], target
+        trial, result, messages, state["submit"], row["world"], order[0], target
     )
     reason = incomplete_reason(
-        launch, result, order, metas, raised, rounds, state, reward, owned
+        launch, result, order, metas, seen["raised"], rounds, state, reward, owned
     )
-    finish_row(row, tag, reason, reward, order, rounds, state, owned)
+    if row["arm"] in protocol.TIMING_ARMS:
+        row["timing"] = fanout_timing(result, messages, rounds, state)
+        if reason is None and None in row["timing"].values():
+            reason = "native_timestamp_missing"
+    finish_row(row, row["tag"], reason, reward, order, rounds, state, owned)
 
 
 def finish_row(
@@ -1236,10 +1416,14 @@ def main(argv: list[str] | None = None) -> int:
         allow_abbrev=False,
     )
     parser.add_argument("cell", type=Path)
-    parser.add_argument("--world", type=int, required=True, choices=WORLDS)
-    parser.add_argument("--arm", required=True, choices=protocol.ARMS)
+    parser.add_argument("--world", type=int, required=True)
+    parser.add_argument(
+        "--arm", required=True, choices=(*protocol.ARMS, *protocol.TIMING_ARMS)
+    )
     parser.add_argument("--tag", required=True, choices=TAGS)
     args = parser.parse_args(argv)
+    if not admitted(args.world, args.arm):
+        parser.error("world_arm_pairing")
     try:
         cell = args.cell.resolve(strict=True)
         row = audit(cell, args.world, args.arm, args.tag)

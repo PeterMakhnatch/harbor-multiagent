@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -44,6 +45,8 @@ SETTINGS = {
     "toolPermission": "strict",
     "permissions": {"deny": DENY},
 }
+ADMISSION_SCHEMA = "seatlab.subscription-admission/v1"
+NOTE_CREATE = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
 
 
 def sha(text: str) -> str:
@@ -62,15 +65,27 @@ def require(test: bool, why: str) -> None:
         raise ValueError(why)
 
 
-def check_personal(cwd: Path, options: list[str], env: dict[str, str]) -> None:
+class Refused(ValueError):
+    pass
+
+
+def refuse(test: bool, why: str) -> None:
+    if not test:
+        raise Refused(why)
+
+
+def check_personal(
+    cwd: Path, options: list[str], env: dict[str, str], stages: list[str]
+) -> None:
     settings = Path(env["HOME"]) / ".gemini" / "antigravity-cli" / "settings.json"
     existing = (
         json.loads(settings.read_text(encoding="utf-8")) if settings.is_file() else {}
     )
-    require(
+    refuse(
         not existing.get("modelProvider") and not existing.get("gcp"),
         "not a personal subscription route",
     )
+    stages.append("version")
     version = subprocess.run(
         [options[0], "--version"],
         cwd=cwd,
@@ -80,11 +95,12 @@ def check_personal(cwd: Path, options: list[str], env: dict[str, str]) -> None:
         timeout=4,
         check=True,
     )
-    require(
+    refuse(
         (version.stdout or version.stderr).strip() == VERSION.encode(),
         "unverified CLI version",
     )
     for query in ("/credits", "/quota"):
+        stages.append(query[1:])
         result = subprocess.run(
             [*options, "--output-format", "json", "-p", query],
             cwd=cwd,
@@ -101,9 +117,9 @@ def check_personal(cwd: Path, options: list[str], env: dict[str, str]) -> None:
         )
         data = report["command"]["data"]
         if query == "/credits":
-            require(
-                report["command"]["name"] == "credits"
-                and data["remaining_credits"] == 0,
+            require(report["command"]["name"] == "credits", "no credits report")
+            refuse(
+                data["remaining_credits"] == 0,
                 "this adapter requires zero spendable AI credits",
             )
         else:
@@ -113,13 +129,81 @@ def check_personal(cwd: Path, options: list[str], env: dict[str, str]) -> None:
                 "missing Gemini subscription group",
             )
             buckets = {b["name"]: b["remaining_fraction"] for b in groups[0]["buckets"]}
-            require(
-                all(
-                    type(buckets.get(b)) in (int, float) and 0.10 < buckets[b] <= 1.0
-                    for b in ("Weekly Limit Remaining", "Five Hour Limit Remaining")
-                ),
-                "quota floor or unknown quota",
-            )
+            limits: list[float] = []
+            for name in ("Weekly Limit Remaining", "Five Hour Limit Remaining"):
+                value = buckets.get(name)
+                if (
+                    not isinstance(value, (float, int))
+                    or isinstance(value, bool)
+                    or not value <= 1.0
+                ):
+                    raise ValueError("unknown quota")
+                limits.append(value)
+            refuse(all(v > 0.10 for v in limits), "quota floor")
+
+
+def admission(stage: str, error: Exception | None) -> bytes:
+    if error is None:
+        outcome, cause = "passed", "none"
+    elif isinstance(error, Refused):
+        outcome, cause = "refused", "denied"
+    elif isinstance(error, subprocess.TimeoutExpired):
+        outcome, cause = "unavailable", "timeout"
+    elif isinstance(error, subprocess.CalledProcessError):
+        outcome, cause = "unavailable", "exit"
+    elif isinstance(error, OSError):
+        outcome, cause = "unavailable", "io"
+    else:
+        outcome, cause = "unavailable", "report"
+    note = {
+        "schema": ADMISSION_SCHEMA,
+        "outcome": outcome,
+        "stage": stage,
+        "cause": cause,
+    }
+    return json.dumps(note, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+
+
+def note_target(note: Path, record: Path) -> Path:
+    require(
+        note.is_absolute()
+        and note.suffix == ".json"
+        and note.parent.resolve(strict=True) == note.parent
+        and not note.is_relative_to(record.absolute())
+        and not os.path.lexists(note),
+        "admission note path",
+    )
+    info = note.parent.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == os.geteuid()
+        and stat.S_IMODE(info.st_mode) == 0o700,
+        "admission note directory",
+    )
+    return note
+
+
+def write_note(note: Path | None, data: bytes) -> None:
+    if note is None:
+        return
+    fd = os.open(note, NOTE_CREATE, 0o400)
+    try:
+        require(os.write(fd, data) == len(data), "admission note write")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def preflight(
+    cwd: Path, options: list[str], env: dict[str, str], note: Path | None
+) -> None:
+    stages = ["route"]
+    try:
+        check_personal(cwd, options, env, stages)
+    except Exception as error:
+        write_note(note, admission(stages[-1], error))
+        raise
+    write_note(note, admission("complete", None))
 
 
 def parse_stream(raw: bytes) -> tuple[str, dict[str, Any]]:
@@ -186,7 +270,9 @@ def parse_stream(raw: bytes) -> tuple[str, dict[str, Any]]:
     }
 
 
-def answer(exe: Path, record: Path, prompt: str) -> str:
+def answer(exe: Path, record: Path, prompt: str, note: Path | None = None) -> str:
+    if note is not None:
+        note = note_target(note, record)
     require(
         exe.is_absolute() and exe.is_file() and os.access(exe, os.X_OK),
         "missing trusted CLI",
@@ -203,7 +289,7 @@ def answer(exe: Path, record: Path, prompt: str) -> str:
     ]
     with tempfile.TemporaryDirectory(prefix="seatlab-agy-") as workspace:
         cwd = Path(workspace)
-        check_personal(cwd, options, env)
+        preflight(cwd, options, env, note)
         (record / "request.json").write_bytes(
             line({"schema": "seatlab.seat-turn/v1", "prompt": prompt})
         )
@@ -258,6 +344,11 @@ def main() -> int:
         required=True,
         help="New private directory for this first attempt",
     )
+    parser.add_argument(
+        "--admission-note",
+        type=Path,
+        help="New file for the fixed-enum preflight outcome",
+    )
     args = parser.parse_args()
     try:
         raw = sys.stdin.buffer.read(65537)
@@ -274,7 +365,7 @@ def main() -> int:
             and bool(packet["prompt"]),
             "invalid turn",
         )
-        text = answer(args.agy, args.record, packet["prompt"])
+        text = answer(args.agy, args.record, packet["prompt"], args.admission_note)
         sys.stdout.buffer.write(line({"text": text}))
         return 0
     except (
