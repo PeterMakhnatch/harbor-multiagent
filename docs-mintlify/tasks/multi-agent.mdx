@@ -60,11 +60,12 @@ timeout_sec = 120.0
 under_test = false
 ```
 
-Each `[agents.<service>]` table takes two optional keys:
+Each `[agents.<service>]` table takes three optional keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `under_test` | `true` | The run lasts until every agent under test has ended. Agents with `under_test = false` are supporting agents: they never hold the run open, and Harbor cancels them when it ends. Scoring is unaffected. |
+| `kill_leftovers` | `true` | When the run ends, Harbor kills every process in this agent's container except the service's own, including processes that the agent left behind under PID 1. Set it to `false` when the verifier needs a process the agent left running. See [When the run ends](#when-the-run-ends). |
 | `mcp_servers` | `[]` | MCP servers for this agent only, declared as `[[agents.<service>.mcp_servers]]` with the same fields as [`[[environment.mcp_servers]]`](/tasks/environment#mcps). They are added to the task-wide list for that agent. |
 
 At least one agent must be under test. In the example, p1 is under test and p2 supports it, so the run ends when p1 ends.
@@ -212,12 +213,30 @@ harbor run -c examples/configs/features/seats-job.yaml
 3. Harbor installs every agent into its container at the same time. Each install has its own agent setup timeout. If any install fails, the trial fails before any agent runs.
 4. All agents start together, each with its own instruction.
 5. The run ends when every agent under test has ended, or when the agent timeout runs out.
-6. Harbor cancels the agents still running, as it does for a single agent at its timeout, and kills every process an exec started in their containers, so a stopped agent cannot act during collection and verification. Each container's own processes, under its PID 1, keep running, and the containers stay up.
+6. Harbor cancels the agents still running, as it does for a single agent at its timeout. Then it kills what every agent left running in its container; see [When the run ends](#when-the-run-ends). The containers stay up.
 7. Harbor copies each agent's `/logs/agent` to `seats/<service>/agent/` in the trial folder, and records its trajectory, token usage and cost as it does for a single agent. It does this for every agent, under test or not.
 8. Harbor collects the task's artifacts.
 9. When verification is enabled, Harbor copies the trial's `seats/` folder into `main` at `/logs/seats/`.
 10. The verifier runs once, in `main`, with every container still up.
 11. Harbor stops the project.
+
+### When the run ends
+
+Cancelling an agent ends Harbor's side of its run. Its harness can keep running in its container, and so can anything an agent started and left behind, including an agent that ended before the run did. A process that detached with `setsid`, `nohup` or a double fork is reparented to the container's PID 1. Any of these can act on the environment while Harbor collects logs and artifacts and while the verifier runs, and the verifier then counts it.
+
+So when the run ends, Harbor stops every agent's container, whether or not its agent was still running:
+
+1. Before it installs an agent, Harbor records the processes that the container already runs, by PID and start time: PID 1 (the init process with `init: true`) and the service's command, such as `sleep infinity`.
+2. When the run ends, Harbor runs one command in the container as root. It kills (`SIGKILL`) every process except PID 1, the recorded processes and their descendants, and its own process. That includes what an exec started and what was reparented to PID 1. It repeats until no such process is left, at most 50 times.
+3. The same command then lists those processes again. The list must be empty. Harbor records the result in the agent's `end_of_play` in `result.json`.
+
+The containers stay up, so Harbor still copies files out of them and runs commands in them. Harbor kills the containers of all agents at the same time, after it has cancelled the agents still running; on local Docker this takes a fraction of a second.
+
+- If the kill fails, or a process is still alive after it, Harbor logs a warning and records a `SeatEndOfPlayError` in that agent's `end_of_play`. Like an agent's error, it goes through the error policy (see [Error classification](/jobs/error-classification)): by default the trial is verified, but its reward is not valid (`reward_valid` is false), because a process that was not stopped could act after the run. Set `override_error_policy` for `SeatEndOfPlayError` to change that.
+- A process that a recorded process starts later, for example a worker of the service's own server, is not killed. A process that a recorded process starts and that then detaches to PID 1 is killed.
+- A zombie process is not counted: it cannot act. Without `init: true`, PID 1 does not reap zombies, so they stay in the container.
+- Set `kill_leftovers = false` on an agent when the verifier needs a process that the agent left running, for example a server it started as its deliverable. For that agent, Harbor kills only the processes that an exec started, and only when the agent was still running when the run ended. A process reparented to PID 1, and every process of an agent that ended before the run, keep running.
+- The kill guarantees nothing against an agent that is root in its container, or can become root: such an agent can replace the shell that Harbor runs as root, or hide a process from it.
 
 ### When an agent fails
 
@@ -226,7 +245,7 @@ harbor run -c examples/configs/features/seats-job.yaml
 - An error a cancelled agent raises while it stops is logged, not recorded.
 - After the run, the trial is verified unless an agent's error has an error policy that skips grading, as for a single-agent trial.
 
-The trial's `exception_info` is the first agent error, in `[agents.<service>]` order and supporting agents included, whose policy skips grading, or else the first agent error. Its message starts with the service name, for example `Seat 'p2': ...`. If the verifier or the trial itself then fails, that error replaces it; every agent's own error stays in `seat_results`.
+The trial's `exception_info` is the first agent error, in `[agents.<service>]` order and supporting agents included, whose policy skips grading, or else the first agent error. An error from the end of the run (`SeatEndOfPlayError`) counts after every agent error. Its message starts with the service name, for example `Seat 'p2': ...`. If the verifier or the trial itself then fails, that error replaces it; every agent's own error stays in `seat_results`.
 
 ## The verifier
 
@@ -257,7 +276,8 @@ The job summary reports each key.
   - `agent_info` is the first agent under test.
   - `agent_setup` and `agent_execution` span all agents.
   - Token totals sum every agent. The cost total sums every agent, and is unknown (`null`) when an agent that ran a model reported no cost. An agent without a model, such as `oracle` or `nop`, costs nothing.
-  - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
+  - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution`, `end_of_play` and `exception_info`.
+  - `end_of_play` records how the agent's container was stopped when the run ended: when the kill finished (`finished_at`), how many processes it killed (`killed`), and the PIDs still alive after it (`left`, empty when the container stopped). Its `exception_info` is a `SeatEndOfPlayError` when the kill failed or left a process alive. `killed` and `left` are `null` for an agent with `kill_leftovers = false`, and `end_of_play` is `null` when such an agent was not stopped.
 
 ## Limitations
 
