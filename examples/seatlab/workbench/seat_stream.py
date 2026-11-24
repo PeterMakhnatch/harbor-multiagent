@@ -343,8 +343,17 @@ def build(path: str, result: str | None = None) -> Record:
     return report
 
 
+def read_journal_bytes(path: str) -> bytes:
+    return _read(path, MAX_BYTES, "journal")
+
+
 def _journal(path: str) -> Record:
-    data = _read(path, MAX_BYTES, "journal")
+    return decode_snapshot(read_journal_bytes(path))
+
+
+def decode_snapshot(data: bytes) -> Record:
+    _require(type(data) is bytes, "journal snapshot is not bytes")
+    _require(len(data) <= MAX_BYTES, f"journal exceeds {MAX_BYTES // MIB} MiB")
     _require(data.count(b"\n") <= MAX_ROWS, "journal exceeds 514 rows")
     *complete, tail = data.split(b"\n")
     partial = tail != b""
