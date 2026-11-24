@@ -165,9 +165,10 @@ from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
 
 ### io1: order or instruction (row 2, ready to run)
 
-Pre-registered in PROBE.md section 14 (commit 8b8d9818); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and
-`io1s` (`--read-first --post-trigger first_submit`), built from `rf1v`'s seed with the commands in section 14
-(qa: 0 FAIL); plans `flotilla/plans/io1smoke.json` (24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.60).
+Pre-registered in PROBE.md section 14 (commit a542223d, with the amendments made after a review and before any
+trial); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and `io1s` (`--read-first --post-trigger first_submit`),
+built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `flotilla/plans/io1smoke.json`
+(24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.90; expected cost $0.55-0.62).
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
@@ -183,7 +184,9 @@ python3 flotilla/docs/results/scripts/io1_decide.py --plan flotilla/plans/io1.js
 ```
 
 The `rf1v` analysis JSON comes from `probe_analysis.py ... 'rf1-*' --tasks .flotilla-local/tasks/rf1v --plan
-flotilla/plans/rf1.json`; a copy is in `.flotilla-local/cards/2026-11-24/analysis/`.
+flotilla/plans/rf1.json`; a copy is in `.flotilla-local/cards/2026-11-24/analysis/`. With `--plan io1.json` the
+`missing` list of each per-set run names every cell twice (both sets share instances and arms) and counts the
+other set's trials as unmapped; `io1_decide.py` does not read it and marks a short test INCOMPLETE itself.
 
 ### Trust card
 

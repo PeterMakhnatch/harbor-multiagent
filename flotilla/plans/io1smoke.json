@@ -1,7 +1,7 @@
 {
  "name": "io1smoke",
  "prereg": {
-  "commit": "8b8d9818a9c9b4d5398fca5bba20490de1150fcd",
+  "commit": "a542223d4f408a6cd4f354e0f8048cdd8ff73ce7",
   "doc": "flotilla/docs/PROBE.md",
   "section": "## 14. Pre-registration: order or instruction, pilot io1 (written 2026-11-24, after the first-contact analysis, before any `--inbox` or late-post trial)"
  },
