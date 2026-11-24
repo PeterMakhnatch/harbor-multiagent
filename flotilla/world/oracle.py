@@ -155,12 +155,14 @@ def post(path: str, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def submit_through_gate(answer: dict[str, Any], attempts: int = 5) -> dict[str, Any]:
-    """Submit; a 409 that shows unread messages (the submit gate) has delivered them, so submit again."""
+    """Submit; a 409 that shows unread messages (the submit gate) has delivered them: read /messages, as a seat
+    that takes the messages in would, then submit again."""
     reply: dict[str, Any] = {}
     for _attempt in range(attempts):
         reply = post("/submit", {"answer": answer})
         if reply.get("status") != 409 or not (reply.get("reply") or {}).get("messages"):
             break
+        call("GET", "/messages")
     return reply
 
 

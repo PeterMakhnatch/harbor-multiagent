@@ -10,14 +10,12 @@ import itertools
 import json
 import subprocess
 import sys
-import time
 import tomllib
 
 import pytest
 from conftest import FLOTILLA, family, load
 from test_build_tasks import by_task, compose_services
 from test_probe import (
-    SCALE,
     SEATS,
     SEED,
     _finish,
@@ -97,10 +95,11 @@ def test_generation_is_deterministic_and_one_workers_slip_gives_a_plausible_wron
         hidden = {correct, wrong, *reported}
         assert not hidden & PROBE.numbers_in("\n".join((shown, *PROBE.seat_files(inst).values())))
         slots = probe["slots"]
-        times = [slot["at_s"] for slot in slots]
+        offsets = [slot["before_s"] for slot in slots]
         assert sorted(slot["seat"] for slot in slots) == WORKERS and len({slot["template"] for slot in slots}) == 3
-        assert times == sorted(times) and PROBE.POST_WINDOW[0] <= times[0] and times[-1] <= PROBE.POST_WINDOW[1]
-        assert all(b - a >= PROBE.MIN_GAP for a, b in itertools.pairwise(times))
+        assert offsets == sorted(offsets, reverse=True)
+        assert PROBE.OFFSET_WINDOW[0] <= offsets[-1] and offsets[0] <= PROBE.OFFSET_WINDOW[1]
+        assert all(a - b >= PROBE.MIN_GAP for a, b in itertools.pairwise(offsets))
         false_seats.add(false_seat)
     assert false_seats == set(WORKERS)  # the false worker is drawn per instance
     assert VERIFY.generate(SEED, 0, 4, difficulty) != VERIFY.generate(SEED + 1, 0, 4, difficulty)
@@ -116,7 +115,7 @@ def test_the_arms_differ_only_in_the_false_workers_number():
             seat = slot["seat"]
             slipped = arm == "talk-false" and seat == probe["false_seat"]
             number = (probe["slips"] if slipped else probe["subtotals"])[seat]
-            assert plans[arm][seat] == [{"at_s": slot["at_s"], "to": "all",
+            assert plans[arm][seat] == [{"before_s": slot["before_s"], "to": "all",
                                          "text": slot["template"].format(n=number, month=probe["month_of"][seat])}]
             assert str(number) in plans[arm][seat][0]["text"] and probe["month_of"][seat] in plans[arm][seat][0]["text"]
     differing = [seat for seat in WORKERS if plans["talk-honest"][seat] != plans["talk-false"][seat]]
@@ -179,7 +178,7 @@ def test_the_three_arms_build_with_every_months_file_and_one_subject_text(tmp_pa
             assert task_json["scheduled_posts"] == BUILD.scheduled_posts(plans)[0]
             assert len(task_json["scheduled_posts"]) == (0 if arm == "talk-quiet" else 3)
             assert (task_json["answer_key"], task_json["decoy"]) == ({"total": correct}, {"total": wrong})
-            assert task_json["world_version"] == 13 and task_json["scripted_seats"] == WORKERS
+            assert task_json["world_version"] == 14 and task_json["scripted_seats"] == WORKERS
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 
@@ -222,7 +221,7 @@ def test_qa_passes_the_arms_and_catches_wrong_posts_and_a_twin_difference(tmp_pa
 
 def _verify_task(inst: dict, arm: str, plans: dict) -> dict:
     return {"family": "probe", "variant": "verify", "instance": 0, "condition": arm, "seats": list(SEATS),
-            "world_version": 13, "answer_key": inst["answer_key"], "decoy": inst["decoy"],
+            "world_version": 14, "answer_key": inst["answer_key"], "decoy": inst["decoy"],
             "scripted_seats": inst["scripted_seats"], "probe": inst["probe"] | {"plans": plans}, "submit_gate": True,
             "scheduled_posts": BUILD.scheduled_posts(plans)[0]}
 
@@ -235,9 +234,7 @@ def test_oracle_play_of_each_arm_scores_the_subject_and_names_the_false_worker(t
     probe = inst["probe"]
     plans = PROBE.confederate_plans(inst, arm)
     posts, own_steps = BUILD.scheduled_posts(plans)
-    fast = [post | {"at_s": round(post["at_s"] * SCALE, 3)} for post in posts]
-    world = _scheduled_world(start_world, tmp_path, arm, fast)
-    time.sleep(0.5)  # every post is due before the seats start
+    world = _scheduled_world(start_world, tmp_path, arm, posts)
     solution = _solution(tmp_path)
     running = [_seat(solution, world, "p1", inst["private"]["p1"])]
     running += [_seat(solution, world, seat, {"script": "confederate", "plan": own_steps[seat]}) for seat in WORKERS]
@@ -254,7 +251,18 @@ def test_oracle_play_of_each_arm_scores_the_subject_and_names_the_false_worker(t
         "exposed_messages": 3 if posting else 0, "n_submissions": 1,
         "false_slot": probe["false_seat"] if arm == "talk-false" else None, "shard_of": probe["shard_of"]}
     messages = json.loads((tmp_path / "verifier" / "world-state.json").read_text())["messages"]
-    assert [(m["from"], m["text"], m["t"]) for m in messages] == [(p["from"], p["text"], p["at_s"]) for p in fast]
+    sends = [e for e in world.events() if e["kind"] == "send"]
+    assert [(m["from"], m["text"]) for m in messages] == [(p["from"], p["text"]) for p in posts]
+    assert [(m["t"], p["before_s"]) for m, p in zip(messages, posts)] == [
+        (e["data"]["at_s"], e["data"]["before_s"]) for e in sends]
+
+
+def test_the_subject_reads_that_each_worker_may_post_its_subtotal_in_every_arm():
+    inst = VERIFY.generate(SEED, 0, 4, "easy")
+    texts = {VERIFY.seat_instruction(inst, "p1", list(SEATS), arm, 4000, 200) for arm in ARMS}
+    assert len(texts) == 1
+    (text,) = texts
+    assert "and may post that subtotal to the team:" in text and "will post" not in text
 
 
 def test_the_verifier_sees_the_subject_adopt_the_false_total(tmp_path, start_world, monkeypatch):

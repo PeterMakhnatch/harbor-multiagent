@@ -82,11 +82,13 @@ def player_dockerfile(files: list[str]) -> str:
 
 def scheduled_posts(plans: dict[str, list[dict[str, Any]]]
                     ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """The posts of the confederates' plans, which the world makes on its own clock (task.json `scheduled_posts`,
-    world version 13; `at_s` is world time), and each confederate's other steps, which it plays itself."""
-    posts = sorted(({"from": seat, "to": step.get("to", "all"), "text": step["text"], "at_s": step["at_s"]}
+    """The posts of the confederates' plans, which the world makes itself (task.json `scheduled_posts`), in the order
+    it adds them, and each confederate's other steps, which it plays itself. A post step's timing is `before_s`
+    (world version 14: seconds before the first request of the seat under test) or `at_s` (version 13: world time)."""
+    key = "before_s" if any("before_s" in step for plan in plans.values() for step in plan) else "at_s"
+    posts = sorted(({"from": seat, "to": step.get("to", "all"), "text": step["text"], key: step[key]}
                     for seat, plan in sorted(plans.items()) for step in plan if "text" in step),
-                   key=lambda post: (post["at_s"], post["from"]))
+                   key=lambda post: (post[key] if key == "at_s" else -post[key], post["from"]))
     return posts, {seat: [step for step in plan if "text" not in step] for seat, plan in plans.items()}
 
 
@@ -452,8 +454,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         if difficulty not in family.SETTINGS:
             raise SystemExit(f"{family_name} has the regimes {sorted(family.SETTINGS)} (--difficulty), not {difficulty}")
         play_timeout = max(play_timeout, max(family.ROUNDS) * round_seconds + 120)  # the longest season fits
-    elif hasattr(family, "ARMS") and (unknown := [c for c in conditions if c not in family.ARMS]):
-        raise SystemExit(f"{family_name} has the arms {family.ARMS}, not {unknown}")
+    elif hasattr(family, "ARMS") and (unknown := [c for c in conditions
+                                                  if c not in (*family.ARMS, *getattr(family, "EXTRA_ARMS", ()))]):
+        raise SystemExit(f"{family_name} has the arms {(*family.ARMS, *getattr(family, 'EXTRA_ARMS', ()))}, "
+                         f"not {unknown}")
     if scripted and not hasattr(family, "generate_scripted"):
         raise SystemExit(f"{family_name} has no scripted variant (generate_scripted)")
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
@@ -627,8 +631,8 @@ def main() -> None:
                        "this build has the same instances; the seed stays out of the command and the output")
     parser.add_argument("--conditions", default=",".join(CONDITIONS),
                         help="default: solo,silent,talk, or the arms of a family that names its own (probe "
-                        "conformity: talk-quiet,talk-wrong,talk-dissent,talk-right; probe verify: "
-                        "talk-quiet,talk-honest,talk-false)")
+                        "conformity: talk-quiet,talk-wrong,talk-dissent,talk-right, and on request talk-one, "
+                        "talk-lead; probe verify: talk-quiet,talk-honest,talk-false)")
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: the tasks go "
                         "to <out>/<family>.<variant>/ and the analysis never pools them with another label; in "
@@ -675,7 +679,7 @@ def main() -> None:
     conditions = tuple(c for c in args.conditions.split(",") if c)
     if arms and path.parent == ROOT / "families" and args.conditions == ",".join(CONDITIONS):
         conditions = arms  # an answer family with arms of its own (probe)
-    known = set(CONDITION_TEXT) | set(arms)
+    known = set(CONDITION_TEXT) | set(arms) | set(getattr(module, "EXTRA_ARMS", ()))
     if unknown := [c for c in conditions if c not in known]:
         parser.error(f"unknown conditions {unknown}; known: {sorted(known)}")
     if args.scripted and args.conditions == ",".join(CONDITIONS):

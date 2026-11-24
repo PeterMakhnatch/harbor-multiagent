@@ -103,7 +103,8 @@ MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no
 DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
 DOCUMENTED_SEED = re.compile(r"(?<![A-Za-z0-9_])seed\W{0,3}(\d+)", re.IGNORECASE)  # --seed 1, seed 1, "seed": 1
 PROBE = load_module(ROOT / "families" / "probe.py", "flotilla_qa_probe")
-PROBE_KIND_ARMS: tuple[tuple[str, ...], ...] = tuple(PROBE.kind(name).ARMS for name in PROBE.KINDS)
+PROBE_KIND_ARMS: tuple[tuple[str, ...], ...] = tuple((*PROBE.kind(name).ARMS, *PROBE.kind(name).EXTRA_ARMS)
+                                                     for name in PROBE.KINDS)
 PROBE_ARMS: tuple[str, ...] = tuple(dict.fromkeys(arm for arms in PROBE_KIND_ARMS for arm in arms))
 TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"), ("talk", "gated"),
          *((arms[0], arm) for arms in PROBE_KIND_ARMS for arm in arms[1:]))  # each pair looks the same to a seat
