@@ -141,8 +141,9 @@ world version 14). Two more arms are built only when named (`--conditions`): `ta
 confederate posts its month's subtotal. Arms `talk-quiet` (no posts), `talk-honest` (every subtotal right) and
 `talk-false` (one drawn confederate posts its month's subtotal with the `void` rows counted).
 Kind `audit` (`--variant audit`, label `probe.audit`): the same months, but `p1` holds no file; it may audit one
-month with `POST /audit` (world version 15), which serves the month's CSV from task.json. Arms `talk-honest`,
-`talk-false` and `talk-false-tell` (the false confederate also says it added up every row of the category).
+month with `POST /audit` (world version 15; `?format=csv` gives the plain file from version 17), which serves the
+month's CSV from task.json. Arms `talk-honest`, `talk-false` and `talk-false-tell` (the false confederate also says
+it added up every row of the category).
 
 ## Tests
 

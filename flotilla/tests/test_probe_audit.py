@@ -6,6 +6,7 @@ world's /audit endpoint, the oracle play of each arm and the verifier's fields."
 from __future__ import annotations
 
 import csv
+import http.client
 import io
 import json
 import random
@@ -124,9 +125,12 @@ def test_the_subject_text_is_the_same_in_every_arm_and_offers_one_audit():
     texts = {AUDIT.seat_instruction(inst, "p1", list(SEATS), arm, 4000, 200) for arm in ARMS}
     assert len(texts) == 1
     (text,) = texts
-    first = probe["month_of"]["p2"]
     assert "You do not have the files. You may audit at most one month: `POST /audit` with " in text
-    assert f'-d \'{{"month": "{first}"}}\'' in text and "returns that month's file as CSV text" in text
+    assert ('`{"month": "<month name>"}`, where `<month name>` is one of the months above, returns that month\'s file '
+            "as CSV text in the `csv` field of a JSON reply (`POST /audit?format=csv` returns the file alone).") in text
+    assert "-d '{\"month\": \"<month name>\"}'" in text
+    for month in inst["audit"]["files"]:  # the example names no month: each month appears once, in the list
+        assert text.count(month) == 1, month
     for seat in WORKERS:
         assert f"- {seat}: {probe['month_of'][seat]}\n" in text
     assert "and may post that subtotal to the team:" in text
@@ -167,7 +171,7 @@ def test_the_three_arms_build_without_data_in_the_seat_image_and_with_the_worlds
             assert json.loads(services["p1"]["env"]["SEAT_BRIEFING"]) == inst["private"]["p1"]
             subject_texts.add((task / "instructions" / "p1.md").read_text())
             task_json = json.loads((task / "environment" / "task.json").read_text())
-            assert task_json["audit"] == inst["audit"] and task_json["world_version"] == 16
+            assert task_json["audit"] == inst["audit"] and task_json["world_version"] == 17
             assert (task_json["answer_key"], task_json["decoy"]) == ({"total": correct}, {"total": wrong})
             plans = PROBE.confederate_plans(inst, arm)
             assert task_json["probe"] == inst["probe"] | {"plans": plans}
@@ -236,7 +240,7 @@ def test_the_world_serves_one_audit_then_refuses_and_logs_every_attempt(tmp_path
     months = list(inst["audit"]["files"])
     world = _audit_world(start_world, tmp_path, inst)
     world.ordered = True
-    assert {"audit_budget": 1, "audit_months": 3, "world_version": 16}.items() <= world.events()[0]["data"].items()
+    assert {"audit_budget": 1, "audit_months": 3, "world_version": 17}.items() <= world.events()[0]["data"].items()
     assert world.seat("p1", "POST", "/audit", {"month": "Smarch"}) == (400, {
         "error": f'unknown month; send {{"month": "<month>"}} with one of: {", ".join(months)}'})
     assert world.seat("p1", "POST", "/audit", {"month": 7})[0] == 400
@@ -249,18 +253,47 @@ def test_the_world_serves_one_audit_then_refuses_and_logs_every_attempt(tmp_path
     assert world.seat("p1", "POST", "/audit", ["not", "an", "object"])[0] == 400
     audits = [(e["seat"], e["data"]) for e in world.events() if e["kind"] == "audit"]
     assert audits == [
-        ("p1", {"month": "Smarch", "ok": False, "status": 400, "left": 1}),
-        ("p1", {"month": "7", "ok": False, "status": 400, "left": 1}),
-        ("p2", {"month": months[0], "ok": False, "status": 403, "left": 0}),
-        ("p1", {"month": months[1], "ok": True, "status": 200, "left": 0}),
-        ("p1", {"month": months[2], "ok": False, "status": 403, "left": 0}),
-        ("p1", {"month": months[1], "ok": False, "status": 403, "left": 0})]
+        ("p1", {"month": "Smarch", "ok": False, "status": 400, "left": 1, "format": "json"}),
+        ("p1", {"month": "7", "ok": False, "status": 400, "left": 1, "format": "json"}),
+        ("p2", {"month": months[0], "ok": False, "status": 403, "left": 0, "format": "json"}),
+        ("p1", {"month": months[1], "ok": True, "status": 200, "left": 0, "format": "json"}),
+        ("p1", {"month": months[2], "ok": False, "status": 403, "left": 0, "format": "json"}),
+        ("p1", {"month": months[1], "ok": False, "status": 403, "left": 0, "format": "json"})]
     state = world.request("GET", "/admin/state", token=world.admin)[1]
     assert [(a["seat"], a["month"], a["ok"], a["attempts_before"]) for a in state["audits"]] == [
         ("p1", "Smarch", False, 0), ("p1", "7", False, 0), ("p2", months[0], False, 0), ("p1", months[1], True, 0),
         ("p1", months[2], False, 0), ("p1", months[1], False, 1)]
     world.request("POST", "/admin/freeze", token=world.admin)
     assert world.seat("p1", "POST", "/audit", {"month": months[0]}) == (409, {"error": "play has ended"})
+
+
+def test_format_csv_returns_the_same_file_as_plain_text_and_refusals_stay_json(tmp_path, start_world):
+    inst = AUDIT.generate(SEED, 0, 4, "easy")
+    months = list(inst["audit"]["files"])
+    world = _audit_world(start_world, tmp_path, inst)
+    world.ordered = True
+    token = world.tokens["p1"]
+    for query in ("?format=xml", "?format=csv&format=json"):
+        assert world.request("POST", f"/audit{query}", token=token, body={"month": months[0]})[:2] == (400, {
+            "error": "the format is json (the default) or csv: POST /audit?format=csv"})
+    assert world.request("POST", "/audit?format=csv", token=token, body={"month": "Smarch"})[0] == 400
+    connection = http.client.HTTPConnection("127.0.0.1", world.port, timeout=10)
+    try:
+        connection.request("POST", "/audit?format=csv", body=json.dumps({"month": months[2].lower()}),
+                           headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+        response = connection.getresponse()
+        text = response.read().decode()
+    finally:
+        connection.close()
+    assert (response.status, response.getheader("Content-Type")) == (200, "text/csv; charset=utf-8")
+    assert (response.getheader("X-Audit-Month"), response.getheader("X-Audits-Left")) == (months[2], "0")
+    assert text == inst["audit"]["files"][months[2]] and text.startswith(CSV_HEADER + "\n")
+    status, reply, headers = world.request("POST", "/audit?format=csv", token=token, body={"month": months[0]})
+    assert (status, reply, headers["Content-Type"]) == (403, {"error": "audit budget used"}, "application/json")
+    audits = [e["data"] for e in world.events() if e["kind"] == "audit"]
+    assert [(a["month"], a["ok"], a["format"]) for a in audits] == [
+        ("Smarch", False, "csv"), (months[2], True, "csv"), (months[0], False, "csv")]
+    assert [e["data"]["reason"] for e in world.events() if e["kind"] == "invalid"] == ["bad format"] * 2
 
 
 def test_a_first_audit_adds_the_scheduled_posts_and_the_gate_still_holds_the_submission(tmp_path, start_world):

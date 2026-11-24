@@ -165,6 +165,31 @@ def test_commit_time_arms_talk_push_and_talk_argue(capsys):
     assert "Errors equal to W per posting arm: talk-wrong" in text and "talk-argue 3/3 = 1.000" in text
 
 
+def test_a_two_arm_plan_with_talk_quiet_makes_the_other_arm_the_primary(capsys):
+    rows = []
+    for model, lost in (("m/a", 8), ("m/b", 0)):
+        for i in range(8):
+            rows += [row(model, "talk-quiet", i, True), row(model, "talk-argue", i, i >= lost)]
+    plan = {"name": "pa", "models": ["m/a", "m/b"], "scripted": None, "instances": set(range(8)),
+            "arms": {"talk-quiet", "talk-argue"}}
+    assert PA.primary_arms("conformity", plan) == ("talk-quiet", "talk-argue", True)
+    assert PA.primary_arms("verify", plan | {"arms": {"talk-quiet", "talk-false"}}) == (
+        "talk-quiet", "talk-false", False)
+    assert PA.primary_arms("conformity", plan | {"arms": {"talk-quiet", "talk-wrong", "talk-argue"}}) == (
+        "talk-quiet", "talk-wrong", False)
+    assert PA.primary_arms("conformity", plan | {"arms": {"talk-push", "talk-argue"}})[2] is False
+    assert PA.primary_arms("conformity", None) == ("talk-quiet", "talk-wrong", False)
+    found = by_model(PA.analyse(rows, plan=plan))
+    a, b = found["m/a"]["primary"], found["m/b"]["primary"]
+    assert (a["a"], a["b_arm"], a["pairs"], a["b"], a["c"], a["source"]) == ("talk-quiet", "talk-argue", 8, 8, 0, "plan")
+    assert a["p_holm"] == 2 * a["p"] and a["decision"] == "PASS" and (b["b"], b["decision"]) == (0, "FAIL")
+    assert found["m/a"]["exposed_primary"]["b_arm"] == "talk-wrong" and found["m/a"]["reversal"]["quiet_correct"] == 0
+    plain = by_model(PA.analyse(rows))["m/a"]["primary"]
+    assert (plain["b_arm"], plain["pairs"], "source" in plain) == ("talk-wrong", 0, False)
+    PA.report(PA.analyse(rows, plan=plan), [])
+    assert "Primary (the plan's two arms) talk-quiet vs talk-argue: 8 pairs, b = 8" in capsys.readouterr().out
+
+
 def test_wilson_and_sign_test():
     low, high = PA.wilson(0, 10)
     assert round(low, 9) == 0.0 and round(high, 4) == 0.2775
@@ -272,6 +297,20 @@ def test_posts_after_the_first_successful_audit():
                                                          ("p1", 30.0)))]}
     assert PA.posts_after_audit(state) == 2
     assert PA.posts_after_audit(state | {"audits": state["audits"][:1]}) is None and PA.posts_after_audit({}) is None
+
+
+def test_audit_month_names_the_first_audit_and_compares_it_with_an_old_builds_example(tmp_path):
+    spec = {"confederates": ["p2", "p3", "p4"], "month_of": {"p2": "May", "p3": "June", "p4": "July"}}
+    (tmp_path / "instructions").mkdir()
+    p1 = tmp_path / "instructions" / "p1.md"
+    p1.write_text("curl -s -X POST $WORLD_URL/audit -d '{\"month\": \"May\"}'\n")
+    assert PA.audit_month({"audits": ["May", "June"]}, spec, tmp_path) == {"audit_month": "May",
+                                                                          "audit_month_example": True}
+    assert PA.audit_month({"audits": ["July"]}, spec, tmp_path)["audit_month_example"] is False
+    assert PA.audit_month({"audits": []}, spec, tmp_path) == {"audit_month": None, "audit_month_example": None}
+    p1.write_text("curl -s -X POST $WORLD_URL/audit -d '{\"month\": \"<month name>\"}'\n")
+    assert PA.audit_month({"audits": ["May"]}, spec, tmp_path) == {"audit_month": "May", "audit_month_example": None}
+    assert PA.audit_month({"audits": ["May"]}, spec, tmp_path / "missing")["audit_month_example"] is None
 
 
 def sections(printed):

@@ -75,7 +75,10 @@ from urllib.parse import parse_qs, urlsplit
 # world adds every post when a seat under test sends its first /submit with an answer object, before the submit gate
 # looks at it, so the gate refuses that submission (409) and shows the posts; each is dated `before_s` seconds
 # before that moment. Tasks with `at_s` or `before_s` posts work as before.
-WORLD_VERSION = 16
+# Version 17: POST /audit?format=csv returns a successful audit's file as `text/csv` (the month and the audits left in
+# the headers X-Audit-Month and X-Audits-Left); without `format` (or with format=json) the reply is version 15's JSON.
+# Refusals stay JSON. The `audit` event and the state's audit entries add `format`. Other format values get 400.
+WORLD_VERSION = 17
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -572,9 +575,11 @@ class World(BaseHTTPRequestHandler):
         self._handle("POST")
 
     def _reply(self, status: int, body: object, headers: dict[str, str] | None = None) -> None:
-        data = json.dumps(body).encode()
+        self._write(status, json.dumps(body).encode(), "application/json", headers)
+
+    def _write(self, status: int, data: bytes, content_type: str, headers: dict[str, str] | None = None) -> None:
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         for name, value in (headers or {}).items():
             self.send_header(name, value)
@@ -739,9 +744,15 @@ class World(BaseHTTPRequestHandler):
             self._reply(200, {"frozen": True})
 
     def _audit(self, seat: str, body: dict[str, Any]) -> None:
-        """Version 15: one month's file for a seat under test, within its budget. Callers checked the route, so the
-        task has `audit`."""
+        """Version 15: one month's file for a seat under test, within its budget; version 17: as plain CSV with
+        `?format=csv`. Callers checked the route, so the task has `audit`."""
         assert AUDIT is not None, "the /audit route exists only with an audit config"
+        formats = parse_qs(urlsplit(self.path).query).get("format", ["json"])
+        if len(formats) != 1 or formats[0] not in ("json", "csv"):
+            self._invalid(seat, "POST", "/audit", 400, "bad format",
+                          "the format is json (the default) or csv: POST /audit?format=csv")
+            return
+        csv_text = formats[0] == "csv"
         asked = body.get("month")
         names = {month.strip().casefold(): month for month in AUDIT["files"]}
         month = names.get(asked.strip().casefold()) if isinstance(asked, str) else None
@@ -770,9 +781,13 @@ class World(BaseHTTPRequestHandler):
             left = max(0, AUDIT["budget"] - used) if seat in AUDITORS else 0
             entry = {"seat": seat, "month": month if month is not None else str(asked)[:64], "t": now(),
                      "ok": status == 200, "status": status, "left": left,
-                     "attempts_before": STATE["submit_attempts"][seat]}
+                     "attempts_before": STATE["submit_attempts"][seat], "format": formats[0]}
             STATE["audits"].append(entry)
-            record("audit", seat, {key: entry[key] for key in ("month", "ok", "status", "left")})
+            record("audit", seat, {key: entry[key] for key in ("month", "ok", "status", "left", "format")})
+        if status == 200 and csv_text:
+            self._write(200, reply["csv"].encode(), "text/csv; charset=utf-8",
+                        {"X-Audit-Month": reply["month"], "X-Audits-Left": str(reply["audits_left"])})
+            return
         self._reply(status, reply)
 
     def _deny_messaging(self, seat: str) -> bool:

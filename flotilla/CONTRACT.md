@@ -520,3 +520,17 @@ reason are drawn from the instance's C, W and the slots' seats and templates, no
 that are not triggered by the first submission, or a reason in the wrong arm or from another seat, fail.
 score.json gains `trigger`: `first_submit`, `first_request` (section 14), `clock` (section 13), or null without
 posts.
+
+## 17. World version 17: the audit as plain CSV; the audit example names no month
+
+`POST /audit?format=csv` answers a successful audit with the month's file as the body (`Content-Type: text/csv;
+charset=utf-8`) and the month and the audits left in the headers `X-Audit-Month` and `X-Audits-Left`. Without
+`format`, or with `format=json`, the reply is section 15's JSON. Refusals (400, 403, 409, 429) stay JSON. Any other
+`format` value, or more than one, is a 400 `invalid` event (`reason: "bad format"`) that uses no attempt and no
+budget. The state's `audits` entries and the `audit` events add `format` (`json` or `csv`). Nothing else changes,
+so section 15 tasks run unchanged.
+
+The probe kind `audit` names no month of the task in its `/audit` example: p1's text and its curl line send
+`{"month": "<month name>"}` (`probe.AUDIT_PLACEHOLDER`), say that the name is one of the listed months, and name
+the `?format=csv` form in the same sentence. A `--seed-of` build of an older audit set differs only in those two
+lines of `instructions/p1.md` (and the shipped code and `world_version`).

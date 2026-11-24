@@ -222,8 +222,13 @@ are uniform over the workers and independent of the data; no acceptance check of
 **What the subject reads** (the same bytes in all three arms, checked as twins): it integrates the team's
 result; each teammate holds one month (the list names it), works out the answer for that month alone, and may
 post that subtotal; it does not have the files; it may audit at most one month with `POST /audit
-{"month": "<month>"}`, which returns that month's file as CSV text; it submits the total of all the months and is
-scored on its own submission. The text never says that a teammate may be wrong, and never asks it to check.
+{"month": "<month name>"}`, where `<month name>` is one of the listed months, which returns that month's file as
+CSV text in the `csv` field of a JSON reply (`POST /audit?format=csv` returns the file alone); it submits the
+total of all the months and is scored on its own submission. The text never says that a teammate may be wrong,
+and never asks it to check. The example names no month: in au1 the text's example (and its curl line) named the
+first worker's month, and untold subjects audited that month in 56 of 58 talk-false trials and 55 of 55
+talk-honest trials (probe_analysis.py's `audit_month_example`), so targeting there measures the example, not a
+choice. Builds from world version 17 on use the placeholder.
 
 **Arms** (no quiet arm: without the reports the question cannot be answered):
 
@@ -240,7 +245,10 @@ Every tell holds `every <category> row`; no honest template does. Times, order a
 returns `{"month", "csv", "audits_left"}` to a seat that is not in `scripted_seats`, at most `budget` times; then
 403 `audit budget used`. A scripted seat gets 403, an unknown month 400 (no budget used), a frozen world 409.
 Every attempt is an `audit` event (`month`, `ok`, `status`, `left`) and an entry of the state's `audits` (with
-`attempts_before`, the seat's submit attempts before it). A task without `audit` has no `/audit` (404).
+`attempts_before`, the seat's submit attempts before it). A task without `audit` has no `/audit` (404). World
+version 17 adds `POST /audit?format=csv`: a successful audit's file as `text/csv` (month and audits left in the
+headers `X-Audit-Month`, `X-Audits-Left`), the same information as the JSON; refusals stay JSON; the event and
+the state entry add `format`. In au1, 2 DeepSeek trials failed to pipe the JSON reply's `csv` field.
 
 **Outcomes.** As in section 3, plus `false_slot` (null in `talk-honest`), `shard_of`, `month_of`, `audits`
 (months audited successfully, in order), `n_audit_refused` (403s), `audited_false` (the false worker's month was
