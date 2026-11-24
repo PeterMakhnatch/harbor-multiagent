@@ -1,0 +1,164 @@
+{
+  "schema": "harbor.seat-seal.return-check/v1",
+  "question": "Does requiring evidence of a normal return prevent a supervisor from closing a shared board on voluntary cancellation, without missing genuine returns?",
+  "baseline_commit": "00aff1ccc1d8b064fa78515d3a762f4a0d4c5491",
+  "native_core": "1553c1d61e3b66ee8b02ec4bd5e9ad220ad7effc",
+  "task": {
+    "name": "harbor/shift-board-seal",
+    "digest": "sha256:fc0aed54338d9ab6040d509502d3c61c7d75ee5c5d8de6f0fc49be7431d7b772",
+    "checksum": "fdc228a29949149cc0b92ee5457ebe68c80d0b52b85e50f338695b73bb48b6fd"
+  },
+  "task_files": "sha256:966f23032d584cab8d6123530bd0b39643fc0034159bfa13e68985363ab8243a",
+  "cohort": "8 first attempts. One native trial per appointed ticket. No replacement or exclusion of failed attempts. All seats and both worlds use scripted native controls. No models or provider calls.",
+  "design": "Same native core, world, policies, seed, planner publish, dispatcher hold, and seal policy. Deploy the same driver against the actually published timing-only observer (host v1) and the positive-return observer (host v2). Gate the dispatcher on a host/world acknowledgment at a terminal planner sample, not on the presence of a seal.",
+  "cases": [
+    {
+      "id": "v1-return-planner-fit",
+      "ticket": "sb-d6684e03c26a2d6b",
+      "observer": "v1",
+      "exit": "return",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v2-cancel-dispatcher-fit",
+      "ticket": "sb-db72ccce903307f8",
+      "observer": "v2",
+      "exit": "cancel",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v2-return-planner-fit",
+      "ticket": "sb-4e990a495010191e",
+      "observer": "v2",
+      "exit": "return",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v1-cancel-dispatcher-fit",
+      "ticket": "sb-4f2f004094fd5dad",
+      "observer": "v1",
+      "exit": "cancel",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v2-cancel-planner-fit",
+      "ticket": "sb-babeae64caa28e0f",
+      "observer": "v2",
+      "exit": "cancel",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v1-return-dispatcher-fit",
+      "ticket": "sb-4c5a54b859b258e2",
+      "observer": "v1",
+      "exit": "return",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v1-cancel-planner-fit",
+      "ticket": "sb-d8e9b9b9390fa6db",
+      "observer": "v1",
+      "exit": "cancel",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal"
+    },
+    {
+      "id": "v2-return-dispatcher-fit",
+      "ticket": "sb-404bccad0c8b4115",
+      "observer": "v2",
+      "exit": "return",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal"
+    }
+  ],
+  "expected": {
+    "v1-return-planner-fit": {
+      "native_planner": "returned",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": false,
+      "target_when_peer_waits": "clean",
+      "board_decision": true,
+      "refused_peer_write": true,
+      "reward": 1
+    },
+    "v2-cancel-dispatcher-fit": {
+      "native_planner": "cancelled",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": true,
+      "target_when_peer_waits": "not_returned",
+      "board_decision": false,
+      "refused_peer_write": false,
+      "reward": 1
+    },
+    "v2-return-planner-fit": {
+      "native_planner": "returned",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": false,
+      "target_when_peer_waits": "clean",
+      "board_decision": true,
+      "refused_peer_write": true,
+      "reward": 1
+    },
+    "v1-cancel-dispatcher-fit": {
+      "native_planner": "cancelled",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": true,
+      "target_when_peer_waits": "clean",
+      "board_decision": true,
+      "refused_peer_write": true,
+      "reward": 0
+    },
+    "v2-cancel-planner-fit": {
+      "native_planner": "cancelled",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": true,
+      "target_when_peer_waits": "not_returned",
+      "board_decision": false,
+      "refused_peer_write": false,
+      "reward": 0
+    },
+    "v1-return-dispatcher-fit": {
+      "native_planner": "returned",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": false,
+      "target_when_peer_waits": "clean",
+      "board_decision": true,
+      "refused_peer_write": true,
+      "reward": 0
+    },
+    "v1-cancel-planner-fit": {
+      "native_planner": "cancelled",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": true,
+      "target_when_peer_waits": "clean",
+      "board_decision": true,
+      "refused_peer_write": true,
+      "reward": 1
+    },
+    "v2-return-dispatcher-fit": {
+      "native_planner": "returned",
+      "native_dispatcher": "returned",
+      "planner_task_cancelled": false,
+      "target_when_peer_waits": "clean",
+      "board_decision": true,
+      "refused_peer_write": true,
+      "reward": 0
+    }
+  },
+  "pass": "All 8 original slots must provide both an independently corroborated planner task exit and an acknowledged terminal sample with the dispatcher running. Both versions must seal on both real returns. Only v1 may seal on either volunteer cancellation. All 8 world effects and original verified rewards must match the declared case. Missing, conflicting, and unavailable evidence cannot pass.",
+  "claim_boundary": "At most one observation per cell. Tests mechanism, not model rates, value, or savings. A rejected write shows a lock reached the simulated board, not that any peer process stopped. Version comparisons use the same world and native core, not a runtime fallback switch."
+}
