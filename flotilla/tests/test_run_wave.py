@@ -1176,10 +1176,13 @@ def test_one_model_failing_between_working_models_stops_the_wave(tmp_path, monke
     starts = [event["key"] for event in events if event["kind"] == "start"]
     assert starts == [cell["key"] for cell in order[:len(starts)]]
     assert sixth + 1 <= len(starts) <= sixth + concurrency < len(order)
-    line = f"stop: 6 invalid trials in a row for {bad} (last: boom; boom; boom); draining in-flight jobs"
-    assert line in (tmp_path / "wave" / "run" / "progress.log").read_text()
+    count = "6" if concurrency == 1 else "[67]"
+    stop = (rf"stop: {count} invalid trials in a row for {re.escape(bad)} "
+            r"\(last: boom; boom; boom\); draining in-flight jobs$")
+    assert re.search(stop, (tmp_path / "wave" / "run" / "progress.log").read_text(), re.MULTILINE)
     code, log = main_exit(tmp_path / "wave", path, monkeypatch)
-    assert code == 3 and line in log
+    assert code == 3 and re.search(stop, log, re.MULTILINE)
+    assert sixth + 1 <= len(re.findall(r" ET start wave-", log)) <= sixth + concurrency
 
 
 def test_one_failing_seat_assignment_row_stops_the_wave(tmp_path, monkeypatch):
