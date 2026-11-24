@@ -205,6 +205,19 @@ A job config takes the same `participants` list and uses it for every trial in t
 harbor run -c examples/configs/features/seats-job.yaml
 ```
 
+### Observe one seat from the host
+
+For a local trial, add `--seat-events` to `harbor trial start`. For a local job, select the observer plugin:
+
+```bash
+harbor run -c examples/configs/features/revised-dispatch-job.yaml \
+  --plugin harbor.cli.seat_events:SeatEventsJobPlugin
+```
+
+The host writes `seat-events.jsonl` in each new trial directory. Each journal starts with the native trial UUID and named roster. It records entry into play and the end of each seat. An explicit `returned` end differs from a harness stop, a cancellation, or an error. No end yet does not establish that a seat is still running. The journal contains no prompts, messages, or model output. A closed journal does not establish a successful grade.
+
+The plugin is not part of the job config. Pass it again on `harbor job resume --job-path JOB_DIR` to observe **new** attempts. It neither backfills completed trials nor changes their journals. Harbor can delete an earlier attempt directory when it retries. A retained journal describes one execution UUID, not the history of a logical trial. Job uploads at an `END` hook can precede the journal's final `closed` row. Read the local file after the job finishes when coverage matters.
+
 ## How a run works
 
 1. Harbor starts the Compose project and runs the task's healthcheck, as for any task.

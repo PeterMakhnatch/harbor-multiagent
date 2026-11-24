@@ -18,6 +18,8 @@ The first command shows `p2: returned` and `p1: entered_only`. The external host
 
 [Wait for one named seat](return-gate/results.md) if another workflow needs a return rather than a snapshot. The external wait distinguishes a harness stop from a return, even when both team grades equal 1.
 
+For native `harbor run` jobs, [install the CLI-only job observer](native-jobs/results.md). The batch reader keeps a missing trial in the registered count.
+
 ## Observe your own team
 
 Use a Harbor environment for **this fork and branch**. From the checkout, set `PYTHONPATH="$PWD:$PWD/src"` if you use the supplied participant class. The following example runs two scripted stock Oracle solutions on local Docker. It needs no provider credentials. Use a new trial directory, never an existing receipt.

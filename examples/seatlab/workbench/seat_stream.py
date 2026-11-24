@@ -254,9 +254,14 @@ def _report(
 
 
 def _result_roster(path: str) -> tuple[str, dict[str, tuple[bool, str | None]]]:
-    document = _strict_json(
-        _read(path, MAX_RESULT_BYTES, "result"), "result is not strict UTF-8 JSON"
+    return result_roster(
+        _strict_json(
+            _read(path, MAX_RESULT_BYTES, "result"), "result is not strict UTF-8 JSON"
+        )
     )
+
+
+def result_roster(document: Any) -> tuple[str, dict[str, tuple[bool, str | None]]]:
     _require(type(document) is dict, "result is not a JSON object")
     version = document.get("schema_version", 1)
     _require(type(version) is int and version == 1, "result schema_version is not 1")
@@ -306,6 +311,16 @@ def compare_result(report: Record, path: str) -> Record:
         "journal has no complete header to bind the result to",
     )
     trial, roster = _result_roster(path)
+    return compare_roster(report, trial, roster)
+
+
+def compare_roster(
+    report: Record, trial: str, roster: dict[str, tuple[bool, str | None]]
+) -> Record:
+    _require(
+        report["trial"] is not None,
+        "journal has no complete header to bind the result to",
+    )
     _require(
         trial == report["trial"], "result id does not match the journal header trial"
     )
