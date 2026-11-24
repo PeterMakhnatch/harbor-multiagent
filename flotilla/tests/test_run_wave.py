@@ -1175,6 +1175,7 @@ def test_one_model_failing_between_working_models_stops_the_wave(tmp_path, monke
     assert events[-1]["reason"] == "invalid"
     starts = [event["key"] for event in events if event["kind"] == "start"]
     assert starts == [cell["key"] for cell in order[:len(starts)]]
+    assert sorted(event["key"] for event in events if event["kind"] == "end") == sorted(starts)  # in-flight ones end
     assert sixth + 1 <= len(starts) <= sixth + concurrency < len(order)
     count = "6" if concurrency == 1 else "[67]"
     stop = (rf"stop: {count} invalid trials in a row for {re.escape(bad)} "
