@@ -300,7 +300,7 @@ def _relation(journal: str | None, result: str | None) -> str:
     return "agree" if journal == result else "conflict"
 
 
-def _compare(report: Record, path: str) -> Record:
+def compare_result(report: Record, path: str) -> Record:
     _require(
         report["trial"] is not None,
         "journal has no complete header to bind the result to",
@@ -339,7 +339,7 @@ def _compare(report: Record, path: str) -> Record:
 def build(path: str, result: str | None = None) -> Record:
     report = _journal(path)
     if result is not None:
-        report["result_comparison"] = _compare(report, result)
+        report["result_comparison"] = compare_result(report, result)
     return report
 
 

@@ -16,6 +16,8 @@ python3.12 -BS -m examples.seatlab.workbench.seat_stream \
 
 The first command shows `p2: returned` and `p1: entered_only`. The external host captured those 4 complete rows while the native CLI still ran. No `result.json` existed immediately before or after the copy. The second command adds the later result: both seats returned, but only `p2` had returned **in the prefix**. `entered_only` means no exit was recorded yet. It does not establish that a process was alive.
 
+[Wait for one named seat](return-gate/results.md) if another workflow needs a return rather than a snapshot. The external wait distinguishes a harness stop from a return, even when both team grades equal 1.
+
 ## Observe your own team
 
 Use a Harbor environment for **this fork and branch**. From the checkout, set `PYTHONPATH="$PWD:$PWD/src"` if you use the supplied participant class. The following example runs two scripted stock Oracle solutions on local Docker. It needs no provider credentials. Use a new trial directory, never an existing receipt.
@@ -29,6 +31,20 @@ PYTHONPATH="$PWD:$PWD/src" harbor trial start -c "$p/hello-support-return.yaml" 
 In another terminal in the same checkout, inspect `trials/observed-hello-team/seat-events.jsonl`. After the trial finishes, add `--result trials/observed-hello-team/result.json` to the snapshot command. A trial with its own task, participants or models uses the same CLI flag. The flag does not wrap, prompt, interrupt or issue commands to any participant. Without the flag, Harbor does not create this journal. The flag is not available for single-agent trials or `--init`.
 
 For a Python integration, open `with trial.seat_events() as stream:` before `await trial.run()`. Read the async iterator in another task. Leave the context before waiting for the iterator to finish. The `closed` row is written when the context exits, not when the first participant returns. Do not wait for `closed` inside a trial hook. Use the journal for additional independent readers; the in-process stream has one consumer.
+
+### Give each worker a native control
+
+List the fixed cases, then give each worker a case and its own fresh directory. The config printer does not allocate tickets, run Harbor or write files. Re-running a historical case creates a new trial; it never recovers the original first attempt.
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench.lifecycle_config list
+root=$(mktemp -d)
+python3.12 -BS -m examples.seatlab.workbench.lifecycle_config support-held \
+  --trials-dir "$root/trials" > "$root/config.json"
+PYTHONPATH="$PWD:$PWD/src" harbor trial start -c "$root/config.json" --seat-events
+```
+
+Omit `--seat-events` for `ship-default`. The other 9 configurations enable the observer at the CLI. The generated 10 config objects matched the corresponding actual inputs, including the stock shipping channel and prior state.
 
 ## Registered first attempts
 
@@ -61,5 +77,7 @@ During `support-return`, the host clock placed the `p2` end at 6.215 s from stre
 ### Evidence boundary
 
 `journals/` contains the original JSONL bytes from this study, plus the actual external prefix. `results/` contains **excerpts**, not entire native results. Each excerpt retains the UUID and native seat role/disposition fields. [Observations](observations.json) preserves native trial event names, grade validity, the reward, private file mode and fixed witness labels. For `hello-seats`, the wrappers mark their own actions in the host trial directory, outside all player and verifier mounts. Neither the wrapper nor the monitor reads the other to assign a disposition. Stock shipping used unmodified Oracle participants.
+
+To verify the complete cohort, run `python3.12 -BS -m examples.seatlab.workbench.seat_stream_cohort examples/seatlab/results/seat-event-stream`. A missing registered journal stays unknown. Exit 0 requires all 8 firsts and the separate external prefix claim.
 
 Registration commit: `480b9b4131e1d20d97451ad39201f9f99861eff2`. Native and participant source: `c8a5e69af50044ba191e62addb248f3fc45b428b`. Task Git trees: `hello-seats` `43928b740204e7b74a0794c275d9c188add25a67`; `ship-handover` `c09e2f59e06ac324e5d9f2dbdc74d4da423de08e`. These receipts show lifecycle behavior. They do not measure whether a supervisor should stop a live model team.
