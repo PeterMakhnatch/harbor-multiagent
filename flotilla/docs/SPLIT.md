@@ -962,3 +962,15 @@ $10 needed for all 6 plans). The order rule changes: lws runs now, while xm1, pv
 lwc start as soon as the smoke rule is applied, in parallel with the resumed waves. The order was a credit
 priority, not part of the design; running in parallel saves about 3 hours. Nothing else changes: the same plans,
 tasks, smoke rule, test and predictions. The resumed waves keep their own plans and caps.
+
+**Smoke result (7:25 PM ET, 6 trials, $0.06, all harness-valid).** Applied as registered:
+
+| Model | Seat-rounds missed | Gate refusals | Refused seat acted again in the same round | Rule |
+|---|---|---|---|---|
+| Claude Haiku 5.5 | 0 of 14 | 2 | 2 | pass |
+| gpt-6-luna | 0 of 8 | 4 | 4 | pass |
+| DeepSeek V4.1 Flash | 3 of 14 | 2 | 2 | fail (21% missed) |
+
+DeepSeek's 3 missed seat-rounds are 1 seat (p1 of `lws-772c44`, instance 33) that took no action in rounds 1 to 3;
+that trial had no gate refusal. By the rule, DeepSeek is dropped and lwc does not run. H1 is unchanged (Haiku and
+Luna). lw1 started at 7:25 PM ET.
