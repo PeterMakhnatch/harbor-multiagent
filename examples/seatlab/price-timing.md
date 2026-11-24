@@ -66,3 +66,7 @@ To check the business result, use the actual stock simulator. This command recon
 ```
 
 The public rows contain synthetic reports, choices and hashes. They do not authenticate a remote machine or a model provider. An owner with the original private directory can additionally verify the native result and client receipts with `inspect`.
+
+## Can the sales recommendation beat simply keeping prices?
+
+This **secondary diagnostic** was specified after the trials started, before inspecting their prices or profits. It cannot change the registered verdict. Rebuild each of the 8 companies and simulate all 3 prices from its day-90 checkpoint. Compare the reported prices with (1) always keeping prices and (2) the most profitable of the 3 prices in hindsight. Report ties as ties. For each complete pair, show what following sales exactly would have earned relative to keeping prices. A hindsight choice measures room to improve; it is not an available agent or a description of what sales knew. No new model sessions may answer this question. Never substitute a lookup from this diagnostic for a registered branch settlement.
