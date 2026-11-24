@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from . import run_panel
-from .capsule import view_hash
+from .capsule import encode_view, view_hash
 from .dispatch_native_return import checked_trial
 from .dispatch_opportunity import _WORLD_SOURCE, _checkout_world
 from .dispatch_order_pair import OrderPair, build_pair, report_bests
+from .dispatch_order_queue import assignments, dispatch_status, emit_wave, within_limits
 from .dispatch_order_repeat import allocate, equal_world_excess, score_repeats
 from .dispatch_order_score import score_pairs
 from .dispatch_returns import _latent_evidence
@@ -20,10 +21,12 @@ _MAX_WORLDS = 128
 _MAX_SHIPMENTS = 4096
 _MATERIAL = (
     "seatlab/capsule.py",
+    "seatlab/dispatch_issue.py",
     "seatlab/dispatch_native_return.py",
     "seatlab/dispatch_opportunity.py",
     "seatlab/dispatch_order.py",
     "seatlab/dispatch_order_pair.py",
+    "seatlab/dispatch_order_queue.py",
     "seatlab/dispatch_order_repeat.py",
     "seatlab/dispatch_order_score.py",
     "seatlab/dispatch_plan.py",
@@ -128,6 +131,11 @@ def _prepare(args: argparse.Namespace) -> tuple[dict[str, Any], list[OrderPair]]
         for case in p.cases:
             old, new = report_bests(case)
             different += old != new
+    message_sizes = [
+        len(encode_view(arm.messages))
+        for p in pairs
+        for arm in (p.chronological, p.reversed)
+    ]
     return {
         "schema": "seatlab.dispatch-order-panel/v1",
         "source": origin,
@@ -137,6 +145,11 @@ def _prepare(args: argparse.Namespace) -> tuple[dict[str, Any], list[OrderPair]]
         "different_recommendations": different,
         "draws_per_order": args.draws,
         "expected_first_replies": 2 * args.draws * len(pairs),
+        "canonical_message_bytes": {
+            "panel": args.draws * sum(message_sizes),
+            "minimum_request": min(message_sizes),
+            "maximum_request": max(message_sizes),
+        },
     }, pairs
 
 
@@ -160,7 +173,7 @@ def _add_source(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     modes = parser.add_subparsers(dest="mode", required=True)
     setup = modes.add_parser(
@@ -169,12 +182,20 @@ def main(argv: list[str] | None = None) -> int:
     emit = modes.add_parser(
         "emit", help="emit one counterbalanced worker wave", allow_abbrev=False
     )
+    claim = modes.add_parser(
+        "claim", help="reserve before emitting each worker request", allow_abbrev=False
+    )
+    status = modes.add_parser(
+        "status",
+        help="join local reservations with first replies without scoring a team",
+        allow_abbrev=False,
+    )
     score = modes.add_parser(
         "score",
         help="score first replies from separate, fresh receivers",
         allow_abbrev=False,
     )
-    for sub in (setup, emit, score):
+    for sub in (setup, emit, claim, status, score):
         _add_source(sub)
         sub.add_argument(
             "--draws",
@@ -183,19 +204,43 @@ def main(argv: list[str] | None = None) -> int:
             default=1,
             help="independent first replies per order; 2 adds same-prompt comparisons",
         )
-    for sub in (emit, score):
+    for sub in (emit, claim, status, score):
         sub.add_argument(
             "--panel-sha256", required=True, help="separately held digest from prepare"
         )
-    emit.add_argument("--wave", required=True, type=int, choices=range(4))
-    emit.add_argument("--shard", type=_shard, default=(0, 1), metavar="INDEX/COUNT")
-    score.add_argument(
-        "replies",
-        nargs="*",
-        type=Path,
-        help="first-reply JSONL files; use no files to show missing coverage",
+    for sub in (emit, claim):
+        sub.add_argument("--wave", required=True, type=int, choices=range(4))
+        sub.add_argument("--shard", type=_shard, default=(0, 1), metavar="INDEX/COUNT")
+    for sub in (claim, status):
+        sub.add_argument(
+            "--spool",
+            required=True,
+            type=Path,
+            help="one preexisting owner-only mode-0700 directory on a trusted local filesystem",
+        )
+    claim.add_argument(
+        "--max-requests",
+        type=int,
+        required=True,
+        help="ceiling for the whole registered panel, not this wave or shard",
     )
-    args = parser.parse_args(argv)
+    claim.add_argument(
+        "--max-input-bytes",
+        type=int,
+        help="optional ceiling on canonical message JSON bytes for the whole panel, not tokens",
+    )
+    for sub in (score, status):
+        sub.add_argument(
+            "replies",
+            nargs="*",
+            type=Path,
+            help="first-reply JSONL files; omit to show missing coverage",
+        )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
     try:
         plan, pairs = _prepare(args)
         if args.mode == "prepare":
@@ -205,31 +250,38 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(
                 "panel SHA-256 does not match the inputs and scoring protocol"
             )
-        if args.mode == "emit":
+        if args.mode in {"claim", "emit"}:
             if args.wave >= 2 * args.draws:
                 raise ValueError("this wave is not in the registered design")
-            slot, size = args.shard
-            for pair in pairs:
-                if pair.block % size == slot:
-                    arm = allocate(pair, args.wave)
-                    _print_json(
-                        {
-                            "id": arm.id,
-                            "prompt_sha256": arm.prompt_sha256,
-                            "messages": arm.messages,
-                        }
-                    )
+            if args.mode == "claim" and not within_limits(
+                plan, args.max_requests, args.max_input_bytes
+            ):
+                print(
+                    "Refused: the complete registered panel exceeds the supplied limit",
+                    file=sys.stderr,
+                )
+                return 1
+            emit_wave(
+                pairs,
+                args.wave,
+                args.shard,
+                args.spool if args.mode == "claim" else None,
+            )
             return 0
         if len(args.replies) > plan["expected_first_replies"]:
             raise ValueError("more first-reply files than requested replies")
-        assigned = (allocate(p, wave) for p in pairs for wave in range(2 * args.draws))
-        routes = {arm.id: arm for arm in assigned}
+        routes = {arm.id: arm for _, _, arm in assignments(pairs, args.draws)}
         try:
             replies = _read_replies(args.replies, routes)
         except (OSError, ValueError, RecursionError):
             raise ValueError(
                 "invalid worker file, duplicate subject or mismatched prompt digest"
             ) from None
+        if args.mode == "status":
+            report, code = dispatch_status(pairs, args.draws, args.spool, replies)
+            report.update(panel_sha256=plan["panel_sha256"])
+            _print_json(report)
+            return code
         if args.draws == 2:
             result = score_repeats(pairs, replies)
             result["equal_world_excess"] = equal_world_excess(result)
@@ -244,7 +296,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Unavailable: {exc}", file=sys.stderr)
         return 3
     except OSError:
-        print("Invalid input: a required local file cannot be read", file=sys.stderr)
+        print(
+            "Local I/O failure: could not read inputs or persist the worker handoff",
+            file=sys.stderr,
+        )
         return 2
     except (RuntimeError, ValueError) as exc:
         print(f"Invalid input: {exc}", file=sys.stderr)
