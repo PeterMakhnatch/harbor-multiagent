@@ -42,7 +42,7 @@ def _hidden(probe: dict) -> set[int]:
 
 
 def test_the_audit_kind_is_a_view_of_the_probe_family():
-    assert AUDIT.ARMS == ("talk-honest", "talk-false", "talk-false-tell") and AUDIT.EXTRA_ARMS == ()
+    assert AUDIT.ARMS == ("talk-honest", "talk-false", "talk-false-tell") and AUDIT.EXTRA_ARMS == PROBE.REPLY_ARMS
     assert (AUDIT.KIND, AUDIT.FAMILY, AUDIT.ORACLE_KEY, AUDIT.SUBMIT_GATE) == ("audit", "probe", True, True)
     assert AUDIT.generate is PROBE.generate_audit and PROBE.kind("audit-pilot").KIND == "audit"
     assert not getattr(PROBE.kind("verify"), "ORACLE_KEY", False) and not getattr(PROBE, "ORACLE_KEY", False)
@@ -171,7 +171,7 @@ def test_the_three_arms_build_without_data_in_the_seat_image_and_with_the_worlds
             assert json.loads(services["p1"]["env"]["SEAT_BRIEFING"]) == inst["private"]["p1"]
             subject_texts.add((task / "instructions" / "p1.md").read_text())
             task_json = json.loads((task / "environment" / "task.json").read_text())
-            assert task_json["audit"] == inst["audit"] and task_json["world_version"] == 19
+            assert task_json["audit"] == inst["audit"] and task_json["world_version"] == 20
             assert (task_json["answer_key"], task_json["decoy"]) == ({"total": correct}, {"total": wrong})
             plans = PROBE.confederate_plans(inst, arm)
             assert task_json["probe"] == inst["probe"] | {"plans": plans}
@@ -263,7 +263,7 @@ def test_the_world_serves_one_audit_then_refuses_and_logs_every_attempt(tmp_path
     months = list(inst["audit"]["files"])
     world = _audit_world(start_world, tmp_path, inst)
     world.ordered = True
-    assert {"audit_budget": 1, "audit_months": 3, "world_version": 19}.items() <= world.events()[0]["data"].items()
+    assert {"audit_budget": 1, "audit_months": 3, "world_version": 20}.items() <= world.events()[0]["data"].items()
     assert world.seat("p1", "POST", "/audit", {"month": "Smarch"}) == (400, {
         "error": f'unknown month; send {{"month": "<month>"}} with one of: {", ".join(months)}'})
     assert world.seat("p1", "POST", "/audit", {"month": 7})[0] == 400

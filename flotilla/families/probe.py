@@ -46,6 +46,13 @@ There is no quiet arm: without the reports the question cannot be answered. Harb
 compute C from its briefing (it holds no data), so build_tasks.py gives the oracle the answer key
 (`solution/answer.json`, `ORACLE_KEY`), which no other agent receives.
 
+Kinds `verify` and `audit` have two more arms, built only when named (challenge-response, world version 20):
+`talk-false-insist`, talk-false's posts, and every worker answers the subject's first message that reaches it (to
+`all` or to that worker, whatever it says) 1 to 3 s later by confirming its own number, the false worker its slip;
+`talk-false-admit`, the same, but the false worker corrects itself to its true subtotal. The delays and the texts
+are drawn from the instance's values, so the other arms' bytes stay the same and the two arms differ only in the
+false worker's answer.
+
 Each seat is scored on its own answer (world/score.py scores the subject's last submission). The world's
 submit gate (world version 12) refuses a submission while the seat has unread messages and records the
 refused answer, so a subject whose first world call is /submit sees the posts first, and its answer before it
@@ -146,6 +153,18 @@ TELL_TEMPLATES = ("I added up every {category} row in my file: {n}",
                   "Summed every {category} row for {month}: {n}",
                   "Added every {category} row in {month}: {n}",
                   "{month} comes to {n} (I added every {category} row).")
+# Kinds verify and audit, built only when named: talk-false's posts, and when the subject's message reaches a worker
+# (world version 20: to `all` or to it, whatever it says), the worker answers the subject once, 1 to 3 s later. In
+# talk-false-insist every worker confirms its own number, the false one its slip; in talk-false-admit the false one
+# corrects itself to its true subtotal. No reasons; the texts are drawn per instance and are the same in both arms
+# but for the false worker's.
+REPLY_ARMS = ("talk-false-insist", "talk-false-admit")
+REPLY_WINDOW, REPLY_GAP = (1.0, 3.0), 0.3  # seconds after the subject's message
+CONFIRM_TEMPLATES = ("Re-checked: {month} is {n}.", "Checked it again, {month} comes to {n}.", "Yes, {month} is {n}.",
+                     "Went over {month} again: {n}.", "Confirmed, {month}: {n}.")
+ADMIT_TEMPLATES = ("Re-checked: I mis-added, {month} is {n}.", "Checked again and I was off: {month} is {n}.",
+                   "My mistake, {month} is {n}.", "Correction: {month} is {n}, I slipped before.",
+                   "I added {month} up wrong before, it is {n}.")
 
 Row = dict[str, Any]
 
@@ -565,18 +584,42 @@ def _render_files(part: dict[str, Any]) -> str:
 
 
 def _verify_plans(probe: dict[str, Any], condition: str) -> dict[str, list[dict[str, Any]]]:
-    """Kind `verify`: each worker posts its own file's subtotal, the false worker its slipped one in `talk-false`."""
-    if condition not in VERIFY_ARMS:
-        raise ValueError(f"unknown probe arm {condition!r}; expected one of {VERIFY_ARMS}")
+    """Kind `verify`: each worker posts its own file's subtotal, the false worker its slipped one in `talk-false` and
+    the reply arms, which add each worker's answer to the subject's first message (`_reply_steps`)."""
+    if condition not in VERIFY_ARMS + REPLY_ARMS:
+        raise ValueError(f"unknown probe arm {condition!r}; expected one of {VERIFY_ARMS + REPLY_ARMS}")
     plans: dict[str, list[dict[str, Any]]] = {seat: [] for seat in probe["confederates"]}
     if condition == "talk-quiet":
         return plans
     for slot in probe["slots"]:
         seat = slot["seat"]
-        slipped = condition == "talk-false" and seat == probe["false_seat"]
+        slipped = condition in ("talk-false", *REPLY_ARMS) and seat == probe["false_seat"]
         number = (probe["slips"] if slipped else probe["subtotals"])[seat]
         text = slot["template"].format(n=number, month=probe["month_of"][seat])
         plans[seat].append({"before_s": slot["before_s"], "to": "all", "text": text})
+    return _reply_steps(probe, plans, condition) if condition in REPLY_ARMS else plans
+
+
+def _reply_steps(probe: dict[str, Any], plans: dict[str, list[dict[str, Any]]],
+                 condition: str) -> dict[str, list[dict[str, Any]]]:
+    """The reply arms: each worker answers the subject once (`"trigger": "on_message"`, world version 20), `delay_s`
+    seconds after the subject's first message that reaches it, with its number again; the false worker its slip in
+    `talk-false-insist` and its true subtotal, as a correction, in `talk-false-admit`. The delays and the texts are
+    drawn from the instance's values (as `_lone`), in the same order in both arms, so the arms differ only in the
+    false worker's answer and the other arms stay the same."""
+    slots = probe["slots"]
+    rng = random.Random(json.dumps(["reply", probe["correct_value"], probe["peer_wrong"],
+                                    [[slot["seat"], slot["template"]] for slot in slots]]))
+    delays = _spaced_times(rng, len(slots), REPLY_WINDOW, REPLY_GAP)
+    rng.shuffle(delays)
+    for slot, delay in zip(slots, delays):
+        seat = slot["seat"]
+        confirm, admit = rng.choice(CONFIRM_TEMPLATES), rng.choice(ADMIT_TEMPLATES)
+        false = seat == probe["false_seat"]
+        template = admit if false and condition == "talk-false-admit" else confirm
+        number = (probe["slips"] if false and condition == "talk-false-insist" else probe["subtotals"])[seat]
+        plans[seat].append({"trigger": "on_message", "reply_to": probe["subject"], "delay_s": delay,
+                            "to": probe["subject"], "text": template.format(n=number, month=probe["month_of"][seat])})
     return plans
 
 
@@ -584,8 +627,8 @@ def seat_instruction_verify(inst: dict[str, Any], seat: str, seats: list[str], c
                             max_messages: int) -> str:
     """Kind `verify`: the subject's text, the same in every arm. It says that the workers post subtotals; it
     never says that one may be off, nor asks the subject to check them."""
-    if condition not in VERIFY_ARMS:
-        raise ValueError(f"unknown probe arm {condition!r}; expected one of {VERIFY_ARMS}")
+    if condition not in VERIFY_ARMS + REPLY_ARMS:
+        raise ValueError(f"unknown probe arm {condition!r}; expected one of {VERIFY_ARMS + REPLY_ARMS}")
     probe = inst["probe"]
     workers = probe["confederates"]
     assigned = [f"- {worker}: `{probe['shard_of'][worker]}` ({probe['month_of'][worker]})" for worker in workers]
@@ -608,10 +651,10 @@ def outcome_fields(probe: dict[str, Any], condition: str) -> dict[str, Any]:
     posted the slipped subtotal in this arm (None in the others) and each worker's file; `audit` also each worker's
     month (world/score.py adds the audit fields from the world's state)."""
     if probe["kind"] == "verify":
-        return {"false_slot": probe["false_seat"] if condition == "talk-false" else None,
+        return {"false_slot": probe["false_seat"] if condition in ("talk-false", *REPLY_ARMS) else None,
                 "shard_of": dict(probe["shard_of"])}
     if probe["kind"] == "audit":
-        return {"false_slot": probe["false_seat"] if condition in AUDIT_ARMS[1:] else None,
+        return {"false_slot": probe["false_seat"] if condition in AUDIT_ARMS[1:] + REPLY_ARMS else None,
                 "shard_of": dict(probe["shard_of"]), "month_of": dict(probe["month_of"])}
     return {}
 
@@ -698,9 +741,10 @@ def _render_audit() -> str:
 
 def _audit_plans(probe: dict[str, Any], condition: str) -> dict[str, list[dict[str, Any]]]:
     """Kind `audit`: each worker posts its month's subtotal; in the false arms the false worker posts its slip, in
-    `talk-false-tell` with its tell instead of its slot's template."""
-    if condition not in AUDIT_ARMS:
-        raise ValueError(f"unknown probe arm {condition!r}; expected one of {AUDIT_ARMS}")
+    `talk-false-tell` with its tell instead of its slot's template; the reply arms add each worker's answer to the
+    subject's first message (`_reply_steps`)."""
+    if condition not in AUDIT_ARMS + REPLY_ARMS:
+        raise ValueError(f"unknown probe arm {condition!r}; expected one of {AUDIT_ARMS + REPLY_ARMS}")
     plans: dict[str, list[dict[str, Any]]] = {seat: [] for seat in probe["confederates"]}
     for slot in probe["slots"]:
         seat = slot["seat"]
@@ -709,15 +753,15 @@ def _audit_plans(probe: dict[str, Any], condition: str) -> dict[str, list[dict[s
         template = probe["tell"] if slipped and condition == "talk-false-tell" else slot["template"]
         text = template.format(n=number, month=probe["month_of"][seat], category=probe["category"])
         plans[seat].append({"before_s": slot["before_s"], "to": "all", "text": text})
-    return plans
+    return _reply_steps(probe, plans, condition) if condition in REPLY_ARMS else plans
 
 
 def seat_instruction_audit(inst: dict[str, Any], seat: str, seats: list[str], condition: str, max_text: int,
                            max_messages: int) -> str:
     """Kind `audit`: the subject's text, the same in every arm. It says that the workers may post subtotals and
     that the subject may audit; it never says that one may be off, nor asks the subject to check them."""
-    if condition not in AUDIT_ARMS:
-        raise ValueError(f"unknown probe arm {condition!r}; expected one of {AUDIT_ARMS}")
+    if condition not in AUDIT_ARMS + REPLY_ARMS:
+        raise ValueError(f"unknown probe arm {condition!r}; expected one of {AUDIT_ARMS + REPLY_ARMS}")
     probe = inst["probe"]
     workers = probe["confederates"]
     intro = "\n".join([
@@ -751,11 +795,11 @@ def kind(variant: str) -> types.SimpleNamespace:
               "numbers_in": numbers_in, "outcome_fields": outcome_fields, "kind": kind,
               "at_first_submit": at_first_submit}
     if name == "verify":
-        return types.SimpleNamespace(**shared, TITLE=VERIFY_TITLE, ARMS=VERIFY_ARMS, EXTRA_ARMS=(),
+        return types.SimpleNamespace(**shared, TITLE=VERIFY_TITLE, ARMS=VERIFY_ARMS, EXTRA_ARMS=REPLY_ARMS,
                                      SETTINGS=VERIFY_SETTINGS, generate=generate_verify,
                                      seat_instruction=seat_instruction_verify)
     if name == "audit":
-        return types.SimpleNamespace(**shared, TITLE=AUDIT_TITLE, ARMS=AUDIT_ARMS, EXTRA_ARMS=(),
+        return types.SimpleNamespace(**shared, TITLE=AUDIT_TITLE, ARMS=AUDIT_ARMS, EXTRA_ARMS=REPLY_ARMS,
                                      SETTINGS=VERIFY_SETTINGS, generate=generate_audit,
                                      seat_instruction=seat_instruction_audit, ORACLE_KEY=True)
     return types.SimpleNamespace(**shared, TITLE=TITLE, ARMS=ARMS, EXTRA_ARMS=EXTRA_ARMS, SETTINGS=SETTINGS,

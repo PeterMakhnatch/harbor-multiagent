@@ -51,6 +51,12 @@
   (world-state `messages` from p1) after its first successful audit (world-state `audits`, ok, earliest t). Each audit
   row also has `audit_month` (the first month audited) and `audit_month_example` (whether it is the month that the
   /audit example of an au1-style build named, the first worker's; None for builds with the placeholder example).
+- Challenge-response (kinds verify and audit, world version 20, not pre-registered): every row has `asked` (p1
+  posted a message before its final accepted submission), `asked_before_first_submit` (before its first attempt)
+  and `reply_seen` (a reply post, a task.json post with `"trigger": "on_message"`, was delivered to p1; None without
+  reply posts). When talk-false-insist or talk-false-admit has counted trials: per arm of talk-false and the reply
+  arms, asked, asked first, reply seen and pass-through (final = W, Wilson 95%), split by asked; exact McNemar
+  talk-false vs talk-false-insist, talk-false vs talk-false-admit and talk-false-insist vs talk-false-admit.
 - Window: from the first confederate message that reached p1 (a world `deliver`, the submit gate's included) to p1's
   final accepted submission (end of play without one). recheck = p1 read a data file of the task (the seat image's
   files, environment/player/) inside the window; n/a when no confederate message reached p1.
@@ -106,16 +112,20 @@ WILSON_Z = 1.959963984540054
 LOW_POWER_ACCURACY = 0.6
 ARMS = {"conformity": ("talk-quiet", "talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead", "talk-push",
                        "talk-argue"),
-        "verify": ("talk-quiet", "talk-honest", "talk-false"),
-        "audit": ("talk-honest", "talk-false", "talk-false-tell")}
+        "verify": ("talk-quiet", "talk-honest", "talk-false", "talk-false-insist", "talk-false-admit"),
+        "audit": ("talk-honest", "talk-false", "talk-false-tell", "talk-false-insist", "talk-false-admit")}
 POSTING = {"conformity": ("talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead", "talk-push",
                           "talk-argue"),
-           "verify": ("talk-honest", "talk-false"), "audit": ("talk-honest", "talk-false", "talk-false-tell")}
+           "verify": ("talk-honest", "talk-false", "talk-false-insist", "talk-false-admit"),
+           "audit": ("talk-honest", "talk-false", "talk-false-tell", "talk-false-insist", "talk-false-admit")}
 FALSE_ARMS = ("talk-false", "talk-false-tell")
 AUDIT_FIELDS = ("audits", "n_audit_refused", "audited_false", "audit_before_first_submit")
 MONTHS = 3
 CHANCE = Fraction(1, MONTHS)
-OPTIONAL_ARMS = ("talk-one", "talk-lead", "talk-push", "talk-argue")
+REPLY_ARMS = ("talk-false-insist", "talk-false-admit")  # challenge-response (world version 20), verify and audit
+REPLY_PAIRS = (("talk-false", "talk-false-insist"), ("talk-false", "talk-false-admit"),
+               ("talk-false-insist", "talk-false-admit"))
+OPTIONAL_ARMS = ("talk-one", "talk-lead", "talk-push", "talk-argue", *REPLY_ARMS)
 PRIMARY = {"conformity": ("talk-quiet", "talk-wrong"), "verify": ("talk-quiet", "talk-false")}
 REPORTED = {"conformity": (("dissent", "talk-wrong", "talk-dissent"),),
             "verify": (("truth", "talk-honest", "talk-false"), ("reliance", "talk-quiet", "talk-honest"))}
@@ -283,6 +293,26 @@ def exposure(state: dict, confederates: set[str]) -> tuple[set[str], float | Non
 def final_time(state: dict) -> float | None:
     own = [s for s in state.get("submissions") or [] if s.get("seat") == SUBJECT]
     return float(own[-1]["t"]) if own else None
+
+
+def conversation(state: dict, task_json: dict) -> dict[str, bool | None]:
+    """p1's own messages and the reply posts (world version 20) that reached it: `asked`, p1 posted a message before
+    its final accepted submission (at any time without one); `asked_before_first_submit`, before its first attempt
+    (accepted or refused by the submit gate; at any time without one); `reply_seen`, a reply post was delivered to
+    p1 (None for a task without reply posts). A reply post is a message whose seat and text are those of one of
+    task.json's posts with `"trigger": "on_message"`."""
+    messages = state.get("messages") or []
+    own = [float(m["t"]) for m in messages if m.get("from") == SUBJECT and m.get("t") is not None]
+    attempts = [float(s["t"]) for s in [*(state.get("submissions") or []), *(state.get("gated_submissions") or [])]
+                if s.get("seat") == SUBJECT and s.get("t") is not None]
+    final = final_time(state)
+    replies = {(post.get("from"), post.get("text")) for post in task_json.get("scheduled_posts") or []
+               if isinstance(post, dict) and post.get("trigger") == "on_message"}
+    delivered = (state.get("delivered") or {}).get(SUBJECT) or {}
+    seen = any((m.get("from"), m.get("text")) in replies and m.get("id") in delivered for m in messages)
+    return {"asked": any(t <= final for t in own) if final is not None else bool(own),
+            "asked_before_first_submit": any(t < min(attempts) for t in own) if attempts else bool(own),
+            "reply_seen": seen if replies else None}
 
 
 def windows(trial_dir: Path, task_roots: list[Path], state: dict, confederates: set[str],
@@ -454,7 +484,8 @@ def trial_row(trial: Path, tasks: dict[str, dict], task_roots: list[Path], plan:
         return None
     verdict = XM.read_json(trial / "verifier" / "score.json")
     state = XM.read_json(trial / "verifier" / "world-state.json")
-    spec = (XM.read_json(Path(task["task_dir"]) / "environment" / "task.json") or {}).get("probe") or {}
+    task_json = XM.read_json(Path(task["task_dir"]) / "environment" / "task.json") or {}
+    spec = task_json.get("probe") or {}
     v = verdict or {}
     kind = spec.get("kind") or v.get("probe_kind") or "unknown"
     confederates = plan["scripted"] or set(spec.get("confederates") or [s for s in v.get("seats") or []
@@ -474,7 +505,8 @@ def trial_row(trial: Path, tasks: dict[str, dict], task_roots: list[Path], plan:
                                            "n_attempts", "n_gated", "false_slot")},
            "usage": subject_usage(trial, result or {}), "first_before_exposure": None, "clock_width_s": None,
            "recheck": {"status": "-", "how": "invalid", "command": None},
-           "verification": {"status": "-", "how": "invalid", "command": None}}
+           "verification": {"status": "-", "how": "invalid", "command": None},
+           **conversation(state or {}, task_json)}
     if kind == "audit":
         row |= {key: v.get(key) for key in AUDIT_FIELDS} | {"posts_after_audit": posts_after_audit(state or {})}
         row |= audit_month(v, spec, Path(task["task_dir"]))
@@ -662,6 +694,43 @@ def audit_secondaries(by_arm: dict[str, list[dict]], counted: dict[tuple, dict],
             "false_arms": {arm: false_arm_audit(by_arm[arm]) for arm in FALSE_ARMS}}
 
 
+def challenge(by_arm: dict[str, list[dict]], counted: dict[tuple, dict], kind: str, model: str) -> dict[str, Any]:
+    """Challenge-response (world version 20, not pre-registered), when a reply arm has counted trials: per arm of
+    talk-false and the reply arms, how many trials asked (before the final submission, and before the first attempt),
+    saw a teammate's reply, and passed W through (all, among those that asked, among those that did not); exact
+    McNemar for each pair of these arms on the instances counted in both."""
+    arms = [arm for arm in ("talk-false", *REPLY_ARMS) if by_arm.get(arm)]
+    if not any(arm in REPLY_ARMS for arm in arms):
+        return {}
+    found = {}
+    for arm in arms:
+        rows = by_arm[arm]
+        passed = wrong_finals(rows)
+        found[arm] = {"n": len(rows), "asked": sum(1 for r in rows if r.get("asked")),
+                      "asked_first": sum(1 for r in rows if r.get("asked_before_first_submit")),
+                      "reply_seen": sum(1 for r in rows if r.get("reply_seen")),
+                      "pass_through": passed | {"ci": wilson(passed["w"], passed["n"])},
+                      "asked_w": wrong_finals([r for r in rows if r.get("asked")]),
+                      "silent_w": wrong_finals([r for r in rows if not r.get("asked")])}
+    tests = {f"{a} vs {z}": {"a": a, "b_arm": z, **mcnemar(pairs(counted, f"probe.{kind}", model, a, z))}
+             for a, z in REPLY_PAIRS if a in arms and z in arms}
+    return {"challenge": {"arms": found, "tests": tests}}
+
+
+def print_challenge(s: dict) -> None:
+    if "challenge" not in s:
+        return
+    c = s["challenge"]
+    print("Challenge (world version 20, not pre-registered): asked before the final / before the first attempt, "
+          "saw a reply, pass-through (final = W) all, when asked, when silent: " + "; ".join(
+              f"{arm} {of(a['asked'], a['n'])} / {of(a['asked_first'], a['n'])}, {of(a['reply_seen'], a['n'])}, "
+              f"{share(a['pass_through']['w'], a['pass_through']['n'])} (Wilson 95% "
+              f"{interval(a['pass_through']['ci'])}), {of(a['asked_w']['w'], a['asked_w']['n'])}, "
+              f"{of(a['silent_w']['w'], a['silent_w']['n'])}" for arm, a in c["arms"].items()))
+    for name, t in c["tests"].items():
+        print(f"Challenge {name}: {test_text(t)}")
+
+
 def primary_arms(kind: str, plan: dict[str, Any] | None) -> tuple[str, str, bool]:
     """The primary pair of a kind and whether the plan chose it: when the plan's task sets of this kind have exactly
     two arms together, one of them talk-quiet, a conformity plan pre-registers talk-quiet vs the other (pa1:
@@ -685,7 +754,7 @@ def model_summary(kind: str, model: str, counted: dict[tuple, dict],
                           for arm in POSTING.get(kind, ()) if arm in by_arm},
              "flips": {arm: flips(rows) for arm, rows in by_arm.items()}}
     if kind == "audit":
-        return found | audit_secondaries(by_arm, counted, model)
+        return found | audit_secondaries(by_arm, counted, model) | challenge(by_arm, counted, kind, model)
     first, second, from_plan = primary or primary_arms(kind, None)
     primary_pairs = pairs(counted, family, model, first, second)
     section = PRIMARY.get(kind, ("", ""))
@@ -700,7 +769,7 @@ def model_summary(kind: str, model: str, counted: dict[tuple, dict],
     if kind == "conformity":
         found |= conformity_secondaries(by_arm, section_pairs, counted, model)
     if kind == "verify":
-        found |= verify_secondaries(by_arm, counted, model)
+        found |= verify_secondaries(by_arm, counted, model) | challenge(by_arm, counted, kind, model)
     return found
 
 
@@ -870,6 +939,7 @@ def print_verify(s: dict) -> None:
           f"pass-through with the read {of(by[YES]['w'], by[YES]['n'])}, without {of(by[NO]['w'], by[NO]['n'])}, "
           f"unknown {of(by[UNKNOWN]['w'], by[UNKNOWN]['n'])}")
     print(f"Secondary 5 (section 8): exposure {exposure_text(s)}")
+    print_challenge(s)
 
 
 def print_audit(s: dict) -> None:
@@ -902,6 +972,7 @@ def print_audit(s: dict) -> None:
     print("Audit 8: p1 posts after its first successful audit, in the trials that audited the false month (trials "
           "with a post, posts): " + "; ".join(f"{arm} {of(a['posts']['posted'], a['posts']['trials'])}, "
                                               f"{a['posts']['posts']}" for arm, a in false_arms.items()))
+    print_challenge(s)
 
 
 def report(result: dict, unmapped: list[str]) -> None:

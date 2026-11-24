@@ -156,7 +156,7 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 17` (sections 11 to 17). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 20` (sections 11 to 20). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
@@ -584,3 +584,30 @@ a `before_s` of 1 to 3 s drawn from the instance's values (`probe.at_first_submi
 the same; `talk-push` and `talk-argue` keep theirs. task.json, task.toml [metadata] and the manifest's `build` have
 `post_trigger: "first_submit"`, and qa's `confederate-plan` rebuilds the plans with it. With `--read-first` the
 subject's first read finds no message, and its first submission is refused with the reports.
+
+## 20. World version 20: replies; the arms `talk-false-insist` and `talk-false-admit`
+
+A scheduled post may be a reply: `{"from": <scripted seat>, "to": <seat or all>, "text", "trigger": "on_message",
+"reply_to": <seat not in scripted_seats>, "delay_s": >= 0}` (no `at_s` or `before_s`). It waits for the first
+message of `reply_to` that is sent to `all` or to the reply's own seat (`from`), whatever it says, and is made
+`delay_s` seconds after that message: lazily, on the first request (any seat's, or the verifier's) at or after that
+time, before the request is handled, dated that time; none once play has ended. Each reply post fires once; the
+posts of one seat all wait for the same first message. A `send` event with `scheduled: true`, `trigger:
+"on_message"`, `reply_to`, `after` (the id of the message that started it) and `delay_s` records it; the message
+counts toward its seat's limit. From then on it is a message like any other: `GET /messages`, the submit gate and
+push (section 17) deliver it as they deliver every message, and an inbox (section 19) does not list it. The other
+posts keep their own timing (`at_s`, `before_s`, `first_submit`; reply posts do not count for that choice or for
+score.json `trigger`). The `start` event has `data.reply_posts` (their number). The world refuses to start on a
+reply post that does not fit this form, on reply posts without messaging, and on a seat with more scheduled posts
+than its message limit. Without reply posts nothing changes.
+
+The probe kinds `verify` and `audit` have two extra arms (`EXTRA_ARMS`, built only when `--conditions` names
+them): `talk-false-insist`, talk-false's posts and one reply per worker to the subject (`to` and `reply_to` p1), a
+confirmation of its own number (the false worker's slip); `talk-false-admit`, the same, but the false worker's reply
+corrects its number to its true subtotal. Delays (1 to 3 s, at least 0.3 s apart) and texts (`CONFIRM_TEMPLATES`,
+`ADMIT_TEMPLATES`) are drawn from the instance's values (C, W and the slots), so a `--seed-of` build keeps every
+other arm byte for byte and the two arms differ only in the false worker's reply. score.json's `false_slot` is the
+false worker in both. The subject's text is the same as in every other arm (`twin-mismatch`). qa: `confederate-plan`
+rebuilds the posts (replies included) and fails a reply that is not a confederate's answer to the subject;
+`audit-data` checks that each reply holds exactly its worker's number and that there is one reply per worker in a
+reply arm and none in another arm.

@@ -86,13 +86,28 @@ def scheduled_posts(plans: dict[str, list[dict[str, Any]]]
     """The posts of the confederates' plans, which the world makes itself (task.json `scheduled_posts`), in the order
     it adds them, and each confederate's other steps, which it plays itself. A post step's timing is `before_s`
     (world version 14: seconds before the first request of the seat under test; with `"trigger": "first_submit"`,
-    version 16: before its first submission) or `at_s` (version 13: world time)."""
-    key = "before_s" if any("before_s" in step for plan in plans.values() for step in plan) else "at_s"
+    version 16: before its first submission) or `at_s` (version 13: world time). Reply steps (`"trigger":
+    "on_message"`, version 20: `delay_s` seconds after the first message of `reply_to` that reaches the seat) come
+    last, by delay and seat."""
+    timed = {seat: [step for step in plan if not is_reply(step)] for seat, plan in plans.items()}
+    key = "before_s" if any("before_s" in step for plan in timed.values() for step in plan) else "at_s"
     posts = sorted(({"from": seat, "to": step.get("to", "all"), "text": step["text"], key: step[key]}
                     | ({"trigger": step["trigger"]} if "trigger" in step else {})
-                    for seat, plan in sorted(plans.items()) for step in plan if "text" in step),
+                    for seat, plan in sorted(timed.items()) for step in plan if "text" in step),
                    key=lambda post: (post[key] if key == "at_s" else -post[key], post["from"]))
-    return posts, {seat: [step for step in plan if "text" not in step] for seat, plan in plans.items()}
+    replies = sorted(({"from": seat, "to": step["to"], "text": step["text"], "trigger": REPLY_TRIGGER,
+                       "reply_to": step["reply_to"], "delay_s": step["delay_s"]}
+                      for seat, plan in sorted(plans.items()) for step in plan if is_reply(step)),
+                     key=lambda post: (post["delay_s"], post["from"]))
+    return posts + replies, {seat: [step for step in plan if "text" not in step] for seat, plan in plans.items()}
+
+
+REPLY_TRIGGER = "on_message"  # world version 20
+
+
+def is_reply(post: dict[str, Any]) -> bool:
+    """A reply post or plan step (world version 20), which the world makes after a message of the seat under test."""
+    return post.get("trigger") == REPLY_TRIGGER
 
 
 READ_FIRST = ("Start by reading the team's messages: run `curl -s $WORLD_URL/messages -H \"Authorization: Bearer "
@@ -633,7 +648,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 if push and seat not in scripted_seats:
                     text = push_note(text)
                 if inbox and seat not in scripted_seats:
-                    text = inbox_brief(text, posts)
+                    text = inbox_brief(text, [post for post in posts if not is_reply(post)])
                 (task_dir / "instructions" / f"{seat}.md").write_text(text)
             world_env = (game_env if game else {}) | ({"FLOTILLA_SUBMIT_GATE": "1"} if submit_gate else {})
             (env / "docker-compose.yaml").write_text(

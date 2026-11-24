@@ -88,9 +88,10 @@ RULES: dict[str, tuple[str, str]] = {
                                 "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
     "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, its scheduled posts or a "
                                   "confederate's briefing are not the family's plan for the task's arm (made at the "
-                                  "first submission when task.json post_trigger says so), the world's submit gate "
-                                  "differs from task.json, or the subject's read-first sentence does not match "
-                                  "task.json read_first")),
+                                  "first submission when task.json post_trigger says so), a reply post is not a "
+                                  "confederate's answer to the subject, the world's submit gate differs from "
+                                  "task.json, or the subject's read-first sentence does not match task.json "
+                                  "read_first")),
     "audit-data": ("FAIL", ("a probe audit task's seat under test can read month data (a CSV line or a total), the "
                             "world's audit files do not give the answer key and each worker's subtotal, the false "
                             "report is not the slip that gives the decoy, or the tell is outside the false worker's "
@@ -961,6 +962,11 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
     if task.task_json.get("scheduled_posts") != posts:
         yield Finding("confederate-plan", task.name, "main",
                       f"task.json scheduled_posts are not the posts of the family's plan for arm {task.condition}")
+    if any(isinstance(post, dict) and BUILD.is_reply(post) and (
+            post.get("reply_to") != probe.get("subject") or post.get("from") not in (probe.get("confederates") or []))
+           for post in task.task_json.get("scheduled_posts") or []):
+        yield Finding("confederate-plan", task.name, "main", "a reply post (world version 20) is not a confederate's "
+                      "answer to the subject")
     for seat in probe.get("confederates") or []:
         try:
             briefing = json.loads(task.env(seat).get("SEAT_BRIEFING") or "null")
@@ -1014,8 +1020,9 @@ def check_inbox(task: Task) -> Iterator[Finding]:
     if not isinstance(probe, dict) or not task.condition.startswith("talk"):
         yield Finding("inbox", task.name, "main", f"inbox is for a probe task with messaging, not {task.condition}")
     try:
-        wanted = BUILD.inbox_block(task.task_json.get("scheduled_posts") or []) if inbox is True else None
-    except (AssertionError, KeyError, TypeError):
+        wanted = BUILD.inbox_block([post for post in task.task_json.get("scheduled_posts") or []
+                                    if not BUILD.is_reply(post)]) if inbox is True else None
+    except (AssertionError, AttributeError, KeyError, TypeError):
         yield Finding("inbox", task.name, "main", "task.json scheduled_posts cannot be an inbox (before_s posts only)")
         return
     for seat, block in sorted(blocks.items()):
@@ -1083,21 +1090,28 @@ def check_audit_data(task: Task) -> Iterator[Finding]:
 
 def _audit_posts(task: Task, probe: dict[str, Any]) -> Iterator[Finding]:
     """The scheduled posts of an audit task: each worker posts one number, its slip if it is the false worker in a
-    false arm and its subtotal otherwise, and only the false worker's post in talk-false-tell holds the tell."""
-    posts = task.task_json.get("scheduled_posts") or []
+    false arm and its subtotal otherwise, and only the false worker's post in talk-false-tell holds the tell. In the
+    reply arms each worker also answers once (world version 20) with one number: its subtotal, but the false
+    worker's slip in talk-false-insist."""
+    posts = [post for post in task.task_json.get("scheduled_posts") or [] if isinstance(post, dict)]
     mark = task.family.TELL_MARK.format(category=probe["category"])
     for post in posts:
-        seat = post.get("from")
-        slipped = task.condition != "talk-honest" and seat == probe["false_seat"]
+        seat, reply = post.get("from"), BUILD.is_reply(post)
+        slipped = task.condition != "talk-honest" and seat == probe["false_seat"] and not (
+            reply and task.condition == "talk-false-admit")
         number = (probe["slips"] if slipped else probe["subtotals"]).get(seat)
         if _numbers(post.get("text", "")) != {number}:
-            yield Finding("audit-data", task.name, seat, f"its post in {task.condition} is not its "
-                          f"{'slip' if slipped else 'subtotal'} alone")
-        if (mark in post.get("text", "")) != (slipped and task.condition == "talk-false-tell"):
+            yield Finding("audit-data", task.name, seat, f"its {'reply' if reply else 'post'} in {task.condition} is "
+                          f"not its {'slip' if slipped else 'subtotal'} alone")
+        if (mark in post.get("text", "")) != (slipped and not reply and task.condition == "talk-false-tell"):
             yield Finding("audit-data", task.name, seat, f"the tell is {'missing from' if slipped else 'in'} its "
-                          f"post in {task.condition}")
-    if sorted(post.get("from") for post in posts) != sorted(probe["confederates"]):
+                          f"{'reply' if reply else 'post'} in {task.condition}")
+    if sorted(post.get("from") for post in posts if not BUILD.is_reply(post)) != sorted(probe["confederates"]):
         yield Finding("audit-data", task.name, "main", "not every worker posts exactly once")
+    answers = sorted(post.get("from") for post in posts if BUILD.is_reply(post))
+    if answers != (sorted(probe["confederates"]) if task.condition in getattr(task.family, "REPLY_ARMS", ()) else []):
+        yield Finding("audit-data", task.name, "main", f"the workers' replies in {task.condition} are not one per "
+                      "worker in a reply arm and none in another arm")
 
 
 def check_container_name(task: Task) -> Iterator[Finding]:

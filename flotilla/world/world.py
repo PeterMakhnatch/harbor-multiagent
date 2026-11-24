@@ -88,7 +88,12 @@ from urllib.parse import parse_qs, urlsplit
 # to each seat that task.json does not list in `scripted_seats` (a `deliver` event with `via: "brief"`): the submit
 # gate never holds a submission for them, and GET /messages lists them as it lists any message. Without the key
 # nothing changes.
-WORLD_VERSION = 19
+# Version 20: replies. A scheduled post may give `"trigger": "on_message"` with `reply_to` (a seat that task.json does
+# not list in `scripted_seats`) and `delay_s` instead of a timing: its seat (a scripted one) posts it `delay_s` seconds
+# after the first message of `reply_to` that goes to `all` or to that seat, whatever it says; once per seat. Like
+# `at_s` posts it is added lazily, on the first request after its time, dated then. The other posts keep their own
+# timing. Without such a post nothing changes.
+WORLD_VERSION = 20
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -126,6 +131,11 @@ WAIT_SECONDS = float(os.environ.get("FLOTILLA_WAIT_SECONDS") or 60)
 START_GRACE = float(os.environ.get("FLOTILLA_START_GRACE") or 300)  # the season starts without a seat that never calls
 MAX_MESSAGES_PER_ROUND = int(os.environ.get("FLOTILLA_MAX_MESSAGES_PER_ROUND") or 0)  # 0: no limit per round
 TASK_JSON_PATH = Path(os.environ.get("FLOTILLA_TASK_JSON", "/world/task.json"))  # main's own task.json
+REPLY_TRIGGER = "on_message"  # version 20: a scheduled post made after a message of the seat under test
+
+
+def _is_reply(post: Any) -> bool:
+    return isinstance(post, dict) and post.get("trigger") == REPLY_TRIGGER
 
 
 def _load_scheduled() -> tuple[list[dict[str, Any]], str, list[str], list[str]]:
@@ -138,6 +148,7 @@ def _load_scheduled() -> tuple[list[dict[str, Any]], str, list[str], list[str]]:
     try:
         task = json.loads(TASK_JSON_PATH.read_text())
         posts, scripted = task.get("scheduled_posts") or [], task.get("scripted_seats") or []
+        posts = [post for post in posts if not _is_reply(post)] if isinstance(posts, list) else posts
     except (OSError, ValueError, AttributeError):
         return [], "", [], [f"{TASK_JSON_PATH} is not a JSON object"]
     listed = posts if isinstance(posts, list) else []
@@ -171,6 +182,40 @@ def _load_scheduled() -> tuple[list[dict[str, Any]], str, list[str], list[str]]:
 
 
 SCHEDULED, SCHEDULE_KEY, SCHEDULE_TRIGGERS, SCHEDULE_PROBLEMS = _load_scheduled()  # pending posts (_post_scheduled)
+
+
+def _load_replies() -> tuple[list[dict[str, Any]], list[str]]:
+    """The task's reply posts (version 20: scheduled posts with `"trigger": "on_message"`), each waiting for the first
+    message of its `reply_to` seat to `all` or to its own seat, and what is wrong (the world then refuses to start)."""
+    if not TASK_JSON_PATH.is_file():
+        return [], []
+    try:
+        task = json.loads(TASK_JSON_PATH.read_text())
+        posts, scripted = task.get("scheduled_posts") or [], task.get("scripted_seats") or []
+    except (OSError, ValueError, AttributeError):
+        return [], []  # _load_scheduled reports it
+    replies = [post for post in posts if _is_reply(post)] if isinstance(posts, list) else []
+    problems = []
+    for post in replies:
+        delay = post.get("delay_s")
+        ok = (post.get("from") in SEATS and post["from"] in scripted and post.get("reply_to") in SEATS
+              and post["reply_to"] not in scripted and post.get("to") in ("all", *SEATS) and post["to"] != post["from"]
+              and isinstance(post.get("text"), str) and post["text"].strip() and len(post["text"]) <= MAX_TEXT
+              and isinstance(delay, int | float) and not isinstance(delay, bool) and 0 <= delay < math.inf
+              and "at_s" not in post and "before_s" not in post)
+        if not ok:
+            problems.append("a reply post is not {from: scripted seat, to: other seat or all, text, trigger: "
+                            f"on_message, reply_to: seat under test, delay_s >= 0}}: {post!r}"[:260])
+    if replies and not problems and not MESSAGING:
+        problems.append(f"reply posts need messaging, and {CONDITION} has none")
+    if not problems and any(sum(isinstance(p, dict) and p.get("from") == seat for p in posts) > MAX_MESSAGES_PER_SEAT
+                            for seat in SEATS):
+        problems.append("a seat has more scheduled posts than its message limit")
+    return ([], problems) if problems else (replies, [])
+
+
+REPLIES, REPLY_PROBLEMS = _load_replies()  # reply posts that wait for their trigger (_arm_replies)
+REPLIES_DUE: list[tuple[float, dict[str, Any], str]] = []  # (due, post, trigger message id), due first
 
 
 def _load_audit() -> tuple[dict[str, Any] | None, list[str], list[str]]:
@@ -362,7 +407,7 @@ def config_problems() -> list[str]:
         "a token names a seat that is not in FLOTILLA_SEATS" if set(TOKENS.values()) - set(SEATS) else "",
     ]
     return ([problem for problem in problems if problem] + SCHEDULE_PROBLEMS + AUDIT_PROBLEMS + PUSH_PROBLEMS
-            + INBOX_PROBLEMS)
+            + INBOX_PROBLEMS + REPLY_PROBLEMS)
 
 
 def expire() -> None:
@@ -426,18 +471,45 @@ def _post_scheduled(seat: str | None, submitting: bool = False) -> None:
     scale = 1.0 if largest <= 0 else max(0.0, min(1.0, (due - 0.1) / largest))
     while SCHEDULED and (SCHEDULE_KEY != "at_s" or SCHEDULED[0]["at_s"] <= due):
         post = SCHEDULED.pop(0)
-        sender = post["from"]
         t = post["at_s"] if SCHEDULE_KEY == "at_s" else due - post["before_s"] * scale
-        STATE["sent"][sender] = STATE["sent"].get(sender, 0) + 1
-        message = {"id": f"m-{secrets.token_hex(6)}", "from": sender, "to": post["to"], "text": post["text"],
-                   "t": round(float(t), 3)}
-        STATE["messages"].append(message)
-        with (LOGS / "messages.jsonl").open("a") as log:
-            log.write(json.dumps(message, sort_keys=True) + "\n")
-        record("send", sender, {"id": message["id"], "to": message["to"], "chars": len(message["text"]),
-                                "scheduled": True, "at_s": message["t"]}
-               | ({"before_s": post["before_s"]} if SCHEDULE_KEY != "at_s" else {})
-               | ({"trigger": "first_submit"} if SCHEDULE_KEY == "first_submit" else {}))
+        _add_post(post, t, ({"before_s": post["before_s"]} if SCHEDULE_KEY != "at_s" else {})
+                  | ({"trigger": "first_submit"} if SCHEDULE_KEY == "first_submit" else {}))
+
+
+def _add_post(post: dict[str, Any], t: float, data: dict[str, Any]) -> None:
+    """A scheduled post as a message from its seat, dated `t`, logged as a `send` event with `scheduled: true`.
+    Callers hold LOCK."""
+    sender = post["from"]
+    STATE["sent"][sender] = STATE["sent"].get(sender, 0) + 1
+    message = {"id": f"m-{secrets.token_hex(6)}", "from": sender, "to": post["to"], "text": post["text"],
+               "t": round(float(t), 3)}
+    STATE["messages"].append(message)
+    with (LOGS / "messages.jsonl").open("a") as log:
+        log.write(json.dumps(message, sort_keys=True) + "\n")
+    record("send", sender, {"id": message["id"], "to": message["to"], "chars": len(message["text"]),
+                            "scheduled": True, "at_s": message["t"]} | data)
+
+
+def _arm_replies(message: dict[str, Any]) -> None:
+    """Version 20: a seat's message starts the wait of every reply post whose `reply_to` is that seat and whose
+    own seat the message reaches (sent to `all` or to it); each post then waits `delay_s` seconds. Callers hold
+    LOCK."""
+    for post in [post for post in REPLIES if post["reply_to"] == message["from"]
+                 and message["to"] in ("all", post["from"])]:
+        REPLIES.remove(post)
+        REPLIES_DUE.append((message["t"] + post["delay_s"], post, message["id"]))
+    REPLIES_DUE.sort(key=lambda waiting: waiting[0])  # stable: posts due at one time keep the order they were armed
+
+
+def _post_replies() -> None:
+    """Version 20: the reply posts whose time has come, in time order, dated that time; lazy, like `at_s` posts, so
+    a reply exists before any reply of the world or any action after its time. None once play has ended. Callers
+    hold LOCK."""
+    at = now()
+    while REPLIES_DUE and REPLIES_DUE[0][0] <= at and not STATE["frozen"]:
+        due, post, trigger_id = REPLIES_DUE.pop(0)
+        _add_post(post, due, {"trigger": REPLY_TRIGGER, "reply_to": post["reply_to"], "after": trigger_id,
+                              "delay_s": post["delay_s"]})
 
 
 def _unread(seat: str) -> list[dict[str, Any]]:
@@ -753,6 +825,9 @@ class World(BaseHTTPRequestHandler):
         if SCHEDULED and SCHEDULE_KEY == "at_s":
             with LOCK:
                 _post_scheduled(None)
+        if REPLIES_DUE:
+            with LOCK:
+                _post_replies()  # version 20: replies whose time has come, before this request is handled
         path = self.path.split("?", 1)[0]
         if path == "/health" and method == "GET":
             if self.client_address[0] not in LOCAL_CLIENTS:
@@ -927,6 +1002,8 @@ class World(BaseHTTPRequestHandler):
             with (LOGS / "messages.jsonl").open("a") as log:
                 log.write(json.dumps(message, sort_keys=True) + "\n")
             record("send", seat, {"id": message["id"], "to": to, "chars": len(text)})
+            if REPLIES:
+                _arm_replies(message)
         self._reply(201, message)
 
     def _get_messages(self, seat: str) -> None:
@@ -1078,7 +1155,8 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                | ({"audit_budget": AUDIT["budget"], "audit_months": len(AUDIT["files"])}
                                   if AUDIT is not None else {})
                                | ({"push": True} if PUSH else {})
-                               | ({"inbox": True} if INBOX else {}))
+                               | ({"inbox": True} if INBOX else {})
+                               | ({"reply_posts": len(REPLIES)} if REPLIES else {}))
         if INBOX:
             _post_inbox()
     return server

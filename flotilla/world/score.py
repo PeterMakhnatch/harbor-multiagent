@@ -90,7 +90,9 @@ def score_game_task(task: dict[str, Any], game: Any) -> None:
 def post_trigger(posts: list[dict[str, Any]], inbox: bool = False) -> str | None:
     """When the world made the scheduled posts: at its start, in the subject's brief (`brief`, world version 19), at
     the subject's first submission (`first_submit`, version 16), at its first request (`first_request`, version 14),
-    on the world's clock (`clock`, version 13), or None."""
+    on the world's clock (`clock`, version 13), or None. Reply posts (version 20) do not count: they wait for a
+    message of the subject."""
+    posts = [post for post in posts if post.get("trigger") != "on_message"]
     if not posts:
         return None
     if inbox:

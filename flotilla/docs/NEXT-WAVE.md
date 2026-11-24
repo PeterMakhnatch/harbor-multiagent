@@ -159,6 +159,7 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 | 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `budget` 0, 1, 2 (needs a build flag) | 40 x 3 x 3 | about $1.6 |
 | 4 | Does an argument move a seat when the task text does not settle it? | the peer cites a policy file that the seat also holds; the claim is false and only that file shows it (`pa1` used a reason the task text refutes) | 32 x 2 x 3 | about $0.6 plus a family change |
 | 5 | Do frontier models behave the same? | trust cards (row 1) on 1-3 frontier models before any claim about frontier agents | 184 per model | $6-8 per model |
+| 6 | Does the integrator ask, and does it accept a teammate's confirmation of a wrong subtotal? | challenge-response (world version 20, PROBE.md section 4): `talk-false`, `talk-false-insist`, `talk-false-admit` on `au2`'s instances (audit) or `rf1v`'s (verify), built `--seed-of` the earlier set; pre-register first | 40 x 3 x 3 models (audit) | about $1.3-1.6 (audit) |
 
 Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
 from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
