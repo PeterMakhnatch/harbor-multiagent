@@ -11,6 +11,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from conftest import FLOTILLA, load
 
 RUN = load(FLOTILLA / "run_wave.py")
@@ -1109,24 +1110,65 @@ def one_model_plan(seed: int) -> dict:
     return plan
 
 
-def test_one_model_failing_between_working_models_stops_the_wave(tmp_path):
+def longest_run(cells: list[dict], bad) -> int:
+    run, longest = 0, 0
+    for cell in cells:
+        run = run + 1 if bad(cell) else 0
+        longest = max(longest, run)
+    return longest
+
+
+def main_exit(tmp: Path, path: Path, monkeypatch) -> tuple[int, str]:
+    """run_wave.main on a launched plan, in a fresh run and jobs dir, with fake balances and the fake Harbor."""
+    monkeypatch.setattr(RUN, "HttpSources", lambda _env: Sources({}, lambda *_args: 10.0))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds")
+    code = RUN.main([str(path), "--run-dir", str(tmp / "main-run"), "--jobs-dir", str(tmp / "main-jobs"),
+                     "--harbor", str(tmp / "harbor"), "--docker-wrapper", str(tmp / "wrapper")])
+    return code, (tmp / "main-run" / "progress.log").read_text()
+
+
+@pytest.mark.parametrize("concurrency", [1, 2])
+def test_one_model_failing_between_working_models_stops_the_wave(tmp_path, monkeypatch, concurrency):
     plan = one_model_plan(seed=11)
+    plan["make_jobs"]["concurrency"] = concurrency
     bad = THREE[1]
     order = plain_order(tmp_path / "preview", plan)
     behaviors = {cell["key"]: spec_for("invalid" if cell["model"] == bad else "ok") for cell in order}
-    bad_positions = [index for index, cell in enumerate(order) if cell["model"] == bad]
-    overall, longest = 0, 0
-    for cell in order[:bad_positions[5] + 1]:
-        overall = overall + 1 if cell["model"] == bad else 0
-        longest = max(longest, overall)
-    assert longest < 6, "the seed must interleave the failing model with the others"
-    events, order, _path, _env = launch(tmp_path / "wave", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    sixth = [index for index, cell in enumerate(order) if cell["model"] == bad][5]
+    assert longest_run(order, lambda cell: cell["model"] == bad) <= 6 - 2, "the seed must interleave the models"
+    events, order, path, _env = launch(tmp_path / "wave", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert_invariants(events, concurrency=concurrency, cap=5.0, reserve=0.05)
     assert events[-1]["reason"] == "invalid"
     starts = [event["key"] for event in events if event["kind"] == "start"]
-    assert starts == [cell["key"] for cell in order[:bad_positions[5] + 1]]
-    log = (tmp_path / "wave" / "run" / "progress.log").read_text()
-    assert f"stop: 6 invalid trials in a row for {bad} (last: boom; boom; boom); draining in-flight jobs" in log
-    assert RUN.EXIT_INVALID_STREAK == 3
+    assert starts == [cell["key"] for cell in order[:len(starts)]]
+    assert sixth + 1 <= len(starts) <= sixth + concurrency < len(order)
+    line = f"stop: 6 invalid trials in a row for {bad} (last: boom; boom; boom); draining in-flight jobs"
+    assert line in (tmp_path / "wave" / "run" / "progress.log").read_text()
+    code, log = main_exit(tmp_path / "wave", path, monkeypatch)
+    assert code == 3 and line in log
+
+
+def test_one_failing_seat_assignment_row_stops_the_wave(tmp_path, monkeypatch):
+    lite, pro = THREE[2], THREE[1]
+    plan = plan_for(list(range(10)), ["silent"], [DEEPSEEK], concurrency=1, cap=5.0, reserve=0.05, seed=5)
+    plan["seat_assignments"] = [[DEEPSEEK, pro], [pro, DEEPSEEK], [DEEPSEEK, DEEPSEEK], [lite, lite]]
+    plan["budget"]["max_invalid_streak"] = 6
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, list(range(10)), ["silent"], seats=("p1", "p2"))
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    failing = [lite, lite]
+    behaviors = {cell["key"]: spec_for("invalid" if cell["assignment"] == failing else "ok") for cell in order}
+    assert longest_run(order, lambda cell: cell["assignment"] == failing) < 6
+    events, order, path, _env = launch(tmp_path / "wave", plan, behaviors, Sources({}, lambda *_args: 10.0),
+                                       seats=("p1", "p2"))
+    assert events[-1]["reason"] == "invalid"
+    sixth = [index for index, cell in enumerate(order) if cell["assignment"] == failing][5]
+    assert [event["key"] for event in events if event["kind"] == "start"] == [cell["key"] for cell in order[:sixth + 1]]
+    label = f"models p1={lite},p2={lite}"
+    line = f"stop: 6 invalid trials in a row for {label} (last: boom; boom; boom); draining in-flight jobs"
+    assert line in (tmp_path / "wave" / "run" / "progress.log").read_text()
+    code, log = main_exit(tmp_path / "wave", path, monkeypatch)
+    assert code == 3 and line in log
 
 
 def test_a_valid_trial_resets_one_models_streak(tmp_path):
