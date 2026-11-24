@@ -224,8 +224,8 @@ One command per stage gives any model a card under the standing protocol of PROB
 `talk-false-tell`), 184 trials per model, confederates p2-p4 on the `oracle` agent. Ready to run:
 `flotilla/plans/cards/tc1.json` (the 3 night models, 552 trials, cap $3.31; it replicates `rf1v` and runs `au2`), and
 `flotilla/plans/cards/tc2smoke.json` then `tc2.json` (the 6 cheap models of row 1: 30 and 1104 trials, caps $0.30
-and $5.00). Run `tc2smoke` first and read each model's 5 trials: the invalid-streak guard counts trials in start
-order, so a model that fails every trial between 5 working models may never stop the wave. Expected `tc2` cost at
+and $5.00). Run `tc2smoke` first and read each model's 5 trials: the invalid-streak guard counts trials in the order
+they are accounted, so a model that fails every trial between 5 working models may never stop the wave. Expected `tc2` cost at
 the night's mean token use per trial (prices read 2026-11-24 07:30 ET): OpenRouter about $2.1 with prompt caching,
 $4.7 without, plus Modal about $2.3.
 
