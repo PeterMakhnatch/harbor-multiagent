@@ -1057,8 +1057,9 @@ How the seats played (an independent reading of all 96 trials, with quotes):
    11 of 16 first offers gave the other seat less than its outside option; rival proposals were open together in 11
    of 16 trials. Its b = 5 comes from the silent arm, where the strong seat claimed above its outside option or
    raised its claim (`pv10-3a266f`: "I will try 63").
-4. **Most b pairs are on 1-window instances** (Haiku 4 and 16, Luna 11 and 13): the strong seat offers its
-   outside option in round 1; in silent the round-2 remainder is below the weak seat's outside option.
+4. **4 of the 6 Haiku and Luna b pairs are on 1-window instances** (Haiku 4 and 16, Luna 11 and 13): the strong
+   seat offers its outside option in round 1; in silent the round-2 remainder is below the weak seat's outside
+   option. Over all 3 models, 6 of the 13 discordant pairs are on the 6 one-window instances.
 5. **Neither c pair is an arm effect.** Haiku instance 1 (`pv10-38fa2c`): one seat had no turn for 635 s (the resume
    stall, FINDINGS.md entry of 20:48 ET) and missed rounds 1 and 2. Luna instance 10 (`pv10-fa4b14`): the silent
    deal pays the strong seat 19 against an outside option of 43.
@@ -1148,8 +1149,9 @@ How the seats played (an independent reading of all 128 lw1 trials and the 6 smo
    evidence here cannot separate the writer's effect from the reader's. An arm whose messages reach no one would.
 3. **Institutions that act at the point of action raise deals for seats that do not read:** binding proposals
    that hold the round until the addressee answers (pv10 PASS) and the read gate (lw1 PASS).
-4. **Most discordant pairs sit on instances with 1 feasible round,** where the first claim decides the game. The
-   instance mix sets the size of every split effect; future waves should balance window counts or test per window.
+4. **Discordant pairs gather on instances with 1 feasible round,** where the first claim decides the game: 10 of
+   the 16 lw1 and lwc pairs sit on 6 of the 32 instances (pv10: 6 of 13 pairs on 6 of 16 instances). The instance
+   mix sets the size of every split effect; future waves should balance window counts or test per window.
 5. **Single trials are noisy.** The same instance and arm in 2 waves agree on the deal outcome in 9 to 14 of 16
    instances. In lw1, lwc and pv10 only 1 of 6 per-model contrasts reaches p < 0.05 (Luna in lw1, p = 0.039), and
    both pooled tests pass with p = 0.0225, close to their cutoffs.
