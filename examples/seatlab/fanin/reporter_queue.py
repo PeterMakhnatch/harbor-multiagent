@@ -169,7 +169,9 @@ def summary(root: Path, cell: str) -> dict[str, Any] | None:
         return None
     if not isinstance(row, dict):
         return None
-    return {key: clean(row.get(key)) for key in SUMMARY}
+    picked = {key: clean(row.get(key)) for key in SUMMARY}
+    picked["incomplete_reason"] = ledger.stock_reason(row.get("incomplete_reason"))
+    return picked
 
 
 def one(args: argparse.Namespace, out: dict[str, Any]) -> int:

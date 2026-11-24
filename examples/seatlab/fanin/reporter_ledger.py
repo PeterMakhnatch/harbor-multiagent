@@ -11,6 +11,7 @@ from uuid import UUID
 
 from ..visibility import calendar_packet as packet
 from ..wait_peer import campaign, worker
+from . import evidence as ev
 from . import external_evidence as ext
 from . import owner_provenance, protocol, screen
 
@@ -34,9 +35,23 @@ REGISTERED = 0o400
 SEALED = 0o444
 REG_KEYS = frozenset({"schema", "sha256", "first", "count", "mode"})
 Refused = campaign.Refused
-Cell = tuple[str, int | None, bool | None]
-ISSUED: Cell = ("issued", None, None)
-MISMATCH: Cell = ("mismatch", None, None)
+Cell = tuple[str, int | None, bool | None, str | None]
+ISSUED: Cell = ("issued", None, None, None)
+MISMATCH: Cell = ("mismatch", None, None, None)
+SEAT_REASONS = frozenset(
+    ev.ERRORS | {"seat_exception", "missing_seat_result", "seat_interrupted"}
+)
+PUBLIC_FAILURES = frozenset(
+    {
+        "behavior_incomplete",
+        "driver_rejected",
+        "missing_native_result",
+        "missing_native_reward",
+        "native_nonzero_exit",
+        "native_trial_exception",
+        "owner_turn_unbound",
+    }
+)
 EVIDENCE_FAILURES = (
     Refused,
     packet._Invalid,
@@ -230,6 +245,18 @@ def uuid4(value: object) -> bool:
     )
 
 
+def stock_reason(value: object) -> str | None:
+    if value is None:
+        return None
+    if type(value) is str:
+        seat, colon, code = value.partition(":")
+        if colon and seat in protocol.SEATS and code in SEAT_REASONS:
+            return value
+        if not colon and value in PUBLIC_FAILURES:
+            return value
+    return "redacted"
+
+
 def graded_row(row: Any, raw: bytes, world: int, arm: str) -> bool:
     source = row["source"]
     return (
@@ -306,12 +333,13 @@ def reported(child: Path, reg: dict[str, Any], world: int, arm: str) -> Cell:
         return MISMATCH
     if worker.canonical(ext.audit(native, world, arm)) + b"\n" != raw:
         return MISMATCH
+    reason = stock_reason(row["incomplete_reason"])
     if not personal:
-        return ("reported", row["native_reward"], None)
+        return ("reported", row["native_reward"], None, reason)
     accounted = provenance(child, native, raw, row)
     if accounted is None:
         return MISMATCH
-    return ("reported", row["native_reward"], accounted)
+    return ("reported", row["native_reward"], accounted, reason)
 
 
 def evaluate(root: Path, reg: dict[str, Any], world: int, arm: str) -> Cell:
@@ -326,7 +354,7 @@ def evaluate(root: Path, reg: dict[str, Any], world: int, arm: str) -> Cell:
         ):
             return MISMATCH
         if not os.path.lexists(child):
-            return ISSUED if marked else ("missing", None, None)
+            return ISSUED if marked else ("missing", None, None, None)
         if not marked or not owned_dir(child, PRIVATE_DIR):
             return MISMATCH
         return reported(child, reg, world, arm)
@@ -362,8 +390,14 @@ def status(root: Path, reg: dict[str, Any]) -> dict[str, Any]:
             {
                 "world": world,
                 "cells": [
-                    {"arm": arm, "state": s, "grade": g, "accounted": a}
-                    for arm, (s, g, a) in found.items()
+                    {
+                        "arm": arm,
+                        "state": s,
+                        "grade": g,
+                        "accounted": a,
+                        "incomplete_reason": r,
+                    }
+                    for arm, (s, g, a, r) in found.items()
                 ],
             }
         )
@@ -375,6 +409,7 @@ def status(root: Path, reg: dict[str, Any]) -> dict[str, Any]:
     counts.update({f"grade_{g}": sum(c[1] == g for c in done) for g in GRADES})
     personal = reg["mode"] == "personal"
     counts["accounted"] = sum(c[2] is True for c in done) if personal else None
+    counts["incomplete"] = sum(c[3] is not None for c in done)
     assert len(cells) == 2 * reg["count"]
     return {
         "schema": STATUS_SCHEMA,

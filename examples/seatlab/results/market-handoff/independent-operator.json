@@ -51,6 +51,56 @@
     "signal_releasing_slot": 15,
     "third_waited_behind_two": true
   },
+  "operator_view": {
+    "actual_campaigns_checked": 5,
+    "first_attempts_preserved": true,
+    "graded_timeout": {
+      "cell": "w1255-stop",
+      "next": [
+        {
+          "arm": "all",
+          "world": 1255
+        }
+      ],
+      "status": {
+        "accounted": false,
+        "arm": "stop",
+        "grade": 0,
+        "incomplete_reason": "p4:inbox_timeout",
+        "state": "reported"
+      },
+      "summary": {
+        "complete": false,
+        "incomplete_reason": "p4:inbox_timeout",
+        "outcome": "graded",
+        "reason": null,
+        "reward": 0
+      }
+    },
+    "interruption": {
+      "accounted": null,
+      "arm": "all",
+      "grade": null,
+      "incomplete_reason": null,
+      "state": "issued"
+    },
+    "typed_wrong": [
+      {
+        "accounted": null,
+        "arm": "all",
+        "grade": 0,
+        "incomplete_reason": "p1:turn_failed",
+        "state": "reported"
+      },
+      {
+        "accounted": null,
+        "arm": "stop",
+        "grade": 0,
+        "incomplete_reason": "p1:turn_failed",
+        "state": "reported"
+      }
+    ]
+  },
   "private_install": {
     "business_replay": {
       "choices": {

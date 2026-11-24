@@ -49,6 +49,8 @@ Call `one` again to continue. For this 4-world example, each operator needs at m
 | 2 | The inputs were refused. Correct the arguments before starting work. |
 | 3 | No cell in this shard is available now. Inspect `status`; the work may be finished, busy or blocked. |
 
+`one` and `status` report `incomplete_reason` separately from the native grade. For example, a real team scored 0 after its booker timed out. Its status was `reported`, its `incomplete_reason` was `p4:inbox_timeout`, and its owner usage was unverified. `p4` names the seat that timed out; it does not identify what happened inside another seat's model client. In contrast, the interrupted first attempt on 1246 has no grade or verified reason. `status.counts.incomplete` counts reported cells with a recorded reason, not all unresolved attempts. Neither command retries a team to clear that field.
+
 For real reporters, register a **new** root with `--mode personal`. Pass `--agy "$AGY"` to each `one` call instead of `--control`. The site wrapper limits the number of teams. A new reporter session starts only after its team acquires a slot and requests that seat's decision. There is no unattended billing permission, paid fallback, cross-host lock, retry or lease expiry. Keep the campaign root private; use the redacted rows when sharing a study.
 
 ## What the acceptance checks show
@@ -60,3 +62,5 @@ For real reporters, register a **new** root with `--mode personal`. Pass `--agy 
 - Two simultaneous incompatible registrations for one directory returned one success and one refusal. A finished campaign returned exit 3. These guarantees apply to cooperating operators with a private local directory, not to other hosts or a malicious local user.
 
 The [redacted evidence](results/reporter-campaign/operator-proof.json) includes the native trial IDs, UTC times, stock grades and cell states. No prompt, reply, session identifier or host path is required to inspect it.
+
+The separate [operator timeout record](results/market-handoff/independent-operator.json) includes the actual `one` summary and `status` fields for a grade of 0. These fields also work when inspecting an older campaign. Unknown or private reason strings are redacted, not used to change an otherwise verified grade.
