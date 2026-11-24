@@ -37,6 +37,8 @@ The [live return-trigger comparison](../results/native-return-trigger/results.md
 The old observer closed the board after 2 of 2 cancellations. The new observer closed it after neither cancellation.
 Both observers still closed it after both genuine returns. The average reward did not change.
 
+You can now [watch a named seat in your own native trial](../results/seat-event-stream/results.md) without changing its task or its participants. The [external wait](../results/seat-event-stream/return-gate/results.md) accepted a genuine return and refused a harness stop before either native result existed. Both teams later earned 1. Run `python3.12 -BS -m examples.seatlab.workbench verify seat-event-stream seat-event-early seat-return-gate` to reproduce the saved evidence, including the correct refusal.
+
 ## Bring your own work
 
 | If you have… | Start here |

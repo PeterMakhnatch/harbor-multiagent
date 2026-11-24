@@ -26,6 +26,8 @@ _RETURN_MODULE = "examples.seatlab.workbench.team_return"
 _SHIPPING = "examples/ship_handover"
 _CAMPAIGN = f"{_SHIPPING}/samples/disconnected-workers"
 _OPTIONS = f"{_SHIPPING}/samples/receiver-options"
+_JOURNAL = f"{_RESULTS}/seat-event-stream"
+_GATE = f"{_JOURNAL}/return-gate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +324,53 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_OPTIONS}/retained.json",
         exit_code=0,
         sha256="b2f0950b01dcaecfa6aeaf8ddd232d2c19fc6e1038e0882623be48561eb94ea8",
+    ),
+    Study(
+        id="seat-event-stream",
+        question="Do the native seat journals agree with final seat outcomes across all eight registered controls?",
+        kind="native-scripted-calibration",
+        guide=f"{_JOURNAL}/results.md",
+        module="examples.seatlab.workbench.seat_stream_cohort",
+        argv=(_JOURNAL, "--json"),
+        report=f"{_JOURNAL}/panel.json",
+        exit_code=0,
+        sha256="4dd409ab2d97c4e20f5542f9bd7a06cbb163a34907742933f94ef4488478c8ef",
+    ),
+    Study(
+        id="seat-event-early",
+        question="Which seat had already returned when the external reader saw four rows but no team result?",
+        kind="native-scripted-calibration",
+        guide=f"{_JOURNAL}/results.md",
+        module="examples.seatlab.workbench.seat_stream",
+        argv=(
+            f"{_JOURNAL}/journals/support-return.prefix.jsonl",
+            "--result",
+            f"{_JOURNAL}/results/support-return.json",
+            "--json",
+        ),
+        report=f"{_JOURNAL}/early-bound.json",
+        exit_code=0,
+        sha256="517ca6243c2bfacbd68de31972cf85dce8430397598d361826691a49647dca61",
+    ),
+    Study(
+        id="seat-return-gate",
+        question="Does a host workflow refuse a harness stop even when the team's final reward is one?",
+        kind="native-scripted-calibration",
+        guide=f"{_GATE}/results.md",
+        module="examples.seatlab.workbench.wait_return",
+        argv=(
+            f"{_GATE}/gate-stopped.prefix.jsonl",
+            "--trial",
+            "68805ba8-34aa-44e9-8233-e5c469dd5401",
+            "--seat",
+            "p2",
+            "--timeout",
+            "0",
+            "--json",
+        ),
+        report=f"{_GATE}/gate-stopped.wait.json",
+        exit_code=1,
+        sha256="1b2e9aa23b84218bc73a469f4de139ca4a848823b1710320d7a3a7c04e7b20d7",
     ),
 )
 

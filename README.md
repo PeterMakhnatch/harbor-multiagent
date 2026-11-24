@@ -24,6 +24,8 @@ The first profile withholds one worker. The second includes all workers and adds
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
 
+To act on a participant's return instead of the final team reward, [watch a native seat](examples/seatlab/results/seat-event-stream/results.md) or [wait for a named return from another process](examples/seatlab/results/seat-event-stream/return-gate/results.md). The host records seat state, not prompts or messages. A harness stop does not count as a return.
+
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
 ```sh
