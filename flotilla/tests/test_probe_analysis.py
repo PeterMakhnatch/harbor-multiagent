@@ -238,56 +238,78 @@ def test_a_variant_label_gives_its_kind_even_when_the_arms_fit_another_kind(tmp_
 
 
 def test_several_builds_of_one_kind_get_their_own_cells_summaries_holm_and_names(tmp_path, capsys):
-    def built(label, *args, **kwargs):
-        return row(*args, **kwargs) | {"build": label}
+    def built(folder, label, *args, **kwargs):
+        return row(*args, **kwargs) | {"build": label, "build_root": str(tmp_path / folder)}
 
-    plain = [built("probe.conformity", "m/a", arm, i, arm == "talk-quiet") for i in range(6)
-             for arm in ("talk-quiet", "talk-wrong")]
-    plain += [built("probe.conformity", "m/b", arm, i, True) for i in range(6) for arm in ("talk-quiet", "talk-wrong")]
-    argue = [built("probe.conformity-commit", "m/a", arm, i, True, started="2026-11-24T01:00:00Z") for i in range(4)
-             for arm in ("talk-quiet", "talk-argue")]
-    verify = [built("probe.verify", "m/a", "talk-quiet", 0, True, kind="verify")]
-    alone = PA.analyse(plain + verify)
-    assert all("build" not in r for r in alone["rows"]) and {r["family"] for r in alone["rows"]} == {
-        "probe.conformity", "probe.verify"}
+    early = "2026-11-23T00:00:00Z"  # pc2 ran first: pooled with pc3 (one label), its trials would fill pc3's cells
+    pc2 = [built("pc2", "probe.conformity", "m/a", arm, i, True, started=early, job="pc2-000001") for i in range(6)
+           for arm in ("talk-quiet", "talk-wrong")]
+    pc3 = [built("pc3", "probe.conformity", "m/a", arm, i, arm == "talk-quiet") for i in range(6)
+           for arm in ("talk-quiet", "talk-wrong")]
+    pc3 += [built("pc3", "probe.conformity", "m/b", arm, i, True) for i in range(6) for arm in ("talk-quiet", "talk-wrong")]
+    pa1 = [built("pa1", "probe.conformity-commit", "m/a", arm, i, True, started="2026-11-24T01:00:00Z")
+           for i in range(4) for arm in ("talk-quiet", "talk-argue")]
+    verify = [built("vf1", "probe.verify", "m/a", "talk-quiet", 0, True, kind="verify")]
+    alone = PA.analyse(pc3 + verify)
+    assert all("build" not in r and "build_root" not in r for r in alone["rows"])
+    assert {r["family"] for r in alone["rows"]} == {"probe.conformity", "probe.verify"}
     assert all("build" not in s for s in alone["summaries"])
-    both = PA.analyse(argue + plain + verify)
-    assert both["duplicates"] == [] and sum(r["counted"] for r in both["rows"]) == 33
+    both = PA.analyse(pa1 + pc3 + pc2 + verify)
+    assert both["duplicates"] == [] and sum(r["counted"] for r in both["rows"]) == 45
     assert {(r["family"], r.get("build")) for r in both["rows"]} == {
-        ("probe.conformity", "probe.conformity"), ("probe.conformity-commit", "probe.conformity-commit"),
-        ("probe.verify", None)}
+        ("probe.conformity (pc2)", "probe.conformity (pc2)"), ("probe.conformity (pc3)", "probe.conformity (pc3)"),
+        ("probe.conformity-commit (pa1)", "probe.conformity-commit (pa1)"), ("probe.verify", None)}
     names = [(s["kind"], s.get("build"), s["model"]) for s in both["summaries"]]
-    assert names == [("conformity", "probe.conformity", "m/a"), ("conformity", "probe.conformity", "m/b"),
-                     ("conformity", "probe.conformity-commit", "m/a"), ("verify", None, "m/a")]
-    for build, rows in (("probe.conformity", plain), ("probe.conformity-commit", argue)):
+    assert names == [("conformity", "probe.conformity (pc2)", "m/a"), ("conformity", "probe.conformity (pc3)", "m/a"),
+                     ("conformity", "probe.conformity (pc3)", "m/b"),
+                     ("conformity", "probe.conformity-commit (pa1)", "m/a"), ("verify", None, "m/a")]
+    for build, rows in (("probe.conformity (pc2)", pc2), ("probe.conformity (pc3)", pc3),
+                        ("probe.conformity-commit (pa1)", pa1)):
         mine = [s for s in both["summaries"] if s.get("build") == build]
         assert [{k: v for k, v in s.items() if k not in ("build", "card")} for s in mine] == [
             {k: v for k, v in s.items() if k != "card"} for s in PA.analyse(rows)["summaries"]]
-    wrong = next(s for s in both["summaries"] if s.get("build") == "probe.conformity" and s["model"] == "m/a")
+    wrong = next(s for s in both["summaries"] if s.get("build") == "probe.conformity (pc3)" and s["model"] == "m/a")
+    assert (wrong["primary"]["b"], wrong["primary"]["pairs"]) == (6, 6)  # pc3's own pairs, none of pc2's
     assert wrong["primary"]["p_holm"] == 2 * wrong["primary"]["p"]  # Holm over m/a and m/b of this build only
-    assert wrong["card"].startswith("m/a conformity (probe.conformity): correct talk-quiet 6/6")
+    assert wrong["card"].startswith("m/a conformity (probe.conformity (pc3)): correct talk-quiet 6/6")
     manifests = {}
-    for label in ("probe.conformity", "probe.conformity-commit"):
-        path = tmp_path / label / "manifest.json"
+    for folder, label in (("pc3", "probe.conformity"), ("pa1", "probe.conformity-commit")):
+        path = tmp_path / folder / "manifest.json"
         path.parent.mkdir()
         path.write_text(json.dumps({"tasks": {"t0": {"label": label}}}))
-        manifests[label] = str(path)
+        manifests[folder] = str(path)
     plan_path = tmp_path / "two.json"
     plan_path.write_text(json.dumps({"name": "two", "models": ["m/a"], "task_sets": [
-        {"manifest": manifests["probe.conformity"], "instances": [0, 6], "arms": ["talk-quiet"]},
-        {"manifest": manifests["probe.conformity-commit"], "instances": [0, 4], "arms": ["talk-quiet", "talk-argue"]}]}))
+        {"manifest": manifests["pc3"], "instances": [0, 6], "arms": ["talk-quiet"]},
+        {"manifest": manifests["pa1"], "instances": [0, 4], "arms": ["talk-quiet", "talk-argue"]}]}))
     plan = PA.read_plan(plan_path)
-    assert [s["label"] for s in plan["sets"]] == ["probe.conformity", "probe.conformity-commit"]
-    assert PA.primary_arms("conformity", plan, "probe.conformity-commit") == ("talk-quiet", "talk-argue", True)
-    assert PA.primary_arms("conformity", plan, "probe.conformity") == ("talk-quiet", "talk-wrong", False)
-    found = PA.analyse(argue + plain, plan=plan)
-    assert found["missing"] == ["probe.conformity instance 6 talk-quiet m/a",
-                                "probe.conformity-commit instance 4 talk-quiet m/a",
-                                "probe.conformity-commit instance 4 talk-argue m/a"]
+    assert [s["build"] for s in plan["sets"]] == ["probe.conformity (pc3)", "probe.conformity-commit (pa1)"]
+    assert PA.primary_arms("conformity", plan, "probe.conformity-commit (pa1)") == ("talk-quiet", "talk-argue", True)
+    assert PA.primary_arms("conformity", plan, "probe.conformity (pc3)") == ("talk-quiet", "talk-wrong", False)
+    found = PA.analyse(pa1 + pc3 + pc2, plan=plan)
+    assert found["missing"] == ["probe.conformity (pc3) instance 6 talk-quiet m/a",
+                                "probe.conformity-commit (pa1) instance 4 talk-quiet m/a",
+                                "probe.conformity-commit (pa1) instance 4 talk-argue m/a"]
     PA.report(found, [])
     text = capsys.readouterr().out
     assert "Holm over the models of a kind per build (several builds of one kind)" in text
-    assert "\n### m/a (probe.conformity-commit)\n" in text and "| conformity (probe.conformity-commit) | talk-argue |" in text
+    assert "\n### m/a (probe.conformity-commit (pa1))\n" in text
+    assert "| conformity (probe.conformity-commit (pa1)) | talk-argue |" in text
+
+
+def test_builds_that_cannot_be_told_apart_are_refused(tmp_path):
+    (tmp_path / "a" / "pc3").mkdir(parents=True)
+    (tmp_path / "b" / "pc3").mkdir(parents=True)
+    twins = [row("m/a", "talk-quiet", 0, True) | {"build": "probe.conformity", "build_root": str(tmp_path / side / "pc3")}
+             for side in "ab"]
+    with pytest.raises(SystemExit, match="refused: two conformity builds share the name 'probe.conformity \\(pc3\\)'"):
+        PA.analyse(twins)
+    task = tmp_path / "a" / "pc3" / "probe.conformity" / "t-1"
+    assert PA.task_root(task, [tmp_path / "b" / "pc3", tmp_path / "a" / "pc3"]) == tmp_path / "a" / "pc3"
+    with pytest.raises(SystemExit, match="is under 0 --tasks folders"):
+        PA.task_root(task, [tmp_path / "b" / "pc3"])
+    with pytest.raises(SystemExit, match="is under 2 --tasks folders"):
+        PA.task_root(task, [tmp_path / "a", tmp_path / "a" / "pc3"])
 
 
 def test_wilson_and_sign_test():

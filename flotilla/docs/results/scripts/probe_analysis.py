@@ -14,10 +14,12 @@
   --plan the instance and the arm are the plan's. Everything else is excluded and listed with its reasons. In each
   (kind, instance, arm, model) cell the first valid trial by start time counts (xm_analysis.choose); only counted
   trials enter the rates and tests; with --plan, a plan cell without a counted trial is listed as missing.
-- Builds: when a run holds trials of several builds (manifest labels, e.g. probe.audit and probe.audit-b2) of one
-  kind, the cells, the summaries and the Holm families are per build instead of per kind: a row's `family` is its
-  label, each summary has `build`, and the tables and cards name it; each build then gets the numbers that a run over
-  that build alone gives. A kind with one build keeps the `probe.<kind>` cells and the output of earlier versions.
+- Builds: a build is one manifest label in one --tasks folder (pc2 and pc3 are both probe.conformity, in two
+  folders). When a run holds trials of several builds of one kind, the cells, the summaries and the Holm families
+  are per build instead of per kind: a row's `family` is the build's name, `<label> (<task folder name>)`, each
+  summary has `build`, and the tables and cards name it; each build then gets the numbers that a run over that build
+  alone gives. Two such builds of one name, and a task under no --tasks folder or under two, are refused. A kind
+  with one build keeps the `probe.<kind>` cells and the output of earlier versions.
 - Outcomes are score.json's (world/score.py): correct, adopted_wrong (final answer = W), first_attempt, exposed,
   n_attempts, n_gated, answer_value.
 - Paired tests per model use the instances counted in both arms; b = only the first arm correct, c = only the second;
@@ -431,8 +433,14 @@ def read_plan(path: Path) -> dict[str, Any]:
             "instances": {int(i) for s in sets for i in s.get("instances") or []} or None,
             "arms": {a for s in sets for a in s.get("arms") or s.get("conditions") or []} or None,
             "sets": [{"kind": manifest_kind(s.get("manifest")), "label": manifest_label(s.get("manifest")),
+                      "build": build_name(manifest_label(s.get("manifest")), s.get("manifest")),
                       "instances": {int(i) for i in s.get("instances") or []},
                       "arms": set(s.get("arms") or s.get("conditions") or [])} for s in sets]}
+
+
+def build_name(label: str | None, manifest: str | None) -> str | None:
+    """A plan task set's build as split_builds names it: its label and its task folder (the manifest's folder)."""
+    return f"{label} ({Path(manifest).parent.name})" if label and manifest else None
 
 
 def manifest_label(manifest: str | None) -> str | None:
@@ -492,6 +500,7 @@ def trial_row(trial: Path, tasks: dict[str, dict], task_roots: list[Path], plan:
     config, result, task = XM.locate(trial, tasks)
     if task is None:
         return None
+    build_root = task_root(Path(task["task_dir"]), task_roots)
     verdict = XM.read_json(trial / "verifier" / "score.json")
     state = XM.read_json(trial / "verifier" / "world-state.json")
     task_json = XM.read_json(Path(task["task_dir"]) / "environment" / "task.json") or {}
@@ -508,7 +517,8 @@ def trial_row(trial: Path, tasks: dict[str, dict], task_roots: list[Path], plan:
         reasons.append("no probe fields in score.json")
     reasons += plan_problems(config, result or {}, model, task, confederates, plan)
     row = {"job": trial.parent.name, "trial": trial.name, "started": (result or {}).get("started_at") or "",
-           "family": f"probe.{kind}", "build": Path(task["task_dir"]).parent.name, "kind": kind,
+           "family": f"probe.{kind}", "build": Path(task["task_dir"]).parent.name,
+           "build_root": str(build_root.resolve()), "kind": kind,
            "instance": task["instance"], "arm": task["arm"],
            "model": model, "valid": not reasons, "reasons": reasons,
            **{key: v.get(key) for key in ("correct", "adopted_wrong", "answer_value", "first_attempt",
@@ -771,7 +781,7 @@ def primary_arms(kind: str, plan: dict[str, Any] | None, build: str | None = Non
     plan pre-registers talk-quiet vs the other (pa1: talk-quiet vs talk-argue); else, and when that pair is section
     7's anyway, section 7's or 8's."""
     first, second = PRIMARY.get(kind, ("", ""))
-    arms = {arm for s in plan_sets(plan) if set_kind(s) == kind and build in (None, s.get("label"))
+    arms = {arm for s in plan_sets(plan) if set_kind(s) == kind and build in (None, s.get("build"))
             for arm in s["arms"]} if plan else set()
     if kind == "conformity" and len(arms) == 2 and "talk-quiet" in arms:
         (other,) = sorted(arms - {"talk-quiet"})
@@ -812,30 +822,53 @@ def model_summary(kind: str, model: str, counted: dict[tuple, dict],
 
 def missing_cells(plan: dict[str, Any], counted: dict[tuple, dict], split: set[str]) -> list[str]:
     """Plan cells (kind, instance, arm, model) without a counted trial, task set by task set; a kind split by build
-    has the set's label in place of probe.<kind>."""
+    has the set's build (label and task folder) in place of probe.<kind>."""
     found = []
     for task_set in plan_sets(plan):
         kind = set_kind(task_set)
         if kind is None:
             continue
-        family = task_set.get("label") if kind in split and task_set.get("label") else f"probe.{kind}"
+        family = task_set.get("build") if kind in split and task_set.get("build") else f"probe.{kind}"
         found += [f"{family} instance {i} {arm} {model}" for model in plan["models"]
                   for arm in ARMS[kind] if arm in task_set["arms"] for i in sorted(task_set["instances"])
                   if (family, i, arm, model) not in counted]
     return found
 
 
+def task_root(task_dir: Path, task_roots: list[Path]) -> Path:
+    """The --tasks folder (one build's manifest) that holds a task: the build's identity, with its label, so that
+    two builds never pool, not even two of one label (pc2 and pc3 are both probe.conformity)."""
+    found = [root for root in task_roots if task_dir.resolve().is_relative_to(root.resolve())]
+    if len(found) != 1:
+        raise SystemExit(f"refused: task {task_dir} is under {len(found)} --tasks folders "
+                         f"({', '.join(map(str, found)) or 'none'}); each task must be in exactly one build's folder")
+    return found[0]
+
+
 def split_builds(rows: list[dict]) -> tuple[list[dict], set[str]]:
-    """The rows with their cell family: the build's label for a kind with trials of several builds, else probe.<kind>
-    (and no `build` field, as before builds were told apart); and the kinds so split."""
-    builds: dict[str, set[str]] = {}
+    """The rows with their cell family: for a kind with trials of several builds (a build: one label in one --tasks
+    folder), the build's name, `<label> (<task folder name>)`, else probe.<kind> (and no `build` field, as before
+    builds were told apart); and the kinds so split. Two builds of one name (one label in two task folders of one
+    name) are refused."""
+    def key(row: dict) -> tuple[str, str]:
+        return row.get("build") or row["family"], row.get("build_root") or ""
+
+    def name(label: str, root: str) -> str:
+        return f"{label} ({Path(root).name})" if root else label
+
+    builds: dict[str, set[tuple[str, str]]] = {}
     for row in rows:
-        builds.setdefault(row["kind"], set()).add(row.get("build") or row["family"])
-    split = {kind for kind, labels in builds.items() if len(labels) > 1}
+        builds.setdefault(row["kind"], set()).add(key(row))
+    split = {kind for kind, keys in builds.items() if len(keys) > 1}
+    for kind in sorted(split):
+        names = sorted(name(*k) for k in builds[kind])
+        if len(set(names)) != len(names):
+            raise SystemExit(f"refused: two {kind} builds share the name {names[0]!r} or another (builds "
+                             f"{sorted(builds[kind])}); give their task folders different names")
     found = []
     for row in rows:
-        rest = {key: value for key, value in row.items() if key != "build"}
-        build = row.get("build") or row["family"]
+        rest = {k: v for k, v in row.items() if k not in ("build", "build_root")}
+        build = name(*key(row))
         found.append(rest | {"family": build, "build": build} if row["kind"] in split else rest)
     return found, split
 
