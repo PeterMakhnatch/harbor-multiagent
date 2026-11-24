@@ -175,6 +175,10 @@ command = "curl -s http://localhost:8000/stats > /tmp/stats.json"
 timeout_sec = 30
 ```
 
+Without `timeout_sec`, the hooks of one collection share a single budget, the
+verifier timeout. Each hook gets what is left of it, and a hook's own
+`timeout_sec` can only shorten its share.
+
 Sidecar artifacts and collection hooks require a Compose-capable sandbox. See
 the [working example](https://github.com/harbor-framework/harbor/tree/main/examples/tasks/sidecar-artifacts)
 and [provider capabilities](/sandboxes/pre-integrated-sandboxes#provider-capabilities).

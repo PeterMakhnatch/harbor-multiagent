@@ -18,6 +18,7 @@ from harbor.environments.base import (
     EnvironmentResourceCapabilities,
     ExecResult,
 )
+from harbor.environments.dind_compose import shell_env_exports
 from harbor.environments.options import EnvironmentOptions
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.trial.config import ResourceMode
@@ -694,18 +695,24 @@ class OpenshiftEnvironment(BaseEnvironment):
         env = self._merge_env(env)
 
         shell_parts = []
-        if env:
-            for key, value in env.items():
-                shell_parts.append(f"export {key}={shlex.quote(value)}")
-
         effective_cwd = cwd or self.task_env_config.workdir
         if effective_cwd:
             shell_parts.append(f"cd {shlex.quote(effective_cwd)}")
 
         shell_parts.append(command)
         shell_command = " && ".join(shell_parts)
+        stdin_data = (
+            f"{shell_env_exports(env)}\n{{\n:\n{shell_command}\n}} </dev/null\n".encode()
+            if env
+            else None
+        )
+        if stdin_data is not None:
+            shell_command = "bash -s"
 
-        exec_command = ["exec", self._pod_name, "-c", "main", *self._ns_args(), "--"]
+        exec_command = ["exec", self._pod_name, "-c", "main", *self._ns_args()]
+        if stdin_data is not None:
+            exec_command.append("-i")
+        exec_command.append("--")
 
         if user is not None:
             if isinstance(user, int):
@@ -714,11 +721,13 @@ class OpenshiftEnvironment(BaseEnvironment):
                 user_arg = shlex.quote(user)
             wrapped = f"su {user_arg} -s /bin/bash -c {shlex.quote(shell_command)}"
             exec_command.extend(["bash", "-c", wrapped])
+        elif stdin_data is not None:
+            exec_command.extend(["bash", "-s"])
         else:
             exec_command.extend(["bash", "-c", shell_command])
 
         return await self._run_oc_command(
-            exec_command, check=False, timeout_sec=timeout_sec
+            exec_command, check=False, timeout_sec=timeout_sec, stdin_data=stdin_data
         )
 
     @override
