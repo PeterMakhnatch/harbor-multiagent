@@ -1,0 +1,48 @@
+{
+ "name": "cr1smoke",
+ "prereg": {
+  "commit": "29c12a04db8c8cd67fbd223ea86e123288734cc1",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 15. Pre-registration: challenge-response pilot cr1 (written 2026-11-24, before any trial with teammate replies)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/cr1",
+   "manifest": ".flotilla-local/tasks/cr1/manifest.json",
+   "instances": [
+    0,
+    1
+   ],
+   "arms": [
+    "talk-false",
+    "talk-false-insist",
+    "talk-false-admit"
+   ]
+  }
+ ],
+ "scripted_seats": [
+  "p2",
+  "p3",
+  "p4"
+ ],
+ "models": [
+  "openrouter/anthropic/claude-haiku-5.5",
+  "openrouter/openai/gpt-6-luna",
+  "openrouter/deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "modal",
+  "concurrency": 10,
+  "start_spacing_s": 5.0
+ },
+ "budget": {
+  "cap_usd": 0.1,
+  "reserve_per_trial_usd": 0.02,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261127
+}

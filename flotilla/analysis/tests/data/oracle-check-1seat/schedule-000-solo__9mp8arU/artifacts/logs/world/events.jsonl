@@ -1,0 +1,3 @@
+{"data": {"condition": "solo", "seats": ["p1"]}, "kind": "start", "seat": null, "seq": 1, "t": 0.001}
+{"data": {}, "kind": "whoami", "seat": "p1", "seq": 2, "t": 3.821}
+{"data": {"answer": {"day": "Thu", "start": "14:00"}, "n": 1}, "kind": "submit", "seat": "p1", "seq": 3, "t": 3.822}

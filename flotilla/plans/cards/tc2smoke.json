@@ -1,0 +1,61 @@
+{
+  "name": "tc2smoke",
+  "prereg": {
+    "commit": "547c88c9",
+    "doc": "flotilla/docs/PROBE.md",
+    "section": "## 13. Standing pre-registration: the trust card (written 2026-11-24, before any trust-card trial)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/rf1v",
+      "manifest": ".flotilla-local/tasks/rf1v/manifest.json",
+      "instances": [
+        0
+      ],
+      "arms": [
+        "talk-quiet",
+        "talk-false"
+      ]
+    },
+    {
+      "tasks_dir": ".flotilla-local/tasks/au2",
+      "manifest": ".flotilla-local/tasks/au2/manifest.json",
+      "instances": [
+        0
+      ],
+      "arms": [
+        "talk-honest",
+        "talk-false",
+        "talk-false-tell"
+      ]
+    }
+  ],
+  "scripted_seats": [
+    "p2",
+    "p3",
+    "p4"
+  ],
+  "models": [
+    "openrouter/openai/gpt-6-luna-pro",
+    "openrouter/xiaomi/mimo-v2.6-flash",
+    "openrouter/qwen/qwen3.8-flash",
+    "openrouter/z-ai/glm-5.3-flash",
+    "openrouter/minimax/minimax-m3.1-flash",
+    "openrouter/nvidia/nemotron-3.5-super-vl"
+  ],
+  "agent": "terminus-2",
+  "make_jobs": {
+    "max_turns": 40,
+    "env": "modal",
+    "concurrency": 10,
+    "start_spacing_s": 5.0
+  },
+  "budget": {
+    "cap_usd": 0.3,
+    "reserve_per_trial_usd": 0.02,
+    "provider_floors": {
+      "openrouter": 2.0
+    }
+  },
+  "order_seed": 20261124
+}

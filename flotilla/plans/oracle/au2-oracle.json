@@ -1,0 +1,32 @@
+{
+ "name": "au2-rehearsal",
+ "prereg": {
+  "commit": "1c4b273bbf5cf7833d4635e6b126894899ccb639",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 13. Standing pre-registration: the trust card (written 2026-11-24, before any trust-card trial)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/au2",
+   "manifest": ".flotilla-local/tasks/au2/manifest.json",
+   "instances": [0, 1],
+   "arms": ["talk-honest", "talk-false", "talk-false-tell"]
+  }
+ ],
+ "scripted_seats": ["p2", "p3", "p4"],
+ "models": [null],
+ "agent": "oracle",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "docker",
+  "concurrency": 2,
+  "start_spacing_s": 0.0
+ },
+ "budget": {
+  "cap_usd": 0.0,
+  "reserve_per_trial_usd": 0.0,
+  "provider_floors": {},
+  "max_invalid_streak": 1
+ },
+ "order_seed": 20261127
+}

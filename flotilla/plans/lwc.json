@@ -1,0 +1,33 @@
+{
+ "name": "lwc",
+ "prereg": {
+  "commit": "20af5154238e76777a1b3a06e85cb37cbccef0fd",
+  "doc": "flotilla/docs/SPLIT.md",
+  "section": "## 19. Listening wave lw1"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/lw1-split",
+   "manifest": ".flotilla-local/tasks/lw1-split/manifest.json",
+   "instances": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16],
+   "arms": ["talk", "gated"]
+  }
+ ],
+ "models": [
+  "openrouter/deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 60,
+  "env": "modal",
+  "concurrency": 8
+ },
+ "budget": {
+  "cap_usd": 3.0,
+  "reserve_per_trial_usd": 0.3,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261124
+}

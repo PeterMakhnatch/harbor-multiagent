@@ -1,0 +1,36 @@
+{
+  "name": "xm1s",
+  "prereg": {
+    "commit": "66d1ba4f1254cccb8acf3ad2e0b714ce6e9ba784",
+    "doc": "flotilla/docs/SPLIT.md",
+    "section": "15. Cross-model wave xm1 (split part): pre-registration"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1s-split",
+      "manifest": ".flotilla-local/tasks/xm1s-split/manifest.json",
+      "instances": [12],
+      "arms": ["talk"]
+    },
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1s-commons",
+      "manifest": ".flotilla-local/tasks/xm1s-commons/manifest.json",
+      "instances": [12],
+      "arms": ["talk"]
+    }
+  ],
+  "models": [
+    "openrouter/qwen/qwen3.8-27b",
+    "openrouter/openai/gpt-oss-120b",
+    "openrouter/anthropic/claude-haiku-5.5",
+    "openrouter/deepseek/deepseek-v4.1-flash-1017"
+  ],
+  "agent": "terminus-2",
+  "make_jobs": {"max_turns": 40, "env": "modal", "concurrency": 8},
+  "budget": {
+    "cap_usd": 3.0,
+    "reserve_per_trial_usd": 0.3,
+    "provider_floors": {"openrouter": 2.0}
+  },
+  "order_seed": 20261123
+}

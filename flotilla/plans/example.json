@@ -1,0 +1,31 @@
+{
+  "name": "example",
+  "prereg": {
+    "commit": "f2b035a3",
+    "doc": "flotilla/docs/NEXT-WAVE.md",
+    "section": "How to run a wave"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/sp3",
+      "manifest": ".flotilla-local/tasks/sp3/manifest.json",
+      "instances": [0, 1],
+      "arms": ["silent", "talk"]
+    },
+    {
+      "tasks_dir": ".flotilla-local/tasks/w1",
+      "manifest": ".flotilla-local/tasks/w1/manifest.json",
+      "instances": [0, 1],
+      "arms": ["silent", "talk"]
+    }
+  ],
+  "models": ["deepseek/deepseek-flash", "openrouter/qwen/qwen3.8-27b"],
+  "agent": "terminus-2",
+  "make_jobs": {"max_turns": 40, "env": "modal", "concurrency": 10},
+  "budget": {
+    "cap_usd": 5.0,
+    "reserve_per_trial_usd": 0.1,
+    "provider_floors": {"deepseek": 1.5, "openrouter": 5.0}
+  },
+  "order_seed": 1
+}

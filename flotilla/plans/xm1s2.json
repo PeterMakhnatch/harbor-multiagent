@@ -1,0 +1,48 @@
+{
+  "name": "xm1s2",
+  "prereg": {
+    "commit": "831506e4104373804094ef4e5668138df1d0fb74",
+    "doc": "flotilla/docs/SPLIT.md",
+    "section": "Amendment 1 (2026-11-23, before the first wave trial)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1s-split",
+      "manifest": ".flotilla-local/tasks/xm1s-split/manifest.json",
+      "instances": [
+        12
+      ],
+      "arms": [
+        "talk"
+      ]
+    },
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1s-commons",
+      "manifest": ".flotilla-local/tasks/xm1s-commons/manifest.json",
+      "instances": [
+        12
+      ],
+      "arms": [
+        "talk"
+      ]
+    }
+  ],
+  "models": [
+    "openrouter/qwen/qwen3.8-flash",
+    "openrouter/z-ai/glm-5.3-flash"
+  ],
+  "agent": "terminus-2",
+  "make_jobs": {
+    "max_turns": 40,
+    "env": "modal",
+    "concurrency": 4
+  },
+  "budget": {
+    "cap_usd": 2.0,
+    "reserve_per_trial_usd": 0.3,
+    "provider_floors": {
+      "openrouter": 2.0
+    }
+  },
+  "order_seed": 20261123
+}

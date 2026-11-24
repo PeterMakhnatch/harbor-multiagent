@@ -1,0 +1,95 @@
+{
+ "name": "pc3",
+ "prereg": {
+  "commit": "97f353f2cb2a7ee8b9ee35637aeb04266113c3d7",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 9. Pre-registration: conformity follow-up pc3 on world version 14 (written 2026-11-24, before any `pc2` outcome is read)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/pc3",
+   "manifest": ".flotilla-local/tasks/pc3/manifest.json",
+   "instances": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47
+   ],
+   "arms": [
+    "talk-quiet",
+    "talk-one",
+    "talk-lead",
+    "talk-wrong"
+   ]
+  }
+ ],
+ "scripted_seats": [
+  "p2",
+  "p3",
+  "p4"
+ ],
+ "models": [
+  "openrouter/anthropic/claude-haiku-5.5",
+  "openrouter/openai/gpt-6-luna",
+  "openrouter/deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "modal",
+  "concurrency": 10,
+  "start_spacing_s": 5.0
+ },
+ "budget": {
+  "cap_usd": 2.0,
+  "reserve_per_trial_usd": 0.05,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261124
+}

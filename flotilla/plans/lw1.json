@@ -1,0 +1,35 @@
+{
+ "name": "lw1",
+ "prereg": {
+  "commit": "20af5154238e76777a1b3a06e85cb37cbccef0fd",
+  "doc": "flotilla/docs/SPLIT.md",
+  "section": "## 19. Listening wave lw1"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/lw1-split",
+   "manifest": ".flotilla-local/tasks/lw1-split/manifest.json",
+   "instances": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                 29, 30, 31, 32],
+   "arms": ["talk", "gated"]
+  }
+ ],
+ "models": [
+  "openrouter/anthropic/claude-haiku-5.5",
+  "openrouter/openai/gpt-6-luna"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 60,
+  "env": "modal",
+  "concurrency": 8
+ },
+ "budget": {
+  "cap_usd": 4.0,
+  "reserve_per_trial_usd": 0.3,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261124
+}

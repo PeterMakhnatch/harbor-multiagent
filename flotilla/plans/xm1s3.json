@@ -1,0 +1,48 @@
+{
+  "name": "xm1s3",
+  "prereg": {
+    "commit": "18ce376a92b52133f5bba600d3996e1676dc56b9",
+    "doc": "flotilla/docs/SPLIT.md",
+    "section": "Amendment 3 (2026-11-23, after these smoke facts"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1s-split",
+      "manifest": ".flotilla-local/tasks/xm1s-split/manifest.json",
+      "instances": [
+        12
+      ],
+      "arms": [
+        "talk"
+      ]
+    },
+    {
+      "tasks_dir": ".flotilla-local/tasks/xm1s-commons",
+      "manifest": ".flotilla-local/tasks/xm1s-commons/manifest.json",
+      "instances": [
+        12
+      ],
+      "arms": [
+        "talk"
+      ]
+    }
+  ],
+  "models": [
+    "openrouter/openai/gpt-6-luna",
+    "openrouter/meta/muse-ember"
+  ],
+  "agent": "terminus-2",
+  "make_jobs": {
+    "max_turns": 40,
+    "env": "modal",
+    "concurrency": 4
+  },
+  "budget": {
+    "cap_usd": 2.0,
+    "reserve_per_trial_usd": 0.3,
+    "provider_floors": {
+      "openrouter": 2.0
+    }
+  },
+  "order_seed": 20261123
+}

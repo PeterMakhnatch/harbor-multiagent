@@ -1,0 +1,38 @@
+{
+ "name": "io1-rehearsal",
+ "prereg": {
+  "commit": "1c4b273bbf5cf7833d4635e6b126894899ccb639",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 14. Pre-registration: order or instruction, pilot io1 (written 2026-11-24, after the first-contact analysis, before any `--inbox` or late-post trial)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/io1v",
+   "manifest": ".flotilla-local/tasks/io1v/manifest.json",
+   "instances": [0, 1],
+   "arms": ["talk-quiet", "talk-false"]
+  },
+  {
+   "tasks_dir": ".flotilla-local/tasks/io1s",
+   "manifest": ".flotilla-local/tasks/io1s/manifest.json",
+   "instances": [0, 1],
+   "arms": ["talk-quiet", "talk-false"]
+  }
+ ],
+ "scripted_seats": ["p2", "p3", "p4"],
+ "models": [null],
+ "agent": "oracle",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "docker",
+  "concurrency": 2,
+  "start_spacing_s": 0.0
+ },
+ "budget": {
+  "cap_usd": 0.0,
+  "reserve_per_trial_usd": 0.0,
+  "provider_floors": {},
+  "max_invalid_streak": 1
+ },
+ "order_seed": 20261126
+}

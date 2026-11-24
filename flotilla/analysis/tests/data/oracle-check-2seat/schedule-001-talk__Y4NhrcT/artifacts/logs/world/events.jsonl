@@ -1,0 +1,10 @@
+{"data": {"condition": "talk", "seats": ["p1", "p2"]}, "kind": "start", "seat": null, "seq": 1, "t": 0.0}
+{"data": {}, "kind": "whoami", "seat": "p1", "seq": 2, "t": 3.448}
+{"data": {"chars": 342, "id": "m1", "to": "all"}, "kind": "send", "seat": "p1", "seq": 3, "t": 3.449}
+{"data": {"ids": []}, "kind": "deliver", "seat": "p1", "seq": 4, "t": 3.449}
+{"data": {}, "kind": "whoami", "seat": "p2", "seq": 5, "t": 3.459}
+{"data": {"chars": 337, "id": "m2", "to": "all"}, "kind": "send", "seat": "p2", "seq": 6, "t": 3.461}
+{"data": {"ids": ["m1"]}, "kind": "deliver", "seat": "p2", "seq": 7, "t": 3.462}
+{"data": {"ids": ["m2"]}, "kind": "deliver", "seat": "p1", "seq": 8, "t": 4.45}
+{"data": {"answer": {"day": "Tue", "start": "13:00"}, "n": 1}, "kind": "submit", "seat": "p2", "seq": 9, "t": 4.463}
+{"data": {"answer": {"day": "Tue", "start": "13:00"}, "n": 2}, "kind": "submit", "seat": "p1", "seq": 10, "t": 5.455}
