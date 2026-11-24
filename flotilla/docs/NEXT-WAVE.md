@@ -192,7 +192,8 @@ other set's trials as unmapped; `io1_decide.py` does not read it and marks a sho
 
 One command per stage gives any model a card under the standing protocol of PROBE.md section 13: reliance
 (`rf1v`, 32 instances x `talk-quiet`, `talk-false`) and audit (`au2`, 40 instances x `talk-honest`, `talk-false`,
-`talk-false-tell`), 184 trials per model, confederates p2-p4 on the `oracle` agent.
+`talk-false-tell`), 184 trials per model, confederates p2-p4 on the `oracle` agent. Ready to run:
+`flotilla/plans/cards/tc1.json` (the 3 night models, 552 trials, cap $3.31; it replicates `rf1v` and runs `au2`).
 
 ```bash
 python3 flotilla/trust_card.py plan --model openrouter/<model> --name card-<short> --prereg-commit <sha with section 13>
