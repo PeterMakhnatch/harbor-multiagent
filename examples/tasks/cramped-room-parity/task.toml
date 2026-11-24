@@ -1,0 +1,26 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/kitchen.jsonl"]
+
+[task]
+name = "harbor/cramped-room-parity"
+description = "Two chefs replay a fixed joint action sequence in Overcooked-AI's Cramped Room."
+keywords = ["seats", "docker-compose", "overcooked", "parity"]
+
+[metadata]
+category = "example"
+tags = ["seats", "deterministic"]
+
+[verifier]
+timeout_sec = 120.0
+
+[agent]
+timeout_sec = 120.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[agents.chef0]
+under_test = true
+
+[agents.chef1]
+under_test = true
