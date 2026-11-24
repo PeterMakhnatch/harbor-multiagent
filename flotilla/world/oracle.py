@@ -11,9 +11,10 @@ only; the oracle reads plain text with the family's `parse_text`, if it has one.
 its own first call; a probe's posts are scheduled posts of the world (CONTRACT.md 13), so its plan is usually
 empty and it makes no call at all. A seat of a family without pooling (`POOLING = False`) needs no teammate: it
 submits its own answer once, through the world's submit gate if there is one. A probe `audit` subject holds no
-data (its briefing names the months only): it audits the first month (`POST /audit`, world version 15) and submits
-the answer key that build_tasks.py gave the oracle alone (answer.json next to this file). The family module sits
-next to this file (solution/family.py). See CONTRACT.md 8, 12, 13 and 14.
+data (its briefing names the months only): it audits the months in order while the world says audits are left
+(`POST /audit`, world version 15; one with the default budget, none with budget 0) and submits the answer key that
+build_tasks.py gave the oracle alone (answer.json next to this file). The family module sits next to this file
+(solution/family.py). See CONTRACT.md 8, 12, 13 and 14.
 """
 
 from __future__ import annotations
@@ -188,11 +189,15 @@ def confederate(own: dict[str, Any]) -> None:
 
 def own_answer(family: Any, own: dict[str, Any]) -> None:
     """A family without pooling: submit the seat's own answer, through the submit gate (a refusal shows the unread
-    messages, and the oracle submits again). An audit subject audits one month, then submits the oracle's key."""
+    messages, and the oracle submits again). An audit subject audits months while audits are left, then submits the
+    oracle's key."""
     if "months" in own:
-        reply = post("/audit", {"month": own["months"][0]})
-        print(json.dumps({"audit": own["months"][0], "status": reply.get("status", 200),
-                          "audits_left": reply.get("audits_left")}), flush=True)
+        for month in own["months"]:
+            reply = post("/audit", {"month": month})
+            print(json.dumps({"audit": month, "status": reply.get("status", 200),
+                              "audits_left": reply.get("audits_left")}), flush=True)
+            if not reply.get("audits_left"):
+                break
         answer = json.loads(Path(__file__).with_name("answer.json").read_text())
     else:
         answer = family.oracle_answer([own])

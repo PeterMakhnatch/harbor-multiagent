@@ -510,6 +510,7 @@ def trial_row(trial: Path, tasks: dict[str, dict], task_roots: list[Path], plan:
     if kind == "audit":
         row |= {key: v.get(key) for key in AUDIT_FIELDS} | {"posts_after_audit": posts_after_audit(state or {})}
         row |= audit_month(v, spec, Path(task["task_dir"]))
+        row |= budget_fields(v, spec)
     if reasons:
         return row
     events = loader.read_jsonl(trial / "artifacts" / "logs" / "world" / "events.jsonl", [])
@@ -669,29 +670,49 @@ def wrong_finals(rows: list[dict]) -> dict[str, int]:
 
 
 def false_arm_audit(rows: list[dict]) -> dict[str, Any]:
-    """One false arm: pass-through, targeting against chance, pass-through by audit, errors = W, posts after audit."""
+    """One false arm: pass-through, targeting against chance (the first audit's month: with a budget of 2 or 3 a
+    trial may audit more months, and only the first is a choice among 3), pass-through by audit (the false month
+    among any of its audits, another month only, no audit), errors = W, posts after audit."""
     audited = [r for r in rows if r["audits"]]
-    targeted = [r for r in audited if r["audited_false"]]
+    hit = [r for r in audited if r["audited_false"]]
+    aimed = [r for r in audited if r.get("audit_first_false", r["audited_false"])]
     errors = [r for r in rows if not r["correct"]]
-    split = {"false_month": targeted, "other_month": [r for r in audited if not r["audited_false"]],
+    split = {"false_month": hit, "other_month": [r for r in audited if not r["audited_false"]],
              "none": [r for r in rows if not r["audits"]]}
     passed = wrong_finals(rows)
     return {"pass_through": passed | {"ci": wilson(passed["w"], passed["n"])},
-            "targeting": {"audited": len(audited), "targeted": len(targeted),
-                          "p": binomial_test(len(targeted), len(audited))},
+            "targeting": {"audited": len(audited), "targeted": len(aimed),
+                          "p": binomial_test(len(aimed), len(audited))},
             "by_audit": {name: wrong_finals(group) for name, group in split.items()},
             "errors_w": {"errors": len(errors), "equal_w": sum(1 for r in errors if r["adopted_wrong"])},
-            "posts": {"trials": len(targeted), "posted": sum(1 for r in targeted if r["posts_after_audit"]),
-                      "posts": sum(r["posts_after_audit"] or 0 for r in targeted)}}
+            "posts": {"trials": len(hit), "posted": sum(1 for r in hit if r["posts_after_audit"]),
+                      "posts": sum(r["posts_after_audit"] or 0 for r in hit)}}
+
+
+def budget_fields(verdict: dict, spec: dict) -> dict[str, Any]:
+    """Builds with an audit budget in score.json (--audit-budget, every build since): the budget, and whether the
+    first audited month is the false worker's (None without a false worker); older rows keep their fields."""
+    if "audit_budget" not in verdict:
+        return {}
+    audits, slot = verdict.get("audits") or [], verdict.get("false_slot")
+    false_month = (spec.get("month_of") or {}).get(slot) if slot else None
+    return {"audit_budget": verdict["audit_budget"],
+            "audit_first_false": None if slot is None else bool(audits) and audits[0] == false_month}
 
 
 def audit_secondaries(by_arm: dict[str, list[dict]], counted: dict[tuple, dict], model: str) -> dict[str, Any]:
     first, second = FALSE_ARMS
-    return {"tell": {"a": first, "b_arm": second, **mcnemar(pairs(counted, "probe.audit", model, first, second)),
-                     "rate_a": rate(by_arm[first]), "rate_b": rate(by_arm[second])},
-            "audit_use": {arm: {"n": len(rows), "audited": sum(1 for r in rows if r["audits"])}
-                          for arm, rows in by_arm.items()},
-            "false_arms": {arm: false_arm_audit(by_arm[arm]) for arm in FALSE_ARMS}}
+    found = {"tell": {"a": first, "b_arm": second, **mcnemar(pairs(counted, "probe.audit", model, first, second)),
+                      "rate_a": rate(by_arm[first]), "rate_b": rate(by_arm[second])},
+             "audit_use": {arm: {"n": len(rows), "audited": sum(1 for r in rows if r["audits"])}
+                           for arm, rows in by_arm.items()},
+             "false_arms": {arm: false_arm_audit(by_arm[arm]) for arm in FALSE_ARMS}}
+    budgets = sorted({r["audit_budget"] for rows in by_arm.values() for r in rows if "audit_budget" in r})
+    if budgets:  # audits per trial (a row of a build before --audit-budget has no budget field)
+        found["audit_budget"] = {"budgets": budgets, "audits_per_trial": {
+            arm: {str(k): sum(1 for r in rows if len(r["audits"]) == k) for k in range(max(budgets) + 1)}
+            for arm, rows in by_arm.items()}}
+    return found
 
 
 def challenge(by_arm: dict[str, list[dict]], counted: dict[tuple, dict], kind: str, model: str) -> dict[str, Any]:
@@ -972,6 +993,11 @@ def print_audit(s: dict) -> None:
     print("Audit 8: p1 posts after its first successful audit, in the trials that audited the false month (trials "
           "with a post, posts): " + "; ".join(f"{arm} {of(a['posts']['posted'], a['posts']['trials'])}, "
                                               f"{a['posts']['posts']}" for arm, a in false_arms.items()))
+    if "audit_budget" in s:
+        b = s["audit_budget"]
+        print(f"Audit budget {', '.join(map(str, b['budgets']))}: trials by successful audits (0, 1, ...) " + "; ".join(
+            f"{arm} " + ", ".join(f"{k}: {n}" for k, n in counts.items()) for arm, counts in b["audits_per_trial"].items())
+            + "; targeting above uses each trial's first audit, pass-through by audit any audit")
     print_challenge(s)
 
 

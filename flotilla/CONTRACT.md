@@ -502,6 +502,13 @@ line and no C, W, S_k or S'_k in anything the subject reads; the audit files giv
 key; W = C - S_k + S'_k of the false worker and the decoy is W; each worker posts exactly its number; the tell
 mark (`every <category> row`) is in the false worker's post of `talk-false-tell` and nowhere else.
 
+`build_tasks.py --audit-budget N` (kind `audit`, N in 0-3, default 1) sets the world's `audit.budget` to N and the
+subject's audit sentence to that budget (`probe.audit_sentence`; for 0 neither the sentence nor the `/audit`
+command line, and the world answers every audit 403 "audit budget used"); for N other than 1 task.json, task.toml
+[metadata] and the manifest's `build` have `audit_budget: N`, and a budget-1 build is unchanged. The verifier adds
+`audit_budget` (task.json's `audit.budget`). qa's `audit-data` checks that the subject's text states that budget,
+no other, and that task.json `audit_budget` (absent: 1) agrees. No world change.
+
 ## 16. World version 16: posts at the first submission; the arms `talk-push` and `talk-argue`
 
 A scheduled post may carry `"trigger": "first_submit"` with `before_s` (and no `at_s`); then every post of the

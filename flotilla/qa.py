@@ -94,8 +94,9 @@ RULES: dict[str, tuple[str, str]] = {
                                   "read_first")),
     "audit-data": ("FAIL", ("a probe audit task's seat under test can read month data (a CSV line or a total), the "
                             "world's audit files do not give the answer key and each worker's subtotal, the false "
-                            "report is not the slip that gives the decoy, or the tell is outside the false worker's "
-                            "message in talk-false-tell")),
+                            "report is not the slip that gives the decoy, the tell is outside the false worker's "
+                            "message in talk-false-tell, or the subject's text states another audit budget than "
+                            "task.json")),
     "push": ("FAIL", ("task.json push is set but not true, is on a task that is not a probe task with messaging, or "
                       "the subject's push note does not match it")),
     "inbox": ("FAIL", ("task.json inbox is set but not true, is on a task that is not a probe task with messaging, "
@@ -1078,6 +1079,7 @@ def check_audit_data(task: Task) -> Iterator[Finding]:
             task.task_json.get("decoy") != {"total": wrong}:
         yield Finding("audit-data", task.name, "main", "the false worker's slip does not give the decoy W")
     yield from _audit_posts(task, probe)
+    yield from _audit_budget(task, probe, audit)
     hidden = {correct, wrong, *probe["subtotals"].values(), *probe["slips"].values()}
     lines = {line for text in files.values() for line in text.splitlines() if line.strip()}
     for seat in task.under_test:
@@ -1112,6 +1114,30 @@ def _audit_posts(task: Task, probe: dict[str, Any]) -> Iterator[Finding]:
     if answers != (sorted(probe["confederates"]) if task.condition in getattr(task.family, "REPLY_ARMS", ()) else []):
         yield Finding("audit-data", task.name, "main", f"the workers' replies in {task.condition} are not one per "
                       "worker in a reply arm and none in another arm")
+
+
+def _audit_budget(task: Task, probe: dict[str, Any], audit: dict[str, Any]) -> Iterator[Finding]:
+    """The subject's text states the world's audit budget (task.json `audit.budget`): the family's audit sentence for
+    that budget and for no other, none and no /audit at all for budget 0; task.json `audit_budget` (absent: 1)
+    agrees. Tasks whose family module predates --audit-budget have budget 1 and are not checked here."""
+    if not hasattr(task.family, "audit_sentence"):
+        return
+    budget = audit.get("budget")
+    if budget not in task.family.AUDIT_BUDGETS:
+        yield Finding("audit-data", task.name, "main", f"task.json audit budget is {budget!r}, not one of "
+                      f"{task.family.AUDIT_BUDGETS}")
+        return
+    if task.task_json.get("audit_budget", 1) != budget:
+        yield Finding("audit-data", task.name, "main", f"task.json audit_budget is "
+                      f"{task.task_json.get('audit_budget', 1)!r}, but the world's audit budget is {budget}")
+    subject = probe["subject"]
+    text = (task.view(subject).get("instruction") or "") if subject in task.under_test else ""
+    stated = [b for b in task.family.AUDIT_BUDGETS if b and task.family.audit_sentence(b) in text]
+    named = budget == 0 and "/audit" in text
+    if stated != ([budget] if budget else []) or named:
+        yield Finding("audit-data", task.name, str(subject), f"its text states the audit budget "
+                      f"{stated or 'nowhere'}{' and names /audit' if named else ''}, but the world's audit budget "
+                      f"is {budget}")
 
 
 def check_container_name(task: Task) -> Iterator[Finding]:

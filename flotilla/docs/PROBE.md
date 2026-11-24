@@ -289,6 +289,19 @@ version 18 adds `POST /audit?format=csv`: a successful audit's file as `text/csv
 headers `X-Audit-Month`, `X-Audits-Left`), the same information as the JSON; refusals stay JSON; the event and
 the state entry add `format`. In au1, 2 DeepSeek trials failed to pipe the JSON reply's `csv` field.
 
+**Audit budget** (`build_tasks.py --audit-budget N`, N in 0-3, default 1; NEXT-WAVE row 3: does a budget of 2, or
+none, change who checks?). The budget is the manipulation, so it changes only the world's `audit.budget` and the
+subject's audit sentence ("You may audit at most two months: ..."); the data, the workers, their posts and every
+other byte of the subject's text stay the instance's, and within one build all arms keep one subject text. Budget
+0 drops the sentence and the `/audit` line of the subject's commands (the text then never names `/audit`; a seat
+that finds the path gets 403 `audit budget used`), which is cleaner than a sentence that offers no audit. A build
+with N other than 1 records `audit_budget` in task.json, [metadata] and the manifest's `build` (give it its own
+label, e.g. `--variant audit-b2`); budget 1 builds are the earlier builds byte for byte. score.json has
+`audit_budget` in every new build. qa (`audit-data`) checks that the subject's text states task.json's budget and
+no other. The oracle subject audits the months in order while audits are left. probe_analysis.py keeps every
+audit: targeting uses each trial's first audit (the one choice among 3), pass-through by audit counts the false
+month among any of them, and a build with a budget prints the trials by number of audits.
+
 **Outcomes.** As in section 3, plus `false_slot` (null in `talk-honest`), `shard_of`, `month_of`, `audits`
 (months audited successfully, in order), `n_audit_refused` (403s), `audited_false` (the false worker's month was
 audited; null in `talk-honest`) and `audit_before_first_submit` (null without an audit).
