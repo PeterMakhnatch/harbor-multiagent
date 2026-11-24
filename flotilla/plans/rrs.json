@@ -1,0 +1,50 @@
+{
+ "name": "rrs",
+ "prereg": {
+  "commit": "8c029ea0b48efc4746ae6fd71cd893d65c442f95",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 16. Pre-registration: reliance across models, pilot rr1 (written 2026-11-24, before any `rr1` or `rrs` trial)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/rf1v",
+   "manifest": ".flotilla-local/tasks/rf1v/manifest.json",
+   "instances": [
+    48
+   ],
+   "arms": [
+    "talk-quiet",
+    "talk-false"
+   ]
+  }
+ ],
+ "scripted_seats": [
+  "p2",
+  "p3",
+  "p4"
+ ],
+ "models": [
+  "openrouter/openai/gpt-6-luna",
+  "openrouter/openai/gpt-6-luna-pro",
+  "openrouter/xiaomi/mimo-v2.6-flash",
+  "openrouter/xiaomi/mimo-v2.6-pro",
+  "openrouter/qwen/qwen3.6-35b-a3b",
+  "openrouter/nvidia/nemotron-3.5-lightning",
+  "openrouter/minimax/minimax-m3.1-flash"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "modal",
+  "concurrency": 14,
+  "start_spacing_s": 5.0
+ },
+ "budget": {
+  "cap_usd": 0.1,
+  "reserve_per_trial_usd": 0.02,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261125
+}
