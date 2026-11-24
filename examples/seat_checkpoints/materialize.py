@@ -211,7 +211,9 @@ def check_tree(root: Path) -> None:
         with os.scandir(root / prefix) as listing:
             for entry in listing:
                 relative = prefix + entry.name
-                require(OUT_NAME.fullmatch(entry.name) is not None, f"staged {relative}")
+                require(
+                    OUT_NAME.fullmatch(entry.name) is not None, f"staged {relative}"
+                )
                 require(entry.name != "__pycache__", f"staged {relative}")
                 if entry.is_dir(follow_symlinks=False):
                     dirs.append(relative)

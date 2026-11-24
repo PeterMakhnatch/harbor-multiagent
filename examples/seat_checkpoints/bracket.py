@@ -55,7 +55,7 @@ class Bookends(NamedTuple):
     peer_open_after_return: bool
 
 
-def _require_dict(value: Any, keys: frozenset[str], where: str) -> dict:
+def _require_dict(value: Any, keys: frozenset[str], where: str) -> dict[str, Any]:
     if type(value) is not dict:
         raise SeatCutInvalid(f"{where} must be an object")
     if set(value) != keys:
@@ -63,7 +63,7 @@ def _require_dict(value: Any, keys: frozenset[str], where: str) -> dict:
     return value
 
 
-def _require_list(value: Any, max_len: int, where: str) -> list:
+def _require_list(value: Any, max_len: int, where: str) -> list[Any]:
     if type(value) is not list:
         raise SeatCutInvalid(f"{where} must be a list")
     if len(value) > max_len:
@@ -257,7 +257,9 @@ def _collect_bookends(samples: list[Sample], ordinals: dict[str, int]) -> Booken
     unacked_marks = 0
     peer_open_after_return = False
     for sample in samples:
-        snapshots = [sample.before] if sample.after is None else [sample.before, sample.after]
+        snapshots = (
+            [sample.before] if sample.after is None else [sample.before, sample.after]
+        )
         for snapshot in snapshots:
             if snapshot.target == "clean" and snapshot.peer == "running":
                 peer_open_after_return = True
@@ -284,7 +286,9 @@ def _collect_bookends(samples: list[Sample], ordinals: dict[str, int]) -> Booken
     )
 
 
-def _counts(samples: list[Sample], ordinals: dict[str, int], ends: Bookends) -> dict:
+def _counts(
+    samples: list[Sample], ordinals: dict[str, int], ends: Bookends
+) -> dict[str, int]:
     return {
         "samples": len(samples),
         "ack_ok": sum(1 for sample in samples if sample.ack == "ok"),
@@ -316,14 +320,14 @@ def _context_flags(
 
 
 def analyze(
-    host: dict,
-    world: dict,
+    host: dict[str, Any],
+    world: dict[str, Any],
     *,
     native_target: str,
     native_peer: str,
     scores: list[int],
     revisions: list[int],
-) -> dict:
+) -> dict[str, Any]:
     cut_length = _validate_series(scores, revisions)
     target_state = _require_choice(native_target, STATES, "native_target")
     peer_state = _require_choice(native_peer, STATES, "native_peer")
@@ -354,15 +358,21 @@ def analyze(
     }
     flags = _context_flags(samples, closed, peer_state, ends)
     if target_state != "clean":
-        flags.insert(0, "target_error" if target_state == "error" else "target_incomplete")
+        flags.insert(
+            0, "target_error" if target_state == "error" else "target_incomplete"
+        )
         result["flags"] = flags
         return result
     return _bounded(result, flags, ends, scores, cut_length)
 
 
 def _bounded(
-    result: dict, flags: list[str], ends: Bookends, scores: list[int], cut_length: int
-) -> dict:
+    result: dict[str, Any],
+    flags: list[str],
+    ends: Bookends,
+    scores: list[int],
+    cut_length: int,
+) -> dict[str, Any]:
     lower_seq = max(ends.lower_seqs) if ends.lower_seqs else 0
     upper_seq = min(ends.upper_seqs) if ends.upper_seqs else cut_length
     if lower_seq > upper_seq:

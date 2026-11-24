@@ -54,7 +54,7 @@ assert 0 < GATE_POLL_SECONDS < GATE_SECONDS and MAX_GATE_POLLS <= 1024
 
 
 def _checked_gates(role: str, gates: object) -> tuple[str, ...]:
-    if type(gates) not in (list, tuple):
+    if type(gates) is not list and type(gates) is not tuple:
         raise ValueError("ControlSeat gates must be a list of stage names")
     listed = tuple(gates)
     if not all(type(gate) is str and gate in ROLE_STAGES[role] for gate in listed):

@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from harbor.trial.hooks import TrialEvent, TrialHookEvent
 from harbor.trial.seats import SeatsTrial
@@ -9,7 +10,10 @@ from harbor.trial.seats import SeatsTrial
 from ..native_study import write_exclusive
 from .observe import HOST_DOCUMENT, role_states
 
-STAGES = {"planner": ("after_publish",), "dispatcher": ("before_decide", "after_decide")}
+STAGES = {
+    "planner": ("after_publish",),
+    "dispatcher": ("before_decide", "after_decide"),
+}
 HELD = frozenset({"held-early", "held-late", "held-leave", "racing", "off"})
 
 
@@ -39,7 +43,11 @@ class Qualification:
         self.job = asyncio.create_task(self.play())
 
     def marker(self, role: str, prefix: str, stage: str) -> Path:
-        assert role in STAGES and stage in STAGES[role] and prefix in {"arrived", "release"}
+        assert (
+            role in STAGES
+            and stage in STAGES[role]
+            and prefix in {"arrived", "release"}
+        )
         return self.root / "seats" / role / "seat-cut-control" / f"{prefix}-{stage}"
 
     async def arrival(self, role: str, stage: str) -> None:
@@ -51,19 +59,28 @@ class Qualification:
         self.marker(role, "release", stage).touch(mode=0o600, exist_ok=False)
         self.trace.append(f"release:{role}:{stage}")
 
-    def samples(self) -> list[dict]:
+    def samples(self) -> list[dict[str, Any]]:
         return json.loads((self.root / HOST_DOCUMENT).read_bytes())["samples"]
 
     async def witness(self, state: str) -> None:
         assert state in {"running", "clean"}
         old = {r["id"] for r in self.samples()} if state == "running" else set()
         snapshot = {"target": state, "peer": "running"}
+
         def witnessed() -> bool:
             rows = self.samples()
             if any(r["ack"] == "failed" for r in rows):
-                raise RuntimeError("no receipt from the world; cannot qualify this schedule")
-            return any(r["id"] not in old and r["ack"] == "ok" and
-                       r["before"] == snapshot and r["after"] == snapshot for r in rows)
+                raise RuntimeError(
+                    "no receipt from the world; cannot qualify this schedule"
+                )
+            return any(
+                r["id"] not in old
+                and r["ack"] == "ok"
+                and r["before"] == snapshot
+                and r["after"] == snapshot
+                for r in rows
+            )
+
         await until(witnessed)
         self.trace.append(f"witness:{state}:running")
 
@@ -81,7 +98,14 @@ class Qualification:
         if self.schedule == "racing":
             self.release("dispatcher", before)
         if self.schedule == "off":
-            await until(lambda: role_states(self.trial.result.seat_results or [], "planner", "dispatcher")["target"] == "clean")
+            await until(
+                lambda: (
+                    role_states(
+                        self.trial.result.seat_results or [], "planner", "dispatcher"
+                    )["target"]
+                    == "clean"
+                )
+            )
             self.trace.append("native:planner:clean")
         else:
             await self.witness("clean")
@@ -103,9 +127,16 @@ class Qualification:
                 status = "interrupted"
             except (TimeoutError, RuntimeError, KeyError, ValueError, OSError) as error:
                 status = type(error).__name__
-        write_exclusive(self.root / "seat-cut-schedule.json", {
-            "schema": "harbor.seat-cut.schedule/v1", "trial_id": str(self.trial.id),
-            "ticket": self.trial.config.trial_name, "schedule": self.schedule,
-            "status": status, "trace": self.trace,
-        }, 0o600)
+        write_exclusive(
+            self.root / "seat-cut-schedule.json",
+            {
+                "schema": "harbor.seat-cut.schedule/v1",
+                "trial_id": str(self.trial.id),
+                "ticket": self.trial.config.trial_name,
+                "schedule": self.schedule,
+                "status": status,
+                "trace": self.trace,
+            },
+            0o600,
+        )
         return status == "complete"

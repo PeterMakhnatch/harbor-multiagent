@@ -3,6 +3,7 @@ import json
 import sys
 import types
 from collections import Counter
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 
@@ -127,7 +128,7 @@ HOST_JOURNAL = ("seat-cut-host.json",)
 
 class Native(NamedTuple):
     native_id: str
-    run: str
+    run: str | None
     grade: int | None
     error: str | None
     scores: list[int] | None
@@ -141,9 +142,13 @@ def _other(seat: str) -> str:
 
 def _check_control_kwargs(value: object, seat: str, where: str) -> None:
     kwargs = as_record(value, f"{where} kwargs", CONTROL_KWARGS)
-    require_registration(kwargs["role"] == seat, f"{where} control role is not the seat")
+    require_registration(
+        kwargs["role"] == seat, f"{where} control role is not the seat"
+    )
     as_choice(kwargs["policy"], f"{where} control policy", CONTROL_POLICIES[seat])
-    gates = as_list(kwargs["gates"], f"{where} control gates", 0, len(CONTROL_GATES[seat]))
+    gates = as_list(
+        kwargs["gates"], f"{where} control gates", 0, len(CONTROL_GATES[seat])
+    )
     for gate in gates:
         as_choice(gate, f"{where} control gate", CONTROL_GATES[seat])
     require_registration(len(set(gates)) == len(gates), f"{where} control gates repeat")
@@ -155,7 +160,9 @@ def _check_participant(value: object, label: str) -> str:
     seat = as_choice(member.get("seat"), f"{where} seat", SEATS)
     where = f"team {label!r} seat {seat!r}"
     keys = set(member)
-    require_registration(keys >= REQUIRED_FIELDS, f"{where} lacks normalized native fields")
+    require_registration(
+        keys >= REQUIRED_FIELDS, f"{where} lacks normalized native fields"
+    )
     require_registration(
         keys <= REQUIRED_FIELDS | OPTIONAL_FIELDS,
         f"{where} has fields outside the public allowlist",
@@ -195,7 +202,9 @@ def _check_teams(value: object) -> dict[str, Any]:
         as_text(label, "team label", AGENT_NAME)
         team = as_list(members, f"team {label!r}", 2, 2)
         seats = {_check_participant(member, label) for member in team}
-        require_registration(seats == set(SEATS), f"team {label!r} does not bind both seats")
+        require_registration(
+            seats == set(SEATS), f"team {label!r} does not bind both seats"
+        )
     return teams
 
 
@@ -212,8 +221,12 @@ def _check_cells(value: object, teams: dict[str, Any]) -> None:
         as_choice(cell["fixture"], "cell fixture", FIXTURES)
         as_choice(cell["rule"], "cell rule", RULES)
         target = as_choice(cell["target"], "cell target", SEATS)
-        require_registration(cell["peer"] == _other(target), "cell peer is not the other seat")
-        require_registration(type(cell["observe"]) is bool, "cell observe is not a boolean")
+        require_registration(
+            cell["peer"] == _other(target), "cell peer is not the other seat"
+        )
+        require_registration(
+            type(cell["observe"]) is bool, "cell observe is not a boolean"
+        )
     assert len(tickets) == len(cells)
 
 
@@ -235,14 +248,19 @@ def load_registration(path: Path) -> Record:
     return validate_registration(record)
 
 
-def _check_lock(lock: Record, cell: Record, team: dict[str, Record], task: Record) -> None:
+def _check_lock(
+    lock: Record, cell: Record, team: dict[str, Record], task: Record
+) -> None:
     version = lock.get("schema_version")
     require(type(version) is int and version == 2, "lock.json is not schema version 2")
     pinned = lock.get("task")
     require(type(pinned) is dict, "lock.json has no task")
     assert type(pinned) is dict
     require(pinned.get("type") == "local", "lock.json task is not local")
-    require(pinned.get("name") == LOCK_TASK_NAME, "lock.json task is not the checkpoint task")
+    require(
+        pinned.get("name") == LOCK_TASK_NAME,
+        "lock.json task is not the checkpoint task",
+    )
     path = pinned.get("path")
     require(
         type(path) is str and PurePosixPath(path).name == LOCK_TASK_NAME,
@@ -255,13 +273,20 @@ def _check_lock(lock: Record, cell: Record, team: dict[str, Record], task: Recor
     check_binding(lock, _environment(cell), team, SEATS, "lock.json")
 
 
-def _check_result(result: Record, cell: Record, team: dict[str, Record], task: Record) -> str:
+def _check_result(
+    result: Record, cell: Record, team: dict[str, Record], task: Record
+) -> str:
     version = result.get("schema_version")
-    require(type(version) is int and version == 1, "result.json is not schema version 1")
+    require(
+        type(version) is int and version == 1, "result.json is not schema version 1"
+    )
     native_id = result.get("id")
     require(canonical_uuid(native_id), "result.json id is not a canonical UUID")
     assert type(native_id) is str
-    require(result.get("trial_name") == cell["ticket"], "result.json trial_name is not the ticket")
+    require(
+        result.get("trial_name") == cell["ticket"],
+        "result.json trial_name is not the ticket",
+    )
     require(
         result.get("task_name") == task["name"],
         "result.json task_name differs from the registration",
@@ -277,33 +302,66 @@ def _check_result(result: Record, cell: Record, team: dict[str, Record], task: R
     return native_id
 
 
+def _native_time(value: object, seat: str) -> datetime:
+    if not isinstance(value, str):
+        raise Invalid(f"native {seat} execution has no timestamp")
+    try:
+        stamp = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise Invalid(f"native {seat} execution has an invalid timestamp") from error
+    require(stamp.utcoffset() is not None, f"native {seat} execution has no time zone")
+    return stamp
+
+
 def _native_error(result: Record) -> str | None:
     require("exception_info" in result, "native trial error record is absent")
+    trial_error = result["exception_info"]
+    require(
+        trial_error is None or type(trial_error) is dict, "invalid native trial error"
+    )
     rows = result.get("seat_results")
-    require(type(rows) is list and len(rows) == 2, "native seat results are not two seats")
+    if trial_error is not None and (rows is None or rows == []):
+        return "native error recorded for trial"
+    require(
+        type(rows) is list and len(rows) == 2, "native seat results are not two seats"
+    )
     assert type(rows) is list
-    failed = [] if result["exception_info"] is None else ["trial"]
+    failed = [] if trial_error is None else ["trial"]
+    executions: list[tuple[str, object]] = []
     seats: set[str] = set()
     for row in rows:
         require(type(row) is dict, "native seat result is not an object")
         require(row.get("under_test") is True, "native seat is not under test")
         require("exception_info" in row, "native seat error record is absent")
         seat = row.get("seat")
-        require(seat in SEATS and seat not in seats, "native seat results repeat or misname a seat")
+        require(
+            seat in SEATS and seat not in seats,
+            "native seat results repeat or misname a seat",
+        )
         seats.add(seat)
+        require(
+            row["exception_info"] is None or type(row["exception_info"]) is dict,
+            f"native {seat} error is not an object",
+        )
         if row["exception_info"] is not None:
             failed.append(seat)
             continue
-        execution = row.get("agent_execution")
-        require(
-            type(execution) is dict and type(execution.get("finished_at")) is str,
-            f"native {seat} seat has no finished execution and no error",
-        )
+        executions.append((seat, row.get("agent_execution")))
     require(seats == set(SEATS), "native seat results are not planner and dispatcher")
-    return None if not failed else "native error recorded for " + " and ".join(failed)
+    if failed:
+        return "native error recorded for " + " and ".join(failed)
+    for seat, execution in executions:
+        if type(execution) is not dict:
+            raise Invalid(f"native {seat} seat has no finished execution and no error")
+        started = _native_time(execution.get("started_at"), seat)
+        finished = _native_time(execution.get("finished_at"), seat)
+        require(started <= finished, f"native {seat} execution ends before it starts")
+    return None
 
 
-def _prefixes(verifier: types.ModuleType, cut: Record, cell: Record) -> tuple[list[int], list[int]]:
+def _prefixes(
+    verifier: types.ModuleType, cut: Record, cell: Record
+) -> tuple[list[int], list[int]]:
     events = cut["events"]
     assert type(events) is list and len(events) <= verifier.MAX_EVENTS
     scores: list[int] = []
@@ -320,7 +378,9 @@ def _prefixes(verifier: types.ModuleType, cut: Record, cell: Record) -> tuple[li
                 rule=cell["rule"],
             )
         except verifier.CutError:
-            raise Invalid("a cut prefix does not replay under the trusted verifier") from None
+            raise Invalid(
+                "a cut prefix does not replay under the trusted verifier"
+            ) from None
         assert observed["reward"] in (0, 1) and 0 <= revision <= 2
         scores.append(observed["reward"])
         revisions.append(revision)
@@ -329,26 +389,61 @@ def _prefixes(verifier: types.ModuleType, cut: Record, cell: Record) -> tuple[li
 
 
 def _attempt(trial: Path, cell: Record, native_id: str, files: str) -> None:
-    receipt = strict_object(read_bytes(trial, ("seat-cut-attempt.json",), MAX_SMALL_BYTES), "attempt")
-    keys = {"schema", "ticket", "trial_id", "team", "target", "peer", "observe", "task_files",
-            "interval_seconds", "max_samples", "timeout_seconds"}
-    require(set(receipt) == keys and receipt["schema"] == "harbor.seat-cut.attempt/v1",
-            "attempt fields or version differ")
-    require(receipt["trial_id"] == native_id and receipt["task_files"] == files,
-            "attempt native id or full task hash differs")
-    require(all(receipt[k] == cell[k] for k in ("ticket", "team", "target", "peer"))
-            and receipt["observe"] is cell["observe"], "attempt differs from the registered cell")
-    count, interval, timeout = (receipt[k] for k in ("max_samples", "interval_seconds", "timeout_seconds"))
+    receipt = strict_object(
+        read_bytes(trial, ("seat-cut-attempt.json",), MAX_SMALL_BYTES), "attempt"
+    )
+    keys = {
+        "schema",
+        "ticket",
+        "trial_id",
+        "team",
+        "target",
+        "peer",
+        "observe",
+        "task_files",
+        "interval_seconds",
+        "max_samples",
+        "timeout_seconds",
+    }
+    require(
+        set(receipt) == keys and receipt["schema"] == "harbor.seat-cut.attempt/v1",
+        "attempt fields or version differ",
+    )
+    require(
+        receipt["trial_id"] == native_id and receipt["task_files"] == files,
+        "attempt native id or full task hash differs",
+    )
+    require(
+        all(receipt[k] == cell[k] for k in ("ticket", "team", "target", "peer"))
+        and receipt["observe"] is cell["observe"],
+        "attempt differs from the registered cell",
+    )
+    count, interval, timeout = (
+        receipt[k] for k in ("max_samples", "interval_seconds", "timeout_seconds")
+    )
     require(type(count) is int, "invalid sample budget")
     if cell["observe"]:
-        require(2 <= count <= 32 and type(interval) in (int, float) and 0.05 <= interval <= 60
-                and type(timeout) in (int, float) and 1 <= timeout <= 60, "invalid sampling parameters")
+        require(
+            2 <= count <= 32
+            and type(interval) in (int, float)
+            and 0.05 <= interval <= 60
+            and type(timeout) in (int, float)
+            and 1 <= timeout <= 60,
+            "invalid sampling parameters",
+        )
     else:
-        require(count == 0 and interval is None and timeout is None, "unobserved attempt configured marks")
+        require(
+            count == 0 and interval is None and timeout is None,
+            "unobserved attempt configured marks",
+        )
 
 
 def _native(
-    trial: Path, cell: Record, team: dict[str, Record], task: Record, verifier: types.ModuleType
+    trial: Path,
+    cell: Record,
+    team: dict[str, Record],
+    task: Record,
+    verifier: types.ModuleType,
 ) -> Native:
     result = strict_object(read_bytes(trial, RESULT, MAX_RESULT_BYTES), "result.json")
     native_id = _check_result(result, cell, team, task)
@@ -358,11 +453,11 @@ def _native(
     _check_config(config, cell, team, "config.json")
     lock = strict_object(read_bytes(trial, LOCK, MAX_CONFIG_BYTES), "lock.json")
     _check_lock(lock, cell, team, task)
+    if error is not None and result.get("reward_valid") is not True:
+        return Native(native_id, None, None, error, None, None)
     identity = read_bytes(trial, IDENTITY, MAX_SMALL_BYTES)
     run = _check_identity(strict_object(identity, "world identity"), cell["ticket"])
     require(native_id != run, "native id repeats the world run")
-    if error is not None and result.get("reward_valid") is not True:
-        return Native(native_id, run, None, error, None, None)
     require(result.get("reward_valid") is True, "native reward is not valid")
     reward = native_reward(result)
     data = {
@@ -385,7 +480,9 @@ def _marker_log(trial: Path, cell: Record, run: str) -> Record:
         set(world) == WORLD_KEYS and world["schema"] == WORLD_SCHEMA,
         "world marker log fields do not match the contract",
     )
-    require(world["ticket"] == cell["ticket"], "world marker log ticket is not the ticket")
+    require(
+        world["ticket"] == cell["ticket"], "world marker log ticket is not the ticket"
+    )
     require(world["run"] == run, "world marker log run is not the world run")
     require(type(world["marks"]) is list, "world marker log marks are not a list")
     return world
@@ -411,6 +508,7 @@ def _host(trial: Path, cell: Record, native_id: str) -> Record | None:
 
 
 def _journal(trial: Path, cell: Record, native: Native) -> tuple[str, Record | None]:
+    assert native.run is not None
     world = _marker_log(trial, cell, native.run)
     host = _host(trial, cell, native.native_id)
     if not cell["observe"]:
@@ -433,7 +531,11 @@ def _journal(trial: Path, cell: Record, native: Native) -> tuple[str, Record | N
 
 
 def _trial(
-    trial: Path, cell: Record, team: dict[str, Record], task: Record, verifier: types.ModuleType
+    trial: Path,
+    cell: Record,
+    team: dict[str, Record],
+    task: Record,
+    verifier: types.ModuleType,
 ) -> tuple[str, int | None, Record | None, str | None]:
     try:
         native = _native(trial, cell, team, task, verifier)
@@ -454,7 +556,9 @@ def _trial(
 
 
 def _roster(team: dict[str, Record]) -> str:
-    kinds = {"scripted" if "import_path" in member else "named" for member in team.values()}
+    kinds = {
+        "scripted" if "import_path" in member else "named" for member in team.values()
+    }
     assert kinds and kinds <= {"scripted", "named"}
     return kinds.pop() if len(kinds) == 1 else "mixed"
 
@@ -473,7 +577,10 @@ def _row(
     bound: Record | None = None
     reason: str | None = None
     if cell["ticket"] in quarantined:
-        status, reason = "duplicate_id", "a native or world id repeats under another ticket"
+        status, reason = (
+            "duplicate_id",
+            "a native or world id repeats under another ticket",
+        )
     elif not paths:
         status = "missing"
     elif len(paths) > 1:
@@ -525,7 +632,9 @@ def collect(registration_path: Path, roots: list[Path]) -> Record:
     assert sum(statuses.values()) == len(rows) == len(cells)
     return {
         "schema": SCHEMA,
-        "task": {key: registration["task"][key] for key in ("name", "digest", "checksum")},
+        "task": {
+            key: registration["task"][key] for key in ("name", "digest", "checksum")
+        },
         "task_files": registration["task_files"],
         "registered": len(rows),
         "statuses": {status: statuses[status] for status in STATUSES},
@@ -566,7 +675,9 @@ def render(report: Record) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python3 -BS -m examples.seat_checkpoints.collect")
+    parser = argparse.ArgumentParser(
+        prog="python3 -BS -m examples.seat_checkpoints.collect"
+    )
     parser.add_argument("registration", type=Path, metavar="REG")
     parser.add_argument("roots", type=Path, nargs="+", metavar="TRIAL_ROOT")
     parser.add_argument("--json", action="store_true")
