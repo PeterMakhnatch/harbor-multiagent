@@ -13,7 +13,7 @@ from typing import Any, NamedTuple
 from .joint_reopen import study
 from .native_owner_process import VARIABLE, OwnerFailure, owner_id, owner_program
 from .native_study import require
-from .native_tickets import _registration
+from .native_tickets import World, _registration
 from .shift_board import plan
 
 SCHEMA = "harbor.native-owner-preflight/v1"
@@ -111,13 +111,13 @@ def _check_owner(member: Record) -> None:
     require(owner_id(member["model_name"]), "owner seat identifier is malformed")
 
 
-def _load(path: str) -> tuple[Owner, Record]:
+def _load(path: str) -> tuple[World, Record]:
     try:
         Path(path).lstat()
         world, registration, _ = _registration(path, None)
     except OSError:
         raise Unreadable() from None
-    return OWNERS[world.schema], registration
+    return world, registration
 
 
 def _local(module_name: str) -> bool:
@@ -172,19 +172,27 @@ def _role(counts: Record, program: str | None) -> Record:
     return {**counts, "program": program or "not_checked", "status": status}
 
 
-def _probe(owner: Owner, registration: Record) -> Record:
+def _probe(owner: Owner | None, registration: Record) -> Record:
     blank = {"external": 0, "not_external": 0, **dict.fromkeys(OUTCOMES, 0)}
-    counts = {role: dict(blank) for role in owner.roles}
+    members = _enrolled(registration)
+    roles = (
+        owner.roles if owner else tuple(sorted({member["seat"] for member in members}))
+    )
+    counts = {role: dict(blank) for role in roles}
     externals: list[Record] = []
-    for member in _enrolled(registration):
+    for member in members:
         require(member["seat"] in counts, "participant seat is unknown")
-        if member.get("import_path") == owner.import_path:
+        require(
+            owner is not None or not member.get("import_path"), "unregistered adapter"
+        )
+        if owner is not None and member.get("import_path") == owner.import_path:
             _check_owner(member)
             externals.append(member)
         else:
             counts[member["seat"]]["not_external"] += 1
     programs: dict[str, str] = {}
     for member in externals:
+        assert owner is not None
         role = member["seat"]
         variable = _adapter(owner, member)
         if variable is not None and role not in programs:
@@ -195,11 +203,12 @@ def _probe(owner: Owner, registration: Record) -> Record:
             outcome = READY if programs[role] == READY else "program_unavailable"
         counts[role]["external"] += 1
         counts[role][outcome] += 1
-    return {role: _role(counts[role], programs.get(role)) for role in owner.roles}
+    return {role: _role(counts[role], programs.get(role)) for role in roles}
 
 
 def preflight(path: str) -> Record:
-    owner, registration = _load(path)
+    world, registration = _load(path)
+    owner = OWNERS.get(world.schema)
     roles = _probe(owner, registration)
     keys = ("external", "not_external", *OUTCOMES)
     total = {key: sum(role[key] for role in roles.values()) for key in keys}
@@ -209,7 +218,9 @@ def preflight(path: str) -> Record:
         status = READY if total[READY] == total["external"] else "unavailable"
     return {
         "schema": SCHEMA,
-        "study": owner.label,
+        "study": owner.label
+        if owner
+        else world.task_name.rsplit("/", 1)[-1].replace("-", "_"),
         "status": status,
         "roles": roles,
         "total": total,
