@@ -54,5 +54,3 @@ The [question and pass criteria](samples/question.json) and [registration](sampl
 | Observation off | 4 | Native rewards were available. No return grade was reported. |
 
 The native evidence identified the grade in **13 of 14** observed trials, but the exact event position in only **12**. See the [per-ticket results](samples/control-outcomes.json) and [finite order qualification](samples/order-outcomes.json). Identification is not a model success rate. The observer can affect timing. No policy interrupted a team, and this study did not measure time or tokens saved. For real teams with no world marks, see the [more limited stock archive analysis](../seat_handoffs/README.md#what-if-a-supervisor-freezes-the-board-when-one-seat-finishes).
-
-To test a policy, use the [live board-seal benchmark](../seat_seals/README.md). It matches a real write restriction with a continuing arm and keeps the native team reward.
