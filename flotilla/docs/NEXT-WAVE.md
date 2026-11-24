@@ -173,6 +173,11 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
 from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
 
+The pre-registered sets `rf1v` (world version 14), `au2` (18), `io1v` and `io1s` (19) are frozen: each task carries
+its own copy of the world it was built with, and they run as built. `qa.py` on them now reports only `stale-code`
+(this checkout's world is version 20); every other rule passes (checked 2026-11-24 06:47 ET). Do not rebuild them
+for a pre-registered wave; `cr1` was built with version 20.
+
 ### io1: order or instruction (row 2, ready to run)
 
 Pre-registered in PROBE.md section 14 (commit a542223d, with the amendments made after a review and before any
