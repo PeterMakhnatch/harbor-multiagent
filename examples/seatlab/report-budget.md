@@ -36,6 +36,18 @@ This is a sensitivity check, not a new result for the agents. The [bounds](resul
 
 **Next question.** Finance followed the sales recommendation on 34 of the 36 delivered reports that it priced. That is not evidence that the recommendation helped. Give matched finance seats the same verified sales facts. Reveal the seller's original price recommendation to only one. Measure the price each seat chooses and settle it against the same company. Do not change the channel limit again to answer that question.
 
+### Registered follow-up: the same facts with or without the seller's advice
+
+**Question.** When finance receives the same sales facts, can showing the seller's actual price recommendation change a committed price? This is a feasibility pilot using archived native senders and **new finance sessions**. It is not a new sample of companies, new sales decisions, or a new native team reward.
+
+Use the original 100-character arm from the [frozen 48 rows](https://github.com/PeterMakhnatch/harbor-multiagent/blob/95545e97c26eeda4c56d6b69539d5107ae2136df/examples/seatlab/results/report-budget/rows.json), SHA-256 `d42f481e38c9d6bf819a546b666f9749fece0c1985fd0fdda96a9927c9ea2e5e`. Rank all 24 world indices by SHA-256 of the UTF-8 text `seatlab/recommendation-card/pilot/v1:{world}`. Take the first 8, in order: **22, 8, 4, 1, 0, 20, 11, 18**. Include them regardless of the seller's actual price or the prior finance result. Do not replace a sender or receiver.
+
+Every finance prompt gets the same private finance view and factual sales card for its company. The card contains the last observed day, the last 30-day window, units, orders and the median ratio of site price to rival price. Rebuild those exact fields from the stock checkpoint. Do not show the seller's prose, simulator payoffs, labels or another receiver's choice. Both prompts explain the price codes. Their only differing byte is the `ADVICE_CODE`: `0` for no recommendation, or the seller's original `1`, `2` or `3`. The actual recommendation remains known to the scorer in both arms.
+
+Run facts first for ranks 0, 2, 4, 6 and advice first for the other ranks. Request one finance choice per arm, up to 16 first requests. Use the same guarded personal client and stop rules as the original study. Never resend a missing request on the same slot. No new Docker team, paid API, acknowledgment, forced price or fallback. Check each receiver's actual request and receipt independently.
+
+**Decision rule.** Call the comparison feasible only with 8 complete pairs, 16 verified independent receiver choices, the registered one-byte input difference, and exact stock settlement of all choices. To justify a larger trial on *new* companies, also require at least one paired price difference. Report recommendation agreement, price changes and actual paired operating profit separately. These are descriptive; even a positive pilot does not warrant exposing recommendations by default. Missing choices make the registered feasibility test incomplete, not a zero-price outcome.
+
 ## Registered plan
 
 **Decision.** Should a Harbor task ask for fewer characters than its delivery channel accepts? In the [previous Bespoke study](price-timing.md#live-result-more-agreement-no-established-profit-benefit), 4 first sales replies had valid prices but explanations of 161–172 characters. The maximum was 160. This study does not edit those replies or reuse those companies.
