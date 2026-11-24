@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .cohort import GRADES, summarize
 from .input_evidence import MAX_TRIALS
 from .isolate import PIN
+from .job_projection import MAX_CONCURRENCY, MAX_RETRIES
 from .seat_stream import Record
 
 if TYPE_CHECKING:
@@ -19,11 +20,15 @@ CAVEAT = (
     "Grades follow the single-job cohort rules per arm and are withheld for both arms on any design, identity, "
     "registration or consistency failure. When the two jobs hold different keys with the same result view, a "
     "grade needs a matching host START receipt. A missing final or START is not a grade. This is a local "
-    "coverage check, not a scheduler, a signature, proof of deployed bytes or messages, or a causal effect."
+    "coverage check, not a scheduler, a signature, proof of deployed bytes or messages, or a causal effect. "
+    "Registration compares only what each native job lock claims about schedule, retry policy and Harbor "
+    "version, editable install and commit; an unrecorded component is neither a match nor a difference, and "
+    "no claim proves the deployed code."
 )
 
 SHAPE = (
-    "a paired cohort needs two evidence records, two keys and optional two START maps"
+    "a paired cohort needs two evidence records, two keys, optional two START maps, "
+    "an optional bounded expected schedule and well-formed native job headers"
 )
 
 COPIES = "copies_out_of_range"
@@ -44,6 +49,40 @@ MISSING = "finals_missing"
 NO_LOCK = "finals_without_lock"
 PENDING = "locks_without_result"
 UNATTRIBUTED = "finals_unattributed"
+CONCURRENCY_DIFFERS = "concurrency_differs"
+RETRIES_DIFFER = "max_retries_differ"
+POLICY_DIFFERS = "retry_policy_differs"
+VERSION_DIFFERS = "harbor_version_differs"
+EDITABLE_DIFFERS = "editable_install_differs"
+COMMIT_DIFFERS = "harbor_commit_differs"
+CONCURRENCY_UNSCHEDULED = "concurrency_not_scheduled"
+RETRIES_UNSCHEDULED = "max_retries_not_scheduled"
+UNRECORDED = "registration_unrecorded"
+
+_PROFILE = (
+    ("concurrency", CONCURRENCY_DIFFERS),
+    ("max_retries", RETRIES_DIFFER),
+    ("retry_policy", POLICY_DIFFERS),
+    ("harbor_version", VERSION_DIFFERS),
+    ("editable_install", EDITABLE_DIFFERS),
+    ("harbor_commit", COMMIT_DIFFERS),
+)
+_HEADER_FIELDS = (
+    ("concurrency", "concurrency"),
+    ("max_retries", "max_retries"),
+    ("retry_policy", "retry_policy"),
+    ("harbor_version", "version"),
+    ("editable_install", "editable"),
+    ("harbor_commit", "commit"),
+)
+_HEADER_TYPES = (
+    ("concurrency", (int,)),
+    ("max_retries", (int,)),
+    ("retry_policy", (str,)),
+    ("version", (str, type(None))),
+    ("commit", (str, type(None))),
+    ("editable", (bool, type(None))),
+)
 
 _ARM_REFUSING = (
     OTHER_INPUT,
@@ -52,19 +91,121 @@ _ARM_REFUSING = (
     EXCESS,
     RESULT_CONFLICT,
     START_CONFLICT,
+    CONCURRENCY_UNSCHEDULED,
+    RETRIES_UNSCHEDULED,
 )
 _ARM_INCOMPLETE = (NOT_CLOSED, MISSING, PENDING, NO_LOCK, UNATTRIBUTED)
 REFUSING = frozenset(
     (COPIES, KEY_SHAPE, SAME_KEY, SAME_JOB, SAME_LOCK, SHARED_EXECUTION)
+    + tuple(code for _, code in _PROFILE)
     + tuple(f"{arm}_{code}" for arm in ARMS for code in _ARM_REFUSING)
 )
 INCOMPLETE = frozenset(
-    (SHARED_VIEW,) + tuple(f"{arm}_{code}" for arm in ARMS for code in _ARM_INCOMPLETE)
+    (SHARED_VIEW,)
+    + tuple(f"{arm}_{code}" for arm in ARMS for code in (*_ARM_INCOMPLETE, UNRECORDED))
 )
+WITHHOLDING = frozenset(f"{arm}_{UNRECORDED}" for arm in ARMS)
 
 
 def _planned(copies: object) -> bool:
     return type(copies) is int and 1 <= copies <= MAX_TRIALS
+
+
+def _scheduled(schedule: object) -> bool:
+    if schedule is None:
+        return True
+    if type(schedule) is not tuple or len(schedule) != 2:
+        return False
+    concurrency, retries = schedule
+    if type(concurrency) is not int or type(retries) is not int:
+        return False
+    return 1 <= concurrency <= MAX_CONCURRENCY and 0 <= retries <= MAX_RETRIES
+
+
+def _recorded(header: Any) -> bool:
+    if header is None:
+        return False
+    shaped = all(
+        hasattr(header, name) and type(getattr(header, name)) in kinds
+        for name, kinds in _HEADER_TYPES
+    )
+    if not shaped:
+        raise ValueError(SHAPE)
+    if header.concurrency < 1 or header.max_retries < 0:
+        raise ValueError(SHAPE)
+    return True
+
+
+def _agreement(left: Any, right: Any, name: str) -> str:
+    if left is None or right is None:
+        return "unrecorded"
+    claims = (getattr(left, name), getattr(right, name))
+    if None in claims:
+        return "unrecorded"
+    return "same" if claims[0] == claims[1] else "different"
+
+
+def _schedule(header: Any) -> Record | None:
+    if header is None:
+        return None
+    return {"concurrency": header.concurrency, "max_retries": header.max_retries}
+
+
+def _off_schedule(arm: str, header: Any, schedule: tuple[int, int]) -> list[str]:
+    if header is None:
+        return [f"{arm}_{UNRECORDED}"]
+    return [
+        f"{arm}_{code}"
+        for code, failed in (
+            (CONCURRENCY_UNSCHEDULED, header.concurrency != schedule[0]),
+            (RETRIES_UNSCHEDULED, header.max_retries != schedule[1]),
+        )
+        if failed
+    ]
+
+
+def _registration(
+    evidence: tuple[Evidence, Evidence], schedule: tuple[int, int] | None
+) -> tuple[list[str], Record]:
+    headers = tuple(
+        side.header if _recorded(side.header) else None for side in evidence
+    )
+    left, right = headers
+    fields = {label: _agreement(left, right, name) for label, name in _HEADER_FIELDS}
+    found = [code for label, code in _PROFILE if fields[label] == "different"]
+    unrecorded = left is None or right is None
+    assert not (unrecorded and found)
+    pair = (
+        "unrecorded"
+        if unrecorded
+        else "inconsistent"
+        if found
+        else "consistent"
+        if all(claim == "same" for claim in fields.values())
+        else "partly_recorded"
+    )
+    state = "not_requested"
+    if schedule is not None:
+        drift = [
+            code
+            for arm, header in zip(ARMS, headers, strict=True)
+            for code in _off_schedule(arm, header, schedule)
+        ]
+        assert unrecorded == bool(WITHHOLDING.intersection(drift))
+        found += drift
+        state = "unrecorded" if unrecorded else "differs" if drift else "matches"
+    return found, {
+        "basis": "native_job_lock_claims",
+        "pair": pair,
+        "fields": fields,
+        "registered": {
+            arm: _schedule(header) for arm, header in zip(ARMS, headers, strict=True)
+        },
+        "expected": None
+        if schedule is None
+        else {"concurrency": schedule[0], "max_retries": schedule[1]},
+        "schedule": state,
+    }
 
 
 def _shared(evidence: tuple[Evidence, Evidence]) -> frozenset[str]:
@@ -146,14 +287,14 @@ def _native(arm: str, report: Record) -> list[str]:
     return found
 
 
-def _arm(evidence: Evidence, key: str, report: Record, refused: bool) -> Record:
+def _arm(evidence: Evidence, key: str, report: Record, withheld: bool) -> Record:
     group = next((g for g in report["groups"] if g["input"] == key), None)
     registered = Counter(item.key for item in evidence.registered)
     retained = len(evidence.finals)
     attributed: int | None = None
     unattributed: int | None = None
     grades: dict[str, int] | None = None
-    if not refused:
+    if not withheld:
         assert all(g["input"] == key for g in report["groups"])
         attributed = 0 if group is None else group["retained"] - group["unattributed"]
         unattributed = report["unattributed"]
@@ -196,6 +337,8 @@ def combine(
     keys: tuple[str, str],
     copies: int,
     starts: tuple[dict[str, Witness], dict[str, Witness]] | None = None,
+    *,
+    schedule: tuple[int, int] | None = None,
 ) -> Record:
     pairs = (evidence, keys) if starts is None else (evidence, keys, starts)
     if not all(type(part) is tuple and len(part) == 2 for part in pairs) or not all(
@@ -204,6 +347,9 @@ def combine(
         raise ValueError(SHAPE)
     if starts is not None and not all(type(side) is dict for side in starts):
         raise ValueError(SHAPE)
+    if not _scheduled(schedule):
+        raise ValueError(SHAPE)
+    drift, registration = _registration(evidence, schedule)
     sides = (None, None) if starts is None else starts
     shared = _shared(evidence)
     reports = tuple(
@@ -219,16 +365,19 @@ def combine(
         for g in report["groups"]
     ):
         reasons.append(SHARED_VIEW)
+    reasons += drift
     assert REFUSING.union(INCOMPLETE).issuperset(reasons)
     refused = bool(REFUSING.intersection(reasons))
+    withheld = refused or bool(WITHHOLDING.intersection(reasons))
     status = "inconsistent" if refused else "incomplete" if reasons else "covered"
     return {
         "schema": SCHEMA,
         "status": status,
         "copies_per_arm": copies if type(copies) is int else None,
         "reasons": sorted(set(reasons)),
+        "registration": registration,
         "arms": {
-            arm: _arm(side, key, report, refused)
+            arm: _arm(side, key, report, withheld)
             for arm, side, key, report in zip(
                 ARMS, evidence, keys, reports, strict=True
             )

@@ -33,6 +33,9 @@ JOB_LOCK_FIELDS = frozenset(
 )
 GRADES = ("zero", "one", "other", "invalid", "unknown")
 PIN = re.compile(r"sha256:[0-9a-f]{64}")
+COMMIT = re.compile(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}")
+RETRY_POLICY_DOMAIN = b"seatlab.job-header.retry-policy.v1\x00"
+HARBOR_VERSION_DOMAIN = b"seatlab.job-header.harbor-version.v1\x00"
 CAVEAT = (
     "Reads one stationary native job directory. Every file and directory read is checked again at the end; "
     "a change during the read refuses the job, but a change after it is not seen. A saved lock describes "
@@ -78,6 +81,15 @@ class Final(NamedTuple):
     binding: str | None = None
 
 
+class JobHeader(NamedTuple):
+    concurrency: int
+    max_retries: int
+    retry_policy: str
+    version: str | None
+    commit: str | None
+    editable: bool | None
+
+
 class Evidence(NamedTuple):
     job: str
     registered: tuple[Cell, ...]
@@ -86,6 +98,7 @@ class Evidence(NamedTuple):
     lock_digest: str
     finals: tuple[Final, ...]
     lock_without_result: int
+    header: JobHeader | None = None
 
 
 class _Reader:
@@ -162,7 +175,7 @@ def _trial_shape(document: Any) -> None:
     _require(type(seats) is list and len(seats) >= MIN_SEATS, TRIAL_TEAM)
 
 
-def _native(data: bytes) -> None:
+def _native(data: bytes) -> JobHeader:
     from harbor.models.job.lock import JobLock
 
     try:
@@ -171,7 +184,74 @@ def _native(data: bytes) -> None:
             lock = JobLock.model_validate_json(data)
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, Warning):
         lock = None
-    _require(lock is not None and lock.schema_version == JOB_LOCK_VERSION, LOCK_NATIVE)
+    if lock is None or lock.schema_version != JOB_LOCK_VERSION:
+        raise Malformed(LOCK_NATIVE)
+    return _job_header(lock)
+
+
+def _digest(domain: bytes, document: Any) -> str:
+    canonical = json.dumps(
+        document,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("ascii")
+    return f"sha256:{hashlib.sha256(domain + canonical).hexdigest()}"
+
+
+def _wait(value: float) -> str:
+    return float(value or 0.0).hex()
+
+
+def _retry_policy(retry: Any) -> str:
+    excluded = frozenset(retry.exclude_exceptions or ())
+    included = frozenset(retry.include_exceptions or ())
+    selector = (
+        {"retry": "only", "exceptions": sorted(included - excluded)}
+        if included
+        else {"retry": "all_except", "exceptions": sorted(excluded)}
+    )
+    return _digest(
+        RETRY_POLICY_DOMAIN,
+        {
+            "max_retries": int(retry.max_retries),
+            "selector": selector,
+            "wait_multiplier": _wait(retry.wait_multiplier),
+            "min_wait_sec": _wait(retry.min_wait_sec),
+            "max_wait_sec": _wait(retry.max_wait_sec),
+        },
+    )
+
+
+def _version(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _digest(HARBOR_VERSION_DOMAIN, {"version": value})
+
+
+def _commit(value: str | None) -> str | None:
+    if type(value) is str and COMMIT.fullmatch(value) is not None:
+        return value.lower()
+    return None
+
+
+def _job_header(lock: Any) -> JobHeader:
+    harbor = lock.harbor
+    header = JobHeader(
+        concurrency=int(lock.n_concurrent_trials),
+        max_retries=int(lock.retry.max_retries),
+        retry_policy=_retry_policy(lock.retry),
+        version=_version(harbor.version),
+        commit=_commit(harbor.git_commit_hash),
+        editable=harbor.is_editable,
+    )
+    assert header.max_retries >= 0
+    assert PIN.fullmatch(header.retry_policy) is not None
+    assert header.commit is None or COMMIT.fullmatch(header.commit) is not None
+    assert header.version is None or PIN.fullmatch(header.version) is not None
+    assert header.editable is None or type(header.editable) is bool
+    return header
 
 
 def _header(data: bytes) -> list[Any]:
@@ -262,7 +342,7 @@ def _read_job(path: Path, expected: str | None, bind_starts: bool) -> Evidence:
     reader.remaining -= native_account.MAX_TOTAL_BYTES - remaining
     _require(reader.remaining >= 0, TOTAL)
     _require(len(trials) == total, LOCK_COUNT)
-    _native(data)
+    header = _native(data)
     registered = tuple(reader.cell(entry) for entry in trials)
     del trials, data
     finals, lock_only = _traverse(reader, job, job_id, registered)
@@ -275,6 +355,7 @@ def _read_job(path: Path, expected: str | None, bind_starts: bool) -> Evidence:
         lock_digest=digest,
         finals=tuple(finals),
         lock_without_result=lock_only,
+        header=header,
     )
 
 

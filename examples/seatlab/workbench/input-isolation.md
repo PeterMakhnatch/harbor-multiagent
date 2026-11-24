@@ -127,19 +127,24 @@ Check these exact job config files **before assigning a worker**:
 
 `matches_plan` (exit `0`) means Harbor expands each config to the expected input and number of copies. The requested concurrency and retry limits must match. `different_plan` (exit `1`) explains what differs. Unsupported inputs return exit `2`. This check supports 1–64 copies per job, one local task and an explicit team. It registers no job, reads no provider prices, and predicts no reward.
 
-At registration, keep the digest of each worker's actual `lock.json` separately. A job lock includes its creation time. You cannot derive these two file digests from `isolate`. After both jobs stop changing, use the held digests and the originally chosen count:
+At registration, keep the digest of each worker's actual `lock.json` separately. A job lock includes its creation time. You cannot derive these two file digests from `isolate`. Afterward, use the held digests and the counts you chose **before** either job started:
 
 ```sh
 "$py" -B -m "$wb" cohort-jobs "$left_job" "$right_job" \
   --pair "$left_key" "$right_key" --copies "$copies" \
-  --job-locks "$left_job_pin" "$right_job_pin" --json
+  --job-locks "$left_job_pin" "$right_job_pin" \
+  --schedule "$concurrency" "$max_retries" --json
 ```
 
 `covered` (exit `0`) means two different jobs registered the assigned inputs and all expected final results support attribution. It does not require a positive grade. `inconsistent` (exit `1`) withholds both grade tallies. Examples include swapped arms, the wrong repeat count, or a duplicated execution across the jobs. `incomplete` (exit `3`) means some evidence is missing. A missing final is never a zero. A wrong file digest or unreadable job returns exit `2` and no partial result.
 
+The `registration` section compares the launch concurrency, retry rules, and Harbor build information in the two native job locks. It distinguishes a known difference from an unrecorded value. A wheel without a commit can support input and grade coverage; it cannot establish the same source revision. With `--schedule`, even two workers that registered the **same wrong limits** lose both tallies. Without it, the reader cannot detect that shared change. These are saved settings, not measured concurrency or proof of deployed code.
+
 Use `--starts "$left_starts" "$right_starts"` to require private host START receipts for both jobs. Separate job directories do not resolve two inputs that have the same visible result fields. Use the [morning report](team-account.md#check-finished-jobs-from-several-workers) if a worker has not produced a readable job. The two-job report checks registered inputs and retained final results. It does not measure what a seat saw or establish a treatment effect.
 
 **Check on saved jobs:** In one earlier sweep, 8 native jobs each used the same three-seat task. We chose two by roster, before reading their grades. Only the reviewer changed, from a scripted no-op to a scripted oracle. Both jobs supplied one distinct final with a valid zero. Swapping the expected inputs, asking for two copies, or supplying one job twice withheld both tallies. We calculated the file digests from the saved locks, not at original enrollment. This checks the reader on real job directories; it is not a preregistered comparison or a model result.
+
+For a separate software check we changed only private copies of those files, never the archived jobs. Differences in concurrency, retry limit, retry delay, or known Harbor commit each withheld both tallies. Reordering the same exception rules did not. Removing the commit reported it as unrecorded. No teams ran for these checks.
 
 ## Hand a planned comparison to independent workers
 
@@ -171,6 +176,6 @@ python3.12 -BS -m examples.seatlab.workbench worker-plan check \
   --reference-sha256 "$refpin" --copies 8 --concurrency 1 --max-retries 0 --json
 ```
 
-`matches_reference` (exit `0`) returns the **worker-local** trial-lock keys for the later `cohort-jobs --job-locks` check. Keep those keys, not the coordinator’s local ones. `different_plan` (exit `1`) withholds both keys. A wrong reference digest, a non-isolated reference, or an unreadable receipt returns exit `2`.
+`matches_reference` (exit `0`) returns the **worker-local** trial-lock keys. Keep those keys, not the coordinator’s local ones. After registration, pass them and the same concurrency and retry counts to `cohort-jobs --job-locks … --schedule …`. `different_plan` (exit `1`) withholds both keys. A wrong reference digest, a non-isolated reference, or an unreadable receipt returns exit `2`.
 
 The coordinator trusts the workers that issue these receipts. The digests identify inputs; they do not authenticate a worker or hide guessable settings. They do not pin Harbor, custom adapter code, container images, or a served model. Use the same known fork revision. A match does not authorize spending or prove what ran. Without an existing isolated reference, these receipts cannot establish that only one input differs.

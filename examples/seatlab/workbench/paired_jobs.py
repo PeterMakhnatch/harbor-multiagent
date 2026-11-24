@@ -16,15 +16,29 @@ if TYPE_CHECKING:
     from .input_witness import Witness
 
 SIDES = ("left", "right")
-OPTIONS = ("--pair", "--copies", "--job-locks", "--plans", "--starts", "--json")
-MAX_ARGUMENTS = 14
+OPTIONS = (
+    "--pair",
+    "--copies",
+    "--job-locks",
+    "--plans",
+    "--starts",
+    "--schedule",
+    "--json",
+)
+MAX_ARGUMENTS = 17
 MAX_ARGUMENT_BYTES = 4096
 COPIES = re.compile(r"[1-9][0-9]{0,5}")
+CONCURRENCY = re.compile(r"[1-9][0-9]{0,3}")
+RETRIES = re.compile(r"0|[1-9][0-9]?")
 EXITS = {"covered": 0, "inconsistent": 1, "incomplete": 3}
 ARGUMENTS_ERROR = "Invalid cohort-jobs arguments. Use cohort-jobs --help."
 SHAPE_ERROR = (
     "Use distinct full lowercase sha256: trial-lock keys, full lowercase sha256: job locks if required, "
     "and 1 to {limit} copies."
+)
+SCHEDULE_ERROR = (
+    "Use --schedule with plain decimal concurrency 1 to {concurrency} and max retries 0 to {retries}, "
+    "only with --job-locks."
 )
 NATIVE_ERROR = "Paired input coverage needs the installed Harbor fork. Do not use -S."
 SIDE_ERROR = "Cannot verify the {side} job, its enrollment pin, its START archive or its retained files. No paired report."
@@ -43,7 +57,8 @@ def _parser() -> Parser:
         allow_abbrev=False,
         description=(
             "Before launch, project two local native job configs. Afterward, check the retained jobs "
-            "against the same two trial-lock keys. No job starts and nothing is written."
+            "against the same two trial-lock keys and, with --schedule, the launch schedule both native "
+            "job locks claim. No job starts and nothing is written."
         ),
     )
     parser.add_argument(
@@ -90,6 +105,15 @@ def _parser() -> Parser:
         metavar=("LEFT_STARTS", "RIGHT_STARTS"),
         help="Write-once host START archives, one per job; required for both or neither.",
     )
+    parser.add_argument(
+        "--schedule",
+        nargs=2,
+        metavar=("CONCURRENCY", "MAX_RETRIES"),
+        help=(
+            "Retained jobs only: the concurrency and max retries each job lock must claim. "
+            "Any drift withholds both arms."
+        ),
+    )
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -118,6 +142,17 @@ def _shaped(opts: argparse.Namespace, limit: int) -> int | None:
         return None
     copies = int(opts.copies)
     return copies if 1 <= copies <= limit else None
+
+
+def _expected(
+    values: list[str], concurrency: int, retries: int
+) -> tuple[int, int] | None:
+    if CONCURRENCY.fullmatch(values[0]) is None or RETRIES.fullmatch(values[1]) is None:
+        return None
+    expected = (int(values[0]), int(values[1]))
+    if expected[0] > concurrency or expected[1] > retries:
+        return None
+    return expected
 
 
 def _side(
@@ -149,11 +184,32 @@ def _arm(side: str, arm: Record) -> str:
     )
 
 
+def _profile(registered: Record | None) -> str:
+    if registered is None:
+        return "unrecorded"
+    return f"concurrency {registered['concurrency']}, max retries {registered['max_retries']}"
+
+
+def _registration(registration: Record) -> list[str]:
+    fields = registration["fields"]
+    agreement = ", ".join(f"{name} {fields[name]}" for name in sorted(fields))
+    registered = registration["registered"]
+    expected = registration["expected"]
+    wanted = "not requested" if expected is None else _profile(expected)
+    return [
+        f"Registration from native job-lock claims: {registration['pair']}; {agreement}.",
+        f"Schedule {registration['schedule'].replace('_', ' ')}: expected {wanted}; "
+        + "; ".join(f"{side} {_profile(registered[side])}" for side in SIDES)
+        + ".",
+    ]
+
+
 def _text(report: Record) -> str:
     reasons = report["reasons"]
     lines = [
         f"{report['status']}: {report['copies_per_arm']} planned copies per arm in two separate jobs.",
         f"Reasons: {', '.join(reasons) if reasons else 'none'}.",
+        *_registration(report["registration"]),
         *(_arm(side, report["arms"][side]) for side in SIDES),
         report["caveat"],
     ]
@@ -170,7 +226,7 @@ def _plans(opts: argparse.Namespace) -> int:
     from .job_projection import MAX_COPIES, compare, project
 
     copies = _shaped(opts, MAX_COPIES)
-    if copies is None or opts.starts is not None:
+    if copies is None or opts.starts is not None or opts.schedule is not None:
         print(ARGUMENTS_ERROR, file=sys.stderr)
         return 2
     plans = []
@@ -210,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         if opts.plans:
             return _plans(opts)
         from .input_evidence import MAX_TRIALS
+        from .job_projection import MAX_CONCURRENCY, MAX_RETRIES
         from .paired_cohort import combine
     except ImportError:
         print(NATIVE_ERROR, file=sys.stderr)
@@ -218,6 +275,15 @@ def main(argv: list[str] | None = None) -> int:
     if copies is None:
         print(SHAPE_ERROR.format(limit=MAX_TRIALS), file=sys.stderr)
         return 2
+    schedule = None
+    if opts.schedule is not None:
+        schedule = _expected(opts.schedule, MAX_CONCURRENCY, MAX_RETRIES)
+        if schedule is None:
+            print(
+                SCHEDULE_ERROR.format(concurrency=MAX_CONCURRENCY, retries=MAX_RETRIES),
+                file=sys.stderr,
+            )
+            return 2
     sides = []
     for index, side in enumerate(SIDES):
         try:
@@ -235,7 +301,11 @@ def main(argv: list[str] | None = None) -> int:
         starts = (left_starts, right_starts)
     try:
         report = combine(
-            (left, right), (opts.pair[0], opts.pair[1]), copies, starts=starts
+            (left, right),
+            (opts.pair[0], opts.pair[1]),
+            copies,
+            starts=starts,
+            schedule=schedule,
         )
     except ImportError:
         print(NATIVE_ERROR, file=sys.stderr)
