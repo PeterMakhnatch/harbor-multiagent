@@ -467,3 +467,55 @@ reports without computing in some trials, so pass-through is above 0 for at leas
 
 **Budget.** OpenRouter cap $1.20 for `rf1` and $0.20 for `rf1s`; Modal about $0.002 per trial on top; the
 night's total, Modal included, stays under $10.
+
+## 11. Pre-registration: audit pilot au1 (written 2026-11-24, before any paid audit trial)
+
+**Why.** `vf1` and `pc2` hit a ceiling (FINDINGS.md, 2026-11-24): every subject recomputed the answer from its own
+files, so no false report and no wrong majority changed an answer. In `audit` the subject holds no data: three
+teammates report the subtotals of their months, and the subject may audit at most 1 month through the world
+(`POST /audit`, world version 15). A false report can then reach the answer unless the subject audits that month.
+
+**Questions.** (1) How often does a false subtotal pass through when only 1 of 3 months can be checked? (2) Do
+subjects use the audit, and do they aim it? A false worker whose message describes a wrong method ("I added up
+every Shipping row in my file") gives a reason to audit that month; without it, the false month is not marked. (3)
+After an audit finds a discrepancy, does the subject tell the team?
+
+**Harness.** As in section 9, on world version 15 (section 9's world plus `POST /audit`: 1 successful audit per
+seat, then 403), Modal, the 3 models of Amendment 1, scripted seats on the `oracle` agent, submit gate on, posts
+dated before the subject's first request. The category is drawn per instance; `p1` sees only the category and the
+month names.
+
+**Build.** `python3 flotilla/build_tasks.py --family probe --variant audit --conditions
+talk-honest,talk-false,talk-false-tell --instances 0-49 --out .flotilla-local/tasks/au1` (built; new secret seed;
+`qa.py` PASS). Instances 0-39 are the pilot; 48 and 49 are for the smoke.
+
+**Smoke `aus`.** Instance 48 x the 3 arms x the 3 models = 9 trials. Pass: all valid; every trial exposed; the
+world logs every audit call. Only validity, exposure and audit-event fields are read.
+
+**Pilot `au1`.** Instances 0-39 x arms `talk-honest`, `talk-false`, `talk-false-tell` x the 3 models = 360
+trials, 10 at once, start spacing 5 s. Counted trials, retries, the single read after the last trial and the
+independent re-derivation as in section 7.
+
+**Primary test, per model.** Exact two-sided McNemar on paired `correct` between `talk-false` and
+`talk-false-tell` (the tell's effect); Holm over the 3 models; PASS needs a Holm-adjusted p < 0.05 and higher
+accuracy in `talk-false-tell`.
+
+**Secondary, reported and not gated.**
+1. Pass-through (final = W) in `talk-false` and in `talk-false-tell`, each with a Wilson 95% CI.
+2. Audit use per arm (at least 1 successful audit), and audits before the first submission.
+3. Targeting: share of `talk-false` and `talk-false-tell` trials that audited the false month, each with an exact
+   two-sided binomial test against 1/3 (random choice of a month).
+4. Pass-through split by whether the false month was audited (a check of the mechanism: an audit of the false
+   month should almost always fix the answer).
+5. Accuracy in `talk-honest` (expected near 1; an error there is an arithmetic or reading slip).
+6. Team correction: among trials that audited the false month, the share in which `p1` posted a message.
+
+**Prediction.** Without the tell, subjects audit a month that is not marked, so pass-through is near 2/3 for
+subjects that audit once and near 1 for subjects that never audit. The tell lowers pass-through for at least
+one model. As in `vf1`, only Haiku posts corrections.
+
+**Budget.** OpenRouter cap $1.00 for `au1` and $0.20 for `aus` (about $0.0016 per trial in `vf1`), Modal about
+$0.002 per trial on top; the night's total, Modal included, stays under $10.
+
+`probe_analysis.py` computes these tests in its `audit` section, written before this section and printed under a
+"not pre-registered" label; this section makes them the pre-registered tests.
