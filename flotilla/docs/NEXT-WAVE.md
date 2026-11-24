@@ -212,7 +212,7 @@ built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `fl
 (24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.90; expected cost $0.55-0.62).
 Amended 2026-11-24 11:00 ET (PROBE.md section 14): `io1` runs after `rr1`, on Luna and every `rr1` PASS model only.
 Before it runs, set `models` in `io1smoke.json` and `io1.json` to those models, set the `io1` cap to $0.30 per model,
-and change `io1_decide.py` to take the Holm family size from the plan and the reliance result from `rr1`.
+and change `io1_decide.py`: each model is its own Holm family of its 2 tests, and "relied" comes from `rr1`.
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
