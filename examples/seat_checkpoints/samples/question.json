@@ -1,0 +1,118 @@
+{
+  "schema": "harbor.seat-cut.question/v1",
+  "question": "Can an operator identify the standing team grade when Harbor records a clean planner finish, without comparing the host and world clocks or wrapping the planner agent?",
+  "population": "18 first attempts with two native scripted seats. No LLM, replayed team, or external service. Both seats use the real Shift Board API. This is an instrumentation qualification, not a model study.",
+  "fixtures": [
+    "planner-fit",
+    "dispatcher-fit"
+  ],
+  "rule": "observe",
+  "target": "planner",
+  "peer": "dispatcher",
+  "arms": {
+    "held-early": {
+      "seeds": [
+        17,
+        482
+      ],
+      "gate_order": "planner then dispatcher",
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "observe": true
+    },
+    "held-late": {
+      "seeds": [
+        17,
+        482
+      ],
+      "gate_order": "dispatcher action then planner",
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "observe": true
+    },
+    "off": {
+      "seeds": [
+        17,
+        482
+      ],
+      "gate_order": "planner then dispatcher, no probes",
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "observe": false
+    },
+    "racing": {
+      "seeds": [
+        17
+      ],
+      "gate_order": "release both, do not assume which event comes first",
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "observe": true
+    },
+    "natural": {
+      "seeds": [
+        17
+      ],
+      "gate_order": "no gates",
+      "planner_gates": [],
+      "dispatcher_gates": [],
+      "dispatcher_policy": "publish",
+      "observe": true
+    },
+    "held-leave": {
+      "seeds": [
+        17
+      ],
+      "gate_order": "planner then dispatcher",
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "leave",
+      "observe": true
+    }
+  },
+  "boundary": "The moment the native seat lifecycle first carries finished_at with no exception. This includes harness cleanup. It is not the last model token, output flush, or final world action. The prefix reward equals the frozen Shift Board reward if the team makes no further change.",
+  "evidence": "A world marker records a prefix ordinal under the same lock as world actions. Its receipt before a host snapshot of a still-open target gives a lower bound. If it is issued after a clean snapshot, the world mark gives an upper bound even if its acknowledgement is lost. A crossing request alone supplies neither. Unmarked host observations do not identify a prefix. All prefixes between endpoints remain possible to this estimator.",
+  "pass": [
+    "All 18 registered first attempts must be accounted for separately. A failed, absent, copied or invalid attempt cannot become an observed zero.",
+    "In all 4 held-early trials, the bound must identify the planner grade, show the peer running after the planner return and not equal the final grade: 1 to 0 for planner-fit, 0 to 1 for dispatcher-fit.",
+    "In all 4 held-late trials, the bound must identify the final grade with the dispatcher still running after the planner return: 0 for planner-fit, 1 for dispatcher-fit.",
+    "In both held-leave trials the bound must identify the planner grade and it must equal the final grade.",
+    "Both fixtures under every schedule must preserve their registered final reward. Each of the 4 unobserved controls must have a native final grade but no reported grade at planner finish."
+  ],
+  "descriptive_only": [
+    "For both racing and both natural teams, publish the observed interval, including if it identifies no score. Neither tightness nor a particular event order is a pass condition.",
+    "Grade identification does not require one exact ordinal. It requires all admissible prefixes to have the same reward. Capturing a post-return score alone is not sufficient.",
+    "Scripted gates exercise the observation system; they are not evidence about whether real agents tend to repair or overwrite one another. The observer can add timing overhead. No benefit of freezing a live world is claimed."
+  ],
+  "cost_usd": 0,
+  "native_trials_max_parallel": 2
+}
