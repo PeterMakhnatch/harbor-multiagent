@@ -217,6 +217,28 @@ python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'cr
 python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.json /tmp/cr1.json
 ```
 
+### Order for an approved batch
+
+Run the ready waves one at a time in this order. "Most" is the plans' OpenRouter caps plus Modal at about $0.0021
+per trial. Before each step, add its "most" to the spend so far (run logs, the key's usage, Modal's usage report),
+and do not start a step that could pass the approved total.
+
+| Step | Plans | Trials | Expected | Most |
+|---|---|---|---|---|
+| 1 | `io1smoke`, `io1` | 24 + 384 | about $1.4 | $1.86 |
+| 2 | `cards/tc1` | 552 | about $2.2 | $4.47 |
+| 3 | `cr1smoke`, `cr1` | 18 + 360 | about $1.6 | $2.19 |
+| 4 | `cards/tc2smoke`, `cards/tc2` | 30 + 1104 | about $4.5-7 (prompt caching or not) | $7.68 |
+
+Trust card waves (steps 2 and 4) run and report as `trust_card.py plan` prints; for `tc2`, run `tc2smoke` first:
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json --run-dir .flotilla-local/runs/tc1 && \
+  keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json --run-dir .flotilla-local/runs/tc1 --retry-invalid
+python3 flotilla/trust_card.py report --plan flotilla/plans/cards/tc1.json --jobs .flotilla-local/jobs \
+  --pattern 'tc1-??????' --out .flotilla-local/cards/tc1
+```
+
 ### Trust card
 
 One command per stage gives any model a card under the standing protocol of PROBE.md section 13: reliance
