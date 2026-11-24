@@ -1,5 +1,67 @@
 # Flotilla: controlled multi-agent experiments on harbor-multiagent
 
+## Start here
+
+Flotilla builds small multi-agent evaluation worlds on the Harbor framework. Each agent has a seat in a shared
+world. It can read data, post messages, and submit answers. The world scores the final answer. Scripted teammates
+send fixed reports, true or false, so each model under test gets the same inputs from its teammates.
+
+### The 2026-11-24 behavior pilots
+
+The pilots tested 7 pre-registered designs in 2,616 trials across 3 models. Two designs showed an effect:
+
+- [Read first (`rf1v`)][read-first]: GPT-6 Luna used a false subtotal in 32 of 32 trials when told to read the
+  team's messages before opening any file. It used the false subtotal in 0 of the same 32 instances without
+  that instruction. Haiku and DeepSeek did not use the false subtotal in any read-first trial.
+- [Limited audits (`au1`)][audit]: each model could check 1 of 3 reports. Across models, 65% to 98% of trials
+  passed on the false report. A sentence that exposed the wrong method reduced the rate to 30% to 60%.
+
+Five designs showed no effect on the primary outcome: [verify with full data (`vf1`)][verify],
+[unanimous wrong totals (`pc2`)][conformity], [different timing and peer roles (`pc3`)][timing],
+[a false argument at submission (`pa1`)][argument], and [read-first conformity (`rf1c`)][read-first].
+
+### Run the demo: local, no model, no cost
+
+```bash
+bash flotilla/demo.sh    # from the repository root
+```
+
+Use local Docker, `/tmp/crucible-docker-slot.sh`, and a Flotilla Harbor venv with PyYAML. The script defaults to
+`~/Developer/harbor-multiagent-flotilla/.venv/bin/harbor`. Set `FLOTILLA_DEMO_HARBOR` for another venv.
+Docker needs the cached `python:3.13-slim` image and the cached Flotilla player build layer.
+The script builds and checks 5 tasks. Harbor runs `oracle` on every seat, with no model, API key, or Modal.
+The script keeps the jobs, probe analysis, [card](analysis/README.md#behavior-cards-flotilla-cards), and
+[timeline](analysis/README.md#trial-timeline) under `$TMPDIR` (default `/tmp`). It prints their paths.
+The oracle uses reference answers. The demo checks the pipeline, not model behavior.
+
+### A trust card for a model: paid
+
+The [trust card protocol][protocol] uses 184 trials per model on Modal. Plan the run with `trust_card.py`.
+Set `PREREG_SHA` to a commit with section 13. Replace the example model with your model slug.
+The plan needs the built `rf1v` and `au2` task sets under `.flotilla-local/tasks/`. Planning does not start trials.
+
+```bash
+python3 flotilla/trust_card.py plan --model openrouter/provider/model --name card-example --prereg-commit "$PREREG_SHA"
+```
+
+After an approved run, use `trust_card.py report` to render the card from its plan and local job results.
+Budget [about $0.70 to $1.30 per cheap model][cost], including Modal. Get approval before starting a paid run.
+The runner requires a plan committed at HEAD. It reserves $0.02 per trial against a default cap of $1.104
+per model (`--cap-usd` overrides it). The cap does not include Modal.
+The runner checks provider balance floors ($2.00 for OpenRouter and $1.50 for DeepSeek).
+It allows 10 jobs at once, spaces starts by 5 s, and stops after 6 consecutive invalid trials overall or for one model.
+
+[read-first]: docs/FINDINGS.md#2026-11-24-0355-et--told-to-read-the-teams-messages-first-gpt-6-luna-sums-the-reports-and-passes-every-slip-through
+[audit]: docs/FINDINGS.md#2026-11-24-0415-et--an-integrator-that-can-check-1-of-3-reports-passes-a-slip-through-65-98-of-the-time-a-method-tell-halves-it
+[verify]: docs/FINDINGS.md#2026-11-24-0225-et--an-integrator-that-holds-the-data-never-passes-a-teammates-slip-through-only-haiku-tells-the-team
+[conformity]: docs/FINDINGS.md#2026-11-24-0245-et--no-seat-took-a-unanimous-wrong-total-because-every-seat-had-computed-before-it-read
+[timing]: docs/FINDINGS.md#2026-11-24-0300-et--realistic-post-times-one-peer-and-a-lead-claim-change-nothing-either
+[argument]: docs/FINDINGS.md#2026-11-24-0345-et--a-false-argument-at-the-moment-of-commitment-lowers-doubt-instead-of-raising-it
+[protocol]: docs/PROBE.md#13-standing-pre-registration-the-trust-card-written-2026-11-24-before-any-trust-card-trial
+[cost]: docs/NEXT-WAVE.md#trust-card
+
+## The design
+
 Does a team of agents beat one agent because it has more workers, or because its workers
 coordinate? Flotilla runs every task instance in three conditions and reads the answer off the
 difference:
