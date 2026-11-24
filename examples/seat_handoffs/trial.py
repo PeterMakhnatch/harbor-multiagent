@@ -24,7 +24,7 @@ DECISION_KEYS = frozenset(
 )
 
 
-def _grade(result: dict[str, Any]) -> tuple[str, float | int | None]:
+def _grade(result: dict[str, Any]) -> tuple[str, float | None]:
     valid = result.get("reward_valid")
     verifier = result.get("verifier_result")
     if valid is not None and type(valid) is not bool:
@@ -40,6 +40,18 @@ def _grade(result: dict[str, Any]) -> tuple[str, float | int | None]:
     if value is None or valid is not True:
         return "unknown", None
     return "valid", value
+
+
+def read_native_result(path: Path) -> tuple[str | None, str, float | None]:
+    result_path = path / "result.json"
+    if not result_path.exists():
+        return None, "unavailable", None
+    result = _load(result_path, "native result", MAX_LOG_BYTES)
+    native_id = result.get("id")
+    if not canonical_uuid(native_id):
+        raise ValueError("missing native trial identifier")
+    status, grade = _grade(result)
+    return native_id, status, grade
 
 
 def _sealed(sealed: Path, world: Path) -> Replay:
@@ -149,18 +161,10 @@ def read_trial(path: Path, *, boundary: str) -> tuple[list[Finding], dict[str, o
     else:
         raise ValueError("no handoff log in the trial directory; coverage is unknown")
     findings = [replay.finding(edge, boundary) for edge in replay.edges]
-    result_path = path / "result.json"
-    native_id = None
-    status, grade = "unavailable", None
-    if result_path.exists():
-        result = _load(result_path, "native result", MAX_LOG_BYTES)
-        if not canonical_uuid(result.get("id")):
-            raise ValueError("missing native trial identifier")
-        native_id = result["id"]
-        status, grade = _grade(result)
-        if grade is not None and replay.reward is not None and replay.reward != grade:
-            raise ValueError("world closure and native verifier disagree on reward")
-    link = {
+    native_id, status, grade = read_native_result(path)
+    if grade is not None and replay.reward is not None and replay.reward != grade:
+        raise ValueError("world closure and native verifier disagree on reward")
+    link: dict[str, object] = {
         "world_run": replay.run,
         "native_trial": native_id,
         "log": "verifier" if sealed.is_file() else "world",

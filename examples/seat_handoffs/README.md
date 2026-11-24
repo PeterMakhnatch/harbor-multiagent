@@ -21,6 +21,24 @@ To try it without Docker, run `python3 -m examples.seat_handoffs events examples
 
 For a native trial, inspect `native_trials` in the JSON. The reader keeps the native trial ID and the world's run ID distinct. It reports a native reward only if `result.json` marks that reward valid. A missing or invalid reward stays `null`, including when the task's own closed journal contains a reward. The [revised-dispatch task](../tasks/revised-dispatch/README.md) also reports whether the booker changed its draft. None of these outputs include the slots, receipts, message contents, or model responses.
 
+## Inspect a whole Harbor job, including missing evidence
+
+Use `job` instead of a shell glob when reporting a cohort. A glob sees only the directories you collected. Harbor's job lock includes every scheduled trial, even when no directory is available.
+
+```bash
+uv run harbor jobs start -c examples/configs/features/revised-dispatch-job.yaml
+python3 -m examples.seat_handoffs job "jobs/<job-name>" --boundary acknowledged
+python3 -m examples.seat_handoffs job "jobs/<job-name>" --boundary acknowledged --json
+```
+
+The [example job](../configs/features/revised-dispatch-job.yaml) runs 3 scripted teams, one at a time. No key is required. Each booker keeps its stale draft. These are valid zero rewards, not missing trials. To run different teams in parallel, give each worker its own job name and config. Set the seed, variant and participants in each config; keep the same seed across conditions.
+
+The reader checks the job UUID, directory name and native trial lock. It groups identical locked inputs rather than assigning an order to indistinguishable repeats. **Missing slots** have no attributable directory in this copy. They may have run elsewhere. A matched trial can still have no journal, no final seal, or no valid grade.
+
+**Valid native grades** count scores from attributable native results, even when the handoff journal is missing. **Usable trials** have both a sealed journal and a valid native grade. Only these contribute to the joint handoff-and-reward summary. Read the trial rows for partial observations.
+
+Use a stable copy to compare workers. In a live job, Harbor can still write files. A retry can replace a trial directory. The reader cannot recover the earlier attempt from a later copy. If the job has no native lock, the reader cannot establish a denominator.
+
 ## Try the two frozen archives
 
 These are two specific published studies, not general parsers for arbitrary agent traces. From a checkout with Peter's fork as `origin`:
