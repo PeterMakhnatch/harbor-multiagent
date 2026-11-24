@@ -69,6 +69,7 @@ KEY_KINDS = frozenset(
         "bad_token",
         "invalid_http",
         "freeze",
+        "audit",
     }
 )
 POLL_KINDS = frozenset({"look", "wait", "state", "whoami", "health"})
