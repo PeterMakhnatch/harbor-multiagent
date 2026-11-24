@@ -519,3 +519,8 @@ $0.002 per trial on top; the night's total, Modal included, stays under $10.
 
 `probe_analysis.py` computes these tests in its `audit` section, written before this section and printed under a
 "not pre-registered" label; this section makes them the pre-registered tests.
+
+**Amendment 1 to section 11 (2026-11-24 03:05 ET, while `au1` runs, before any `au1` outcome is read).** The script
+now prints the primary with its decision (bcbaa1c9; before that it printed the test without one). Secondary 3 is
+computed among the trials that audited at least once, the share for which the 1/3 null holds; the share of all
+trials that audited the false month follows from it and secondary 2.
