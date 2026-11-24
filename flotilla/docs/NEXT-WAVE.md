@@ -166,17 +166,18 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 | 1 | Which models stop checking when reports come first, and how do they audit? A trust card per model. | `trust_card.py` under PROBE.md section 13 (`rf1v` + `au2`). Cheap OpenRouter ids on 2026-11-24: `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`, `qwen/qwen3.8-flash`, `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl`; frontier: `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol`, `google/gemini-4-argon`. Re-carding the 3 night models replicates `rf1v` and runs `au2` | 184 per model | about $0.7 per cheap model (Modal included), $6-8 per frontier model |
 | 2 | Is it the order or the instruction? | complete the 2 x 2 (instruction x reports before the first data read): `--inbox` (reports in the brief, no read-first sentence) and `--read-first --post-trigger first_submit` (instruction, reports only at the first submit); verify `talk-quiet`, `talk-false` on `rf1v`'s instances. `--push` cannot do it: agents batch their first world call with their first data read (FINDINGS.md, 2026-11-24 05:20) | 32 x 2 x 2 sets x 3 models = 384 | about $1.3 |
 | 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `--audit-budget` 0, 1, 2 (built; `au2`'s seed); give each budget its own `--variant` (`audit-b0`, `audit-b1`, `audit-b2`) so no two builds share a label, and analyse each budget's jobs with its own one-set plan; pre-register first | 40 x 3 x 3 | about $1.6 |
-| 4 | Does an argument move a seat when the task text does not settle it? | the peer cites a policy file that the seat also holds; the claim is false and only that file shows it (`pa1` used a reason the task text refutes) | 32 x 2 x 3 | about $0.6 plus a family change |
+| 4 | Does an argument move a seat when the task text does not settle it? | conformity `--policy-file` (built): each seat holds `policy.md`, whose deciding rule (void, weekend or cap, drawn per instance) only that file states; arm `talk-policy` (one peer posts W with a false claim about `policy.md`) against `talk-one` (the same post without the claim) and `talk-quiet`; analysis fields `opened_policy`, `policy_after_claim`. Pre-register first (decide the rule mix: void is drawn about half the time) | 32 x 3 x 3 | about $0.8 |
 | 5 | Do frontier models behave the same? | trust cards (row 1) on 1-3 frontier models before any claim about frontier agents | 184 per model | $6-8 per model |
 | 6 | Does the integrator ask, and does it accept a teammate's confirmation of a wrong subtotal? | challenge-response `cr1` (world version 20): `talk-false`, `talk-false-insist`, `talk-false-admit` on `au2`'s instances (audit). Ready: PROBE.md section 15, set `.flotilla-local/tasks/cr1`, plans `cr1smoke`/`cr1` | 40 x 3 x 3 models = 360 | about $1.6 (cap $1.30 OpenRouter) |
 
 Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
 from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
 
-The pre-registered sets `rf1v` (world version 14), `au2` (18), `io1v` and `io1s` (19) are frozen: each task carries
-its own copy of the world it was built with, and they run as built. `qa.py` on them now reports only `stale-code`
-(this checkout's world is version 20); every other rule passes (checked 2026-11-24 06:47 ET). Do not rebuild them
-for a pre-registered wave; `cr1` was built with version 20.
+The pre-registered sets `rf1v` (world version 14), `au2` (18), `io1v`, `io1s` (19) and `cr1` (20) are frozen: each
+task carries its own copy of the world and family code it was built with, and they run as built. `qa.py` on them
+reports only `stale-code` (this checkout's code is newer); every other rule passes (checked 2026-11-24 06:47 ET, and
+`cr1` at 07:02 ET after the `--policy-file` change to the shipped `family.py`). Do not rebuild them for a
+pre-registered wave.
 
 ### io1: order or instruction (row 2, ready to run)
 
