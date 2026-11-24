@@ -286,7 +286,7 @@ python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan>    # a run_
 python3 -m flotilla_analysis.watch ../../.flotilla-local/jobs --once    # any Harbor jobs (or job) folder
 python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan> --html /tmp/wave   # live dashboard
 flotilla-watch TARGET [--interval 30] [--once] [--json PATH] [--html DIR] [--notify] [--stall-seconds 300]
-               [--cap-usd X]
+               [--cap-usd X] [--blind]
 ```
 
 Each pass (every `--interval` seconds) prints the wave's progress (cells or trials done, valid, invalid,
@@ -311,6 +311,14 @@ only when its `result.json` changes. The flags are the timeline's (stall, error,
 problems) plus provider errors from `trial.log`. A trial without a page says why in its flags (`no
 timeline: ...` for a trial whose task is not resolved, `timeline failed: <error>` when rendering fails); the
 watch goes on. `--once --html DIR` builds the dashboard of a finished wave. Every text is HTML-escaped.
+
+`--blind` is for pre-registered waves that forbid interim looks at outcomes. Text, `--json` and `--html`
+then show progress, validity, spend, stalls and errors only, and say `BLIND` in the header. They show no
+reward of any trial, no reward summary (the text says `rewards: hidden (blind)`, the JSON has no
+`rewards`), no `score.json` field and no answer. The finished trials have no `reward` in the JSON and a
+`valid` column instead of the reward in the HTML. A trial's unscored reason can quote its reward, so it
+becomes `reason hidden (blind)`. Exceptions and provider errors stay. No timeline page is written: a page
+shows the reward, the `score.json` fields and the submitted answers.
 
 What the host can see during a trial (fork Harbor, read 2026-11-24, Docker and Modal):
 
