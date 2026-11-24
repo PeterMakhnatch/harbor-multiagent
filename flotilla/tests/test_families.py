@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import FAMILIES, FLOTILLA, family, instance, load
+from conftest import FAMILIES, FLOTILLA, TEAM_FAMILIES, family, instance, load
 
 INSTANCES = range(30)
 SETTINGS = [(difficulty, n_seats) for difficulty in ("easy", "hard") for n_seats in (2, 3)]
@@ -82,7 +82,7 @@ MAX_LUCKY_SHARE = {"schedule": 0.35, "ledger": 0.0, "puzzle": 0.05}
 MAX_MEAN_ALONE = {"schedule": 0.35, "ledger": 0.0, "puzzle": 0.5}
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", TEAM_FAMILIES)  # probe gives its subject the whole task: nothing is split
 @pytest.mark.parametrize(("difficulty", "n_seats"), SETTINGS)
 def test_oracle_with_one_part_scores_clearly_below_one(name, difficulty, n_seats):
     module = family(name)

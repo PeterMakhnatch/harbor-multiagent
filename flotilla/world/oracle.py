@@ -5,8 +5,13 @@ Messaging on (`talk...`): post the briefing to everyone, wait for every teammate
 full answer. A briefing travels as numbered chunks (`FLOTILLA-BRIEFING <i>/<n> <text>`) that fit the
 world's message limits; a seat whose briefing cannot fit sends `FLOTILLA-BRIEFING 0/0` (nothing is
 coming). A scripted peer (briefing with a `script` key) posts its part, true or false, as plain text
-only; the oracle reads plain text with the family's `parse_text`, if it has one.
-The family module sits next to this file (solution/family.py). See CONTRACT.md 8.
+only; the oracle reads plain text with the family's `parse_text`, if it has one. A confederate (`"script":
+"confederate"`, the probe family) plays its plan: timed posts (`{"at_s", "to", "text"}`) and, if the plan has
+them, timed submissions (`{"at_s", "submit": {...}}`), measured from its own start. A seat of a family without
+pooling (`POOLING = False`) needs no teammate: it submits its own answer at once, and with messaging on it holds
+play open for `ORACLE_HOLD_SECONDS` (or the environment's `ORACLE_HOLD_SECONDS`, for tests) and submits again,
+through the world's submit gate if there is one. The family module sits next to this file (solution/family.py).
+See CONTRACT.md 8 and 12.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -136,13 +142,66 @@ def scripted_peer(own: dict[str, Any]) -> None:
         time.sleep(30)
 
 
+def post(path: str, body: dict[str, Any]) -> dict[str, Any]:
+    """POST, with a refusal (4xx) returned as {"status", "reply"} instead of raised."""
+    try:
+        return call("POST", path, body)
+    except urllib.error.HTTPError as exc:
+        try:
+            reply = json.load(exc)
+        except ValueError:
+            reply = None
+        return {"status": exc.code, "reply": reply}
+
+
+def submit_through_gate(answer: dict[str, Any], attempts: int = 5) -> dict[str, Any]:
+    """Submit; a 409 that shows unread messages (the submit gate) has delivered them, so submit again."""
+    reply: dict[str, Any] = {}
+    for _attempt in range(attempts):
+        reply = post("/submit", {"answer": answer})
+        if reply.get("status") != 409 or not (reply.get("reply") or {}).get("messages"):
+            break
+    return reply
+
+
+def confederate(own: dict[str, Any]) -> None:
+    """Play a confederate's plan, each step at its `at_s` seconds after this seat's first call, and print what the
+    world replied to each step."""
+    call("GET", "/whoami")
+    start = time.monotonic()
+    for step in sorted(own.get("plan") or [], key=lambda step: float(step["at_s"])):
+        time.sleep(max(0.0, start + float(step["at_s"]) - time.monotonic()))
+        if "submit" in step:
+            path, reply = "/submit", submit_through_gate(step["submit"])
+        else:
+            path, reply = "/messages", post("/messages", {"to": step.get("to", "all"), "text": step["text"]})
+        print(json.dumps({"at_s": round(time.monotonic() - start, 3), "path": path, "reply": reply}), flush=True)
+
+
+def own_answer(family: Any, own: dict[str, Any], me: dict[str, Any]) -> None:
+    """A family without pooling: submit at once (the first attempt is on record); with messaging on, hold play
+    open while scripted peers post, then submit again."""
+    answer = family.oracle_answer([own])
+    print(json.dumps(submit_through_gate(answer)), flush=True)
+    if not messaging(me):
+        return
+    time.sleep(float(os.environ.get("ORACLE_HOLD_SECONDS") or getattr(family, "ORACLE_HOLD_SECONDS", 0.0)))
+    print(json.dumps(submit_through_gate(answer)))
+
+
 def main() -> None:
     own = json.loads(os.environ["SEAT_BRIEFING"])
+    if own.get("script") == "confederate":
+        confederate(own)
+        return
     if "script" in own:
         scripted_peer(own)
         return
     family = family_module()
     me = call("GET", "/whoami")
+    if not getattr(family, "POOLING", True):
+        own_answer(family, own, me)
+        return
     parts: dict[str, list[Any]] = {}
     if messaging(me):
         max_text, max_messages = limits(me)

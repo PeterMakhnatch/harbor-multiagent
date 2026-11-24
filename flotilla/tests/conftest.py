@@ -39,6 +39,11 @@ def family(name: str) -> ModuleType:
     return load(FLOTILLA / "families" / f"{name}.py", f"flotilla_test_family_{name}")
 
 
+# Families that split the information across seats (every family but probe, whose subject holds the whole task):
+# the checks that assume pooling, or the solo, silent and talk conditions, run on these.
+TEAM_FAMILIES = [name for name in FAMILIES if getattr(family(name), "POOLING", True)]
+
+
 @functools.cache
 def instance(name: str, i: int, n_seats: int, difficulty: str, seed: int = 1) -> dict[str, Any]:
     """A generated instance, cached across tests (tests must not change it)."""

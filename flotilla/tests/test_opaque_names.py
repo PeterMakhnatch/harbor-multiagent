@@ -10,23 +10,27 @@ import sys
 import tomllib
 from pathlib import Path
 
-from conftest import FAMILIES, FLOTILLA, load
+from conftest import FAMILIES, FLOTILLA, TEAM_FAMILIES, load
 from test_build_tasks import by_task, compose_services, seat_visible_texts
 
 BUILD = load(FLOTILLA / "build_tasks.py")
 TALK_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned")
+PROBE_ARMS = ("talk-quiet", "talk-wrong", "talk-dissent", "talk-right")
 # every word that would tell a seat what its task is: condition words, families, and the variants built below
-WORDS = ("solo", "silent", "talk", "liar", "warned", *FAMILIES, "hard", "3seat")
+WORDS = ("solo", "silent", "talk", "liar", "warned", "quiet", "wrong", "dissent", "right", *FAMILIES, "hard", "3seat",
+         "conformity")
 
 
 def build_all(out: Path, **options) -> list[Path]:
-    """Every family in the three conditions, a variant, and the scripted liar label in all four talk conditions."""
+    """Every team family in the three conditions, a variant, the scripted liar label in all four talk conditions, and
+    the probe in its four arms."""
     built = []
-    for family_name in FAMILIES:
+    for family_name in TEAM_FAMILIES:
         built += BUILD.build(family_name, [0, 1], 2, "easy", 1, BUILD.CONDITIONS, out, **options)
     built += BUILD.build("ledger", [0], 3, "hard", 1, BUILD.CONDITIONS, out, variant="3seat", **options)
     built += BUILD.build("schedule", [0, 1], 2, "easy", 1, TALK_CONDITIONS, out, variant="liar", scripted=True,
                          **options)
+    built += BUILD.build("probe", [0], 4, "easy", 1, PROBE_ARMS, out, variant="conformity", **options)
     return built
 
 
@@ -38,7 +42,7 @@ def manifest(out: Path) -> dict[str, dict]:
 
 def test_opaque_names_say_nothing_about_the_task(tmp_path):
     built = build_all(tmp_path)
-    assert len(built) == 3 * 6 + 3 + 8
+    assert len(built) == 3 * 6 + 3 + 8 + 4
     names = [task.name for task in built]
     assert len(set(names)) == len(names)
     for task in built:
@@ -87,8 +91,8 @@ def test_the_manifest_maps_every_task_and_lies_outside_every_task_folder(tmp_pat
         assert entry["instructions_sha256"] == {seat: hashlib.sha256((task / "instructions" / f"{seat}.md")
                                                                      .read_bytes()).hexdigest() for seat in entry["seats"]}
     assert [p.name for p in tmp_path.rglob("manifest.json")] == ["manifest.json"]  # one, at the build root
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["ledger", "ledger.3seat", "manifest.json", "puzzle",
-                                                         "schedule", "schedule.liar"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ledger", "ledger.3seat", "manifest.json", "probe.conformity",
+                                                         "puzzle", "schedule", "schedule.liar"]
 
 
 def test_readable_names_keep_the_old_layout(tmp_path):

@@ -66,7 +66,7 @@ RULES: dict[str, tuple[str, str]] = {
     "opaque-names": ("FAIL", ("a task built with opaque names has a task or folder name that is not t-<12 hex>, "
                               "or that names a condition, its family or its variant")),
     "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart in what it reads (talk and "
-                               "talk-liar, talk-warned and talk-liar-warned, talk and gated)")),
+                               "talk-liar, talk-warned and talk-liar-warned, talk and gated, the four probe arms)")),
     "seat-network": ("FAIL", "a seat is not alone with main on a network of its own"),
     "seat-secrets": ("FAIL", ("a seat gets the answer key, the build's seed, task.json, task.toml, the build "
                               "manifest, a world, family or score file, the admin token or another seat's token")),
@@ -83,6 +83,9 @@ RULES: dict[str, tuple[str, str]] = {
                              "answer key; --allow-public-seed makes it a WARN, only to repeat a published build")),
     "container-name": ("FAIL", ("a service sets container_name: a seat reads that fixed name by a reverse DNS "
                                 "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
+    "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, a confederate's briefing "
+                                  "is not the family's plan for the task's arm, or the world's submit gate differs "
+                                  "from task.json")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
@@ -98,8 +101,10 @@ SOURCE_WORDS = ("flotilla", "harbor-multiagent")  # the software's name and its 
 MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no seat may get (seat-secrets)
 DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
 DOCUMENTED_SEED = re.compile(r"(?<![A-Za-z0-9_])seed\W{0,3}(\d+)", re.IGNORECASE)  # --seed 1, seed 1, "seed": 1
-TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"), ("talk", "gated"))  # each pair looks the same
-REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned")
+PROBE_ARMS: tuple[str, ...] = load_module(ROOT / "families" / "probe.py", "flotilla_qa_probe").ARMS
+TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"), ("talk", "gated"),
+         *((PROBE_ARMS[0], arm) for arm in PROBE_ARMS[1:]))  # each pair looks the same to a seat under test
+REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned", *PROBE_ARMS)
 LIAR = re.compile(r"(?<![a-z])liars?(?![a-z])", re.IGNORECASE)
 WARNED = re.compile(r"(?<![a-z])warned(?![a-z])", re.IGNORECASE)
 WORLD_FILES = ("task.json", "world.py", "score.py", "family.py", "docker-compose.yaml")  # main's, never a seat's
@@ -110,7 +115,7 @@ MIN_TOKEN_CHARS = 16  # a shorter token could be guessed by another seat
 MAX_READ_BYTES = 2_000_000
 TASK_NAME = re.compile(r"^(?P<label>.+)-(?P<instance>\d+)-(?P<condition>[a-z]+(?:-[a-z]+)*)$")
 OPAQUE_NAME: re.Pattern[str] = BUILD.OPAQUE_NAME  # t-<12 hex>, the folder name; the task name is flotilla/<it>
-CONDITION_WORDS = tuple(sorted({word for name in BUILD.CONDITION_TEXT for word in name.split("-")}))
+CONDITION_WORDS = tuple(sorted({word for name in (*BUILD.CONDITION_TEXT, *PROBE_ARMS) for word in name.split("-")}))
 HEX_ONLY = re.compile(r"^[0-9a-f]+$")
 
 
@@ -893,8 +898,11 @@ def check_game_secret(task: Task) -> Iterator[Finding]:
 
 def check_solo_sufficient(task: Task) -> Iterator[Finding]:
     """A seat whose own briefing already gives the answer needs no teammate in this instance. Only a WARN: in
-    `schedule` a seat alone may guess right by luck (CONTRACT.md 7)."""
+    `schedule` a seat alone may guess right by luck (CONTRACT.md 7). A family without pooling (`POOLING = False`,
+    the probe family) gives every seat the whole task by design, so it is not checked."""
     if task.condition == "solo" or task.family is None or task.answer_key is None:
+        return
+    if getattr(task.family, "POOLING", True) is False:
         return
     for seat in task.under_test:
         raw = task.env(seat).get("SEAT_BRIEFING")
@@ -910,6 +918,36 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
 
 
+def check_confederate_plan(task: Task) -> Iterator[Finding]:
+    """A probe task (task.json `probe`, CONTRACT.md 12) has its subject as the only seat under test, each confederate
+    plays the family's plan for the task's own arm (a task built for one arm with another arm's plans would measure
+    the wrong condition), and main's FLOTILLA_SUBMIT_GATE says what task.json says."""
+    probe = task.task_json.get("probe")
+    if not isinstance(probe, dict) or task.family is None:
+        return
+    if task.under_test != [probe.get("subject")]:
+        yield Finding("confederate-plan", task.name, "*", f"the seats under test are {', '.join(task.under_test)}, "
+                      f"not the subject {probe.get('subject')}")
+    try:
+        plans = task.family.confederate_plans({"probe": probe}, task.condition)
+    except Exception as exc:  # noqa: BLE001 - a plan the family cannot rebuild is a finding
+        yield Finding("confederate-plan", task.name, "*",
+                      f"the family cannot rebuild the plans of arm {task.condition} ({type(exc).__name__})")
+        return
+    for seat in probe.get("confederates") or []:
+        try:
+            briefing = json.loads(task.env(seat).get("SEAT_BRIEFING") or "null")
+        except ValueError:
+            briefing = None
+        if briefing != {"script": "confederate", "plan": plans.get(seat)}:
+            yield Finding("confederate-plan", task.name, seat,
+                          f"its briefing is not the family's plan for arm {task.condition}")
+    gate = task.env("main").get("FLOTILLA_SUBMIT_GATE") == "1"
+    if gate != (task.task_json.get("submit_gate") is True):
+        yield Finding("confederate-plan", task.name, "main",
+                      f"FLOTILLA_SUBMIT_GATE is {'on' if gate else 'off'}, but task.json says otherwise")
+
+
 def check_container_name(task: Task) -> Iterator[Finding]:
     """Harbor names a trial's containers after the trial, an opaque name. A container_name replaces it with a fixed
     name, which a seat reads by a reverse DNS lookup of main's address (or of its own), as a silent seat read
@@ -921,7 +959,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret)
+              check_game_secret, check_confederate_plan)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -968,8 +1006,9 @@ def describe_difference(name: str, mine: str | None, theirs: str | None, twin: s
 
 
 def check_twins(tasks: list[Task]) -> Iterator[Finding]:
-    """talk and talk-liar (and talk-warned and talk-liar-warned) differ only in the scripted peer's script, and talk
-    and gated only in the world's read gate: each seat under test reads the same bytes in both, apart from its token."""
+    """talk and talk-liar (and talk-warned and talk-liar-warned) differ only in the scripted peer's script, talk
+    and gated only in the world's read gate, and the probe arms only in the confederates' plans: each seat under test
+    reads the same bytes in both, apart from its token."""
     groups: dict[tuple[str, str, int], dict[str, Task]] = defaultdict(dict)
     for task in tasks:
         if task.instance is not None and task.condition:
