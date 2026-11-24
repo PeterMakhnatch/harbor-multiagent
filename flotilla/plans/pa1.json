@@ -68,7 +68,7 @@
  },
  "budget": {
   "cap_usd": 0.4,
-  "reserve_per_trial_usd": 0.05,
+  "reserve_per_trial_usd": 0.02,
   "provider_floors": {
    "openrouter": 2.0
   }
