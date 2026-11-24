@@ -84,14 +84,13 @@ class OracleAgent(BaseAgent):
         return self._task.paths.solution_dir, self._task.paths.solve_path
 
     def _seat_caller_uid(self, environment: BaseEnvironment) -> int | None:
-        uid = environment.default_user
         if (
             not isinstance(environment, SeatEnvironment)
             or self._task.config.environment.os == TaskOS.WINDOWS
-            or isinstance(uid, bool)
-            or not isinstance(uid, int)
-            or uid <= 0
         ):
+            return None
+        uid = environment.default_user
+        if isinstance(uid, bool) or not isinstance(uid, int) or uid <= 0:
             return None
         return uid
 
