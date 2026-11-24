@@ -156,7 +156,7 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 13` (sections 11 to 13). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 14` (sections 11 to 14). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
@@ -398,7 +398,7 @@ POOLING = False                    # the subject's own part answers the task: no
 SUBMIT_GATE = True                 # FLOTILLA_SUBMIT_GATE=1 and task.json "submit_gate": true
 KINDS: tuple[str, ...]             # the family's kinds: conformity, verify
 def kind(variant) -> namespace     # the family for the kind the variant label starts with (the builder uses it)
-def confederate_plans(inst, condition) -> {seat: [{"at_s", "to", "text"} | {"at_s", "submit": {...}}]}  # world time
+def confederate_plans(inst, condition) -> {seat: [{"before_s", "to", "text"} | {"at_s", "submit": {...}}]}  # section 14
 def seat_files(inst) -> {file name: text}
 def seat_instruction(inst, seat, seats, condition, max_text, max_messages) -> str
 def answer_value(answer) -> int | None   # the number an answer gives (score.py's probe fields)
@@ -411,16 +411,17 @@ no variant is `conformity`), and `build_tasks.py` builds with `kind(variant)`'s 
 `probe["kind"]`, and `oracle_answer` and `seat_files` read either kind's part.
 
 `generate` also returns `scripted_seats`, `decoy` (`{"total": W}`) and `probe`: `{"kind", "subject",
-"confederates", "correct_value" (C), "peer_wrong" (W), "category", "slots" [{"seat", "at_s", "template"}]}`
+"confederates", "correct_value" (C), "peer_wrong" (W), "category", "slots" [{"seat", "before_s", "template"}]}`
 plus, for `conformity`, `"dissenter_slot"`, and for `verify`, `"shard_of"` {seat: file}, `"month_of"` {seat:
 month name}, `"subtotals"` {seat: S_k}, `"slips"` {seat: S'_k} and `"false_seat"`. A `verify` part is
 `{"category", "files": [{"file", "month", "rows", "csv"}]}`. task.json holds `probe` plus `plans` (this arm's
 plans), `scheduled_posts` (section 13), `decoy`, `scripted_seats` and `submit_gate`. The builder turns every post
-step of the plans into a scheduled post of the world; a confederate's `SEAT_BRIEFING` is `{"script":
+step of the plans into a scheduled post of the world (section 14); a confederate's `SEAT_BRIEFING` is `{"script":
 "confederate", "plan": [...]}` with the other steps (none in `conformity` or `verify`). The oracle plays them
 `at_s` seconds after the seat's `/whoami` (a submission goes through the gate) and prints the world's reply; with
-an empty plan it makes no call. The oracle subject (`POOLING = False`) submits `oracle_answer([own])` once,
-through the gate.
+an empty plan it makes no call. The oracle subject (`POOLING = False`) submits `oracle_answer([own])` through the
+gate: after a 409 that shows messages it reads `GET /messages` and submits again, so a posting arm shows one gated
+attempt.
 
 The verifier scores the subject's own last accepted submission (a confederate's submission never counts) and
 adds to `score.json`: `arm`, `probe_kind`, `subject`, `answer_value`, `correct`, `correct_value`, `peer_wrong`,
@@ -444,6 +445,21 @@ exactly like any other. The `start` event has `data.scheduled_posts` (the number
 refuses to start when a post names an unknown seat, sends to its own sender, has empty or too long text or a
 negative or non-number `at_s`, when the condition has no messaging, or when a seat has more posts than its
 message limit. Without the key (every family but `probe`, and every task built before version 13) nothing
-changes. The probe family (both kinds) schedules its confederates' posts 0.2-1.5 s after the world starts, before
-any seat's first request (a seat container starts only after main's first health check, 2 s in), so the submit
-gate shows them to a subject whose first world call is its submission.
+changes. Version 13 builds of the probe family schedule their confederates' posts 0.2-1.5 s after the world starts.
+
+## 14. World version 14: posts at the first request of the seat under test
+
+A scheduled post may give `"before_s": seconds >= 0` instead of `at_s`; one task's posts all use the same key,
+and the world refuses to start on a mix. With `before_s`, the world adds every post at the first authorized
+request of a seat that task.json does not list in `scripted_seats` (the seat under test), before it handles that
+request, so its reply and the submit gate already show them. Posts are added in falling `before_s` order, each
+with message `t` = (that request's world time - `before_s`); when the request comes earlier than the largest
+`before_s` + 0.1 s (local oracle seats start about 4 s in), all offsets shrink by one factor, so the order and the
+proportions hold and the first post has `t` = 0.1 s. The `send` event has `data.scheduled: true`, `data.before_s`
+and `data.at_s` (the message `t`). Requests of scripted
+seats, health checks and the verifier add nothing; the world refuses to start when every seat is scripted. The
+`start` event's `data.scheduled_by` names the key. Posts with `at_s` (version 13 builds, such as pc2 and vf1) keep
+section 13's world clock, so those builds still run and verify with this world. The probe family (both kinds)
+dates its confederates' posts 3 to 12 s before the subject's first request, at least 0.8 s apart: in v13 the
+posts carried `t` = 0.2-1.5 s while a subject's own messages, 15 s or more later, carried the time of sending,
+so a subject could see that its peers answered before it started.

@@ -82,11 +82,13 @@ def player_dockerfile(files: list[str]) -> str:
 
 def scheduled_posts(plans: dict[str, list[dict[str, Any]]]
                     ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    """The posts of the confederates' plans, which the world makes on its own clock (task.json `scheduled_posts`,
-    world version 13; `at_s` is world time), and each confederate's other steps, which it plays itself."""
-    posts = sorted(({"from": seat, "to": step.get("to", "all"), "text": step["text"], "at_s": step["at_s"]}
+    """The posts of the confederates' plans, which the world makes itself (task.json `scheduled_posts`), in the order
+    it adds them, and each confederate's other steps, which it plays itself. A post step's timing is `before_s`
+    (world version 14: seconds before the first request of the seat under test) or `at_s` (version 13: world time)."""
+    key = "before_s" if any("before_s" in step for plan in plans.values() for step in plan) else "at_s"
+    posts = sorted(({"from": seat, "to": step.get("to", "all"), "text": step["text"], key: step[key]}
                     for seat, plan in sorted(plans.items()) for step in plan if "text" in step),
-                   key=lambda post: (post["at_s"], post["from"]))
+                   key=lambda post: (post[key] if key == "at_s" else -post[key], post["from"]))
     return posts, {seat: [step for step in plan if "text" not in step] for seat, plan in plans.items()}
 
 

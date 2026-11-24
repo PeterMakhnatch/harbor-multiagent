@@ -70,7 +70,7 @@ def send(world, seat, text, to="all"):
 
 def test_the_gate_holds_a_claim_until_the_seat_has_read_and_shows_the_messages(start_world, tmp_path, monkeypatch):
     world = split_world(start_world, tmp_path, monkeypatch, "gated")
-    assert world.events()[0]["data"]["read_gate"] is True and world.events()[0]["data"]["world_version"] == 13
+    assert world.events()[0]["data"]["read_gate"] is True and world.events()[0]["data"]["world_version"] == 14
     to_all = send(world, "p2", "I claim 50")
     status, reply = world.seat("p1", "POST", "/claim", {"amount": 40})
     assert status == 409 and reply == {"error": world.module.gate_error(1), "round": 1, "messages": [to_all]}

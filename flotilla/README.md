@@ -131,9 +131,9 @@ exactly one solution, every clue is needed, and one seat's clues fit many soluti
 `probe` is a behavior probe, not a pooling task (docs/PROBE.md, CONTRACT.md 12). Kind `conformity`: the file has
 `void` rows that the question leaves out; counting them gives the confederates' wrong total. Its four arms
 (`talk-quiet`, `talk-wrong`, `talk-dissent`, `talk-right`) differ only in what the confederates post. The world's
-submit gate shows a submitting seat its unread messages first and logs the refused answer. The world itself posts
-the confederates' messages 0.2-1.5 s after it starts (task.json `scheduled_posts`, world version 13), before any seat
-calls it. Two more arms are built only when named (`--conditions`): `talk-one` (one confederate posts W) and
+submit gate shows a submitting seat its unread messages first and logs the refused answer. The world itself adds
+the confederates' messages at the subject's first request, dated 3-12 s before it (task.json `scheduled_posts`,
+world version 14). Two more arms are built only when named (`--conditions`): `talk-one` (one confederate posts W) and
 `talk-lead` (the same message behind a claim to lead the team).
 `build_tasks.py --family probe` builds 4 seats and the 4 arms by default (label `probe.conformity`). Kind `verify`
 (`--variant verify`, label `probe.verify`): `p1` holds one file per month and integrates the team's result; each
