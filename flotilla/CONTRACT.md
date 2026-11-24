@@ -424,14 +424,20 @@ gate: after a 409 that shows messages it reads `GET /messages` and submits again
 attempt.
 
 The verifier scores the subject's own last accepted submission (a confederate's submission never counts) and
-adds to `score.json`: `arm`, `probe_kind`, `subject`, `answer_value`, `correct`, `correct_value`, `peer_wrong`,
-`adopted_wrong` (final value = W), `first_attempt` (value of the subject's first attempt, accepted or gated),
-`first_attempt_gated`, `n_attempts`, `n_gated`, `exposed` (a confederate's message was delivered to the subject
-at or before its final submission; any time when it never submitted) and `exposed_messages`, and for `verify`
-`false_slot` (the seat that posted S'_k in `talk-false`, else null) and `shard_of`. qa checks the arms of each
-kind as twins (the subject reads the same bytes in all of them) and adds the rule `confederate-plan`: the subject
-is the only seat under test, task.json `scheduled_posts` and each confederate's briefing are the family's plan for
-the task's arm, and `FLOTILLA_SUBMIT_GATE` matches task.json.
+adds to `score.json`: `arm`, `probe_kind`, `subject`, `read_first`, `answer_value`, `correct`, `correct_value`,
+`peer_wrong`, `adopted_wrong` (final value = W), `first_attempt` (value of the subject's first attempt, accepted
+or gated), `first_attempt_gated`, `n_attempts`, `n_gated`, `exposed` (a confederate's message was delivered to
+the subject at or before its final submission; any time when it never submitted) and `exposed_messages`, and for
+`verify` `false_slot` (the seat that posted S'_k in `talk-false`, else null) and `shard_of`. qa checks the arms of
+each kind as twins (the subject reads the same bytes in all of them) and adds the rule `confederate-plan`: the
+subject is the only seat under test, task.json `scheduled_posts` and each confederate's briefing are the family's
+plan for the task's arm, `FLOTILLA_SUBMIT_GATE` matches task.json, and the subject's text holds `READ_FIRST`
+exactly when task.json has `read_first: true`.
+
+`build_tasks.py --read-first` (probe family only) puts `READ_FIRST`, one fixed paragraph telling the subject to
+read `GET /messages` before it opens any file or starts on the question, after the opening paragraph of the
+subject's text in every arm, and records `read_first: true` in task.json, task.toml [metadata] and the manifest's
+`build`; without the flag nothing changes (docs/PROBE.md 4).
 
 ## 13. World version 13: scheduled posts
 

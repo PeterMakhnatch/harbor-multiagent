@@ -484,3 +484,63 @@ def test_the_verifier_scores_the_subjects_own_last_answer_and_sees_adoption(tmp_
     assert (summary["answer_value"], summary["adopted_wrong"], summary["correct"]) == (wrong, True, False)
     assert (summary["first_attempt"], summary["first_attempt_gated"], summary["n_gated"]) == (correct, True, 1)
     assert (summary["exposed"], summary["exposed_messages"], summary["n_submissions"]) == (True, 1, 2)
+    assert summary["read_first"] is False
+    _reward, summary = _verify(tmp_path, world, monkeypatch, _probe_task(inst, "talk-wrong", {}) | {"read_first": True})
+    assert summary["read_first"] is True
+
+
+# --- The read-first variant ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("variant", ["conformity", "verify"])
+def test_read_first_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_nothing_else(tmp_path, variant):
+    pytest.importorskip("yaml")
+    kind = family(f"probe.{variant}")
+    arms = (*kind.ARMS, *kind.EXTRA_ARMS)
+    BUILD.build("probe", [0, 1], 4, "easy", SEED, arms, tmp_path / "plain", variant=variant)
+    BUILD.build("probe", [0, 1], 4, "easy", SEED, arms, tmp_path / "told", variant=variant, read_first_subject=True)
+    plain, told = by_task(tmp_path / "plain"), by_task(tmp_path / "told")
+    assert sorted(plain) == sorted(told) and len(told) == 2 * len(arms)
+    texts = {}
+    for key, task in told.items():
+        before = plain[key]
+        text = (task / "instructions" / "p1.md").read_text()
+        assert text == BUILD.read_first((before / "instructions" / "p1.md").read_text())
+        assert text.count(BUILD.READ_FIRST) == 1
+        assert text.split("\n\n")[2] == BUILD.READ_FIRST  # after the title and the opening paragraph
+        texts.setdefault(key[1], set()).add(text)
+        for name in ("p2.md", "p3.md", "p4.md"):
+            assert (task / "instructions" / name).read_text() == (before / "instructions" / name).read_text()
+        files = sorted(path.name for path in (before / "environment" / "player").iterdir())
+        assert files == sorted(path.name for path in (task / "environment" / "player").iterdir()) and all(
+            (task / "environment" / "player" / name).read_bytes() == (before / "environment" / "player" / name).read_bytes()
+            for name in files)
+        task_json = json.loads((task / "environment" / "task.json").read_text())
+        assert task_json == json.loads((before / "environment" / "task.json").read_text()) | {"read_first": True}
+        meta = tomllib.loads((task / "task.toml").read_text())["metadata"]
+        assert meta == tomllib.loads((before / "task.toml").read_text())["metadata"] | {"read_first": True}
+        briefings = [{seat: service["env"]["SEAT_BRIEFING"] for seat, service in compose_services(
+            (folder / "environment" / "docker-compose.yaml").read_text()).items() if seat != "main"}
+            for folder in (task, before)]
+        assert briefings[0] == briefings[1]
+    assert all(len(found) == 1 for found in texts.values())  # one subject text per instance, in every arm
+    manifest = json.loads((tmp_path / "told" / "manifest.json").read_text())["tasks"]
+    assert all(entry["build"]["read_first"] is True for entry in manifest.values())
+    assert all("read_first" not in entry["build"]
+               for entry in json.loads((tmp_path / "plain" / "manifest.json").read_text())["tasks"].values())
+
+
+def test_qa_passes_a_read_first_build_and_catches_a_missing_sentence(tmp_path):
+    pytest.importorskip("yaml")
+    qa = load(FLOTILLA / "qa.py")
+    BUILD.build("probe", [0], 4, "easy", SEED, ARMS, tmp_path, variant="conformity", read_first_subject=True)
+    found, tasks = qa.check(qa.find_tasks([str(tmp_path)]))
+    assert [f for f in found if f.level == "FAIL"] == [] and len(tasks) == 4
+    by_arm = {task.condition: task.path for task in tasks}
+    instruction = by_arm["talk-wrong"] / "instructions" / "p1.md"
+    instruction.write_text(instruction.read_text().replace(BUILD.READ_FIRST + "\n\n", ""))
+    found, _tasks = qa.check(qa.find_tasks([str(tmp_path)]))
+    assert sorted((f.rule, f.task, f.seat) for f in found if f.level == "FAIL") == sorted([
+        ("confederate-plan", by_arm["talk-wrong"].name, "p1"), ("twin-mismatch", by_arm["talk-wrong"].name, "p1")])
+    with pytest.raises(SystemExit, match="--read-first applies to the probe family"):
+        BUILD.build("schedule", [0], 2, "easy", 1, ("talk",), tmp_path / "other", read_first_subject=True)
