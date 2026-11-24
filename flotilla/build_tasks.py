@@ -578,7 +578,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         if budget_fields:
             inst = family.with_audit_budget(inst, audit_budget)
         if policy_file:
-            inst = family.with_policy(inst)
+            inst = family.with_policy(inst, i, seed, difficulty)
         team_seats = list(inst["seats"]) if game else sorted(inst["private"])
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted or probe else ()
         for condition in conditions:

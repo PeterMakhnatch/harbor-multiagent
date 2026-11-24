@@ -4,6 +4,7 @@ policy-data rule, and the oracle play of talk-quiet and talk-policy against a re
 
 from __future__ import annotations
 
+import collections
 import json
 import re
 import tomllib
@@ -24,24 +25,31 @@ def _terms(probe: dict) -> tuple[dict, dict]:
     return PROBE.policy_terms(policy["rule"], policy["cap"], policy["said"])
 
 
-def test_the_policy_decides_c_its_misreading_gives_w_and_neither_shows_in_what_the_subject_reads():
-    rules = set()
-    for i in range(30):
+def test_the_rule_is_stratified_the_misreading_is_plausible_and_c_and_w_stay_out_of_what_the_subject_reads(tmp_path):
+    rules = collections.Counter()
+    for i in range(48):
         plain = PROBE.generate(SEED, i, 4, "easy")
-        inst = PROBE.with_policy(plain)
-        assert plain == PROBE.generate(SEED, i, 4, "easy") and inst == PROBE.with_policy(plain)
+        inst = PROBE.with_policy(plain, i, SEED, "easy")
+        assert plain == PROBE.generate(SEED, i, 4, "easy") and inst == PROBE.with_policy(plain, i, SEED, "easy")
         probe, part = inst["probe"], inst["solo_private"]
         policy = probe["policy"]
-        rules.add(policy["rule"])
-        assert part["csv"] == plain["solo_private"]["csv"] and part["policy"] == {"rule": policy["rule"],
-                                                                                  "cap": policy["cap"]}
+        rules[policy["rule"]] += 1
+        assert policy["rule"] == PROBE.POLICY_RULES[i % 3] and probe["slots"] == plain["probe"]["slots"]
+        assert set(part) == {"file", "csv", "category", "rows", "policy_file"}  # the briefing names no rule
+        assert part["policy_file"] == "/home/player/policy.md" and probe["category"] == part["category"]
+        if policy["redrawn"] == 0:
+            assert part["csv"] == plain["solo_private"]["csv"]
         terms, misread = _terms(probe)
         correct = PROBE.policy_total(part["csv"], probe["category"], **terms)
         wrong = PROBE.policy_total(part["csv"], probe["category"], **misread)
-        assert correct != wrong and (probe["correct_value"], probe["peer_wrong"]) == (correct, wrong)
+        assert (probe["correct_value"], probe["peer_wrong"]) == (correct, wrong)
+        assert PROBE.SLIP_SHARE[0] * correct <= abs(wrong - correct) <= PROBE.SLIP_SHARE[1] * correct
         assert (inst["answer_key"], inst["decoy"]) == ({"total": correct}, {"total": wrong})
-        assert PROBE.oracle_answer([part]) == {"total": correct}
         text = PROBE.policy_text(policy["rule"], policy["cap"])
+        assert PROBE.policy_rule(text) == (policy["rule"], policy["cap"])
+        written = tmp_path / f"policy-{i}.md"
+        written.write_text(text)
+        assert PROBE.oracle_answer([part | {"policy_file": str(written)}]) == {"total": correct}
         assert policy["claim"] == PROBE.POLICY_CLAIMS[policy["rule"]].format(cap=policy["said"])
         assert policy["claim"] not in text and "policy.md" in policy["claim"]
         if policy["rule"] == "cap":
@@ -51,11 +59,13 @@ def test_the_policy_decides_c_its_misreading_gives_w_and_neither_shows_in_what_t
         seen = "\n".join((subject, part["csv"], text, policy["claim"]))
         assert not {correct, wrong} & PROBE.numbers_in(seen)
         assert PROBE.seat_files(inst) == {"expenses.csv": part["csv"], "policy.md": text}
-    assert rules == set(PROBE.POLICY_RULES)
+    assert rules == {"void": 16, "weekend": 16, "cap": 16}
+    with pytest.raises(ValueError, match="not a policy.md"):
+        PROBE.policy_rule(text.replace("4. ", "4. Mostly: "))
 
 
 def test_talk_policy_is_talk_ones_message_behind_the_claim_and_needs_a_policy():
-    inst = PROBE.with_policy(PROBE.generate(SEED, 0, 4, "easy"))
+    inst = PROBE.with_policy(PROBE.generate(SEED, 0, 4, "easy"), 0, SEED, "easy")
     one = BUILD.scheduled_posts(PROBE.confederate_plans(inst, "talk-one"))[0]
     told = BUILD.scheduled_posts(PROBE.confederate_plans(inst, "talk-policy"))[0]
     assert len(one) == len(told) == 1
@@ -83,6 +93,9 @@ def test_the_flag_builds_policy_md_and_the_question_in_every_arm_and_changes_not
             task_json = json.loads((task / "environment" / "task.json").read_text())
             meta = tomllib.loads((task / "task.toml").read_text())["metadata"]
             assert task_json["policy_file"] is True and meta["policy_file"] is True
+            compose = (task / "environment" / "docker-compose.yaml").read_text()
+            assert "/home/player/policy.md" in compose  # the seats' briefings name the file, never its rule
+            assert not any(word in compose for word in ("Saturday", "weekend", "at most", '\\"rule\\"', '"rule"'))
             assert "Dockerfile" in [p.name for p in (task / "environment" / "player").iterdir()]
             assert "COPY --chown=player:player policy.md" in (task / "environment" / "player" / "Dockerfile").read_text()
         for arm in ARMS[:3]:
@@ -129,13 +142,15 @@ def test_qa_passes_a_policy_build_and_catches_a_wrong_policy_a_stray_claim_and_a
 
 @pytest.mark.parametrize("arm", ["talk-quiet", "talk-policy"])
 def test_oracle_play_applies_the_policy_and_scores_one(tmp_path, start_world, monkeypatch, arm):
-    inst = PROBE.with_policy(PROBE.generate(SEED, 0, 4, "easy"))
+    inst = PROBE.with_policy(PROBE.generate(SEED, 0, 4, "easy"), 0, SEED, "easy")
     probe = inst["probe"]
+    written = tmp_path / "policy.md"
+    written.write_text(PROBE.seat_files(inst)["policy.md"])
     plans = PROBE.confederate_plans(inst, arm)
     posts, own_steps = BUILD.scheduled_posts(plans)
     world = _scheduled_world(start_world, tmp_path, arm, posts)
     solution = _solution(tmp_path)
-    running = [_seat(solution, world, "p1", inst["private"]["p1"])]
+    running = [_seat(solution, world, "p1", inst["private"]["p1"] | {"policy_file": str(written)})]
     running += [_seat(solution, world, seat, {"script": "confederate", "plan": own_steps[seat]}) for seat in SEATS[1:]]
     outputs = [_finish(process) for process in running]
     assert outputs[0] == [{"accepted": True}] and all(output == [{"plan": "empty"}] for output in outputs[1:])
