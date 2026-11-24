@@ -34,7 +34,7 @@ def test_start_event_reports_version_condition_seats_and_limits(start_world):
     world = start_world("silent", ("p1", "p2", "p3"))
     start = world.events()[0]
     assert start["kind"] == "start"
-    assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 16,
+    assert start["data"] == {"condition": "silent", "seats": ["p1", "p2", "p3"], "world_version": 17,
                              "limits": {"max_text": 4000, "max_messages": 200}}
 
 
@@ -122,7 +122,7 @@ def test_submit_reply_carries_no_count_and_the_last_submission_wins(start_world)
     # In world v1 the reply carried the running count n, which told a silent seat that a teammate submitted.
     assert replies == [(200, {"accepted": True})] * 3
     state = world.request("GET", "/admin/state", token=world.admin)[1]
-    assert state["world_version"] == 16
+    assert state["world_version"] == 17
     assert [(s["n"], s["seat"], s["answer"]) for s in state["submissions"]] == [
         (1, "p1", {"day": "Mon"}), (2, "p2", {"day": "Tue"}), (3, "p1", {"day": "Wed"})]
     assert [e["data"]["n"] for e in world.events() if e["kind"] == "submit"] == [1, 2, 3]
@@ -477,5 +477,5 @@ def test_no_reply_names_the_software_a_family_or_a_version(start_world, conditio
         assert set(headers) <= REPLY_HEADERS, headers  # no X- header, no other header
         assert headers["Server"] == world.module.SERVER == "world"
         assert not re.search(r"\d", headers["Server"])  # no version of the world or of Python
-    assert world.events()[0]["data"]["world_version"] == world.module.WORLD_VERSION == 16
-    assert world.request("GET", "/admin/state", token=world.admin)[1]["world_version"] == 16
+    assert world.events()[0]["data"]["world_version"] == world.module.WORLD_VERSION == 17
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["world_version"] == 17

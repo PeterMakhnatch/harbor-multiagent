@@ -94,6 +94,8 @@ RULES: dict[str, tuple[str, str]] = {
                             "world's audit files do not give the answer key and each worker's subtotal, the false "
                             "report is not the slip that gives the decoy, or the tell is outside the false worker's "
                             "message in talk-false-tell")),
+    "push": ("FAIL", ("task.json push is set but not true, is on a task that is not a probe task with messaging, or "
+                      "the subject's push note does not match it")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
@@ -970,6 +972,24 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
                       "task.json read_first says otherwise")
 
 
+def check_push(task: Task) -> Iterator[Finding]:
+    """A push task (task.json `push: true`, CONTRACT.md 17) is a probe task in a messaging condition whose subject's
+    text holds PUSH_NOTE; any other task has neither the key nor the note."""
+    push = task.task_json.get("push")
+    probe = task.task_json.get("probe")
+    subject = probe.get("subject") if isinstance(probe, dict) else None
+    noted = [seat for seat in task.under_test if BUILD.PUSH_NOTE in (task.view(seat).get("instruction") or "")]
+    if push is None and not noted:
+        return
+    if push is not True:
+        yield Finding("push", task.name, "main", f"task.json push is {push!r}, and only true is allowed")
+    if not isinstance(probe, dict) or not task.condition.startswith("talk"):
+        yield Finding("push", task.name, "main", f"push is for a probe task with messaging, not {task.condition}")
+    if noted != ([subject] if push is True else []):
+        yield Finding("push", task.name, str(subject), f"the push note is in the text of {noted or 'no seat'}, but "
+                      f"task.json push is {push!r}")
+
+
 def _numbers(text: str) -> set[int]:
     """Every run of digits that is a word of its own ("540." too; not the digits inside a hex token)."""
     return {int(found) for found in re.findall(r"(?<!\w)\d+(?!\w)", text, flags=re.ASCII)}
@@ -1046,7 +1066,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan, check_audit_data)
+              check_game_secret, check_confederate_plan, check_audit_data, check_push)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
