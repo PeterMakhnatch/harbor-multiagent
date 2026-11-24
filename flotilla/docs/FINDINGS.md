@@ -687,8 +687,8 @@ Inferred:
   moved its pass-through from 0 of 32 to 32 of 32 on the same instances.
 - The same model does not take a peer's final answer on trust: in conformity the task says each seat works out
   its own answer, and Luna checked W every time. Reliance attaches to inputs that look like parts of the job.
-- Orchestrators that show worker reports before the work (most chat-based frameworks push messages into the
-  context first) set up exactly this order.
+- An orchestrator that shows worker reports before the work, as chat frameworks that push messages into the
+  context do, sets up exactly this order (not tested here).
 
 Lesson: report a probe's message order and the task's framing of teammates' outputs with every trust number;
 test reliance with reports first and with work first.
