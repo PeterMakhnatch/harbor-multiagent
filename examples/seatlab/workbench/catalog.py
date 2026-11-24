@@ -243,6 +243,29 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="565a4118189f422e944b4e2ee68cec1ac10acd4bd676bbad61984c72697f9bbf",
     ),
+    Study(
+        id="ship-transfer",
+        question="Does delivery help the same two-seat recovery team if the supplier is still working at handover?",
+        kind="native-scripted-calibration",
+        guide="examples/ship_handover/two-worlds.md",
+        module="examples.ship_handover.transfer",
+        argv=(
+            "examples/ship_handover/samples/two-worlds/stock-recovery.json",
+            "examples/ship_handover/samples/two-worlds/inflight-recovery.json",
+            "--stock-packet",
+            "examples/ship_handover/samples/two-worlds/stock-recovery-w0.json",
+            "--stock-packet",
+            "examples/ship_handover/samples/two-worlds/stock-recovery-w1.json",
+            "--inflight-packet",
+            "examples/ship_handover/samples/two-worlds/inflight-recovery-w0.json",
+            "--inflight-packet",
+            "examples/ship_handover/samples/two-worlds/inflight-recovery-w1.json",
+            "--json",
+        ),
+        report="examples/ship_handover/samples/two-worlds/transfer-recovery.json",
+        exit_code=0,
+        sha256="48d2eb547752c8e79abb061370a7601b4feb522298573120cc59e39297a99d62",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

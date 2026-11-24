@@ -48,6 +48,7 @@ Both observers still closed it after both genuine returns. The average reward di
 | A returned plan but no packets yet | Run `team_return BOOK PLAN` without packet paths. The enrolled pairs remain in the result with unknown grades. |
 | A different native world | [Ship Handover](../../ship_handover/README.md) measures omissions and duplicate dispatches across two shifts. Its supplier ledger is not a scheduling work book. |
 | A shipment that can settle after both seats leave | [Ship Inflight](../../ship_inflight/README.md) separates the relief decision from the final parcel count. Try `python3.12 -BS -m examples.seatlab.workbench verify ship-inflight`. |
+| One team to compare across both shipping worlds | [Register the same roster and compare delivery effects](../../ship_handover/two-worlds.md). Try `python3.12 -BS -m examples.seatlab.workbench verify ship-transfer`. |
 | A private task checkout and an Oracle seat that cannot start | [Check the native private-upload comparison](../results/private-oracle-upload/results.md). A valid world grade does not prove a seat ran. |
 
 You can run either source separately: `examples.seat_handoffs.work_report show` for the book, or `examples.seat_seals.workers show` for a plan and its packets. Share their digests over a trusted channel. These reports check internal consistency. They do not authenticate who produced the evidence or establish what a new model team will do.
