@@ -21,6 +21,19 @@ To try it without Docker, run `python3 -m examples.seat_handoffs events examples
 
 For a native trial, inspect `native_trials` in the JSON. The reader keeps the native trial ID and the world's run ID distinct. It reports a native reward only if `result.json` marks that reward valid. A missing or invalid reward stays `null`, including when the task's own closed journal contains a reward. The [revised-dispatch task](../tasks/revised-dispatch/README.md) also reports whether the booker changed its draft. None of these outputs include the slots, receipts, message contents, or model responses.
 
+## Inspect how an inaccurate report affects a booking
+
+Run this [scripted native control](../configs/features/revised-dispatch-report-error.yaml), then inspect the trial name printed by Harbor:
+
+```bash
+uv run harbor trial start -c examples/configs/features/revised-dispatch-report-error.yaml
+python3 -m examples.seat_handoffs events trials/<trial-name> --boundary acknowledged --json
+```
+
+Read `native_trials[0].decision`. The reporter sent an inaccurate revision. The booker acknowledged and matched it, then earned a valid zero. Change only the booker policy to `ignore`. It still acknowledges the revision but now books the correct slot. Neither result implies that a model understood or distrusted the report.
+
+The [original registration](samples/report-accuracy-registration.json) and [measured results](samples/report-accuracy-controls.json) cover 10 first attempts using stock Harbor. They include different booker policies that made the **same** correct choice, and 2 trials where agreement is unknown. A late or missing acknowledgement never counts as disagreement. Old version 1 decision files have no agreement measurement.
+
 ## Inspect a whole Harbor job, including missing evidence
 
 Use `job` instead of a shell glob when reporting a cohort. A glob sees only the directories you collected. Harbor's job lock includes every scheduled trial, even when no directory is available.

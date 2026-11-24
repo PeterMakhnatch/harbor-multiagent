@@ -15,6 +15,7 @@ if EXPOSED:
 BASE = "http://world:8080"
 SLOTS = frozenset(("A", "B", "C"))
 POLICIES = frozenset(("fresh", "stale", "late", "ignore", "unconfirmed"))
+REPORT_POLICIES = frozenset(("as_briefed", "alternate"))
 DEADLINE = time.monotonic() + 300
 HTTP = build_opener(ProxyHandler({}))
 TOKEN = Path("/run/role/token").read_text(encoding="utf-8").strip()
@@ -62,8 +63,16 @@ def report_slot(inbox: dict, phase: str) -> str | None:
     return None
 
 
-def reporter() -> None:
+def alternate_slot(first: str, current: str) -> str:
+    choice = min(SLOTS - {first, current})
+    if choice in (first, current):
+        raise RuntimeError("alternate slot must differ from both briefs")
+    return choice
+
+
+def reporter(policy: str) -> None:
     reported: set[str] = set()
+    first: str | None = None
     while True:
         brief = poll(
             lambda: call("GET", "/brief"),
@@ -76,7 +85,15 @@ def reporter() -> None:
             return
         if phase not in ("initial", "revision") or phase in reported:
             raise ValueError(f"brief: unexpected phase {phase!r}")
-        call("POST", "/report", {"phase": phase, "slot": slot(brief.get("slot"))})
+        briefed = slot(brief.get("slot"))
+        sent = briefed
+        if phase == "initial":
+            first = briefed
+        elif policy == "alternate":
+            if first is None:
+                raise RuntimeError("revision brief arrived before the initial brief")
+            sent = alternate_slot(first, briefed)
+        call("POST", "/report", {"phase": phase, "slot": sent})
         reported.add(phase)
 
 
@@ -128,7 +145,10 @@ class Booker:
 
 seat = os.environ.get("SEAT")
 if seat == "reporter":
-    reporter()
+    report_policy = os.environ.get("HANDOFF_REPORT_POLICY", "as_briefed")
+    if report_policy not in REPORT_POLICIES:
+        raise ValueError(f"HANDOFF_REPORT_POLICY must be one of {sorted(REPORT_POLICIES)}")
+    reporter(report_policy)
 elif seat == "booker":
     policy = os.environ.get("HANDOFF_POLICY", "fresh")
     if policy not in POLICIES:

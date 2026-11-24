@@ -15,7 +15,7 @@ VERIFIER_DIR = Path("/logs/verifier")
 FREEZE_URL = "http://127.0.0.1:8080/freeze"
 FREEZE_BODY = b"{}"
 SCHEMA = "harbor.handoffs/v1"
-DECISION_SCHEMA = "harbor.revised-dispatch.decision/v1"
+DECISION_SCHEMA = "harbor.revised-dispatch.decision/v2"
 EDGES = [
     {"message": "initial", "sender": "reporter", "receiver": "booker"},
     {"message": "revision", "sender": "reporter", "receiver": "booker"},
@@ -63,6 +63,7 @@ class LogFacts:
     returned: tuple[str, ...]
     acknowledged: tuple[str, ...]
     committed: bool
+    acknowledged_before_commit: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -181,6 +182,7 @@ def parse_log(log: bytes) -> LogFacts:
     returned: list[str] = []
     acknowledged: list[str] = []
     committed = False
+    acknowledged_before_commit: tuple[str, ...] = ()
     for event in events[1:]:
         seq, kind = event["seq"], event.get("type")
         if not isinstance(kind, str) or set(event) != EVENT_KEYS.get(kind):
@@ -200,6 +202,7 @@ def parse_log(log: bytes) -> LogFacts:
             if event["receiver"] != "booker" or committed:
                 raise WorldEvidenceError(f"event {seq} is a second or foreign commit")
             committed = True
+            acknowledged_before_commit = tuple(acknowledged)
     return LogFacts(
         run,
         len(events),
@@ -207,6 +210,7 @@ def parse_log(log: bytes) -> LogFacts:
         tuple(returned),
         tuple(acknowledged),
         committed,
+        acknowledged_before_commit,
     )
 
 
@@ -263,6 +267,9 @@ def grade(log: bytes, state_bytes: bytes, cut: Cut, expected: Fixture) -> Grade:
     state = _object(state_bytes, "world state")
     _check_state(state, facts, expected)
     draft, commit, final = state["draft"], state["commit"], state["final"]
+    revised = state["reported_revision"]
+    revision_sent = "revision" in facts.sent
+    revision_acked = "revision" in facts.acknowledged_before_commit
     reward = int(commit is not None and commit == final)
     closed = {"seq": facts.events, "type": "closed", "reward": reward}
     sealed = log + json.dumps(closed, separators=(",", ":")).encode("ascii") + b"\n"
@@ -271,6 +278,10 @@ def grade(log: bytes, state_bytes: bytes, cut: Cut, expected: Fixture) -> Grade:
         "run": facts.run,
         "draft_changed": None if draft is None or commit is None else draft != commit,
         "decision_correct": None if commit is None else commit == final,
+        "revision_correct": revised == final if revision_sent else None,
+        "commit_matches_acknowledged_revision": (
+            commit == revised if revision_acked else None
+        ),
         "event_counts": {
             "sent": len(facts.sent),
             "returned": len(facts.returned),

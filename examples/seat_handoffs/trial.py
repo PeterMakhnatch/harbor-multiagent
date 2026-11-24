@@ -7,6 +7,7 @@ from .core import (
     BOUNDARIES,
     MAX_LINE_BYTES,
     MAX_LOG_BYTES,
+    Edge,
     Finding,
     Replay,
     canonical_uuid,
@@ -18,10 +19,22 @@ from .core import (
     unique_object,
 )
 
-DECISION_SCHEMA = "harbor.revised-dispatch.decision/v1"
+DECISION_V1 = "harbor.revised-dispatch.decision/v1"
+DECISION_V2 = "harbor.revised-dispatch.decision/v2"
 DECISION_KEYS = frozenset(
     {"schema", "run", "draft_changed", "decision_correct", "event_counts"}
 )
+REVISION_KEYS = frozenset({"revision_correct", "commit_matches_acknowledged_revision"})
+DECISION_SCHEMAS = {
+    DECISION_V1: DECISION_KEYS,
+    DECISION_V2: DECISION_KEYS | REVISION_KEYS,
+}
+TASK_EDGES = (
+    Edge(message="initial", sender="reporter", receiver="booker"),
+    Edge(message="revision", sender="reporter", receiver="booker"),
+)
+REVISION_EDGE = ("revision", "booker")
+DECIDER = "booker"
 
 
 def _grade(result: dict[str, Any]) -> tuple[str, float | None]:
@@ -104,14 +117,58 @@ def _load(path: Path, what: str, limit: int) -> dict[str, Any]:
     return cast(dict[str, Any], record)
 
 
+def _revision(
+    record: dict[str, Any], replay: Replay, correct: bool | None
+) -> dict[str, bool | None]:
+    if replay.edges != TASK_EDGES or replay.acks is not True:
+        raise ValueError(
+            "verifier decision v2 needs the task edges and receiver acknowledgements"
+        )
+    sent = REVISION_EDGE[0] in replay.sent
+    acked = replay.acknowledged.get(REVISION_EDGE)
+    committed = replay.commits.get(DECIDER)
+    aligned_known = acked is not None and committed is not None and acked < committed
+    report = record["revision_correct"]
+    aligned = record["commit_matches_acknowledged_revision"]
+    if not (type(report) is bool if sent else report is None):
+        raise ValueError(
+            "verifier decision revision_correct contradicts the send record"
+        )
+    if not (type(aligned) is bool if aligned_known else aligned is None):
+        raise ValueError(
+            "verifier decision revision alignment contradicts the acknowledgement order"
+        )
+    if aligned is True and report is not correct:
+        raise ValueError(
+            "verifier decision matches the revision but disagrees on correctness"
+        )
+    if aligned is False and report is True and correct is True:
+        raise ValueError(
+            "verifier decision differs from a correct revision yet is correct"
+        )
+    return {
+        "draft_changed": record["draft_changed"],
+        "decision_correct": correct,
+        "revision_correct": report,
+        "commit_matches_acknowledged_revision": aligned,
+    }
+
+
 def _decision(
     path: Path, replay: Replay, grade: float | None
 ) -> dict[str, bool | None] | None:
     if not path.exists():
         return None
     record = _load(path, "verifier decision", MAX_LINE_BYTES)
-    if set(record) != DECISION_KEYS or record["schema"] != DECISION_SCHEMA:
-        raise ValueError(f"verifier decision is not a {DECISION_SCHEMA} record")
+    schema = record.get("schema")
+    if (
+        not isinstance(schema, str)
+        or schema not in DECISION_SCHEMAS
+        or set(record) != DECISION_SCHEMAS[schema]
+    ):
+        raise ValueError(
+            f"verifier decision is not a {DECISION_V1} or {DECISION_V2} record"
+        )
     if record["run"] != replay.run:
         raise ValueError("verifier decision and sealed handoff log name different runs")
     journal = {
@@ -144,6 +201,8 @@ def _decision(
     ):
         if value is not None and value != reward:
             raise ValueError(f"verifier decision and {source} disagree on correctness")
+    if schema == DECISION_V2:
+        return _revision(record, replay, correct)
     return {"draft_changed": changed, "decision_correct": correct}
 
 
