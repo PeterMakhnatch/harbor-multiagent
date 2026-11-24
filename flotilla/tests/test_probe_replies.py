@@ -59,36 +59,45 @@ def _send(world, seat: str, to: str, text: str) -> dict:
 # --- The world --------------------------------------------------------------------------------------------------
 
 
-def test_a_reply_comes_once_per_seat_after_the_subjects_first_message_that_reaches_that_seat(tmp_path, start_world):
-    world = _reply_world(start_world, tmp_path, [_reply("p2", "two", 0.3), _reply("p3", "three", 0.3),
-                                                 _reply("p4", "four", 0.6, to="all")])
+def test_a_reply_comes_once_per_seat_after_the_subjects_first_message_that_reaches_that_seat(tmp_path, start_world,
+                                                                                               monkeypatch):
+    world = _reply_world(start_world, tmp_path, [_reply("p2", "two", 0.25), _reply("p3", "three", 0.25),
+                                                 _reply("p4", "four", 0.5, to="all")])
+    clock = [5.0]  # the world's clock, set by the test: a request's time is exact, whatever the machine's load
+    monkeypatch.setattr(world.module, "now", lambda: clock[0])
     assert world.events()[0]["data"]["reply_posts"] == 3 and world.module.SCHEDULED == []
     _send(world, "p2", "all", "a confederate's message starts nothing")
-    asked_p3 = _send(world, "p1", "p3", "p3, are you sure?")  # reaches p3 only
-    time.sleep(0.4)
+    asked_p3 = _send(world, "p1", "p3", "p3, are you sure?")  # reaches p3 only, at t = 5.0
+    clock[0] = 5.249
+    world.seat("p1", "GET", "/whoami")
+    assert _texts(world)[2:] == []  # 1 ms before its time
+    clock[0] = 5.25
     world.seat("p1", "GET", "/whoami")
     assert _texts(world)[2:] == [("p3", "three")]
-    asked_all = _send(world, "p1", "all", "everyone, please check")  # p2 and p4; p3 has answered
-    time.sleep(0.15)
+    asked_all = _send(world, "p1", "all", "everyone, please check")  # p2 and p4, at t = 5.25; p3 has answered
+    clock[0] = 5.499
     world.seat("p2", "GET", "/whoami")
-    assert _texts(world)[3:] == [("p1", "everyone, please check")]  # not yet: 0.3 s and 0.6 s
-    time.sleep(0.6)
+    assert _texts(world)[3:] == [("p1", "everyone, please check")]  # not yet: due at 5.5 and 5.75
+    clock[0] = 5.5
     world.seat("p2", "GET", "/whoami")  # any request adds what is due
-    _send(world, "p1", "all", "and again")
-    time.sleep(0.7)
+    assert _texts(world)[3:] == [("p1", "everyone, please check"), ("p2", "two")]
+    clock[0] = 5.75
+    _send(world, "p1", "all", "and again")  # p4's reply is due first: the world adds it before this message
+    clock[0] = 7.0
     world.seat("p1", "GET", "/whoami")
     assert _texts(world)[3:] == [("p1", "everyone, please check"), ("p2", "two"), ("p4", "four"),
                                  ("p1", "and again")]  # once per seat: the second question gets nothing
     sends = {e["data"]["id"]: e for e in world.events() if e["kind"] == "send"}
     messages = {m["text"]: m for m in _state(world)["messages"]}
-    for text, asked, delay in (("three", asked_p3, 0.3), ("two", asked_all, 0.3), ("four", asked_all, 0.6)):
+    for text, asked, delay in (("three", asked_p3, 0.25), ("two", asked_all, 0.25), ("four", asked_all, 0.5)):
         message = messages[text]
         data = sends[message["id"]]["data"]
         assert (data["scheduled"], data["trigger"], data["reply_to"], data["after"], data["delay_s"]) == (
             True, "on_message", "p1", asked["id"], delay)
-        assert message["t"] == data["at_s"] == round(asked["t"] + delay, 3)
+        assert message["t"] == data["at_s"] == asked["t"] + delay
     assert messages["four"]["to"] == "all" and messages["two"]["to"] == "p1"
     assert _state(world)["sent"] == {"p1": 3, "p2": 2, "p3": 1, "p4": 1}
+    assert world.module.REPLIES == [] and world.module.REPLIES_DUE == []
 
 
 def test_the_subjects_message_to_another_seat_starts_nothing_and_a_frozen_world_makes_no_reply(tmp_path, start_world):
@@ -120,11 +129,11 @@ def test_push_carries_a_due_reply_and_the_inbox_keeps_it_out_of_the_brief(tmp_pa
     early = {"from": "p2", "to": "all", "text": "February is 901.", "before_s": 5.0}
     world = _reply_world(start_world, tmp_path, [early, _reply("p2", "Re-checked: 901", 0.2)], push=True)
     status, reply = world.seat("p1", "GET", "/whoami")
-    assert [m["text"] for m in reply["new_messages"]] == ["February is 901."]
+    assert status == 200 and [m["text"] for m in reply["new_messages"]] == ["February is 901."]
     _send(world, "p1", "p2", "sure?")
     time.sleep(0.3)
     status, reply = world.seat("p1", "GET", "/whoami")
-    assert [m["text"] for m in reply["new_messages"]] == ["Re-checked: 901"]
+    assert status == 200 and [m["text"] for m in reply["new_messages"]] == ["Re-checked: 901"]
     vias = [e["data"].get("via") for e in world.events() if e["kind"] == "deliver" and e["seat"] == "p1"]
     assert vias == ["push", "push"]
     world = _reply_world(start_world, tmp_path, [early, _reply("p2", "Re-checked: 901", 0.2)], arm="talk-honest",
