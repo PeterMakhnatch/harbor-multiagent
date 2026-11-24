@@ -1,0 +1,1 @@
+{"concurrency":1,"copies":8,"max_retries":0,"prepared_input":"sha256:d438a030baaa6d53cb875c4004843c2d8fd9272b43b147227d71ea50de6bb592","schema":"seatlab.workbench.worker-plan/v1","trial_lock_record":"sha256:5667deb4af043807d06510677db17abc5c5a2f539aa1d10e10196c088656a7f3"}

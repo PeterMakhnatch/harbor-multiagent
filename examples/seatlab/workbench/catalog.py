@@ -13,6 +13,7 @@ Kind = Literal[
     "separate-archive-and-scripted-cohorts",
     "native-scripted-calibration",
     "native-handler-enumeration",
+    "native-plan-preflight",
 ]
 
 _RESULTS = "examples/seatlab/results"
@@ -30,6 +31,7 @@ _JOURNAL = f"{_RESULTS}/seat-event-stream"
 _GATE = f"{_JOURNAL}/return-gate"
 _JOBS = f"{_JOURNAL}/native-jobs"
 _HISTORY = f"{_JOBS}/retry/indexed"
+_SHIP_PLANS = f"{_RESULTS}/ship-worker-plans"
 
 
 @dataclass(frozen=True, slots=True)
@@ -440,6 +442,31 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_HISTORY}/misattributed.json",
         exit_code=1,
         sha256="93e86f1e9ab88e6c9068e7d23fab82ea98b7c274663f06d6fb8ae6c951754dfa",
+    ),
+    Study(
+        id="ship-worker-plans",
+        question="Do two worker-local shipping jobs keep the planned channel difference and schedule when their task directories move?",
+        kind="native-plan-preflight",
+        guide="examples/seatlab/workbench/input-isolation.md",
+        module="examples.seatlab.workbench.worker_plan",
+        argv=(
+            "check",
+            f"{_SHIP_PLANS}/reference.json",
+            f"{_SHIP_PLANS}/left.json",
+            f"{_SHIP_PLANS}/right.json",
+            "--reference-sha256",
+            "sha256:ff3eb516e1576926508b5bca9e73d94a1fc4d80af63a69b1ff803f898e316371",
+            "--copies",
+            "8",
+            "--concurrency",
+            "1",
+            "--max-retries",
+            "0",
+            "--json",
+        ),
+        report=f"{_SHIP_PLANS}/matched.json",
+        exit_code=0,
+        sha256="aa9e870126c7c5e366101fe494f8300fd90931df2603b33d238e3995122ee613",
     ),
 )
 

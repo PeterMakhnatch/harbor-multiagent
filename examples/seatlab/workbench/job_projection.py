@@ -7,9 +7,10 @@ from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
-from . import arm_config, arm_runtime, arm_sources
+from . import arm_config, arm_runtime, arm_sources, isolate
 from .arm_config import MAX_PATH_BYTES, MAX_TRIAL_NAME, _fail, _require
 from .seat_stream import MIB, Record
+from .worker_handoff import MAX_CONCURRENCY, MAX_COPIES, MAX_RETRIES, RECEIPT_SCHEMA
 
 SCHEMA = "seatlab.workbench.paired-job-plans/v1"
 SIDES = ("left", "right")
@@ -29,9 +30,6 @@ JOB_FIELDS = frozenset(
 RETRY_FIELDS = frozenset({"max_retries"})
 VOLATILE = ("trial_name", "trials_dir", "job_id")
 MIN_SEATS = 2
-MAX_COPIES = 64
-MAX_CONCURRENCY = 1024
-MAX_RETRIES = 16
 MAX_PROJECTED_BYTES = 16 * MIB
 PLAN_ID = UUID("00000000-0000-4000-8000-000000000000")
 KEY = re.compile(r"sha256:[0-9a-f]{64}")
@@ -61,6 +59,7 @@ BAD_COMPARE = "job plans cannot be compared with these keys or copies"
 @dataclass(frozen=True)
 class Projection:
     input: str
+    prepared_input: str
     copies: int
     concurrency: int
     max_retries: int
@@ -182,8 +181,11 @@ def project(path: Path) -> Projection:
     source = arm_sources.inspect_source(task_dir, record["task"])
     _require(runtime.seats == source.seats, WRONG_SEATS)
     arm_config._settled(path, stamp, text, task_dir, tree)
+    prepared = isolate.prepared_input(isolate.Arm(source, runtime))
+    assert _key(runtime.record_key) and _key(prepared)
     return Projection(
         input=runtime.record_key,
+        prepared_input=prepared,
         copies=len(trials),
         concurrency=job.n_concurrent_trials,
         max_retries=job.retry.max_retries,
@@ -192,6 +194,18 @@ def project(path: Path) -> Projection:
 
 def _key(value: Any) -> bool:
     return type(value) is str and KEY.fullmatch(value) is not None
+
+
+def export(path: Path) -> Record:
+    plan = project(path)
+    return {
+        "schema": RECEIPT_SCHEMA,
+        "prepared_input": plan.prepared_input,
+        "trial_lock_record": plan.input,
+        "copies": plan.copies,
+        "concurrency": plan.concurrency,
+        "max_retries": plan.max_retries,
+    }
 
 
 def compare(

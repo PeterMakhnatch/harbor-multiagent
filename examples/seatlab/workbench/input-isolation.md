@@ -114,7 +114,7 @@ This check trusts the host and its private archive. The saved evidence is not a 
 
 ## Check a participant or channel comparison across two worker jobs
 
-Before either worker starts, keep the ordered `trial_lock_records` from `isolate` and choose the number of attempts **per arm**. The jobs must use the same task locators that the preflight used. If work moves to different absolute paths, recheck the inputs at their final locations. A portable comparison digest is not a substitute for a native registration key.
+Before either worker starts, keep the ordered `trial_lock_records` from `isolate` and choose the number of attempts **per arm**. Those exact keys include the native task paths. If workers use different checkouts, [check their local plans separately](#hand-a-planned-comparison-to-independent-workers). A portable comparison digest does not replace a native registration key.
 
 Give each worker its own native job config. Set `tasks` to its one local task, `participants` to its roster, and `environment` to its world. Set `n_attempts` to the chosen number in both configs. Leave `agents` at its native default. Do not combine the two configs or use a dataset that adds a different source locator. These are ordinary `harbor run` jobs, not standalone `harbor trial start` trials. The shipping benchmark's four calibration controls remain standalone.
 
@@ -140,3 +140,37 @@ At registration, keep the digest of each worker's actual `lock.json` separately.
 Use `--starts "$left_starts" "$right_starts"` to require private host START receipts for both jobs. Separate job directories do not resolve two inputs that have the same visible result fields. Use the [morning report](team-account.md#check-finished-jobs-from-several-workers) if a worker has not produced a readable job. The two-job report checks registered inputs and retained final results. It does not measure what a seat saw or establish a treatment effect.
 
 **Check on saved jobs:** In one earlier sweep, 8 native jobs each used the same three-seat task. We chose two by roster, before reading their grades. Only the reviewer changed, from a scripted no-op to a scripted oracle. Both jobs supplied one distinct final with a valid zero. Swapping the expected inputs, asking for two copies, or supplying one job twice withheld both tallies. We calculated the file digests from the saved locks, not at original enrollment. This checks the reader on real job directories; it is not a preregistered comparison or a model result.
+
+## Hand a planned comparison to independent workers
+
+Try the shipping example from the fork root: `python3.12 -BS -m examples.seatlab.workbench verify ship-worker-plans`. The sender and receiver use the same roster in both jobs. Only the shipping channel changes: deliver the parcel reference or withhold it. Both workers prepared 8 copies with concurrency 1 and no retries. No team ran.
+
+Use this path when the coordinator has a reference design but cannot read the workers’ private configs. The coordinator first checks the intended contrast. Each worker then checks its own actual job config. Workers send back only two digests and three schedule limits. No step starts a job.
+
+**Coordinator:** Choose the copies, concurrency and maximum retries before collecting any receipts. Save a successful `isolate --configs` report. Keep the digest of its exact bytes separately. For a stock shipping comparison, the declared change is `SH_CHANNEL`:
+
+```sh
+umask 077
+"$py" -B -m examples.seatlab.workbench isolate --configs \
+  "$left_task" "$left_trial" "$right_task" "$right_trial" \
+  --world-setting SH_CHANNEL --json > "$exchange/reference.json" &&
+refpin="sha256:$(shasum -a 256 "$exchange/reference.json" | cut -d ' ' -f 1)"
+```
+
+**Each worker:** Use its installed fork and its local job config. The task path can differ from the coordinator’s path. Send only the resulting receipt through your usual private channel. Do not send the job config, role text, or environment.
+
+```sh
+"$py" -B -m examples.seatlab.workbench worker-plan export "$my_job_config" > "$my_receipt"
+```
+
+**Coordinator:** Check the two receipts in their assigned order. This part needs only Python 3.12 or later. The example requires 8 planned copies per worker, concurrency 1, and no retries:
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench worker-plan check \
+  "$exchange/reference.json" "$exchange/left.json" "$exchange/right.json" \
+  --reference-sha256 "$refpin" --copies 8 --concurrency 1 --max-retries 0 --json
+```
+
+`matches_reference` (exit `0`) returns the **worker-local** trial-lock keys for the later `cohort-jobs --job-locks` check. Keep those keys, not the coordinator’s local ones. `different_plan` (exit `1`) withholds both keys. A wrong reference digest, a non-isolated reference, or an unreadable receipt returns exit `2`.
+
+The coordinator trusts the workers that issue these receipts. The digests identify inputs; they do not authenticate a worker or hide guessable settings. They do not pin Harbor, custom adapter code, container images, or a served model. Use the same known fork revision. A match does not authorize spending or prove what ran. Without an existing isolated reference, these receipts cannot establish that only one input differs.

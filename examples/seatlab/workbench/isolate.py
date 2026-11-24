@@ -53,7 +53,7 @@ def _digest(value: object) -> str:
     )
 
 
-def _pin(arm: Arm) -> str:
+def prepared_input(arm: Arm) -> str:
     s, r = arm
     return _digest(
         (
@@ -69,6 +69,13 @@ def _pin(arm: Arm) -> str:
             r.groups,
         )
     )
+
+
+def comparison_digest(mode: str, target: str, inputs: dict[str, str]) -> str:
+    assert mode in MODES and type(target) is str
+    assert type(inputs) is dict and inputs.keys() == {"left", "right"}
+    assert all(type(pin) is str and PIN.fullmatch(pin) for pin in inputs.values())
+    return _digest((SCHEMA, mode, target, inputs))
 
 
 def _changed(left: dict[str, str], right: dict[str, str]) -> set[str]:
@@ -108,8 +115,8 @@ def compare(
     assert mode in MODES
     src, dst = left.source, right.source
     lrt, rrt = left.runtime, right.runtime
-    pins = {"left": _pin(left), "right": _pin(right)}
-    pair = _digest((SCHEMA, mode, target, pins))
+    pins = {"left": prepared_input(left), "right": prepared_input(right)}
+    pair = comparison_digest(mode, target, pins)
     pin_matches = expected is None or expected == pair
     pieces = {
         "role_instruction": (src.roles, dst.roles),

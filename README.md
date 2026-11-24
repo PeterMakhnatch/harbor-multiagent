@@ -15,7 +15,7 @@ This branch combines the [team operator](examples/seatlab/workbench/team-account
 ```sh
 git clone --depth 1 --branch seatlab/offline-team-receipts https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
-python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete ship-decision-evidence
+python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete ship-decision-evidence ship-worker-plans
 ```
 
 The first two reports show what changes when one worker is missing or all workers return. They keep archived model teams separate from scripted controls. The shipping report asks a different question: did the receiver have a usable parcel reference before deciding? The original runs did not record whether the receiver cited it. The [new benchmark](examples/seatlab/decision_receipt/README.md) records the citation separately from the delivery outcome. Preparing its four control configurations does not run them.
@@ -40,7 +40,7 @@ Before spending on a communication benchmark, [check what the world actually mea
 
 Before assigning teams, [compare two unrun local trial configs](examples/seatlab/workbench/input-isolation.md#check-trial-configs-before-any-worker-starts) or two saved native locks. Check that only the named role instruction, participant configuration or world setting changes. The command starts no seat.
 
-Harbor applies one roster and one world configuration to a whole job. For a roster or channel comparison, [check two independent worker jobs](examples/seatlab/workbench/input-isolation.md#check-a-participant-or-channel-comparison-across-two-worker-jobs) against the planned inputs and repeat count. A copied worker result cannot fill both arms.
+Harbor applies one roster and one world configuration to a whole job. For a roster or channel comparison, [check two worker jobs](examples/seatlab/workbench/input-isolation.md#check-a-participant-or-channel-comparison-across-two-worker-jobs) against the planned inputs and repeat count. On separate machines, [exchange two small plan receipts](examples/seatlab/workbench/input-isolation.md#hand-a-planned-comparison-to-independent-workers) instead of private configs or paths. `ship-worker-plans` verifies a real handoff without starting either job.
 
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
