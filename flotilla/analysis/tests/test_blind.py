@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import re
 import tempfile
 import time
 import unittest
@@ -29,6 +30,11 @@ def keys(value) -> set[str]:
         elif isinstance(item, list):
             stack.extend(item)
     return found
+
+
+def leaked(leak: str, text: str) -> bool:
+    """A sentinel as its own value, not digits inside a longer number such as a timestamp (1795536290.618509)."""
+    return re.search(r"(?<![0-9])" + re.escape(leak), text) is not None
 
 
 class Blind(unittest.TestCase):
@@ -81,7 +87,7 @@ class Blind(unittest.TestCase):
         text, raw, html = self.surfaces()
         page = (html / "index.html").read_text()
         for surface in (text, raw, page):
-            self.assertIn("0.618", surface)
+            self.assertTrue(leaked("0.618", surface))
         self.assertIn("1.4142", raw)
         timeline = (html / "trials" / "j1__toy-000-talk__scored.html").read_text()
         self.assertIn(ANSWER, timeline)
@@ -91,7 +97,7 @@ class Blind(unittest.TestCase):
         text, _, _ = self.surfaces("--blind")
         self.assertTrue(text.startswith("flotilla-watch BLIND "))
         for leak in LEAKS:
-            self.assertNotIn(leak, text)
+            self.assertFalse(leaked(leak, text), leak)
         self.assertNotIn("mean", text.split("ETA")[1])
         self.assertIn("trials 5: done 3 (valid 1, invalid 2), running 1, pending 1", text)
         self.assertIn("p1:AgentTimeoutError", text)
@@ -101,7 +107,7 @@ class Blind(unittest.TestCase):
     def test_json_has_no_reward_or_score_value(self):
         _, raw, _ = self.surfaces("--blind")
         for leak in LEAKS:
-            self.assertNotIn(leak, raw)
+            self.assertFalse(leaked(leak, raw), leak)
         status = json.loads(raw)
         self.assertIs(status["blind"], True)
         self.assertFalse(keys(status) & {"reward", "rewards", "mean_reward", "score", "answer"})
@@ -121,7 +127,7 @@ class Blind(unittest.TestCase):
         _, _, html = self.surfaces("--blind")
         page = (html / "index.html").read_text()
         for leak in LEAKS:
-            self.assertNotIn(leak, page)
+            self.assertFalse(leaked(leak, page), leak)
         self.assertIn("<h1>flotilla-watch BLIND: jobs", page)
         self.assertIn("Rewards: hidden (blind)", page)
         self.assertNotIn("mean reward", page)
@@ -137,7 +143,7 @@ class Blind(unittest.TestCase):
         for offset in (0, 30, 60):
             board.update(watcher.poll(now=T0 + offset))
         self.assertEqual(board.renders, 0)
-        self.assertNotIn("0.618", watch.render(watcher.poll(now=T0 + 90)))
+        self.assertFalse(leaked("0.618", watch.render(watcher.poll(now=T0 + 90))))
 
 
 if __name__ == "__main__":
