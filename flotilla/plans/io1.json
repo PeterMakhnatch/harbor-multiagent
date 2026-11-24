@@ -1,0 +1,119 @@
+{
+ "name": "io1",
+ "prereg": {
+  "commit": "8b8d9818a9c9b4d5398fca5bba20490de1150fcd",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 14. Pre-registration: order or instruction, pilot io1 (written 2026-11-24, after the first-contact analysis, before any `--inbox` or late-post trial)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/io1v",
+   "manifest": ".flotilla-local/tasks/io1v/manifest.json",
+   "instances": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+   ],
+   "arms": [
+    "talk-quiet",
+    "talk-false"
+   ]
+  },
+  {
+   "tasks_dir": ".flotilla-local/tasks/io1s",
+   "manifest": ".flotilla-local/tasks/io1s/manifest.json",
+   "instances": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+   ],
+   "arms": [
+    "talk-quiet",
+    "talk-false"
+   ]
+  }
+ ],
+ "scripted_seats": [
+  "p2",
+  "p3",
+  "p4"
+ ],
+ "models": [
+  "openrouter/anthropic/claude-haiku-5.5",
+  "openrouter/openai/gpt-6-luna",
+  "openrouter/deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "modal",
+  "concurrency": 10,
+  "start_spacing_s": 5.0
+ },
+ "budget": {
+  "cap_usd": 0.6,
+  "reserve_per_trial_usd": 0.02,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261126
+}
