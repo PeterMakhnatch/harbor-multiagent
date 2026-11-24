@@ -956,3 +956,9 @@ python3 flotilla/run_wave.py flotilla/plans/lws.json --run-dir .flotilla-local/r
 openrouter/anthropic/claude-haiku-5.5,openrouter/openai/gpt-6-luna --replication-model
 openrouter/deepseek/deepseek-v4.1-flash-1017 --missed-cutoff 1.0`; sensitivity: the same without
 `--missed-cutoff`; `listening.py` with the same jobs and tasks.
+
+**Amendment 1 (2026-11-23, 7:10 PM ET, before any lw trial).** Peter added credit (balance $29.96 against about
+$10 needed for all 6 plans). The order rule changes: lws runs now, while xm1, pv10 and xp1 resume, and lw1 and
+lwc start as soon as the smoke rule is applied, in parallel with the resumed waves. The order was a credit
+priority, not part of the design; running in parallel saves about 3 hours. Nothing else changes: the same plans,
+tasks, smoke rule, test and predictions. The resumed waves keep their own plans and caps.
