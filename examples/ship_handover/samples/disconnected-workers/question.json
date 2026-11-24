@@ -1,0 +1,17 @@
+{
+  "schema": "harbor.shipping.disconnected-workers-question/v1",
+  "question": "Can two independently staged native workers operate a paired shipping study without duplicating team starts after a directory copy or lost grant, while preserving the enrolled transfer interval?",
+  "subjects": "One fixed scripted draft/resume roster. Each task is registered independently in one four-cell block; stock and in-flight both hide their original disposition. Two logical workers run on the same private Mac and Docker engine. A copied worker has no shared worker filesystem. One coordinator owns one durable local SQLite store. No claim of separate hosts or model behavior.",
+  "pass": [
+    "Freeze 8 tickets, the public plan and both native source identities before launch. Each worker restores its own tasks and native configs. The coordinator observes no more than one grant per ticket, across worker processes and a recreated worker directory.",
+    "Let two independent copies of worker 0 ask for the same first ticket. Exactly one grant leads to one native start. Lose the response for a different ticket after its grant. A fresh request cannot recover permission, and the missing attempt remains unknown.",
+    "Run all remaining tickets once. Expect 8 issued, 7 distinct native teams and 7 independently replayed final supplier grades; the lost ticket has no known grade. A producer cannot fill it with a second attempt. An owner-side export from each actual worker reproduces the comparable-outcome intervals for the original 8 tickets.",
+    "With draft/resume, both tasks score 1 exactly when (original succeeds AND channel withholds) OR (original fails AND channel delivers). The deliver-minus-withhold effect is -1 for a successful original and +1 for a failed original in both tasks. An absent grade may leave a cross-task difference unresolved.",
+    "The previous board plan, ledger protocol and verdicts continue to work without a schema migration. Run the board protocol qualifier as a regression. No additional model runs."
+  ],
+  "operator_boundaries": [
+    "One grant permits one attempted start; it does not prove the native process or seat actually started. No automatic retry or reclamation. Missing evidence is not zero.",
+    "Worker configuration and registrations are private to the operator. A route to one trusted authority must exist. The public plan has opaque tickets, registration digests and assignments only. No secret credentials are checked in."
+  ],
+  "budget_usd": "0.00"
+}
