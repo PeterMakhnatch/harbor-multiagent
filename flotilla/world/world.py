@@ -71,7 +71,11 @@ from urllib.parse import parse_qs, urlsplit
 # list in `scripted_seats`, at most `budget` times per seat; a further audit gets 403 ("audit budget used"), a
 # scripted seat 403, an unknown month 400. Every attempt is an `audit` event (month, ok, status, left) and an entry of
 # `audits` in the state. Without the key /audit is an unknown path (404) and nothing else changes.
-WORLD_VERSION = 15
+# Version 16: commit-time posts. A scheduled post may give `"trigger": "first_submit"` (with `before_s`): then the
+# world adds every post when a seat under test sends its first /submit with an answer object, before the submit gate
+# looks at it, so the gate refuses that submission (409) and shows the posts; each is dated `before_s` seconds
+# before that moment. Tasks with `at_s` or `before_s` posts work as before.
+WORLD_VERSION = 16
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -112,9 +116,10 @@ TASK_JSON_PATH = Path(os.environ.get("FLOTILLA_TASK_JSON", "/world/task.json")) 
 
 
 def _load_scheduled() -> tuple[list[dict[str, Any]], str, list[str], list[str]]:
-    """The task's scheduled posts in the order they are added, their timing key (`at_s`: world time, version 13;
-    `before_s`: seconds before the first request of a seat under test, version 14), the seats whose first request
-    adds them (`before_s` only), and what is wrong (the world then refuses to start)."""
+    """The task's scheduled posts in the order they are added, when the world adds them (`at_s`: on the world's
+    clock, version 13; `before_s`: at the first request of a seat under test, version 14; `first_submit`: at its
+    first submission, version 16), the seats whose request adds them (not for `at_s`), and what is wrong (the world
+    then refuses to start)."""
     if not TASK_JSON_PATH.is_file():
         return [], "", [], []
     try:
@@ -122,29 +127,34 @@ def _load_scheduled() -> tuple[list[dict[str, Any]], str, list[str], list[str]]:
         posts, scripted = task.get("scheduled_posts") or [], task.get("scripted_seats") or []
     except (OSError, ValueError, AttributeError):
         return [], "", [], [f"{TASK_JSON_PATH} is not a JSON object"]
-    keys = {key for post in posts if isinstance(post, dict) for key in ("at_s", "before_s") if key in post} \
-        if isinstance(posts, list) else set()
-    key = keys.pop() if len(keys) == 1 else ""
+    listed = posts if isinstance(posts, list) else []
+    keys = {key for post in listed if isinstance(post, dict) for key in ("at_s", "before_s") if key in post}
+    if any(isinstance(post, dict) and "trigger" in post for post in listed):
+        mode, timing = "first_submit", "before_s"
+    else:
+        mode = timing = keys.pop() if len(keys) == 1 else ""
     problems = []
     for post in posts if isinstance(posts, list) else [None]:
-        ok = (key and isinstance(post, dict) and post.get("from") in SEATS and post.get("to") in ("all", *SEATS)
+        ok = (mode and isinstance(post, dict) and post.get("from") in SEATS and post.get("to") in ("all", *SEATS)
               and post.get("to") != post.get("from") and isinstance(post.get("text"), str) and post["text"].strip()
-              and len(post["text"]) <= MAX_TEXT and isinstance(post.get(key), int | float)
-              and not isinstance(post.get(key), bool) and 0 <= post[key] < math.inf)
+              and len(post["text"]) <= MAX_TEXT and isinstance(post.get(timing), int | float)
+              and not isinstance(post.get(timing), bool) and 0 <= post[timing] < math.inf
+              and (post.get("trigger") == "first_submit" and "at_s" not in post if mode == "first_submit" else True))
         if not ok:
-            problems.append("a scheduled post is not {from: seat, to: other seat or all, text, at_s or before_s >= 0}"
-                            f" (one of the two in every post): {post!r}"[:240])
+            problems.append("a scheduled post is not {from: seat, to: other seat or all, text, at_s or before_s >= 0, "
+                            "optional trigger: first_submit with before_s} (the same timing in every post): "
+                            f"{post!r}"[:260])
     if posts and not problems and not MESSAGING:
         problems.append(f"scheduled posts need messaging, and {CONDITION} has none")
     if not problems and any(sum(p["from"] == seat for p in posts) > MAX_MESSAGES_PER_SEAT for seat in SEATS):
         problems.append("a seat has more scheduled posts than its message limit")
-    triggers = [seat for seat in SEATS if seat not in scripted] if key == "before_s" else []
-    if posts and not problems and key == "before_s" and not triggers:
-        problems.append("posts timed by before_s need a seat that is not in scripted_seats")
+    triggers = [seat for seat in SEATS if seat not in scripted] if mode != "at_s" else []
+    if posts and not problems and mode != "at_s" and not triggers:
+        problems.append(f"posts timed by {mode} need a seat that is not in scripted_seats")
     if problems:
         return [], "", [], problems
-    order = (lambda post: post["at_s"]) if key == "at_s" else (lambda post: -post["before_s"])
-    return sorted(posts, key=order), key, triggers, []
+    order = (lambda post: post["at_s"]) if mode == "at_s" else (lambda post: -post["before_s"])
+    return sorted(posts, key=order), mode, triggers, []
 
 
 SCHEDULED, SCHEDULE_KEY, SCHEDULE_TRIGGERS, SCHEDULE_PROBLEMS = _load_scheduled()  # pending posts (_post_scheduled)
@@ -336,19 +346,19 @@ def _note_look(seat: str) -> None:
     _drain_protocol(seat)
 
 
-def _post_scheduled(seat: str | None) -> None:
+def _post_scheduled(seat: str | None, submitting: bool = False) -> None:
     """Post the scheduled posts that are due, in order, each as a message from its seat. `at_s` posts: every post
     whose time has come, with `t` = at_s; lazy, like tick(), so a post exists before any reply or action after its
     time. `before_s` posts: all of them at the first request of a seat under test (`seat`; None for any other
-    request), with `t` = now - before_s; when that request comes before the largest before_s (+ 0.1 s), every offset
-    shrinks by the same factor, so the order and the proportions hold and the first post has t = 0.1 s. Callers
-    hold LOCK."""
+    request); `first_submit` posts: all of them at its first submission (`submitting`). Both are dated `t` = now -
+    before_s; when that moment comes before the largest before_s (+ 0.1 s), every offset shrinks by the same factor,
+    so the order and the proportions hold and the first post has t = 0.1 s. Callers hold LOCK."""
     due = now()
-    if SCHEDULE_KEY == "before_s" and seat not in SCHEDULE_TRIGGERS:
+    if SCHEDULE_KEY != "at_s" and (seat not in SCHEDULE_TRIGGERS or (SCHEDULE_KEY == "first_submit") != submitting):
         return
     largest = max((post.get("before_s", 0.0) for post in SCHEDULED), default=0.0)
     scale = 1.0 if largest <= 0 else max(0.0, min(1.0, (due - 0.1) / largest))
-    while SCHEDULED and (SCHEDULE_KEY == "before_s" or SCHEDULED[0]["at_s"] <= due):
+    while SCHEDULED and (SCHEDULE_KEY != "at_s" or SCHEDULED[0]["at_s"] <= due):
         post = SCHEDULED.pop(0)
         sender = post["from"]
         t = post["at_s"] if SCHEDULE_KEY == "at_s" else due - post["before_s"] * scale
@@ -360,7 +370,8 @@ def _post_scheduled(seat: str | None) -> None:
             log.write(json.dumps(message, sort_keys=True) + "\n")
         record("send", sender, {"id": message["id"], "to": message["to"], "chars": len(message["text"]),
                                 "scheduled": True, "at_s": message["t"]}
-               | ({"before_s": post["before_s"]} if SCHEDULE_KEY == "before_s" else {}))
+               | ({"before_s": post["before_s"]} if SCHEDULE_KEY != "at_s" else {})
+               | ({"trigger": "first_submit"} if SCHEDULE_KEY == "first_submit" else {}))
 
 
 def _unread(seat: str) -> list[dict[str, Any]]:
@@ -850,6 +861,8 @@ class World(BaseHTTPRequestHandler):
                 record("late", seat, {"path": "/submit", **evidence})
                 self._reply(409, {"error": "play has ended; the answer is frozen"})
                 return
+            if SCHEDULED and SCHEDULE_KEY == "first_submit":
+                _post_scheduled(seat, submitting=True)  # version 16: before the gate, which then shows the posts
             held = _submit_gate(seat, evidence, answer)
             if held is None:
                 n = len(STATE["submissions"]) + 1

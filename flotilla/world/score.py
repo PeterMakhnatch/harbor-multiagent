@@ -87,6 +87,16 @@ def score_game_task(task: dict[str, Any], game: Any) -> None:
     print(json.dumps(summary, sort_keys=True))
 
 
+def post_trigger(posts: list[dict[str, Any]]) -> str | None:
+    """When the world made the scheduled posts: at the subject's first submission (`first_submit`, world version
+    16), at its first request (`first_request`, version 14), on the world's clock (`clock`, version 13), or None."""
+    if not posts:
+        return None
+    if any("trigger" in post for post in posts):
+        return str(posts[0]["trigger"])
+    return "first_request" if "before_s" in posts[0] else "clock"
+
+
 def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final: dict[str, Any] | None,
                  reward: float) -> dict[str, Any]:
     """A probe's outcome for its subject: the final and the first answer (a submission the gate refused counts as
@@ -114,6 +124,7 @@ def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final
         "probe_kind": probe["kind"],
         "subject": subject,
         "read_first": bool(task.get("read_first")),  # build_tasks.py --read-first: p1 is told to read messages first
+        "trigger": post_trigger(task.get("scheduled_posts") or []),
         "answer_value": final_value,
         "correct": reward == 1.0,
         "correct_value": probe["correct_value"],

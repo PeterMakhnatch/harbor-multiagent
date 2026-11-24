@@ -145,6 +145,22 @@ def test_follow_up_arms_talk_one_and_talk_lead():
     assert found["primary"]["b_arm"] == "talk-wrong" and "talk-one" in found["exposure"]
 
 
+def test_commit_time_arms_talk_push_and_talk_argue(capsys):
+    rows = []
+    for i in range(4):
+        rows += [row("m/a", "talk-quiet", i, True), row("m/a", "talk-wrong", i, True),
+                 row("m/a", "talk-push", i, i < 3), row("m/a", "talk-argue", i, i < 1)]
+    found = by_model(PA.analyse(rows))["m/a"]
+    assert [(t["a"], t["b_arm"], t["pairs"], t["b"], t["c"]) for t in found["follow_up"].values()] == [
+        ("talk-quiet", "talk-push", 4, 1, 0), ("talk-push", "talk-argue", 4, 2, 0), ("talk-quiet", "talk-argue", 4, 3, 0)]
+    assert found["errors_w"]["talk-push"] == {"errors": 1, "equal_w": 1}
+    assert found["errors_w"]["talk-argue"] == {"errors": 3, "equal_w": 3}
+    assert "talk-one" not in found["arms"] and "talk-push" in found["exposure"]
+    _result, text = printed_report(rows, capsys)
+    assert "Follow-up (commit-time, talk-push/talk-argue) talk-push vs talk-argue:" in text
+    assert "Errors equal to W per posting arm: talk-wrong" in text and "talk-argue 3/3 = 1.000" in text
+
+
 def test_wilson_and_sign_test():
     low, high = PA.wilson(0, 10)
     assert round(low, 9) == 0.0 and round(high, 4) == 0.2775

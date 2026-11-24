@@ -424,6 +424,6 @@ def test_a_gated_split_task_looks_like_talk_to_its_seats_and_turns_the_read_gate
             assert not any("gated" in text for text in seat_visible_texts(gated, seat, services["gated"]))
         for condition, task in (("talk", talk), ("gated", gated), ("propose", tasks[("split", i, "propose")])):
             task_json = json.loads((task / "environment" / "task.json").read_text())
-            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 15)
-            assert "WORLD_VERSION = 15\n" in (task / "environment" / "world.py").read_text()
+            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 16)
+            assert "WORLD_VERSION = 16\n" in (task / "environment" / "world.py").read_text()
             assert ('"counter"' in (task / "instructions" / "p1.md").read_text()) == (condition == "propose")

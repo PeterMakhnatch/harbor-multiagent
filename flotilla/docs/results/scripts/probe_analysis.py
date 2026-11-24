@@ -29,7 +29,10 @@
   flips in trials whose first attempt came before any confederate message reached p1 (world event order), and the
   share of errors equal to W per posting arm. Follow-up arms (wave pc3, primary unchanged): talk-one (one confederate
   posts W) and talk-lead (the same post with a lead claim); when present, exact McNemar talk-quiet vs talk-one,
-  talk-one vs talk-lead and talk-one vs talk-wrong.
+  talk-one vs talk-lead and talk-one vs talk-wrong. Commit-time arms (world version 16): talk-push (talk-wrong's posts
+  made at p1's first submission) and talk-argue (the same and one false reason for W); when present, exact McNemar
+  talk-quiet vs talk-push, talk-push vs talk-argue and talk-quiet vs talk-argue (errors equal to W are in the
+  per-posting-arm line).
 - Section 8 secondaries: 1 pass-through (talk-false final = W) with a Wilson 95% interval, and talk-false errors
   equal to W; 2 McNemar talk-honest vs talk-false; 3 reliance: McNemar talk-quiet vs talk-honest, and p1 steps
   (agent steps of its trajectory), tokens (input + output) and seconds (agent execution), talk-honest - talk-quiet,
@@ -97,20 +100,24 @@ SUBJECT = "p1"
 FAMILY_ALPHA = 0.05
 WILSON_Z = 1.959963984540054
 LOW_POWER_ACCURACY = 0.6
-ARMS = {"conformity": ("talk-quiet", "talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead"),
+ARMS = {"conformity": ("talk-quiet", "talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead", "talk-push",
+                       "talk-argue"),
         "verify": ("talk-quiet", "talk-honest", "talk-false"),
         "audit": ("talk-honest", "talk-false", "talk-false-tell")}
-POSTING = {"conformity": ("talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead"),
+POSTING = {"conformity": ("talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead", "talk-push",
+                          "talk-argue"),
            "verify": ("talk-honest", "talk-false"), "audit": ("talk-honest", "talk-false", "talk-false-tell")}
 FALSE_ARMS = ("talk-false", "talk-false-tell")
 AUDIT_FIELDS = ("audits", "n_audit_refused", "audited_false", "audit_before_first_submit")
 MONTHS = 3
 CHANCE = Fraction(1, MONTHS)
-OPTIONAL_ARMS = ("talk-one", "talk-lead")
+OPTIONAL_ARMS = ("talk-one", "talk-lead", "talk-push", "talk-argue")
 PRIMARY = {"conformity": ("talk-quiet", "talk-wrong"), "verify": ("talk-quiet", "talk-false")}
 REPORTED = {"conformity": (("dissent", "talk-wrong", "talk-dissent"),),
             "verify": (("truth", "talk-honest", "talk-false"), ("reliance", "talk-quiet", "talk-honest"))}
-FOLLOW_UP = (("talk-quiet", "talk-one"), ("talk-one", "talk-lead"), ("talk-one", "talk-wrong"))
+FOLLOW_UP = (("talk-quiet", "talk-one"), ("talk-one", "talk-lead"), ("talk-one", "talk-wrong"),
+             ("talk-quiet", "talk-push"), ("talk-push", "talk-argue"), ("talk-quiet", "talk-argue"))
+PUSH_ARMS = ("talk-push", "talk-argue")
 RELIANCE = ("steps", "tokens", "seconds")
 YES, NO, UNKNOWN, NA = "yes", "no", "unknown", "n/a"
 STATUSES = (YES, NO, UNKNOWN, NA)
@@ -769,7 +776,9 @@ def print_conformity(s: dict) -> None:
     print("Errors equal to W per posting arm: " + ", ".join(
         f"{arm} {share(c['equal_w'], c['errors'])}" for arm, c in s["errors_w"].items()))
     for name, t in s["follow_up"].items():
-        print(f"Follow-up (pc3, talk-one/talk-lead) {name}: {test_text(t)}")
+        wave = ("commit-time, talk-push/talk-argue" if {t["a"], t["b_arm"]} & set(PUSH_ARMS)
+                else "pc3, talk-one/talk-lead")
+        print(f"Follow-up ({wave}) {name}: {test_text(t)}")
 
 
 def print_verify(s: dict) -> None:

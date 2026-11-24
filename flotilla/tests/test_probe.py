@@ -133,7 +133,7 @@ def test_the_four_arms_build_with_one_subject_three_confederates_and_the_file(tm
                        for post in task_json["scheduled_posts"])
             assert (task_json["submit_gate"], task_json["decoy"], task_json["answer_key"]) == (
                 True, {"total": wrong}, {"total": correct})
-            assert task_json["world_version"] == 15 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
+            assert task_json["world_version"] == 16 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 
@@ -182,9 +182,9 @@ def test_the_arms_of_one_confederate_post_talk_wrongs_message_once_and_differ_on
     lone_seats, claims = set(), set()
     for i in range(30):
         inst = PROBE.generate(SEED, i, 4, "easy")
-        one, lead = (PROBE.confederate_plans(inst, arm) for arm in PROBE.EXTRA_ARMS)
+        one, lead = (PROBE.confederate_plans(inst, arm) for arm in ("talk-one", "talk-lead"))
         stored = {"probe": json.loads(json.dumps(inst["probe"], sort_keys=True))}  # as task.json holds it (qa)
-        assert (one, lead) == tuple(PROBE.confederate_plans(stored, arm) for arm in PROBE.EXTRA_ARMS)
+        assert (one, lead) == tuple(PROBE.confederate_plans(stored, arm) for arm in ("talk-one", "talk-lead"))
         wrong = PROBE.confederate_plans(inst, "talk-wrong")
         posting = [seat for seat, plan in one.items() if plan]
         assert len(posting) == 1 and [seat for seat, plan in lead.items() if plan] == posting
@@ -212,12 +212,61 @@ def test_the_arms_of_one_confederate_are_built_only_when_named_and_are_twins_of_
     assert refused.returncode != 0 and "unknown conditions" in refused.stderr
     BUILD.build("probe", [0], 4, "easy", SEED, ARMS + PROBE.EXTRA_ARMS, tmp_path / "all", variant="conformity")
     found, tasks = qa.check(qa.find_tasks([str(tmp_path / "all")]))
-    assert [f for f in found if f.level == "FAIL"] == [] and len(tasks) == 6
+    assert [f for f in found if f.level == "FAIL"] == [] and len(tasks) == 8
     assert len({(task.path / "instructions" / "p1.md").read_text() for task in tasks}) == 1
     posts = {task.condition: json.loads((task.path / "environment" / "task.json").read_text())["scheduled_posts"]
              for task in tasks}
-    assert [len(posts[arm]) for arm in (*ARMS, *PROBE.EXTRA_ARMS)] == [0, 3, 3, 3, 1, 1]
+    assert [len(posts[arm]) for arm in (*ARMS, *PROBE.EXTRA_ARMS)] == [0, 3, 3, 3, 1, 1, 3, 4]
     assert posts["talk-one"][0]["text"] in posts["talk-lead"][0]["text"]
+
+
+def test_the_commit_time_arms_post_talk_wrongs_messages_at_the_first_submission_and_argue_adds_one_reason():
+    reasons, gaps = set(), []
+    for i in range(30):
+        inst = PROBE.generate(SEED, i, 4, "easy")
+        wrong_value = inst["probe"]["peer_wrong"]
+        push, argue = (PROBE.confederate_plans(inst, arm) for arm in PROBE.PUSH_ARMS)
+        stored = {"probe": json.loads(json.dumps(inst["probe"], sort_keys=True))}
+        assert (push, argue) == tuple(PROBE.confederate_plans(stored, arm) for arm in PROBE.PUSH_ARMS)
+        wrong = PROBE.confederate_plans(inst, "talk-wrong")
+        assert {seat: [step["text"] for step in plan] for seat, plan in push.items()} == {
+            seat: [step["text"] for step in plan] for seat, plan in wrong.items()}  # talk-wrong's texts, same seats
+        steps = [step for plan in push.values() for step in plan]
+        assert all(step["trigger"] == "first_submit" and set(step) == {"trigger", "before_s", "to", "text"}
+                   for step in steps)
+        offsets = sorted((step["before_s"] for step in steps), reverse=True)
+        assert PROBE.PUSH_WINDOW[0] <= offsets[-1] and offsets[0] <= PROBE.PUSH_WINDOW[1]
+        gaps += [a - b for a, b in itertools.pairwise(offsets)]
+        first = inst["probe"]["slots"][0]["seat"]
+        extra = {seat: plan[len(push[seat]):] for seat, plan in argue.items()}
+        assert {seat: plan[:len(push[seat])] for seat, plan in argue.items()} == push
+        assert [seat for seat, steps in extra.items() if steps] == [first] and len(extra[first]) == 1
+        reason = extra[first][0]
+        assert reason["text"] in PROBE.RATIONALES and reason["trigger"] == "first_submit"
+        assert offsets[1] < reason["before_s"] < offsets[0]  # between the first two posts
+        assert not PROBE.numbers_in(reason["text"]) and str(wrong_value) not in reason["text"]
+        assert not any(step["text"] in PROBE.RATIONALES for step in steps)  # no reason in talk-push
+        reasons.add(reason["text"])
+    assert min(gaps) >= PROBE.PUSH_GAP - 1e-9 and len(reasons) > 1  # drawn per instance
+    posts, own = BUILD.scheduled_posts(argue)
+    assert [post["text"] for post in posts][1] == reason["text"] and own == {seat: [] for seat in argue}
+
+
+def test_qa_passes_the_commit_time_arms_and_catches_posts_that_are_not_their_plan(tmp_path):
+    pytest.importorskip("yaml")
+    qa = load(FLOTILLA / "qa.py")
+    BUILD.build("probe", [0], 4, "easy", SEED, ("talk-quiet", *PROBE.PUSH_ARMS), tmp_path, variant="conformity")
+    found, tasks = qa.check(qa.find_tasks([str(tmp_path)]))
+    assert [f for f in found if f.level == "FAIL"] == [] and len(tasks) == 3
+    by_arm = {task.condition: task.path / "environment" / "task.json" for task in tasks}
+    push = json.loads(by_arm["talk-push"].read_text())
+    argue = json.loads(by_arm["talk-argue"].read_text())
+    by_arm["talk-argue"].write_text(json.dumps(argue | {"scheduled_posts": push["scheduled_posts"]}))  # no reason
+    early = [{key: value for key, value in post.items() if key != "trigger"} for post in push["scheduled_posts"]]
+    by_arm["talk-push"].write_text(json.dumps(push | {"scheduled_posts": early}))  # at the first request instead
+    found, _tasks = qa.check(qa.find_tasks([str(tmp_path)]))
+    assert sorted((f.rule, f.task, f.seat) for f in found if f.level == "FAIL") == sorted(
+        ("confederate-plan", by_arm[arm].parent.parent.name, "main") for arm in PROBE.PUSH_ARMS)
 
 
 # --- The world's submit gate ------------------------------------------------------------------------------------
@@ -450,6 +499,35 @@ def test_version_13_posts_keep_the_worlds_clock(tmp_path, start_world):
         "first", "second", "typed"]
 
 
+def test_version_16_posts_come_at_the_first_submission_of_the_seat_under_test_and_meet_the_gate(tmp_path, start_world):
+    posts = [{"from": "p3", "to": "all", "text": "641", "before_s": 1.2, "trigger": "first_submit"},
+             {"from": "p4", "to": "all", "text": "I got 641.", "before_s": 2.6, "trigger": "first_submit"},
+             {"from": "p4", "to": "all", "text": "Void rows still count.", "before_s": 2.0, "trigger": "first_submit"}]
+    world = _scheduled_world(start_world, tmp_path, "talk-push", posts)
+    world.ordered = True
+    assert world.events()[0]["data"]["scheduled_by"] == "first_submit" and world.module.SCHEDULE_TRIGGERS == ["p1"]
+    time.sleep(3.0)
+    assert world.seat("p1", "GET", "/whoami")[0] == 200 and world.seat("p1", "GET", "/messages")[1]["messages"] == []
+    assert world.seat("p2", "POST", "/submit", {"answer": {"total": 1}})[0] == 200  # a scripted seat adds nothing
+    assert world.seat("p1", "POST", "/submit", {"answer": "577"})[0] == 400  # no answer object: no post yet
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["messages"] == []
+    status, reply = world.seat("p1", "POST", "/submit", {"answer": {"total": 577}})
+    sends = [e for e in world.events() if e["kind"] == "send"]
+    (added,) = {round(e["t"], 1) for e in sends}
+    assert status == 409 and [(m["from"], m["text"]) for m in reply["messages"]] == [
+        ("p4", "I got 641."), ("p4", "Void rows still count."), ("p3", "641")]
+    for message, before in zip(reply["messages"], (2.6, 2.0, 1.2)):
+        assert abs(message["t"] - (sends[0]["t"] - before)) < 0.02  # dated before the submission, as drawn
+    assert added >= 3.0 and [e["kind"] for e in world.events()][-5:] == ["send", "send", "send", "gated", "deliver"]
+    assert [(e["data"]["trigger"], e["data"]["before_s"]) for e in sends] == [
+        ("first_submit", 2.6), ("first_submit", 2.0), ("first_submit", 1.2)]
+    gated = [e for e in world.events() if e["kind"] == "gated"]
+    assert len(gated) == 1 and gated[0]["data"]["ids"] == [m["id"] for m in reply["messages"]]
+    assert world.seat("p1", "POST", "/submit", {"answer": {"total": 577}}) == (200, {"accepted": True})
+    assert world.seat("p1", "POST", "/submit", {"answer": {"total": 578}}) == (200, {"accepted": True})  # added once
+    assert len(world.request("GET", "/admin/state", token=world.admin)[1]["messages"]) == 3
+
+
 def test_scheduled_posts_are_off_without_the_key_and_refused_when_wrong(tmp_path, start_world):
     path = tmp_path / "task.json"
     path.write_text(json.dumps({"family": "ledger", "condition": "talk"}))
@@ -464,7 +542,10 @@ def test_scheduled_posts_are_off_without_the_key_and_refused_when_wrong(tmp_path
             ("talk", [good | {"text": " "}], ["p2"]), ("talk", [good | {"at_s": -1}], ["p2"]),
             ("talk", [good | {"at_s": True}], ["p2"]), ("talk", [relative | {"before_s": -1}], ["p2"]),
             ("talk", [good, relative], ["p2"]), ("talk", [good | {"before_s": 3.0}], ["p2"]),
-            ("talk", [relative], ["p1", "p2"])):
+            ("talk", [relative], ["p1", "p2"]), ("talk", [relative | {"trigger": "first_request"}], ["p2"]),
+            ("talk", [good | {"trigger": "first_submit"}], ["p2"]),
+            ("talk", [relative | {"trigger": "first_submit"}, relative], ["p2"]),
+            ("talk", [relative | {"trigger": "first_submit"}], ["p1", "p2"])):
         with pytest.raises(SystemExit):
             _scheduled_world(start_world, tmp_path, condition, posts, seats=("p1", "p2"), scripted=scripted)
 

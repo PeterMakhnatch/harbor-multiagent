@@ -33,6 +33,8 @@ PROBE_CONDITIONS = (
     "talk-right",
     "talk-one",
     "talk-lead",
+    "talk-push",
+    "talk-argue",
     "talk-honest",
     "talk-false",
     "talk-false-tell",

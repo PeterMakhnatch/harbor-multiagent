@@ -178,7 +178,7 @@ def test_the_three_arms_build_with_every_months_file_and_one_subject_text(tmp_pa
             assert task_json["scheduled_posts"] == BUILD.scheduled_posts(plans)[0]
             assert len(task_json["scheduled_posts"]) == (0 if arm == "talk-quiet" else 3)
             assert (task_json["answer_key"], task_json["decoy"]) == ({"total": correct}, {"total": wrong})
-            assert task_json["world_version"] == 15 and task_json["scripted_seats"] == WORKERS
+            assert task_json["world_version"] == 16 and task_json["scripted_seats"] == WORKERS
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 
