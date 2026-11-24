@@ -106,14 +106,21 @@ def _plan(member: Member) -> tuple[dict[str, int], list[Path]]:
     return counts, behavior
 
 
-def _behavior(paths: list[Path], *, include_timeouts: bool) -> dict[str, Any]:
-    assert type(include_timeouts) is bool
+def _behavior(
+    paths: list[Path], *, include_timeouts: bool, checkpoints: bool
+) -> dict[str, Any]:
+    assert type(include_timeouts) is bool and type(checkpoints) is bool
     if not paths:
-        report = empty_report(include_timeouts=include_timeouts)
+        report = empty_report(
+            include_timeouts=include_timeouts, checkpoints=checkpoints
+        )
         assert report["inputs"] == 0 and report["usable_trials"] == 0
         assert report["trials"] == []
     else:
-        report = inspect_changes(paths, include_timeouts=include_timeouts)
+        report = inspect_changes(
+            paths, include_timeouts=include_timeouts, checkpoints=checkpoints
+        )
+    assert ("checkpoints" in report) == checkpoints
     assert report["schema"] == BEHAVIOR_SCHEMA
     assert report["inputs"] == len(paths) == len(report["trials"])
     assert all(row["slot"] == index + 1 for index, row in enumerate(report["trials"]))
@@ -156,10 +163,12 @@ def _totals(rows: list[dict[str, Any]], behavior: dict[str, Any]) -> dict[str, i
 
 
 def inspect_jobs(
-    paths: list[Path], *, include_timeouts: bool = False
+    paths: list[Path], *, include_timeouts: bool = False, checkpoints: bool = False
 ) -> dict[str, Any]:
     if type(include_timeouts) is not bool:
         raise ValueError("include_timeouts must be a bool")
+    if type(checkpoints) is not bool:
+        raise ValueError("checkpoints must be a bool")
     found = _members(paths)
     plans = [_plan(member) for member in found]
     joint: list[Path] = []
@@ -169,7 +178,9 @@ def inspect_jobs(
         joint.extend(behavior_paths)
         spans.append(list(range(start + 1, len(joint) + 1)))
     assert len(joint) <= MAX_TOTAL
-    behavior = _behavior(joint, include_timeouts=include_timeouts)
+    behavior = _behavior(
+        joint, include_timeouts=include_timeouts, checkpoints=checkpoints
+    )
     trials = behavior["trials"]
     rows: list[dict[str, Any]] = []
     for index, (member, (counts, _), slots) in enumerate(

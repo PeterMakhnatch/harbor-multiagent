@@ -6,6 +6,8 @@ from typing import Any
 from .core import canonical_uuid
 from .native_records import read_record
 from .schedule_bounds import METRICS, Window, bounds, possible
+from .schedule_checkpoints import SEATS as CHECKPOINT_SEATS
+from .schedule_checkpoints import measure
 from .schedule_native import AmbiguousRubric, Team, Write, read_team
 from .schedule_tape import peer_returns
 
@@ -183,14 +185,33 @@ def _summary(
     return summary
 
 
-def empty_report(*, include_timeouts: bool = False) -> dict[str, Any]:
-    return {
+def _checkpoints(
+    groups: dict[str, list[Team]], references: dict[str, Reference]
+) -> dict[str, Any]:
+    paired = {
+        digest: [team for team in group if len(team.seats) == CHECKPOINT_SEATS]
+        for digest, group in groups.items()
+    }
+    paired = {digest: group for digest, group in paired.items() if group}
+    section = measure(paired, {digest: references[digest] for digest in paired})
+    excluded = sum(len(group) for group in groups.values()) - section["teams"]
+    assert "not_two_seats" not in section and excluded >= 0
+    return {**section, "not_two_seats": excluded}
+
+
+def empty_report(
+    *, include_timeouts: bool = False, checkpoints: bool = False
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
         "schema": SCHEMA,
         "inputs": 0,
         "usable_trials": 0,
         "trials": [],
         "summary": _summary([], {key: [0, 0] for key in METRICS}, include_timeouts),
     }
+    if checkpoints:
+        report["checkpoints"] = _checkpoints({}, {})
+    return report
 
 
 def _partial_id(path: Path) -> str | None:
@@ -215,10 +236,12 @@ def _partial_id(path: Path) -> str | None:
 
 
 def inspect_changes(
-    paths: list[Path], *, include_timeouts: bool = False
+    paths: list[Path], *, include_timeouts: bool = False, checkpoints: bool = False
 ) -> dict[str, Any]:
     if type(include_timeouts) is not bool:
         raise ValueError("include_timeouts must be a bool")
+    if type(checkpoints) is not bool:
+        raise ValueError("checkpoints must be a bool")
     if not isinstance(paths, list | tuple) or not 1 <= len(paths) <= MAX_INPUTS:
         raise ValueError(f"supply between 1 and {MAX_INPUTS} trial paths")
     if not all(isinstance(path, Path) for path in paths):
@@ -253,10 +276,13 @@ def inspect_changes(
     usable = sum(1 for row in rows if row["status"] == "usable")
     assert len(rows) == len(paths)
     assert usable == sum(len(group) for group in groups.values())
-    return {
+    report: dict[str, Any] = {
         "schema": SCHEMA,
         "inputs": len(paths),
         "usable_trials": usable,
         "trials": rows,
         "summary": _summary(rows, _bounds(groups, references), include_timeouts),
     }
+    if checkpoints:
+        report["checkpoints"] = _checkpoints(groups, references)
+    return report

@@ -111,6 +111,27 @@ In the first row, inspecting each trial alone left 77 writes unknown. Sharing ev
 
 The [aggregate evidence](samples/schedule-changes-cohort.json) includes the registration, enrollment losses, uncertain counts, keyed checks and sensitivity to timeouts. The original trials are not distributed here. Use the [Flotilla analysis](https://github.com/PeterMakhnatch/harbor-multiagent/blob/71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3/flotilla/analysis/README.md) when the task folders **are** available.
 
+### Is first agreement a safe time to stop?
+
+**Do not stop a live team just because its seats agree.** In one archived team, the two seats first agreed at submission 36. Their joint answer was wrong. The standing answer at submission 57 was correct. One seat later timed out, but the native verifier recorded a valid success. Excluding all such teams hides this case.
+
+Use `--checkpoints` with `schedule` or `schedule-jobs`. For example, after extracting the 4 public trials above:
+
+```bash
+python3 -BS -m examples.seat_handoffs schedule "$scratch/$fixture"/schedule-*/ --checkpoints
+```
+
+The reader scans submissions in native order. It records the first legal answer, the first time both seats have legal answers, and the first time those answers match. A malformed answer clears the seat's previous answer. Each rule uses only the prefix available at the time. If a rule never triggers, the comparison keeps the native final grade. Only **later recorded writes** make a trigger early. They are not a measurement of time, tokens, or money saved.
+
+| Archived two-seat teams | Teams | Reached agreement | Agreement before the final write | Later writes in those teams | Native successes lost by freezing | Native failures turned into successes |
+|---|---:|---:|---:|---:|---:|---:|
+| Both seats finished | 117 | 49 | 8 | 56 | 0 | 1–3 |
+| Also include verified grades after a seat timeout | 171 | 58 | 15 | 428 | 1 | 2–7 |
+
+In the completed group, just 1 of 66 talking teams and 7 of 51 silent teams agreed before the final write. Freezing the *first legal answer* instead lost 6 native successes. Waiting for *both to give a legal answer* without requiring agreement lost 3. The rules test different things. These are retrospective comparisons on fixed records, not interventions on live teams.
+
+The [registered question](samples/schedule-checkpoint-question.json) fixes the population, the 3 rules, and the test. The [aggregate results](samples/schedule-checkpoint-outcomes.json) retain the full 192 scheduled slots. Bounds allow every answer key compatible with the native grades for each exact task checksum.
+
 ## Add an instrumented world
 
 Start with the [reference producer](../tasks/revised-dispatch/environment/world.py) and [verifier](../tasks/revised-dispatch/tests/verify.py). The producer declares the possible message/receiver edges at startup. It records only the first send, reply prepared, and optional acknowledgement for each relevant edge. Each receiver can make one irreversible commit. A monotonically increasing `seq` orders the events within one world instance. Use symbolic message IDs, never message bodies or secrets.

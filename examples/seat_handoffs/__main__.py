@@ -3,6 +3,7 @@ import json
 import sys
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from . import bespoke, calendar, core, job, schedule_changes, schedule_jobs
 from .trial import read_trial
@@ -33,18 +34,49 @@ def _job_report(path: Path, boundary: str, as_json: bool) -> int:
     return 0
 
 
+def _checkpoint_lines(section: dict[str, Any]) -> None:
+    print(
+        f"Checkpoint teams (two seats): {section['teams']}   "
+        f"Tasks: {section['tasks']}   Not two seats: {section['not_two_seats']}"
+    )
+    for name, cohort in section["cohorts"].items():
+        print(
+            f"{name}: eligible {cohort['eligible']}   "
+            f"native successes {cohort['native_final_successes']}   "
+            f"graded timeouts {cohort['graded_timeouts']}"
+        )
+        for rule, found in cohort["rules"].items():
+            early = found["early_stratum"]
+            print(
+                f"  {rule}: reached {found['reached']}   early {found['early']}   "
+                f"final only {found['final_only']}   abstain {found['abstain']}   "
+                f"later writes {found['subsequent_writes']}"
+            )
+            print(
+                f"    lost {found['worsened'][0]} to {found['worsened'][1]}   "
+                f"gained {found['improved'][0]} to {found['improved'][1]}   "
+                f"net {found['net'][0]} to {found['net'][1]}   "
+                f"early completed {early['completed']}   verdict {found['verdict']}"
+            )
+
+
 def _schedule_report(
-    paths: list[Path], *, as_json: bool, jobs: bool, include_timeouts: bool
+    paths: list[Path],
+    *,
+    as_json: bool,
+    jobs: bool,
+    include_timeouts: bool,
+    checkpoints: bool,
 ) -> int:
     try:
         if jobs:
             report = schedule_jobs.inspect_jobs(
-                paths, include_timeouts=include_timeouts
+                paths, include_timeouts=include_timeouts, checkpoints=checkpoints
             )
             behavior = report["behavior"]
         else:
             report = schedule_changes.inspect_changes(
-                paths, include_timeouts=include_timeouts
+                paths, include_timeouts=include_timeouts, checkpoints=checkpoints
             )
             behavior = report
     except ValueError as exc:
@@ -76,9 +108,11 @@ def _schedule_report(
             print(
                 f"{row['job_id']}\t{row['usable_trials']} usable / {row['registered_slots']} scheduled"
             )
-    else:
+    elif not checkpoints:
         for row in behavior["trials"]:
             print(f"{row['slot']}\t{row['native_trial'] or '-'}\t{row['status']}")
+    if checkpoints:
+        _checkpoint_lines(behavior["checkpoints"])
     return 0
 
 
@@ -106,11 +140,18 @@ def main() -> int:
         action="store_true",
         help="for schedules: include verified grades from teams with an agent timeout",
     )
+    parser.add_argument(
+        "--checkpoints",
+        action="store_true",
+        help="for schedules: measure two-seat cutoff checkpoints against shared keys",
+    )
     options = parser.parse_args()
     if options.boundary and options.source not in ("events", "job"):
         parser.error(
             "--boundary applies only to events and jobs; other sources use their native evidence"
         )
+    if options.checkpoints and options.source not in ("schedule", "schedule-jobs"):
+        parser.error("--checkpoints applies only to schedule and schedule-jobs")
     boundary = options.boundary or "returned"
     if options.source in ("schedule", "schedule-jobs"):
         return _schedule_report(
@@ -118,6 +159,7 @@ def main() -> int:
             as_json=options.json,
             jobs=options.source == "schedule-jobs",
             include_timeouts=options.include_timeouts,
+            checkpoints=options.checkpoints,
         )
     if options.include_timeouts:
         parser.error("--include-timeouts applies only to schedule and schedule-jobs")
