@@ -106,7 +106,7 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
             assert json.loads(env["SEAT_BRIEFING"]) == json.loads(json.dumps(expected))
         task_json = json.loads((task / "environment" / "task.json").read_text())
         assert task_json["answer_key"] == inst["answer_key"] and task_json["seats"] == seats
-        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (15, 4000, 200)
+        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (16, 4000, 200)
         assert task_json["seed"] == meta["seed"] == 1
         for script in (task / "tests" / "test.sh", task / "solution" / "solve.sh"):
             assert script.stat().st_mode & 0o111
