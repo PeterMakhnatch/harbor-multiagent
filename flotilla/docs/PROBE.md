@@ -775,3 +775,103 @@ retry per invalid trial, run before the single read; `flotilla-watch --blind`; a
 **Budget.** Smoke `cr1smoke` (instances 0-1, all cells, 18 trials) then `cr1`; OpenRouter cap $0.10 and $1.30 (au1
 cost $0.0023 per trial), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the
 spend.
+
+## Staged runs: method for future pre-registrations
+
+Use this method only for a new pre-registration. It does not change the fixed-size tests above.
+`stage_cells` in `flotilla/stages.py` makes the stages. `SequentialTest` and `holm` make the
+decisions. This module does not launch trials.
+
+**Planner.** Fix the task sets, instances, arms, models and `order_seed` before any outcomes.
+The seed shuffles the instances within each task set once. Each cumulative stage takes the first
+`ceil(fraction × instance count)` instances of each set, with the same instances for every model.
+It includes all arms of each selected instance. The default fractions are `0.25, 0.5, 1.0`.
+Run only the newly added blocks of cells for each model and task set that still needs trials.
+For each test, record its distinct cumulative pair counts as the looks. Rounding can give the same
+count at two stages; inspect that count only once. A paired test uses 2 named arms, even when a
+stage also contains other arms. If multiple live tests need a cell, run it once.
+
+**Test.** At each look use all counted, complete pairs assigned to that test through the look.
+Let `b` and `c` count pairs in which only the first or only the second arm succeeds.
+For each look compute the exact two-sided McNemar p-value, `min(1, 2 × Pr[Binomial(b+c, 1/2) ≤ min(b,c)])`.
+It is 1 with no discordance. A test with `K` planned looks spends an equal share at each look.
+Its staged p-value is `min(1, K × min(raw p so far))`, with direction from the earliest look that attains
+the minimum. The planned `K` does not change when a test stops.
+
+**Stop.** Let `m` be the number of tests in the fixed Holm family and `alpha` its error limit.
+At an interim look, stop for efficacy if `m × staged p < alpha`. The pre-computed boundary is the
+largest minority discordance count at each total discordance count that meets this condition.
+This guarantees Holm rejection even if all other tests have p-value 1. Freeze the stopped p-value and direction.
+A pre-registered direction gate still applies; rejection in the other direction does not pass that gate.
+
+Stop for futility only if the staged p-value is at least `alpha` and the best possible raw p at the final
+look, multiplied by `K`, is also at least `alpha`. To get that best case, make every remaining pair
+discordant in the current majority direction (either direction for a tie). At a fixed final number of
+discordances, that split gives the smallest tail. Adding a majority discordance cannot increase the
+two-sided tail. Thus no earlier completion can give a better p-value. A current staged p below `alpha`
+can still reject through Holm, so the final boundary alone does not justify futility.
+Otherwise continue to the next look. Close any test still open at its last look.
+
+**Family error.** Under each test's null, conditional on which pairs are discordant, the discordance
+directions must be independent fair signs. Each planned look then gives a super-uniform raw p-value.
+For any `u` in `[0,1)`, a stopped staged p-value at most `u` requires some planned look with raw p at most
+`u/K`. The union bound gives probability at most `u`. This argument does not require independent looks.
+Apply Holm once to the frozen or final staged p-values of the full family, even if some are 1.
+Holm controls the probability of any false rejection at `alpha` without requiring independent tests.
+An incomplete test has p-value 1 and stays in the family. Stop a model's trials only when none of its
+remaining tests or pre-registered non-staged endpoints need those trials.
+
+**Copy into a new pre-registration.** Fill in every bracket before the first trial:
+
+> We use the staged method in `flotilla/stages.py` at commit [SHA]. The plan [path and SHA] fixes the task sets,
+> instances, arms, models, and order seed. Stage fractions are [fractions]. The planned complete-pair looks for
+> each test are [counts by test], after dropping duplicate counts due to rounding.
+>
+> The Holm family contains exactly [all tests, with model, task set or pool, binary endpoint, and ordered arm
+> contrast], with family alpha [alpha]. We use exact two-sided McNemar p-values and equal spending over each
+> test's planned looks. We stop for efficacy or deterministic futility by the rules above. We apply Holm once
+> to the frozen or final staged p-values, with rejection at adjusted p strictly below [alpha]. The direction
+> required for each pass is [direction or none]; we use the earliest look with the minimum raw p-value.
+>
+> We inspect outcomes only after the planned pairs for a look are complete and valid. Validity and retries
+> follow [rule and retry limit], without inspecting outcomes to choose retries. If a required pair remains
+> invalid, mark that test incomplete and assign it p-value 1; do not replace its instance or move its look.
+> We keep incomplete tests in the family. After a test stops, we do not update its p-value or direction.
+> We continue collecting cells for [other tests and endpoints that need them, or none].
+
+**Simulation.** Run this command for the full table (100,000 replicates per scenario, seed `20261124`):
+
+```bash
+uvx --quiet --python 3.12 --with pytest --with pyyaml python flotilla/tests/test_stages.py
+```
+
+Both designs read the same paired outcomes. The fixed test uses the full pair count and applies
+Holm to the raw McNemar p-values. The staged test uses the default looks and family alpha 0.05.
+The simulation permutes each pilot profile's observed counts without replacement. It holds 2 other
+`rf1v` p-values at 1 and simulates all 3 `au1` models independently. For each null, it simulates
+3 independent models with 48 pairs each. Each pair is discordant with probability `q`, with a fair sign.
+
+Agreement means the same rejection decision, or the same vector of decisions for a family row.
+Family rows sum pairs across the simulated models. Exact family-wise error (FWER) enumerates
+the possible count transitions and uses independence across models. Any Holm rejection requires
+the smallest p-value to be strictly below `0.05/3`.
+
+| Profile `(b,c)` | Mean staged pairs / fixed pairs | Agreement | Simulated FWER staged / fixed | Exact FWER staged / fixed |
+|---|---:|---:|---:|---:|
+| `rf1v` Luna `(32,0)` | 16.000 / 32 | 100.000% | — | — |
+| `au1` Haiku `(1,15)` | 37.034 / 40 | 100.000% | — | — |
+| `au1` DeepSeek `(1,14)` | 38.091 / 40 | 100.000% | — | — |
+| `au1` Luna `(0,20)` | 23.402 / 40 | 100.000% | — | — |
+| `au1` family | 98.527 / 120 | 100.000% | — | — |
+| Null family, `q=0` | 144.000 / 144 | 100.000% | 0.000% / 0.000% | 0.000000% / 0.000000% |
+| Null family, `q=0.1` | 144.000 / 144 | 99.411% | 0.045% / 0.634% | 0.041652% / 0.647921% |
+| Null family, `q=0.2` | 143.993 / 144 | 98.488% | 0.447% / 1.918% | 0.438532% / 1.921143% |
+| Null family, `q=0.3` | 143.946 / 144 | 98.284% | 0.810% / 2.238% | 0.816948% / 2.264087% |
+| Null family, `q=0.4` | 143.886 / 144 | 98.154% | 1.149% / 2.325% | 1.154142% / 2.407620% |
+| Null family, `q=0.5` | 143.840 / 144 | 97.747% | 1.346% / 2.711% | 1.337768% / 2.693432% |
+
+Both designs reject for every listed effect profile in every replicate. That agreement does not
+establish power for smaller effects. The largest exact staged FWER in this grid is 1.338%, below 5%.
+With 0 discordant pairs after 24 of 48 pairs, 24 remaining pairs could still cross the boundary.
+The default looks therefore save no pairs for that null. A plan with an additional look at 42
+would stop that profile after 42 pairs, with 4 looks in its spending rule.
