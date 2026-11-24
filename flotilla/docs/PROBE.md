@@ -668,8 +668,11 @@ answers, decoys and false workers.
 
 **Primary (co-primary, Holm over the 6 tests: 3 models x 2 sets, alpha 0.05).** Per model and set, exact
 two-sided McNemar on paired `correct`, `talk-quiet` vs `talk-false`; PASS when the Holm-adjusted p < 0.05 and
-`talk-false` is less accurate. Reading the 2 x 2 for a model: `io1v` PASS and `io1s` FAIL means the order is
-enough; both FAIL means it takes the order and the instruction together; `io1s` PASS means the instruction alone.
+`talk-false` is less accurate. Reading the 2 x 2 for a model whose `rf1v` primary was PASS (Luna): `io1v` PASS
+and `io1s` FAIL means the order is enough; both FAIL means it takes the order and the instruction together;
+`io1s` PASS means the instruction alone. For a model whose `rf1v` primary was FAIL (Haiku, DeepSeek), both FAIL
+means no reliance in any cell, and a PASS is new reliance in that cell. `docs/results/scripts/io1_decide.py`
+applies these rules to the two `probe_analysis.py` outputs (amendment before any `io1` trial, 2026-11-24).
 
 **Secondary, reported and not gated.** Pass-through (answer = W) with Wilson 95% intervals; whether `p1` opened
 any data file before its final submit (the re-check rule of section 7); the agent step of the first data read
