@@ -197,9 +197,51 @@ def main(argv: list[str] | None = None) -> int:
     observed.add_argument(
         "--sha256", help="separately held study digest, required with --report"
     )
+    trial = modes.add_parser(
+        "trial",
+        help="Diagnose one stationary native Dispatch trial",
+        allow_abbrev=False,
+    )
+    trial.add_argument(
+        "directory", type=Path, help="trusted local trial directory with result.json"
+    )
+    trial.add_argument(
+        "--trial-id", required=True, help="expected native UUID from your job ledger"
+    )
+    trial.add_argument(
+        "--require-bound",
+        action="store_true",
+        help="require an acknowledged view for every active role",
+    )
     args = parser.parse_args(argv)
     try:
-        if args.mode == "observed":
+        if args.mode == "trial":
+            if __package__:
+                from .dispatch_native_return import inspect_trial
+            else:
+                from dispatch_native_return import inspect_trial
+            world = _checkout_world(
+                (run_panel.EXAMPLES_DIR / _WORLD_SOURCE).read_bytes()
+            )
+            result: dict[str, Any]
+            try:
+                result = inspect_trial(args.directory, args.trial_id, world)
+                has_receipts = all(
+                    basis == "bound" for basis in result["observations"].values()
+                )
+                code = (
+                    0
+                    if result["status"] == "measured"
+                    and (not args.require_bound or has_receipts)
+                    else 3
+                )
+            except FileNotFoundError:
+                result = {
+                    "schema": "seatlab.dispatch-native-return/v1",
+                    "status": "missing_evidence",
+                }
+                code = 3
+        elif args.mode == "observed":
             if (args.report is None) != (args.sha256 is None):
                 parser.error(
                     "supply both --report and --sha256, or neither for the public study"

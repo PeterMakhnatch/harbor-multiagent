@@ -253,3 +253,23 @@ def test_duplicate_measured_attempt_is_rejected(
     cell["trial_id"] = _cell(study, "s2003-reordered-MS")["trial_id"]
     with pytest.raises(ValueError, match=r"trial_id|UUID|duplicate"):
         _reduce_variant(study, world_type)
+
+
+def test_invalid_row_cannot_reuse_a_measured_trial(
+    retained: tuple[dict[str, Any], str], world_type: type
+) -> None:
+    study, _ = retained
+    invalid = next(cell for cell in study["cells"] if cell["status"] == "invalid")
+    invalid["trial_id"] = _cell(study, "s2001-reordered-MM")["trial_id"]
+    with pytest.raises(ValueError, match="duplicate trial_id"):
+        _reduce_variant(study, world_type)
+
+
+def test_truthful_rows_bind_the_team_delivery_digest(
+    retained: tuple[dict[str, Any], str], world_type: type
+) -> None:
+    study, _ = retained
+    metrics = _cell(study, "s2001-reordered-SM")["metrics"]
+    metrics["delivered_messages_sha256"] = "f" * 64
+    with pytest.raises(ValueError, match="team delivered_messages_sha256"):
+        _reduce_variant(study, world_type)

@@ -75,6 +75,21 @@ This command reads the [saved study](results/native-model-primary.json). It chec
 
 Exit `3` preserves measured rows when the study is incomplete. Exit `0` requires a fully measured grid. Exit `2` rejects an invalid input. To inspect a new `team_report.collect` return of the same registered protocol, add `--report FILE --sha256 HELD_DIGEST`. A matching choice shows consistency with a rule. It does not prove how the model read the reports.
 
+### Check one private native trial
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_opportunity trial "$trial_dir" \
+  --trial-id "$expected_uuid" --require-bound
+```
+
+Use your own completed trial directory. Take the expected UUID from your job record. The reader checks both native role results, the verifier reward and the regenerated stock world. It reports three separate counts: choices consistent with truthful reports, choices consistent with actual delivered reports, and the subset where inventory sent an incorrect report. It does not print a prompt, an answer, or a host path.
+
+`observations` gives the evidence for each active role. `bound` means the client acknowledged the matching view digest. `reconstructed` means only the world record supports the view. Neither proves that a model used the view. Use `--require-bound` to require matching receipts for all active roles. A contradictory receipt is invalid, not reconstructed.
+
+Exit `0` means the requested comparison is available. Exit `3` covers missing evidence, missing required acknowledgments, or a different condition. A completed non-`reordered` trial retains its actual grade but has no order comparison. Exit `2` rejects inconsistent or invalid evidence. These are local, unsigned records. The UUID and the checks do not authenticate their producer.
+
+In this study, the direct reader reproduced all 8 reorder comparisons and all 4 fresh grades. Both role receipts matched in all 12 completed teams. The reader rejected the invalid team. The other 3 teams had no recorded attempt.
+
 ## Model resources
 
 The table sums the CLI fields by role. CLI and API durations are sums across calls, not trial elapsed time.
