@@ -37,7 +37,7 @@ class _Oversized(Exception):
     pass
 
 
-def _owner_id(value: object) -> bool:
+def owner_id(value: object) -> bool:
     return (
         type(value) is str
         and OWNER_ID.fullmatch(value) is not None
@@ -82,7 +82,11 @@ def _offered(view: dict[str, Any]) -> list[str]:
     return choices
 
 
-def _executable(role: str, variable: str) -> str:
+def owner_program(role: str, variable: str) -> str:
+    if type(role) is not str or ROLE.fullmatch(role) is None:
+        raise ValueError("owner role is not an identifier")
+    if type(variable) is not str or VARIABLE.fullmatch(variable) is None:
+        raise ValueError("owner variable is not an environment name")
     path = os.environ.get(variable, "")
     if not path:
         raise OwnerFailure(role, "owner_unconfigured")
@@ -245,9 +249,9 @@ async def call_owner(
 ) -> tuple[str, str | None]:
     _check_call(role, variable, request_schema, reply_schema, instructions)
     offered = _offered(view)
-    if not _owner_id(requested):
+    if not owner_id(requested):
         raise OwnerFailure(role, "requested_invalid")
-    executable = _executable(role, variable)
+    executable = owner_program(role, variable)
     payload = _request(request_schema, requested, instructions, view)
     reply = _reply(role, reply_schema, await _run(role, executable, payload))
     if type(reply["requested"]) is not str or reply["requested"] != requested:
@@ -256,6 +260,6 @@ async def call_owner(
     if type(choice) is not str or choice not in offered:
         raise OwnerFailure(role, "owner_choice_not_offered")
     served = reply["served_model"]
-    if served is not None and not _owner_id(served):
+    if served is not None and not owner_id(served):
         raise OwnerFailure(role, "owner_served_model_invalid")
     return choice, served

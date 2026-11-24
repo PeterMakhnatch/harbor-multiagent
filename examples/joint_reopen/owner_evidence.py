@@ -1,6 +1,6 @@
-import re
 from typing import cast
 
+from ..native_owner_process import REASON, owner_id
 from .observation import CODES, ROLES
 from .observation import KINDS as ACTIONS
 from .study import OWNER_IMPORT_PATH
@@ -9,6 +9,7 @@ SCHEMA = "harbor.joint-reopen.owner-evidence/v1"
 RECEIPT_SCHEMA = "harbor.joint-reopen.owner-receipt/v1"
 METADATA_KEY = "joint_reopen_owner"
 IDENTITY = "owner_declared"
+REPORTED_FAILURE = "reported_failure"
 STATUSES = ("matched", "missing", "malformed", "inconsistent", "failed", "unjudged")
 REASONS = {
     "matched": (None,),
@@ -53,20 +54,10 @@ RECEIPT_KEYS = frozenset(
     {"schema", "role", "requested", "outcome", "confirmed", "decisions", "failure"}
 )
 DECISION_KEYS = frozenset({"turn", "stage", "kind", "served_model"})
-OWNER_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/+-]{0,127}")
-FAILURE = re.compile(r"[a-z_]{1,48}")
 MAX_DECISIONS = len(ACTIONS)
 MAX_SEAT_ROWS = 16
 
 Record = dict[str, object]
-
-
-def _owner_id(value: object) -> bool:
-    return (
-        type(value) is str
-        and OWNER_ID.fullmatch(value) is not None
-        and "://" not in value
-    )
 
 
 def owner_roles(team: dict[str, Record]) -> tuple[str, ...]:
@@ -136,7 +127,7 @@ def _header(receipt: object) -> str | None:
     schema, role = fields["schema"], fields["role"]
     if type(schema) is not str or schema != RECEIPT_SCHEMA:
         return "receipt_schema"
-    if not _owner_id(fields["requested"]) or not (
+    if not owner_id(fields["requested"]) or not (
         role is None or (type(role) is str and role in ROLES)
     ):
         return "receipt_fields"
@@ -146,7 +137,7 @@ def _header(receipt: object) -> str | None:
     if (outcome == "failed") != (failure is not None) and outcome not in TERMINALS:
         return "outcome_malformed"
     if failure is not None and (
-        type(failure) is not str or FAILURE.fullmatch(failure) is None
+        type(failure) is not str or REASON.fullmatch(failure) is None
     ):
         return "outcome_malformed"
     return None
@@ -178,7 +169,7 @@ def _decisions(value: object) -> tuple[list[Record], int] | None:
             return None
         if type(kind) is not str or kind not in KINDS:
             return None
-        if served is not None and not _owner_id(served):
+        if served is not None and not owner_id(served):
             return None
         if served is not None:
             declared += 1
@@ -202,7 +193,7 @@ def _parse(receipt: object) -> tuple[str | None, Record | None]:
         "requested": fields["requested"],
         "role": fields["role"],
         "outcome": fields["outcome"],
-        "failure": fields["failure"],
+        "failure": None if fields["failure"] is None else REPORTED_FAILURE,
         "confirmed": confirmed,
         "decisions": rows,
         "declared": declared,
@@ -298,7 +289,7 @@ def _entry(
     member: Record, result: Record, role: str, world: list[str] | None
 ) -> Record:
     requested = member.get("model_name")
-    if not _owner_id(requested):
+    if not owner_id(requested):
         raise ValueError(f"registered {role} owner seat names no owner")
     status, reason, owner = _classify(cast(str, requested), result, role, world)
     assert status in STATUSES and reason in REASONS[status]

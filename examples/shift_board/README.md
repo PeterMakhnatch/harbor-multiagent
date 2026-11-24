@@ -81,6 +81,7 @@ export SHIFT_BOARD_DISPATCHER_OWNER="$SHIFT_BOARD_PLANNER_OWNER"
 study=$(mktemp -d)
 uv run python -m examples.shift_board.plan register "$study/manifest.json" \
   --participants examples/shift_board/samples/owner-team.json --seed 4935
+uv run python -B -m examples.native_owner_preflight "$study/manifest.json" || exit $?
 uv run python -m examples.shift_board.plan emit "$study/manifest.json" \
   --shard 0/1 --out "$study/worker"
 config=$(python3 -BS -m examples.shift_board.worklist "$study/manifest.json" \

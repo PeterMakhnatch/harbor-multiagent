@@ -24,10 +24,12 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 export JOINT_REOPEN_EAST_OWNER="$PWD/examples/joint_reopen/scripted_owner.py"
 export JOINT_REOPEN_WEST_OWNER="$PWD/examples/joint_reopen/scripted_owner.py"
 space=$(mktemp -d)
-reg=examples/joint_reopen/samples/owner-registration.json
+reg=examples/joint_reopen/samples/owner-repair-registration.json
+uv run python -B -m examples.native_owner_preflight "$reg" || exit $?
 uv run python -m examples.joint_reopen.study emit "$reg" --out "$space/east-west" --shard 0/12
-cfg=$(python3 -BS -m examples.native_worklist take --study "$reg" "$space/east-west" 0/12)
+cfg=$(python3 -BS -m examples.native_worklist take --study "$reg" "$space/east-west" 0/12) || exit $?
 trial="$space/east-west/trials/$(basename "$cfg" .json)"
+printf 'Native trial directory: %s\n' "$trial"
 uv run harbor trial start -c "$cfg"
 ```
 
@@ -37,9 +39,11 @@ The view contains the role, provisional slot, public options, turn, stage, and w
 
 The host executable is trusted. It receives no seat token, provider key, peer path or study setting through this interface. A shared host user, filesystem, session store or network can still connect the programs outside the world. Isolate these when measuring communication. A new process starts each turn; the view carries the seat's task state. The command does not start a paid model by itself.
 
+Run the admission check **before** `native_worklist take`. It validates each distinct enrolled external participant, constructs its native adapter, and checks its role-specific program. It does not execute the program or contact a model. Exit `0` means ready, `1` means unavailable, `2` means an input or preflight error, and `3` means there are no supported external seats. It does not predict the grade or prove the owner will answer. The same command accepts Shift Board registrations.
+
 ### Inspect an unfinished team
 
-Run this command from the same checkout, in another terminal, while Harbor runs:
+In another terminal, set `trial` to the native trial directory printed above. Run this command from the same checkout while Harbor runs:
 
 ```bash
 python3 -BS -m examples.joint_reopen.progress "$trial" --json
@@ -54,6 +58,10 @@ After the run, use `collect` below. Its optional `owner_evidence.roles[ROLE]` co
 **Qualification history.** The [first registration](samples/owner-registration.json) and its [predictions](samples/owner-predictions.json) precede the harness run. Its first 2 reserved tickets stopped at adapter import, before Harbor created a trial directory. The public instructions exceeded their 1,024-byte limit. The other 10 tickets were not reserved. This qualification failed; neither missing result is a grade.
 
 The [repair registration](samples/owner-repair-registration.json) is a separate qualification. It changes only the ticket IDs. In row order it inherits all 12 predictions, interventions, and pass conditions from the first registration. It keeps the original task checksum, rosters, calendars, report treatment and verifier. The repaired public instructions fit in 755 ASCII bytes. Neither qualification uses a model.
+
+**Result.** All 12 repair tickets reached native Harbor. The [redacted results](samples/owner-outcomes.json) contain 11 usable teams and 1 native error with a standing reward that was not credited. All 212 checked fields matched. There were 90 scripted decisions and 21 world-matched owner receipts. In the mixed team the stock seat voted, but the live reader correctly reported no marker for it.
+
+In the held team, the live command saw `east: owner_turn/report [endorse, card]` and `west: barrier/vote [endorse, card, report]`. Neither a verifier observation nor `result.json` existed yet. After release, both voted and the native reward was 1. This was a controlled pause, not evidence of a deadlock. In a separate delivered/withheld pair, both owners received byte-identical inputs through turn 4. The inputs differed on turn 5, after the owners asked for their inboxes. When neither asked, all 4 inputs stayed identical for each role.
 
 ## Register a private study for your own harness
 
