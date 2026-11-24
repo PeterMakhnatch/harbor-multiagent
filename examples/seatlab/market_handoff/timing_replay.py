@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from . import simulator, timing_messages as messages, timing_panel, timing_world
+from . import simulator, timing_evidence, timing_panel, timing_world
 from .timing_study import ROLES
 
 
@@ -26,35 +26,47 @@ def reproduce(stock: Any, row: dict[str, Any]) -> int:
     if binding["checkpoint_sha256"] != row["checkpoint_sha256"]:
         raise ValueError("the stock checkpoint differs from the decision checkpoint")
     turns = {(t["seat"], t["purpose"]): t for t in row["turns"]}
-    report = messages.read_sales(
-        match(turns["sales", "sales"], messages.sales_prompt(binding["sales"]))
-    )
+    report, sales = timing_evidence.sales_plan(binding, turns["sales", "sales"])
+    match(sales["step"]["turn"], sales["step"]["prompt"])
     if report != row["report"]:
         raise ValueError("the public report differs from what sales returned")
+    digests = {"sales": sales["digests"]}
     for role in ROLES:
-        early = role == row["early"]
-        price_prompt = messages.price_prompt(
-            binding["finance"], report if early else None
+        plan = timing_evidence.finance_plan(
+            binding,
+            row["early"],
+            report,
+            role,
+            [turns[role, "finance-price"], turns[role, "finance-receipt"]],
         )
-        reply = match(turns[role, "finance-price"], price_prompt)
-        pick = messages.read_price(reply)
-        if pick != row["picks"][role]:
+        for step in plan["steps"]:
+            match(step["turn"], step["prompt"])
+        digests[role] = plan["digests"]
+        pick = plan["pick"]
+        if pick != row["picks"][role] or plan["token"] != row["ack_tokens"][role]:
             raise ValueError(
-                "the reported finance decision differs from its owner's reply"
+                "the public decision or acknowledgment differs from its bound reply"
             )
-        ack = turns[role, "finance-receipt"]
-        token = json.loads(ack["reply"])["ack"]
-        prompt = messages.receipt_prompt(
-            price_prompt, reply, None if early else report, token
-        )
-        if not messages.read_receipt(match(ack, prompt), token):
-            raise ValueError("finance did not acknowledge this delivery")
         actual = timing_world.settle(stock, checkpoint, pick)
         if actual != row["settlements"][role]:
             raise ValueError(
                 f"stock settlement differs for world {row['world']}, repeat {row['repeat']}, seat {role}"
             )
+    timing_evidence.check_events(row["events"], digests)
     return len(turns)
+
+
+def partial_settlements(stock: Any, row: dict[str, Any]) -> int:
+    settlements = row.get("settlements") or {}
+    if not settlements:
+        return 0
+    checkpoint, binding = timing_world.make_company(stock, row["world"])
+    if row["checkpoint_sha256"] != binding["checkpoint_sha256"]:
+        raise ValueError("unexpected partial company checkpoint")
+    for role, settled in settlements.items():
+        if settled != timing_world.settle(stock, checkpoint, row["picks"][role]):
+            raise ValueError(f"partial branch does not reproduce for seat {role}")
+    return len(settlements)
 
 
 def main() -> int:
@@ -78,6 +90,8 @@ def main() -> int:
     eligible = [r for r in rows if args.world is None or r["world"] == args.world]
     complete = [r for r in eligible if r["status"] == "complete"]
     turns = sum(reproduce(stock, row) for row in complete)
+    partial = [r for r in eligible if r["status"] == "incomplete"]
+    observed = sum(partial_settlements(stock, row) for row in partial)
     print(
         json.dumps(
             {
@@ -85,7 +99,8 @@ def main() -> int:
                 "verified_pairs": len(complete),
                 "rebuilt_turns": turns,
                 "stock_settlements": 2 * len(complete),
-                "incomplete_pairs_not_replayed": len(eligible) - len(complete),
+                "incomplete_pairs": len(partial),
+                "additional_partial_stock_settlements": observed,
                 "new_model_calls": 0,
             },
             sort_keys=True,
