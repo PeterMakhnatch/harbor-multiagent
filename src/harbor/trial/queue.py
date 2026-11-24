@@ -1,14 +1,20 @@
 import asyncio
 import shutil
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from harbor.models.job.config import RetryConfig
 from harbor.models.trial.config import TrialConfig
 from harbor.models.trial.result import TrialResult
 from harbor.trial.hooks import HookCallback, TrialEvent, TrialHookEvent
 from harbor.utils.logger import logger
+
+if TYPE_CHECKING:
+    from harbor.trial.trial import Trial
+
+type TrialAttemptObserver = Callable[[Trial], AbstractAsyncContextManager[None]]
 
 
 @dataclass(frozen=True)
@@ -46,6 +52,8 @@ class TrialQueue:
         self._agent_pool_limits: dict[str, int] = {}
         self._agent_pool_semaphores: dict[str, asyncio.Semaphore] = {}
         self._held_agent_permits: dict[str, list[_AgentSemaphorePermit]] = {}
+        self._attempt_observer: TrialAttemptObserver | None = None
+        self._dispatched = False
 
     def add_hook(self, event: TrialEvent, callback: HookCallback) -> "TrialQueue":
         """Register a callback for a trial lifecycle event and return the queue."""
@@ -79,6 +87,35 @@ class TrialQueue:
     def on_trial_cancelled(self, callback: HookCallback) -> "TrialQueue":
         """Register a callback that runs when a queued trial is cancelled."""
         return self.add_hook(TrialEvent.CANCEL, callback)
+
+    def observe_trial_attempts(self, factory: TrialAttemptObserver) -> "TrialQueue":
+        """Install the single passive context entered around each trial attempt."""
+        if self._attempt_observer is not None:
+            raise RuntimeError("A trial attempt observer is already installed.")
+        if self._dispatched:
+            raise RuntimeError(
+                "A trial attempt observer cannot be installed after dispatch."
+            )
+        self._attempt_observer = factory
+        return self
+
+    async def _run_observed_attempt(
+        self, trial: "Trial", observer: TrialAttemptObserver
+    ) -> TrialResult:
+        """Run one attempt inside the observer without letting it suppress errors."""
+        context = observer(trial)
+        if not isinstance(context, AbstractAsyncContextManager):
+            raise TypeError(
+                "A trial attempt observer must return an async context manager."
+            )
+        await context.__aenter__()
+        try:
+            result = await trial.run()
+        except BaseException as error:
+            await context.__aexit__(type(error), error, error.__traceback__)
+            raise
+        await context.__aexit__(None, None, None)
+        return result
 
     def _calculate_backoff_delay_sec(self, attempt: int) -> float:
         """Calculate the backoff delay for a retry attempt."""
@@ -178,7 +215,10 @@ class TrialQueue:
         for attempt in range(self._retry_config.max_retries + 1):
             trial = await Trial.create(trial_config)
             self._setup_hooks(trial)
-            result = await trial.run()
+            if self._attempt_observer is None:
+                result = await trial.run()
+            else:
+                result = await self._run_observed_attempt(trial, self._attempt_observer)
 
             exceptions = result.recorded_exceptions()
             if not exceptions:
@@ -229,6 +269,7 @@ class TrialQueue:
         The caller decides how to schedule it (await, gather, TaskGroup).
         """
         self._validate_agent_concurrency([trial_config])
+        self._dispatched = True
         return self._run_trial(trial_config)
 
     def submit_batch(

@@ -1,16 +1,27 @@
+from __future__ import annotations
+
 import asyncio
 import errno
 import functools
 import json
 import os
 import stat
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING, override
 
 from rich.console import Console
 
-from harbor.models.trial.result import TrialResult
+from harbor.models.job.plugin import BaseJobPlugin
 from harbor.trial.seat_events import SeatEventRow, SeatEventStream
 from harbor.trial.seats import SeatsTrial
+
+if TYPE_CHECKING:
+    from harbor.job import Job
+    from harbor.models.job.result import JobResult
+    from harbor.models.trial.result import TrialResult
+    from harbor.trial.trial import Trial
 
 SEAT_EVENTS_FILE_NAME = "seat-events.jsonl"
 
@@ -102,10 +113,13 @@ async def _drain(stream: SeatEventStream, fd: int) -> str | None:
             pending.add_done_callback(functools.partial(_close, fd))
 
 
-async def run_with_seat_events(trial: SeatsTrial, *, warnings: Console) -> TrialResult:
-    """Run the trial while one drain task appends each seat event as a line of
-    TRIAL_DIR/seat-events.jsonl. Raises SeatEventsJournalError before play if
-    the journal cannot be created; a later write failure only warns."""
+@asynccontextmanager
+async def observe_seat_events(
+    trial: SeatsTrial, *, warnings: Console
+) -> AsyncIterator[None]:
+    """Around one native trial.run(), one drain task appends each seat event as
+    a line of TRIAL_DIR/seat-events.jsonl. Raises SeatEventsJournalError before
+    play if the journal cannot be created; a later write failure only warns."""
     drain: asyncio.Task[str | None] | None = None
     try:
         with trial.seat_events() as stream:
@@ -116,7 +130,7 @@ async def run_with_seat_events(trial: SeatsTrial, *, warnings: Console) -> Trial
                 name="harbor-seat-events",
                 eager_start=True,
             )
-            return await trial.run()
+            yield
     finally:
         if drain is not None:
             reason = await asyncio.shield(drain)
@@ -127,3 +141,33 @@ async def run_with_seat_events(trial: SeatsTrial, *, warnings: Console) -> Trial
                     markup=False,
                     highlight=False,
                 )
+
+
+async def run_with_seat_events(trial: SeatsTrial, *, warnings: Console) -> TrialResult:
+    async with observe_seat_events(trial, warnings=warnings):
+        return await trial.run()
+
+
+class SeatEventsJobPlugin(BaseJobPlugin):
+    def __init__(self) -> None:
+        super().__init__()
+        self._warnings = Console(stderr=True)
+
+    @override
+    async def on_job_start(self, job: Job) -> None:
+        if not job.config.participants:
+            raise ValueError(
+                "SeatEventsJobPlugin requires a job with configured participants."
+            )
+        job.observe_trial_attempts(self._observe)
+
+    @override
+    async def on_job_end(self, job_result: JobResult) -> None:
+        del job_result
+
+    def _observe(self, trial: Trial) -> AbstractAsyncContextManager[None]:
+        if not isinstance(trial, SeatsTrial):
+            raise TypeError(
+                f"SeatEventsJobPlugin needs a SeatsTrial, got {type(trial).__name__}."
+            )
+        return observe_seat_events(trial, warnings=self._warnings)
