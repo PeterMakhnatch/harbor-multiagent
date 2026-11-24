@@ -37,8 +37,8 @@ A smoke ignores a plan's stages. A smoke with OpenRouter models, and the dry run
 without a zero-data-retention endpoint (pricing.zdr_lines): the account has ZDR on and gets 404 for such a model.
 
 Staged waves (optional plan key stages; stages.py and docs/PROBE.md "Staged runs"): stage k adds the blocks that
-stages.stage_cells first puts in stage k, in the wave's order. A block of a task set with a test runs only for the
-models with a test on that set that still continues. Each stage runs its cells, then once more every cell without a
+stages.stage_cells first puts in stage k, in the wave's order. An arm runs if no test uses it on that set or at
+least one test that uses it is still live for the model. Each stage runs its cells, then once more every cell without a
 valid trial (one retry, as --retry-invalid), then looks: each live (test, model) gets its cumulative (b, c, n) from
 probe_analysis.trial_row over the stage's finished cells and its disposition from stages.SequentialTest. stdout and
 progress.log show only the look and each model's status; stages.json in the run dir holds b, c, n, p and the Holm
@@ -1301,13 +1301,20 @@ class Staged:
         return self.stage_of[(cell["task_set"], cell["instance"])]
 
     def cells(self, stage: int, live: dict | None = None) -> list[dict]:
-        """The cells the stage adds, in the wave's order: whole blocks of a set without a test, or of a model with a
-        live test on the set."""
+        """The stage's cells in wave order: an untested arm or an arm with a live test for the model."""
         live = self.live if live is None else live
-        tested = {test["task_set"] for test in self.tests}
-        return [cell for cell in self.order if self.block_stage(cell) == stage and (
-            cell["task_set"] not in tested or any(live[(test["test"], cell["model"])] for test in self.tests
-                                                  if test["task_set"] == cell["task_set"]))]
+        tests_by_arm: dict[tuple[int, str], list[int]] = {}
+        for test in self.tests:
+            for arm in test["arms"]:
+                tests_by_arm.setdefault((test["task_set"], arm), []).append(test["test"])
+        found = []
+        for cell in self.order:
+            if self.block_stage(cell) != stage:
+                continue
+            tests = tests_by_arm.get((cell["task_set"], cell["arm"]))
+            if not tests or any(live[(test, cell["model"])] for test in tests):
+                found.append(cell)
+        return found
 
     def planned(self, every_look: bool) -> list[dict]:
         """Every cell when every test runs to its last look; else the fewest, every test stopping at its first."""

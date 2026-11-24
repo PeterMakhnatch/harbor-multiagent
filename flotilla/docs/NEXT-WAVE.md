@@ -210,9 +210,9 @@ Pre-registered in PROBE.md section 14 (commit a542223d, with the amendments made
 trial); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and `io1s` (`--read-first --post-trigger first_submit`),
 built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `flotilla/plans/io1smoke.json`
 (24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.90; expected cost $0.55-0.62).
-Amended 2026-11-24 11:00 ET (PROBE.md section 14): `io1` runs after `rr1`, on Luna and every `rr1` PASS model only.
-Before it runs, set `models` in `io1smoke.json` and `io1.json` to those models, set the `io1` cap to $0.30 per model,
-and change `io1_decide.py`: each model is its own Holm family of its 2 tests, and "relied" comes from `rr1`.
+After `rr1`, set `models` in `io1smoke.json` and `io1.json` to Luna and every new model that passes `rr1`.
+Set the `io1` cap to $0.30 per model. Use the `rr1` decisions JSON from step 1 below for the reliance labels.
+Each model is its own Holm family of 2 tests.
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
@@ -224,14 +224,12 @@ for s in io1v io1s; do
   python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'io1-??????' \
     --tasks .flotilla-local/tasks/$s --plan flotilla/plans/io1.json --json /tmp/$s.json
 done
-python3 flotilla/docs/results/scripts/io1_decide.py --plan flotilla/plans/io1.json --rf1v <rf1v analysis JSON> \
+python3 flotilla/docs/results/scripts/io1_decide.py --plan flotilla/plans/io1.json --reliance /tmp/rr1-decisions.json \
   /tmp/io1v.json /tmp/io1s.json
 ```
 
-The `rf1v` analysis JSON comes from `probe_analysis.py ... 'rf1-*' --tasks .flotilla-local/tasks/rf1v --plan
-flotilla/plans/rf1.json`; a copy is in `.flotilla-local/cards/2026-11-24/analysis/`. With `--plan io1.json` the
-`missing` list of each per-set run names every cell twice (both sets share instances and arms) and counts the
-other set's trials as unmapped; `io1_decide.py` does not read it and marks a short test INCOMPLETE itself.
+With `--plan io1.json`, each per-set analysis includes missing cells and unmapped trials from the other set.
+`io1_decide.py` ignores those lists and marks a test with fewer than 32 pairs INCOMPLETE.
 
 ### cr1: challenge-response (row 6, ready to run)
 
@@ -272,6 +270,19 @@ Before step 1:
 keys run -- python3 flotilla/run_wave.py flotilla/plans/rrs.json --run-dir .flotilla-local/runs/rrs
 # read validity only (flotilla-watch --blind); drop from rr1.json every model with an invalid smoke trial, commit
 keys run -- python3 flotilla/run_wave.py flotilla/plans/rr1.json --run-dir .flotilla-local/runs/rr1
+```
+
+Check for `stop done` in the `rr1` progress log before reading outcomes. The runner handles invalid retries in each
+stage. If the smoke excludes Luna, the protocol cannot decide whether its reliance repeats. Resolve that before
+preparing the `io1` plans.
+
+```bash
+python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'rr1-??????' \
+  --tasks .flotilla-local/tasks/rf1v --plan flotilla/plans/rr1.json --json /tmp/rr1-analysis.json
+python3 flotilla/docs/results/scripts/rr1_decide.py --plan flotilla/plans/rr1.json \
+  --stages .flotilla-local/runs/rr1/stages.json --analysis /tmp/rr1-analysis.json
+python3 flotilla/docs/results/scripts/rr1_decide.py --plan flotilla/plans/rr1.json \
+  --stages .flotilla-local/runs/rr1/stages.json --analysis /tmp/rr1-analysis.json --json > /tmp/rr1-decisions.json
 ```
 
 The trust cards (section "Trust card" below) run and report as `trust_card.py plan` prints:

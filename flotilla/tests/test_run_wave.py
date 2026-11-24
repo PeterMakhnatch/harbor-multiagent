@@ -1665,12 +1665,12 @@ LOOK_LINE = re.compile(r"look \d+/\d+ after stage \d+/\d+: test \d+ set \d+ talk
                        r"(continue|stop-efficacy|stop-futility|final)( \(recomputed on resume\))?")
 
 
-def probe_tree(repo: Path, sets) -> None:
+def probe_tree(repo: Path, sets, *, arms=PROBE_ARMS) -> None:
     """Probe tasks (kind verify) with p1 under test and p2 scripted; one build folder per (folder, instances)."""
     for folder_name, instances in sets:
         root, tasks = repo / folder_name, {}
         for instance in instances:
-            for arm in PROBE_ARMS:
+            for arm in arms:
                 name = f"t-{folder_name}-{instance:06x}-{arm}"
                 folder = root / "probe.verify" / name
                 (folder / "environment").mkdir(parents=True)
@@ -1704,7 +1704,8 @@ class Wave:
     def __init__(self, tmp: Path, plan: dict, outcome):
         self.tmp, self.plan = tmp, plan
         self.repo = init_repo(tmp)
-        probe_tree(self.repo, [(Path(item["tasks_dir"]).name, item["instances"]) for item in plan["task_sets"]])
+        for item in plan["task_sets"]:
+            probe_tree(self.repo, [(Path(item["tasks_dir"]).name, item["instances"])], arms=RUN.arms_of(item))
         self.path = commit_plan(self.repo, plan)
         self.order = RUN.order_of(plan, RUN.resolve_paths(plan, self.repo), [["p2"]] * len(plan["task_sets"]))
         control = {}
@@ -1805,6 +1806,25 @@ def test_an_all_tie_model_stops_at_the_futility_look_only_with_futility_on(tmp_p
     assert off.entry(M1)["disposition"]["status"] == "final" and len(off.starts()) == 32 * 2
     capsys.readouterr()
 
+def test_a_stopped_test_skips_only_its_exclusive_arms_for_its_model(tmp_path):
+    plan = staged_plan(range(16), [M1, M2], family="model", fractions=(0.5, 1.0))
+    quiet, false = PROBE_ARMS
+    honest, untested = "talk-honest", "talk-policy"
+    plan["task_sets"][0]["arms"] += [honest, untested]
+    plan["stages"]["tests"].append({"task_set": 0, "arms": [quiet, honest], "outcome": "correct"})
+    wave = Wave(tmp_path, plan, lambda cell: (cell["model"] == M2 or cell["arm"] != false, 0))
+    assert wave.run()[-1]["reason"] == "done"
+    first, second = wave.summary()["tests"]
+    assert first["models"][M1]["disposition"]["status"] == "efficacy"
+    assert first["models"][M1]["history"] == [[8, 0, 8]]
+    assert second["models"][M1]["history"] == [[0, 0, 8], [0, 0, 16]]
+    first_instances = {cell["instance"] for cell in RUN.STAGES.stage_cells(plan, [0.5, 1.0])[0]}
+    assert {(row["instance"], row["model"], row["arm"]) for row in wave.starts()} == {
+        (instance, model, arm) for instance in range(16) for model in (M1, M2)
+        for arm in (quiet, false, honest, untested)
+        if instance in first_instances or model != M1 or arm != false
+    }
+
 
 def test_an_invalid_pair_lowers_n_keeps_the_test_and_retries_finish_before_the_look(tmp_path, capsys):
     plan = staged_plan(range(8), [M1], family="model", fractions=(0.5, 1.0))
@@ -1829,6 +1849,41 @@ def test_an_invalid_pair_lowers_n_keeps_the_test_and_retries_finish_before_the_l
     lost_key = RUN.cell_key(0, lost, "talk-false", M1)
     assert [item["valid"] for item in wave.state()["finished"][lost_key]["attempts"]] == [False, False]
     capsys.readouterr()
+
+
+def test_a_stage_one_guard_exit_resumes_missing_cells_then_retries_before_the_look(tmp_path, monkeypatch):
+    plan = staged_plan(range(8), [M1], family="model", fractions=(0.5, 1.0))
+    plan["budget"]["max_invalid_streak"] = 2
+    plan["make_jobs"]["concurrency"] = 1
+    staged = RUN.Staged(plan, RUN.order_of(plan))
+    first = [cell["key"] for cell in staged.cells(0)]
+    later = [cell["key"] for cell in staged.cells(1)]
+    invalid = first[:2]
+    wave = Wave(tmp_path, plan, lambda cell: (cell["arm"] == "talk-quiet", int(cell["key"] in invalid)))
+    prices = {M1: {"prompt": "0.0000001", "completion": "0.000002"}}
+    monkeypatch.setattr(RUN, "HttpSources", lambda _base: Sources(prices, lambda *_args: 100.0))
+    run_dir = tmp_path / "run"
+    argv = [str(wave.path), "--run-dir", str(run_dir), "--jobs-dir", str(tmp_path / "jobs"),
+            "--harbor", str(wave.harbor)]
+
+    assert RUN.main(argv) == 3
+    assert wave.state()["stages"] == {"stage": 0, "looks": []}
+    assert not (run_dir / RUN.STAGES_FILE).exists()
+    assert set(wave.state()["finished"]) == set(invalid)
+    assert all(not row["valid"] for row in wave.state()["finished"].values())
+
+    assert RUN.main(argv) == 0
+    resumed = wave.starts()[len(invalid):]
+    assert [(RUN.cell_key(0, row["instance"], row["arm"], M1), row["attempt"]) for row in resumed] == (
+        [(key, 1) for key in first[2:]] + [(key, 2) for key in invalid] + [(key, 1) for key in later])
+    log = (run_dir / "progress.log").read_text()
+    look = log.index("look 1/2 after stage 1/2:")
+    assert all(log.index(f"end {row['job']} ") < look for row in resumed[:len(first)])
+    assert look < log.index(f"start {resumed[len(first)]['job']} ")
+    assert wave.entry(M1)["history"] == [[4, 0, 4], [8, 0, 8]]
+    assert {key: [a["valid"] for a in row["attempts"]] for key, row in wave.state()["finished"].items()} == {
+        key: [False, True] if key in invalid else [True] for key in first + later
+    }
 
 
 def test_a_resume_after_a_crash_mid_stage_gives_the_same_cells_and_decisions(tmp_path, capsys):
