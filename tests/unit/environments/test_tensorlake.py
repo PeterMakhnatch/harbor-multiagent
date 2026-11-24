@@ -6,6 +6,7 @@ migration's lifecycle / exec / upload paths.
 import asyncio
 import contextlib
 import logging
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -719,6 +720,45 @@ class TestRunCommandAsync:
         result = await ubuntu_env._run_command_async("true")
         assert result.exit_code == 0
         assert result.stdout == "hello"
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Executes a POSIX shell locally"
+    )
+    async def test_direct_exec_forwards_env_after_bash_startup(
+        self, ubuntu_env, tmp_path
+    ):
+        sandbox = self._wire_sandbox(
+            ubuntu_env,
+            info_sequence=[
+                SimpleNamespace(status=ProcessStatus.EXITED, exit_code=0, signal=None),
+            ],
+        )
+        command_env = {"TOKEN": "synthetic='value'\n", "EMPTY": ""}
+
+        sandbox.write_stdin = AsyncMock()
+        sandbox.close_stdin = AsyncMock()
+        await ubuntu_env.exec(
+            """printf '%s=%s' "$TOKEN" "$EMPTY" """,
+            env=command_env,
+            cwd=str(tmp_path),
+        )
+
+        request = sandbox.start_process.await_args.kwargs
+        assert "env" not in request and "synthetic" not in " ".join(request["args"])
+        pid, script = sandbox.write_stdin.await_args.args
+        sandbox.close_stdin.assert_awaited_once_with(pid)
+        startup = tmp_path / "startup.sh"
+        startup.write_text("export TOKEN=profile-default\n")
+        process = await asyncio.create_subprocess_exec(
+            request["command"],
+            *request["args"],
+            env={**os.environ, "BASH_ENV": str(startup)},
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await process.communicate(script)
+        assert process.returncode == 0
+        assert stdout.decode() == command_env["TOKEN"] + "="
 
     async def test_sighup_recovers_to_zero_when_repoll_returns_minus_one(
         self, ubuntu_env
@@ -2422,7 +2462,9 @@ class TestExecWorkdir:
         _attach_mock_sandbox(env)
         captured: dict = {}
 
-        async def fake_run(command, discard_stdout=False, shell="bash"):
+        async def fake_run(
+            command, discard_stdout=False, shell="bash", env=None, stdin=None
+        ):
             captured["command"] = command
             return SimpleNamespace(stdout="", stderr="", exit_code=0)
 

@@ -20,7 +20,11 @@ from harbor.models.task.verifier_mode import VerifierEnvironmentMode
 from harbor.models.trial.config import AgentConfig, TaskConfig, TrialConfig
 from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.models.trial.paths import EnvironmentPaths
-from harbor.trial.errors import EnvironmentStartTimeoutError, VerifierTimeoutError
+from harbor.trial.errors import (
+    AgentTimeoutError,
+    EnvironmentStartTimeoutError,
+    VerifierTimeoutError,
+)
 from harbor.trial.single_step import SingleStepTrial
 
 _NO_MCP_HEADERS = MCPHeaderEnv(refs={}, env={}, secrets=frozenset())
@@ -30,6 +34,7 @@ def _single_step_trial(tmp_path: Path) -> SingleStepTrial:
     trial = object.__new__(SingleStepTrial)
     trial.logger = MagicMock()
     trial._are_artifacts_collected = False
+    trial._verifier_timeout_sec = 600.0
     trial._artifact_handler = SimpleNamespace(
         download_artifacts=AsyncMock(),
         sidecar_services=lambda artifacts=None: set(),
@@ -188,6 +193,29 @@ async def test_run_invokes_run_when_not_install_only(tmp_path: Path) -> None:
 
     trial._prepare.assert_awaited_once()
     trial._run.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_run_records_keyboard_interrupt_as_cancelled(tmp_path: Path) -> None:
+    trial = _single_step_trial(tmp_path)
+    trial.config = SimpleNamespace(
+        install_only=False, trial_name="t", override_error_policy=None
+    )
+    trial._result = SimpleNamespace(exception_info=None)
+    trial.paths = SimpleNamespace(exception_message_path=tmp_path / "exception.txt")
+    trial._init_result = MagicMock()
+    trial._emit = AsyncMock()
+    trial._prepare = AsyncMock()
+    trial._run = AsyncMock(side_effect=KeyboardInterrupt)
+    trial._recover_outputs = AsyncMock()
+    trial._finalize = AsyncMock()
+    trial._close_logger_handler = MagicMock()
+    trial._scrub_jobs_dir = MagicMock()
+
+    with pytest.raises(KeyboardInterrupt):
+        await trial.run()
+
+    assert trial.result.exception_info.exception_type == "CancelledError"
 
 
 @pytest.mark.asyncio
@@ -432,6 +460,41 @@ async def test_verifier_errors_propagate_unchanged(
 
     assert exc_info.value is error
     assert trial.result.verifier.finished_at is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", list(VerifierEnvironmentMode))
+async def test_verifier_error_replaces_graded_agent_error(
+    tmp_path: Path, mode: VerifierEnvironmentMode
+) -> None:
+    trial = _verifier_trial()
+    trial.logger = MagicMock()
+    trial.task.config.agent = SimpleNamespace(user=None)
+    trial.task.instruction = "test instruction"
+    trial._agent_timeout_sec = 10
+    trial._load_trajectory = None
+    trial.paths.exception_message_path = tmp_path / "exception.txt"
+    trial._run_agent_phase = AsyncMock(
+        side_effect=AgentTimeoutError("Agent execution timed out after 10 seconds")
+    )
+    trial._sync_agent_output = AsyncMock()
+    trial._upload_agent_logs = AsyncMock()
+    trial._collect_artifacts = AsyncMock()
+    trial._stop_agent_environment = AsyncMock()
+    error = VerifierTimeoutError("Verifier execution timed out after 45.0 seconds")
+    trial._run_separate_verifier.side_effect = error
+    trial._run_shared_verifier.side_effect = error
+
+    with patch(
+        "harbor.trial.single_step.resolve_task_verifier_mode", return_value=mode
+    ):
+        try:
+            await trial._run()
+        except VerifierTimeoutError as exc:
+            trial._record_exception(exc)
+
+    assert trial.result.exception_info.exception_type == "VerifierTimeoutError"
+    assert "VerifierTimeoutError" in trial.paths.exception_message_path.read_text()
 
 
 def _scrub_trial(tmp_path: Path, agent, user_agent=None) -> SingleStepTrial:

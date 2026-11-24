@@ -1,0 +1,30 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/handoffs.jsonl"]
+
+[task]
+name = "harbor/revised-dispatch"
+description = "A reporter seat sends an initial report and one revision; the booker seat under test commits one slot."
+keywords = ["seats", "docker-compose", "multi-agent", "handoffs"]
+
+[metadata]
+difficulty = "easy"
+category = "example"
+tags = ["seats", "handoffs"]
+
+[verifier]
+timeout_sec = 60.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[environment.env]
+HANDOFF_SEED = "0"
+HANDOFF_VARIANT = "replace"
+
+[agents.booker]
+
+[agents.reporter]
+under_test = false

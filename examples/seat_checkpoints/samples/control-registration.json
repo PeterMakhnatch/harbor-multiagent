@@ -1,0 +1,398 @@
+{
+  "schema": "harbor.seat-cut.study/v1",
+  "task": {
+    "name": "harbor/shift-board-checkpoint",
+    "digest": "sha256:e086df3414a2b2682883cf574b28ddea4ebbc9f37c3706886d04ead430e13353",
+    "checksum": "41e230fbbdda4b6a2c941975988e9d4dd0058f895393d7f5c45e60d5aff45e3d"
+  },
+  "task_files": "sha256:9a9d2ff7406aeeecda3c4a0fd09fe82dddb986ff90280f61e4dad6075da87874",
+  "teams": {
+    "held-early": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "preferred",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "held-late": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "preferred",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "off": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "preferred",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "racing": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "preferred",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "natural": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": []
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "preferred",
+          "gates": []
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "held-leave": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "leave",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "sb-3502d76aff027666",
+      "team": "held-early",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-7b26968cd4f2ba64",
+      "team": "held-early",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-d9f74d4ad4e9980c",
+      "team": "held-early",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-3f13f891bf8045f5",
+      "team": "held-early",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-f7d9b8fa0ad53eec",
+      "team": "held-late",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-d1d657eab3d05255",
+      "team": "held-late",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-0fa9a7feed9d36f7",
+      "team": "held-late",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-6177badc0359b8db",
+      "team": "held-late",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-02664e4bd9a8edf9",
+      "team": "off",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": false
+    },
+    {
+      "ticket": "sb-45d05b1a97f9e0c3",
+      "team": "off",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": false
+    },
+    {
+      "ticket": "sb-893c12bcb106e5ed",
+      "team": "off",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": false
+    },
+    {
+      "ticket": "sb-afe7e54c0defadc2",
+      "team": "off",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": false
+    },
+    {
+      "ticket": "sb-aaabe21dcfaa5497",
+      "team": "racing",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-3735200577c380b2",
+      "team": "racing",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-d2cec7977d3aa813",
+      "team": "natural",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-e67968ad9568a7a5",
+      "team": "natural",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-4352a606029265d7",
+      "team": "held-leave",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    },
+    {
+      "ticket": "sb-d211d769c63772cf",
+      "team": "held-leave",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true
+    }
+  ]
+}

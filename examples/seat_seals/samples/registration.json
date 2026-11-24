@@ -1,0 +1,299 @@
+{
+  "schema": "harbor.seat-seal.study/v1",
+  "task": {
+    "name": "harbor/shift-board-seal",
+    "digest": "sha256:fc0aed54338d9ab6040d509502d3c61c7d75ee5c5d8de6f0fc49be7431d7b772",
+    "checksum": "fdc228a29949149cc0b92ee5457ebe68c80d0b52b85e50f338695b73bb48b6fd"
+  },
+  "task_files": "sha256:966f23032d584cab8d6123530bd0b39643fc0034159bfa13e68985363ab8243a",
+  "teams": {
+    "control-preferred": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "preferred",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "control-leave": [
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "planner",
+          "policy": "publish",
+          "gates": [
+            "after_publish"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "import_path": "examples.seat_checkpoints.control_seat:ControlSeat",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {
+          "role": "dispatcher",
+          "policy": "leave",
+          "gates": [
+            "before_decide",
+            "after_decide"
+          ]
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "sb-103d2c5092fd8107",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-late",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-11e878707cb0428c",
+      "team": "control-preferred",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-29004322ddeded78",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-late",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-312b6d9f16e24aa0",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-3aaf0022cf26ca00",
+      "team": "control-preferred",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-41f567a5afc2ea56",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-4555676f89fe12e6",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-4b48e035d27b5517",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-4f3843bd49d1e26c",
+      "team": "control-leave",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-leave",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-82c85020f5461769",
+      "team": "control-leave",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-leave",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-8dd9bd2aa655a095",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-window",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-9c41326c14efcfa6",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-window",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-be541ea39848f36d",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-window",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-ca35e79803da0f40",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-window",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-d9614db3e7dc9dc9",
+      "team": "control-preferred",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "seal"
+    },
+    {
+      "ticket": "sb-da882eb65265e386",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-late",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-f4ff9871e51d3e1e",
+      "team": "control-preferred",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-late",
+      "mode": "continue"
+    },
+    {
+      "ticket": "sb-f5eb539863694b2b",
+      "team": "control-preferred",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "target": "planner",
+      "peer": "dispatcher",
+      "observe": true,
+      "schedule": "held-early",
+      "mode": "seal"
+    }
+  ]
+}

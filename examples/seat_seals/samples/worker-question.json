@@ -1,0 +1,17 @@
+{
+  "schema": "harbor.seat-seal.worker-question/v1",
+  "base": "99bcbaf0335744c3bc3fcc960f70a50fd18c5bc1",
+  "registered_team_study": "9d62f1497ccaf246f37a3a53691d284eeb1d6db9",
+  "question": "When a worker is late or missing, does assigning both arms of a paired native team experiment together preserve more observable interventions? Does it also narrow uncertainty about the overall reward difference?",
+  "prior_knowledge": "The task publishes the scripted schedules and their predictions. The complete seal cohort is in progress. No archived seal pair outcomes or worker-withdrawal effects were used to choose the transfer design. The number of assigned arms and complete blocks follows from the layouts, not a model.",
+  "population": "The frozen 18 first attempts, 9 matched blocks of continue and seal. No reruns of these tickets. Distinguish the valid final binary grade, linked world intervention and evidence the expected controlled schedule occurred. A model population is not being sampled.",
+  "design": "Order matched blocks by their lower randomized ticket. With 3 workers, assign each block j to worker j modulo 3. Paired places both arms there. Crossed places continue there and seal on the next worker cyclically. Freeze layout before acquisition. Compare all 8 subsets of received worker packets in each layout. Missing packets and a delivered but absent ticket are different observations.",
+  "pass": [
+    "Ordinal worker identifiers and outcome-free assignments are deterministic across independent cold processes. Each of 18 registered tickets belongs to exactly one worker per layout. One root may have multiple cooperating processes. Never start an existing ticket directory or count it as a successful trial. Another machine running the same shard requires a shared root or a single owner.",
+    "All the original native grades and intervention joins that are known on full evidence replay from the minimal exported packet and public plan, without a private task, provider, raw verifier answer, trajectory or agent message. Withholding any subset retains all nine blocks, rejects repeated worker claims, and never invents an outcome. A native identity repeated across seats of different trials (across registered tickets) cannot contribute two known grades. Digests are not signatures.",
+    "With three workers and two packets received, paired assignment should retain six complete blocks, crossed three, if all native events and both joins are observed. In either layout six missing binary outcomes contribute width six to the bound on the sum of seal-minus-continue rewards if all received grades are known. Report the actual count and endpoints, not just the mathematical prediction. An unsupported return linkage cannot erase an independently valid final.",
+    "Recover the full reports when the withheld packets return. Check sharp attainable counts of positive/negative pairs against an independent finite oracle. Transfer probes must reject mixed plans, incomplete or duplicate rows, tampering with a known digest, and invalid field types. A lost worker is not random attrition, and no complete-block mean estimates a population effect without assumptions."
+  ],
+  "new_oracle_model_calls": 0,
+  "budget_usd": 0
+}

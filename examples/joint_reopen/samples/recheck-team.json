@@ -1,0 +1,6 @@
+{
+  "participants": [
+    {"seat": "east", "name": "oracle", "env": {"JR_POLICY": "recheck"}},
+    {"seat": "west", "name": "oracle", "env": {"JR_POLICY": "recheck"}}
+  ]
+}

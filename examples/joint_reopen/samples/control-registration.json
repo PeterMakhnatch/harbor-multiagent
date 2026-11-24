@@ -1,0 +1,404 @@
+{
+  "schema": "harbor.joint-reopen.study/v1",
+  "task": {
+    "name": "harbor/joint-reopen",
+    "digest": "sha256:ec969b116cab9718db6f8a1e35337529c0e5c60e1cc86160746ce8497b8fdf44",
+    "checksum": "d39605c284edbf87a396d75d273bb096f0b17ceca2ef09f9fb57a671acc2dfd8"
+  },
+  "teams": {
+    "recheck": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "recheck"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "recheck"
+        },
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "keep": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "keep"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "keep"
+        },
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "ack-keep": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "ack-keep"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "ack-keep"
+        },
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "switch": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "switch"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "switch"
+        },
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "east-rechecks": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "recheck"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "ack-keep"
+        },
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "west-rechecks": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "ack-keep"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "recheck"
+        },
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "jr-c89234ed4c2b6008",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-45ac72925ddbc15f",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-9f1096b77f1fb2d4",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-db83c1b1c6d1b83f",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-4e01dc74821c5c12",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-be848053396f6cb9",
+      "team": "west-rechecks",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-0db6ded8bf87ff65",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "none",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-86c6030d0790248a",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "west",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-cb9fb2f4cf501c35",
+      "team": "west-rechecks",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-cdf7f23c5d449727",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-b3775806ad32ae9c",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "east",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-a5c2d66fa3de3189",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-26967c7665dd8ee6",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-347928fd87ef0103",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-170f3257303387bc",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-f68e0f2444db10aa",
+      "team": "east-rechecks",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-7626848d35689eea",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-408b593b9605e0a1",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-d45ec31a2bd01d32",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-6c8be835d4529490",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "both",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-2b39265803149f23",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-9983c2dbfb1e0fb5",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-38f6020f74ece15f",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-60ce41dc0a5b1f27",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "none",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-ec83ee65ce878a94",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-7c8a95e28b05e330",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-126199b5334c1c83",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-27b7eb9dcb7999d4",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-dea4ad074ad2a435",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-490180e15a4930b1",
+      "team": "east-rechecks",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-47581a318c7435ad",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "both",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-60d9eacf4c707490",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    }
+  ]
+}

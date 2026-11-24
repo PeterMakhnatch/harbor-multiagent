@@ -1,0 +1,24 @@
+{
+  "schema": "harbor.seatlab.schedule-checkpoint-question/v1",
+  "registered_utc": "2026-11-24T06:50:39.766552+00:00",
+  "jobs": [
+    "c1-ds-2seat",
+    "c1-glm47-2seat",
+    "c1-gptoss-2seat",
+    "c1-qwen36-2seat",
+    "w1-schedule-ds-2seat",
+    "w2-schedule-glm-4-7-flash-2seat",
+    "w2-schedule-gpt-oss-120b-2seat",
+    "w2-schedule-qwen3-6-35b-2seat"
+  ],
+  "population": "The same two-seat Flotilla panel as schedule-changes-cohort.json, all registered slots, both native-completed and sensitivity including graded seat timeouts. No new model calls.",
+  "question": "Would freezing the already-standing answer when both seats first post the same legal window preserve the eventual reward? Is this genuinely an early event, rather than both happening on the final write?",
+  "rules": [
+    "first legal submission",
+    "first time both last posted submissions are legal, whether or not they agree",
+    "first time both last posted submissions are legal and normalize to the same window"
+  ],
+  "protocol": "Scan submissions in native order. A malformed submission clears that role’s prior choice. Never select a cutoff using grades, other runs, future writes, task keys, or elapsed host times. Keep the native final reward if no checkpoint occurs; label the abstentions. Analyze all matched teams first, then report talk/silent and timeouts separately. Count later recorded writes, not tokens or minutes saved.",
+  "test": "Only call agreement a lossless early stop ON THIS ARCHIVE if at least one completed team has later writes and the largest possible count of lost successes is zero under all native same-task-consistent keys. Report possible benefit/loss separately and net bounds; otherwise reject or mark unresolved. Independently score every reached prefix with a recovered task key where available. No claim about live cancellation or an LLM changing behavior.",
+  "budget_usd": 0
+}

@@ -1,0 +1,372 @@
+{
+  "schema": "harbor.seat-cut.qualification/v1",
+  "source": "native scripted seats",
+  "task": {
+    "name": "harbor/shift-board-checkpoint",
+    "digest": "sha256:e086df3414a2b2682883cf574b28ddea4ebbc9f37c3706886d04ead430e13353",
+    "checksum": "41e230fbbdda4b6a2c941975988e9d4dd0058f895393d7f5c45e60d5aff45e3d"
+  },
+  "task_files": "sha256:9a9d2ff7406aeeecda3c4a0fd09fe82dddb986ff90280f61e4dad6075da87874",
+  "registered": 18,
+  "checks": 114,
+  "failed_checks": 0,
+  "statuses": {
+    "bounded": 14,
+    "no_clean_return": 0,
+    "unobserved_control": 4,
+    "native_error": 0,
+    "journal_incomplete": 0,
+    "journal_invalid": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "ambiguous": 0,
+    "duplicate_id": 0,
+    "missing": 0
+  },
+  "unknowns": {
+    "observed_cells": 14,
+    "observed_without_bound": 0,
+    "bounded_grade_identified": 13,
+    "bounded_grade_unidentified": 1,
+    "controls": 4,
+    "without_native_grade": 0
+  },
+  "cells": [
+    {
+      "ticket": "sb-3502d76aff027666",
+      "team": "held-early",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 8,
+      "native_grade": 0,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-7b26968cd4f2ba64",
+      "team": "held-early",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 8,
+      "native_grade": 1,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-d9f74d4ad4e9980c",
+      "team": "held-early",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 8,
+      "native_grade": 0,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-3f13f891bf8045f5",
+      "team": "held-early",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 11,
+      "native_grade": 1,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-f7d9b8fa0ad53eec",
+      "team": "held-late",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        6,
+        6
+      ],
+      "peer_open_after_return": true,
+      "samples": 13,
+      "native_grade": 0,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-d1d657eab3d05255",
+      "team": "held-late",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        6,
+        6
+      ],
+      "peer_open_after_return": true,
+      "samples": 10,
+      "native_grade": 1,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-0fa9a7feed9d36f7",
+      "team": "held-late",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        6,
+        6
+      ],
+      "peer_open_after_return": true,
+      "samples": 10,
+      "native_grade": 0,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-6177badc0359b8db",
+      "team": "held-late",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        6,
+        6
+      ],
+      "peer_open_after_return": true,
+      "samples": 10,
+      "native_grade": 1,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-02664e4bd9a8edf9",
+      "team": "off",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "unobserved_control",
+      "grade_at_return": null,
+      "prefix_at_return": null,
+      "peer_open_after_return": null,
+      "samples": null,
+      "native_grade": 0,
+      "checks": 6,
+      "failed": []
+    },
+    {
+      "ticket": "sb-45d05b1a97f9e0c3",
+      "team": "off",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "unobserved_control",
+      "grade_at_return": null,
+      "prefix_at_return": null,
+      "peer_open_after_return": null,
+      "samples": null,
+      "native_grade": 1,
+      "checks": 6,
+      "failed": []
+    },
+    {
+      "ticket": "sb-893c12bcb106e5ed",
+      "team": "off",
+      "seed": 482,
+      "fixture": "planner-fit",
+      "status": "unobserved_control",
+      "grade_at_return": null,
+      "prefix_at_return": null,
+      "peer_open_after_return": null,
+      "samples": null,
+      "native_grade": 0,
+      "checks": 6,
+      "failed": []
+    },
+    {
+      "ticket": "sb-afe7e54c0defadc2",
+      "team": "off",
+      "seed": 482,
+      "fixture": "dispatcher-fit",
+      "status": "unobserved_control",
+      "grade_at_return": null,
+      "prefix_at_return": null,
+      "peer_open_after_return": null,
+      "samples": null,
+      "native_grade": 1,
+      "checks": 6,
+      "failed": []
+    },
+    {
+      "ticket": "sb-aaabe21dcfaa5497",
+      "team": "racing",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 8,
+      "native_grade": 0,
+      "checks": 5,
+      "failed": []
+    },
+    {
+      "ticket": "sb-3735200577c380b2",
+      "team": "racing",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 8,
+      "native_grade": 1,
+      "checks": 5,
+      "failed": []
+    },
+    {
+      "ticket": "sb-d2cec7977d3aa813",
+      "team": "natural",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        1
+      ],
+      "prefix_at_return": [
+        3,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 7,
+      "native_grade": 0,
+      "checks": 5,
+      "failed": []
+    },
+    {
+      "ticket": "sb-e67968ad9568a7a5",
+      "team": "natural",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        3,
+        5
+      ],
+      "peer_open_after_return": true,
+      "samples": 7,
+      "native_grade": 1,
+      "checks": 5,
+      "failed": []
+    },
+    {
+      "ticket": "sb-4352a606029265d7",
+      "team": "held-leave",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 8,
+      "native_grade": 1,
+      "checks": 7,
+      "failed": []
+    },
+    {
+      "ticket": "sb-d211d769c63772cf",
+      "team": "held-leave",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "bounded",
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "samples": 11,
+      "native_grade": 0,
+      "checks": 7,
+      "failed": []
+    }
+  ]
+}

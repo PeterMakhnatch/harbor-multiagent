@@ -1,0 +1,765 @@
+{
+  "schema": "harbor.joint-reopen.owner-outcomes/v1",
+  "question": "Can two independently controlled Harbor seats choose when to acquire private and peer information? Can an observer identify which operation the harness last reported while a team is unfinished, without seeing the calendar or assigning blame?",
+  "unit": "A registered native Harbor team, not a turn or a simulated history.",
+  "original_qualification": {
+    "revision": "be1cdcc282daeece157dc3a2ff88936141d370b4",
+    "adapter_revision": "131c9987a788a6665c3fc14cc6318ca39043c40d",
+    "registered": 12,
+    "reserved": 2,
+    "unreserved": 10,
+    "native_trial_directories": 0,
+    "usable": 0,
+    "verdict": "failed",
+    "prelaunch_fault": "Public instructions exceeded the native owner bound at import. Neither reservation produced a native trial or a grade. Never combined with the repair.",
+    "reserved_ticket_ids": [
+      "jr-b73aabbad331d4b0",
+      "jr-1f9c23a04eea014d"
+    ]
+  },
+  "repair_qualification": {
+    "registration_revision": "c122b2507bea37e1aa6120e0fdac5ac93d5d9ed2",
+    "manifest_sha256": "c1a48c3c0a44e693e915d9829d787f440dff0ccc10f2b48ba120bac03892435a",
+    "inherited_predictions_sha256": "b52edcc0bf55db22dd72e9888800d3d6768307c601bdf68f504547badcba2891",
+    "task": {
+      "name": "harbor/joint-reopen",
+      "digest": "sha256:ec969b116cab9718db6f8a1e35337529c0e5c60e1cc86160746ce8497b8fdf44",
+      "checksum": "d39605c284edbf87a396d75d273bb096f0b17ceca2ef09f9fb57a671acc2dfd8"
+    },
+    "native_package": {
+      "name": "harbor",
+      "version": "0.26.0",
+      "python": "3.13.17"
+    },
+    "registered": 12,
+    "first_attempts_by_shard": [
+      6,
+      6
+    ],
+    "statuses": {
+      "usable": 11,
+      "missing": 0,
+      "incomplete": 0,
+      "ambiguous": 0,
+      "duplicate": 0,
+      "native_error": 1,
+      "invalid": 0
+    },
+    "rewarded": 5,
+    "predicted_fields_compared": 212,
+    "differences": 0,
+    "world_matched_owner_receipts": 21,
+    "scripted_owner_decisions": 90,
+    "served_model_declarations": 0,
+    "model_calls": 0,
+    "provider_usd": 0,
+    "unique_native_trial_ids": 12,
+    "unique_usable_world_ids": 11,
+    "verdict": "passed"
+  },
+  "held_report": {
+    "ticket": "jr-db5dcf5b45d84bdd",
+    "before_native_verifier_observation": true,
+    "while_running": {
+      "schema": "harbor.joint-reopen.progress-view/v1",
+      "trial": "present",
+      "native_result_present_unverified": false,
+      "roles": {
+        "east": {
+          "status": "observed",
+          "serial": 5,
+          "state": "owner_turn",
+          "step": "report",
+          "confirmed": [
+            "endorse",
+            "card"
+          ]
+        },
+        "west": {
+          "status": "observed",
+          "serial": 7,
+          "state": "barrier",
+          "step": "vote",
+          "confirmed": [
+            "endorse",
+            "card",
+            "report"
+          ]
+        }
+      }
+    },
+    "native_reward_after_release": 1,
+    "both_final_markers": "voted"
+  },
+  "per_role_cross_arm_input_comparison": {
+    "scope": "Ordinary east-conflict pairs on this public fixture. Full role input bytes compared in private via keyed digests. No raw role views, keys or digests published.",
+    "pairs": {
+      "both-read": {
+        "east": {
+          "turns_per_arm": 5,
+          "identical_prefix": 4,
+          "different_turns": 1
+        },
+        "west": {
+          "turns_per_arm": 5,
+          "identical_prefix": 4,
+          "different_turns": 1
+        }
+      },
+      "own-cards": {
+        "east": {
+          "turns_per_arm": 4,
+          "identical_prefix": 4,
+          "different_turns": 0
+        },
+        "west": {
+          "turns_per_arm": 4,
+          "identical_prefix": 4,
+          "different_turns": 0
+        }
+      }
+    }
+  },
+  "separate_qualifications": {
+    "real_archive_copies": {
+      "cases": 17,
+      "metadata_only_copies_unchanged_grade": 15,
+      "native_grade_unavailable_not_credited": 2,
+      "mutations": [
+        {
+          "case": "unaltered",
+          "owner_status": "matched",
+          "reason": null,
+          "native_status": "usable"
+        },
+        {
+          "case": "self-declared-label",
+          "owner_status": "matched",
+          "reason": null,
+          "native_status": "usable"
+        },
+        {
+          "case": "missing-agent",
+          "owner_status": "missing",
+          "reason": "agent_result_absent",
+          "native_status": "usable"
+        },
+        {
+          "case": "missing-meta",
+          "owner_status": "missing",
+          "reason": "receipt_absent",
+          "native_status": "usable"
+        },
+        {
+          "case": "missing-receipt",
+          "owner_status": "missing",
+          "reason": "receipt_absent",
+          "native_status": "usable"
+        },
+        {
+          "case": "null-receipt",
+          "owner_status": "malformed",
+          "reason": "receipt_fields",
+          "native_status": "usable"
+        },
+        {
+          "case": "extra-field",
+          "owner_status": "malformed",
+          "reason": "receipt_fields",
+          "native_status": "usable"
+        },
+        {
+          "case": "wrong-schema",
+          "owner_status": "malformed",
+          "reason": "receipt_schema",
+          "native_status": "usable"
+        },
+        {
+          "case": "modified-request",
+          "owner_status": "inconsistent",
+          "reason": "requested_mismatch",
+          "native_status": "usable"
+        },
+        {
+          "case": "wrong-role",
+          "owner_status": "inconsistent",
+          "reason": "role_mismatch",
+          "native_status": "usable"
+        },
+        {
+          "case": "wrong-turn",
+          "owner_status": "malformed",
+          "reason": "decisions_malformed",
+          "native_status": "usable"
+        },
+        {
+          "case": "repeated-kind",
+          "owner_status": "inconsistent",
+          "reason": "sequence_invalid",
+          "native_status": "usable"
+        },
+        {
+          "case": "truncated-confirmed",
+          "owner_status": "inconsistent",
+          "reason": "confirmed_mismatch",
+          "native_status": "usable"
+        },
+        {
+          "case": "omitted-inbox",
+          "owner_status": "inconsistent",
+          "reason": "world_mismatch",
+          "native_status": "usable"
+        },
+        {
+          "case": "terminal-declared-failure",
+          "owner_status": "failed",
+          "reason": "terminal_failure",
+          "native_status": "usable"
+        },
+        {
+          "case": "native-seat-error-after-vote",
+          "owner_status": "failed",
+          "reason": "native_seat_error",
+          "native_status": "native_error"
+        },
+        {
+          "case": "native-grade-unavailable",
+          "owner_status": "unjudged",
+          "reason": "world_unavailable",
+          "native_status": "native_error"
+        }
+      ]
+    },
+    "live_marker_faults": {
+      "passed": 11,
+      "concurrent_first_writers": 32,
+      "accepted_first_writes": 1
+    },
+    "model_free_world_simulation": {
+      "runs": 2884,
+      "fault_injections": 628,
+      "checks": 151606,
+      "violations": 0,
+      "cross_arm_prefix_comparisons": 1068,
+      "cross_fixture_prefix_comparisons": 2136,
+      "report_options_posted_per_arm": {
+        "deliver": 42,
+        "withhold": 42
+      },
+      "bounded_world_events": 10,
+      "scope": "In-memory policy histories with a real frozen Meeting; not native trials or model decisions."
+    },
+    "prior_task_compatibility": {
+      "stock_joint_teams_same_grade_and_identifiers": 32,
+      "shift_new_native_id": "4e5d3a5b-ff32-4147-9aab-369f7bfb613e",
+      "shift_confirmed_native_fields": 8,
+      "shift_confirmed_dispatcher_receipt_fields": 4,
+      "shift_roles_world_matched": 2,
+      "shift_credited_reward": 0,
+      "shift_other_registered_tickets_not_run": 3
+    },
+    "admission": {
+      "cases": 11,
+      "earlier_import_revision_rejected": 7,
+      "live_joint_owner_configs_ready": 7,
+      "shift_owner_configs_ready": 2,
+      "external_program_executions_at_preflight": 0
+    }
+  },
+  "limits": [
+    "Host programs are trusted and share a host user unless isolated by the operator. A declared model identity is not authentication.",
+    "A marker describes the last operation reported, not present process liveness. The two markers do not form an atomic world snapshot.",
+    "The native task still exposes a shared phase barrier and possible timing information. Only the per-turn payloads were compared here.",
+    "The first failed registration and the repair qualification remain separate. No paid or subscription model supplied any seat decisions."
+  ],
+  "rows": [
+    {
+      "ticket": "jr-8a417e61ea9a5109",
+      "prediction_ticket": "jr-b73aabbad331d4b0",
+      "team": "both-read",
+      "fixture": "east",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "79072e05-c83b-4704-a099-650ad358d3e4",
+      "native_status": "usable",
+      "credited_reward": 1,
+      "world_run": "b4983840-6c1a-4703-9fe9-e13b14daa7b2",
+      "world_observation_sha256": "9aed0e6d4eb681c0edf33cacfee0bf16e9d63300c52635063bb77d3d086f68c5",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-cf508967b29a1366",
+      "prediction_ticket": "jr-1f9c23a04eea014d",
+      "team": "both-read",
+      "fixture": "east",
+      "channel": "withhold",
+      "intervention": "ordinary",
+      "native_id": "c7cf6b17-5f4a-4af7-b0d0-af4709c60a01",
+      "native_status": "usable",
+      "credited_reward": 0,
+      "world_run": "35f663fe-8c79-4d09-a67a-780ead703dbc",
+      "world_observation_sha256": "55c6ce689a5b9eafb627b332076703cc6ef314e35c8f246471261e1956429a21",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_withheld",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_withheld",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-77553e3877bc4622",
+      "prediction_ticket": "jr-23f0f4100a9129a6",
+      "team": "own-cards",
+      "fixture": "east",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "538112e7-7326-4cba-9714-fd63f275548c",
+      "native_status": "usable",
+      "credited_reward": 0,
+      "world_run": "483eaaf8-85b1-44ce-b16c-0e996e98d5d4",
+      "world_observation_sha256": "6f24f998c1dc6777d95a235a4136df4444bdc4f0e05d04ac749c1bca294ebdec",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-60a69579aa217c14",
+      "prediction_ticket": "jr-d490f8d4bd422ad9",
+      "team": "own-cards",
+      "fixture": "east",
+      "channel": "withhold",
+      "intervention": "ordinary",
+      "native_id": "83d759ec-bae9-456a-a7e7-cb9ed8a0b14a",
+      "native_status": "usable",
+      "credited_reward": 0,
+      "world_run": "536c6455-612f-42b1-9c88-cfa4dfba3a91",
+      "world_observation_sha256": "1fd9c0b55ddad84904a52e931c1f7b6c321b10ed234e4d19fca6a6c69207fcc8",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-2191fa49fe352c4d",
+      "prediction_ticket": "jr-7eaccb1c6fdb243b",
+      "team": "east-reads",
+      "fixture": "east",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "8375326e-8f64-4a40-815d-215e98396d8d",
+      "native_status": "usable",
+      "credited_reward": 0,
+      "world_run": "77d30efd-5276-4878-9ff2-96e3e16c2875",
+      "world_observation_sha256": "5db01beb1e85fd6c0694ce889ed2c80d7c9f291bb7f23170d7eac2e0e2cc6183",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-141113bb8f4abdb6",
+      "prediction_ticket": "jr-367a54e937ffbd85",
+      "team": "east-reads",
+      "fixture": "west",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "1c1c09e1-1930-45cd-9054-4694cafa3fc5",
+      "native_status": "usable",
+      "credited_reward": 1,
+      "world_run": "542a3dc5-4eac-4706-9af6-82242412b184",
+      "world_observation_sha256": "efffc50c2e18481b1a0fb0ce865b84d74f3d02fb1f3fd51b39aeec0fbcaf3b8a",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-3f4595cfa3ae58b0",
+      "prediction_ticket": "jr-d6814f9a441fb16b",
+      "team": "keep",
+      "fixture": "none",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "d28d679b-8221-4263-b2de-2e9e5484d3ed",
+      "native_status": "usable",
+      "credited_reward": 1,
+      "world_run": "a93e40da-a7ca-408e-a9a1-2cbaea7cf106",
+      "world_observation_sha256": "dd84c1dde45e0ddc7cdac23356da5f4443a9784750f8ebeb89bb39bbccbdcca1",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 3,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 3,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-d3077c8eb2e785da",
+      "prediction_ticket": "jr-9d83fde0c7544c4d",
+      "team": "keep",
+      "fixture": "west",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "92b1bc33-f7da-4ed3-87d6-93b35bea4fc5",
+      "native_status": "usable",
+      "credited_reward": 0,
+      "world_run": "a02fcca5-2e56-4c18-95a0-5bb111eb62ef",
+      "world_observation_sha256": "9fd510f6b8d324d198a599c1e1573eb28f801fb2f9a3c86ccb7c0d3f04c465ed",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 3,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "report",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 3,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-5a39d3886661f04c",
+      "prediction_ticket": "jr-c4eef083e0cd5e01",
+      "team": "east-stops",
+      "fixture": "east",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "324eb0cb-c1be-4e4d-99cd-572e5af7401a",
+      "native_status": "usable",
+      "credited_reward": 0,
+      "world_run": "d0bd5f11-600e-43b0-a18c-1a8f8e9b62e4",
+      "world_observation_sha256": "11d82fd8dd445aca1e32b6660b0a6954c53a844a049e41973993c7b7f40979f7",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report"
+          ],
+          "last_marker": "stopped",
+          "declared_outcome": "stopped",
+          "declared_turns": 4,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-494ec722f3aba0f8",
+      "prediction_ticket": "jr-54d4c99eca7c5d4d",
+      "team": "stock-east",
+      "fixture": "west",
+      "channel": "deliver",
+      "intervention": "ordinary",
+      "native_id": "70bbb6da-c694-44d2-8a8d-bdea9674ae76",
+      "native_status": "usable",
+      "credited_reward": 1,
+      "world_run": "41f61e7f-f17f-42fb-a953-105d82b03a1d",
+      "world_observation_sha256": "9d316ae4a0cb7d15b0eb8b398786fd4038857575d4f9716799ea2f5b3a4f212d",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "not_instrumented",
+          "declared_outcome": null,
+          "declared_turns": null,
+          "receipt": null,
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-db5dcf5b45d84bdd",
+      "prediction_ticket": "jr-8553113e8679890d",
+      "team": "both-read",
+      "fixture": "west",
+      "channel": "deliver",
+      "intervention": "hold-east-report",
+      "native_id": "f0adbcb7-7bd6-46d5-beef-c504f4e88ae8",
+      "native_status": "usable",
+      "credited_reward": 1,
+      "world_run": "5aeba11d-d5a2-4ed3-ad39-b4e34f1bfe5e",
+      "world_observation_sha256": "c65442d22df457838afd2a1d2011c2fb4daab8b9a40a32e1e284dd219257f62c",
+      "roles": {
+        "east": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        },
+        "west": {
+          "world_actions": [
+            "endorse",
+            "card",
+            "report",
+            "inbox_returned",
+            "vote"
+          ],
+          "last_marker": "voted",
+          "declared_outcome": "voted",
+          "declared_turns": 5,
+          "receipt": "matched",
+          "receipt_reason": null
+        }
+      }
+    },
+    {
+      "ticket": "jr-a7b3bc71246c458c",
+      "prediction_ticket": "jr-d1fd71f150c9dc11",
+      "team": "both-read",
+      "fixture": "both",
+      "channel": "withhold",
+      "intervention": "both-executables-unset",
+      "native_id": "f935e794-1e46-4114-b1af-a893459bed20",
+      "native_status": "native_error",
+      "credited_reward": null,
+      "world_run": null,
+      "world_observation_sha256": null,
+      "roles": {
+        "east": {
+          "world_actions": null,
+          "last_marker": "failed",
+          "declared_outcome": "failed",
+          "declared_turns": 0,
+          "receipt": "failed",
+          "receipt_reason": "native_trial_error"
+        },
+        "west": {
+          "world_actions": null,
+          "last_marker": "failed",
+          "declared_outcome": "failed",
+          "declared_turns": 0,
+          "receipt": "failed",
+          "receipt_reason": "native_trial_error"
+        }
+      }
+    }
+  ]
+}

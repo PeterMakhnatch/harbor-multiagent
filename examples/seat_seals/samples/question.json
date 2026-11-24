@@ -1,0 +1,74 @@
+{
+  "schema": "harbor.seat-seal.question/v1",
+  "task": "harbor/shift-board-seal",
+  "base_checkpoint": "32e5e1076fee4a9fe86d262717680e859727e0a4",
+  "question": "Does closing calendar mutations when the host observes a clean planner return prevent both a later harmful replacement and a later repair? Can the decision arrive too late even though the peer is still running?",
+  "unit": "one registered first-attempt native two-seat team; grade is the unchanged stock Shift Board verifier reward",
+  "target": "planner",
+  "peer": "dispatcher",
+  "rule": "observe",
+  "modes": [
+    "continue",
+    "seal"
+  ],
+  "schedules": {
+    "held-early": {
+      "seeds": [
+        17,
+        482
+      ],
+      "fixtures": [
+        "planner-fit",
+        "dispatcher-fit"
+      ],
+      "policy": "preferred"
+    },
+    "held-late": {
+      "seeds": [
+        17
+      ],
+      "fixtures": [
+        "planner-fit",
+        "dispatcher-fit"
+      ],
+      "policy": "preferred"
+    },
+    "held-window": {
+      "seeds": [
+        17
+      ],
+      "fixtures": [
+        "planner-fit",
+        "dispatcher-fit"
+      ],
+      "policy": "preferred"
+    },
+    "held-leave": {
+      "seeds": [
+        17
+      ],
+      "fixtures": [
+        "planner-fit"
+      ],
+      "policy": "leave"
+    }
+  },
+  "enrollment": "Cross 9 schedule/fixture/seed blocks with both modes: 18 tickets. Full native task and participant binding is frozen separately before the first trial. Record every first attempt, including non-completions. Never replace a ticket.",
+  "protocol": [
+    "The host observes native planner completion. Its first sample beginning with a clean target requests a decision in both modes. Earlier requests are passive marks. A target error does not request a decision.",
+    "The world linearizes the decision under the calendar lock. Continue acknowledges but does not restrict writes. Seal refuses authorized seat POSTs after the decision, without ending the peer or rejecting reads. There is no per-seat cancellation.",
+    "The world records the decision ID, board prefix, revision, mode, and subsequent enforced refusal metadata without private request contents. A final board alone cannot prove that enforcement occurred.",
+    "Held-early/held-leave release the peer after a clean acknowledged decision. Held-late completes the peer decision before the planner returns. Held-window holds the control-only decision transport until the planner returns and the dispatcher commits. The last two schedules have different true event order despite identical final grades.",
+    "The grade at native return can be an interval. The commit prefix at the world decision is exact with bound world evidence. Do not equate host return with world decision, or a missing acknowledgement with nonapplication."
+  ],
+  "pass": [
+    "All 18 original tickets appear; all nine blocked comparisons are reported, including missing and ambiguous cases. Both modes run identical seat policies and gate schedules.",
+    "Held-early: in both seeds, continue ends with dispatcher-fit outcome and seal preserves planner-fit. This prevents two harmful replacements and forfeits two repairs across the four pairs. The enforced arm records dispatcher publish refusal and the continuing arm records its accepted action.",
+    "Held-late and held-window: in both modes every final matches dispatcher-fit. No late seal undoes a committed write. Held-window has host/gate evidence the planner returned before that accepted write and the decision took effect after it; the passive return grade may remain unidentified.",
+    "Held-leave: both final grades are 1. Continue records a terminal leave; seal records a refusal. Equal rewards do not establish equal behavior.",
+    "For any supported measured seal arm, no mutation is accepted after the durable world decision; real board and stock verifier agree. A missing or mismatched host/decision journal yields no supported receipt on that axis, and cannot erase an independently validated native final.",
+    "All populations, actual native failures and untested named-seat behavior remain explicit. No speed, cost, frequency, or model benefit claim."
+  ],
+  "budget_usd": 0,
+  "model_calls": 0
+}

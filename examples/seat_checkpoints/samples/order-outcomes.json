@@ -1,0 +1,301 @@
+{
+  "schema": "harbor.seat-cut.order-qualification/v1",
+  "size": {
+    "world_events": [
+      0,
+      2
+    ],
+    "rpcs": [
+      0,
+      2
+    ],
+    "final_rpc_outcomes": [
+      "ok",
+      "failed_marked",
+      "failed_unmarked",
+      "pending_marked",
+      "pending_unmarked"
+    ],
+    "peer_ends": [
+      "absent",
+      "clean",
+      "error"
+    ],
+    "configurations": 99,
+    "max_order_events": 10,
+    "free_orders": 34673,
+    "restricted_actor_orders": 41168,
+    "observer_rule_free_orders": 30106,
+    "relaxed_only_free_orders": 4567,
+    "free_orders_by_rpc_plan": {
+      "failed_marked": 2408,
+      "failed_unmarked": 549,
+      "none": 46,
+      "ok": 1204,
+      "ok+failed_marked": 12950,
+      "ok+failed_unmarked": 3996,
+      "ok+ok": 6475,
+      "ok+pending_marked": 3996,
+      "ok+pending_unmarked": 2300,
+      "pending_marked": 549,
+      "pending_unmarked": 200
+    },
+    "distinct_observations": 2420,
+    "distinct_coarse_observations": 260,
+    "free_only_observations": 264,
+    "score_paths": 14,
+    "scored_observations": 14390,
+    "analyzer_calls": 14390,
+    "checked_truth_cells": 34346
+  },
+  "sharpness": {
+    "ordinal": {
+      "free_full": {
+        "observations": 2420,
+        "sharp": 2420,
+        "lower_slack": 0,
+        "upper_slack": 0,
+        "interior_gaps": 0,
+        "max_slack": 0,
+        "every_observation_sharp": true
+      },
+      "free_coarse": {
+        "observations": 260,
+        "sharp": 260,
+        "lower_slack": 0,
+        "upper_slack": 0,
+        "interior_gaps": 0,
+        "max_slack": 0,
+        "every_observation_sharp": true
+      },
+      "restricted_full": {
+        "observations": 2156,
+        "sharp": 1694,
+        "lower_slack": 462,
+        "upper_slack": 0,
+        "interior_gaps": 0,
+        "max_slack": 2,
+        "every_observation_sharp": false
+      },
+      "restricted_coarse": {
+        "observations": 260,
+        "sharp": 260,
+        "lower_slack": 0,
+        "upper_slack": 0,
+        "interior_gaps": 0,
+        "max_slack": 0,
+        "every_observation_sharp": true
+      }
+    },
+    "grade_full_observations": {
+      "free_scored": 14390,
+      "free_sharp": 14390,
+      "restricted_scored": 12558,
+      "restricted_sharp": 10618
+    },
+    "scope": "coarse keeps target clean/open per snapshot, acks and marks; claims cover only the generated families"
+  },
+  "witnesses": {
+    "lost_ack_lower_trap": {
+      "world_events": 1,
+      "native_peer": "clean",
+      "samples": [
+        {
+          "before": {
+            "target": "running",
+            "peer": "running"
+          },
+          "after": {
+            "target": "running",
+            "peer": "running"
+          },
+          "ack": "ok"
+        },
+        {
+          "before": {
+            "target": "running",
+            "peer": "running"
+          },
+          "after": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "ack": "failed"
+        }
+      ],
+      "marks": [
+        {
+          "sample": 0,
+          "after_seq": 0
+        },
+        {
+          "sample": 1,
+          "after_seq": 1
+        }
+      ],
+      "scores": null,
+      "true_prefixes_free": [
+        0,
+        1
+      ],
+      "true_prefixes_restricted": [
+        0,
+        1
+      ],
+      "reported": {
+        "lower_seq": 0,
+        "upper_seq": 1,
+        "exact_ordinal": false,
+        "flags": [
+          "no_upper_bookend",
+          "no_prefix_identification",
+          "receipt_lost"
+        ]
+      }
+    },
+    "post_return_lost_ack_upper": {
+      "world_events": 0,
+      "native_peer": "clean",
+      "samples": [
+        {
+          "before": {
+            "target": "running",
+            "peer": "clean"
+          },
+          "after": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "ack": "ok"
+        },
+        {
+          "before": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "after": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "ack": "failed"
+        }
+      ],
+      "marks": [
+        {
+          "sample": 0,
+          "after_seq": 0
+        },
+        {
+          "sample": 1,
+          "after_seq": 0
+        }
+      ],
+      "scores": null,
+      "true_prefixes_free": [
+        0
+      ],
+      "true_prefixes_restricted": [
+        0
+      ],
+      "reported": {
+        "lower_seq": 0,
+        "upper_seq": 0,
+        "exact_ordinal": true,
+        "flags": [
+          "no_lower_bookend",
+          "receipt_lost"
+        ]
+      }
+    },
+    "shared_observation_distinct_grades": {
+      "world_events": 1,
+      "native_peer": "clean",
+      "samples": [
+        {
+          "before": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "after": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "ack": "ok"
+        },
+        {
+          "before": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "after": {
+            "target": "clean",
+            "peer": "clean"
+          },
+          "ack": "failed"
+        }
+      ],
+      "marks": [
+        {
+          "sample": 0,
+          "after_seq": 1
+        },
+        {
+          "sample": 1,
+          "after_seq": 1
+        }
+      ],
+      "scores": [
+        0,
+        1
+      ],
+      "true_prefixes_free": [
+        0,
+        1
+      ],
+      "true_prefixes_restricted": [
+        0,
+        1
+      ],
+      "reported": {
+        "lower_seq": 0,
+        "upper_seq": 1,
+        "exact_ordinal": false,
+        "flags": [
+          "no_lower_bookend",
+          "no_prefix_identification",
+          "no_score_identification",
+          "receipt_lost"
+        ],
+        "min_grade": 0,
+        "max_grade": 1,
+        "grade_identified": false
+      }
+    }
+  },
+  "malformed": {
+    "base_accepted": true,
+    "cases": 12,
+    "rejected": 12,
+    "reasons": {
+      "duplicate_mark": "world mark ids must be unique",
+      "out_of_order_marks": "world marks are out of host issue order",
+      "revision_mismatch": "world mark revision mismatches its ordinal",
+      "ordinal_beyond_cut": "world mark ordinal exceeds the final cut",
+      "non_monotone_ordinals": "world mark ordinals are not monotone",
+      "unknown_mark": "world holds a mark the host never issued",
+      "acked_without_mark": "acknowledged sample has no world mark",
+      "ticket_mismatch": "host and world tickets differ",
+      "world_run_not_uuid4": "world.run must be a UUID4",
+      "duplicate_sample_id": "host sample ids must be unique",
+      "pending_not_last": "only the last host sample may be pending",
+      "lifecycle_revert": "target lifecycle reverts from clean to running"
+    }
+  },
+  "limits": [
+    "Bounds are small: at most 2 world events, 2 RPCs, binary scores. Larger schedules are not enumerated.",
+    "No clocks, intervals, max_samples, journal write failures, cancellation, or error/incomplete target returns are modeled.",
+    "World marks and snapshots are atomic events; any real non-atomic snapshot or mark outside the world lock is outside this model.",
+    "Sharpness is computed only for these generated families. Restricted-family slack follows from attribution rules the analyzer cannot see and is not a defect claim.",
+    "The simulator imports bracket.analyze and only tests it as a black box; malformed coverage is the listed deterministic mutations of one valid observation."
+  ]
+}
