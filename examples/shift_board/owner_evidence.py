@@ -1,11 +1,11 @@
 import re
 from typing import Any, cast
 
+from ..native_owner_process import OWNER_ID
 from .owner_game import MAX_DISPATCHER_TURNS, PLANNER_TURNS
 from .owner_io import (
     KINDS,
     METADATA_KEY,
-    OWNER_ID,
     RECEIPT_SCHEMA,
     REPLY_SCHEMA,
     REQUEST_SCHEMA,

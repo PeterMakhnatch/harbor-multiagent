@@ -39,6 +39,7 @@ FIXTURES = ("none", "east", "west", "both")
 CHANNELS = ("deliver", "withhold")
 CONTROLS = ("keep", "ack-keep", "switch", "recheck")
 ORACLE = "oracle"
+OWNER_IMPORT_PATH = "examples.joint_reopen.owner_seat:JointOwnerSeat"
 MAX_SEED = 2147483647
 MAX_CELLS = 2048
 MAX_TEAMS = 32
@@ -47,9 +48,13 @@ MAX_ENV = 8
 TEAM = re.compile(r"[a-z][a-z0-9-]{0,47}")
 TICKET = re.compile(r"jr-[0-9a-f]{16}")
 MODEL_NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._:+-]|/(?!/)){0,255}")
+OWNER_MODEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._:+-]|/(?!/)){0,127}")
 CREDENTIAL = re.compile(r"KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|AUTH")
 REQUIRED_FIELDS = frozenset({"seat", "name", "skip_model_parsing", *NATIVE_DEFAULTS})
 MODEL_FIELDS = frozenset({"model_name", "model_api_key_name", "model_api_format"})
+OWNER_FIELDS = frozenset(
+    {"seat", "import_path", "model_name", "skip_model_parsing", *NATIVE_DEFAULTS}
+)
 CELL_FIELDS = frozenset({"ticket", "team", "seed", "fixture", "channel"})
 REGISTRATION_FIELDS = frozenset({"schema", "task", "teams", "cells"})
 
@@ -70,8 +75,28 @@ def _check_env(value: object, where: str, oracle: bool) -> None:
         )
 
 
+def check_owner_model(value: object, where: str) -> str:
+    return as_text(value, f"{where} owner model_name", OWNER_MODEL)
+
+
+def _check_owner(member: dict[str, Any], where: str) -> None:
+    require("name" not in member, f"{where} sets both name and import_path")
+    require(set(member) == OWNER_FIELDS, f"{where} owner seat fields differ")
+    check_native_defaults(member, where)
+    require(
+        type(member["import_path"]) is str
+        and member["import_path"] == OWNER_IMPORT_PATH,
+        f"{where} import_path is not the joint owner seat",
+    )
+    require(member["skip_model_parsing"] is True, f"{where} owner skip_model_parsing")
+    check_owner_model(member["model_name"], where)
+
+
 def _check_participant(value: object, where: str) -> str:
     member = as_record(value, where)
+    if "import_path" in member:
+        _check_owner(member, where)
+        return as_choice(member["seat"], f"{where} seat", SEATS)
     keys = set(member)
     require(keys >= REQUIRED_FIELDS, f"{where} lacks normalized native fields")
     require(

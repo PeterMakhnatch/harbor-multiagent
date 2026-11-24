@@ -30,10 +30,13 @@ from .study import (
     MAX_SEED,
     MODEL_FIELDS,
     ORACLE,
+    OWNER_FIELDS,
+    OWNER_IMPORT_PATH,
     REQUIRED_FIELDS,
     SCHEMA,
     TASK_DIR,
     TASK_NAME,
+    check_owner_model,
     load_registration,
     validate_registration,
     world_env,
@@ -99,16 +102,36 @@ def _check_model(raw: dict[str, Any], where: str) -> None:
         require(reference == "${" + key + "}", f"{where} env holds an inline value")
 
 
+def _check_owner(raw: dict[str, Any], where: str) -> None:
+    require("name" not in raw, f"{where} sets both name and import_path")
+    require(set(raw) <= OWNER_FIELDS, f"{where} owner seat has fields outside v1")
+    require(
+        raw["import_path"] == OWNER_IMPORT_PATH,
+        f"{where} import_path is not the joint owner seat",
+    )
+    require(
+        raw.get("skip_model_parsing") is True,
+        f"{where} owner seat must set skip_model_parsing",
+    )
+    check_owner_model(raw.get("model_name"), where)
+
+
 def _check_raw_participant(value: object, where: str) -> dict[str, Any]:
     raw = as_record(value, where)
-    require(set(raw) <= RAW_FIELDS, f"{where} has fields outside the v1 allowlist")
-    require(isinstance(raw.get("name"), str), f"{where} names no agent")
+    owner = "import_path" in raw
+    if owner:
+        _check_owner(raw, where)
+    else:
+        require(set(raw) <= RAW_FIELDS, f"{where} has fields outside the v1 allowlist")
+        require(isinstance(raw.get("name"), str), f"{where} names no agent")
     for field, default in NATIVE_DEFAULTS.items():
         found = raw.get(field, default)
         require(
             type(found) is type(default) and found == default,
             f"{where} changes a native default",
         )
+    if owner:
+        return raw
     if raw["name"] == ORACLE:
         _check_control(raw, where)
     else:

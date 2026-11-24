@@ -23,6 +23,7 @@ from ..native_evidence import (
     strict_object,
 )
 from .observation import ROLES, validate_observation
+from .owner_evidence import inspect_owners, owner_roles
 from .study import load_registration
 
 SCHEMA = "harbor.joint-reopen.collection/v1"
@@ -53,7 +54,9 @@ Claim = tuple[tuple[int, int], Path, bool]
 
 
 class NativeError(Exception):
-    pass
+    def __init__(self, reason: str, owners: Record | None = None) -> None:
+        super().__init__(reason)
+        self.owners = owners
 
 
 def _environment(cell: Record) -> dict[str, str]:
@@ -179,11 +182,14 @@ def _check_result(
 
 def _evaluate(
     trial: Path, cell: Record, team: dict[str, Record], task: Record
-) -> tuple[str, Record]:
+) -> tuple[str, Record, Record | None]:
     config = strict_object(read_bytes(trial, CONFIG, MAX_CONFIG_BYTES), "config.json")
     _check_config(config, cell, team, "config.json")
     result = strict_object(read_bytes(trial, RESULT, MAX_RESULT_BYTES), "result.json")
-    native_id, reward = _check_result(result, cell, team, task)
+    try:
+        native_id, reward = _check_result(result, cell, team, task)
+    except NativeError as error:
+        raise NativeError(str(error), inspect_owners(team, result, None)) from None
     lock = strict_object(read_bytes(trial, LOCK, MAX_CONFIG_BYTES), "lock.json")
     _check_lock(lock, cell, team, task)
     published = strict_object(
@@ -207,7 +213,8 @@ def _evaluate(
         observation["reward"] == reward, "native reward differs from the observation"
     )
     require(native_id != observation["run"], "native id repeats the world run")
-    return native_id, observation
+    owners = inspect_owners(team, result, observation["timeline"])
+    return native_id, observation, owners
 
 
 def _identifiers(trial: Path) -> set[str]:
@@ -288,6 +295,7 @@ def _row(
     native_id: str | None = None
     observation: Record | None = None
     reason: str | None = None
+    owners: Record | None = None
     if not found:
         status = "missing"
     elif len(found) > 1:
@@ -302,18 +310,20 @@ def _row(
         status, reason = "incomplete", "trial directory is empty"
     else:
         try:
-            native_id, observation = _evaluate(found[0][1], cell, team, task)
+            native_id, observation, owners = _evaluate(found[0][1], cell, team, task)
             status = "usable"
         except Incomplete as error:
             status, reason = "incomplete", str(error)
         except NativeError as error:
-            status, reason = "native_error", str(error)
+            status, reason, owners = "native_error", str(error), error.owners
         except Invalid as error:
             status, reason = "invalid", str(error)
     assert status in STATUSES and (status == "usable") == (observation is not None)
     row.update(
         status=status, reason=reason, native_id=native_id, observation=observation
     )
+    if owner_roles(team):
+        row["owner_evidence"] = owners
     return row
 
 
@@ -375,6 +385,27 @@ def _tsv(rows: list[Record]) -> list[str]:
     return lines
 
 
+def _actions(value: list[str] | None) -> str | None:
+    return None if value is None else "+".join(value)
+
+
+def _owner_lines(rows: list[Record]) -> list[Record]:
+    return [
+        {
+            "ticket": row["ticket"],
+            "role": role,
+            "owner_status": entry["status"],
+            "owner_reason": entry["reason"],
+            "owner_outcome": entry["owner_outcome"],
+            "world_actions": _actions(entry["world_actions"]),
+            "owner_confirmed": _actions(entry["owner_confirmed"]),
+        }
+        for row in rows
+        if row.get("owner_evidence") is not None
+        for role, entry in row["owner_evidence"]["roles"].items()
+    ]
+
+
 def render(report: Record) -> str:
     totals = {
         "registered": report["registered"],
@@ -393,6 +424,9 @@ def render(report: Record) -> str:
         for row in report["cells"]
     ]
     sections = [_tsv([totals]), _tsv(report["groups"]), _tsv(tickets)]
+    owners = _owner_lines(report["cells"])
+    if owners:
+        sections.append(_tsv(owners))
     return "\n\n".join("\n".join(section) for section in sections)
 
 
