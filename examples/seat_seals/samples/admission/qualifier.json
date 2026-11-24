@@ -1,0 +1,39 @@
+{
+  "denominator": 18,
+  "evidence": "offline admission transport qualification, not native evidence",
+  "failed": {},
+  "layout": "paired",
+  "ok": true,
+  "plan": "sha256:d09f25377e56ca3c0d8a85d29141701272e6567dd1e974bc5dd6ac978c0359fc",
+  "probes": {
+    "concurrent_single_grant": true,
+    "independent_ticket_granted": true,
+    "init_existing_refused": true,
+    "init_fresh_store": true,
+    "lost_reply_then_denied": true,
+    "refused_ticket_still_grantable": true,
+    "repeat_after_restart_denied": true,
+    "status_stable_after_restart": true,
+    "wrong_plan_no_spend": true,
+    "wrong_shard_no_spend": true
+  },
+  "schema": "harbor.seat-seal.admission-qualification/v1",
+  "slots": [
+    "sb-0104c3e5a36954eb",
+    "sb-153ae47972f519e1",
+    "sb-38db5d3aae608166",
+    "sb-363e1a4ed1c3db27"
+  ],
+  "totals": {
+    "already_issued": 10,
+    "exit_other": 0,
+    "exit_refused": 2,
+    "failed": 0,
+    "granted": 3,
+    "no_valid_reply": 3,
+    "passed": 10,
+    "probes": 10,
+    "processes": 29
+  },
+  "workers": 3
+}

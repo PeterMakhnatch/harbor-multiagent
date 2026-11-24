@@ -7,6 +7,7 @@ from typing import Any
 
 from ..native_evidence import Incomplete, Invalid
 from .contract import load_registration
+from .worker_admission import classify, load_status, render
 from .worker_layout import digest, load_plan, make_plan, write_record
 from .worker_packets import capture, load_packet
 from .worker_report import join
@@ -49,6 +50,7 @@ def parser() -> argparse.ArgumentParser:
     show.add_argument(
         "--checked", nargs=2, metavar=("PACKET", "DIGEST"), action="append", default=[]
     )
+    show.add_argument("--admission-status", type=Path, metavar="STATUS")
     show.add_argument("--json", action="store_true")
     return cli
 
@@ -60,11 +62,16 @@ def emit(data: Record) -> None:
 def show(args: argparse.Namespace, plan: Record) -> int:
     if len(args.packets) + len(args.checked) > plan["workers"]:
         raise ValueError("more packets than planned workers")
+    states = None
+    if args.admission_status is not None:
+        states = load_status(args.admission_status, plan)
     records = [load_packet(path, plan) for path in args.packets]
     records.extend(
         load_packet(Path(path), plan, expected) for path, expected in args.checked
     )
     report = join(plan, records)
+    if states is not None:
+        report["admission"] = classify(report, states)
     if args.json:
         emit(report)
     else:
@@ -79,6 +86,8 @@ def show(args: argparse.Namespace, plan: Record) -> int:
         )
         print(f"pairs with both schedules supported\t{report['paired_schedules']}/{n}")
         print(f"sum of seal minus continue rewards\t[{low}, {high}] across {n} pairs")
+        if states is not None:
+            print("\n".join(render(report["admission"])))
     return 0
 
 

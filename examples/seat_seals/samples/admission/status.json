@@ -1,0 +1,101 @@
+{
+  "counts": {
+    "issued": 3,
+    "unissued": 15
+  },
+  "plan": "sha256:d09f25377e56ca3c0d8a85d29141701272e6567dd1e974bc5dd6ac978c0359fc",
+  "registration": "sha256:194039900a0d3309a9ab6ab963ccdf206469ff2dbf5786d56c4f614c16dc5e71",
+  "schema": "harbor.seat-seal.admission-status/v1",
+  "tickets": [
+    {
+      "state": "issued",
+      "ticket": "sb-0104c3e5a36954eb",
+      "worker": 0
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-153ae47972f519e1",
+      "worker": 1
+    },
+    {
+      "state": "issued",
+      "ticket": "sb-1dfa4219f7eaa814",
+      "worker": 1
+    },
+    {
+      "state": "issued",
+      "ticket": "sb-363e1a4ed1c3db27",
+      "worker": 0
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-38db5d3aae608166",
+      "worker": 2
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-486c43307c760670",
+      "worker": 0
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-4928a66bb9f72ad1",
+      "worker": 1
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-6653fb61816b6705",
+      "worker": 2
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-6df5b8a596cc5f8c",
+      "worker": 2
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-7b463189b994a378",
+      "worker": 0
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-8208e8bf39fae355",
+      "worker": 1
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-859f9a7bfc12b93d",
+      "worker": 2
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-a4bac5c2eba2e796",
+      "worker": 2
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-a821233d85949768",
+      "worker": 2
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-c3dea7f2ca13a306",
+      "worker": 0
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-ce0425ccf82b119c",
+      "worker": 1
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-e965efccdd5827a8",
+      "worker": 0
+    },
+    {
+      "state": "unissued",
+      "ticket": "sb-fe4973b9af01ba87",
+      "worker": 1
+    }
+  ]
+}

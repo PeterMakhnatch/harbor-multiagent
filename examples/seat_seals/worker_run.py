@@ -206,6 +206,24 @@ def status(registration_path: Path, plan: Record, worker: int, trials: Path) -> 
     }
 
 
+def _require_custody(survey: Survey) -> None:
+    require(
+        survey.binding in ("unbound", "same"),
+        f"trials directory binding is {survey.binding}; no trial was started",
+    )
+    require(
+        sum(survey.foreign.values()) == 0,
+        "registered tickets of other workers are in this trials directory; "
+        "no trial was started",
+    )
+    require(
+        survey.binding == "same"
+        or all(value == "absent" for value in survey.observed.values()),
+        "this unbound trials directory already holds assigned tickets; "
+        "no trial was started",
+    )
+
+
 def _candidates(
     trials: Path,
     plan_digest: str,
@@ -216,21 +234,8 @@ def _candidates(
     with ExitStack() as stack:
         root = open_root(stack, trials)
         survey = _survey(root, plan_digest, worker, tickets, registered)
-        require(
-            survey.binding in ("unbound", "same"),
-            f"trials directory binding is {survey.binding}; no trial was started",
-        )
-        require(
-            sum(survey.foreign.values()) == 0,
-            "registered tickets of other workers are in this trials directory; "
-            "no trial was started",
-        )
+        _require_custody(survey)
         fresh = [ticket for ticket in tickets if survey.observed[ticket] == "absent"]
-        require(
-            survey.binding == "same" or len(fresh) == len(tickets),
-            "this unbound trials directory already holds assigned tickets; "
-            "no trial was started",
-        )
         if fresh and survey.binding == "unbound":
             bind(root, plan_digest, worker)
     assert fresh == sorted(fresh)
@@ -259,6 +264,55 @@ def _native_args(
         allow_named_seats=allow_named_seats,
         interval=None if interval is None else float(interval),
     )
+
+
+def prepare_ticket(
+    registration_path: Path,
+    plan: Record,
+    worker: int,
+    task: Path,
+    trials: Path,
+    ticket: str,
+    *,
+    allow_named_seats: bool,
+) -> argparse.Namespace:
+    _, _, tickets = _load(registration_path, plan, worker)
+    require(ticket in tickets, "ticket is not assigned to this worker")
+    from . import run as native_run
+
+    args = _native_args(registration_path, task, trials, ticket, allow_named_seats, None)
+    try:
+        native_run.inputs(args)
+    except OSError as error:
+        raise ValueError(
+            f"task or trials directory is unusable: {error.strerror}"
+        ) from None
+    return args
+
+
+def ticket_custody(
+    registration_path: Path,
+    plan: Record,
+    worker: int,
+    trials: Path,
+    ticket: str,
+    *,
+    bind_root: bool,
+) -> str:
+    require(type(bind_root) is bool, "bind_root is not a bool")
+    registration, loaded, tickets = _load(registration_path, plan, worker)
+    require(ticket in tickets, "ticket is not assigned to this worker")
+    plan_digest = digest(loaded)
+    registered = frozenset(cell["ticket"] for cell in registration["cells"])
+    with ExitStack() as stack:
+        root = open_root(stack, trials)
+        survey = _survey(root, plan_digest, worker, tickets, registered)
+        _require_custody(survey)
+        observed = survey.observed[ticket]
+        if bind_root and observed == "absent" and survey.binding == "unbound":
+            bind(root, plan_digest, worker)
+    assert observed in OBSERVED
+    return observed
 
 
 async def run_next(

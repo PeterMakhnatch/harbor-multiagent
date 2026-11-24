@@ -45,6 +45,8 @@ python -B -m examples.seat_seals.workers run-next "$work/study.json" "$work/plan
 
 For a named team, `run-next` also requires `--allow-named-seats`. Set the provider's spending limit yourself. No command here calls a model by default. For remote or automated dispatch, supply `--expected-plan DIGEST` from the coordinator. Set the concurrency limit in the host scheduler.
 
+To grant each ticket at most once across directories, use [the admission coordinator](admission.md).
+
 4. Stop writers before export. Each worker returns a packet and its canonical content digest:
 
 ```bash
