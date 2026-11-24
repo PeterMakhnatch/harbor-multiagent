@@ -835,7 +835,8 @@ def test_dry_run_derives_and_prints_the_scripted_seats(tmp_path):
     assert dry.returncode == 0, dry.stderr
     lines = dry.stdout.splitlines()
     assert lines[1] == "scripted seats (oracle agent, no model, cost 0): set 0 p3"
-    assert lines[2] == "guards: stop after 6 invalid trials in a row; provider floors deepseek $1.00 (account balance)"
+    assert lines[2] == ("guards: stop after 6 invalid trials in a row, overall or for one model; "
+                        "provider floors deepseek $1.00 (account balance)")
     assert sorted(line.split(" ", 1)[1] for line in lines[3:]) == [
         f"set 0 instance 0 talk {DEEPSEEK}", f"set 0 instance 0 talk-liar {DEEPSEEK}"]
     unbuilt = scripted_plan([DEEPSEEK])
@@ -1099,6 +1100,51 @@ def test_a_streak_formed_in_the_final_drain_exits_3(tmp_path):
     assert events[-1]["reason"] == "done"
 
 
+THREE = [DEEPSEEK, "deepseek/deepseek-pro", "deepseek/deepseek-lite"]
+
+
+def one_model_plan(seed: int) -> dict:
+    plan = plan_for(list(range(10)), ["silent"], THREE, concurrency=1, cap=5.0, reserve=0.05, seed=seed)
+    plan["budget"]["max_invalid_streak"] = 6
+    return plan
+
+
+def test_one_model_failing_between_working_models_stops_the_wave(tmp_path):
+    plan = one_model_plan(seed=11)
+    bad = THREE[1]
+    order = plain_order(tmp_path / "preview", plan)
+    behaviors = {cell["key"]: spec_for("invalid" if cell["model"] == bad else "ok") for cell in order}
+    bad_positions = [index for index, cell in enumerate(order) if cell["model"] == bad]
+    overall, longest = 0, 0
+    for cell in order[:bad_positions[5] + 1]:
+        overall = overall + 1 if cell["model"] == bad else 0
+        longest = max(longest, overall)
+    assert longest < 6, "the seed must interleave the failing model with the others"
+    events, order, _path, _env = launch(tmp_path / "wave", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert events[-1]["reason"] == "invalid"
+    starts = [event["key"] for event in events if event["kind"] == "start"]
+    assert starts == [cell["key"] for cell in order[:bad_positions[5] + 1]]
+    log = (tmp_path / "wave" / "run" / "progress.log").read_text()
+    assert f"stop: 6 invalid trials in a row for {bad} (last: boom; boom; boom); draining in-flight jobs" in log
+    assert RUN.EXIT_INVALID_STREAK == 3
+
+
+def test_a_valid_trial_resets_one_models_streak(tmp_path):
+    plan = one_model_plan(seed=11)
+    bad = THREE[1]
+    order = plain_order(tmp_path / "preview", plan)
+    bad_keys = [cell["key"] for cell in order if cell["model"] == bad]
+    behaviors = {cell["key"]: spec_for("ok") for cell in order}
+    for position, key in enumerate(bad_keys):
+        if position != 5:
+            behaviors[key] = spec_for("invalid")
+    events, _order, _path, _env = launch(tmp_path / "wave", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert events[-1]["reason"] == "done"
+    ends = [event for event in events if event["kind"] == "end" and event["model"] == bad]
+    assert [event["valid"] for event in ends] == [False] * 5 + [True] + [False] * 4
+    assert "invalid trials in a row" not in (tmp_path / "wave" / "run" / "progress.log").read_text()
+
+
 def test_max_invalid_streak_defaults_to_6_and_is_validated(tmp_path):
     plan = plan_for([0], ["silent"], [DEEPSEEK])
     blob = tmp_path / "plan.json"
@@ -1110,4 +1156,5 @@ def test_max_invalid_streak_defaults_to_6_and_is_validated(tmp_path):
     blob.write_text(json.dumps({**plan, "budget": {**plan["budget"], "max_invalid_streak": 2}}))
     assert RUN.streak_of(RUN.load_plan(blob)) == 2
     assert RUN.guard_line(RUN.load_plan(blob)) == (
-        "guards: stop after 2 invalid trials in a row; provider floors deepseek $1.00 (account balance)")
+        "guards: stop after 2 invalid trials in a row, overall or for one model; "
+        "provider floors deepseek $1.00 (account balance)")

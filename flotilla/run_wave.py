@@ -19,8 +19,9 @@ must equal them. seat_assignments rows then list models for the seats under test
 
 Guards: before each start, each provider's balance must be at or above its floor; the OpenRouter balance is the
 lower of the account balance (/api/v1/credits) and the key's own limit left (/api/v1/key). After
-budget.max_invalid_streak (default 6) trials in a row end invalid, in accounting order, no new cell starts; the
-in-flight trials finish and are accounted, and the command exits 3. A rerun resumes as usual.
+budget.max_invalid_streak (default 6) trials in a row end invalid, in accounting order, overall or counting only one
+model's trials, no new cell starts; the in-flight trials finish and are accounted, and the command exits 3. A rerun
+resumes as usual.
 """
 
 from __future__ import annotations
@@ -466,7 +467,8 @@ def guard_line(plan: dict) -> str:
     sources = {"openrouter": "lower of account balance and key limit left", "deepseek": "account balance"}
     shown = ", ".join(f"{provider} ${float(amount):.2f} ({sources.get(provider, 'balance')})"
                       for provider, amount in sorted(floors.items()))
-    return f"guards: stop after {streak_of(plan)} invalid trials in a row; provider floors {shown}"
+    return (f"guards: stop after {streak_of(plan)} invalid trials in a row, overall or for one model; "
+            f"provider floors {shown}")
 
 
 def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None]) -> None:
@@ -742,7 +744,7 @@ def account(future, futures, state, events, jobs_dir, reserve, run_dir, lock: th
                  f"source {bill['source']}{flag} spent ${spent:.4f}")
     events.append({"kind": "end", "key": cell["key"], "job": job, "valid": valid, "cost": bill["cost"],
                    "estimate": estimate, "source": bill["source"], "flag": bill["flag"], "exit_code": exit_code,
-                   "spent": spent, "problem": problem})
+                   "spent": spent, "problem": problem, "model": label_of(cell)})
 
 
 def drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock) -> None:
@@ -769,11 +771,12 @@ def read_balance(sources, provider: str, sleep) -> tuple[Balance | None, BaseExc
     return None, last
 
 
-def invalid_streak(events: list[dict]) -> list[dict]:
-    """The end events of the invalid trials that ended last, in a row (accounting order)."""
+def invalid_streak(events: list[dict], model: str | None = None) -> list[dict]:
+    """The end events of the invalid trials that ended last, in a row (accounting order); with a model, counting
+    only that model's trials."""
     streak = []
     for event in reversed(events):
-        if event["kind"] != "end":
+        if event["kind"] != "end" or (model is not None and event.get("model") != model):
             continue
         if event["valid"]:
             break
@@ -781,12 +784,25 @@ def invalid_streak(events: list[dict]) -> list[dict]:
     return streak[::-1]
 
 
-def streak_stop(events: list[dict], limit: int, run_dir: Path, note: str = "draining in-flight jobs") -> bool:
+def tripped_streak(events: list[dict], limit: int) -> tuple[list[dict], str | None]:
+    """The first streak at or above the limit: the whole wave's, else one model's (None names no model)."""
     streak = invalid_streak(events)
-    if len(streak) < limit:
+    if len(streak) >= limit:
+        return streak, None
+    for model in dict.fromkeys(event.get("model") for event in events if event["kind"] == "end"):
+        streak = invalid_streak(events, model)
+        if len(streak) >= limit:
+            return streak, model
+    return [], None
+
+
+def streak_stop(events: list[dict], limit: int, run_dir: Path, note: str = "draining in-flight jobs") -> bool:
+    streak, model = tripped_streak(events, limit)
+    if not streak:
         return False
     kinds = "; ".join(event.get("problem") or "unknown" for event in streak[-STREAK_KINDS_SHOWN:])
-    log(run_dir, f"stop: {len(streak)} invalid trials in a row (last: {kinds}); {note}")
+    whose = f" for {model}" if model else ""
+    log(run_dir, f"stop: {len(streak)} invalid trials in a row{whose} (last: {kinds}); {note}")
     return True
 
 
