@@ -1,15 +1,23 @@
 import json
 import math
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from ..native_study import DIGEST, as_choice, as_int, as_record, as_text, require
 from ..seat_handoffs.core import reject_constant, unique_object
 from ..shift_board.plan import TICKET
+from ..ship_handover.study import INFLIGHT_TICKET
+from ..ship_handover.study import TICKET as STOCK_TICKET
 from .worker_layout import MAX_WORKERS
 
 REQUEST_SCHEMA = "harbor.seat-seal.admission-request/v1"
 REPLY_SCHEMA = "harbor.seat-seal.admission-reply/v1"
+SHIPPING_REQUEST_SCHEMA = "harbor.shipping.admission-request/v1"
+SHIPPING_REPLY_SCHEMA = "harbor.shipping.admission-reply/v1"
+SHIPPING_TICKET = re.compile(
+    f"(?:{STOCK_TICKET.pattern})|(?:{INFLIGHT_TICKET.pattern})"
+)
 GRANTED = "granted"
 ALREADY_ISSUED = "already_issued"
 STATUSES = (GRANTED, ALREADY_ISSUED)
@@ -20,6 +28,24 @@ REQUEST_FIELDS = frozenset({"schema", *BOUND_FIELDS})
 REPLY_FIELDS = frozenset({*REQUEST_FIELDS, "status"})
 
 Message = dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class Namespace:
+    request: str
+    reply: str
+    ticket: re.Pattern[str]
+
+
+SEAT = Namespace(REQUEST_SCHEMA, REPLY_SCHEMA, TICKET)
+SHIPPING = Namespace(SHIPPING_REQUEST_SCHEMA, SHIPPING_REPLY_SCHEMA, SHIPPING_TICKET)
+NAMESPACES = (SEAT, SHIPPING)
+assert len({schema for n in NAMESPACES for schema in (n.request, n.reply)}) == 4
+assert all(
+    SEAT.ticket.fullmatch(sample) is None
+    for sample in ("sh-" + "0" * 16, "si-" + "0" * 16)
+)
+assert SHIPPING.ticket.fullmatch("sb-" + "0" * 16) is None
 
 
 def _finite(text: str) -> float:
@@ -42,24 +68,29 @@ def strict_object(text: str, label: str) -> Message:
     return as_record(value, label)
 
 
-def _check_bound(record: Message, label: str) -> None:
+def request_namespace(request: Message) -> Namespace:
+    found = [space for space in NAMESPACES if request.get("schema") == space.request]
+    require(len(found) == 1, "admission request schema differs")
+    return found[0]
+
+
+def _check_bound(record: Message, label: str, space: Namespace) -> None:
     as_text(record["plan"], f"{label} plan digest", DIGEST)
     as_int(record["worker"], f"{label} worker", 0, MAX_WORKERS - 1)
-    as_text(record["ticket"], f"{label} ticket", TICKET)
+    as_text(record["ticket"], f"{label} ticket", space.ticket)
     as_text(record["nonce"], f"{label} nonce", NONCE)
 
 
 def validate_request(value: object) -> Message:
     request = as_record(value, "admission request", REQUEST_FIELDS)
-    require(request["schema"] == REQUEST_SCHEMA, "admission request schema differs")
-    _check_bound(request, "admission request")
+    _check_bound(request, "admission request", request_namespace(request))
     return request
 
 
 def make_request(plan_digest: str, worker: int, ticket: str, nonce: str) -> Message:
     return validate_request(
         {
-            "schema": REQUEST_SCHEMA,
+            "schema": _request_schema(ticket),
             "plan": plan_digest,
             "worker": worker,
             "ticket": ticket,
@@ -68,11 +99,17 @@ def make_request(plan_digest: str, worker: int, ticket: str, nonce: str) -> Mess
     )
 
 
+def _request_schema(ticket: object) -> str:
+    shipping = isinstance(ticket, str) and SHIPPING.ticket.fullmatch(ticket) is not None
+    return SHIPPING.request if shipping else SEAT.request
+
+
 def validate_reply(value: object, request: Message) -> str:
     request = validate_request(request)
+    space = request_namespace(request)
     reply = as_record(value, "admission reply", REPLY_FIELDS)
-    require(reply["schema"] == REPLY_SCHEMA, "admission reply schema differs")
-    _check_bound(reply, "admission reply")
+    require(reply["schema"] == space.reply, "admission reply schema differs")
+    _check_bound(reply, "admission reply", space)
     for field in BOUND_FIELDS:
         require(
             type(reply[field]) is type(request[field])
@@ -86,7 +123,7 @@ def make_reply(request: Message, status: str) -> Message:
     request = validate_request(request)
     as_choice(status, "admission status", STATUSES)
     reply = {field: request[field] for field in BOUND_FIELDS}
-    reply.update(schema=REPLY_SCHEMA, status=status)
+    reply.update(schema=request_namespace(request).reply, status=status)
     assert validate_reply(reply, request) == status
     return reply
 
@@ -94,7 +131,7 @@ def make_reply(request: Message, status: str) -> Message:
 def wire_bytes(message: Message) -> bytes:
     record = as_record(message, "admission envelope")
     require(
-        record.get("schema") in (REQUEST_SCHEMA, REPLY_SCHEMA),
+        any(record.get("schema") in (n.request, n.reply) for n in NAMESPACES),
         "admission envelope schema is unknown",
     )
     try:

@@ -1,0 +1,18 @@
+{
+  "participants": [
+    {
+      "seat": "outgoing",
+      "name": "oracle",
+      "env": {
+        "SH_POLICY": "draft"
+      }
+    },
+    {
+      "seat": "relief",
+      "name": "oracle",
+      "env": {
+        "SH_POLICY": "resume"
+      }
+    }
+  ]
+}

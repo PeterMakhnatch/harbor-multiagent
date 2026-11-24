@@ -5,34 +5,38 @@ import sqlite3
 import stat
 import sys
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import quote
 
-from ..native_study import record_bytes, require
+from ..native_study import DIGEST, as_text, record_bytes, require
+from ..seat_handoffs.native_records import read_record
+from ..ship_handover import campaign_plan
+from . import worker_layout
 from .admission_wire import (
     ALREADY_ISSUED,
     GRANTED,
     MAX_ENVELOPE_BYTES,
+    SEAT,
+    SHIPPING,
     Message,
+    Namespace,
     make_reply,
     read_message,
+    request_namespace,
     strict_object,
     validate_request,
     wire_bytes,
 )
-from .worker_layout import (
-    MAX_PATH_BYTES,
-    MAX_PLAN_BYTES,
-    assigned,
-    digest,
-    load_plan,
-    validate_plan,
-)
+from .worker_layout import MAX_PATH_BYTES, assigned, digest
 
 LEDGER_SCHEMA = "harbor.seat-seal.admission-ledger/v1"
 STATUS_SCHEMA = "harbor.seat-seal.admission-status/v1"
+SHIPPING_LEDGER_SCHEMA = "harbor.shipping.admission-ledger/v1"
+SHIPPING_STATUS_SCHEMA = "harbor.shipping.admission-status/v1"
+
 STORE_NAME = "admission.sqlite3"
 APPLICATION_ID = 0x53534C41
 USER_VERSION = 1
@@ -64,8 +68,10 @@ GUARDS = (
     (
         "tickets_update",
         "tickets",
-        "BEFORE UPDATE ON tickets WHEN OLD.nonce IS NOT NULL OR NEW.nonce IS NULL "
-        "OR NEW.ticket IS NOT OLD.ticket OR NEW.worker IS NOT OLD.worker",
+        (
+            "BEFORE UPDATE ON tickets WHEN OLD.nonce IS NOT NULL OR NEW.nonce IS NULL "
+            "OR NEW.ticket IS NOT OLD.ticket OR NEW.worker IS NOT OLD.worker"
+        ),
         "rows only move to issued",
     ),
 )
@@ -83,11 +89,73 @@ SCHEMA_OBJECTS = sorted(
     ]
 )
 
+Plan = dict[str, Any]
 Inventory = list[tuple[str, int]]
 
 
 @dataclass(frozen=True, slots=True)
+class Kind:
+    plan_schema: str
+    ledger_schema: str
+    status_schema: str
+    wire: Namespace
+    max_plan_bytes: int
+    max_tickets: int
+    validate: Callable[[object], Plan]
+    load: Callable[[Path, str], Plan]
+    inventory: Callable[[Plan], Inventory]
+
+
+def _seat_load(path: Path, expected: str) -> Plan:
+    return worker_layout.load_plan(path, expected=expected)
+
+
+def _seat_inventory(plan: Plan) -> Inventory:
+    rows = [
+        (ticket, worker)
+        for worker in range(plan["workers"])
+        for ticket in assigned(plan, worker)
+    ]
+    rows.sort()
+    assert len(rows) == 2 * len(plan["blocks"])
+    assert len({ticket for ticket, _ in rows}) == len(rows)
+    return rows
+
+
+SEAT_KIND = Kind(
+    worker_layout.SCHEMA,
+    LEDGER_SCHEMA,
+    STATUS_SCHEMA,
+    SEAT,
+    worker_layout.MAX_PLAN_BYTES,
+    2 * worker_layout.MAX_BLOCKS,
+    worker_layout.validate_plan,
+    _seat_load,
+    _seat_inventory,
+)
+SHIPPING_KIND = Kind(
+    campaign_plan.SCHEMA,
+    SHIPPING_LEDGER_SCHEMA,
+    SHIPPING_STATUS_SCHEMA,
+    SHIPPING,
+    campaign_plan.MAX_PLAN_BYTES,
+    len(campaign_plan.WORLDS) * campaign_plan.MAX_CELLS,
+    campaign_plan.validate_plan,
+    campaign_plan.load_plan,
+    campaign_plan.inventory,
+)
+KINDS = (SEAT_KIND, SHIPPING_KIND)
+MAX_ANY_PLAN_BYTES = max(kind.max_plan_bytes for kind in KINDS)
+assert len({kind.plan_schema for kind in KINDS}) == len(KINDS)
+assert len({kind.ledger_schema for kind in KINDS}) == len(KINDS)
+assert len({kind.status_schema for kind in KINDS}) == len(KINDS)
+assert len({kind.wire for kind in KINDS}) == len(KINDS)
+assert campaign_plan.MAX_WORKERS == worker_layout.MAX_WORKERS
+
+
+@dataclass(frozen=True, slots=True)
 class Ledger:
+    kind: Kind
     plan: str
     registration: str
     owners: dict[str, int]
@@ -153,19 +221,25 @@ def _rollback(db: sqlite3.Connection) -> None:
         db.execute("ROLLBACK")
 
 
-def _inventory(plan: dict[str, Any]) -> Inventory:
-    rows = [
-        (ticket, worker)
-        for worker in range(plan["workers"])
-        for ticket in assigned(plan, worker)
-    ]
-    rows.sort()
-    assert len(rows) == 2 * len(plan["blocks"])
-    assert len({ticket for ticket, _ in rows}) == len(rows)
+def _inventory(kind: Kind, plan: Plan) -> Inventory:
+    rows = kind.inventory(plan)
+    require(1 <= len(rows) <= kind.max_tickets, "plan inventory is out of bounds")
+    tickets = [ticket for ticket, _ in rows]
+    require(tickets == sorted(set(tickets)), "plan inventory is not unique and sorted")
+    require(
+        all(kind.wire.ticket.fullmatch(ticket) is not None for ticket in tickets),
+        "plan inventory names a ticket outside the ledger namespace",
+    )
+    workers = [worker for _, worker in rows]
+    require(
+        all(type(worker) is int for worker in workers)
+        and set(workers) == set(range(plan["workers"])),
+        "plan inventory does not give every worker its own tickets",
+    )
     return rows
 
 
-def _populate(db: sqlite3.Connection, plan: dict[str, Any], rows: Inventory) -> None:
+def _populate(db: sqlite3.Connection, kind: Kind, plan: Plan, rows: Inventory) -> None:
     require(
         db.execute("SELECT count(*) FROM sqlite_master").fetchone() == (0,),
         "admission store is not empty",
@@ -177,7 +251,12 @@ def _populate(db: sqlite3.Connection, plan: dict[str, Any], rows: Inventory) -> 
     db.execute(
         "INSERT INTO meta (singleton, schema, plan_digest, registration, plan) "
         "VALUES (1, ?, ?, ?, ?)",
-        (LEDGER_SCHEMA, digest(plan), plan["registration"], _plan_text(plan)),
+        (
+            kind.ledger_schema,
+            digest(plan),
+            plan["registration"],
+            _plan_text(kind, plan),
+        ),
     )
     db.executemany(
         "INSERT INTO tickets (ticket, worker, nonce) VALUES (?, ?, NULL)", rows
@@ -186,15 +265,33 @@ def _populate(db: sqlite3.Connection, plan: dict[str, Any], rows: Inventory) -> 
         db.execute(_guard_ddl(name, event, reason))
 
 
-def _plan_text(plan: dict[str, Any]) -> str:
+def _plan_text(kind: Kind, plan: Plan) -> str:
     text = record_bytes(plan).decode("ascii")
-    require(len(text) <= MAX_PLAN_BYTES, "worker plan exceeds its bound")
+    require(len(text) <= kind.max_plan_bytes, "worker plan exceeds its bound")
     return text
 
 
+def _plan_kind(path: Path) -> Kind:
+    try:
+        record = read_record(path, MAX_ANY_PLAN_BYTES)
+    except OSError as error:
+        raise ValueError(f"worker plan {path} is not a plain file") from error
+    require(record is not None, f"worker plan {path} does not exist")
+    assert record is not None
+    shipping = record.get("schema") == SHIPPING_KIND.plan_schema
+    return SHIPPING_KIND if shipping else SEAT_KIND
+
+
 def init(plan_path: Path, ledger: Path, expected: str) -> Message:
-    plan = load_plan(_bounded(plan_path, "worker plan"), expected=expected)
-    rows = _inventory(plan)
+    plan_path = _bounded(plan_path, "worker plan")
+    as_text(expected, "expected plan digest", DIGEST)
+    kind = _plan_kind(plan_path)
+    plan = kind.load(plan_path, expected)
+    require(
+        plan["schema"] == kind.plan_schema and digest(plan) == expected,
+        "worker plan digest differs from the expected digest",
+    )
+    rows = _inventory(kind, plan)
     ledger = _bounded(ledger, "admission ledger")
     os.mkdir(ledger, DIRECTORY_MODE)
     _check_directory(ledger)
@@ -205,7 +302,7 @@ def init(plan_path: Path, ledger: Path, expected: str) -> Message:
     db = _connect(store)
     try:
         db.execute("BEGIN IMMEDIATE")
-        _populate(db, plan, rows)
+        _populate(db, kind, plan, rows)
         db.execute("COMMIT")
     finally:
         _rollback(db)
@@ -236,36 +333,44 @@ def _check_header(db: sqlite3.Connection) -> None:
     require(objects == SCHEMA_OBJECTS, "admission store schema differs")
 
 
-def _read_meta(db: sqlite3.Connection) -> tuple[dict[str, Any], str]:
+def _read_meta(db: sqlite3.Connection) -> tuple[Kind, Plan, str]:
     rows = db.execute(
         "SELECT schema, plan_digest, registration, plan FROM meta"
     ).fetchall()
     require(len(rows) == 1, "admission store has no single plan record")
     schema, plan_digest, registration, text = rows[0]
-    require(schema == LEDGER_SCHEMA, "admission ledger schema differs")
+    kinds = [kind for kind in KINDS if kind.ledger_schema == schema]
+    require(len(kinds) == 1, "admission ledger schema differs")
+    kind = kinds[0]
     require(
-        isinstance(text, str) and len(text) <= MAX_PLAN_BYTES,
+        isinstance(text, str) and len(text) <= kind.max_plan_bytes,
         "admission store plan is not bounded text",
     )
-    plan = validate_plan(strict_object(text, "admission store plan"))
-    require(_plan_text(plan) == text, "admission store plan is not canonical")
+    plan = kind.validate(strict_object(text, "admission store plan"))
+    require(
+        plan["schema"] == kind.plan_schema,
+        "admission store plan schema differs from its ledger schema",
+    )
+    require(_plan_text(kind, plan) == text, "admission store plan is not canonical")
     require(digest(plan) == plan_digest, "admission store plan digest differs")
     require(plan["registration"] == registration, "admission registration differs")
-    return plan, plan_digest
+    return kind, plan, plan_digest
 
 
 def _load(db: sqlite3.Connection) -> Ledger:
     db.execute("BEGIN")
     try:
         _check_header(db)
-        plan, plan_digest = _read_meta(db)
-        rows = db.execute("SELECT ticket, worker FROM tickets ORDER BY ticket").fetchall()
-        expected = _inventory(plan)
+        kind, plan, plan_digest = _read_meta(db)
+        rows = db.execute(
+            "SELECT ticket, worker FROM tickets ORDER BY ticket"
+        ).fetchall()
+        expected = _inventory(kind, plan)
         require(rows == expected, "admission store inventory differs from its plan")
         db.execute("COMMIT")
     finally:
         _rollback(db)
-    return Ledger(plan_digest, plan["registration"], dict(expected))
+    return Ledger(kind, plan_digest, plan["registration"], dict(expected))
 
 
 def _open(ledger: Path) -> tuple[sqlite3.Connection, Ledger]:
@@ -282,6 +387,10 @@ def _open(ledger: Path) -> tuple[sqlite3.Connection, Ledger]:
 
 
 def _check_binding(state: Ledger, request: Message) -> None:
+    require(
+        request_namespace(request) == state.kind.wire,
+        "request namespace differs from the ledger plan",
+    )
     require(request["plan"] == state.plan, "request plan differs from the ledger plan")
     owner = state.owners.get(request["ticket"])
     require(owner is not None, "request ticket is not in the ledger plan")
@@ -323,7 +432,9 @@ def _write_all(fd: int, data: bytes) -> None:
 def serve_once(ledger: Path, source: BinaryIO, sink: int) -> str:
     db, state = _open(ledger)
     try:
-        request = validate_request(read_message(source.readline(MAX_ENVELOPE_BYTES + 1)))
+        request = validate_request(
+            read_message(source.readline(MAX_ENVELOPE_BYTES + 1))
+        )
         _check_binding(state, request)
         result = _claim(db, request)
     finally:
@@ -341,7 +452,8 @@ def status(ledger: Path) -> Message:
     finally:
         db.close()
     require(
-        [(ticket, worker) for ticket, worker, _ in rows] == sorted(state.owners.items()),
+        [(ticket, worker) for ticket, worker, _ in rows]
+        == sorted(state.owners.items()),
         "admission store inventory changed",
     )
     tickets = [
@@ -350,7 +462,7 @@ def status(ledger: Path) -> Message:
     ]
     counts = Counter(entry["state"] for entry in tickets)
     return {
-        "schema": STATUS_SCHEMA,
+        "schema": state.kind.status_schema,
         "plan": state.plan,
         "registration": state.registration,
         "counts": {ISSUED: counts[ISSUED], UNISSUED: counts[UNISSUED]},

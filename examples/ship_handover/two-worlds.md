@@ -2,6 +2,8 @@
 
 Use this workflow when a recovery policy succeeds before a handover and may fail when the supplier has not finished. Both seats run under test. Use the same native agent configuration for each role. Give each trial its own ticket. No command below sends a prompt unless you explicitly start a model trial.
 
+For workers without a shared disk, use [one coordinator across both worlds](disconnected-workers.md). It reports a lost start permission separately from a failed team.
+
 ## Read the released result
 
 From this fork checkout, with Python 3.12 or later:
