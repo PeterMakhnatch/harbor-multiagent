@@ -440,7 +440,8 @@ no file, `READ_FIRST_NO_FILES`: "before you start on the question") after the wh
 text (just before `## The question`, so in verify and audit the months' list stays under its lead-in line) in every
 arm, and records `read_first: true` in task.json, task.toml [metadata] and the manifest's `build`; without the flag
 nothing changes (docs/PROBE.md 4). Conformity's opening block is one paragraph, so its text is the same as before;
-verify and audit builds made before 2026-11-24 night have the paragraph between the lead-in line and the list.
+verify and audit builds made before commit a870a444 (2026-11-24, about 5 AM ET; for example the `rf1v` set) have the
+paragraph between the lead-in line and the list.
 
 ## 13. World version 13: scheduled posts
 
