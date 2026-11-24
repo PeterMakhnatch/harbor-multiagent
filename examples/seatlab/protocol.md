@@ -67,6 +67,8 @@ Exit `0` means at least one shipment distinguishes the rules. Exit `1` means non
 
 The [retained native study](results/native-model-primary.json) provides an independent check with different seeds. At seed `2001`, its truthful arrival-order scripts scored 12 optimal and 12 feasible in `fresh`, then 8 optimal and 10 feasible in `reordered`. At seed `2003`, they scored 9 optimal and 9 feasible in `reordered`. All 3 results match the input calculation. The `2003 / fresh` script team never ran.
 
+After a team returns, use the [retained-choice diagnostic](native-model-results.md#did-the-model-choose-as-if-it-used-the-last-older-report). It compares actual decisions, not just the opportunity to distinguish them.
+
 ## Runtime and retention
 
 The initial study targets Olam commit `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, not stock Harbor 0.26. Run the maintained `hello-seats` task as an independent positive control first. Use local Docker with at most 1 trial at a time for this run. No cloud provisioning or metered API is required for the controls. Use fresh output directories. Keep all failed attempts and their reason in the study record. Keep host paths, personal credentials and raw provider traces out of public evidence. Publish to the personal fork only.

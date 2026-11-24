@@ -1,6 +1,7 @@
-"""Review the discriminating power of Dispatch Handoff inputs without running seats."""
+"""Check Dispatch Handoff inputs and diagnose retained choices without running seats."""
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -8,11 +9,16 @@ from types import ModuleType
 from typing import Any, cast
 
 if __package__:
-    from . import run_panel
+    from . import dispatch_returns, run_panel
+    from .capsule import _reject_constant, _unique_object
 else:
+    import dispatch_returns
     import run_panel
+    from capsule import _reject_constant, _unique_object
 
 _WORLD_SOURCE = "tasks/dispatch-handoff/environment/seatworld.py"
+_RELEASE = Path(__file__).parent / "results/native-model-primary.json"
+_RELEASE_SHA256 = "79eec3d776c0a00d218637aa88f118989cfc3f5b1116db221e88ad57a2da7bb9"
 
 _REQUIRED_ARMS = ("fresh", "reordered")
 _COUNT_KEYS = (
@@ -138,6 +144,34 @@ def _checkout_world(source: bytes) -> type:
     return module.World
 
 
+def _observed(path: Path, pin: str) -> dict[str, Any]:
+    if __package__:
+        from . import team_driver
+    else:
+        import team_driver
+
+    try:
+        raw = run_panel.dispatch_plan._read_regular(path)
+    except (OSError, ValueError) as exc:
+        raise ValueError(
+            "study must be a readable regular file of at most 1 MiB"
+        ) from exc
+    if hashlib.sha256(raw).hexdigest() != pin:
+        raise ValueError("study bytes do not match the pinned SHA-256")
+    try:
+        study = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_constant,
+        )
+    except (ValueError, RecursionError):
+        raise ValueError("invalid study JSON") from None
+    world = _checkout_world((run_panel.EXAMPLES_DIR / _WORLD_SOURCE).read_bytes())
+    return dispatch_returns.reduce_returns(
+        study, pin, team_driver._grid(), team_driver.EPISODES, world
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     modes = parser.add_subparsers(dest="mode", required=True)
@@ -150,19 +184,51 @@ def main(argv: list[str] | None = None) -> int:
     design.add_argument(
         "--sha256", required=True, help="separately held registration digest"
     )
+    observed = modes.add_parser(
+        "observed",
+        help="Diagnose the retained speaker-listener study",
+        allow_abbrev=False,
+    )
+    observed.add_argument(
+        "--report",
+        type=Path,
+        help="pinned JSON from team_report.collect; default: released study",
+    )
+    observed.add_argument(
+        "--sha256", help="separately held study digest, required with --report"
+    )
     args = parser.parse_args(argv)
     try:
-        registration, _, sources = run_panel._pinned(args.registration, args.sha256)
-        result = describe(
-            registration, args.sha256, _checkout_world(sources[_WORLD_SOURCE])
-        )
-    except (OSError, ValueError, RuntimeError) as exc:
+        if args.mode == "observed":
+            if (args.report is None) != (args.sha256 is None):
+                parser.error(
+                    "supply both --report and --sha256, or neither for the public study"
+                )
+            result = _observed(
+                args.report or _RELEASE,
+                args.sha256 if args.report is not None else _RELEASE_SHA256,
+            )
+            code = (
+                0
+                if result["coverage"]["registered"] == result["coverage"]["measured"]
+                else 3
+            )
+        else:
+            registration, _, sources = run_panel._pinned(args.registration, args.sha256)
+            result = describe(
+                registration, args.sha256, _checkout_world(sources[_WORLD_SOURCE])
+            )
+            code = {"distinguishable": 0, "indistinguishable": 1, "missing_arms": 3}[
+                result["status"]
+            ]
+    except OSError:
+        print("Invalid input: could not read a required source", file=sys.stderr)
+        return 2
+    except (ValueError, RuntimeError) as exc:
         print(f"Invalid input: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True, separators=(",", ":"), allow_nan=False))
-    return {"distinguishable": 0, "indistinguishable": 1, "missing_arms": 3}[
-        result["status"]
-    ]
+    return code
 
 
 if __name__ == "__main__":

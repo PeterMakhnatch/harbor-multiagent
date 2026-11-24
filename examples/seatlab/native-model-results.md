@@ -61,6 +61,20 @@ Each entry shows **choices changed / change in optimal choices / change in feasi
 - **Dispatch:** All `2001 / fresh` cells reached 12 optimal choices. In `2003 / reordered`, `SS` → `SM` gained 1 optimal choice and lost 2, even as feasibility rose from 9 to 12. With model inventory in that group, `MS` → `MM` raised both counts from 9 to 12.
 - **Inventory:** Both actors matched their own native input on all 144 revision reports per actor. In `2003 / reordered`, `SM` → `MM` changed 4 choices with equal messages and the same accepted dispatch view digest. The 2 cells used separate dispatch model generations. This contrast does not show a speaker effect through the messages.
 
+### Did the model choose as if it used the last, older report?
+
+**Not on a single choice that distinguishes the rules.** In the 4 measured `reordered` teams with a model in dispatch, newest and last recommended different bays on 14 decisions. The model chose the newest report's best bay 12 times, the older report's best bay 0 times, and neither 2 times. The 14 decisions repeat **7 distinct shipments across 2 worlds**. They are not 14 independent trials.
+
+On the other 34 decisions, the rules recommended the same bay. The model chose that bay 32 times and a different bay twice. All 4 misses came from one native team, `2003 / SM`. The full study contains 16 registered teams: 12 measured, 1 invalid and 3 not attempted. None of the missing grades enter these counts.
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_opportunity observed
+```
+
+This command reads the [saved study](results/native-model-primary.json). It checks the native world fingerprint, both actors, sent-report fidelity, delivered-message digests and per-shipment grades. It emits counts for each `reordered` team. A wrong inventory report is not counted as a receiver choosing the older report. The released projections omit incorrect payloads, so the reader cannot reconstruct those decisions.
+
+Exit `3` preserves measured rows when the study is incomplete. Exit `0` requires a fully measured grid. Exit `2` rejects an invalid input. To inspect a new `team_report.collect` return of the same registered protocol, add `--report FILE --sha256 HELD_DIGEST`. A matching choice shows consistency with a rule. It does not prove how the model read the reports.
+
 ## Model resources
 
 The table sums the CLI fields by role. CLI and API durations are sums across calls, not trial elapsed time.
