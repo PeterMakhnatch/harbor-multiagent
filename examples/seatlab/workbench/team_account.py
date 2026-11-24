@@ -57,6 +57,24 @@ def parser() -> argparse.ArgumentParser:
         "merge", help="combine portable worker packets for disjoint scopes"
     )
     merge.add_argument("packets", nargs="+", metavar="PACKET")
+    ledger = sub.add_parser(
+        "ledger",
+        help="explain a saved settlement ledger without assuming it belongs to a job",
+    )
+    ledger.add_argument("events", metavar="EVENTS.jsonl")
+    ledger.add_argument(
+        "--family",
+        action="append",
+        default=[],
+        metavar="TAG",
+        help="group local call identities starting with this exact TAG/ (repeatable)",
+    )
+    ledger.add_argument(
+        "--routes", action="store_true", help="show requested and reported model labels"
+    )
+    ledger.add_argument(
+        "--json", action="store_true", help="print exact decimal subtotals"
+    )
     for command in (native, archive, merge):
         fmt = command.add_mutually_exclusive_group()
         fmt.add_argument(
@@ -131,6 +149,14 @@ def main(argv: list[str] | None = None) -> int:
         return preview_shipping(args[1:])
     try:
         options = parser().parse_args(args)
+        if options.source == "ledger":
+            from . import ledger_scope
+
+            report = ledger_scope.summarize(
+                options.events, families=options.family, routes=options.routes
+            )
+            print(_json(report) if options.json else ledger_scope.render(report))
+            return 0
         exporting = getattr(options, "packet", False)
         kept = getattr(options, "archive", None)
         fragments = getattr(options, "fragment", None)

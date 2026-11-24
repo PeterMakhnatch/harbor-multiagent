@@ -45,6 +45,8 @@ MAX_COST_NANO = 10**18
 PRECISION = 120
 CALL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 GENERATION = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}")
+MAX_ROUTE_CHARS = 128
+ROUTE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*(?: [A-Za-z0-9_.:/-]+)*")
 EVENTS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "started": (
         frozenset(
@@ -118,6 +120,13 @@ class _Ledger:
     settled: dict[str, tuple[str, Decimal]] = field(default_factory=dict)
     repeated_settlements: int = 0
     generation_calls: dict[str, str] = field(default_factory=dict)
+    routes: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+
+
+def route_label(value: object) -> str | None:
+    if type(value) is not str or not 0 < len(value) <= MAX_ROUTE_CHARS:
+        return None
+    return value if ROUTE.fullmatch(value) is not None else None
 
 
 def _number(text: str) -> Decimal:
@@ -235,7 +244,20 @@ def _settlement(row: Record, index: int) -> tuple[str, Decimal]:
     return generation, usd
 
 
-def _apply(ledger: _Ledger, row: Record, index: int) -> None:
+def _route(ledger: _Ledger, call: str, row: Record, index: int) -> None:
+    receipt = row["receipt"]
+    route = (
+        route_label(receipt.get("model")),
+        route_label(receipt.get("provider_name")),
+    )
+    prior = ledger.routes.setdefault(call, route)
+    _require(
+        prior == route,
+        f"ledger row {index} settles a call with a contradictory route",
+    )
+
+
+def _apply(ledger: _Ledger, row: Record, index: int, *, include_routes: bool) -> None:
     call = row["call_id"]
     match row["event"]:
         case "started":
@@ -260,6 +282,8 @@ def _apply(ledger: _Ledger, row: Record, index: int) -> None:
                     f"ledger row {index} settles a call with a contradictory generation or cost",
                 )
                 ledger.repeated_settlements += 1
+                if include_routes:
+                    _route(ledger, call, row, index)
                 return
             owner_call = ledger.generation_calls.setdefault(settlement[0], call)
             _require(
@@ -267,13 +291,16 @@ def _apply(ledger: _Ledger, row: Record, index: int) -> None:
                 f"ledger row {index} reuses a generation for another local call",
             )
             ledger.settled[call] = settlement
+            if include_routes:
+                _route(ledger, call, row, index)
 
 
-def _ledger(path: str) -> _Ledger:
+def _ledger(path: str, *, include_routes: bool = False) -> _Ledger:
+    _require(type(include_routes) is bool, "invalid route option")
     ledger = _Ledger()
     lines = _lines(_read(path, MAX_LEDGER_BYTES, "ledger"), "ledger")
     for index, raw in enumerate(lines):
-        _apply(ledger, _ledger_row(raw, index), index)
+        _apply(ledger, _ledger_row(raw, index), index, include_routes=include_routes)
     ledger.rows = len(lines)
     outcomes = ledger.failed | ledger.unavailable | ledger.held | ledger.settled.keys()
     _require(
@@ -283,6 +310,14 @@ def _ledger(path: str) -> _Ledger:
     _require(
         not ledger.failed & ledger.settled.keys(),
         "ledger has a failed call that also settled",
+    )
+    _require(
+        include_routes or not ledger.routes,
+        "ledger collected routes without the option",
+    )
+    _require(
+        not include_routes or ledger.routes.keys() == ledger.settled.keys(),
+        "ledger routes do not match its settlements",
     )
     return ledger
 

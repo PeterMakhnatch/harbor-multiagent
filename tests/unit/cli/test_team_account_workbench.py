@@ -301,3 +301,20 @@ def test_generation_owner_conflict_never_assigns_money_twice(job, tmp_path, caps
         capsys, "native", job, "--ledger", ledger, "--owners", owners, "--json"
     )
     assert (code, out) == (2, "") and "second seat" in err
+
+    code, out, _ = run(capsys, "ledger", ledger, "--json")
+    independent = json.loads(out)
+    assert code == 0
+    assert independent["all_calls"]["known_usd"] == "0.0035"
+    assert independent["requested_routes"] is independent["reported_routes"] is None
+    assert "openai" not in out and "author" not in out and FINAL_B not in out
+    code, out, _ = run(capsys, "ledger", ledger, "--routes", "--json")
+    independent = json.loads(out)
+    assert code == 0
+    assert [row["model"] for row in independent["requested_routes"]] == [
+        "openai/gpt-5-mini"
+    ]
+    assert independent["reported_routes"] == [
+        {"model": None, "provider": None, "settled": 2, "known_usd": "0.0035"}
+    ]
+    assert "gen-a" not in out and "author" not in out

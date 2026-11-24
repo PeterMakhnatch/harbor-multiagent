@@ -128,6 +128,20 @@ python3.12 -BS -m "$wb" account native "$job" --ledger "$events" --owners "$owne
 
 A trusted host that has the native attempt UUID, seat and returned generation ID can produce an ownership row with `examples.seatlab.workbench.generation_receipts.owner(trial, seat, generation_id)`. Store one JSON object per line in a private file. The row contains a domain-separated hash, not the raw generation ID. Duplicate delivery is safe. Conflicting owners are an error. Never match using the model name, time, cost, or seat label alone. The provider subtotal covers executions in the supplied packets. Executions from an open job can later be replaced. Retries absent from the packets and detached candidates are outside the subtotal.
 
+### Which workload incurred these charges?
+
+You do not need a Harbor job to read a saved settlement ledger:
+
+```sh
+python3.12 -BS -m "$wb" account ledger "$events" --family plain --family v1 --routes
+```
+
+The default report hides model and provider names. `--routes` shows the requested model on each start and the model and provider on each settled receipt. The two tables describe the same calls. Do not add their totals. A provider can expand a model alias. Different labels alone do not prove fallback.
+
+Each `--family TAG` selects local identities that start with exactly `TAG/`. The report groups other calls separately. A tag identifies a naming convention in this file, not a Harbor team. The command prints no full local identity, call ID or generation ID. Use `--json` for exact decimal subtotals. A missing receipt is not a zero charge.
+
+For example, one saved cost-quality campaign has 280 started calls. Its 267 settled receipts report `$0.797539752`. The `plain/` group accounts for `$0.634926074` across 204 settled calls. The `v1/` group accounts for `$0.162613678` across 63. The other 13 starts have no settled price: 9 recorded failures and 4 without a recorded outcome. These are not subscription charges or an account-wide bill. None of these receipts establishes the cost of the separate native Harbor job.
+
 ## Decide whether a proposed run fits a budget
 
 Use a saved native `lock.json`, an operator-supplied rate card and explicit **per-seat, per-attempt limits**. Use the exact route in the lock. No model is selected automatically. This command does not fetch prices. Price cache writes, long context, reasoning and fallback policies at the highest rate that could apply. Refuse to run if a route or limit is unclear.
