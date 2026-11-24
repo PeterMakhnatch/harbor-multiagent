@@ -342,6 +342,30 @@ stuck behind provider retries, shows as a stall; the retries also show in `trial
 `timeout`, `server` (5xx, connection) or the LiteLLM error class. A finished trial with an
 `exception_info` (trial or seat) is an error.
 
+## Behavior cards: `flotilla-cards`
+
+```bash
+cd flotilla/analysis
+python3 -m flotilla_analysis.cards OUTDIR --analysis pc2.json --analysis vf1.json --jobs JOBS [--examples 3]
+```
+
+Reads the JSON of `flotilla/docs/results/scripts/probe_analysis.py ... --json PATH` (repeat `--analysis`
+for several waves) and writes `OUTDIR/index.html`: one card per summary (probe kind, wave, model) with the
+accuracy per arm (k/n), the pre-registered primary (pairs, b, c, p, Holm p, decision) and follow-up
+tests, and the kind's key secondaries (conformity: reversal, talk-wrong errors = W, re-check when exposed;
+verify: pass-through with its Wilson interval, verified share; audit: the talk-false vs talk-false-tell
+test without decision, pass-through per false arm, targeting against 1/3, pass-through by audit, audit
+use). Every number is copied from the JSON, or is a share k/n of two JSON counts; a value the JSON lacks
+is "-". No test or interval is recomputed.
+
+Examples per card: counted trials of the card's kind and model, at most N per category, ordered by job
+name then trial name: wrong final answers; posting-arm trials (the arms of the summary's `exposure`) in
+which p1 sent a message (from `verifier/world-state.json`, else `messages.jsonl`); for audit, false-arm
+trials that audited the false month and those that did not. Each example links its `flotilla-timeline`
+page, written to `OUTDIR/trials/<job>.html`. The tool reads only the trial folders the JSON rows name.
+The page is plain HTML with inline CSS and no script. `--tasks` and `--manifest` work as for
+`flotilla-analyze`.
+
 ## Tests
 
 ```bash
