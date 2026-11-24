@@ -1,0 +1,22 @@
+jobs_dir: jobs
+job_name: observed-retry-team
+n_attempts: 2
+n_concurrent_trials: 1
+retry:
+  max_retries: 1
+  include_exceptions: [LifecycleControlError]
+  min_wait_sec: 1
+  max_wait_sec: 1
+environment:
+  type: docker
+  delete: true
+  force_build: false
+participants:
+  - seat: p1
+    import_path: examples.seatlab.workbench.lifecycle_oracle:LifecycleOracle
+    kwargs: {behavior: delay}
+  - seat: p2
+    import_path: examples.seatlab.workbench.lifecycle_oracle:LifecycleOracle
+    kwargs: {behavior: raise}
+tasks:
+  - path: examples/tasks/hello-seats

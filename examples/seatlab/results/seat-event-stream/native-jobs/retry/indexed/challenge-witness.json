@@ -1,0 +1,22 @@
+{
+  "challenge": {
+    "changed_uuid": "17dc6f76-ba03-4b13-bfc2-1c7e7d638a74",
+    "from_key": "d871136c10b543ea05ecb4315966ddd8b8f8eb225a7b927cb4726a8c88709615",
+    "original": "host-witness.json",
+    "purpose": "Keep the same four native execution UUIDs. Change exactly one logical-slot assignment without modifying any raw journal.",
+    "to_key": "e2bedff937302090ed15e56a1d93491b59e35ec821d96549a243684c5d7e188f",
+    "type": "deliberately_relabelled_control_not_an_observation"
+  },
+  "job": "a8af33b9-820a-48ff-a6e9-0e83e50a9d77",
+  "observed_grouping": {
+    "d871136c10b543ea05ecb4315966ddd8b8f8eb225a7b927cb4726a8c88709615": [
+      "c16573ef-2524-4643-ba8c-b64f236f309b"
+    ],
+    "e2bedff937302090ed15e56a1d93491b59e35ec821d96549a243684c5d7e188f": [
+      "0f1b62bf-5c80-481a-98ad-51cc31992a67",
+      "17dc6f76-ba03-4b13-bfc2-1c7e7d638a74",
+      "9086b777-d2be-4d57-b0ed-0965a4ed3bfe"
+    ]
+  },
+  "schema": "seatlab.independent-slot-retry-witness/v1"
+}

@@ -1,0 +1,15 @@
+{
+  "finished_at": "2026-11-24T08:08:14.967150",
+  "id": "a8af33b9-820a-48ff-a6e9-0e83e50a9d77",
+  "n_total_trials": 2,
+  "schema_version": 1,
+  "started_at": "2026-11-24T08:07:00.367349",
+  "stats": {
+    "n_cancelled_trials": 0,
+    "n_completed_trials": 2,
+    "n_errored_trials": 2,
+    "n_pending_trials": 0,
+    "n_retries": 2,
+    "n_running_trials": 0
+  }
+}
