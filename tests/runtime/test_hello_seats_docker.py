@@ -3,6 +3,9 @@ model APIs are used."""
 
 import asyncio
 import hashlib
+import os
+import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -23,8 +26,17 @@ SEATS = ("p1", "p2")
 
 
 async def test_oracle_in_both_seats_earns_reward_one(tmp_path: Path):
+    task = TASK
+    if os.name != "nt":
+        checkout = tmp_path / "private-checkout"
+        checkout.mkdir(mode=0o700)
+        task = checkout / TASK.name
+        shutil.copytree(TASK, task)
+        (task / "solution").chmod(0o700)
+        (task / "solution" / "solve.sh").chmod(0o600)
+
     config = TrialConfig(
-        task=TaskConfig(path=TASK),
+        task=TaskConfig(path=task),
         # Parallel tests share the Docker daemon's Compose project namespace.
         trial_name=f"seats-{hashlib.sha256(str(tmp_path).encode()).hexdigest()[:12]}",
         trials_dir=tmp_path / "trials",
@@ -53,3 +65,7 @@ async def test_oracle_in_both_seats_earns_reward_one(tmp_path: Path):
     for seat in SEATS:
         oracle_log = trial.paths.trial_dir / "seats" / seat / "agent" / "oracle.txt"
         assert f"{seat} posts its note" in oracle_log.read_text()
+    if os.name != "nt":
+        assert stat.S_IMODE(task.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE((task / "solution").stat().st_mode) == 0o700
+        assert stat.S_IMODE((task / "solution" / "solve.sh").stat().st_mode) == 0o600
