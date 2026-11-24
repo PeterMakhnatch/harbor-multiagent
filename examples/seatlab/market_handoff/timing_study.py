@@ -377,15 +377,48 @@ def issue(stock: Any, target: Path, args: argparse.Namespace, early: str) -> Non
     store(target / "native-exit.json", {"returncode": p.returncode})
 
 
+def inspect_cell(stock: Any, root: Path, world: int, repeat: int) -> dict[str, Any]:
+    target = cell(root, world, repeat)
+    early = assignment(world, repeat)
+    row = base(world, repeat, early)
+    if not target.exists():
+        return {**row, "reason": "not_issued"}
+    if not (target / "issued.json").is_file():
+        return {**row, "reason": "no_durable_issue_record"}
+    issued = load(target / "issued.json")
+    if issued != {k: row[k] for k in ("schema", "world", "repeat", "early", "control")}:
+        raise ValueError("original attempt does not match the requested cell")
+    if (
+        not (target / "company.json").is_file()
+        and not (target / "predecision.json").is_file()
+    ):
+        return {**row, "reason": "no_durable_company_record"}
+    return collect(stock, target, world, repeat, early)
+
+
+def export(stock: Any, root: Path) -> list[dict[str, Any]]:
+    from .timing_panel import summarize
+
+    rows = [
+        inspect_cell(stock, root, world, repeat)
+        for world in range(timing_world.CONTROL_WORLD)
+        for repeat in (0, 1)
+    ]
+    summarize(rows)
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run once or inspect one native sales-report timing comparison."
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("run", "inspect"):
+    for name in ("run", "inspect", "export"):
         sub = commands.add_parser(name)
         sub.add_argument("--stock", type=Path, required=True)
         sub.add_argument("--root", type=Path, required=True)
+        if name == "export":
+            continue
         sub.add_argument("--world", type=int, choices=range(9), required=True)
         sub.add_argument("--repeat", type=int, choices=(0, 1), required=True)
         sub.add_argument("--control", action="store_true")
@@ -393,28 +426,25 @@ def main() -> int:
             for param in ("native-python", "client", "slot"):
                 sub.add_argument("--" + param, type=Path, required=True)
     args = parser.parse_args()
+    os.umask(0o077)
+    stock = simulator.load_stock(args.stock.resolve(strict=True))
+    if stock.numpy_version != "2.1.3":
+        raise ValueError("the registered experiment requires NumPy 2.1.3")
+    if args.command == "export":
+        print(json.dumps(export(stock, args.root), sort_keys=True, allow_nan=False))
+        return 0
     if args.control != (args.world == timing_world.CONTROL_WORLD) or (
         args.control and args.repeat != 0
     ):
         parser.error("--control is mandatory only for company 8, repetition 0")
-    os.umask(0o077)
-    early = assignment(args.world, args.repeat)
-    target = cell(args.root, args.world, args.repeat)
-    stock = simulator.load_stock(args.stock.resolve(strict=True))
-    if stock.numpy_version != "2.1.3":
-        raise ValueError("the registered experiment requires NumPy 2.1.3")
     if args.command == "run":
-        issue(stock, target, args, early)
-    issued = load(target / "issued.json")
-    if issued != {
-        "schema": STUDY,
-        "world": args.world,
-        "repeat": args.repeat,
-        "early": early,
-        "control": args.control,
-    }:
-        raise ValueError("original attempt does not match the requested cell")
-    row = collect(stock, target, args.world, args.repeat, early)
+        issue(
+            stock,
+            cell(args.root, args.world, args.repeat),
+            args,
+            assignment(args.world, args.repeat),
+        )
+    row = inspect_cell(stock, args.root, args.world, args.repeat)
     print(json.dumps(row, sort_keys=True, allow_nan=False))
     return 0 if row["status"] == "complete" else 1
 

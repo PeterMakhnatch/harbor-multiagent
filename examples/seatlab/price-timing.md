@@ -18,6 +18,14 @@
 
 ## Run one new comparison
 
+Use the study branch on [Peter's fork](https://github.com/PeterMakhnatch/harbor-multiagent/tree/experiments/seatlab-live-price-timing). The upstream repository and the fork's default branch do not contain this study.
+
+```sh
+git clone --branch experiments/seatlab-live-price-timing --single-branch \
+  https://github.com/PeterMakhnatch/harbor-multiagent.git
+cd harbor-multiagent
+```
+
 Use Python 3.12 with NumPy 2.1.3 for `STOCK_PYTHON`. Point `BESPOKE_STOCK` at the [released benchmark checkout](https://github.com/bespokelabsai/multi-agent-coordination-bench/tree/dbec43ff757c86c17077e61b37c7f584c880bdee) at the registered revision. Use the [fork's isolated native setup](../../README.md#seatlab-workbench) for `HARBOR_PYTHON`. Do not replace a global Harbor installation. Docker must run locally. `SLOT_WRAPPER` must be the shared launcher that limits concurrent Docker trials. On the study host it is `/tmp/crucible-docker-slot.sh`.
 
 The live adapter supports personal `agy` 1.5.15 with `gemini-4-carbon-low`. Each live turn checks the route, client version, zero spendable AI credits, and the remaining quota. It denies tools and paid fallback. The client runs in an empty workspace. Never put credentials in the task, trial config, or Docker environment. The control does not call the model.
@@ -39,3 +47,22 @@ To inspect an existing cell without starting seats or Docker, run:
 "$STOCK_PYTHON" -B -m "$m.timing_study" inspect --root "$root" \
   --stock "$BESPOKE_STOCK" --world 0 --repeat 0
 ```
+
+## Collect or replay without a model
+
+After your workers finish, export their original attempts and score the panel. Neither command starts Docker or calls a model. The exporter reads all 16 slots. It distinguishes missing attempts, incomplete runs and completed runs. It never replaces a missing grade with zero.
+
+```sh
+m=examples.seatlab.market_handoff
+"$STOCK_PYTHON" -B -m "$m.timing_study" export \
+  --root "$root" --stock "$BESPOKE_STOCK" > "$root/rows.json"
+python3.12 -BS -m "$m.timing_panel" "$root/rows.json"
+```
+
+To check the business result, use the actual stock simulator. This command reconstructs the private views from public seeds, checks the recorded replies and their delivery order, then trades both committed policies to the terminal day. Add `--world 3` to inspect only company 3. A partial price commitment can be replayed, but it does not become a complete team result.
+
+```sh
+"$STOCK_PYTHON" -B -m "$m.timing_replay" "$root/rows.json" --stock "$BESPOKE_STOCK"
+```
+
+The public rows contain synthetic reports, choices and hashes. They do not authenticate a remote machine or a model provider. An owner with the original private directory can additionally verify the native result and client receipts with `inspect`.

@@ -98,6 +98,8 @@ Give an independent supervisor [the first hour of 3 real Bespoke teams](examples
 
 To run your own two-seat business task, [stage a real market in local Harbor](examples/seatlab/market-handoff.md#run-one-business-team-in-harbor). Sales sees demand and competition. Finance sees the company's cash and the sales recommendation. Replay needs no key. [Score 12 matched companies](examples/seatlab/market-handoff.md#result-the-correct-sales-recommendation-did-not-pass) without Docker, a simulator install, or a paid call.
 
+To test **when** a message matters, [compare the same sales report before and after finance commits its price](examples/seatlab/price-timing.md). Independent workers can run different companies. Anyone can replay the released decisions in the stock simulator without a model account.
+
 For a local campaign, [give independent workers the same sealed market panel](examples/seatlab/market-operations.md#how-independent-workers-run-this-study). They claim different companies and resume after an interruption. To test your own output selector, [split 18 completed-team pairs among blind workers](examples/seatlab/continuation-study.md#give-completed-team-pairs-to-independent-workers). The example runs without an API key.
 
 To test **your own sales and finance agents**, [send blind packets or connect two live programs](examples/seatlab/market-handoff.md#can-an-operator-bring-new-sales-and-finance-seats). Compare the native result with the actual prompts and first replies. The reference programs run without an API key.
