@@ -1,0 +1,27 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/budget.json"]
+
+[task]
+name = "harbor/seatlab-report-budget-native"
+description = "A sales analyst sends one report and a finance lead commits one price for the same simulated retail company."
+keywords = ["seats", "docker-compose", "multi-agent", "seatlab"]
+
+[metadata]
+difficulty = "medium"
+category = "example"
+tags = ["seats", "coordination", "report-budget"]
+
+[verifier]
+timeout_sec = 30.0
+
+[agent]
+timeout_sec = 900.0
+
+[environment]
+build_timeout_sec = 120.0
+
+[agents.sales]
+under_test = true
+
+[agents.finance]
+under_test = true

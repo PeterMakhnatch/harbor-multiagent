@@ -1,0 +1,8 @@
+{
+  "schema": "seatlab.report-budget-controls/v1",
+  "scope": "Native Harbor controls only. These are not model requests or live study companies.",
+  "controls": [
+    {"world": 24, "target": 100, "native_id": "fd96cb0f-d4fd-4c7e-a159-ccbea3adbe56", "checkpoint_sha256": "aecafa180a143a6b5594e36fce92eb3c2f6aa1256390d8e17ded8a1756080145", "sales_reason_chars": 100, "sales_status": "accepted", "finance_received_report": true, "finance_pick": 2, "protocol_reward": 1.0, "model_sessions": 0},
+    {"world": 24, "target": 160, "native_id": "07cd3751-0849-4659-96df-827e51f2d91c", "checkpoint_sha256": "aecafa180a143a6b5594e36fce92eb3c2f6aa1256390d8e17ded8a1756080145", "sales_reason_chars": 161, "sales_status": "invalid", "finance_received_report": false, "finance_pick": 1, "protocol_reward": 1.0, "model_sessions": 0}
+  ]
+}
