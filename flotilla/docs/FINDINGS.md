@@ -502,3 +502,33 @@ Inferred:
 
 Lesson: ramp trial starts after a pause (for example, at most 4 new trials per minute), record per-call model
 latency and retries in the seat trajectory, and scan every wave for shared gaps before applying a validity rule.
+
+## 2026-11-24 01:55 ET — A fifth of the money went to invalid trials, almost all before the wave runner existed
+
+Run: `docs/results/scripts/reliability.py .flotilla-local/jobs --runs .flotilla-local/runs` over every Flotilla
+trial on this host (754 job folders, 1291 trials, 2026-11-19 to 2026-11-23); no new trial, no cost.
+
+Observed:
+
+- 1166 of 1291 trials are valid (90.3%). The 125 invalid trials: 96 agent timeouts, 24 cancelled, 4 provider
+  errors (OpenRouter 404 from a data-policy block, 2:45-2:54 PM ET on 2026-11-23), 1 Docker build failure. No
+  world restart, verifier error or seat that never started.
+- $7.65 of the $34.51 recorded spend (22.2%) went to invalid trials; agent timeouts took $6.98 of it.
+- All 96 timed-out trials still have a verifier reward. A scoreboard that does not read `exception_info` counts
+  them.
+- 122 of the 125 invalid trials fall in 3 bursts: 2026-11-19 3:57-4:51 AM ET (60 of 177 started trials invalid)
+  and 5:08-6:39 AM ET (58 of 251), both before `run_wave.py`; and the 4 provider errors. The 619 trials run by
+  `run_wave.py` have 7 invalid trials, which cost $0.08; its validity verdicts match the ledger in all 619.
+- By model: qwen3.6-35b-a3b 60 of 141 invalid, glm-4.7-flash 34 of 90, deepseek-v4-flash 23 of 142, all from
+  timeouts and cancels; Haiku 5.5, gpt-6-luna and gpt-oss-120b each below 1%.
+- Docker: 0 setup failures in 140 trials, setup median 14 s; Modal: 1 in 1151, setup median 27 s.
+- The only stall event is the 2026-11-23 burst start (17 trials, 25 seats; entry above).
+
+Inferred:
+
+- Time limits, not providers or sandboxes, caused most losses: slow open models hit the 600 s and 900 s agent
+  limits in the first, unspaced waves.
+- A wave runner with a cap, start spacing and per-trial validity removed almost all of the waste.
+
+Lesson: price a wave with its expected invalid share; treat an agent timeout as invalid even when it has a reward;
+run `reliability.py` after each wave and `flotilla-watch` during it.
