@@ -5,6 +5,7 @@ import math
 import os
 import re
 import shlex
+import tempfile
 import time
 import tomllib
 from dataclasses import dataclass
@@ -18,6 +19,13 @@ from harbor.environments.base import BaseEnvironment, ExecResult
 from harbor.environments.capabilities import (
     EnvironmentCapabilities,
     EnvironmentResourceCapabilities,
+)
+from harbor.environments.desktop_exec import (
+    posix_exec_files,
+    posix_staged_exec,
+    staged_exec_files,
+    windows_exec_files,
+    windows_staged_exec,
 )
 from harbor.environments.options import EnvironmentOptions
 from harbor.models.environment_type import EnvironmentType
@@ -315,17 +323,78 @@ class UseComputerEnvironment(BaseEnvironment):
         timeout_sec: int | None = None,
         user: str | int | None = None,
     ) -> ExecResult:
-        merged_env = self._merge_env(env)
         timeout = self._exec_timeout(timeout_sec)
         user = self._resolve_user(user)
+        command_env = {
+            key: value
+            for key, value in (self._merge_env(env) or {}).items()
+            if _ENV_NAME_RE.fullmatch(key)
+        }
+        password = (
+            self._service_profile.sudo_password
+            if user is not None and self._service_profile is not None
+            else ""
+        )
+        if not command_env and not password:
+            return await self._exec_plain(command, cwd, timeout, user)
+
+        async def run(body: str) -> ExecResult:
+            return await self._exec_plain(body, None, timeout, None)
+
+        async def upload(contents: bytes, remote_path: str) -> None:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "payload"
+                path.write_bytes(contents)
+                if self._service_upload_path:
+                    await self._upload_service_file(path, remote_path)
+                else:
+                    await self.sandbox.upload(path, remote_path)
 
         if self._platform == "windows":
-            return await self._exec_windows(command, cwd, merged_env, timeout, user)
-        if self._platform == "ubuntu":
-            return await self._exec_ubuntu(command, cwd, merged_env, timeout, user)
+            body = self._compose_windows_command(command, cwd=cwd)
+            async with staged_exec_files(
+                run, upload, windows_exec_files(body, command_env), windows=True
+            ) as directory:
+                return await self._exec_plain(
+                    windows_staged_exec(directory), None, timeout, user
+                )
+
+        original_command = command
+        if self._platform in {"ios", "macos"}:
+            command = self._remap_macos_command(command)
+            command_env = self._remap_macos_env(command_env) or {}
+            cwd = self._remote_path(cwd) if cwd else None
         if self._platform == "ios":
-            return await self._exec_ios(command, cwd, merged_env, timeout)
-        return await self._exec_macos(command, cwd, merged_env, timeout, user)
+            user = None
+        body = self._compose_posix_command(command, cwd=cwd, user=None)
+        async with staged_exec_files(
+            run, upload, posix_exec_files(body, command_env, password)
+        ) as directory:
+            runner = posix_staged_exec(
+                directory, user=user, login=user is not None, askpass=bool(password)
+            )
+            return await self._exec_plain(
+                runner, None, timeout, None, original_command=original_command
+            )
+
+    async def _exec_plain(
+        self,
+        command: str,
+        cwd: str | None,
+        timeout: int,
+        user: str | int | None,
+        *,
+        original_command: str | None = None,
+    ) -> ExecResult:
+        if self._platform == "windows":
+            return await self._exec_windows(command, cwd, timeout, user)
+        if self._platform == "ubuntu":
+            return await self._exec_ubuntu(command, cwd, timeout, user)
+        if self._platform == "ios":
+            return await self._exec_ios(command, cwd, timeout)
+        return await self._exec_macos(
+            command, cwd, timeout, user, original_command=original_command
+        )
 
     @override
     async def upload_file(self, source_path: Path | str, target_path: str) -> None:
@@ -507,7 +576,6 @@ class UseComputerEnvironment(BaseEnvironment):
             "sudo chown lume /usr/local/bin && "
             "touch /logs/verifier/reward.txt",
             cwd=None,
-            env=None,
             timeout=60,
             user=None,
         )
@@ -516,33 +584,33 @@ class UseComputerEnvironment(BaseEnvironment):
         self,
         command: str,
         cwd: str | None,
-        env: dict[str, str] | None,
         timeout: int,
         user: str | int | None,
+        *,
+        original_command: str | None = None,
     ) -> ExecResult:
         command = self._compose_posix_command(
             self._remap_macos_command(command),
             cwd=self._remote_path(cwd) if cwd else None,
-            env=self._remap_macos_env(env),
             user=user,
         )
         command = self._wrap_posix_with_timeout(command, timeout)
         sandbox = cast(_MacOSSandbox, self.sandbox)
         start = time.monotonic()
         exec_ax = getattr(sandbox, "exec_ax", None)
-        if self._needs_macos_ax(command) and callable(exec_ax):
+        if self._needs_macos_ax(original_command or command) and callable(exec_ax):
             result = await exec_ax(command, timeout=timeout)
         else:
             result = await sandbox.exec_ssh(command, timeout=timeout)
         elapsed = time.monotonic() - start
-        normalized_command = command.replace("\\", "/")
+        normalized_command = (original_command or command).replace("\\", "/")
         if "/tests/" in normalized_command or "/logs/verifier/" in normalized_command:
             self.logger.info(
                 "verifier exec rc=%s (%.1fs) timeout=%ss cmd=%s",
                 result.return_code,
                 elapsed,
                 timeout,
-                self._cmd_snippet(command),
+                self._cmd_snippet(original_command or command),
             )
         return self._to_exec_result(result)
 
@@ -550,19 +618,12 @@ class UseComputerEnvironment(BaseEnvironment):
         self,
         command: str,
         cwd: str | None,
-        env: dict[str, str] | None,
         timeout: int,
         user: str | int | None,
     ) -> ExecResult:
+        command = self._compose_posix_command(command, cwd=cwd, user=user)
         if self._service_profile:
-            command = self._compose_service_command(
-                command,
-                cwd=cwd,
-                env=env,
-                user=user,
-            )
             return await self._exec_service(command, timeout=timeout)
-        command = self._compose_posix_command(command, cwd=cwd, env=env, user=user)
         result = await cast(_ShellSandbox, self.sandbox).shell.run(
             command,
             shell="bash",
@@ -574,13 +635,11 @@ class UseComputerEnvironment(BaseEnvironment):
         self,
         command: str,
         cwd: str | None,
-        env: dict[str, str] | None,
         timeout: int,
     ) -> ExecResult:
         command = self._compose_posix_command(
             self._remap_macos_command(command),
             cwd=self._remote_path(cwd) if cwd else None,
-            env=self._remap_macos_env(env),
             user=None,
         )
         result = await cast(_IOSSandbox, self.sandbox).exec(command, timeout=timeout)
@@ -590,7 +649,6 @@ class UseComputerEnvironment(BaseEnvironment):
         self,
         command: str,
         cwd: str | None,
-        env: dict[str, str] | None,
         timeout: int,
         user: str | int | None,
     ) -> ExecResult:
@@ -600,7 +658,7 @@ class UseComputerEnvironment(BaseEnvironment):
                 "commands run as the sandbox desktop user.",
                 user,
             )
-        command = self._compose_windows_command(command, cwd=cwd, env=env)
+        command = self._compose_windows_command(command, cwd=cwd)
         result = await cast(_ShellSandbox, self.sandbox).shell.run(
             command,
             shell="cmd",
@@ -613,18 +671,9 @@ class UseComputerEnvironment(BaseEnvironment):
         command: str,
         *,
         cwd: str | None,
-        env: dict[str, str] | None,
         user: str | int | None,
     ) -> str:
         parts: list[str] = []
-        if env:
-            exports = " ".join(
-                f"{name}={shlex.quote(str(value))}"
-                for name, value in env.items()
-                if _ENV_NAME_RE.match(name)
-            )
-            if exports:
-                parts.append(f"export {exports};")
         if cwd:
             parts.append(f"cd {shlex.quote(cwd)} &&")
         parts.append(command)
@@ -638,17 +687,12 @@ class UseComputerEnvironment(BaseEnvironment):
         command: str,
         *,
         cwd: str | None,
-        env: dict[str, str] | None,
     ) -> str:
         parts: list[str] = []
         if cwd:
             parts.append(
                 f"cd /d {quote_shell_arg(self._remote_path(cwd), TaskOS.WINDOWS)}"
             )
-        if env:
-            for name, value in env.items():
-                if _ENV_NAME_RE.match(name) and not self._has_cmd_line_break(value):
-                    parts.append(f'set "{name}={value}"')
         parts.append(command)
         return " && ".join(parts)
 
@@ -844,11 +888,6 @@ class UseComputerEnvironment(BaseEnvironment):
             return value
         return f"com.apple.CoreSimulator.{kind}.{value}"
 
-    @staticmethod
-    def _has_cmd_line_break(value: object) -> bool:
-        value_str = str(value)
-        return "\r" in value_str or "\n" in value_str or "\x00" in value_str
-
     # ====== Service-backed sandboxes ======
     # applies mainly to OsWorld as of right now, cause the DSL and environment is tightly coupled.
 
@@ -1042,26 +1081,6 @@ class UseComputerEnvironment(BaseEnvironment):
             except ValueError:
                 pass
         return min(0.5 * (2**attempt), 8.0)
-
-    def _compose_service_command(
-        self,
-        command: str,
-        *,
-        cwd: str | None,
-        env: dict[str, str] | None,
-        user: str | int | None,
-    ) -> str:
-        body = self._compose_posix_command(command, cwd=cwd, env=env, user=None)
-        if user is None:
-            return body
-        if self._service_profile is None or not self._service_profile.sudo_password:
-            return self._compose_posix_command(command, cwd=cwd, env=env, user=user)
-        password = shlex.quote(self._service_profile.sudo_password)
-        sudo_parts = ["sudo", "-S", "-p", "''"]
-        if str(user) != "root":
-            sudo_parts.extend(["-u", shlex.quote(str(user))])
-        sudo_parts.extend(["--", "bash", "-lc", shlex.quote(body)])
-        return f"printf '%s\\n' {password} | {' '.join(sudo_parts)}"
 
     def _setup_service_config(self) -> None:
         self._service_profile = self._resolve_service_profile()

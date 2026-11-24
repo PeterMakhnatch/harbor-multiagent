@@ -59,6 +59,7 @@ class FakeSandbox:
         self.keepalives: list[float] = []
         self.closed = False
         self.uploads: list[tuple[str, str]] = []
+        self.uploaded_contents: dict[str, bytes] = {}
         self.downloads: list[tuple[str, str]] = []
         self.exec_ssh_calls: list[dict[str, Any]] = []
         self.exec_ax_calls: list[dict[str, Any]] = []
@@ -71,6 +72,7 @@ class FakeSandbox:
 
     async def upload(self, local_path: str | Path, remote_path: str) -> None:
         self.uploads.append((str(local_path), remote_path))
+        self.uploaded_contents[remote_path] = Path(local_path).read_bytes()
 
     async def download_file(self, remote_path: str, local_path: str | Path) -> None:
         self.downloads.append((remote_path, str(local_path)))
@@ -221,12 +223,26 @@ async def test_start_creates_ubuntu_osworld_sandbox_with_service_proxy(
     assert sandbox.keepalives == [30.0]
     assert sandbox.shell.calls == []
     assert service_requests[0]["path"] == "/platform"
-    setup_payload = service_requests[1]["kwargs"]["json"]
-    assert "/logs/agent" in setup_payload["command"]
-    assert "/tmp/harbor/logs/agent" not in setup_payload["command"]
-    assert "sudo -S" in setup_payload["command"]
-    assert "VM_NET_IP=127.0.0.1" in setup_payload["command"]
-    assert "OSWORLD_CHROMIUM_PORT=9222" in setup_payload["command"]
+    commands = [
+        request["kwargs"]["json"]["command"]
+        for request in service_requests
+        if request["path"] == "/execute"
+    ]
+    scripts = [
+        request["kwargs"]["files"]["file_data"][1]
+        for request in service_requests
+        if request["path"] == "/setup/upload"
+        and request["kwargs"]["data"]["file_path"].endswith("/run.sh")
+    ]
+    assert any("sudo -A" in command for command in commands)
+    assert all("VM_NET_IP=127.0.0.1" not in command for command in commands)
+    assert any(
+        b"/logs/agent" in script
+        and b"/tmp/harbor/logs/agent" not in script
+        and b"VM_NET_IP=127.0.0.1" in script
+        and b"OSWORLD_CHROMIUM_PORT=9222" in script
+        for script in scripts
+    )
 
     await env.stop(delete=True)
     assert sandbox.closed
@@ -500,11 +516,21 @@ async def test_use_computer_osworld_keeps_canonical_harbor_paths(
     env._service_request = fake_service_request  # type: ignore[method-assign]
 
     await env.exec("chmod +x /tests/test.sh", user="root")
-    command = service_requests[-1]["kwargs"]["json"]["command"]
-
-    assert "/tests/test.sh" in command
-    assert "/tmp/harbor/tests/test.sh" not in command
-    assert "sudo -S" in command
+    command = next(
+        request["kwargs"]["json"]["command"]
+        for request in service_requests
+        if request["path"] == "/execute"
+        and "sudo -A" in request["kwargs"]["json"]["command"]
+    )
+    assert "/tests/test.sh" not in command
+    script = next(
+        request["kwargs"]["files"]["file_data"][1]
+        for request in service_requests
+        if request["path"] == "/setup/upload"
+        and request["kwargs"]["data"]["file_path"].endswith("/run.sh")
+    )
+    assert b"/tests/test.sh" in script
+    assert b"/tmp/harbor/tests/test.sh" not in script
 
     local_file = tmp_path / "fixture.txt"
     local_file.write_text("ok")
@@ -613,12 +639,13 @@ async def test_macos_remaps_harbor_paths_for_exec_and_upload(
         env={"OUT": "/logs/agent/out.txt"},
         timeout_sec=5,
     )
-    command = sandbox.exec_ssh_calls[-1]["command"]
-
-    assert "/tmp/harbor/logs/verifier/reward.txt" in command
-    assert "/tmp/harbor/runtime/skills" in command
-    assert "cd /tmp/harbor/tests" in command
-    assert "/tmp/harbor/tmp" not in command
+    assert all("OUT=" not in call["command"] for call in sandbox.exec_ssh_calls)
+    (script,) = sandbox.uploaded_contents.values()
+    assert b"/tmp/harbor/logs/verifier/reward.txt" in script
+    assert b"/tmp/harbor/runtime/skills" in script
+    assert b"cd /tmp/harbor/tests" in script
+    assert b"OUT=/tmp/harbor/logs/agent/out.txt" in script
+    assert b"/tmp/harbor/tmp" not in script
 
     local_file = tmp_path / "answer.txt"
     local_file.write_text("ok")

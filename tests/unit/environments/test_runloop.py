@@ -143,6 +143,34 @@ def _policy_name(policy: NetworkPolicy) -> str:
     return RunloopEnvironment._runloop_network_policy_name(policy)
 
 
+async def test_exec_stages_environment_outside_command(temp_dir):
+    env = _make_env(temp_dir)
+    result = SimpleNamespace(
+        exit_code=0,
+        stdout=AsyncMock(return_value=""),
+        stderr=AsyncMock(return_value=""),
+    )
+    run = AsyncMock(return_value=result)
+    uploaded = {}
+
+    async def upload(*, path, file):
+        uploaded[path] = file.read_text()
+
+    env._client = SimpleNamespace()
+    env._devbox = SimpleNamespace(
+        cmd=SimpleNamespace(exec=run), file=SimpleNamespace(upload=upload)
+    )
+    await env.exec("pwd", user="agent", env={"TOKEN": "synthetic-value"})
+
+    setup, execute, cleanup = [call.kwargs["command"] for call in run.await_args_list]
+    directory = setup.removeprefix("mkdir -m 700 ")
+    assert setup.startswith("mkdir -m 700 /tmp/harbor-env-")
+    assert "su agent -s /bin/bash -c" in execute
+    assert execute.endswith(f"bash -s' < {directory}/env.sh")
+    assert cleanup == f"rm -rf {directory}"
+    assert "TOKEN=synthetic-value" in uploaded[f"{directory}/env.sh"]
+
+
 def _set_client(
     env: RunloopEnvironment,
     network_policies: _FakeNetworkPolicies,

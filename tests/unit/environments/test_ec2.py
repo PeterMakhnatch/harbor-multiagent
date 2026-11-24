@@ -471,7 +471,8 @@ async def test_exec_uses_detached_status_file_polling(tmp_path: Path) -> None:
     assert start_args[:3] == ["exec", "-T", "-d"]
     assert ["-w", "/work"] == start_args[3:5]
     assert "-e" in start_args
-    assert "EXAMPLE=1" in start_args
+    assert start_args[start_args.index("-e") + 1] == "EXAMPLE"
+    assert env._compose_exec.await_args_list[0].kwargs["env"] == {"EXAMPLE": "1"}
     assert start_args[-3:-1] == ["bash", "-lc"]
     assert "runtime_exec_" in start_args[-1]
 

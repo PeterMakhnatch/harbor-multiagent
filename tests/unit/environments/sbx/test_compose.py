@@ -133,7 +133,9 @@ async def test_exec_supervises_main_and_posix_sidecars(
         assert argv[wrapper_index - 3 : wrapper_index] == ["sh", "-c", _EXEC_WATCHER]
         assert argv[wrapper_index + 1 : wrapper_index + 3] == [shell, "-c"]
         if index == 0:
-            assert "VALUE=a 'quoted' value" in argv
+            assert argv[argv.index("VALUE") - 1] == "-e"
+            assert "a 'quoted' value" not in outer
+            assert host.commands[index][2]["VALUE"] == "a 'quoted' value"
     await compose._compose_exec(["exec", "-T", "main", "true"])
     assert not host.commands[-1][0].startswith("exec 3<")
     assert host.exec_eof_acks[-1] is None
@@ -368,12 +370,13 @@ async def test_compose_uses_outer_host_for_setup_and_main_for_agent(
     await compose.exec("pwd")
     await compose.service_exec("pwd", service="api")
 
-    main_command, _, _ = host.commands[-2]
+    main_command, _, main_env = host.commands[-2]
     sidecar_command, _, _ = host.commands[-1]
     assert (
-        "exec -T -w /workspace -e PERSISTENT=present main bash -c 'umask 022; pwd'"
+        "exec -T -w /workspace -e PERSISTENT main bash -c 'umask 022; pwd'"
         in main_command
     )
+    assert main_env["PERSISTENT"] == "present"
     assert "exec -T api sh -c pwd" in sidecar_command
     assert "PERSISTENT=present api" not in sidecar_command
 

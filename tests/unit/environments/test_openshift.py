@@ -6,7 +6,10 @@ exec command assembly, and the start/stop lifecycle (with all external
 calls mocked).
 """
 
+import asyncio
 import json
+import os
+import shlex
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,7 +22,6 @@ from harbor.environments.openshift import (
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import EnvironmentConfig
 from harbor.models.trial.paths import TrialPaths
-
 
 # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -636,11 +638,40 @@ class TestOpenshiftExec:
             return_value=ExecResult(return_code=0, stdout="", stderr="")
         )
 
-        await oc_env.exec("echo $FOO", env={"FOO": "bar"})
+        value = "synthetic='value' $(not-a-command)\n"
+        await oc_env.exec(
+            """printf '%s=%s' "$FOO" "$EMPTY" """,
+            env={"FOO": value, "EMPTY": ""},
+        )
 
-        cmd = oc_env._run_oc_command.call_args[0][0]
-        shell_cmd = cmd[-1] if isinstance(cmd[-1], str) else " ".join(cmd)
-        assert "FOO" in shell_cmd
+        call = oc_env._run_oc_command.call_args
+        cmd = call.args[0]
+        assert "-i" in cmd
+        assert "not-a-command" not in " ".join(cmd)
+        assert shlex.split(call.kwargs["stdin_data"].decode())[:3] == [
+            "export",
+            f"FOO={value}",
+            "EMPTY=",
+        ]
+
+    @pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
+    async def test_exec_stdin_preserves_literal_values(self, oc_env):
+        oc_env._run_oc_command = AsyncMock(return_value=ExecResult(return_code=0))
+        value = "synthetic='value' $(not-a-command)\n"
+        await oc_env.exec(
+            """printf '%s=%s' "$FOO" "$EMPTY" """, env={"FOO": value, "EMPTY": ""}
+        )
+        call = oc_env._run_oc_command.call_args
+        cmd = call.args[0]
+        process = await asyncio.create_subprocess_exec(
+            *cmd[cmd.index("--") + 1 :],
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate(call.kwargs["stdin_data"])
+        assert process.returncode == 0, stderr
+        assert stdout.decode() == value + "="
 
     async def test_exec_with_user_string_uses_su(self, oc_env):
         oc_env._run_oc_command = AsyncMock(
@@ -653,6 +684,42 @@ class TestOpenshiftExec:
         shell_str = " ".join(cmd)
         assert "su" in shell_str
         assert "runuser" not in shell_str
+
+    async def test_exec_hands_inherited_stdin_to_selected_user(self, oc_env):
+        oc_env._run_oc_command = AsyncMock(return_value=ExecResult(return_code=0))
+        await oc_env.exec("true", env={"TOKEN": "synthetic"}, user="agent")
+
+        call = oc_env._run_oc_command.await_args
+        argv = call.args[0]
+        assert argv[-3:] == ["bash", "-c", "su agent -s /bin/bash -c 'bash -s'"]
+        assert b"synthetic" in call.kwargs["stdin_data"]
+
+    @pytest.mark.skipif(os.name == "nt", reason="Executes a POSIX shell locally")
+    async def test_exec_stdin_does_not_restart_bash_with_command_env(
+        self, oc_env, tmp_path
+    ):
+        oc_env._run_oc_command = AsyncMock(return_value=ExecResult(return_code=0))
+        startup = tmp_path / "startup.sh"
+        startup.write_text("printf 'unexpected startup' >&2\n")
+        await oc_env.exec(
+            'printf "%s\\n" "$BASH_ENV"; set -e; false; echo not-reached',
+            env={"BASH_ENV": str(startup)},
+        )
+
+        call = oc_env._run_oc_command.await_args
+        argv = call.args[0]
+        assert argv[-2:] == ["bash", "-s"]
+        process = await asyncio.create_subprocess_exec(
+            *argv[argv.index("--") + 1 :],
+            env={key: value for key, value in os.environ.items() if key != "BASH_ENV"},
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate(call.kwargs["stdin_data"])
+        assert process.returncode == 1
+        assert stdout.decode() == f"{startup}\n"
+        assert stderr == b""
 
     async def test_exec_with_user_int_resolves_via_getent(self, oc_env):
         oc_env._run_oc_command = AsyncMock(

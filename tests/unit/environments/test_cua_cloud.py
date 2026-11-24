@@ -306,11 +306,34 @@ def test_exec_short_command_goes_through_service(
     assert "echo hi" in command
 
 
+def test_docker_exec_stages_environment_outside_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env, _, fake_svc = _make_env(tmp_path, monkeypatch)
+    asyncio.run(env.start())
+    env._task_container = "test-container"
+    fake_svc.calls.clear()
+    value = "synthetic='value' $dollar\n"
+
+    asyncio.run(env.exec("echo hi", env={"TOKEN": value, "EMPTY": ""}, timeout_sec=30))
+
+    setup, command, cleanup = fake_svc.exec_calls()
+    assert setup.startswith("mkdir -m 700 /tmp/harbor-env-")
+    assert command.startswith(". /tmp/harbor-env-")
+    assert "-e TOKEN -e EMPTY" in command
+    assert all("synthetic" not in part for part in (setup, command, cleanup))
+    uploads = [call for call in fake_svc.calls if call["path"] == "/setup/upload"]
+    assert len(uploads) == 1
+    assert b"synthetic=" in uploads[0]["files"]["file_data"][1]
+    assert cleanup == "rm -rf " + setup.removeprefix("mkdir -m 700 ")
+
+
 def test_exec_composes_env_cwd_user(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env, _, fake_svc = _make_env(tmp_path, monkeypatch, sudo_password="pw")
     asyncio.run(env.start())
+    fake_svc.calls.clear()
 
     asyncio.run(
         env.exec(
@@ -318,11 +341,20 @@ def test_exec_composes_env_cwd_user(
         )
     )
 
-    command = fake_svc.exec_calls()[-1]
-    assert command.startswith("printf '%s\\n' pw | sudo -S")
+    setup, command, cleanup = fake_svc.exec_calls()
+    assert setup.startswith("mkdir -m 700 /tmp/harbor-exec-")
+    assert "sudo -A" in command and " pw " not in command
     assert "-u user" in command
-    assert "export FOO=bar;" in command
-    assert "cd /work &&" in command
+    assert "FOO=bar" not in command
+    files = {
+        call["data"]["file_path"].rsplit("/", 1)[-1]: call["files"]["file_data"][1]
+        for call in fake_svc.calls
+        if call["path"] == "/setup/upload"
+    }
+    assert b"export FOO=bar" in files["run.sh"]
+    assert b"cd /work &&" in files["run.sh"]
+    assert b" pw\n" in files["askpass"]
+    assert cleanup == "rm -rf " + setup.removeprefix("mkdir -m 700 ")
 
 
 def test_exec_windows_composition(
@@ -335,13 +367,24 @@ def test_exec_windows_composition(
         task_env_config=EnvironmentConfig(os=TaskOS.WINDOWS),
     )
     asyncio.run(env.start())
+    fake_svc.calls.clear()
+    fake_svc.exec_results["echo %LOCALAPPDATA%"] = {
+        "output": "C:\\Users\\Test\\AppData\\Local\r\n",
+        "returncode": 0,
+    }
 
     asyncio.run(env.exec("dir", cwd="C:/work", env={"FOO": "bar"}, timeout_sec=30))
 
-    command = fake_svc.exec_calls()[-1]
-    assert "cd /d C:\\work" in command
-    assert 'set "FOO=bar"' in command
-    assert command.endswith("dir")
+    _, _, command, _ = fake_svc.exec_calls()
+    assert command.startswith("powershell.exe ")
+    assert "bar" not in command
+    files = {
+        call["data"]["file_path"].rsplit("\\", 1)[-1]: call["files"]["file_data"][1]
+        for call in fake_svc.calls
+        if call["path"] == "/setup/upload"
+    }
+    assert b'"FOO": "bar"' in files["env.ps1"]
+    assert b"cd /d C:\\work && dir" in files["command.txt"]
 
 
 def test_exec_long_command_uses_detached_path(

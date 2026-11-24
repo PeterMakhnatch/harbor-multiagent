@@ -6,6 +6,7 @@ import time
 import tarfile
 import json
 import hashlib
+import shlex
 
 import httpx
 from pathlib import Path
@@ -818,7 +819,12 @@ async def test_compose_start_uses_docker_enabled_sandbox_and_layered_compose(
     assert "-f /harbor/compose/docker-compose-resources.json" not in up_command
     assert "-f /harbor/compose/docker-compose-no-network.yaml" not in build_command
     assert "-f /harbor/compose/docker-compose-no-network.yaml" not in up_command
-    assert "PREBUILT_IMAGE_NAME=docker.io/library/python:3.12-slim" in build_command
+    build_call = next(
+        call for call in env._sandbox.process.calls if call["args"][2] == build_command
+    )
+    assert (
+        build_call["env"]["PREBUILT_IMAGE_NAME"] == "docker.io/library/python:3.12-slim"
+    )
     assert "docker compose" in up_command
     assert (
         "/harbor/compose/docker-compose-resources.json"
@@ -1072,7 +1078,7 @@ async def test_exec_merges_env_cwd_user_and_result(
 
     result = await env.exec(
         "echo hi",
-        env={"B": "2"},
+        env={"B": "2", "HOME": "/custom 'home'\n", "USER": "custom-user"},
         user="agent",
     )
 
@@ -1081,11 +1087,15 @@ async def test_exec_merges_env_cwd_user_and_result(
     assert call["args"] == (
         beam_mod._SANDBOX_BASH,
         "-c",
-        "su agent -s /bin/bash -c "
-        f"'{beam_mod._SHELL_DEFAULT_EXPORTS}; export A=1 B=2; echo hi'",
+        "su agent -s /bin/bash -c 'exec /bin/bash -s'",
     )
     assert call["cwd"] == "/workspace"
     assert "env" not in call["kwargs"]
+    script = shlex.split(call["kwargs"]["stdin"].decode())
+    assert "A=1" in script
+    assert "B=2" in script
+    assert "HOME=/custom 'home'\n" in script
+    assert "USER=custom-user" in script
 
 
 @pytest.mark.asyncio
@@ -1102,9 +1112,48 @@ async def test_exec_adds_shell_defaults_without_sdk_env(
     assert call["args"] == (
         beam_mod._SANDBOX_BASH,
         "-c",
-        f"{beam_mod._SHELL_DEFAULT_EXPORTS}; echo $HOME",
+        'export HOME="${HOME:-/root}" '
+        'PATH="${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"; '
+        "umask 022; echo $HOME",
     )
     assert "env" not in call["kwargs"]
+
+
+@pytest.mark.parametrize("compose", [False, True])
+@pytest.mark.parametrize("key", ["HOME", "PATH"])
+async def test_exec_preserves_explicit_empty_shell_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, compose: bool, key: str
+) -> None:
+    env = _make_env(
+        tmp_path,
+        monkeypatch,
+        compose="services: {db: {image: redis:7}}" if compose else None,
+    )
+    sandbox = FakeSandbox()
+    env._sandbox = sandbox
+    variables = {key: ""}
+
+    if compose:
+        assert env._compose is not None
+        compose_exec = AsyncMock(return_value=ExecResult(return_code=0))
+        env._compose._compose_exec = compose_exec
+        await env.exec("true", env=variables)
+        call = compose_exec.await_args
+        parts = call.args[0]
+        command = parts[-1]
+        alias = f"HARBOR_BEAM_EXEC_{key}"
+        assert parts[parts.index("-e") + 1] == alias
+        assert call.kwargs["env"] == {alias: ""}
+        assert f'export {key}="${{{alias}}}"' in command
+    else:
+        await env.exec("true", env=variables)
+        call = sandbox.process.calls[-1]
+        command = call["args"][-1]
+        assert call["env"] == variables
+
+    other = "PATH" if key == "HOME" else "HOME"
+    assert f"${{{key}:-" not in command
+    assert f"${{{other}:-" in command
 
 
 @pytest.mark.asyncio
@@ -1206,9 +1255,9 @@ async def test_exec_does_not_wrap_explicit_root_user(
     await env.exec("true", user="0")
 
     assert [call["args"] for call in fake_sandbox.process.calls] == [
-        (beam_mod._SANDBOX_BASH, "-c", f"{beam_mod._SHELL_DEFAULT_EXPORTS}; true"),
-        (beam_mod._SANDBOX_BASH, "-c", f"{beam_mod._SHELL_DEFAULT_EXPORTS}; true"),
-        (beam_mod._SANDBOX_BASH, "-c", f"{beam_mod._SHELL_DEFAULT_EXPORTS}; true"),
+        (beam_mod._SANDBOX_BASH, "-c", beam_mod._with_shell_defaults("true")),
+        (beam_mod._SANDBOX_BASH, "-c", beam_mod._with_shell_defaults("true")),
+        (beam_mod._SANDBOX_BASH, "-c", beam_mod._with_shell_defaults("true")),
     ]
 
 
@@ -1233,8 +1282,9 @@ async def test_compose_exec_targets_main_with_env_cwd_and_user(
     assert result.return_code == 0
     parts = env._compose._compose_exec.call_args.args[0]
     assert parts[:4] == ["exec", "-T", "-w", "/workspace"]
-    assert parts[4:9] == ["-u", "agent", "main", "bash", "-lc"]
-    assert parts[9] == f"{beam_mod._SHELL_DEFAULT_EXPORTS}; export A=1 B=2; echo hi"
+    assert parts[4:13] == ["-e", "A", "-e", "B", "-u", "agent", "main", "bash", "-lc"]
+    assert parts[13] == beam_mod._with_shell_defaults("echo hi")
+    assert env._compose._compose_exec.call_args.kwargs["env"] == {"A": "1", "B": "2"}
 
 
 @pytest.mark.asyncio
