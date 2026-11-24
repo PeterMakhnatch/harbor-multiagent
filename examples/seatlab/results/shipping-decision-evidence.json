@@ -1,0 +1,372 @@
+{
+  "schema": "harbor.shipping.decision-evidence/v1",
+  "releases": [
+    {
+      "release": "stock-controls",
+      "source": "published native stock controls; physical outcomes, seat exits not established",
+      "registered": 26,
+      "present": 26,
+      "missing": 0,
+      "accepted_decisions": 22,
+      "decision_unrecorded": 0,
+      "no_decision": 4,
+      "inbox_returns_before_decision": 14,
+      "inbox_unrecorded_at_decision": 0,
+      "empty_returns_before_decision": 6,
+      "references_before_decision": 8,
+      "citation_opportunities_measured": 0,
+      "cited_at_decision": null,
+      "strata": [
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "decided_without_reference",
+          "rows": 7,
+          "known_rewards": 7,
+          "reward_one": 6
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "no_decision",
+          "rows": 2,
+          "known_rewards": 2,
+          "reward_one": 2
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "returned_citation_unrecorded",
+          "rows": 4,
+          "known_rewards": 4,
+          "reward_one": 2
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "decided_without_reference",
+          "rows": 7,
+          "known_rewards": 7,
+          "reward_one": 1
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "no_decision",
+          "rows": 2,
+          "known_rewards": 2,
+          "reward_one": 0
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "returned_citation_unrecorded",
+          "rows": 4,
+          "known_rewards": 4,
+          "reward_one": 3
+        }
+      ]
+    },
+    {
+      "release": "inflight-cuts",
+      "source": "registered scripted controls; public native claims and replayed frozen cut",
+      "registered": 16,
+      "present": 16,
+      "missing": 0,
+      "accepted_decisions": 14,
+      "decision_unrecorded": 0,
+      "no_decision": 2,
+      "inbox_returns_before_decision": 12,
+      "inbox_unrecorded_at_decision": 0,
+      "empty_returns_before_decision": 4,
+      "references_before_decision": 8,
+      "citation_opportunities_measured": 0,
+      "cited_at_decision": null,
+      "strata": [
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "decided_without_reference",
+          "rows": 3,
+          "known_rewards": 3,
+          "reward_one": 1
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "no_decision",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "returned_citation_unrecorded",
+          "rows": 4,
+          "known_rewards": 4,
+          "reward_one": 3
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "decided_without_reference",
+          "rows": 3,
+          "known_rewards": 3,
+          "reward_one": 2
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "no_decision",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "returned_citation_unrecorded",
+          "rows": 4,
+          "known_rewards": 4,
+          "reward_one": 2
+        }
+      ]
+    },
+    {
+      "release": "two-worlds",
+      "source": "published native qualification for the two-world scripted controls",
+      "registered": 16,
+      "present": 16,
+      "missing": 0,
+      "accepted_decisions": 8,
+      "decision_unrecorded": 8,
+      "no_decision": 0,
+      "inbox_returns_before_decision": 8,
+      "inbox_unrecorded_at_decision": 0,
+      "empty_returns_before_decision": 4,
+      "references_before_decision": 4,
+      "citation_opportunities_measured": 0,
+      "cited_at_decision": null,
+      "strata": [
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "decided_without_reference",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "decision_unrecorded",
+          "rows": 2,
+          "known_rewards": 2,
+          "reward_one": 0
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "decided_without_reference",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "decision_unrecorded",
+          "rows": 2,
+          "known_rewards": 2,
+          "reward_one": 2
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "decided_without_reference",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "decision_unrecorded",
+          "rows": 2,
+          "known_rewards": 2,
+          "reward_one": 2
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "decided_without_reference",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "decision_unrecorded",
+          "rows": 2,
+          "known_rewards": 2,
+          "reward_one": 0
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        }
+      ]
+    },
+    {
+      "release": "disconnected",
+      "source": "published worker qualification, not raw inbox events; a missing ticket and an unspecified receipt remain unknown",
+      "registered": 8,
+      "present": 7,
+      "missing": 1,
+      "accepted_decisions": 7,
+      "decision_unrecorded": 0,
+      "no_decision": 0,
+      "inbox_returns_before_decision": 4,
+      "inbox_unrecorded_at_decision": 3,
+      "empty_returns_before_decision": 0,
+      "references_before_decision": 4,
+      "citation_opportunities_measured": 0,
+      "cited_at_decision": null,
+      "strata": [
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "reference_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "fails",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "reference_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "inflight",
+          "axis": "fate",
+          "state": "settles",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "reference_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "committed",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 0
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "missing_result",
+          "rows": 1,
+          "known_rewards": 0,
+          "reward_one": null
+        },
+        {
+          "world": "stock",
+          "axis": "prior",
+          "state": "dropped",
+          "observation": "returned_citation_unrecorded",
+          "rows": 1,
+          "known_rewards": 1,
+          "reward_one": 1
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Reports are separate releases, not independent replications. Do not add their team counts.",
+    "Stock prior state occurs before the seats act. In-flight supplier fate occurs after they stop.",
+    "An empty inbox response is not a returned reference. A returned reference is not a citation.",
+    "Only a returned reference before an accepted decision creates a citation opportunity. Unrecorded is not zero.",
+    "A citation records the accepted action, not comprehension, intent or a causal effect on reward."
+  ]
+}
