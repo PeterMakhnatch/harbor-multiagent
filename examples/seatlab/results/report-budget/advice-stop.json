@@ -1,0 +1,22 @@
+{
+  "arm": "facts",
+  "durable_campaign_stop": {
+    "cause": "admission_refused",
+    "cell": "r0-w22-facts",
+    "schema": "seatlab.report-budget-campaign-stop/v1"
+  },
+  "first_slot_admission": {
+    "cause": "denied",
+    "outcome": "refused",
+    "schema": "seatlab.subscription-admission/v1",
+    "stage": "version"
+  },
+  "model_calls_for_version_probe": 0,
+  "native_world": 22,
+  "original_replies_on_disk": 0,
+  "original_requests_on_disk": 0,
+  "rank": 0,
+  "registered_client_version": "1.5.15",
+  "schema": "seatlab.advice-pilot-admission-stop/v1",
+  "version_reported_after_stop": "1.5.16"
+}

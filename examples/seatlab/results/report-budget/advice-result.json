@@ -1,0 +1,437 @@
+{
+  "arms": [
+    "facts",
+    "advice"
+  ],
+  "cards_sha256": "51a324e6ee5214880663393c3c33563bb068bc372f8ce648b44b2f3f099a1b07",
+  "companies": [
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "unobserved"
+        }
+      },
+      "checkpoint_sha256": "9618ccbc76ce210f3208847d20fc8af619b394c62743e3ff0939889c0eac2b05",
+      "first_arm": "facts",
+      "native_id": "17a9b5a9-ed0d-4315-8854-b813372d2efa",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 0,
+      "sender_answer_sha256": "c3ffe061be18e7b49b6c1e704cdd3c78bb7d43b5ccf22067383ed07b613371a8",
+      "sender_pick": 3,
+      "sender_session_sha256": "6ccc7623ebc673ba60d5b078af92714c528e029c59f8277cbf26c11e3d85f3fa",
+      "world": 22
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "35072a44291be46dfb7408f973ddd512a0efceba80a6badcf0eb04b6795dce16",
+      "first_arm": "advice",
+      "native_id": "f170c17c-d643-4ae0-b951-51a481a5058f",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 1,
+      "sender_answer_sha256": "20a97dfb475be0d7012112b34d690e8ad15c064b3f281dc6a78d52ca8e58a45e",
+      "sender_pick": 3,
+      "sender_session_sha256": "28371d155b36c52ce566371082389d221b1ec927a0f9046729e05516d646eb30",
+      "world": 8
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "650677e9b60b45cda9c35b6c05c033998b04c7e5512dd46a47ab0c4b492a7c3d",
+      "first_arm": "facts",
+      "native_id": "9d6bd283-c469-477d-9eb4-2c8419d2842c",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 2,
+      "sender_answer_sha256": "7ba1bed9081df0f874c8b2612b4900ea7eb88caa38a17d3268126074b46dbf18",
+      "sender_pick": 3,
+      "sender_session_sha256": "07c71006b0316cd1341e6f88f25fd229bd21a5c5c8348d09329d909363e075f2",
+      "world": 4
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "a786034c7b687df9b0509e1301531cc6665866d22ceb074e4d1ff414ea770c52",
+      "first_arm": "advice",
+      "native_id": "a3edfbf0-3386-4d59-8bf4-9093f5ebc58a",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 3,
+      "sender_answer_sha256": "1b22af1d10d6d6f0f85293651ad033bc6e258d9537e0a8927711b47e78937214",
+      "sender_pick": 3,
+      "sender_session_sha256": "70a43ab152f9a816841157cec33472a4391884e9bb91c1b55720fe2af37cc3ae",
+      "world": 1
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "2f999f4c565bcfe2f095747daa508269b2d43631c3053201ea67640a6df58765",
+      "first_arm": "facts",
+      "native_id": "def3336b-ffc5-40ca-832c-ad72289e2f7d",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 4,
+      "sender_answer_sha256": "d38e604267a39079cb093936ba83f75092352affd91d91e595424b2f84c94b8c",
+      "sender_pick": 1,
+      "sender_session_sha256": "4f21d1b4c6051a32183ae13409fd7a3aa8dce46be20abbcf5bda131c289e45f4",
+      "world": 0
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "425a281fb50e20569b8d03299350afafb6534be2d5a0f318a69b23901315691d",
+      "first_arm": "advice",
+      "native_id": "434a8eaf-3a18-4969-9498-3c3185219e19",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 5,
+      "sender_answer_sha256": "abbe75b703d90b296261f55a6e54a2ea32d66e1efd9462d315b0143dec85a0a0",
+      "sender_pick": 1,
+      "sender_session_sha256": "9cceb65c11b217fc06257f7e87bebce0a2f51af7eca2693e87579e89a45e3c87",
+      "world": 20
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "e99fe7dc932522042eb2bacca5f155d46f5495ad62ef768cbcd11ca588a5e3a2",
+      "first_arm": "facts",
+      "native_id": "3feb12af-688d-4858-8856-4f27e91d1ffa",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 6,
+      "sender_answer_sha256": "4ba2f59dd438965102770f7d84ef16d6e4cbf159ed17dcd27aeebf2d202fcbcd",
+      "sender_pick": 3,
+      "sender_session_sha256": "84d86e0120ca48ed2d2764aaa4e2c2bdc10e8641c989ad404f70569de327000f",
+      "world": 11
+    },
+    {
+      "advice_minus_facts_usd": null,
+      "arms": {
+        "advice": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        },
+        "facts": {
+          "answer_sha256": null,
+          "continuation_profit_usd": null,
+          "matches_recommendation": null,
+          "pick": "unknown",
+          "receiver_session_sha256": null,
+          "request_sha256": null,
+          "status": "not_issued"
+        }
+      },
+      "checkpoint_sha256": "1c8e09831f1f9948562fa4968d290517b363d9e7ce81a58c76f8161cfbd4682d",
+      "first_arm": "advice",
+      "native_id": "2fb1b156-b118-4754-a8dd-9135bda8490b",
+      "pair": "unknown",
+      "price_changed": null,
+      "rank": 7,
+      "sender_answer_sha256": "cf2035cf2a078ec3dcf1f01fabeb63f360e280e3ba68bfc26ab536e00aa0a9f9",
+      "sender_pick": 1,
+      "sender_session_sha256": "39ffb4bcdff384e505121266be5eaa528c7152dfbdfb832004fd3b6145d2a50c",
+      "world": 18
+    }
+  ],
+  "missing_pairs": [
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "unobserved"
+      },
+      "rank": 0,
+      "world": 22
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 1,
+      "world": 8
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 2,
+      "world": 4
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 3,
+      "world": 1
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 4,
+      "world": 0
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 5,
+      "world": 20
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 6,
+      "world": 11
+    },
+    {
+      "arms": {
+        "advice": "not_issued",
+        "facts": "not_issued"
+      },
+      "rank": 7,
+      "world": 18
+    }
+  ],
+  "price_changes": 0,
+  "profit": {
+    "advice_wins": 0,
+    "complete_pairs": 0,
+    "facts_wins": 0,
+    "mean_advice_minus_facts_usd": null,
+    "metric": "continuation_profit_usd of the exact stock settlement of each committed finance price; advice minus facts on complete pairs only; a missing price is unknown, not zero",
+    "sum_advice_minus_facts_usd": null,
+    "ties": 0
+  },
+  "readiness": {
+    "complete_pairs": 0,
+    "exact_settlements": 0,
+    "feasible": false,
+    "larger_trial_on_new_companies_warranted": false,
+    "new_native_teams": 0,
+    "one_byte_contrast_verified": 8,
+    "price_changes": 0,
+    "required_pairs": 8,
+    "value_claim": false,
+    "value_claim_reason": "descriptive feasibility pilot; a positive profit difference does not warrant exposing recommendations by default"
+  },
+  "recommendation_agreement": {
+    "advice": {
+      "denominator_priced": 0,
+      "matched": 0
+    },
+    "complete_pairs": {
+      "advice_matched": 0,
+      "denominator": 0,
+      "facts_matched": 0
+    },
+    "facts": {
+      "denominator_priced": 0,
+      "matched": 0
+    }
+  },
+  "schema": "seatlab.report-budget-advice-summary/v1",
+  "source": {
+    "archived_verified_sessions": 93,
+    "sender_target": 100,
+    "sha256": "d42f481e38c9d6bf819a546b666f9749fece0c1985fd0fdda96a9927c9ea2e5e"
+  },
+  "usage": {
+    "archived_native_senders": 8,
+    "attestation": "each receipt is a timing_seat owner receipt: passed admission, requested gemini-4-carbon-low, no served model, zero tools, no paid fallback, positive client usage, fresh receiver session distinct from every archived sender",
+    "billing": "not claimed",
+    "by_arm": {
+      "advice": {
+        "issued": 0,
+        "known_client_tokens": 0,
+        "prices": 0,
+        "requests": 0,
+        "slots": 8,
+        "unknown_prices": 8,
+        "verified": 0
+      },
+      "facts": {
+        "issued": 1,
+        "known_client_tokens": 0,
+        "prices": 0,
+        "requests": 0,
+        "slots": 8,
+        "unknown_prices": 8,
+        "verified": 0
+      }
+    },
+    "finance": {
+      "issued": 1,
+      "known_client_tokens": 0,
+      "prices": 0,
+      "requests": 0,
+      "requests_with_unknown_tokens": 0,
+      "slots": 16,
+      "unknown_prices": 16,
+      "verified": 0
+    },
+    "new_native_teams": 0,
+    "new_sales_requests": 0,
+    "status": {
+      "invalid": 0,
+      "not_issued": 15,
+      "priced": 0,
+      "unanswered": 0,
+      "unobserved": 1
+    },
+    "usage_source": "client-reported usage.total_tokens on verified turns only; not a billing, provider or server attestation"
+  },
+  "worlds": [
+    22,
+    8,
+    4,
+    1,
+    0,
+    20,
+    11,
+    18
+  ]
+}

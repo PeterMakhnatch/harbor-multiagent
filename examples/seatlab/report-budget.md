@@ -48,6 +48,16 @@ Run facts first for ranks 0, 2, 4, 6 and advice first for the other ranks. Reque
 
 **Decision rule.** Call the comparison feasible only with 8 complete pairs, 16 verified independent receiver choices, the registered one-byte input difference, and exact stock settlement of all choices. To justify a larger trial on *new* companies, also require at least one paired price difference. Report recommendation agreement, price changes and actual paired operating profit separately. These are descriptive; even a positive pilot does not warrant exposing recommendations by default. Missing choices make the registered feasibility test incomplete, not a zero-price outcome.
 
+**Pilot result: stopped before a receiver request.** The first slot (world 22, facts only) stopped at the client version check. The registered client was `1.5.15`; the executable reported `1.5.16` in a version-only check after the stop. The owner directory contains the refusal and no request, reply, or price. The remaining 15 slots were never issued. There are 0 complete price pairs and no measured effect. The 8 reconstructed prompt pairs passed the one-byte check; that is input evidence, not receiver behavior. No paid API or Docker trial ran. The original 48 native teams above are unaffected.
+
+The [8 source cards](results/report-budget/advice-cards.json), [stop receipt](results/report-budget/advice-stop.json), [all 16 slots](results/report-budget/advice-turns.json) and [result](results/report-budget/advice-result.json) preserve that distinction. Reproduce both reports without a key, Docker, or a model:
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench verify native-report-budget advice-visibility-pilot
+```
+
+Keep this cohort closed. Qualify a versioned client and register a separate cohort before testing seller advice again. Do not substitute a new executable for the registered one or treat the absent prices as zero.
+
 ## Registered plan
 
 **Decision.** Should a Harbor task ask for fewer characters than its delivery channel accepts? In the [previous Bespoke study](price-timing.md#live-result-more-agreement-no-established-profit-benefit), 4 first sales replies had valid prices but explanations of 161–172 characters. The maximum was 160. This study does not edit those replies or reuse those companies.
@@ -109,3 +119,24 @@ python3.12 -BS -m examples.seatlab.report_budget.panel "$OWNER_ROOT/public-rows.
 "$STOCK_PYTHON" -B -m examples.seatlab.report_budget.replay \
   "$OWNER_ROOT/public-rows.json" --stock "$BESPOKE_STOCK"
 ```
+
+## Reuse a native sender without running another native team
+
+The receiver pilot starts new finance sessions from 8 archived sales decisions. It does not start Harbor or Docker. Use it to test a change to the information a receiver gets **before** spending resources on fresh teams. It cannot measure a new team grade or a seller's response to a new policy.
+
+The portable scorer needs only Python 3.12 and the 3 public files: original native rows, archived cards and receiver turns. To collect a cohort of your own, use the pinned stock runtime and the guarded personal client described above. Use a fresh private directory. Never publish that directory.
+
+```sh
+DATA=examples/seatlab/results/report-budget
+OWNER="$(mktemp -d)"
+OP=examples.seatlab.report_budget
+"$STOCK_PYTHON" -B -m "$OP.advice_card" "$DATA/rows.json" \
+  --stock "$BESPOKE_STOCK" > "$OWNER/cards.json"
+"$STOCK_PYTHON" -B -m "$OP.advice_turn" run --source "$DATA/rows.json" \
+  --stock "$BESPOKE_STOCK" --owner "$OWNER" --client "$AGY_CLIENT"
+"$STOCK_PYTHON" -B -m "$OP.advice_turn" export --source "$DATA/rows.json" \
+  --stock "$BESPOKE_STOCK" --owner "$OWNER" > "$OWNER/turns.json"
+python3.12 -BS -m "$OP.advice_panel" "$OWNER/cards.json" "$OWNER/turns.json"
+```
+
+Run `export` even if collection stops. It keeps all 16 slots and never contacts a model. A durable stop or an interrupted claim is not permission to retry that slot. Read `readiness`, `recommendation_agreement`, and `profit` separately. A valid summary can report that the pilot did not pass.

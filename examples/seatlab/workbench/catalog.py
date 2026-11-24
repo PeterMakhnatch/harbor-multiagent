@@ -9,6 +9,7 @@ Kind = Literal[
     "partial-native-operator-cohort",
     "stock-business-counterfactual",
     "native-replay-team",
+    "archived-sender-live-receiver",
     "secondary-native-receipt-analysis",
 ]
 
@@ -178,6 +179,22 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/report-budget/result.json",
         exit_code=0,
         sha256="2f5f10f542a5fc20273c486c922eb38f71f9db7d3fd1fdcabcf48d052cc61bc3",
+    ),
+    Study(
+        id="advice-visibility-pilot",
+        question="Can matched receivers isolate seller advice from the same numeric sales facts?",
+        kind="archived-sender-live-receiver",
+        guide="examples/seatlab/report-budget.md",
+        module="examples.seatlab.report_budget.advice_panel",
+        argv=(
+            f"{_RESULTS}/report-budget/advice-cards.json",
+            f"{_RESULTS}/report-budget/advice-turns.json",
+            "--source",
+            f"{_RESULTS}/report-budget/rows.json",
+        ),
+        report=f"{_RESULTS}/report-budget/advice-result.json",
+        exit_code=0,
+        sha256="efe5d19c85f2a5f0e98fe39744e4dc9c492d1facedadfd6acb8df933c6458c2e",
     ),
 )
 
