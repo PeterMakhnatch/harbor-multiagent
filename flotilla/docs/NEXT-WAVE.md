@@ -444,6 +444,12 @@ without `stages` runs as before.
    the staged ones.
 8. `--smoke` ignores `stages` and runs its first N instances as before.
 
+**Rehearsal.** Run `flotilla/plans/oracle/rr1-oracle.json` without `--smoke` to keep the `rr1` stages.
+Use the same `rf1v` task build and set `--run-dir .flotilla-local/runs/rr1-rehearsal`.
+The plan runs every seat on the oracle at $0, with 2 Docker slots and no provider key.
+Expect 24 trials and `stop-futility` at the first look. Read the jobs with `probe_analysis.py --models oracle`.
+Use `stages.json` for the rehearsal decision. `rr1_decide.py` accepts only the `rr1` plan.
+
 Data policy: the account has zero data retention on. The dry run, and a smoke with OpenRouter models, print
 `ZDR warning: <model>: no zero-data-retention endpoint: an account with ZDR on gets 404` for each OpenRouter
 model that has no ZDR endpoint in the public list (`/api/v1/endpoints/zdr`, cached 24 h in
