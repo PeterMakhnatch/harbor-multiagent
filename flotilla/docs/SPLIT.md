@@ -975,7 +975,7 @@ DeepSeek's 3 missed seat-rounds are 1 seat (p1 of `lws-772c44`, instance 33) tha
 that trial had no gate refusal. By the rule, DeepSeek is dropped and lwc does not run. H1 is unchanged (Haiku and
 Luna). lw1 started at 7:25 PM ET.
 
-**Amendment 2 (2026-11-23, 8:58 PM ET, before any lwc trial; the lw1 result had been read).** A scan of all seat
+**Amendment 2 (2026-11-23, 8:47 PM ET, before any lwc trial; the lw1 result had been read).** A scan of all seat
 trajectories after lw1 found one shared stall. 25 seats in 17 trials of 4 plans (xm1, pv10, xp1, lws) went 612 to
 747 s between 2 turns, and every stall started between 7:07:52 and 7:09:01 PM ET, just after the resume burst
 (about 31 trials started within 10 s). Of the seats in flight at 7:08:30 PM ET, 17 of 22 DeepSeek seats stalled, 4

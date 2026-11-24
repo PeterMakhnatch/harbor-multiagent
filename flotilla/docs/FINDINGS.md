@@ -432,3 +432,67 @@ direct, local Docker and world versions 5, 7 and 4, against OpenRouter, Modal an
 79/173 commons). The rate is stable across route, environment and world version for this model. Eval Lab's
 muster runs (`boxes`, DeepSeek Flash with thinking off, another harness) measured 82%, so the task and the
 harness change the rate too.
+
+## 2026-11-23 20:48 ET — A read gate turns pending messages into counter-offers
+
+Run: wave lw1 (SPLIT.md section 19 and section 20), world v11, split regime b, 32 instances, Claude Haiku 5.5 and
+gpt-6-luna, arms `talk` and `gated`, 128 trials, $0.89, pre-registered; independent re-derivation (0 mismatches)
+and a trajectory reading of all trials. In `gated` the world refuses a claim or pass with 409 while the seat has
+an undelivered message, and the 409 carries the messages.
+
+Observed:
+
+- Deals: Haiku 26 of 32 in talk and 28 of 32 in gated; Luna 22 of 32 and 29 of 32. Pooled exact test over 64
+  pairs: b = 11, c = 2, p = 0.0225 (alpha 0.025): PASS, b > c in both models; most of it is Luna (8 against 1).
+- In talk, Haiku took 103 of 109 exposed claims with an unread message and Luna 117 of 145, the xm1 pattern.
+- In 9 of the 11 gated-only deals the 409 handed a seat the other seat's round-1 offer, and the seat changed its
+  claim to fit in the same round (`lw1-20d942` p2: "Reading them shows p1 claimed 77 and proposed that I claim 35
+  ... My 56 would have made the total 133, causing no deal").
+- All 89 refusals (with the smoke) led to reasoning that names the delivered message; no seat treated the 409 as
+  an error, and no refused action slipped to a later round. Gated seats missed 0 seat-rounds.
+- Both talk-only deals pay a seat below its outside option. Counting only deals that give both seats their
+  outside options, the discordant pairs are 9 gated-only and 0 talk-only.
+- Costs: Haiku sends its claim with a blocking `/wait`, so 28 of 42 Haiku retries came more than 55 s after the
+  409; in 2 Luna trials the gate moved a seat from its outside option to a lower offer (59 to 43, 78 to 65).
+- In 4 of the b pairs the deciding talk claim came before the other seat had sent anything; 7 of the 13
+  discordant pairs are on the 6 instances where only round 1 can make a deal.
+
+Inferred:
+
+- For models that act before they read, delivery at the point of action restores the message channel: the world,
+  not the prompt, decides whether a message is heard. The talk-versus-silent split failure of xm1 (b = 3, c = 7)
+  and this PASS fit one account: Haiku and Luna did not use messages they never fetched.
+- The effect is concentrated where the first claim decides the game. Where round 2 can still make a deal, the
+  silent 2-step focal rule already works, and the gate adds little.
+- Part of b comes from message timing (a message must exist before the claim for the gate to fire); a later arm can
+  separate inbox use from timing, for example by letting a seat see whether the other seat has written.
+
+Lesson: a communication arm needs a delivery path that does not depend on the seat polling. Report the share of
+actions taken with an unread message next to every talk effect.
+
+## 2026-11-23 20:48 ET — A burst start after a pause stalled 25 seats for 10 to 12 minutes
+
+Run: the resume of waves xm1, pv10 and xp1 and the smoke lws at 7:07 PM ET (about 31 trials started within 10 s,
+3 runners, Modal, OpenRouter); found by a scan of seat trajectories for gaps over 500 s between turns.
+
+Observed:
+
+- 25 seats in 17 trials went 612 to 747 s between 2 turns, and every gap started between 7:07:52 and 7:09:01 PM
+  ET. Of the seats in flight at 7:08:30 PM ET: DeepSeek 17 of 22, Claude Haiku 4 of 24, gpt-6-luna 0 of 17.
+- No trial that started after 7:10 PM ET has such a gap (lw1: 0 of 128).
+- A stalled step shows no error: `pv10-38fa2c` p1 sent `curl /wait` with a 30 s duration at 7:09:01 PM ET, and its
+  next step came at 7:19:36 PM ET with an uncached prompt. The trial log has no timeout or retry line.
+- All 17 trials are harness-valid. Effects: DeepSeek commons pairs 9 and 11 (silent lakes lost; the
+  pre-registered sensitivity check removes them), pv10 Haiku instance 1 (a silent-only deal), and the DeepSeek lw
+  smoke failure (`lws-772c44` p1, 747 s), which SPLIT.md section 19 Amendment 2 re-runs. No pooled decision
+  changes.
+
+Inferred:
+
+- The stall is on the provider routes, not on the host or Modal: Luna seats on the same host and in the same
+  minute did not stall. The gap length (about 600 s plus a turn) fits a client request timeout and a successful
+  retry, but the logs do not show it.
+- A smoke or validity rule that counts missed rounds cannot tell a provider stall from a model that does not act.
+
+Lesson: ramp trial starts after a pause (for example, at most 4 new trials per minute), record per-call model
+latency and retries in the seat trajectory, and scan every wave for shared gaps before applying a validity rule.

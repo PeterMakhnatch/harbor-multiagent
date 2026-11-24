@@ -554,3 +554,50 @@ How the seats played (an independent reading of all 43 trials by a separate agen
 Inferred: across 3 model families the talk arm raises survival in direction, but the mechanism is not the one
 the arm names. Most seats act before they read; talk helps where the seats share a sustainable rule or adopt a
 coordination frame, and fails where one seat misreads the rule and never reads the correction.
+
+## 21. Cross-model wave xm1 (commons part): final result
+
+The wave finished at 8:18 PM ET on 2026-11-23 after the credit stop (section 20; SPLIT.md sections 18 and 20).
+96 commons trials, all harness-valid, none truncated; every model-arm misses at most 6.2% of its seat-rounds. An
+independent re-derivation from the raw files (SPLIT.md section 20) reproduced every number below.
+
+| Model | Silent survived | Talk survived | Pairs | b | c | Exact p | Over-use silent / talk | Sustained share silent / talk |
+|---|---|---|---|---|---|---|---|---|
+| Claude Haiku 5.5 (new) | 4 of 16 | 8 of 16 | 16 | 7 | 3 | 0.344 | 0.81 / 0.57 | 0.32 / 0.45 |
+| gpt-6-luna (new) | 2 of 16 | 10 of 16 | 16 | 9 | 1 | 0.0215 | 0.58 / 0.29 | 0.32 / 0.69 |
+| DeepSeek V4.1 Flash (replication) | 7 of 16 | 16 of 16 | 16 | 9 | 0 | 0.0039 | 0.28 / 0.01 | 0.52 / 0.99 |
+
+Pooled over the 2 new models: 32 pairs, b = 16, c = 4, p = 0.0118 (alpha 0.025): PASS, consistent (b > c in both
+models). Talk keeps more lakes alive for all 3 model families. Predictions (section 19 as amended): talk minus
+silent survival is 25 points for Haiku and 50 for Luna (at least 25: held, Haiku exactly at the bound); talk
+survival is at most 85% for both (held); DeepSeek talk 100% (at least 80%: held) and silent 44% (at most 60%:
+held); prediction 4 failed for both new models (talk over-use 0.57 against half of 0.81 for Haiku, and 0.2913
+against half of 0.5812 for Luna, a miss by 0.0007).
+
+How the seats played (an independent reading of all 96 trials by a separate agent, with quotes):
+
+1. **Luna survives by a shared fair share in talk.** In all 9 lakes where only talk survived, the 3 Luna talk seats
+   opened at the fair share and kept it; each silent twin lost to a high opening request and then a grab. Luna's
+   first over-use is a scope error in 6 of 13 new trials (the group's safe catch read as one seat's: "39 is roughly
+   one-third of the starting stock").
+2. **Haiku over-uses by guess, and its talk survivals are low.** Haiku opens above the fair share in 27 of 48 talk
+   seats and 42 of 48 silent seats, usually a "moderate" guess with no arithmetic (`xm1-1c030e`: 40, fair share
+   14). 6 of its 8 talk survivals and 3 of its 4 silent survivals end below 80% of capacity (down to 18 of 92 fish):
+   the hidden season ended before the lake collapsed.
+3. **DeepSeek talk survives 16 of 16;** every round-1 request is at or below the fair share. Silent loses 9 of 16:
+   5 by one seat taking the whole lake in round 1, 2 by a small over-use and a retaliating grab, and 2 by stalls.
+4. **Reading.** Talk seats saw 35% (Haiku), 42% (Luna) and 89% (DeepSeek) of the messages sent to them. Share of
+   exposed talk actions taken with an unread message (`listening.py`, all 48 talk lakes): Haiku 203 of 256 (0.79),
+   Luna 158 of 282 (0.56), DeepSeek 146 of 388 (0.38).
+5. **Flags.** A stall hit seats at the burst start of the resume (7:08 PM ET; every affected trial started within 3
+   s of the resume): single DeepSeek seats went 632 to 694 s between turns in 3 commons trials. The 2 silent ones
+   (`xm1-70c504`, `xm1-d60ec4`) each miss 5 or 6 seat-rounds and decide DeepSeek pairs 9 and 11. The
+   pre-registered sensitivity check (without trials that missed more than 2 seat-rounds) sets them apart: DeepSeek
+   b = 7, c = 0 (p = 0.0156), pooled primary unchanged (PASS). Other flags: low "survivals" (point 2); 12% to 25% of
+   over-use seat-rounds are unequal splits of a safe total; 11 Haiku messages in 7 trials are logged in the round
+   after the one they describe; 27 of 48 DeepSeek silent seats searched the container and found nothing of another
+   seat; 11 requests hit the hidden 10**6 limit.
+
+Inferred: talk saves lakes for all 3 families, but by 2 routes. Where all seats compute and keep the same fair share
+(DeepSeek, and Luna in its talk survivals), the lake stays full; where seats guess (Haiku), talk slows the decline
+but does not stop it, and many "survivals" are lakes that the hidden season saved.
