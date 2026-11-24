@@ -12,6 +12,8 @@ A multi-agent task puts several agents in one environment at once. Use it to bui
 
 Each agent runs in its own container, with its own harness, model, instruction and logs. Any harness and model that Harbor supports can fill any role, either as an agent under test or as a supporting agent. The verifier grades the whole environment once, at the end.
 
+To use a multi-agent task as a controlled experiment, where conditions differ in one factor, check it against the [validity checklist](/tasks/multi-agent-validity).
+
 ## How it fits together
 
 - The task's `environment/docker-compose.yaml` holds the environment's services plus one service per agent.
