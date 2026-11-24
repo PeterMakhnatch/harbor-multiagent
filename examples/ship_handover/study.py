@@ -101,7 +101,10 @@ def _check_participant(value: object, where: str) -> str:
     else:
         as_text(member.get("model_name"), f"{where} model_name", MODEL_NAME)
         if "model_api_key_name" in member:
-            as_text(member["model_api_key_name"], f"{where} key name", KEY_NAME)
+            key = as_text(member["model_api_key_name"], f"{where} key name", KEY_NAME)
+            require(
+                not key.startswith(WORLD_PREFIX), f"{where} key names a world field"
+            )
         if "model_api_format" in member:
             as_text(member["model_api_format"], f"{where} api format", API_FORMAT)
     if "env" in member:
