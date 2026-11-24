@@ -737,12 +737,11 @@ in flight), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run befo
 `io1` runs after `rr1` (section 16), on GPT-6 Luna and on every new model that PASSes `rr1`. Haiku and DeepSeek
 are dropped: outside `au1` and Luna's `rf1v` `talk-false` cell, no false number reached a final answer in 2,224
 valid trials of all 3 models (FINDINGS.md, 2026-11-24 10:49 ET), so their cells were predicted at 0 to 2 of 32 and
-add cost without information.
-Holm family is the 2 tests (`io1v`, `io1s`) of each included model, alpha 0.05. The 2 x 2 reading uses the
-model's `rr1` result as "relied" (PASS) or "did not rely" (FAIL); for Luna, `rr1` replaces `rf1v`. The plan
-`flotilla/plans/io1.json` names the included models before the first trial; its OpenRouter cap is $0.30 per
-model. Before the read, `io1_decide.py` takes the family size from the plan and the reliance result from the
-`rr1` decisions file (a tool change, not a design change). The rest of this section holds.
+add cost without information. The Holm family is the 2 tests (`io1v`, `io1s`) of each included model, alpha 0.05.
+The 2 x 2 reading uses the model's `rr1` result as "relied" (PASS) or "did not rely" (FAIL); for Luna, `rr1`
+replaces `rf1v`. The plan `flotilla/plans/io1.json` names the included models before the first trial; its
+OpenRouter cap is $0.30 per model. Before the read, `io1_decide.py` takes the family size from the plan and the
+reliance result from the `rr1` decisions file (a tool change, not a design change). The rest of this section holds.
 
 ## 15. Pre-registration: challenge-response pilot cr1 (written 2026-11-24, before any trial with teammate replies)
 
