@@ -243,3 +243,7 @@ Verify the [fresh receipts](results/market-handoff/native-repeat-receipts.json) 
 ```sh
 python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat
 ```
+
+**Clean environment: one reproduced grade and one unresolved live turn.** A private install with uv 0.13.5 ran the recorded business team. Sales and finance both chose 1; stock reward was 0. A second operator used `--include-anchors`, reproduced the same choices with another new ID, then re-entered without starting a duplicate. The four-seat typed calendar on the shared gate also finished and scored 1.
+
+The signed-in calendar on the private installation did **not** pass the separate owner-evidence check. One reporter accepted its request but returned no verified reply. The booking seat timed out; Harbor recorded no submission and a grade of 0. No client receipt establishes how many tokens that turn used. The worker kept the first attempt. The [redacted operator record](results/market-handoff/independent-operator.json) distinguishes this measured grade from the unknown usage. It does not establish what caused the missing reply.
