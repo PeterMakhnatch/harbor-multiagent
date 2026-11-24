@@ -1,0 +1,49 @@
+{
+  "cases": [
+    {
+      "case": "gate-return",
+      "journal_rows_at_notice": 4,
+      "native_cli_alive_at_notice": true,
+      "native_reward": 1.0,
+      "peer_at_notice": "entered_only",
+      "result_existed_at_notice": false,
+      "target": "p2",
+      "target_disposition": "returned",
+      "trial": "df38acfa-27d5-46c3-989d-07c5dce20047",
+      "wait_exit": 0,
+      "wait_outcome": "returned",
+      "witness_marks": [
+        "setup_entered",
+        "setup_returned",
+        "run_entered",
+        "oracle_returned",
+        "wrapper_returned"
+      ]
+    },
+    {
+      "case": "gate-stopped",
+      "journal_rows_at_notice": 5,
+      "native_cli_alive_at_notice": true,
+      "native_reward": 1.0,
+      "peer_at_notice": "returned",
+      "result_existed_at_notice": false,
+      "target": "p2",
+      "target_disposition": "stop_requested",
+      "trial": "68805ba8-34aa-44e9-8233-e5c469dd5401",
+      "wait_exit": 1,
+      "wait_outcome": "not_returned",
+      "witness_marks": [
+        "setup_entered",
+        "setup_returned",
+        "run_entered",
+        "oracle_returned",
+        "hold_started",
+        "hold_cancelled",
+        "wrapper_cancelled"
+      ]
+    }
+  ],
+  "registration": "4c45a25affb5b8590e89c7ce2a64726deeae2749",
+  "schema": "seatlab.native-return-gate-firsts/v1",
+  "source": "baad86c2834bd488c1c91b1cbd232aa16616c4ab"
+}
