@@ -58,6 +58,7 @@ from ..shift_board.collect import (
     load_verifier,
 )
 from .contract import environment, load_registration
+from .schedules import VERDICTS, classify
 
 SCHEMA = "harbor.seat-seal.collection/v1"
 SEAL_SCHEMA = "harbor.seat-seal.world/v1"
@@ -616,8 +617,15 @@ def _gate(trial: Path, cell: Record, native_id: str) -> Record:
         _check_schedule(receipt, cell, native_id)
     except Invalid as problem:
         return _gate_row("invalid", str(problem), None)
-    status = "complete" if receipt["status"] == "complete" else "incomplete"
-    return _gate_row(status, None, receipt)
+    verdict = classify(cell["schedule"], receipt["status"], receipt["trace"])
+    assert verdict in VERDICTS
+    if verdict == "invalid":
+        return _gate_row(
+            "invalid",
+            "schedule receipt status and trace do not follow the published protocol",
+            None,
+        )
+    return _gate_row(verdict, None, receipt)
 
 
 def _unresolved(status: str, reason: str | None) -> Record:

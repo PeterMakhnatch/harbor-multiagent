@@ -1,0 +1,146 @@
+{
+  "empty_archive": {
+    "incomplete_pairs": 9,
+    "missing_tickets": 18
+  },
+  "same_native_grade_on_all_single_receipt_cases": 0,
+  "schema": "harbor.seat-seal.receipt-controls/v1",
+  "second_directory_same_ticket": {
+    "grades_retained": 17,
+    "native_grade": null,
+    "status": "ambiguous"
+  },
+  "single_receipt_cases": {
+    "acknowledgement-lost": {
+      "ack": "failed",
+      "decision": "committed",
+      "gate": "complete",
+      "joined": true,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "boolean-ordinal": {
+      "ack": "ok",
+      "decision": "invalid",
+      "gate": "complete",
+      "joined": null,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": null,
+      "status": "graded"
+    },
+    "empty-complete-gate": {
+      "ack": "ok",
+      "decision": "committed",
+      "gate": "invalid",
+      "joined": true,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "foreign-world": {
+      "ack": "ok",
+      "decision": "invalid",
+      "gate": "complete",
+      "joined": null,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": null,
+      "status": "graded"
+    },
+    "host-journal-missing": {
+      "ack": null,
+      "decision": "committed",
+      "gate": "complete",
+      "joined": null,
+      "journal": "absent",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "no-decision-with-acknowledged-mark": {
+      "ack": "ok",
+      "decision": "invalid",
+      "gate": "complete",
+      "joined": false,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "ordinal-disagrees-with-independent-mark": {
+      "ack": "ok",
+      "decision": "invalid",
+      "gate": "complete",
+      "joined": null,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "plausible-interrupted-gate": {
+      "ack": "ok",
+      "decision": "committed",
+      "gate": "incomplete",
+      "joined": true,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "reordered-complete-gate": {
+      "ack": "ok",
+      "decision": "committed",
+      "gate": "invalid",
+      "joined": true,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "short-truncated-ledger": {
+      "ack": "ok",
+      "decision": "committed",
+      "gate": "complete",
+      "joined": true,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": "truncated",
+      "status": "graded"
+    },
+    "world-decision-missing": {
+      "ack": "ok",
+      "decision": "absent",
+      "gate": "complete",
+      "joined": null,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": null,
+      "status": "graded"
+    },
+    "world-mark-missing": {
+      "ack": null,
+      "decision": "committed",
+      "gate": "complete",
+      "joined": null,
+      "journal": "invalid",
+      "native_grade": 0,
+      "refusal_ledger": "recorded",
+      "status": "graded"
+    },
+    "wrong-refusal-owner": {
+      "ack": "ok",
+      "decision": "invalid",
+      "gate": "complete",
+      "joined": null,
+      "journal": "bounded",
+      "native_grade": 0,
+      "refusal_ledger": null,
+      "status": "graded"
+    }
+  },
+  "source": "Separate altered copies of one completed scripted ticket. No native trial was rerun. A missing join is null, not evidence that the request failed."
+}
