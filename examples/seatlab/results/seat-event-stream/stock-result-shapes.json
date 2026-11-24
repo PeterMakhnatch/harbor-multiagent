@@ -1,0 +1,104 @@
+{
+  "ship-default": {
+    "result_fields": [
+      "agent_execution",
+      "agent_info",
+      "agent_result",
+      "agent_setup",
+      "config",
+      "environment_setup",
+      "exception_info",
+      "finished_at",
+      "id",
+      "reward_valid",
+      "schema_version",
+      "seat_results",
+      "source",
+      "started_at",
+      "step_results",
+      "task_checksum",
+      "task_id",
+      "task_name",
+      "trial_name",
+      "trial_uri",
+      "verifier",
+      "verifier_environment_mode",
+      "verifier_result"
+    ],
+    "schema_version": 1,
+    "seat_fields": {
+      "outgoing": [
+        "agent_execution",
+        "agent_info",
+        "agent_result",
+        "agent_setup",
+        "exception_info",
+        "execution_disposition",
+        "seat",
+        "under_test"
+      ],
+      "relief": [
+        "agent_execution",
+        "agent_info",
+        "agent_result",
+        "agent_setup",
+        "exception_info",
+        "execution_disposition",
+        "seat",
+        "under_test"
+      ]
+    },
+    "task_checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+  },
+  "ship-observed": {
+    "result_fields": [
+      "agent_execution",
+      "agent_info",
+      "agent_result",
+      "agent_setup",
+      "config",
+      "environment_setup",
+      "exception_info",
+      "finished_at",
+      "id",
+      "reward_valid",
+      "schema_version",
+      "seat_results",
+      "source",
+      "started_at",
+      "step_results",
+      "task_checksum",
+      "task_id",
+      "task_name",
+      "trial_name",
+      "trial_uri",
+      "verifier",
+      "verifier_environment_mode",
+      "verifier_result"
+    ],
+    "schema_version": 1,
+    "seat_fields": {
+      "outgoing": [
+        "agent_execution",
+        "agent_info",
+        "agent_result",
+        "agent_setup",
+        "exception_info",
+        "execution_disposition",
+        "seat",
+        "under_test"
+      ],
+      "relief": [
+        "agent_execution",
+        "agent_info",
+        "agent_result",
+        "agent_setup",
+        "exception_info",
+        "execution_disposition",
+        "seat",
+        "under_test"
+      ]
+    },
+    "task_checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+  }
+}

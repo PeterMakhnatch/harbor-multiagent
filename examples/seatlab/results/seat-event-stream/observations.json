@@ -1,0 +1,242 @@
+{
+  "cases": {
+    "setup-refusal": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "end"
+      ],
+      "reward": null,
+      "reward_valid": false,
+      "trial": "0ded0687-8b32-4047-b878-6b98041b1509",
+      "witness": {
+        "p1": [
+          "setup_entered",
+          "setup_refused"
+        ],
+        "p2": []
+      }
+    },
+    "ship-default": {
+      "journal_mode": null,
+      "journal_present": false,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1,
+      "reward_valid": true,
+      "trial": "bb59200e-6bff-4a5d-a536-19529d32202f",
+      "witness": {
+        "outgoing": [],
+        "relief": []
+      }
+    },
+    "ship-observed": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1,
+      "reward_valid": true,
+      "trial": "cb99d649-4811-4f99-a87a-ffd0292edc76",
+      "witness": {
+        "outgoing": [],
+        "relief": []
+      }
+    },
+    "support-cancel": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1.0,
+      "reward_valid": true,
+      "trial": "631fa2bb-e89e-420f-9d20-e80d8f7ba018",
+      "witness": {
+        "p1": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "delay_started",
+          "delay_elapsed",
+          "wrapper_returned"
+        ],
+        "p2": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "cancel_raised",
+          "wrapper_cancelled"
+        ]
+      }
+    },
+    "support-fault": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1.0,
+      "reward_valid": true,
+      "trial": "a882f9ae-4f88-4199-b836-4471f09b6f5c",
+      "witness": {
+        "p1": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "delay_started",
+          "delay_elapsed",
+          "wrapper_returned"
+        ],
+        "p2": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "error_raised",
+          "wrapper_raised"
+        ]
+      }
+    },
+    "support-held": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1.0,
+      "reward_valid": true,
+      "trial": "fd2043d1-44b8-4062-b333-e554fdd8dec7",
+      "witness": {
+        "p1": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "delay_started",
+          "delay_elapsed",
+          "wrapper_returned"
+        ],
+        "p2": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "hold_started",
+          "hold_cancelled",
+          "wrapper_cancelled"
+        ]
+      }
+    },
+    "support-return": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1.0,
+      "reward_valid": true,
+      "trial": "21834e78-5b04-4c11-b1db-b7e3d131e2dc",
+      "witness": {
+        "p1": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "delay_started",
+          "delay_elapsed",
+          "wrapper_returned"
+        ],
+        "p2": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "wrapper_returned"
+        ]
+      }
+    },
+    "team-deadline": {
+      "journal_mode": 384,
+      "journal_present": true,
+      "native_events": [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end"
+      ],
+      "reward": 1.0,
+      "reward_valid": true,
+      "trial": "61a751fa-0d84-4e34-892b-2a264c54bd32",
+      "witness": {
+        "p1": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "hold_started",
+          "hold_cancelled",
+          "wrapper_cancelled"
+        ],
+        "p2": [
+          "setup_entered",
+          "setup_returned",
+          "run_entered",
+          "oracle_returned",
+          "hold_started",
+          "hold_cancelled",
+          "wrapper_cancelled"
+        ]
+      }
+    }
+  },
+  "external_prefix": {
+    "case": "support-return",
+    "cli_process_still_running": true,
+    "prefix_rows": 4,
+    "trial_result_existed_after": false,
+    "trial_result_existed_before": false
+  },
+  "registered_at": "480b9b4131e1d20d97451ad39201f9f99861eff2",
+  "schema": "seatlab.seat-life-observations/v1",
+  "source": "c8a5e69af50044ba191e62addb248f3fc45b428b"
+}

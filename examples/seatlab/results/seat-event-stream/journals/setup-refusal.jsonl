@@ -1,0 +1,2 @@
+{"schema":"harbor.seat-events/v1","kind":"open","seq":0,"trial":"0ded0687-8b32-4047-b878-6b98041b1509","seats":[{"name":"p1","under_test":true},{"name":"p2","under_test":false}]}
+{"kind":"closed","seq":1,"elapsed_ns":12856999667}
