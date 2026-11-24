@@ -460,8 +460,8 @@ def test_version_14_posts_keep_their_offsets_when_the_subject_starts_after_them(
     added = [e["t"] for e in world.events() if e["kind"] == "send"]
     messages = world.request("GET", "/admin/state", token=world.admin)[1]["messages"]
     assert [m["text"] for m in messages] == ["early", "late"]
-    for message, post, at in zip(messages, posts, added):
-        assert abs(message["t"] - (at - post["before_s"])) < 0.02  # the offsets as drawn
+    moments = [message["t"] + post["before_s"] for message, post in zip(messages, posts)]
+    assert max(moments) - min(moments) <= 0.002 and -0.002 <= added[0] - moments[0] < 0.5  # the offsets as drawn
 
 
 def test_version_14_posts_meet_a_first_call_to_submit_at_the_gate(tmp_path, start_world):
@@ -516,8 +516,9 @@ def test_version_16_posts_come_at_the_first_submission_of_the_seat_under_test_an
     (added,) = {round(e["t"], 1) for e in sends}
     assert status == 409 and [(m["from"], m["text"]) for m in reply["messages"]] == [
         ("p4", "I got 641."), ("p4", "Void rows still count."), ("p3", "641")]
-    for message, before in zip(reply["messages"], (2.6, 2.0, 1.2)):
-        assert abs(message["t"] - (sends[0]["t"] - before)) < 0.02  # dated before the submission, as drawn
+    moments = [message["t"] + before for message, before in zip(reply["messages"], (2.6, 2.0, 1.2))]
+    assert max(moments) - min(moments) <= 0.002  # one moment for all posts, each dated before_s before it, as drawn
+    assert -0.002 <= sends[0]["t"] - moments[0] < 0.5  # that moment is the submission, logged just after it
     assert added >= 3.0 and [e["kind"] for e in world.events()][-5:] == ["send", "send", "send", "gated", "deliver"]
     assert [(e["data"]["trigger"], e["data"]["before_s"]) for e in sends] == [
         ("first_submit", 2.6), ("first_submit", 2.0), ("first_submit", 1.2)]
