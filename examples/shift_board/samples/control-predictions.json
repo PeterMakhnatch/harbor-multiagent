@@ -1,0 +1,332 @@
+{
+  "schema": "harbor.shift-board.control-predictions/v1",
+  "registered_utc": "2026-11-24T06:31:24.936551+00:00",
+  "question": "Can the revision guard prevent a stale destructive change without preventing a later deliberate repair or a deliberate override? Does simply abandoning refused writes also lose good repairs?",
+  "test": "All 16 scheduled native scripted teams must have valid evidence. Each must match every predicted field. Do not replace failed or missing first attempts. Compare the two private calendar fixtures separately. No model benefit claim.",
+  "budget_usd": "0",
+  "new_model_calls": 0,
+  "planner": "oracle, preferred",
+  "dispatcher": "oracle, policy assigned in registration",
+  "cells": [
+    {
+      "team": "once",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "damage",
+        "final_action": "publish",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "damage"
+      }
+    },
+    {
+      "team": "once",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "damage",
+        "final_action": "leave",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "unchanged"
+      }
+    },
+    {
+      "team": "once",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "repair",
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    },
+    {
+      "team": "once",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "repair",
+        "final_action": "leave",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "unchanged"
+      }
+    },
+    {
+      "team": "recheck",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "damage",
+        "final_action": "publish",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "damage"
+      }
+    },
+    {
+      "team": "recheck",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "damage",
+        "final_action": "leave",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "unchanged"
+      }
+    },
+    {
+      "team": "recheck",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "repair",
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    },
+    {
+      "team": "recheck",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 2,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "repair",
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    },
+    {
+      "team": "override",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "damage",
+        "final_action": "publish",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "damage"
+      }
+    },
+    {
+      "team": "override",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 2,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "damage",
+        "final_action": "publish",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "damage"
+      }
+    },
+    {
+      "team": "override",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 1,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "repair",
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    },
+    {
+      "team": "override",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 2,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "first_stale_effect": "repair",
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    },
+    {
+      "team": "read-first",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 0,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "first_stale_effect": null,
+        "final_action": "leave",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "unchanged"
+      }
+    },
+    {
+      "team": "read-first",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": true,
+        "draft_correct": false,
+        "attempts": 0,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "first_stale_effect": null,
+        "final_action": "leave",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "unchanged"
+      }
+    },
+    {
+      "team": "read-first",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 1,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "first_stale_effect": null,
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    },
+    {
+      "team": "read-first",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "expected": {
+        "prepared": true,
+        "incumbent_correct": false,
+        "draft_correct": true,
+        "attempts": 1,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "first_stale_effect": null,
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      }
+    }
+  ]
+}
