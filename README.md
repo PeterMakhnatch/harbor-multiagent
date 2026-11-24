@@ -22,6 +22,8 @@ The first two reports show what changes when one worker is missing or all worker
 
 To see why the **same two-seat decisions** can earn different rewards, [inspect two saved shipping controls](examples/seatlab/decision_receipt/README.md#compare-two-saved-decisions). The decision card shows the sender's handoff, the receiver's accepted action, and what the supplier did afterward. No seat runs.
 
+To design a new comparison without paying for teams, [prepare the Dispatch report-order benchmark](examples/seatlab/protocol.md#isolate-report-order-without-changing-what-the-sender-said). It gives independent receivers the same two reports in opposite orders. To diagnose a finished team, [inspect native choices and both role receipts](examples/seatlab/native-model-results.md#check-one-private-native-trial). Neither command calls a model.
+
 `list` shows all studies. `verify` with no names checks the entire catalog. Both commands work offline after cloning and need no Harbor install, Docker, or model key.
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.

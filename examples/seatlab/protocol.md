@@ -69,6 +69,33 @@ The [retained native study](results/native-model-primary.json) provides an indep
 
 After a team returns, use the [retained-choice diagnostic](native-model-results.md#did-the-model-choose-as-if-it-used-the-last-older-report). It compares actual decisions, not just the opportunity to distinguish them.
 
+### Isolate report order without changing what the sender said
+
+**Question:** Does a receiver choose a different bay when the same two peer reports arrive in the opposite order? The native `fresh` arm omits the old report. A `fresh` versus `reordered` grade alone cannot isolate order.
+
+Start with the `$packet` and `$pin` from [the registration above](#review-a-dispatch-panel-without-running-it). These commands generate inputs only. They do not start a receiver.
+
+```sh
+order() {
+  mode=$1; shift
+  python3.12 -BS -m examples.seatlab.dispatch_order "$mode" \
+    --registration "$packet" --sha256 "$pin" "$@"
+}
+order prepare > "$root/order-plan.json"
+order_pin=$(python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["panel_sha256"])' "$root/order-plan.json")
+order emit --panel-sha256 "$order_pin" --wave 0 > "$root/wave-0.jsonl"
+order emit --panel-sha256 "$order_pin" --wave 1 > "$root/wave-1.jsonl"
+order score --panel-sha256 "$order_pin"  # exit 3: no first replies yet
+```
+
+The example has 2 worlds, 24 distinct shipments and **4 first replies**. In 10 shipments the two reports recommend different best bays. The input is otherwise identical across arms, including both report payloads, available actions, utilities, and instructions. Each wave contains one input per world. The first ordering alternates across worlds. Add `--shard 0/2` or `--shard 1/2` to split a wave between workers.
+
+Send only `messages` to a fresh receiver. Give each request its own session. Return a JSON line with `id`, `prompt_sha256`, and the first raw `reply` string. Do not retry a malformed reply. Keep the plan digest with the coordinator. The worker does not receive the ordering label, seed, actual stock, old choices, or native reward.
+
+After authorized calls, use `order score --panel-sha256 "$order_pin" first-*.jsonl`. The report separates choice changes, agreement with the newest **reported** stock, and correctness against **actual** stock. Only complete world pairs contribute to counts. Missing and invalid replies stay visible. A worker file with a duplicate subject or mismatched digest is rejected. Different decisions do not, by themselves, establish an order effect.
+
+To use a real inventory seat's reports, replace `--registration … --sha256 …` with `--trial "$trial_dir" --trial-id "$expected_uuid"`. Repeat the arguments for distinct worlds. The reader requires a matching dispatch view acknowledgment and a valid native result. It retains incorrect peer reports. It regenerates the replay prompt, not the original model session. In the retained `2001` and `2003` worlds, the same check found 7 informative shipments among 24. No altered order has a measured team reward.
+
 ## Runtime and retention
 
 The initial study targets Olam commit `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, not stock Harbor 0.26. Run the maintained `hello-seats` task as an independent positive control first. Use local Docker with at most 1 trial at a time for this run. No cloud provisioning or metered API is required for the controls. Use fresh output directories. Keep all failed attempts and their reason in the study record. Keep host paths, personal credentials and raw provider traces out of public evidence. Publish to the personal fork only.
