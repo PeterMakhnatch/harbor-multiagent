@@ -453,5 +453,5 @@ Use `stages.json` for the rehearsal decision. `rr1_decide.py` accepts only the `
 Data policy: the account has zero data retention on. The dry run, and a smoke with OpenRouter models, print
 `ZDR warning: <model>: no zero-data-retention endpoint: an account with ZDR on gets 404` for each OpenRouter
 model that has no ZDR endpoint in the public list (`/api/v1/endpoints/zdr`, cached 24 h in
-`.flotilla-local/cache`). On 2026-11-24 Qwen3.8 Flash and all 12 `:free` models had none, so a `:free` smoke
-fails on this account.
+`.flotilla-local/cache`). On 2026-11-24 (10:50 and 11:46 ET) Qwen3.8 Flash and every `:free` model in the catalog
+(11 to 12 ids) had none, so a `:free` smoke fails on this account.

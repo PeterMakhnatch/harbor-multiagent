@@ -780,7 +780,7 @@ Inferred:
 Lesson: with tool-using agents, "before the work" means before the agent plans its first data read; measure where
 the messages land against that step, not against wall time.
 
-## 2026-11-24 10:49 ET — A quarter of the model money went to confirming a finished task; only Luna ever summed a report unread
+## 2026-11-24 10:49 ET — A quarter of the model money went to confirming a finished task; only Luna ever summed the reports without opening the data
 
 Exploratory analysis of finished waves (no new trials; not pre-registered). An agent (TraceMining) wrote
 `flotilla/docs/results/scripts/trace_features.py`, which derives 100 features per trial from the raw trial files,
@@ -819,8 +819,9 @@ Inferred:
   verifier scores `p1`'s last accepted answer, not the final turn. It changes the agent loop, so it belongs in a
   Terminus 2 option (Harbor core) and every arm of a wave must use the same setting.
 - For Luna, the report shape matters: per-month parts of the sum it integrates, visible before any file is open,
-  were summed unread; a full total was checked. The existing data cannot separate order from the sentence, because
-  no `rf1v` arm has one without the other (`io1`, PROBE.md section 14, is designed for that).
+  were added up without opening the data files; a full total was checked. The existing data cannot separate order
+  from the sentence, because no `rf1v` arm has one without the other (`io1`, PROBE.md section 14, is designed for
+  that).
 - More Haiku or DeepSeek trials on the verify and conformity sets add cost and no information: neither passed a
   false number through in any of them.
 
