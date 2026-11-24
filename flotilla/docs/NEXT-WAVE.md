@@ -165,7 +165,7 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 |---|---|---|---|---|
 | 1 | Which models stop checking when reports come first, and how do they audit? A trust card per model. | `trust_card.py` under PROBE.md section 13 (`rf1v` + `au2`). Cheap OpenRouter ids on 2026-11-24: `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`, `qwen/qwen3.8-flash`, `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl`; frontier: `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol`, `google/gemini-4-argon`. Re-carding the 3 night models replicates `rf1v` and runs `au2` | 184 per model | about $0.7 per cheap model (Modal included), $6-8 per frontier model |
 | 2 | Is it the order or the instruction? | complete the 2 x 2 (instruction x reports before the first data read): `--inbox` (reports in the brief, no read-first sentence) and `--read-first --post-trigger first_submit` (instruction, reports only at the first submit); verify `talk-quiet`, `talk-false` on `rf1v`'s instances. `--push` cannot do it: agents batch their first world call with their first data read (FINDINGS.md, 2026-11-24 05:20) | 32 x 2 x 2 sets x 3 models = 384 | about $1.3 |
-| 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `--audit-budget` 0, 1, 2 (built; `au2`'s seed; analyse each budget's jobs with its own one-set plan, or one run now that `probe_analysis.py` splits builds); pre-register first | 40 x 3 x 3 | about $1.6 |
+| 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `--audit-budget` 0, 1, 2 (built; `au2`'s seed); give each budget its own `--variant` (`audit-b0`, `audit-b1`, `audit-b2`) so no two builds share a label, and analyse each budget's jobs with its own one-set plan; pre-register first | 40 x 3 x 3 | about $1.6 |
 | 4 | Does an argument move a seat when the task text does not settle it? | the peer cites a policy file that the seat also holds; the claim is false and only that file shows it (`pa1` used a reason the task text refutes) | 32 x 2 x 3 | about $0.6 plus a family change |
 | 5 | Do frontier models behave the same? | trust cards (row 1) on 1-3 frontier models before any claim about frontier agents | 184 per model | $6-8 per model |
 | 6 | Does the integrator ask, and does it accept a teammate's confirmation of a wrong subtotal? | challenge-response `cr1` (world version 20): `talk-false`, `talk-false-insist`, `talk-false-admit` on `au2`'s instances (audit). Ready: PROBE.md section 15, set `.flotilla-local/tasks/cr1`, plans `cr1smoke`/`cr1` | 40 x 3 x 3 models = 360 | about $1.6 (cap $1.30 OpenRouter) |
@@ -182,9 +182,10 @@ built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `fl
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
-# check the smoke's validity only (flotilla-watch --blind), then:
-keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1
-keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 --retry-invalid
+# check the smoke's validity only (flotilla-watch --blind), then run the wave; the retry runs only when the wave
+# ended normally (exit 0); exit 3 means 6 invalid trials in a row: find the cause before any retry
+keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 && \
+  keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 --retry-invalid
 for s in io1v io1s; do
   python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'io1-??????' \
     --tasks .flotilla-local/tasks/$s --plan flotilla/plans/io1.json --json /tmp/$s.json
@@ -202,8 +203,9 @@ other set's trials as unmapped; `io1_decide.py` does not read it and marks a sho
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1smoke.json --run-dir .flotilla-local/runs/cr1smoke
-keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1
-keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1 --retry-invalid
+# check the smoke's validity only, then (exit 3: find the cause before any retry):
+keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1 && \
+  keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1 --retry-invalid
 python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'cr1-??????' \
   --tasks .flotilla-local/tasks/cr1 --plan flotilla/plans/cr1.json --json /tmp/cr1.json
 python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.json /tmp/cr1.json
