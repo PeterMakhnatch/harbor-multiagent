@@ -249,3 +249,13 @@ python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat
 The signed-in calendar on the private installation did **not** pass the separate owner-evidence check. One reporter accepted its request but returned no verified reply. The booking seat timed out; Harbor recorded no submission and a grade of 0. No client receipt establishes how many tokens that turn used. The worker kept the first attempt. The [redacted operator record](results/market-handoff/independent-operator.json) distinguishes this measured grade from the unknown usage. It does not establish what caused the missing reply.
 
 **Separate operator acceptance, before launch.** Can both shell commands above complete the entire panel in the private, locked Harbor environment? Start a new campaign from public revision `d8498afbbc42007fa7566b30407d3aabbfbaca3b`. Require each shard to finish 12 first attempts and reuse none. Require all 24 IDs to be new relative to both published panels. Require all delivered choices and stock grades to match. Use no model calls and retain failures. This checks the public workflow; it adds no independent model decisions.
+
+**Acceptance result: pass.** Both operators finished their 12 assigned trials; neither reused an anchor or issued a retry. The original panel and the 2 repetitions contain 72 distinct native IDs. All 48 role prompts and choices and all 24 grades matched again. The second repetition includes 11 genuine zeros. Native timestamps show at most 2 concurrent trials. This repeated the public workflow and the same decisions, not the models.
+
+To check the [second operator bundle](results/market-handoff/native-operator-repeat-receipts.json) offline from the fork root:
+
+```sh
+d=examples/seatlab/results/market-handoff
+python3.12 -BS -m examples.seatlab.market_handoff.native_repeat_panel \
+  score "$d" "$d/native-panel.json" "$d/native-operator-repeat-receipts.json"
+```

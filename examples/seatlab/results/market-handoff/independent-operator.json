@@ -1,1 +1,148 @@
-{"anchor_worker":{"default_uses_original":true,"include_anchors":{"choices":{"finance":1,"sales":1},"grade":0.0,"trial_id":"030cc8b2-8c10-4bcb-ba71-09c34daa78b2"},"reentry":"already_complete_no_new_trial"},"calendar":{"arm":"all","asked_reports":3,"complete":true,"exact_reports":3,"finished_at":"2026-11-23T23:59:18.283606Z","grade":1,"native_id":"3589c64b-5d1f-4346-931a-c9b19efe8493","owner":null,"started_at":"2026-11-23T23:58:54.890696Z","submissions":1,"world":1254},"gate_revision":"45a6d2ed3fd6bd72cd0776511ef6f1687fe0c40d","mixed_overlap":[{"arm":"donor","world":8},{"arm":"own","world":10},{"arm":"donor","world":10}],"native_max_concurrent":2,"native_results":25,"operator_control":{"inherited_process_ids_preserved":true,"other_command_exit_codes":[20,21],"signal_releasing_slot":15,"third_waited_behind_two":true},"private_install":{"business_replay":{"choices":{"finance":1,"sales":1},"grade":0.0,"trial_id":"606c513c-93c6-4ac1-989f-fe0e38dabe8e"},"installer":"uv 0.13.5","python":"Python 3.12.12","real_calendar":{"arm":"stop","asked_reports":0,"complete":false,"exact_reports":0,"finished_at":"2026-11-24T00:06:53.217314Z","first_wire":{"accepted":true,"action":"report","reply":false,"status":"unanswered"},"grade":0,"incomplete_reason":"p4:inbox_timeout","native_id":"f57d4729-ea6d-4090-b3be-e525b0dd1981","observed_owner_tokens":null,"owner":{"attested_sessions":0,"attested_tokens":0,"fully_accounted":false,"served_model":null},"started_at":"2026-11-24T00:01:04.142217Z","submissions":0,"world":1255},"real_calendar_question_result":"inconclusive_no_owner_receipt"},"registered":"1b34c730df837364aa63c4347a6300e7facff944","schema":"seatlab.mixed-local-admission/v1","source":"separately verified native trial result start/finish times"}
+{
+  "anchor_worker": {
+    "default_uses_original": true,
+    "include_anchors": {
+      "choices": {
+        "finance": 1,
+        "sales": 1
+      },
+      "grade": 0.0,
+      "trial_id": "030cc8b2-8c10-4bcb-ba71-09c34daa78b2"
+    },
+    "reentry": "already_complete_no_new_trial"
+  },
+  "calendar": {
+    "arm": "all",
+    "complete": true,
+    "delivered_reports": 3,
+    "exact_reports": 3,
+    "finished_at": "2026-11-23T23:59:18.283606Z",
+    "grade": 1,
+    "native_id": "3589c64b-5d1f-4346-931a-c9b19efe8493",
+    "owner": null,
+    "report_requests": 3,
+    "started_at": "2026-11-23T23:58:54.890696Z",
+    "submissions": 1,
+    "world": 1254
+  },
+  "gate_revision": "45a6d2ed3fd6bd72cd0776511ef6f1687fe0c40d",
+  "mixed_overlap": [
+    {
+      "arm": "donor",
+      "world": 8
+    },
+    {
+      "arm": "own",
+      "world": 10
+    },
+    {
+      "arm": "donor",
+      "world": 10
+    }
+  ],
+  "native_max_concurrent": 2,
+  "native_results": 25,
+  "operator_control": {
+    "inherited_process_ids_preserved": true,
+    "other_command_exit_codes": [
+      20,
+      21
+    ],
+    "signal_releasing_slot": 15,
+    "third_waited_behind_two": true
+  },
+  "private_install": {
+    "business_replay": {
+      "choices": {
+        "finance": 1,
+        "sales": 1
+      },
+      "grade": 0.0,
+      "trial_id": "606c513c-93c6-4ac1-989f-fe0e38dabe8e"
+    },
+    "guide_shards": {
+      "custom_local_scripts_in_shard_commands": false,
+      "distinct_ids_across_three_panels": 72,
+      "ids_new_vs_original_and_first_repetition": 24,
+      "matches": {
+        "choices": {
+          "agree": 48,
+          "required": 48
+        },
+        "prompts": {
+          "agree": 48,
+          "required": 48
+        },
+        "rewards": {
+          "agree": 24,
+          "graded": 24,
+          "required": 24
+        },
+        "seat_bindings": {
+          "agree": 48,
+          "required": 48
+        }
+      },
+      "max_native_concurrent": 2,
+      "model_calls": 0,
+      "native_cells": 24,
+      "observed_zero_rewards": 11,
+      "receipt_bundle_sha256": "2350fd6d90cff2a3cf965b8d9271dec15c27204db3a1cb20149345139e7df73a",
+      "registration_revision": "63e7990a421be96cbfd4fbd85e3bdf676082ee83",
+      "result": "pass",
+      "shards": [
+        {
+          "assigned": 12,
+          "completed": 12,
+          "failed": 0,
+          "incomplete": 0,
+          "reused": 0,
+          "shard": "0/2"
+        },
+        {
+          "assigned": 12,
+          "completed": 12,
+          "failed": 0,
+          "incomplete": 0,
+          "reused": 0,
+          "shard": "1/2"
+        }
+      ],
+      "site_slot_used": true,
+      "source_revision": "d8498afbbc42007fa7566b30407d3aabbfbaca3b"
+    },
+    "installer": "uv 0.13.5",
+    "python": "Python 3.12.12",
+    "real_calendar": {
+      "arm": "stop",
+      "complete": false,
+      "delivered_reports": 0,
+      "exact_reports": 0,
+      "finished_at": "2026-11-24T00:06:53.217314Z",
+      "first_wire": {
+        "accepted": true,
+        "action": "report",
+        "reply": false,
+        "status": "unanswered"
+      },
+      "grade": 0,
+      "incomplete_reason": "p4:inbox_timeout",
+      "native_id": "f57d4729-ea6d-4090-b3be-e525b0dd1981",
+      "observed_owner_tokens": null,
+      "owner": {
+        "attested_sessions": 0,
+        "attested_tokens": 0,
+        "fully_accounted": false,
+        "served_model": null
+      },
+      "report_requests": 1,
+      "started_at": "2026-11-24T00:01:04.142217Z",
+      "submissions": 0,
+      "world": 1255
+    },
+    "real_calendar_question_result": "inconclusive_no_owner_receipt"
+  },
+  "registered": "1b34c730df837364aa63c4347a6300e7facff944",
+  "schema": "seatlab.mixed-local-admission/v1",
+  "source": "separately verified native trial result start/finish times"
+}
