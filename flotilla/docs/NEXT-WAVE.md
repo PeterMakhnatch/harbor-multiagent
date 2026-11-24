@@ -364,9 +364,9 @@ without `stages` runs as before.
 2. Run `run_wave.py --dry-run <plan>`. It prints the instances by the end of each stage per task set, the looks
    of each test with the futility bounds, the most and the fewest trials, and a cost forecast for both.
 3. Run the wave with the usual command. Each stage runs its new blocks, then retries each invalid cell once,
-   then looks. `--retry-invalid` is not necessary. A task set with a test runs its later blocks only for the
-   models whose test on that set continues. A task set without a test runs in full. The cap (the full-wave
-   cap), reserve, floors, invalid-streak guard and exit codes do not change.
+   then looks. `--retry-invalid` is not necessary. In later stages a model runs an arm of a task set only if the
+   arm belongs to one of its live tests on that set, or to no test. A task set without a test runs in full. The
+   cap (the full-wave cap), reserve, floors, invalid-streak guard and exit codes do not change.
 4. The operator sees one line per look and model on stdout and in `progress.log`, for example `look 2/3 after
    stage 2/3: test 1 set 0 talk-quiet vs talk-false: openrouter/openai/gpt-6-luna stop-efficacy`. The status
    is `continue`, `stop-efficacy`, `stop-futility` or `final`. The line never shows b, c, n or p.
@@ -385,5 +385,5 @@ without `stages` runs as before.
 Data policy: the account has zero data retention on. The dry run, and a smoke with OpenRouter models, print
 `ZDR warning: <model>: no zero-data-retention endpoint: an account with ZDR on gets 404` for each OpenRouter
 model that has no ZDR endpoint in the public list (`/api/v1/endpoints/zdr`, cached 24 h in
-`.flotilla-local/cache`). On 2026-11-23 Qwen3.8 Flash and all 12 `:free` models had none, so a `:free` smoke
+`.flotilla-local/cache`). On 2026-11-24 Qwen3.8 Flash and all 12 `:free` models had none, so a `:free` smoke
 fails on this account.
