@@ -1,4 +1,5 @@
-"""Behavior cards: one static HTML page of the probe pilots, a card per (probe kind, wave, model).
+"""Behavior cards: one static HTML page of the probe pilots, a card per (probe kind, or build when
+probe_analysis split the run's kind by build; wave; model).
 
 ``flotilla-cards OUTDIR --analysis a.json [--analysis b.json ...] --jobs DIR [--examples N]`` reads the
 JSON that ``flotilla/docs/results/scripts/probe_analysis.py ... --json PATH`` writes, and writes
@@ -71,8 +72,14 @@ class Card:
         return str(self.summary.get("model") or "-")
 
     @property
+    def build(self) -> str | None:
+        """The build label when probe_analysis split the run's kind by build (summary ``build``)."""
+        build = self.summary.get("build")
+        return build if isinstance(build, str) and build else None
+
+    @property
     def label(self) -> str:
-        return f"probe.{self.kind}"
+        return self.build or f"probe.{self.kind}"
 
 
 def dig(data: Any, *keys: Any) -> Any:
@@ -289,7 +296,8 @@ def categories(summary: dict[str, Any], jobs: Path) -> list[tuple[str, Any]]:
 
 
 def pick(rows: list[dict[str, Any]], summary: dict[str, Any], jobs: Path, n: int) -> list[tuple[str, list]]:
-    """Up to n counted rows of the card's kind and model per category, by job name then trial name."""
+    """Up to n counted rows of the card's kind, build (when the run is split by build) and model per category,
+    by job name then trial name."""
     mine = sorted(
         (
             r
@@ -298,6 +306,7 @@ def pick(rows: list[dict[str, Any]], summary: dict[str, Any], jobs: Path, n: int
             and r.get("counted") is True
             and r.get("kind") == summary.get("kind")
             and r.get("model") == summary.get("model")
+            and ("build" not in summary or r.get("build") == summary.get("build"))
         ),
         key=lambda r: (str(r.get("job")), str(r.get("trial"))),
     )
@@ -369,9 +378,13 @@ def _source_html(source: str, data: dict[str, Any]) -> str:
     models = dig(data, "plan", "models")
     name, alpha = fmt(dig(data, "plan", "name")), fmt(data.get("alpha"))
     listed = ", ".join(map(str, models)) if isinstance(models, list) else "-"
+    builds = sorted(
+        {str(s["build"]) for s in data.get("summaries") or [] if isinstance(s, dict) and s.get("build")}
+    )
+    split = f"; split by build: {', '.join(builds)}" if builds else ""
     return (
         f"<li><code>{esc(source)}</code>: wave {esc(name)}, alpha {esc(alpha)}, models {esc(listed)}; "
-        f"{esc(counts)}</li>"
+        f"{esc(counts)}{esc(split)}</li>"
     )
 
 
@@ -383,10 +396,14 @@ def render_index(analyses: list[tuple[str, dict[str, Any]]], cards: list[Card], 
         if not mine:
             sections.append(f"<h2>{esc(source)}</h2><p>no summaries</p>")
             continue
-        sections.append(
-            f"<h2>{esc(mine[0].label)} · wave {esc(mine[0].wave)}</h2>"
-            f'<div class="cards">{"".join(render_card(c) for c in mine)}</div>'
-        )
+        groups: dict[str, list[Card]] = {}
+        for card in mine:
+            groups.setdefault(card.label, []).append(card)
+        for label, group in groups.items():
+            sections.append(
+                f"<h2>{esc(label)} · wave {esc(group[0].wave)}</h2>"
+                f'<div class="cards">{"".join(render_card(c) for c in group)}</div>'
+            )
     body = (
         "<h1>Flotilla behavior cards</h1>"
         '<p class="meta">Every number comes from the JSON that <code>flotilla/docs/results/scripts/'
