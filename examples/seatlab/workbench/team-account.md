@@ -43,7 +43,20 @@ An identical projection counts once, even if the JSON layout changes. Different 
 
 ### Check finished jobs from several workers
 
-Give the coordinator one JSON manifest. Each row points to one saved native job. Paths resolve from the manifest, not the shell. Add only the evidence you intend to check. Keep the manifest local; its paths can identify workers.
+Give the coordinator one JSON manifest. Each row names one native job directory. Paths resolve from the manifest's directory, not the shell. Add only the evidence you intend to check.
+
+Put the manifest in a private leaf directory. Give each worker a subdirectory below it. Do not use `..` in a row.
+
+```text
+morning/                    owner-only; never share it
+  spool.json
+  worker-a/job/             worker A's native job is copied here
+  worker-a/account-receipts/
+  worker-b/job/
+  worker-b/seat-journals/
+  worker-b/handoff-receipts/
+  worker-b/witness.json
+```
 
 ```json
 {
@@ -55,21 +68,35 @@ Give the coordinator one JSON manifest. Each row points to one saved native job.
 }
 ```
 
+Enroll every job **before** you assign work. List each job path, even when its directory does not exist yet. Then record the manifest's SHA-256:
+
 ```sh
-python3.12 -BS -m examples.seatlab.workbench attention spool.json
-python3.12 -BS -m examples.seatlab.workbench attention spool.json --json
+umask 077
+pin=$(python3.12 -BS -c 'import hashlib,sys;f=open(sys.argv[1],"rb");print("sha256:"+hashlib.file_digest(f,"sha256").hexdigest())' morning/spool.json)
+echo "$pin"
 ```
+
+Keep the pin where no worker can write. Do not change `spool.json` after this step. In the morning, give the pin to the check:
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench attention morning/spool.json --expected-spool "$pin"
+python3.12 -BS -m examples.seatlab.workbench attention morning/spool.json --expected-spool "$pin" --json
+```
+
+The pin compares the exact manifest bytes before the command reads a job. A removed, added, reordered or reformatted row gives exit `2` with no report. The pin is a file digest, not a signature. It does not identify the author or prove that a worker ran. A person who can change the manifest and the stored pin can change both. Without `--expected-spool`, the report covers only the rows in the supplied file. It cannot show that a row was removed. The report gives `spool_sha256` for the bytes it read; compare it with your pin.
+
+Each report row has `row`, the 1-based position in the private manifest, and `job`, the native job UUID. A row is `absent` when its job directory does not exist or has no top-level `result.json`. An absent row has `job: null`. It is not a grade, a failure or a finding. A broken symlink, a file in place of a directory, an invalid result, or a job that appears during the read gives exit `2`, not `absent`. The report shows job UUIDs and row numbers, not paths, prompts or seat labels. Keep the manifest local; its paths can identify workers.
 
 `accounts` checks attempt receipts against the surviving final results. `seats` checks host seat journals. `handoffs` checks message receipts. Add `witness` only with `seats` to compare each execution with an independent slot observation. Without these fields, the command checks only the native results. Two paths to the same job do not count twice; the operator rejects the manifest.
 
 | Exit | Meaning | What to do |
 | --- | --- | --- |
-| `0` | Every listed job closed. The requested checks found no gaps. | Report the scope checked, not a blanket pass. This is not an authorization to spend. |
-| `1` | At least one closed job has a finding. | Inspect its job UUID and finding codes. The same job can have more than one kind of gap. Do not sum them as failed trials. |
-| `2` | The manifest or its evidence is invalid, unreadable or changed during the read. | Use a stationary copy. Fix the input before interpreting any result. |
-| `3` | No closed job has a finding, but a job is open or its finish is unknown. | Obtain its final native result if available. Do not treat the job as a failure or start a replacement. |
+| `0` | Every listed row is a closed job. The requested checks found no gaps. | Report the scope checked, not a blanket pass. Without a pin, the scope is only the supplied rows. This is not an authorization to spend. |
+| `1` | At least one closed job has a finding, whatever the other rows are. | Inspect its job UUID and finding codes. The same job can have more than one kind of gap. Do not sum them as failed trials. |
+| `2` | The manifest does not match the pin, or the manifest or its evidence is invalid, unreadable or changed during the read. | Use a stationary copy. Fix the input before interpreting any result. Do not edit the manifest to match; enroll again before new work. |
+| `3` | No closed job has a finding, but a row is open, unknown or absent. | Obtain the final native result if available. Do not treat the job as a failure or start a replacement. |
 
-Try the [included manifest](morning-example.json) with `attention examples/seatlab/workbench/morning-example.json`. Its two published job excerpts omit finish records. The expected exit is `3`. In a separate retained closed job, all 20 final attempt accounts matched. Checking its message receipts reported `handoff_receipt_unavailable: 20`. This means the records cannot tell what the seats exchanged. It does not mean the seats were silent.
+Try the [included manifest](morning-example.json) with `attention examples/seatlab/workbench/morning-example.json`. It has no pin. Its two published job excerpts omit finish records. The expected exit is `3`. In a separate retained closed job, all 20 final attempt accounts matched. Checking its message receipts reported `handoff_receipt_unavailable: 20`. This means the records cannot tell what the seats exchanged. It does not mean the seats were silent.
 
 ### Recover evidence without changing a grade
 
