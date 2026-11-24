@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -17,7 +18,7 @@ from ..native_study import (
     write_exclusive,
 )
 from ..seat_handoffs.native_records import read_record_with_digest
-from ..ship_inflight.materialize import BASE, BASE_FILES
+from ..ship_inflight.materialize import BASE, BASE_FILES, STOCK
 from .study import (
     MAX_REGISTRATION_BYTES,
     TASK_DIR,
@@ -41,15 +42,49 @@ ARMS = {
 }
 PRIOR = "committed"
 LOCK_MODE = 0o444
+EXECUTABLE_BITS = stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+STOCK_FILES = tuple(relative for relative, _, _ in STOCK)
+STOCK_EXECUTABLE = frozenset(
+    relative for relative, mode, _ in STOCK if mode & EXECUTABLE_BITS
+)
+ROLE_FILES = ("instructions/outgoing.md", "instructions/relief.md")
+LEGACY = "legacy"
+ROLE_PACKAGE = "role-file"
+ROLE_PACKAGE_DIGEST = (
+    "sha256:001d1b8d1b3355be39b2aec51680f3b867e1932b9141e792862894662bfd27ad"
+)
 
 OUT_EXISTS = "output must be a new directory under an existing parent"
 HARBOR_MISSING = "arm inputs need the installed Harbor fork"
 UNPINNED = "registrations or stock package differ from the released pins"
+UNKNOWN_PACKAGE = (
+    "the installed packager selects neither the legacy nor the role-file package"
+)
 LOCK_FAILED = "native locks could not be built from the pinned inputs"
 WRITE_FAILED = "arm locks were not written; this run's partial files were removed"
 
+
+def _package_digest(files: tuple[str, ...]) -> str:
+    pinned = {relative: digest for relative, _, digest in STOCK}
+    outer = hashlib.sha256()
+    for relative in files:
+        outer.update(f"{relative}\0{pinned[relative]}\n".encode("ascii"))
+    return "sha256:" + outer.hexdigest()
+
+
+LEGACY_FILES = tuple(path for path in STOCK_FILES if path not in ROLE_FILES)
+PACKAGES: dict[str, tuple[tuple[str, ...], str]] = {
+    LEGACY: (LEGACY_FILES, _package_digest(LEGACY_FILES)),
+    ROLE_PACKAGE: (STOCK_FILES, _package_digest(STOCK_FILES)),
+}
+
 assert TASK_DIR == REPO / TASK_ROOT
 assert {registration for registration, _, _ in ARMS.values()} == set(PINS)
+assert STOCK_FILES == tuple(sorted(STOCK_FILES)) and len(STOCK_FILES) == 12
+assert set(ROLE_FILES) < set(STOCK_FILES)
+assert STOCK_EXECUTABLE == {"solution/solve.sh", "tests/test.sh"}
+assert PACKAGES[LEGACY][1] == BASE["digest"]
+assert PACKAGES[ROLE_PACKAGE][1] == ROLE_PACKAGE_DIGEST != BASE["digest"]
 
 
 def _target(out: str | os.PathLike[str]) -> Path:
@@ -78,13 +113,36 @@ def _registration(name: str) -> dict[str, Any]:
 def _require_stock() -> None:
     try:
         files = task_files_digest(TASK_DIR, dict(BASE))
+        executable = {
+            relative
+            for relative in STOCK_FILES
+            if os.lstat(TASK_DIR / relative).st_mode & EXECUTABLE_BITS
+        }
     except (ValueError, OSError):
         raise ValueError(UNPINNED) from None
     require(files == BASE_FILES, UNPINNED)
+    require(executable == STOCK_EXECUTABLE, UNPINNED)
+
+
+def _package(harbor: Any) -> str:
+    try:
+        content_hash, files = harbor.Packager.compute_content_hash(TASK_DIR)
+        root = TASK_DIR.resolve()
+        included = tuple(Path(path).relative_to(root).as_posix() for path in files)
+    except (ValueError, OSError):
+        raise ValueError(UNKNOWN_PACKAGE) from None
+    digest = "sha256:" + content_hash
+    matches = [
+        label
+        for label, (expected, pinned) in PACKAGES.items()
+        if included == expected and digest == pinned
+    ]
+    require(len(matches) == 1, UNKNOWN_PACKAGE)
+    return digest
 
 
 def _lock(
-    harbor: Any, registration: dict[str, Any], ticket: str, channel: str
+    harbor: Any, registration: dict[str, Any], ticket: str, channel: str, digest: str
 ) -> dict[str, Any]:
     cells = [cell for cell in registration["cells"] if cell["ticket"] == ticket]
     require(len(cells) == 1, UNPINNED)
@@ -104,11 +162,11 @@ def _lock(
         lock = harbor.build_trial_lock(trial_config=config, task_download_result=local)
     except (ValueError, OSError):
         raise ValueError(LOCK_FAILED) from None
-    require(lock.task.digest == BASE["digest"], UNPINNED)
+    require(lock.task.digest == digest, UNPINNED)
     return lock.model_dump(mode="json", exclude_none=True)
 
 
-def _payloads() -> dict[str, dict[str, Any]]:
+def _payloads() -> tuple[str, dict[str, dict[str, Any]]]:
     try:
         harbor = native()
         from harbor.models.job.lock import build_trial_lock
@@ -117,12 +175,14 @@ def _payloads() -> dict[str, dict[str, Any]]:
     harbor.build_trial_lock = build_trial_lock
     registrations = {name: _registration(name) for name in PINS}
     _require_stock()
+    digest = _package(harbor)
     payloads = {
-        name: _lock(harbor, registrations[registration], ticket, channel)
+        name: _lock(harbor, registrations[registration], ticket, channel, digest)
         for name, (registration, ticket, channel) in ARMS.items()
     }
     _require_stock()
-    return payloads
+    require(_package(harbor) == digest, UNPINNED)
+    return digest, payloads
 
 
 def _publish(target: Path, payloads: dict[str, dict[str, Any]]) -> None:
@@ -147,19 +207,40 @@ def _publish(target: Path, payloads: dict[str, dict[str, Any]]) -> None:
 
 def prepare(out: str | os.PathLike[str]) -> dict[str, dict[str, str]]:
     target = _target(out)
-    payloads = _payloads()
+    digest, payloads = _payloads()
     _publish(target, payloads)
     digests = {name: hashlib.sha256(record_bytes(p)) for name, p in payloads.items()}
     return {
-        name: {"task_root": TASK_ROOT, "sha256": digest.hexdigest()}
-        for name, digest in digests.items()
+        name: {
+            "task_root": TASK_ROOT,
+            "sha256": sha.hexdigest(),
+            "lock_task_digest": digest,
+        }
+        for name, sha in digests.items()
     }
+
+
+def provenance(prepared: dict[str, dict[str, str]]) -> str:
+    digests = {entry["lock_task_digest"] for entry in prepared.values()}
+    assert len(digests) == 1
+    (digest,) = digests
+    labels = [label for label, (_, pinned) in PACKAGES.items() if pinned == digest]
+    assert len(labels) == 1
+    return (
+        f"prospective locks: task digest {digest} ({labels[0]} packager)\n"
+        f"archived registrations: task digest {BASE['digest']} ({LEGACY} packager);"
+        " old results keep it"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     root = argparse.ArgumentParser(
         prog="python -m examples.ship_handover.arm_inputs",
-        description=f"Write native TrialLock v2 files {', '.join(ARMS)}.",
+        description=(
+            f"Write new prospective native TrialLock v2 files {', '.join(ARMS)}"
+            " from the archived registrations. Old results keep their archived"
+            " task digest."
+        ),
     )
     root.add_argument("out", help="new directory for the 3 locks; never overwritten")
     args = root.parse_args(argv)
@@ -170,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     public = {name: {"task_root": TASK_ROOT} for name in prepared}
     print(json.dumps(public, indent=2, sort_keys=True))
+    print(provenance(prepared), file=sys.stderr)
     return 0
 
 

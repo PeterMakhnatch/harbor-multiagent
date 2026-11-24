@@ -10,6 +10,7 @@ from examples.native_study import record_bytes
 from examples.ship_handover import arm_inputs
 from harbor.models.job.lock import TrialLock, build_trial_lock
 from harbor.models.trial.config import TaskConfig, TrialConfig
+from harbor.publisher.packager import Packager
 from harbor.tasks.client import TaskDownloadResult
 
 TASK_ROOT = "examples/tasks/ship-handover"
@@ -36,6 +37,22 @@ def native_lock(lock: TrialLock, monkeypatch) -> TrialLock:
     return build_trial_lock(trial_config=config, task_download_result=local)
 
 
+def packager(monkeypatch, drop: tuple[str, ...], salt: bytes) -> None:
+    original = Packager.compute_content_hash
+
+    def selected(task_dir: Path) -> tuple[str, list[Path]]:
+        _, files = original(task_dir)
+        root = Path(task_dir).resolve()
+        kept = [f for f in files if f.relative_to(root).as_posix() not in drop]
+        outer = hashlib.sha256(salt)
+        for f in kept:
+            rel = f.relative_to(root).as_posix()
+            outer.update(f"{rel}\0{Packager.compute_file_hash(f)}\n".encode())
+        return outer.hexdigest(), kept
+
+    monkeypatch.setattr(Packager, "compute_content_hash", staticmethod(selected))
+
+
 def test_writes_exactly_the_three_native_arm_locks(tmp_path: Path, monkeypatch):
     out = tmp_path / "arms"
     prepared = arm_inputs.prepare(out)
@@ -44,12 +61,15 @@ def test_writes_exactly_the_three_native_arm_locks(tmp_path: Path, monkeypatch):
         name: TASK_ROOT for name in LOCKS
     }
     for name, (channel, seats) in LOCKS.items():
+        assert prepared[name]["lock_task_digest"] == arm_inputs.ROLE_PACKAGE_DIGEST
         raw = (out / name).read_bytes()
         assert str(arm_inputs.REPO).encode() not in raw and b"${" not in raw
         lock = TrialLock.model_validate_json(raw)
         assert record_bytes(lock.model_dump(mode="json", exclude_none=True)) == raw
         assert lock.schema_version == 2
         assert lock.task.type == "local" and lock.task.name == "ship-handover"
+        assert lock.task.digest == arm_inputs.ROLE_PACKAGE_DIGEST
+        assert lock.task.digest != arm_inputs.BASE["digest"]
         assert lock.task.path == Path(TASK_ROOT)
         assert lock.environment.env == {"SH_PRIOR": "committed", "SH_CHANNEL": channel}
         assert tuple(p.name for p in lock.participants) == seats
@@ -58,10 +78,40 @@ def test_writes_exactly_the_three_native_arm_locks(tmp_path: Path, monkeypatch):
         assert prepared[name]["sha256"] == hashlib.sha256(raw).hexdigest()
 
 
-def test_cli_prints_only_the_task_root_map(tmp_path: Path, capsys):
+def test_cli_prints_the_task_root_map_and_both_task_digests(tmp_path: Path, capsys):
     assert arm_inputs.main([str(tmp_path / "arms")]) == 0
-    printed = json.loads(capsys.readouterr().out)
-    assert printed == {name: {"task_root": TASK_ROOT} for name in LOCKS}
+    output = capsys.readouterr()
+    assert json.loads(output.out) == {name: {"task_root": TASK_ROOT} for name in LOCKS}
+    assert output.err == (
+        f"prospective locks: task digest {arm_inputs.ROLE_PACKAGE_DIGEST}"
+        " (role-file packager)\n"
+        f"archived registrations: task digest {arm_inputs.BASE['digest']}"
+        " (legacy packager); old results keep it\n"
+    )
+
+
+def test_legacy_packager_keeps_the_archived_digest(tmp_path: Path, monkeypatch):
+    packager(monkeypatch, arm_inputs.ROLE_FILES, b"")
+    prepared = arm_inputs.prepare(tmp_path / "arms")
+    for name in LOCKS:
+        lock = TrialLock.model_validate_json((tmp_path / "arms" / name).read_bytes())
+        assert lock.task.digest == arm_inputs.BASE["digest"]
+        assert prepared[name]["lock_task_digest"] == arm_inputs.BASE["digest"]
+    assert "(legacy packager)\n" in arm_inputs.provenance(prepared)
+
+
+@pytest.mark.parametrize(
+    ("drop", "salt"),
+    [(("README.md",), b""), (("instructions/relief.md",), b""), ((), b"x")],
+)
+def test_unknown_native_package_is_refused(
+    tmp_path: Path, monkeypatch, drop: tuple[str, ...], salt: bytes
+):
+    packager(monkeypatch, drop, salt)
+    out = tmp_path / "arms"
+    with pytest.raises(ValueError, match=arm_inputs.UNKNOWN_PACKAGE):
+        arm_inputs.prepare(out)
+    assert not out.exists()
 
 
 def test_existing_output_is_refused_untouched(tmp_path: Path, capsys):
@@ -89,16 +139,44 @@ def test_unpinned_registration_is_refused(tmp_path: Path, monkeypatch):
     assert not out.exists()
 
 
-@pytest.mark.parametrize("change", ["edit", "extra"])
+@pytest.mark.parametrize("change", ["edit", "extra", "role", "unexecutable", "mode"])
 def test_stock_package_drift_is_refused(tmp_path: Path, monkeypatch, change: str):
     task = tmp_path / "ship-handover"
     shutil.copytree(arm_inputs.TASK_DIR, task)
     if change == "edit":
         with (task / "tests" / "test.sh").open("a") as handle:
             handle.write("\n")
-    else:
+    elif change == "extra":
         (task / "tests" / "extra.txt").write_text("unpinned\n")
+    elif change == "role":
+        with (task / "instructions" / "relief.md").open("a") as handle:
+            handle.write("\n")
+    elif change == "unexecutable":
+        script = task / "tests" / "test.sh"
+        script.chmod(script.stat().st_mode & ~0o111)
+    else:
+        source = task / "tests" / "verify.py"
+        source.chmod(source.stat().st_mode | 0o100)
     monkeypatch.setattr(arm_inputs, "TASK_DIR", task)
+    out = tmp_path / "arms"
+    with pytest.raises(ValueError, match=arm_inputs.UNPINNED):
+        arm_inputs.prepare(out)
+    assert not out.exists()
+
+
+def test_source_change_while_building_is_refused(tmp_path: Path, monkeypatch):
+    task = tmp_path / "ship-handover"
+    shutil.copytree(arm_inputs.TASK_DIR, task)
+    monkeypatch.setattr(arm_inputs, "TASK_DIR", task)
+    original = arm_inputs._lock
+
+    def drifting(*args: Any) -> dict[str, Any]:
+        built = original(*args)
+        with (task / "instructions" / "outgoing.md").open("a") as handle:
+            handle.write("\n")
+        return built
+
+    monkeypatch.setattr(arm_inputs, "_lock", drifting)
     out = tmp_path / "arms"
     with pytest.raises(ValueError, match=arm_inputs.UNPINNED):
         arm_inputs.prepare(out)

@@ -1,3 +1,4 @@
+import hashlib
 import os
 import shutil
 import stat
@@ -10,6 +11,7 @@ import pytest
 from examples.seatlab.workbench import arm_sources
 from examples.seatlab.workbench.arm_sources import GROUPS, Source, inspect_source
 from harbor.models.job.lock import _build_lock_trial_task
+from harbor.models.task.task import Task
 from harbor.models.trial.config import TaskConfig
 from harbor.publisher.packager import Packager
 
@@ -51,9 +53,50 @@ def chmod(path: Path, executable: bool) -> None:
     path.chmod(mode | stat.S_IXUSR if executable else mode & ~bits)
 
 
+def raw_role(root: Path, seat: str) -> str:
+    data = (root / "instructions" / f"{seat}.md").read_bytes()
+    return hashlib.sha256(data).hexdigest()
+
+
+def loaded_role(root: Path, seat: str) -> str:
+    text = Task(root).seat_instruction(seat)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def role_files(name: str) -> set[str]:
+    return {f"instructions/{seat}.md" for seat in SEATS[name]}
+
+
+def packaged(root: Path) -> set[str]:
+    task_dir = root.resolve()
+    return {
+        path.relative_to(task_dir).as_posix()
+        for path in Packager.collect_files(task_dir)
+    }
+
+
+def rewrite_role(path: Path, rewrite: str) -> None:
+    data = path.read_bytes()
+    assert b"\r" not in data and b"canary" not in data.lower()
+    if rewrite == "crlf":
+        path.write_bytes(data.replace(b"\n", b"\r\n"))
+    else:
+        assert rewrite == "canary"
+        path.write_bytes(b"<!-- harbor canary 3f9c -->\n\n" + data)
+
+
+@pytest.fixture
+def legacy_packager(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    def omit_roles(paths: Any, spec: Any, file_filter: Any) -> list[Path]:
+        return []
+
+    monkeypatch.setattr(Packager, "_seat_instruction_files", staticmethod(omit_roles))
+    return monkeypatch
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize("name", sorted(SEATS))
-def test_stock_source_binds_native_lock_without_role_coverage(
+def test_stock_source_binds_native_lock_with_role_coverage(
     tmp_path: Path, name: str
 ) -> None:
     root = copy(name, tmp_path)
@@ -61,16 +104,39 @@ def test_stock_source_binds_native_lock_without_role_coverage(
     source = inspect_source(root, lock)
     assert lock["type"] == "local" and lock["name"] == name
     assert source.seats == SEATS[name]
-    assert set(source.roles) == set(SEATS[name])
-    assert all(len(value) == 64 for value in source.roles.values())
-    assert set(source.effective_roles) == set(SEATS[name])
-    assert all(len(value) == 64 for value in source.effective_roles.values())
+    assert source.roles == {seat: raw_role(root, seat) for seat in SEATS[name]}
+    assert source.effective_roles == {
+        seat: loaded_role(root, seat) for seat in SEATS[name]
+    }
     assert tuple(source.groups) == GROUPS
+    assert role_files(name) <= packaged(root)
     assert source.native_digest == lock["digest"]
     assert source.native_digest == "sha256:" + Packager.compute_content_hash(root)[0]
-    assert source.lock_covers_roles is False
+    assert source.lock_covers_roles is True
     assert source.unpackaged_files == 0
     assert inspect_source(STOCK / name, lock) == source
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("name", sorted(SEATS))
+def test_legacy_lock_omits_roles_and_fails_the_current_package(
+    tmp_path: Path, name: str, legacy_packager: pytest.MonkeyPatch
+) -> None:
+    root = copy(name, tmp_path)
+    lock = native_lock(root)
+    legacy = inspect_source(root, lock)
+    assert not role_files(name) & packaged(root)
+    assert legacy.native_digest == lock["digest"]
+    assert legacy.lock_covers_roles is False
+    assert legacy.unpackaged_files == 0
+    legacy_packager.undo()
+    refused(root, lock, arm_sources.WRONG_DIGEST)
+    current = inspect_source(root, native_lock(root))
+    assert current.native_digest != legacy.native_digest
+    assert current.lock_covers_roles is True
+    assert current.roles == legacy.roles
+    assert current.effective_roles == legacy.effective_roles
+    assert current.groups == legacy.groups
 
 
 @pytest.mark.unit
@@ -86,7 +152,30 @@ def test_relocated_copy_binds_without_trusting_lock_path(tmp_path: Path) -> None
 
 
 @pytest.mark.unit
-def test_role_text_change_is_isolated_and_not_lock_covered(tmp_path: Path) -> None:
+def test_role_text_change_needs_its_own_lock_that_covers_it(tmp_path: Path) -> None:
+    base = copy("hello-seats", tmp_path / "base")
+    arm = copy("hello-seats", tmp_path / "arm")
+    lock = native_lock(base)
+    append(arm / "instructions" / "p2.md", "Answer in one line.\n")
+    refused(arm, lock, arm_sources.WRONG_DIGEST)
+    arm_lock = native_lock(arm)
+    refused(base, arm_lock, arm_sources.WRONG_DIGEST)
+    left, right = inspect_source(base, lock), inspect_source(arm, arm_lock)
+    assert changed(left, right) == set()
+    assert left.roles["p1"] == right.roles["p1"]
+    assert right.roles["p2"] == raw_role(arm, "p2") != left.roles["p2"]
+    assert left.effective_roles["p1"] == right.effective_roles["p1"]
+    assert right.effective_roles["p2"] == loaded_role(arm, "p2")
+    assert right.effective_roles["p2"] != left.effective_roles["p2"]
+    assert right.native_digest == arm_lock["digest"] != left.native_digest
+    assert left.lock_covers_roles is True and right.lock_covers_roles is True
+    assert right.unpackaged_files == 0
+
+
+@pytest.mark.unit
+def test_legacy_role_text_change_keeps_old_digest_without_proof(
+    tmp_path: Path, legacy_packager: pytest.MonkeyPatch
+) -> None:
     base = copy("hello-seats", tmp_path / "base")
     arm = copy("hello-seats", tmp_path / "arm")
     lock = native_lock(base)
@@ -103,23 +192,40 @@ def test_role_text_change_is_isolated_and_not_lock_covered(tmp_path: Path) -> No
 
 @pytest.mark.unit
 @pytest.mark.parametrize("rewrite", ["crlf", "canary"])
-def test_non_content_role_rewrite_keeps_native_instruction(
+def test_non_content_role_rewrite_needs_its_own_lock_but_keeps_loaded_text(
     tmp_path: Path, rewrite: str
 ) -> None:
     base = copy("ship-handover", tmp_path / "base")
     arm = copy("ship-handover", tmp_path / "arm")
     lock = native_lock(base)
-    role = arm / "instructions" / "relief.md"
-    data = role.read_bytes()
-    assert b"\r" not in data and b"canary" not in data.lower()
-    if rewrite == "crlf":
-        role.write_bytes(data.replace(b"\n", b"\r\n"))
-    else:
-        role.write_bytes(b"<!-- harbor canary 3f9c -->\n\n" + data)
+    rewrite_role(arm / "instructions" / "relief.md", rewrite)
+    refused(arm, lock, arm_sources.WRONG_DIGEST)
+    arm_lock = native_lock(arm)
+    left, right = inspect_source(base, lock), inspect_source(arm, arm_lock)
+    assert changed(left, right) == set()
+    assert right.roles["relief"] == raw_role(arm, "relief") != left.roles["relief"]
+    assert Task(arm).seat_instruction("relief") == Task(base).seat_instruction("relief")
+    assert right.effective_roles["relief"] == loaded_role(arm, "relief")
+    assert left.effective_roles == right.effective_roles
+    assert right.native_digest == arm_lock["digest"] != left.native_digest
+    assert right.lock_covers_roles is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("rewrite", ["crlf", "canary"])
+def test_legacy_non_content_role_rewrite_keeps_old_digest_without_proof(
+    tmp_path: Path, rewrite: str, legacy_packager: pytest.MonkeyPatch
+) -> None:
+    base = copy("ship-handover", tmp_path / "base")
+    arm = copy("ship-handover", tmp_path / "arm")
+    lock = native_lock(base)
+    rewrite_role(arm / "instructions" / "relief.md", rewrite)
     left, right = inspect_source(base, lock), inspect_source(arm, lock)
     assert changed(left, right) == set()
     assert left.roles["relief"] != right.roles["relief"]
     assert left.effective_roles == right.effective_roles
+    assert right.native_digest == left.native_digest
+    assert right.lock_covers_roles is False
 
 
 @pytest.mark.unit

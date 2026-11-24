@@ -10,17 +10,17 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 ## SeatLab workbench
 
-Use this fork branch to inspect real team traces, replay published studies, or assign new native trials to independent workers. Start with an offline check:
+This branch combines the [team operator](examples/seatlab/workbench/team-account.md), native packaging of per-seat instructions, and a [two-seat shipping benchmark](examples/seatlab/decision_receipt/README.md). Start by checking the saved evidence:
 
 ```sh
-git clone --depth 1 --branch seatlab/team-operator-workbench https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch seatlab/offline-team-receipts https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
-python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete
+python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete ship-decision-evidence
 ```
 
-The first profile withholds one worker. The second includes all workers and adds verified timeouts to the archived population. Both keep **archived model teams** separate from **scripted native controls**. See [the team-return operator](examples/seatlab/workbench/team-return.md) to read the findings, change the inputs, or run your own team.
+The first two reports show what changes when one worker is missing or all workers return. They keep archived model teams separate from scripted controls. The shipping report asks a different question: did the receiver have a usable parcel reference before deciding? The original runs did not record whether the receiver cited it. The [new benchmark](examples/seatlab/decision_receipt/README.md) records the citation separately from the delivery outcome. Preparing its four control configurations does not run them.
 
-`list` shows all studies. `verify` with no names checks the entire catalog. After the clone, these two commands work offline. They need no Harbor install, Docker, model key, or model call.
+`list` shows all studies. `verify` with no names checks the entire catalog. Both commands work offline after cloning and need no Harbor install, Docker, or model key.
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
 

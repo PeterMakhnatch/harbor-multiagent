@@ -4,7 +4,7 @@ Before paying for a comparison, name the one prepared input that should differ. 
 
 ## Try two controls and one confound
 
-From the fork checkout, use the stock two-seat shipping task. The helper prepares three local trial locks from two [released registrations](../../ship_handover/samples/two-worlds). These are prepared inputs, not historical run records. The helper refuses a changed release or an existing output directory.
+From the fork checkout, use the stock two-seat shipping task. The helper prepares three local trial locks from two [released registrations](../../ship_handover/samples/two-worlds). It checks the original task files and their executable bits. It prints the new task digest and the archived digest separately. A difference is expected on this role-aware branch. The three locks are **new inputs**, not records of past executions. The helper refuses a changed release or an existing output directory.
 
 ```sh
 py=.venv/bin/python
@@ -38,7 +38,7 @@ Give the second worker the `comparison` value from the JSON report. Add `--expec
 
 The checker uses both the raw role file and Harbor's loaded text. It checks the native package digest, participant order, other lock fields, non-role file contents, and which files are executable. It reads unshipped local files too. A moved local task can qualify if its directory name, checked inputs and lock still agree. Cosmetic or external path changes can cause a refusal. Use stationary local inputs. This is not a filesystem snapshot or a deployment attestation.
 
-The legacy native packager omits role files. Two different receiver instructions can then have the **same** native task digest. `isolate` refuses an instruction-only claim under such locks. It can still compare participant or world inputs in the supplied local trees and reports `native_lock_covers_roles: false`. [Fork PR #134](https://github.com/PeterMakhnatch/harbor-multiagent/pull/134) repairs new packages. Keep the original lock for old results. Do not re-label them as results from a repaired package.
+This checkout includes the [role-aware native packager](https://github.com/PeterMakhnatch/harbor-multiagent/pull/134). Each declared seat instruction is in a new package and its digest. The legacy packager omitted those files. Two different instructions could then have the same native digest. `isolate` refuses an instruction-only claim under such locks. It can compare participant or world inputs in matching local trees and reports `native_lock_covers_roles: false` if the installed packager omits the roles. Keep the original locks with old results. A fresh lock is not evidence about an old trial.
 
 This tool does not compare host gates, scheduling, external files behind a path, mutable images, provider behavior or messages actually received. It does not compare job-level retries or sample size. Use the [handoff author guide](../../seat_handoffs/author.md) to check what a benchmark observes. Use the [budget preview](team-account.md#decide-whether-a-proposed-run-fits-a-budget) to price an authorized plan separately.
 

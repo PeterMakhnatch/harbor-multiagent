@@ -328,6 +328,17 @@ STUDIES: tuple[Study, ...] = (
         sha256="b2f0950b01dcaecfa6aeaf8ddd232d2c19fc6e1038e0882623be48561eb94ea8",
     ),
     Study(
+        id="ship-decision-evidence",
+        question="Which shipping teams received a usable reference before deciding, and which releases measured citation?",
+        kind="secondary-native-receipt-analysis",
+        guide="examples/seatlab/decision_receipt/README.md",
+        module="examples.seatlab.decision_receipt.archive",
+        argv=("--json",),
+        report=f"{_RESULTS}/shipping-decision-evidence.json",
+        exit_code=0,
+        sha256="32d7dba196e132fea4c93224b29553ef7bc227c758e758b275b35caa61da72c9",
+    ),
+    Study(
         id="seat-event-stream",
         question="Do the native seat journals agree with final seat outcomes across all eight registered controls?",
         kind="native-scripted-calibration",

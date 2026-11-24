@@ -81,6 +81,10 @@ A multi-agent task has no `instruction.md`. Every agent needs `instructions/<ser
 You are p1. Post exactly one note to http://world:8080/note with author p1 and the text 'hello from p1', then GET /notes and confirm it is there, then stop.
 ```
 
+The task package includes the instruction for every declared seat, including supporting seats. It does not include other files in `instructions/`. Do not exclude a declared instruction with `.gitignore`: Harbor refuses to build an incomplete package.
+
+Changing one seat's instruction changes the task digest, even when the environment and verifier stay the same. Older builds omitted these files from the package and the digest. Republish a new version from the original task directory and update pins for future jobs. Keep old locks with their original results; they do not identify the role instructions.
+
 ## The Compose file
 
 `environment/docker-compose.yaml` holds the environment's services plus one service per agent. Harbor merges it on top of its base compose file, as for any [multi-container](https://harborframework.com/docs/tasks/multi-container) task.
