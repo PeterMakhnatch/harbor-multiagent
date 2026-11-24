@@ -11,6 +11,7 @@ class LintRule(StrEnum):
     UNUSED_HARBORIGNORE = "unused-harborignore"
     ROOT_AGENT = "root-agent"
     SHARED_VERIFIER = "shared-verifier"
+    MAIN_SEAT = "main-seat"
     OVERLAPPING_ARTIFACTS = "overlapping-artifacts"
     ARTIFACT_LOG_OVERLAP = "artifact-log-overlap"
     COMPOSE_PRIVILEGED = "compose-privileged"
@@ -18,6 +19,10 @@ class LintRule(StrEnum):
     COMPOSE_WRITABLE_BIND_MOUNT = "compose-writable-bind-mount"
     COMPOSE_EXTERNAL_BIND_MOUNT = "compose-external-bind-mount"
     COMPOSE_SYMLINK_BIND_MOUNT = "compose-symlink-bind-mount"
+    SEAT_SHARED_VOLUME = "seat-shared-volume"
+    SEAT_SHARED_NAMESPACE = "seat-shared-namespace"
+    SEAT_SHARED_NETWORK = "seat-shared-network"
+    SEAT_HOST_SECRET = "seat-host-secret"
     UNPINNED_IMAGE = "unpinned-image"
     UNPINNED_PYTHON_DEPENDENCY = "unpinned-python-dependency"
     VERIFIER_RUNTIME_INSTALL = "verifier-runtime-install"
@@ -31,6 +36,7 @@ DEFAULT_RULES = {
     LintRule.INVALID_TASK_FILES,
     LintRule.UNUSED_HARBORIGNORE,
     LintRule.SHARED_VERIFIER,
+    LintRule.MAIN_SEAT,
     LintRule.ARTIFACT_LOG_OVERLAP,
     LintRule.OVERLAPPING_ARTIFACTS,
     LintRule.COMPOSE_PRIVILEGED,
@@ -38,6 +44,9 @@ DEFAULT_RULES = {
     LintRule.COMPOSE_WRITABLE_BIND_MOUNT,
     LintRule.COMPOSE_EXTERNAL_BIND_MOUNT,
     LintRule.COMPOSE_SYMLINK_BIND_MOUNT,
+    LintRule.SEAT_SHARED_VOLUME,
+    LintRule.SEAT_SHARED_NAMESPACE,
+    LintRule.SEAT_HOST_SECRET,
     LintRule.UNPINNED_PYTHON_DEPENDENCY,
     LintRule.VERIFIER_RUNTIME_INSTALL,
     LintRule.VERIFIER_NETWORK_DOWNLOAD,
@@ -54,6 +63,18 @@ COMPOSE_RULES = {
     LintRule.COMPOSE_WRITABLE_BIND_MOUNT,
     LintRule.COMPOSE_EXTERNAL_BIND_MOUNT,
     LintRule.COMPOSE_SYMLINK_BIND_MOUNT,
+    LintRule.SEAT_SHARED_VOLUME,
+    LintRule.SEAT_SHARED_NAMESPACE,
+    LintRule.SEAT_SHARED_NETWORK,
+    LintRule.SEAT_HOST_SECRET,
+}
+
+# Compose rules that only report on seat tasks.
+SEAT_RULES = {
+    LintRule.SEAT_SHARED_VOLUME,
+    LintRule.SEAT_SHARED_NAMESPACE,
+    LintRule.SEAT_SHARED_NETWORK,
+    LintRule.SEAT_HOST_SECRET,
 }
 
 

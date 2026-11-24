@@ -8,16 +8,25 @@ import stat
 import tomllib
 import warnings
 from collections.abc import Iterator
+from os.path import normpath
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import UnionType
 from typing import Annotated, Any, Union, get_args, get_origin
 from urllib.parse import urlsplit
 
+import yaml
 from packaging.requirements import InvalidRequirement, Requirement
 from pydantic import AliasChoices, AliasPath, BaseModel, ValidationError
 
+from harbor.constants import MAIN_SERVICE_NAME
 from harbor.lint.compose import lint_compose, lint_image
-from harbor.lint.models import COMPOSE_RULES, LintFinding, LintRule, sort_findings
+from harbor.lint.models import (
+    COMPOSE_RULES,
+    SEAT_RULES,
+    LintFinding,
+    LintRule,
+    sort_findings,
+)
 from harbor.models.task.artifacts import (
     convention_source_for_os,
     validate_artifact_entries,
@@ -137,9 +146,11 @@ def _is_task_build_file(path: Path, root: Path) -> bool:
 
 def _source_files(
     root: Path, *, file_filter: TaskFileFilter
-) -> tuple[set[Path], set[Path], list[LintFinding]]:
+) -> tuple[set[Path], set[Path], set[Path], list[LintFinding]]:
+    """Return regular files, invalid ignore files, rejected paths and findings."""
     files: set[Path] = set()
     invalid_ignore_files: set[Path] = set()
+    rejected: set[Path] = set()
     findings = []
 
     def visit(path: Path, ancestors: frozenset[Path]) -> None:
@@ -190,6 +201,7 @@ def _source_files(
         except (ValueError, RuntimeError, OSError) as exc:
             if _is_operational_file_error(exc):
                 raise
+            rejected.add(path)
             findings.append(
                 LintFinding(
                     rule=LintRule.INVALID_TASK_FILES,
@@ -199,7 +211,7 @@ def _source_files(
             )
 
     visit(root, frozenset())
-    return files, invalid_ignore_files, findings
+    return files, invalid_ignore_files, rejected, findings
 
 
 def _artifact_overlaps_logs(entry: str | ArtifactConfig, os: TaskOS) -> bool:
@@ -234,6 +246,7 @@ def _lint_layout(
     files: set[Path],
     *,
     invalid_ignore_files: set[Path],
+    rejected: set[Path],
 ) -> list[LintFinding]:
     findings = []
 
@@ -249,24 +262,37 @@ def _lint_layout(
             paths.environment_dir,
             "Missing environment directory; add environment/ or set environment.docker_image.",
         )
+    for seat in config.agents:
+        filename = f"instructions/{seat}.md"
+        instruction = paths.seat_instruction_path(seat)
+        if instruction in files:
+            if not strip_canary(instruction.read_text()).strip():
+                invalid(
+                    instruction, f"Seat instruction is empty; add text to {filename}."
+                )
+        # The source scan already reports an unsafe instruction or directory.
+        elif rejected.isdisjoint((instruction, *instruction.parents)):
+            invalid(instruction, f"Missing seat instruction; add {filename}.")
+
     overlapping: set[str] = set()
     for index, step in enumerate(config.steps or [None]):
-        try:
-            instruction = (
-                paths.step_instruction_path(step.name)
-                if step
-                else paths.instruction_path
-            )
-        except (ValueError, RuntimeError):
-            invalid(
-                paths.task_dir,
-                "Step inputs must stay within the task without symlink cycles.",
-            )
-            continue
-        if instruction not in files:
-            invalid(instruction, "Missing instruction file; add instruction.md.")
-        elif not strip_canary(instruction.read_text()).strip():
-            invalid(instruction, "Instruction is empty; describe the agent's task.")
+        if not config.agents:
+            try:
+                instruction = (
+                    paths.step_instruction_path(step.name)
+                    if step
+                    else paths.instruction_path
+                )
+            except (ValueError, RuntimeError):
+                invalid(
+                    paths.task_dir,
+                    "Step inputs must stay within the task without symlink cycles.",
+                )
+                continue
+            if instruction not in files:
+                invalid(instruction, "Missing instruction file; add instruction.md.")
+            elif not strip_canary(instruction.read_text()).strip():
+                invalid(instruction, "Instruction is empty; describe the agent's task.")
         try:
             definition = resolve_verifier_environment_definition(
                 config,
@@ -351,7 +377,14 @@ def _lint_config(config: TaskConfig, path: Path) -> list[LintFinding]:
                     f"steps[{index}].artifacts: {collision.describe()}",
                 )
 
-    if task_has_any_shared_verifier(config):
+    if config.agents:
+        # Seat tasks always verify in main, so only a seat there shares it.
+        if MAIN_SERVICE_NAME in config.agents:
+            emit(
+                LintRule.MAIN_SEAT,
+                "agents.main: Seat runs an agent in main, where the verifier runs; give the agent its own service.",
+            )
+    elif task_has_any_shared_verifier(config):
         emit(
             LintRule.SHARED_VERIFIER,
             'Verifier shares the agent sandbox; set verifier.environment_mode = "separate", including shared step overrides.',
@@ -610,6 +643,42 @@ def _lint_dockerfile(path: Path, *, agent: bool, shell: bool) -> list[LintFindin
     return findings
 
 
+def _seat_dockerfiles(
+    config: TaskConfig, paths: TaskPaths, files: set[Path]
+) -> set[Path]:
+    """Task Dockerfiles that seat services build, without running Compose.
+
+    Reads each seat's ``build`` from the task's Compose file, including YAML
+    merge keys. ``extends``, ``include`` and interpolation are not followed,
+    and a remote context names no task file.
+    """
+    compose = paths.environment_dir / "docker-compose.yaml"
+    if not config.agents or compose not in files:
+        return set()
+    try:
+        data = yaml.safe_load(compose.read_text())
+    except (yaml.YAMLError, ValueError):
+        return set()  # Compose checks report a file Compose cannot load.
+    services = data.get("services") if isinstance(data, dict) else None
+    if not isinstance(services, dict):
+        return set()
+    dockerfiles = set()
+    for seat in config.agents:
+        service = services.get(seat)
+        build = service.get("build") if isinstance(service, dict) else None
+        if isinstance(build, str):
+            build = {"context": build}
+        if not isinstance(build, dict) or "dockerfile_inline" in build:
+            continue
+        context = build.get("context", ".")
+        dockerfile = build.get("dockerfile", "Dockerfile")
+        if isinstance(context, str) and isinstance(dockerfile, str):
+            path = Path(normpath(paths.environment_dir / context / dockerfile))
+            if path in files:  # A regular file within the task.
+                dockerfiles.add(path)
+    return dockerfiles
+
+
 def _lint_sources(
     config: TaskConfig, paths: TaskPaths, files: set[Path]
 ) -> list[LintFinding]:
@@ -632,6 +701,10 @@ def _lint_sources(
                 )
             )
     builds = {paths.environment_dir / "Dockerfile": config.environment.os}
+    # Seats run agents, so their images are agent images too.
+    seat_images = _seat_dockerfiles(config, paths, files)
+    for path in seat_images:
+        builds.setdefault(path, config.environment.os)
     scripts: dict[Path, bool] = {}
     for step in config.steps or [None]:
         try:
@@ -663,7 +736,7 @@ def _lint_sources(
             findings.extend(
                 _lint_dockerfile(
                     path,
-                    agent=path.parent == paths.environment_dir,
+                    agent=path.parent == paths.environment_dir or path in seat_images,
                     shell=os == TaskOS.LINUX,
                 )
             )
@@ -701,7 +774,7 @@ def lint_task(
     if not root.is_dir():
         raise NotADirectoryError(root)
     paths = TaskPaths(root)
-    files, invalid_ignore_files, findings = _source_files(
+    files, invalid_ignore_files, rejected, findings = _source_files(
         root, file_filter=TaskFileFilter(root)
     )
     config = None
@@ -752,7 +825,11 @@ def lint_task(
     if config is not None:
         findings.extend(
             _lint_layout(
-                config, paths, files, invalid_ignore_files=invalid_ignore_files
+                config,
+                paths,
+                files,
+                invalid_ignore_files=invalid_ignore_files,
+                rejected=rejected,
             )
         )
         findings.extend(_lint_config(config, paths.config_path))
@@ -761,9 +838,24 @@ def lint_task(
         contexts = _compose_contexts(config, paths) if config is not None else {}
         for path in sorted(files):
             if path.name == "docker-compose.yaml" and _is_task_build_file(path, root):
+                # Seats are services of the agent environment's Compose file.
+                seats = (
+                    list(config.agents)
+                    if config is not None and path.parent == paths.environment_dir
+                    else []
+                )
+                # Without seats, seat rules report nothing and need no Docker.
+                if (
+                    not seats
+                    and selected_rules is not None
+                    and (selected_rules & COMPOSE_RULES) <= SEAT_RULES
+                ):
+                    continue
                 # One Compose file may be reused by verifiers with different envs.
                 for env in contexts.get(path, [{}]):
-                    for finding in lint_compose(path, task_root=root, task_env=env):
+                    for finding in lint_compose(
+                        path, task_root=root, task_env=env, seats=seats
+                    ):
                         if finding not in findings:
                             findings.append(finding)
     return sort_findings(

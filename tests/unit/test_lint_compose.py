@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -15,7 +16,8 @@ from harbor.lint.compose import (
     _load_compose,
     lint_compose,
 )
-from tests.unit.test_lint import cli as cli, task as task
+from harbor.lint.models import DEFAULT_RULES
+from tests.unit.test_lint import cli as cli, configure, task as task
 
 pytestmark = pytest.mark.unit
 
@@ -109,6 +111,384 @@ def test_other_volumes_are_not_binds(model, path, kind):
             {"type": "volume", "source": "inputs", "target": "/data"}
         ]
     assert lint_compose(path) == []
+
+
+def volume(read_only: bool = False, subpath: str | None = None) -> dict[str, Any]:
+    mount: dict[str, Any] = {"type": "volume", "source": "a", "target": "/data"}
+    if read_only:
+        mount["read_only"] = True
+    if subpath is not None:
+        mount["volume"] = {"subpath": subpath}
+    return mount
+
+
+SEAT_VOLUMES = {
+    "own-volume": ({"p1": [volume()]}, []),
+    "seats-read": (
+        {"main": [volume()], "p1": [volume(True)], "p2": [volume(True)]},
+        [],
+    ),
+    "main-reads-seat": ({"main": [volume(True)], "p1": [volume()]}, []),
+    "seat-reads-main": ({"main": [volume()], "p1": [volume(True)]}, []),
+    "one-seat-twice": ({"p1": [volume(), volume(True)]}, []),
+    "separate-subpaths": (
+        {
+            "main": [volume(True)],
+            "p1": [volume(subpath="p1")],
+            "p2": [volume(subpath="./p2/")],
+        },
+        [],
+    ),
+    "seats-write": (
+        {"p1": [volume()], "p2": [volume()]},
+        [("p1", "mounted by seat p2"), ("p2", "mounted by seat p1")],
+    ),
+    "seat-reads-seat": (
+        {"p1": [volume()], "p2": [volume(True)]},
+        [("p1", "mounted by seat p2")],
+    ),
+    "main-writes": (
+        {"main": [volume()], "p1": [volume()]},
+        [("p1", "written by main")],
+    ),
+    "service-writes": (
+        {"db": [volume()], "p1": [volume()], "p2": [volume(True)]},
+        [("p1", "mounted by seat p2"), ("p1", "written by db")],
+    ),
+    "volume-and-subpath": (
+        {"p1": [volume()], "p2": [volume(subpath="p2")]},
+        [("p1", "mounted by seat p2"), ("p2", "mounted by seat p1")],
+    ),
+    "subpath-traversal": (
+        {"p1": [volume(subpath="p1")], "p2": [volume(True, "p2/../p1")]},
+        [("p1", "mounted by seat p2")],
+    ),
+}
+
+
+def volume_findings(path: Path) -> list[Any]:
+    """Findings for seats p1 and p2, without seat-shared-network."""
+    return [
+        f
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule != "seat-shared-network"
+    ]
+
+
+@pytest.mark.parametrize(
+    "mounts,expected", SEAT_VOLUMES.values(), ids=list(SEAT_VOLUMES)
+)
+def test_seat_shared_volume(model, path, mounts, expected):
+    for service, volumes in mounts.items():
+        model["services"].setdefault(service, {})["volumes"] = volumes
+    assert [
+        (f.rule, f.message.split(":")[0], f.message.split(" also ")[1].split(";")[0])
+        for f in volume_findings(path)
+    ] == [
+        ("seat-shared-volume", f"services.{service}.volumes[0]", sharing)
+        for service, sharing in expected
+    ]
+    assert lint_compose(path) == []  # Tasks without seats have no seat findings.
+
+
+@pytest.mark.parametrize(
+    "flags,expected",
+    [
+        ("bind,ro", set()),
+        ("bind", {"compose-writable-bind-mount", "seat-shared-volume"}),
+    ],
+)
+def test_seat_shared_bind_volume_access(model, path, flags, expected):
+    model["volumes"] = {"a": {"driver_opts": {"o": flags, "device": "./data"}}}
+    model["services"].update(p1={"volumes": [volume()]}, p2={"volumes": [volume()]})
+    assert {f.rule for f in volume_findings(path)} == expected
+
+
+def shared_mount_messages(path: Path) -> list[str]:
+    return [
+        finding.message.split(";")[0]
+        for finding in lint_compose(
+            path, task_root=path.parent.parent, seats=["p1", "p2"]
+        )
+        if finding.rule == LintRule.SEAT_SHARED_VOLUME
+    ]
+
+
+@pytest.mark.parametrize(
+    "first,second,read_only,where",
+    [
+        ("./data", "./data", False, "'environment/data'"),
+        ("./data", "./data/child", False, "'environment/data/child'"),
+        ("./data/child", "./data", False, "'environment/data/child'"),
+        ("./data", "./data-other", False, None),
+        ("./data", "./data", True, None),
+        ("../../host-input", "../../host-input", False, "outside the task directory"),
+    ],
+    ids=["same", "parent", "child", "separate", "both-read-only", "external"],
+)
+def test_seat_shared_host_bind_paths(model, path, first, second, read_only, where):
+    bind = {"type": "bind", "source": first, "target": "/data"}
+    model["services"].update(
+        main={"volumes": [bind]},
+        p1={"volumes": [{**bind, "read_only": read_only}]},
+        p2={"volumes": [{**bind, "source": second, "read_only": True}]},
+    )
+    assert shared_mount_messages(path) == (
+        [
+            f"services.p1.volumes[0]: Seat p1 can write a host path {where} also mounted by seat p2"
+        ]
+        if where
+        else []
+    )
+
+
+def test_seat_shared_host_bind_paths_resolve_symlinks(model, path):
+    task_root = path.parent.parent
+    data = task_root / "data"
+    data.mkdir()
+    (path.parent / "alias").symlink_to(data, target_is_directory=True)
+    bind = {"type": "bind", "source": "./alias", "target": "/data"}
+    model["services"].update(
+        p1={"volumes": [bind]},
+        p2={"volumes": [{**bind, "source": str(data), "read_only": True}]},
+    )
+    assert shared_mount_messages(path) == [
+        "services.p1.volumes[0]: Seat p1 can write a host path 'data' also mounted by seat p2"
+    ]
+
+
+@pytest.mark.parametrize("second_name", ["first", "second"])
+def test_seat_shared_local_driver_device(model, path, second_name):
+    driver = {
+        "driver": "local",
+        "driver_opts": {"type": "none", "o": "bind", "device": "./data"},
+    }
+    model["volumes"] = {
+        "a": {**driver, "name": "first"},
+        "b": {**driver, "name": second_name},
+    }
+    model["services"].update(
+        p1={"volumes": [volume()]},
+        p2={"volumes": [{**volume(True), "source": "b"}]},
+    )
+    assert shared_mount_messages(path) == [
+        "services.p1.volumes[0]: Seat p1 can write a host path 'environment/data' "
+        "also mounted by seat p2"
+    ]
+
+
+@pytest.mark.parametrize("subpath,shared", [("p1", True), ("p2", False)])
+def test_seat_direct_and_local_driver_bind_subpaths(model, path, subpath, shared):
+    model["volumes"] = {
+        "a": {"driver_opts": {"type": "none", "o": "bind,ro", "device": "./data"}}
+    }
+    model["services"].update(
+        p1={"volumes": [{"type": "bind", "source": "./data/p1", "target": "/data"}]},
+        p2={"volumes": [volume(subpath=subpath)]},
+    )
+    assert shared_mount_messages(path) == (
+        [
+            "services.p1.volumes[0]: Seat p1 can write a host path 'environment/data/p1' "
+            "also mounted by seat p2"
+        ]
+        if shared
+        else []
+    )
+
+
+@pytest.mark.parametrize(
+    "volumes,shared",
+    [
+        (
+            {
+                "a": {"name": "x", "external": True},
+                "b": {"name": "x", "external": True},
+            },
+            True,
+        ),
+        ({"a": {"name": "x"}, "b": {"name": "x"}}, True),
+        ({"a": {"name": "harbor-lint_a"}, "b": {"name": "harbor-lint_b"}}, False),
+        ({}, False),
+    ],
+    ids=["one-external-volume", "one-name", "own-volumes", "undeclared-keys"],
+)
+def test_seat_shared_volume_compares_docker_names(model, path, volumes, shared):
+    model["volumes"] = volumes
+    model["services"].update(
+        p1={"volumes": [volume()]},
+        p2={"volumes": [{**volume(True), "source": "b"}]},
+    )
+    assert [f.message.split(";")[0] for f in volume_findings(path)] == (
+        ["services.p1.volumes[0]: Seat can write a volume also mounted by seat p2"]
+        if shared
+        else []
+    )
+
+
+SEAT_NETWORKS = {
+    "default-network": ({"p1": {}, "p2": {}}, ["p1", "p2"]),
+    "one-network": (
+        {"p1": {"networks": {"play": None}}, "p2": {"networks": ["play"]}},
+        ["p1", "p2"],
+    ),
+    "own-networks": (
+        {
+            "main": {"networks": {"p1-net": None, "p2-net": None}},
+            "p1": {"networks": {"p1-net": None}},
+            "p2": {"networks": {"p2-net": None}},
+        },
+        [],
+    ),
+    "one-docker-network": (
+        {"p1": {"networks": {"a": None}}, "p2": {"networks": {"b": None}}},
+        ["p1", "p2"],
+    ),
+    "bridge": (
+        {"p1": {"network_mode": "bridge"}, "p2": {"network_mode": "bridge"}},
+        ["p1", "p2"],
+    ),
+    "no-network": ({"p1": {"network_mode": "none"}, "p2": {}}, []),
+    "shared-namespaces": (
+        {"p1": {"network_mode": "host"}, "p2": {"network_mode": "service:main"}},
+        [],
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "services,expected", SEAT_NETWORKS.values(), ids=list(SEAT_NETWORKS)
+)
+def test_seat_shared_network(model, path, services, expected):
+    model["services"].update(services)
+    # Both keys name one Docker network only in the one-docker-network case.
+    model["networks"] = {"a": {"name": "x"}, "b": {"name": "x"}, "p1-net": {}}
+    findings = lint_compose(path, seats=["p1", "p2"])
+    assert [f.message for f in findings if f.rule == "seat-shared-network"] == [
+        f"services.{seat}."
+        f"{'network_mode' if 'network_mode' in services[seat] else 'networks'}: "
+        f"Seat shares a network with seat {'p2' if seat == 'p1' else 'p1'}; "
+        "give each seat its own network, shared only with main."
+        for seat in expected
+    ]
+
+
+def test_seat_shared_network_is_opt_in():
+    assert LintRule.SEAT_SHARED_NETWORK not in DEFAULT_RULES
+
+
+NAMESPACES = [("network_mode", "network"), ("pid", "PID"), ("ipc", "IPC")]
+
+
+@pytest.mark.parametrize("key,kind", NAMESPACES)
+@pytest.mark.parametrize(
+    "mode,shares",
+    [
+        ("host", "the host's"),
+        ("service:main", "another container's"),
+        ("container:other", "another container's"),
+        ("none", None),
+        ("private", None),
+        (None, None),
+    ],
+)
+def test_seat_shared_namespace(model, path, key, kind, mode, shares):
+    model["services"]["main"][key] = "host"  # main alone does not share a seat's.
+    model["services"]["p1"] = {key: mode}
+    findings = lint_compose(path, seats=["p1"])
+    assert [(f.rule, f.message) for f in findings] == (
+        [
+            (
+                "seat-shared-namespace",
+                f"services.p1.{key}: Seat shares {shares} {kind} namespace; remove it to isolate the seat.",
+            )
+        ]
+        if shares
+        else []
+    )
+
+
+@pytest.mark.parametrize("key,kind", NAMESPACES)
+@pytest.mark.parametrize(
+    "service,mode,shared",
+    [
+        ("main", "service:p1", True),
+        ("db", "service:p1", True),
+        ("main", "container:p1-box", True),
+        ("main", "service:db", False),
+        ("main", "container:other", False),
+        ("main", "host", False),
+    ],
+)
+def test_service_shares_seat_namespace(model, path, key, kind, service, mode, shared):
+    model["services"].update(db={}, p1={"container_name": "p1-box"})
+    model["services"][service][key] = mode
+    findings = lint_compose(path, seats=["p1"])
+    assert [(f.rule, f.message) for f in findings] == (
+        [
+            (
+                "seat-shared-namespace",
+                f"services.{service}.{key}: Service shares a seat's {kind} namespace; remove it to isolate the seat.",
+            )
+        ]
+        if shared
+        else []
+    )
+    assert lint_compose(path) == []  # Tasks without seats have no seat findings.
+
+
+def add_seats(task: Path, *seats: str) -> None:
+    """Turn the task into a seat task with an instruction for each seat."""
+    configure(task, agent={}, verifier={}, agents={seat: {} for seat in seats})
+    (task / "instructions").mkdir()
+    for seat in seats:
+        (task / f"instructions/{seat}.md").write_text("Play your part.\n")
+
+
+@pytest.mark.parametrize("output", ["text", "json"])
+def test_seat_findings_never_print_compose_values(task, cli, model, output):
+    # Compose interpolates these values, so they can hold host secrets.
+    secret = "DO_NOT_PRINT"
+    add_seats(task, "p1", "p2")
+    (task / "environment/docker-compose.yaml").write_text("services: {}")
+    mount = {"type": "volume", "source": secret, "target": "/data"}
+    model["services"].update(
+        main={"pid": "service:p1"},
+        p1={"network_mode": f"container:{secret}", "volumes": [mount]},
+        p2={"ipc": f"service:{secret}", "volumes": [{**mount, "read_only": True}]},
+    )
+    model["volumes"] = {secret: {"name": secret}}
+    result = CliRunner().invoke(
+        cli, [str(task), *(["--json"] if output == "json" else [])]
+    )
+    assert result.exit_code == 1
+    assert secret not in result.stdout
+    if output == "json":
+        assert [
+            (f["rule"], f["message"].split(":")[0]) for f in json.loads(result.stdout)
+        ] == [
+            ("seat-shared-namespace", "services.main.pid"),
+            ("seat-shared-namespace", "services.p1.network_mode"),
+            ("seat-shared-namespace", "services.p2.ipc"),
+            ("seat-shared-volume", "services.p1.volumes[0]"),
+        ]
+
+
+def test_seat_privilege_and_docker_socket_use_existing_rules(model, path):
+    model["services"]["p1"] = {
+        "privileged": True,
+        "volumes": [
+            {
+                "type": "bind",
+                "source": "/var/run/docker.sock",
+                "target": "/var/run/docker.sock",
+                "read_only": True,
+            }
+        ],
+    }
+    reported = {f.rule for f in lint_compose(path, seats=["p1"])}
+    assert "compose-privileged" in reported
+    # POSIX host sources are inspected only on POSIX hosts.
+    assert ("compose-external-bind-mount" in reported) == (os.name != "nt")
 
 
 @pytest.mark.parametrize(
@@ -365,15 +745,20 @@ def test_cli_non_compose_selection_without_docker(
 
 
 @pytest.mark.parametrize(
-    "rule",
+    "rule,seats",
     [
-        "compose-privileged",
-        "unpinned-image",
-        "invalid-task-config",
-        "invalid-task-files",
+        ("compose-privileged", False),
+        ("unpinned-image", False),
+        ("invalid-task-config", False),
+        ("invalid-task-files", False),
+        ("seat-shared-volume", True),
+        ("seat-shared-namespace", True),
+        ("seat-shared-network", True),
     ],
 )
-def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule):
+def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule, seats):
+    if seats:
+        add_seats(task, "p1")
     (task / "environment/docker-compose.yaml").write_text("services: {}")
     run = Mock(side_effect=FileNotFoundError("docker"))
     monkeypatch.setattr("harbor.lint.compose.subprocess.run", run)
@@ -381,6 +766,22 @@ def test_cli_compose_selection_requires_docker(task, cli, monkeypatch, rule):
     assert result.exit_code == 2
     assert not result.stdout
     run.assert_called_once()
+
+
+@pytest.mark.parametrize("folder", ["environment", "tests", "steps/one/tests"])
+@pytest.mark.parametrize(
+    "rule", ["seat-shared-volume", "seat-shared-namespace", "seat-shared-network"]
+)
+def test_cli_seat_rules_without_seats_skip_docker(task, cli, monkeypatch, folder, rule):
+    compose = task / folder / "docker-compose.yaml"
+    compose.parent.mkdir(parents=True, exist_ok=True)
+    compose.write_text("services: {}")
+    run = Mock(side_effect=FileNotFoundError("docker"))
+    monkeypatch.setattr("harbor.lint.compose.subprocess.run", run)
+    result = CliRunner().invoke(cli, [str(task), "--json", "--select", rule])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == []
+    run.assert_not_called()
 
 
 def test_task_rule_selection_preserves_unfiltered_default(task, model):
@@ -450,3 +851,129 @@ def test_missing_task_environment_is_operational_and_redacted(task, cli, monkeyp
     assert not result.stdout
     assert "DO_NOT_PRINT" not in result.stderr
     run.assert_not_called()
+
+
+def test_seat_volumes_from_is_a_shared_volume(model, path):
+    """A seat with volumes_from gets every volume of the other container (review E1)."""
+    model["services"].update(
+        {
+            "p1": {"volumes_from": ["service:main:rw"]},
+            "p2": {"volumes_from": ["service:p1:ro"]},
+            "main": {},
+        }
+    )
+    findings = lint_compose(path, seats=["p1", "p2"])
+    assert sorted(f.message for f in findings if f.rule == "seat-shared-volume") == [
+        "services.p1.volumes_from[0]: Seat mounts another container's volumes; "
+        "mount only the seat's own named volumes.",
+        "services.p2.volumes_from[0]: Seat mounts another container's volumes; "
+        "mount only the seat's own named volumes.",
+    ]
+    # main is not a seat: its volumes_from is not a seat finding
+    model["services"]["main"] = {"volumes_from": ["service:p1:ro"]}
+    model["services"]["p1"] = {}
+    model["services"]["p2"] = {}
+    assert [
+        f
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule == "seat-shared-volume"
+    ] == []
+
+
+def test_seat_host_secret(model, path):
+    """Values a seat takes from the runner, not the task (review E6)."""
+    task_dir = path.parent
+    (task_dir / "seat.env").write_text("SAFE=1\n")
+    model["services"].update(
+        {
+            "p1": {
+                "env_file": [{"path": "/etc/hosts"}, {"path": "seat.env"}],
+                "environment": {"OPENAI_API_KEY": None, "SAFE": "1"},
+                "secrets": [{"source": "hostkey"}, {"source": "local"}],
+                "configs": [{"source": "hostcfg"}],
+            },
+            "main": {"environment": {"ANTHROPIC_API_KEY": None}},
+        }
+    )
+    model["secrets"] = {
+        "hostkey": {"environment": "ANTHROPIC_API_KEY"},
+        "local": {"file": "seat.env"},
+    }
+    model["configs"] = {"hostcfg": {"file": "/etc/hosts"}}
+    findings = [
+        f.message
+        for f in lint_compose(path, seats=["p1"])
+        if f.rule == "seat-host-secret"
+    ]
+    assert [m.split(":", 1)[0] for m in findings] == [
+        "services.p1.configs[0]",
+        "services.p1.env_file[0]",
+        "services.p1.environment.OPENAI_API_KEY",
+        "services.p1.secrets[0]",
+    ]
+    # No value is printed, and main (not a seat) is not reported.
+    assert not any("/etc/hosts" in m or "ANTHROPIC_API_KEY" in m for m in findings)
+
+
+def test_seat_host_secret_is_a_default_seat_rule():
+    from harbor.lint.models import COMPOSE_RULES, SEAT_RULES
+
+    assert LintRule.SEAT_HOST_SECRET in DEFAULT_RULES
+    assert LintRule.SEAT_HOST_SECRET in SEAT_RULES
+    assert LintRule.SEAT_HOST_SECRET in COMPOSE_RULES
+
+
+@pytest.mark.parametrize(
+    "key,mode",
+    [
+        ("userns_mode", "host"),
+        ("cgroup", "host"),
+        ("network_mode", "Host"),
+        ("pid", "SERVICE:main"),
+    ],
+)
+def test_seat_namespace_modes_beyond_the_first_table(model, path, key, mode):
+    """userns and cgroup namespaces, and modes written in another case (review E5)."""
+    model["services"]["p1"] = {key: mode}
+    findings = [
+        f for f in lint_compose(path, seats=["p1"]) if f.rule == "seat-shared-namespace"
+    ]
+    assert [f.message.split(":", 1)[0] for f in findings] == [f"services.p1.{key}"]
+
+
+def test_seat_volume_subpath_with_a_leading_slash(model, path):
+    """A subpath written "/p1" is the same as "p1" (review E3)."""
+    model["volumes"] = {"shared": {}}
+    model["services"].update(
+        {
+            "p1": {
+                "volumes": [
+                    {
+                        "type": "volume",
+                        "source": "shared",
+                        "target": "/a",
+                        "volume": {"subpath": "/p1"},
+                    }
+                ]
+            },
+            "p2": {
+                "volumes": [
+                    {
+                        "type": "volume",
+                        "source": "shared",
+                        "target": "/b",
+                        "volume": {"subpath": "p1"},
+                    }
+                ]
+            },
+        }
+    )
+    findings = [
+        f
+        for f in lint_compose(path, seats=["p1", "p2"])
+        if f.rule == "seat-shared-volume"
+    ]
+    assert {f.message.split(":", 1)[0] for f in findings} == {
+        "services.p1.volumes[0]",
+        "services.p2.volumes[0]",
+    }

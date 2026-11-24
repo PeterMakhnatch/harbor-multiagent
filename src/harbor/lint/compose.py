@@ -1,9 +1,11 @@
 import errno
 import json
 import os
+import posixpath
 import re
 import stat
 import subprocess
+from collections.abc import Collection
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from uuid import uuid4
@@ -16,6 +18,13 @@ from harbor.lint.models import LintFinding, LintRule, sort_findings
 from harbor.utils.env import resolve_env_vars
 
 _RUNTIME_HOST_DIRECTORY = f"__harbor_lint_runtime_{uuid4().hex}__"
+_SEAT_NAMESPACES = {
+    "network_mode": "network",
+    "pid": "PID",
+    "ipc": "IPC",
+    "userns_mode": "user",
+    "cgroup": "cgroup",
+}
 
 
 def lint_image(
@@ -154,13 +163,32 @@ def _has_symlink(path: Path) -> bool:
     return False
 
 
+def _network_names(service: dict[str, Any], networks: dict[str, Any]) -> set[str]:
+    """Docker names of the networks a service is attached to."""
+    mode = service.get("network_mode")
+    if mode:
+        # host and joins are namespaces; a mode such as bridge is a network.
+        if mode in ("host", "none") or mode.startswith(("service:", "container:")):
+            return set()
+        return {mode}
+    # Compose attaches a service without networks to the default network.
+    return {
+        (networks.get(key) or {}).get("name") or key
+        for key in service.get("networks") or ["default"]
+    }
+
+
 def lint_compose(
     path: Path,
     *,
     task_root: Path | None = None,
     task_env: dict[str, str] | None = None,
+    seats: Collection[str] = (),
 ) -> list[LintFinding]:
-    """Check Compose's normalized model without starting containers."""
+    """Check Compose's normalized model without starting containers.
+
+    ``seats`` names the services that run a seat task's agents.
+    """
     path = path.absolute()
     if not path.is_file():
         raise OSError("Compose input must be a regular file.")
@@ -182,7 +210,7 @@ def lint_compose(
             LintFinding(rule=rule, path=str(path), message=f"{field}: {message}")
         )
 
-    def bind(source: str, field: str, read_only: bool = False) -> None:
+    def bind(source: str, field: str, read_only: bool = False) -> Path | None:
         if read_only is False:
             emit(
                 LintRule.COMPOSE_WRITABLE_BIND_MOUNT,
@@ -190,7 +218,7 @@ def lint_compose(
                 "Writable bind mount allows modifying host files; use a read-only mount or a volume.",
             )
         if source.startswith("~"):
-            return
+            return None
         # Runtime host paths are unknown. Never treat their placeholders as local
         # task inputs or inspect them for symlinks on the lint host.
         if Path(source).is_relative_to(Path(path.anchor) / _RUNTIME_HOST_DIRECTORY):
@@ -199,13 +227,13 @@ def lint_compose(
                 field,
                 "Runtime bind source may be outside the task directory; review its host path.",
             )
-            return
+            return None
         windows = PureWindowsPath(source).is_absolute()
         posix = PurePosixPath(source).is_absolute()
         relative = not posix and not windows
         # A Windows source cannot be inspected on a POSIX host (or vice versa).
         if (windows and os.name != "nt") or (posix and not windows and os.name == "nt"):
-            return
+            return None
         local = project_dir / source if relative else Path(source)
         try:
             resolved = local.resolve()
@@ -221,20 +249,20 @@ def lint_compose(
                 field,
                 "Bind source contains a symlink cycle.",
             )
-            return
-        if resolved.is_relative_to(task_root):
-            return
-        emit(
-            LintRule.COMPOSE_EXTERNAL_BIND_MOUNT,
-            field,
-            "Bind source resolves outside the task directory; use task-local inputs.",
-        )
-        if _has_symlink(local):
+            return None
+        if not resolved.is_relative_to(task_root):
             emit(
-                LintRule.COMPOSE_SYMLINK_BIND_MOUNT,
+                LintRule.COMPOSE_EXTERNAL_BIND_MOUNT,
                 field,
-                "Bind source traverses a symlink outside the task directory; use task-local inputs.",
+                "Bind source resolves outside the task directory; use task-local inputs.",
             )
+            if _has_symlink(local):
+                emit(
+                    LintRule.COMPOSE_SYMLINK_BIND_MOUNT,
+                    field,
+                    "Bind source traverses a symlink outside the task directory; use task-local inputs.",
+                )
+        return resolved
 
     local_binds: dict[str, tuple[str, bool]] = {}
     for name, volume in data.get("volumes", {}).items():
@@ -259,6 +287,10 @@ def lint_compose(
         for service in data.get("services", {}).values()
         if service.get("build") and service.get("image")
     }
+    # Mounts of each Docker volume: service, field, write access and subpath.
+    volume_mounts: dict[str, list[tuple[str, str, bool, PurePosixPath]]] = {}
+    # Effective host paths of direct and local-driver mounts used by seats.
+    host_mounts: list[tuple[str, str, bool, Path]] = []
     for name, service in data.get("services", {}).items():
         field = f"services.{name}"
         image = service.get("image")
@@ -291,9 +323,10 @@ def lint_compose(
             source = mount.get("source")
             location = f"{field}.volumes[{index}]"
             read_only = mount.get("read_only", False)
+            host_path = None
             if mount["type"] == "bind":
                 if source:
-                    bind(source, location, read_only=read_only)
+                    host_path = bind(source, location, read_only=read_only)
                 else:
                     emit(
                         LintRule.INVALID_TASK_CONFIG,
@@ -302,5 +335,190 @@ def lint_compose(
                     )
             elif mount["type"] == "volume" and source in local_binds:
                 device, driver_read_only = local_binds[source]
-                bind(device, location, read_only=read_only or driver_read_only)
+                read_only = read_only or driver_read_only
+                host_path = bind(device, location, read_only=read_only)
+            if mount["type"] == "volume" and source:
+                raw_subpath = (mount.get("volume") or {}).get("subpath") or ""
+                # "/p1" and "p1" name one subpath; a leading "//" must not hide it.
+                subpath = PurePosixPath(
+                    posixpath.normpath("/" + raw_subpath.lstrip("/"))
+                )
+                # Compose resolves each key's Docker name: its name: field, an
+                # external key itself, or the key with the project prefix.
+                volume = data.get("volumes", {}).get(source, {}).get("name")
+                volume_mounts.setdefault(volume or source, []).append(
+                    (name, location, not read_only, subpath)
+                )
+                if host_path is not None:
+                    host_path = host_path.joinpath(*subpath.parts[1:])
+            if host_path is not None and name in seats:
+                host_mounts.append((name, location, not read_only, host_path))
+    # Namespace and secret findings name fields and services, not interpolated values.
+    services = data.get("services", {})
+    # Modes that join a seat's namespace, from a service that is not a seat.
+    seat_targets = {f"service:{seat}".lower() for seat in seats} | {
+        f"container:{container}".lower()
+        for seat in seats
+        if (container := services.get(seat, {}).get("container_name"))
+    }
+    for name, service in services.items():
+        for key, kind in _SEAT_NAMESPACES.items():
+            # Compose accepts "Host" and "SERVICE:main" as written; compare case-insensitively.
+            mode = str(service.get(key) or "").lower()
+            if name in seats and mode == "host":
+                sharing = f"Seat shares the host's {kind} namespace"
+            elif name in seats and mode.startswith(("service:", "container:")):
+                sharing = f"Seat shares another container's {kind} namespace"
+            elif mode in seat_targets:
+                sharing = f"Service shares a seat's {kind} namespace"
+            else:
+                continue
+            emit(
+                LintRule.SEAT_SHARED_NAMESPACE,
+                f"services.{name}.{key}",
+                f"{sharing}; remove it to isolate the seat.",
+            )
+    seat_networks = {
+        seat: _network_names(services[seat], data.get("networks", {}))
+        for seat in seats
+        if seat in services
+    }
+    for seat, networks in seat_networks.items():
+        if peers := sorted(
+            other
+            for other, other_networks in seat_networks.items()
+            if other != seat and networks & other_networks
+        ):
+            key = "network_mode" if services[seat].get("network_mode") else "networks"
+            emit(
+                LintRule.SEAT_SHARED_NETWORK,
+                f"services.{seat}.{key}",
+                f"Seat shares a network with seat {', '.join(peers)}; give each "
+                "seat its own network, shared only with main.",
+            )
+
+    def outside_task(source: str) -> bool:
+        """Whether a host path a seat reads lies outside the task directory."""
+        windows = PureWindowsPath(source).is_absolute()
+        posix = PurePosixPath(source).is_absolute()
+        if (windows and os.name != "nt") or (posix and not windows and os.name == "nt"):
+            return True  # another platform's absolute path is never inside this task
+        local = Path(source) if posix or windows else project_dir / source
+        try:
+            return not local.resolve().is_relative_to(task_root)
+        except (OSError, RuntimeError):
+            return True
+
+    for seat in seats:
+        service = services.get(seat)
+        if not service:
+            continue
+        field = f"services.{seat}"
+        # volumes_from gives a seat every volume of another container, writable
+        # unless :ro, so it can reach main's /logs or a peer seat's files.
+        for index, _ in enumerate(service.get("volumes_from") or []):
+            emit(
+                LintRule.SEAT_SHARED_VOLUME,
+                f"{field}.volumes_from[{index}]",
+                "Seat mounts another container's volumes; mount only the seat's own named volumes.",
+            )
+        # Values a seat takes from the runner instead of the task: a support seat
+        # could read the tested seat's provider key this way.
+        for index, entry in enumerate(service.get("env_file") or []):
+            source = entry.get("path") if isinstance(entry, dict) else entry
+            if isinstance(source, str) and outside_task(source):
+                emit(
+                    LintRule.SEAT_HOST_SECRET,
+                    f"{field}.env_file[{index}]",
+                    "Seat reads an env file outside the task directory; put the values in the task or remove them.",
+                )
+        environment = service.get("environment") or {}
+        for key in sorted(k for k, value in environment.items() if value is None):
+            emit(
+                LintRule.SEAT_HOST_SECRET,
+                f"{field}.environment.{key}",
+                "Seat takes this variable from the runner's environment by name; set its value in the task or remove it.",
+            )
+        for kind in ("secrets", "configs"):
+            definitions = data.get(kind) or {}
+            for index, reference in enumerate(service.get(kind) or []):
+                source = (
+                    reference.get("source")
+                    if isinstance(reference, dict)
+                    else reference
+                )
+                definition = definitions.get(source) or {}
+                from_runner = definition.get("environment") is not None
+                host_file = isinstance(definition.get("file"), str) and outside_task(
+                    definition["file"]
+                )
+                if from_runner or host_file:
+                    emit(
+                        LintRule.SEAT_HOST_SECRET,
+                        f"{field}.{kind}[{index}]",
+                        f"Seat gets a {kind[:-1]} from the runner's environment or a file outside the "
+                        "task directory; use task-local content.",
+                    )
+    host_peers: dict[str, set[str]] = {}
+    for seat, location, writable, host_path in host_mounts:
+        # Two read-only seats cannot send data to each other through the mount.
+        if not writable:
+            continue
+        overlaps: dict[Path, set[str]] = {}
+        for other, _, _, other_path in host_mounts:
+            if other == seat:
+                continue
+            if other_path.is_relative_to(host_path):
+                overlaps.setdefault(other_path, set()).add(other)
+            elif host_path.is_relative_to(other_path):
+                overlaps.setdefault(host_path, set()).add(other)
+        for shared, peers in overlaps.items():
+            host_peers.setdefault(location, set()).update(peers)
+            where = (
+                repr(shared.relative_to(task_root).as_posix())
+                if shared.is_relative_to(task_root)
+                else "outside the task directory"
+            )
+            emit(
+                LintRule.SEAT_SHARED_VOLUME,
+                location,
+                f"Seat {seat} can write a host path {where} also mounted by seat "
+                f"{', '.join(sorted(peers))}; give each seat its own mount.",
+            )
+    for mounts in volume_mounts.values():
+        for seat, location, writable, subpath in mounts:
+            if seat not in seats or not writable:
+                continue
+            shared = [
+                (other, other_writable)
+                for other, _, other_writable, other_subpath in mounts
+                if other != seat
+                and (
+                    subpath.is_relative_to(other_subpath)
+                    or other_subpath.is_relative_to(subpath)
+                )
+            ]
+            # No other seat may mount what a seat can write. Other services may
+            # read it, as main reads a seat's files, but must not also write it.
+            if peers := sorted(
+                {other for other, _ in shared if other in seats}.difference(
+                    host_peers.get(location, ())
+                )
+            ):
+                emit(
+                    LintRule.SEAT_SHARED_VOLUME,
+                    location,
+                    "Seat can write a volume also mounted by seat "
+                    f"{', '.join(peers)}; give each seat its own volume.",
+                )
+            if writers := sorted(
+                {other for other, other_writable in shared if other_writable}
+                - set(seats)
+            ):
+                emit(
+                    LintRule.SEAT_SHARED_VOLUME,
+                    location,
+                    "Seat can write a volume also written by "
+                    f"{', '.join(writers)}; mount it read-only in one of them.",
+                )
     return sort_findings(findings)

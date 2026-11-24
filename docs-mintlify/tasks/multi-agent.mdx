@@ -116,7 +116,7 @@ networks:
   play: {}
 ```
 
-Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`.
+Both agents run the same image as the user `player`, wait for `main` to be healthy, and reach the world as `world`. They are on the same network, so they can also reach each other; to keep agents apart, see [`seat-shared-network`](/tasks/lint#seat-checks).
 
 ### An agent's container
 
@@ -148,6 +148,8 @@ volumes:
 ```
 
 `tests/test.sh` can then read p1's home directory at `/agents/p1/home`.
+
+[`harbor lint`](/tasks/lint) reports a volume that an agent can write when another agent also mounts it, or when another service also writes it. The read-only mount in `main` above is not reported.
 
 ## Participants
 
