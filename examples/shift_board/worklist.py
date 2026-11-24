@@ -10,6 +10,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from ..native_study import parse_shard
 from ..seat_handoffs.core import reject_constant, unique_object
 from ..seat_handoffs.native_records import record_digest
 from .plan import (
@@ -18,7 +19,6 @@ from .plan import (
     TASK_FILES,
     TICKET,
     load_manifest,
-    parse_shard,
     task_files_digest,
 )
 

@@ -41,3 +41,22 @@ python3 -BS -m examples.joint_reopen.collect "$reg" \
 ```
 
 Keep the native records private. Publish the redacted outcomes, not raw trajectories, provider configs, or calendars. Preserve valid zeroes, incomplete trials, and native failures separately. Compare channel arms within the same seed, roster and fixture. Withheld content is not the same as a seat receiving a report and ignoring it. No claim about a real model follows from the scripted controls.
+
+## What happened in the 32 registered controls?
+
+All 32 scripted teams finished on the native Docker runner. Two workers ran 16 first attempts each. All 928 predictions matched the verifier. The [result rows](samples/control-outcomes.json) give the ticket, native trial ID, world run ID and observation hash. The two seeds were fixed in advance. These are controls, not model trials.
+
+| Updated calendars, both seats use `recheck` | Rewarded with peer reports | Rewarded without peer reports |
+|---|---:|---:|
+| Both can keep the original booking | 2/2 | 2/2 |
+| Only east must change | 2/2 | 0/2 |
+| Only west must change | 2/2 | 0/2 |
+| Both must change | 2/2 | 2/2 |
+
+The one-sided cases distinguish sharing from guessing. The seat that could keep the booking had to change its vote to repair the team decision. Without the report, that seat kept the booking and the other seat changed. When both had to change, both picked the same fallback on these two seeds without a report. Success alone is not evidence of communication.
+
+The other controls separate access from use. On one seed, `keep` and `ack-keep` each scored 1/4. Only `ack-keep` returned both accurate reports before voting. An always-switch team scored 3/4. Its two votes also agreed on a feasible slot in the fourth trial, but it gave up a booking that still worked. In the four one-sided trials with just one rechecking seat, all four teams split their votes.
+
+An independent calendar model and verifier replay matched on 10,000 bounded histories, including partially played games and reads after a vote. Those histories are not extra teams. The cold reader checks the native task, roster, setting, grade, and non-repeated IDs. The world publishes no second receipt for its UUID. A hash identifies the observation file, but cannot establish its origin outside the trial directory.
+
+For a model study, keep the seats blind to the condition and seed. Use new, private seeds and repeat both channel arms. A return proves availability, not attention. The phase barrier and elapsed time still exist in both arms. Do not count timing as withheld.

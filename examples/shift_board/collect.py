@@ -4,11 +4,23 @@ import os
 import stat
 import sys
 import types
-import uuid
 from collections import Counter
 from pathlib import Path
-from typing import Any, cast
 
+from ..native_evidence import (
+    Incomplete,
+    Invalid,
+    Record,
+    canonical_uuid,
+    check_binding,
+    native_reward,
+    read_bytes,
+    require,
+    require_usage,
+    same,
+    seat_map,
+    strict_object,
+)
 from .owner_evidence import inspect_owners
 from .plan import load_manifest
 
@@ -23,7 +35,7 @@ VERIFIER_SOURCE = (
 )
 VERIFIER_NAMES = ("evaluate", "parse_cut", "CutError", "MAX_CUT_BYTES")
 LOCK_TASK_NAME = "shift-board"
-SEATS = frozenset(("planner", "dispatcher"))
+SEATS = ("planner", "dispatcher")
 RULES = ("observe", "guard")
 STATUSES = ("usable", "missing", "duplicate", "quarantined", "incomplete", "invalid")
 CELL_FIELDS = ("ticket", "pair", "seed", "fixture", "rule", "team", "repeat")
@@ -56,21 +68,6 @@ CUT = ("verifier", "shift-board-cut.json")
 OBSERVATION = ("verifier", "shift-board.json")
 REWARD = ("verifier", "reward.json")
 
-Record = dict[str, Any]
-
-
-class Incomplete(Exception):
-    pass
-
-
-class Invalid(Exception):
-    pass
-
-
-def _require(condition: bool, reason: str) -> None:
-    if not condition:
-        raise Invalid(reason)
-
 
 def load_verifier() -> types.ModuleType:
     assert VERIFIER_SOURCE.is_absolute()
@@ -84,113 +81,6 @@ def load_verifier() -> types.ModuleType:
     return module
 
 
-def _read_bytes(trial: Path, parts: tuple[str, ...], limit: int) -> bytes:
-    assert parts and limit > 0
-    label = "/".join(parts)
-    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
-    opened: list[int] = []
-    try:
-        opened.append(os.open(trial, flags | os.O_DIRECTORY))
-        for name in parts[:-1]:
-            opened.append(os.open(name, flags | os.O_DIRECTORY, dir_fd=opened[-1]))
-        fd = os.open(parts[-1], flags, dir_fd=opened[-1])
-    except FileNotFoundError:
-        raise Incomplete(f"{label} is missing") from None
-    except OSError:
-        raise Invalid(f"{label} is not reachable through plain directories") from None
-    finally:
-        for descriptor in opened:
-            os.close(descriptor)
-    with open(fd, "rb") as handle:
-        _require(
-            stat.S_ISREG(os.fstat(handle.fileno()).st_mode),
-            f"{label} is not a regular file",
-        )
-        data = handle.read(limit + 1)
-    _require(len(data) <= limit, f"{label} exceeds {limit} bytes")
-    return data
-
-
-def _unique(pairs: list[tuple[str, Any]]) -> Record:
-    record = dict(pairs)
-    if len(record) != len(pairs):
-        raise ValueError("duplicate JSON key")
-    return record
-
-
-def _constant(name: str) -> None:
-    raise ValueError(f"non-finite JSON number {name}")
-
-
-def _object(data: bytes, label: str) -> Record:
-    try:
-        value = json.loads(
-            data.decode("utf-8"), object_pairs_hook=_unique, parse_constant=_constant
-        )
-    except (UnicodeDecodeError, ValueError, RecursionError):
-        raise Invalid(f"{label} is not strict JSON") from None
-    _require(type(value) is dict, f"{label} is not a JSON object")
-    return value
-
-
-def _same(left: object, right: object) -> bool:
-    stack = [(left, right)]
-    while stack:
-        first, second = stack.pop()
-        if type(first) is not type(second):
-            return False
-        if type(first) is dict:
-            left_map = cast(dict[str, object], first)
-            right_map = cast(dict[str, object], second)
-            if left_map.keys() != right_map.keys():
-                return False
-            stack.extend((left_map[key], right_map[key]) for key in left_map)
-        elif type(first) is list:
-            left_list = cast(list[object], first)
-            right_list = cast(list[object], second)
-            if len(left_list) != len(right_list):
-                return False
-            stack.extend(zip(left_list, right_list))
-        elif first != second:
-            return False
-    return True
-
-
-def _canonical(value: object, version: int | None = None) -> bool:
-    if type(value) is not str:
-        return False
-    try:
-        parsed = uuid.UUID(value)
-    except ValueError:
-        return False
-    return str(parsed) == value and (version is None or parsed.version == version)
-
-
-def _seat_map(participants: object, label: str) -> dict[str, Record]:
-    _require(
-        type(participants) is list and len(participants) == 2,
-        f"{label} is not two seats",
-    )
-    assert isinstance(participants, list)
-    seats: dict[str, Record] = {}
-    for participant in participants:
-        _require(isinstance(participant, dict), f"{label} has a non-object seat")
-        assert isinstance(participant, dict)
-        seat = participant.get("seat")
-        _require(
-            isinstance(seat, str) and seat not in seats,
-            f"{label} has a bad or repeated seat",
-        )
-        assert isinstance(seat, str)
-        seats[seat] = {
-            key: value
-            for key, value in cast(Record, participant).items()
-            if value is not None
-        }
-    _require(set(seats) == SEATS, f"{label} does not bind planner and dispatcher")
-    return seats
-
-
 def _environment(cell: Record) -> dict[str, str]:
     return {
         "BOARD_SEED": str(cell["seed"]),
@@ -200,141 +90,107 @@ def _environment(cell: Record) -> dict[str, str]:
     }
 
 
-def _check_binding(
-    record: object, cell: Record, team: dict[str, Record], label: str
-) -> None:
-    _require(type(record) is dict, f"{label} is not an object")
-    assert type(record) is dict
-    environment = record.get("environment")
-    _require(type(environment) is dict, f"{label} has no environment")
-    assert type(environment) is dict
-    _require(
-        _same(environment.get("env"), _environment(cell)),
-        f"{label} env is not the cell",
-    )
-    seats = _seat_map(record.get("participants"), f"{label} participants")
-    _require(_same(seats, team), f"{label} participants differ from the registration")
-
-
 def _check_config(
     config: Record, cell: Record, team: dict[str, Record], label: str
 ) -> None:
-    _require(
+    require(
         config.get("trial_name") == cell["ticket"],
         f"{label} trial_name is not the ticket",
     )
-    _check_binding(config, cell, team, label)
+    check_binding(config, _environment(cell), team, SEATS, label)
 
 
 def _check_lock(
     lock: Record, cell: Record, team: dict[str, Record], task: Record
 ) -> None:
     version = lock.get("schema_version")
-    _require(type(version) is int and version == 2, "lock.json is not schema version 2")
+    require(type(version) is int and version == 2, "lock.json is not schema version 2")
     pinned = lock.get("task")
-    _require(type(pinned) is dict, "lock.json has no task")
+    require(type(pinned) is dict, "lock.json has no task")
     assert type(pinned) is dict
-    _require(pinned.get("type") == "local", "lock.json task is not local")
-    _require(pinned.get("name") == LOCK_TASK_NAME, "lock.json task is not shift-board")
-    _require(
+    require(pinned.get("type") == "local", "lock.json task is not local")
+    require(pinned.get("name") == LOCK_TASK_NAME, "lock.json task is not shift-board")
+    require(
         pinned.get("digest") == task["digest"],
         "lock.json digest differs from the registration",
     )
-    _check_binding(lock, cell, team, "lock.json")
-
-
-def _native_reward(result: Record) -> int:
-    _require(result.get("reward_valid") is True, "native reward is not valid")
-    verifier = result.get("verifier_result")
-    _require(type(verifier) is dict, "native verifier result is missing")
-    assert type(verifier) is dict
-    rewards = verifier.get("rewards")
-    _require(
-        type(rewards) is dict and set(rewards) == {"reward"},
-        "native rewards are not one reward",
-    )
-    assert type(rewards) is dict
-    reward = rewards["reward"]
-    _require(
-        type(reward) in (int, float) and reward in (0, 1),
-        "native reward is not binary",
-    )
-    return int(reward)
+    check_binding(lock, _environment(cell), team, SEATS, "lock.json")
 
 
 def _check_seats(result: Record) -> None:
     rows = result.get("seat_results")
-    _require(
+    require(
         type(rows) is list and len(rows) == 2, "native seat results are not two seats"
     )
     assert type(rows) is list
     seats: set[str] = set()
     for row in rows:
-        _require(isinstance(row, dict), "native seat result is not an object")
+        require(isinstance(row, dict), "native seat result is not an object")
         assert isinstance(row, dict)
-        _require(row.get("under_test") is True, "native seat is not under test")
-        _require(
+        require(row.get("under_test") is True, "native seat is not under test")
+        require(
             "exception_info" in row and row["exception_info"] is None,
             "native seat error record is absent or not null",
         )
         seat = row.get("seat")
-        _require(
+        require(
             isinstance(seat, str) and seat not in seats,
             "native seat result repeats a seat",
         )
         assert isinstance(seat, str)
         seats.add(seat)
-    _require(seats == SEATS, "native seat results are not planner and dispatcher")
+    require(seats == set(SEATS), "native seat results are not planner and dispatcher")
 
 
 def _check_result(
     result: Record, cell: Record, team: dict[str, Record], task: Record
 ) -> tuple[str, int]:
     version = result.get("schema_version")
-    _require(
+    require(
         type(version) is int and version == 1, "result.json is not schema version 1"
     )
     native_id = result.get("id")
-    _require(_canonical(native_id), "result.json id is not a canonical UUID")
+    require(canonical_uuid(native_id), "result.json id is not a canonical UUID")
     assert type(native_id) is str
-    _require(
+    require(
         result.get("trial_name") == cell["ticket"],
         "result.json trial_name is not the ticket",
     )
-    _require(
+    require(
         result.get("task_name") == task["name"],
         "result.json task_name differs from the registration",
     )
-    _require(
+    require(
         result.get("task_checksum") == task["checksum"],
         "result.json checksum differs from the registration",
     )
-    _require(
+    require(
         "exception_info" in result and result["exception_info"] is None,
         "native trial error record is absent or not null",
     )
     _check_seats(result)
     config = result.get("config")
-    _require(type(config) is dict, "result.json has no config")
+    require(type(config) is dict, "result.json has no config")
     assert type(config) is dict
     _check_config(config, cell, team, "result.json config")
-    return native_id, _native_reward(result)
+    require(result.get("reward_valid") is True, "native reward is not valid")
+    return native_id, native_reward(result)
 
 
 def _check_identity(identity: Record, ticket: str) -> str:
-    _require(
+    require(
         set(identity) == IDENTITY_KEYS,
         "world identity fields do not match the contract",
     )
-    _require(
+    require(
         identity["schema"] == IDENTITY_SCHEMA, "world identity schema does not match"
     )
-    _require(
+    require(
         identity["ticket"] == ticket,
         "world identity ticket is not the directory ticket",
     )
     run = identity["run"]
-    _require(_canonical(run, 4), "world identity run is not a canonical UUID4")
+    require(canonical_uuid(run, 4), "world identity run is not a canonical UUID4")
     return run
 
 
@@ -349,13 +205,11 @@ def _grade(
     except verifier.CutError:
         raise Invalid("cut does not replay under the trusted verifier") from None
     assert type(expected) is dict and expected["reward"] in (0, 1)
-    published = _object(data["observation"], "verifier/shift-board.json")
-    _require(
-        _same(expected, published), "published observation differs from the replay"
-    )
-    recorded = _object(data["reward"], "verifier/reward.json")
-    _require(
-        _same(recorded, {"reward": expected["reward"]}),
+    published = strict_object(data["observation"], "verifier/shift-board.json")
+    require(same(expected, published), "published observation differs from the replay")
+    recorded = strict_object(data["reward"], "verifier/reward.json")
+    require(
+        same(recorded, {"reward": expected["reward"]}),
         "verifier/reward.json differs from the replay",
     )
     return cut, expected
@@ -363,13 +217,13 @@ def _grade(
 
 def _evidence(trial: Path, verifier: types.ModuleType) -> dict[str, bytes]:
     return {
-        "result": _read_bytes(trial, RESULT, MAX_RESULT_BYTES),
-        "config": _read_bytes(trial, CONFIG, MAX_CONFIG_BYTES),
-        "lock": _read_bytes(trial, LOCK, MAX_CONFIG_BYTES),
-        "identity": _read_bytes(trial, IDENTITY, MAX_SMALL_BYTES),
-        "cut": _read_bytes(trial, CUT, verifier.MAX_CUT_BYTES),
-        "observation": _read_bytes(trial, OBSERVATION, MAX_SMALL_BYTES),
-        "reward": _read_bytes(trial, REWARD, MAX_SMALL_BYTES),
+        "result": read_bytes(trial, RESULT, MAX_RESULT_BYTES),
+        "config": read_bytes(trial, CONFIG, MAX_CONFIG_BYTES),
+        "lock": read_bytes(trial, LOCK, MAX_CONFIG_BYTES),
+        "identity": read_bytes(trial, IDENTITY, MAX_SMALL_BYTES),
+        "cut": read_bytes(trial, CUT, verifier.MAX_CUT_BYTES),
+        "observation": read_bytes(trial, OBSERVATION, MAX_SMALL_BYTES),
+        "reward": read_bytes(trial, REWARD, MAX_SMALL_BYTES),
     }
 
 
@@ -381,15 +235,18 @@ def _evaluate(
     verifier: types.ModuleType,
 ) -> tuple[str, Record, Record | None]:
     data = _evidence(trial, verifier)
-    result = _object(data["result"], "result.json")
+    result = strict_object(data["result"], "result.json")
     native_id, reward = _check_result(result, cell, team, task)
-    _check_config(_object(data["config"], "config.json"), cell, team, "config.json")
-    _check_lock(_object(data["lock"], "lock.json"), cell, team, task)
-    run = _check_identity(_object(data["identity"], "world identity"), cell["ticket"])
+    config = strict_object(data["config"], "config.json")
+    _check_config(config, cell, team, "config.json")
+    _check_lock(strict_object(data["lock"], "lock.json"), cell, team, task)
+    run = _check_identity(
+        strict_object(data["identity"], "world identity"), cell["ticket"]
+    )
     cut, expected = _grade(verifier, data, cell)
-    _require(expected["run"] == run, "world identity run differs from the cut")
-    _require(expected["reward"] == reward, "native reward differs from the replay")
-    _require(native_id != run, "native id repeats the world run")
+    require(expected["run"] == run, "world identity run differs from the cut")
+    require(expected["reward"] == reward, "native reward differs from the replay")
+    require(native_id != run, "native id repeats the world run")
     return native_id, expected, inspect_owners(team, result, cut)
 
 
@@ -403,10 +260,11 @@ def _identifiers(trial: Path, verifier: types.ModuleType) -> set[str]:
     found: set[str] = set()
     for parts, limit, key in sources:
         try:
-            value = _object(_read_bytes(trial, parts, limit), "/".join(parts)).get(key)
+            data = read_bytes(trial, parts, limit)
+            value = strict_object(data, "/".join(parts)).get(key)
         except (Incomplete, Invalid):
             continue
-        if isinstance(value, str) and _canonical(value):
+        if isinstance(value, str) and canonical_uuid(value):
             found.add(value)
     return found
 
@@ -414,26 +272,26 @@ def _identifiers(trial: Path, verifier: types.ModuleType) -> set[str]:
 def _scan(
     roots: list[Path], tickets: frozenset[str]
 ) -> tuple[dict[str, list[Path]], dict[str, int]]:
-    _require_usage(1 <= len(roots) <= MAX_ROOTS, f"give 1 to {MAX_ROOTS} trials roots")
+    require_usage(1 <= len(roots) <= MAX_ROOTS, f"give 1 to {MAX_ROOTS} trials roots")
     seen: set[tuple[int, int]] = set()
     claims: dict[str, list[Path]] = {}
     counts = {"roots": len(roots), "claimed": 0, "unknown": 0, "skipped": 0}
     total = 0
     for root in roots:
         info = os.stat(root)
-        _require_usage(stat.S_ISDIR(info.st_mode), f"{root} is not a directory")
-        _require_usage(
+        require_usage(stat.S_ISDIR(info.st_mode), f"{root} is not a directory")
+        require_usage(
             (info.st_dev, info.st_ino) not in seen, f"{root} repeats a trials root"
         )
         seen.add((info.st_dev, info.st_ino))
         with os.scandir(root) as entries:
             for index, entry in enumerate(entries, start=1):
                 total += 1
-                _require_usage(
+                require_usage(
                     index <= MAX_ROOT_ENTRIES,
                     f"{root} has over {MAX_ROOT_ENTRIES} entries",
                 )
-                _require_usage(
+                require_usage(
                     total <= MAX_ENTRIES,
                     f"trials roots have over {MAX_ENTRIES} entries",
                 )
@@ -446,11 +304,6 @@ def _scan(
                     counts["unknown"] += 1
     assert counts["claimed"] + counts["unknown"] + counts["skipped"] == total
     return claims, counts
-
-
-def _require_usage(condition: bool, reason: str) -> None:
-    if not condition:
-        raise ValueError(reason)
 
 
 def _quarantined(
@@ -469,7 +322,7 @@ def _quarantined(
 def _registered_teams(manifest: Record) -> dict[str, dict[str, Record]]:
     try:
         return {
-            label: _seat_map(team, f"team {label}")
+            label: seat_map(team, f"team {label}", SEATS)
             for label, team in manifest["teams"].items()
         }
     except Invalid as error:
