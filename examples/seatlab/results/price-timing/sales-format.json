@@ -1,0 +1,46 @@
+{
+  "accepted_reason_length_range_chars": [
+    153,
+    160
+  ],
+  "accepted_verified_sales_replies": 11,
+  "reason_limit_chars": 160,
+  "rejected": [
+    {
+      "answer_sha256": "c8d82a02c75e893918b90c046b5b3a57823dc75417d008f8d486a842ac0f883f",
+      "error": "reason_length",
+      "reason_chars": 167,
+      "repeat": 1,
+      "reply": "{\"pick\": 2, \"reason\": \"Prices sit 12.3% below rivals (0.877x). Days 60-89 orders surged to 1057 (1179 units) on 56% stock. x1.15 reaches ~1.01x parity, boosting margin and curbing stockouts.\"}\n",
+      "world": 0
+    },
+    {
+      "answer_sha256": "acd9661a1cf88c1e417251b55bcc4b9aaab736d613adf3d79b748f0c05f6341a",
+      "error": "reason_length",
+      "reason_chars": 161,
+      "repeat": 0,
+      "reply": "{\"pick\": 1, \"reason\": \"Units surged to 360 in days 60-89 as stock reached 272/600. Our 3.91 rating trails rivals' 4.29; x0.937 price gap offsets lower rating, while x1.15 hurts demand.\"}\n",
+      "world": 5
+    },
+    {
+      "answer_sha256": "6f848021bc97a79eb78ec40d9a38c7554ec9e47c3266a253a79de3c2b4278b29",
+      "error": "reason_length",
+      "reason_chars": 172,
+      "repeat": 1,
+      "reply": "{\"pick\": 1, \"reason\": \"Units surged 0->15->360 as stock rose to 272/600; traffic grew 18%. Median price is 0.937x rivals with lower rating (3.91 vs 4.29). x1.15 risks momentum; x0.85 cuts margin.\"}\n",
+      "world": 5
+    },
+    {
+      "answer_sha256": "10c36e640fbf7799b554fa499a536d397afb39e31469fe44e4853a8435b9b270",
+      "error": "reason_length",
+      "reason_chars": 167,
+      "repeat": 1,
+      "reply": "{\"pick\": 3, \"reason\": \"At 0.986x rival price & 4.32 rating: 0 orders days 0-59, only 63 orders/68 units on 13.1k sessions days 60-89 (0.48% conv). Severe demand weakness; x1.15 kills volume.\"}\n",
+      "world": 6
+    }
+  ],
+  "sales_requests": 16,
+  "schema": "seatlab.sales-reply-format-diagnostic/v1",
+  "scope": "Post-run diagnosis. Rejected turns were never delivered, repaired, or included as complete pairs.",
+  "verified_sales_replies": 15
+}

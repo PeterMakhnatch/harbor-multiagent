@@ -16,6 +16,35 @@
 
 **Scope.** This is a restricted price-setting task in the released stock simulator. It is not the published open-ended benchmark, an estimate of profit for real retailers, or 32 independent companies. The two finance continuations in each pair implement alternative futures, not two directors jointly running one company.
 
+## Live result: more agreement, no established profit benefit
+
+**Registered verdict: inconclusive.** All 16 first attempts ran. Only 9 completed both the price and acknowledgment steps. They covered 6 of the 8 companies. The [original rule](https://github.com/PeterMakhnatch/harbor-multiagent/blob/1bccce93ac0ff932733cf1546a256e681b2d081e/examples/seatlab/price-timing.md) required all 16. We did not replace a team or calculate a full-panel effect or p-value.
+
+| On the 9 complete pairs | Report before pricing | Same report after pricing |
+|---|---:|---:|
+| Finance chose the price sales recommended | 8/9 | 4/9 |
+| Mean simulated operating profit after day 90 | $139,974.50 | $188,442.33 |
+| Bankrupt companies | 0 | 0 |
+
+Prices differed in 4 pairs. Early delivery earned more twice, less twice, and the same amount 5 times. Its mean difference was **−$48,467.83 per complete pair**. Without the largest paired loss ($665,283.38), the average would be positive. Only 3 companies completed both repetitions: one favored early delivery, one favored late delivery, and one tied. These are descriptions of the completed pairs, not an estimate for all 8 companies.
+
+**Where the other 7 stopped.** Four sales replies contained a valid price but gave reasons of 161–172 characters. The limit was 160. The [original replies and their hashes](results/price-timing/sales-format.json) reproduce the parser error. One sales request had no verified reply. In 2 more trials, both finance seats committed prices, but the early seat had no verified acknowledgment. Replaying those prices gave early-minus-late differences of $0 and +$341,601.50. They are real decisions, not complete pairs. All 7 failures had a measured native grade of zero.
+
+**Was sales giving good advice?** A separate run tried all 3 prices on each of the 8 original checkpoints. Keeping prices was best in 4 companies, raising them in 2, and discounting in 2. On the 9 complete pairs, following sales exactly beat keeping prices twice, lost 5 times, and tied twice. Early delivery can make advice more persuasive without making it more valuable.
+
+**Evidence and usage.** The owner recorded 60 model requests. The client produced 57 verified session receipts covering 430,076 reported tokens. Usage for the other 3 requests is unknown. The requested subscription model was `gemini-4-carbon-low`; the client did not attest the served model. No paid API key or rented infrastructure was used. The full replay rebuilt 45 complete turns and 22 stock settlements, including 4 from incomplete pairs. It made no new model calls.
+
+**Next experiment.** Keep the 160-character wire limit. On new companies, compare asking sales for 100 characters with asking for 160. Count every first attempt. Measure accepted reports first and decision value separately. A shorter prompt target might improve delivery; this study did not test that. Do not count a repaired message as an original success.
+
+[Original attempts](results/price-timing/rows.json) · [Panel result](results/price-timing/result.json) · [Stock replay](results/price-timing/replay.json) · [All 24 fixed-price outcomes](results/price-timing/value.json)
+
+From a checkout of this branch, reproduce the published summary with the Python standard library only. No Docker, stock installation, model client, or API key is required:
+
+```sh
+python3.12 -BS -m examples.seatlab.market_handoff.timing_panel \
+  examples/seatlab/results/price-timing/rows.json
+```
+
 ## Run one new comparison
 
 Use the study branch on [Peter's fork](https://github.com/PeterMakhnatch/harbor-multiagent/tree/experiments/seatlab-live-price-timing). The upstream repository and the fork's default branch do not contain this study.
