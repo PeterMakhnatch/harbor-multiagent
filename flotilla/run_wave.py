@@ -33,11 +33,23 @@ floor, no balance or price catalog read. Every subject must be free: Harbor's or
 "oracle", models omitted or [null]), or an OpenRouter id ending ":free" on terminus-2, with each model in at most one
 seat_assignments row. The run dir ends in -smoke, also with --run-dir. Jobs are named smoke-<plan>-<hex6> so
 they do not match the wave's job patterns. A trial that records spend stops new starts and the command exits 4.
+A smoke ignores a plan's stages. A smoke with OpenRouter models, and the dry run's forecast, warn for each model
+without a zero-data-retention endpoint (pricing.zdr_lines): the account has ZDR on and gets 404 for such a model.
+
+Staged waves (optional plan key stages; stages.py and docs/PROBE.md "Staged runs"): stage k adds the blocks that
+stages.stage_cells first puts in stage k, in the wave's order. A block of a task set with a test runs only for the
+models with a test on that set that still continues. Each stage runs its cells, then once more every cell without a
+valid trial (one retry, as --retry-invalid), then looks: each live (test, model) gets its cumulative (b, c, n) from
+probe_analysis.trial_row over the stage's finished cells and its disposition from stages.SequentialTest. stdout and
+progress.log show only the look and each model's status; stages.json in the run dir holds b, c, n, p and the Holm
+families. A resume recomputes every look from the trial folders and refuses one that differs from state.json.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import functools
 import hashlib
 import importlib.util
 import json
@@ -80,13 +92,18 @@ _SPEC = importlib.util.spec_from_file_location("flotilla_pricing", ROOT / "prici
 PRICING = importlib.util.module_from_spec(_SPEC)  # type: ignore[arg-type]
 assert _SPEC and _SPEC.loader
 _SPEC.loader.exec_module(PRICING)
+_STAGES = importlib.util.spec_from_file_location("flotilla_stages", ROOT / "stages.py")
+STAGES = importlib.util.module_from_spec(_STAGES)  # type: ignore[arg-type]
+assert _STAGES and _STAGES.loader
+sys.modules.setdefault(_STAGES.name, STAGES)
+_STAGES.loader.exec_module(STAGES)
 _JOBS = importlib.util.spec_from_file_location("flotilla_make_jobs", ROOT / "make_jobs.py")
 JOBS = importlib.util.module_from_spec(_JOBS)  # type: ignore[arg-type]
 assert _JOBS and _JOBS.loader
 _JOBS.loader.exec_module(JOBS)
 PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
-    "scripted_seats",
+    "scripted_seats", "stages",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
@@ -96,6 +113,16 @@ EXIT_INVALID_STREAK = 3
 EXIT_SMOKE_CHARGED = 4
 STREAK_KINDS_SHOWN = 3
 SET_KEYS = frozenset({"tasks_dir", "manifest", "instances", "arms", "conditions"})
+ZDR_URL = "https://openrouter.ai/api/v1/endpoints/zdr"
+STAGE_KEYS = frozenset({"fractions", "alpha", "family", "futility", "tests"})
+FUTILITY_KEYS = frozenset({"delta", "beta_f"})
+TEST_KEYS = frozenset({"task_set", "arms", "outcome"})
+STAGE_FAMILIES = ("model", "holm")
+STAGE_OUTCOMES = ("correct",)
+STAGES_FILE = "stages.json"
+PROBE_ANALYSIS = ROOT / "docs" / "results" / "scripts" / "probe_analysis.py"
+SHOWN = {"continue": "continue", "efficacy": "stop-efficacy", "futility": "stop-futility",
+         "nonbinding_futility": "stop-futility", "final": "final"}
 
 
 def provider_of(model: str) -> str:
@@ -232,7 +259,68 @@ def load_plan(path: Path, *, smoke: bool = False) -> dict:
                 raise SystemExit(f"refused: task set {index} missing {field}")
         if not (task_set.get("arms") or task_set.get("conditions")):
             raise SystemExit(f"refused: task set {index} has no arms")
+    if "stages" in plan:
+        check_stages(plan, smoke=smoke)
     return plan
+
+
+def _whole(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def check_test(plan: dict, number: int, test) -> tuple[int, frozenset]:
+    if not isinstance(test, dict):
+        raise SystemExit(f"refused: stages test {number} is not an object")
+    refuse_unknown(test, TEST_KEYS, f"stages test {number}")
+    for field in sorted(TEST_KEYS):
+        if field not in test:
+            raise SystemExit(f"refused: stages test {number} missing {field}")
+    index, arms = test["task_set"], test["arms"]
+    if not _whole(index) or not 0 <= index < len(plan["task_sets"]):
+        raise SystemExit(f"refused: stages test {number} task_set must index the plan's task sets")
+    known = arms_of(plan["task_sets"][index])
+    if not isinstance(arms, list) or len(arms) != 2 or arms[0] == arms[1] or not all(arm in known for arm in arms):
+        raise SystemExit(f"refused: stages test {number} arms must be 2 different arms of task set {index}")
+    if test["outcome"] not in STAGE_OUTCOMES:
+        raise SystemExit(f"refused: stages test {number} outcome must be one of {', '.join(STAGE_OUTCOMES)}")
+    return index, frozenset(arms)
+
+
+def check_stages(plan: dict, *, smoke: bool) -> None:
+    """Refuse a stages block that stages.py cannot run. A smoke ignores the block, so it skips the stage cells."""
+    spec = plan["stages"]
+    if not isinstance(spec, dict):
+        raise SystemExit("refused: stages must be an object")
+    refuse_unknown(spec, STAGE_KEYS, "stages")
+    for field in ("fractions", "alpha", "family", "tests"):
+        if field not in spec:
+            raise SystemExit(f"refused: stages missing {field}")
+    if plan.get("seat_assignments"):
+        raise SystemExit("refused: staged waves do not support seat_assignments")
+    if spec["family"] not in STAGE_FAMILIES:
+        raise SystemExit(f"refused: stages family must be one of {', '.join(STAGE_FAMILIES)}")
+    futility = spec.get("futility")
+    if futility is not None:
+        if not isinstance(futility, dict):
+            raise SystemExit("refused: stages futility must be an object")
+        refuse_unknown(futility, FUTILITY_KEYS, "stages futility")
+        if set(futility) != FUTILITY_KEYS:
+            raise SystemExit("refused: stages futility needs both delta and beta_f")
+    if not isinstance(spec["tests"], list) or not spec["tests"]:
+        raise SystemExit("refused: stages tests must be a nonempty list")
+    seen = set()
+    for number, test in enumerate(spec["tests"]):
+        pair = check_test(plan, number, test)
+        if pair in seen:
+            raise SystemExit(f"refused: stages test {number} repeats a test")
+        seen.add(pair)
+    try:
+        for test in stage_tests(plan):
+            sequential(plan, test)
+        if not smoke:
+            STAGES.stage_cells(plan, spec["fractions"])
+    except (TypeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from None
 
 
 def spacing_of(plan: dict) -> float:
@@ -515,7 +603,7 @@ def key_line(env: dict[str, str], models: list) -> str:
 
 def smoke_plan(plan: dict, count: int) -> dict:
     """The plan a smoke runs: the first count distinct instances of each task set, local Docker, a $0 cap and reserve,
-    no provider floor. The smoke key marks it for pricing.forecast_lines (a plan file cannot set it)."""
+    no provider floor and no stages. The smoke key marks it for pricing.forecast_lines (a plan file cannot set it)."""
     sets = []
     for index, task_set in enumerate(plan["task_sets"]):
         arms = arms_of(task_set)
@@ -526,7 +614,8 @@ def smoke_plan(plan: dict, count: int) -> dict:
     options = {**plan["make_jobs"], "env": "docker",
                "concurrency": min(plan["make_jobs"]["concurrency"], SMOKE_MAX_CONCURRENCY)}
     budget = {**plan["budget"], "cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}}
-    return {**plan, "name": plan["name"] + SMOKE_SUFFIX, "task_sets": sets, "make_jobs": options, "budget": budget,
+    kept = {key: value for key, value in plan.items() if key != "stages"}
+    return {**kept, "name": plan["name"] + SMOKE_SUFFIX, "task_sets": sets, "make_jobs": options, "budget": budget,
             "smoke": count}
 
 
@@ -593,8 +682,7 @@ def guard_line(plan: dict) -> str:
             f"provider floors {shown}")
 
 
-def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None], keys: str,
-                  forecast: list[str]) -> None:
+def print_head(plan: dict, order: list[dict], scripted: list[list[str] | None], keys: str) -> None:
     reserve = float(plan["budget"]["reserve_per_trial_usd"])
     cap = float(plan["budget"]["cap_usd"])
     print(f"{plan['name']}: {len(order)} cells, reserve ${reserve:.2f} per trial, cap ${cap:.2f}, "
@@ -604,6 +692,11 @@ def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None
     print(scripted_line(plan, scripted))
     print(guard_line(plan))
     print(keys)
+
+
+def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None], keys: str,
+                  forecast: list[str]) -> None:
+    print_head(plan, order, scripted, keys)
     for line in forecast:
         print(line)
     for index, cell in enumerate(order, 1):
@@ -617,7 +710,7 @@ class Balance(NamedTuple):
 
 
 class HttpSources:
-    """OpenRouter catalog and provider balances. Tests pass a fake with the same three methods."""
+    """OpenRouter catalog, zero-data-retention list and provider balances. Tests pass a fake with the same methods."""
 
     def __init__(self, env: dict[str, str]):
         self.env = env
@@ -625,11 +718,11 @@ class HttpSources:
     def catalog(self) -> dict:
         """The public OpenRouter model list, with no key. A failed read raises RuntimeError (the forecast then
         falls back to its cache)."""
-        try:
-            with urllib.request.urlopen(urllib.request.Request(CATALOG_URL), timeout=20) as response:
-                return json.load(response)
-        except Exception as exc:
-            raise RuntimeError(f"could not read {CATALOG_URL} ({type(exc).__name__})") from exc
+        return _public_json(CATALOG_URL)
+
+    def zdr(self) -> dict:
+        """The public list of zero-data-retention endpoints, with no key; a failed read raises RuntimeError."""
+        return _public_json(ZDR_URL)
 
     def prices(self, models: list[str]) -> dict:
         payload = _fetch_json(CATALOG_URL, {})
@@ -657,6 +750,14 @@ class HttpSources:
         key_left = PRICING.parse_openrouter_key(_fetch_json("https://openrouter.ai/api/v1/key", header))
         amount, detail = PRICING.openrouter_balance(account, key_left)
         return Balance(amount, detail)
+
+
+def _public_json(url: str) -> dict:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url), timeout=20) as response:
+            return json.load(response)
+    except Exception as exc:
+        raise RuntimeError(f"could not read {url} ({type(exc).__name__})") from exc
 
 
 def _fetch_json(url: str, headers: dict[str, str]) -> dict:
@@ -996,7 +1097,8 @@ def cell_gate(cell: dict, floors: dict, sources, sleep):
 
 
 def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, wrapper, env, repo, sources, namer,
-             sleep, clock):
+             sleep, clock, starts: dict | None = None):
+    """Run the pending cells under the guards. starts (staged waves) carries the last start time across calls."""
     options = plan["make_jobs"]
     reserve, cap = float(plan["budget"]["reserve_per_trial_usd"]), float(plan["budget"]["cap_usd"])
     floors, concurrency = plan["budget"]["provider_floors"], options["concurrency"]
@@ -1005,7 +1107,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
     lock = threading.Lock()
     smoke = plan.get("smoke")
     job_prefix = f"smoke-{plan['name'].removesuffix(SMOKE_SUFFIX)}" if smoke else plan["name"]
-    index, spins, stop, last_start = 0, 0, None, None
+    index, spins, stop, last_start = 0, 0, None, (starts or {}).get("last")
     bound = len(pending) * 16 + 32
     try:
         while index < len(pending):
@@ -1074,6 +1176,8 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             submit(pool, futures, events, cell, job, command, run_dir / f"{job}.log", env, repo,
                    state["spent_usd"], reserve, cap, concurrency)
             last_start = clock()
+            if starts is not None:
+                starts["last"] = last_start
             index += 1
     finally:
         while futures:
@@ -1102,6 +1206,250 @@ def smoke_run_dir(run_dir: Path | None, wave: dict) -> Path:
     return resolved.with_name(resolved.name + SMOKE_SUFFIX)
 
 
+def stage_tests(plan: dict) -> list[dict]:
+    """Each staged test with its planned looks: the distinct planned pair counts and the stage (0-based) of each."""
+    spec = plan["stages"]
+    found = []
+    for number, test in enumerate(spec["tests"], 1):
+        counts = STAGES.stage_counts(len(plan["task_sets"][test["task_set"]]["instances"]), spec["fractions"])
+        at = [stage for stage, count in enumerate(counts) if stage == 0 or count != counts[stage - 1]]
+        found.append({"test": number, "task_set": test["task_set"], "arms": list(test["arms"]),
+                      "outcome": test["outcome"], "looks": [counts[stage] for stage in at], "look_stages": at})
+    return found
+
+
+def family_size(plan: dict) -> int:
+    """family model: one Holm family per model over its tests; family holm: one per test over the models."""
+    if plan["stages"]["family"] == "model":
+        return len(plan["stages"]["tests"])
+    return len(plan["models"])
+
+
+def sequential(plan: dict, test: dict):
+    spec = plan["stages"]
+    return STAGES.SequentialTest(test["looks"], family_size(plan), spec["alpha"], **(spec.get("futility") or {}))
+
+
+@functools.cache
+def probe_analysis():
+    spec = importlib.util.spec_from_file_location("flotilla_run_wave_probe_analysis", PROBE_ANALYSIS)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+class Outcomes:
+    """Paired outcomes from trial folders, read with probe_analysis.trial_row (the analysis's own validity rules and
+    score.json reading). A cell's counted trial is the analysis's: the first valid one by start time."""
+
+    def __init__(self, plan: dict, repo: Path, jobs_dir: Path, paths: dict[tuple[int, int, str], str]):
+        self.analysis = probe_analysis()
+        self.roots = list(dict.fromkeys((repo / task_set["tasks_dir"]).resolve() for task_set in plan["task_sets"]))
+        self.tasks = self.analysis.XM.load_manifests(self.roots)
+        scripted = plan.get("scripted_seats")
+        self.plans = [{"name": plan["name"], "models": list(plan["models"]),
+                       "scripted": None if scripted is None else set(scripted), "instances": set(task_set["instances"]),
+                       "arms": set(arms_of(task_set)), "sets": []} for task_set in plan["task_sets"]]
+        tested = {test["task_set"] for test in stage_tests(plan)}
+        for (index, _instance, _arm), task in paths.items():
+            if index in tested and (self.tasks.get(Path(task).name) or {}).get("family") != "probe":
+                raise SystemExit(f"refused: a staged test reads probe outcomes; task set {index} has a non-probe task")
+        self.jobs_dir = jobs_dir
+        self.rows: dict[str, dict | None] = {}
+
+    def row(self, task_set: int, job: str) -> dict | None:
+        if job not in self.rows:
+            trial, _result = read_trial(self.jobs_dir, job)
+            self.rows[job] = None if trial is None else self.analysis.trial_row(
+                trial, self.tasks, self.roots, self.plans[task_set])
+        return self.rows[job]
+
+    def paired(self, task_set: int, jobs: list[str], model: str, arms: list[str]) -> dict:
+        """b (only the first arm correct), c and n (complete counted pairs), as probe_analysis.mcnemar counts them."""
+        rows = [row for job in jobs if (row := self.row(task_set, job)) is not None]
+        counted, _duplicates = self.analysis.XM.choose(rows)
+        families = sorted({row["family"] for row in counted.values()})
+        if len(families) > 1:
+            raise SystemExit(f"refused: task set {task_set} trials score as several builds {families}")
+        pairs = self.analysis.pairs(counted, families[0], model, *arms) if families else []
+        found = self.analysis.mcnemar(pairs)
+        return {"b": found["b"], "c": found["c"], "n": found["pairs"],
+                "counted": sorted(f"{row['job']}/{row['trial']}" for pair in pairs for row in pair)}
+
+
+class Staged:
+    """A staged wave: which cells each stage runs and the looks after it. Decisions depend only on the trial folders
+    of finished cells, so a resume recomputes them."""
+
+    def __init__(self, plan: dict, order: list[dict]):
+        spec = plan["stages"]
+        self.plan, self.order, self.count = plan, order, len(spec["fractions"])
+        self.tests = stage_tests(plan)
+        self.rules = {test["test"]: sequential(plan, test) for test in self.tests}
+        self.stage_of: dict[tuple[int, int], int] = {}
+        for stage, cells in enumerate(STAGES.stage_cells(plan, spec["fractions"])):
+            for cell in cells:
+                self.stage_of.setdefault((cell["task_set"], cell["instance"]), stage)
+        self.models = list(plan["models"])
+        self.live = {(test["test"], model): True for test in self.tests for model in self.models}
+        self.record = {test["test"]: {model: {"history": [], "looks": [], "disposition": None}
+                                      for model in self.models} for test in self.tests}
+        self.done = 0
+
+    def block_stage(self, cell: dict) -> int:
+        return self.stage_of[(cell["task_set"], cell["instance"])]
+
+    def cells(self, stage: int, live: dict | None = None) -> list[dict]:
+        """The cells the stage adds, in the wave's order: whole blocks of a set without a test, or of a model with a
+        live test on the set."""
+        live = self.live if live is None else live
+        tested = {test["task_set"] for test in self.tests}
+        return [cell for cell in self.order if self.block_stage(cell) == stage and (
+            cell["task_set"] not in tested or any(live[(test["test"], cell["model"])] for test in self.tests
+                                                  if test["task_set"] == cell["task_set"]))]
+
+    def planned(self, every_look: bool) -> list[dict]:
+        """Every cell when every test runs to its last look; else the fewest, every test stopping at its first."""
+        on, off = dict.fromkeys(self.live, True), dict.fromkeys(self.live, False)
+        return [cell for stage in range(self.count) for cell in self.cells(stage, on if every_look or not stage else off)]
+
+    def look(self, stage: int, finished: dict, outcomes: Outcomes) -> list[dict]:
+        """The looks planned after this stage, for each live (test, model); returns what the operator may see."""
+        shown = []
+        for test in self.tests:
+            if stage not in test["look_stages"]:
+                continue
+            look = test["look_stages"].index(stage)
+            for model in self.models:
+                if not self.live[(test["test"], model)]:
+                    continue
+                entry = self.record[test["test"]][model]
+                if len(entry["history"]) != look:
+                    raise SystemExit(f"refused: test {test['test']} {model} would skip a planned look")
+                jobs = [attempt["job"] for cell in self.order if cell["task_set"] == test["task_set"]
+                        and cell["model"] == model and cell["arm"] in test["arms"] and self.block_stage(cell) <= stage
+                        for attempt in attempts_of(finished.get(cell["key"]))]
+                found = outcomes.paired(test["task_set"], jobs, model, test["arms"])
+                entry["history"].append([found["b"], found["c"], found["n"]])
+                disposition = self.rules[test["test"]].disposition(entry["history"])
+                entry["looks"].append({"stage": stage + 1, "look": look + 1, "planned_pairs": test["looks"][look],
+                                       **found})
+                entry["disposition"] = dataclasses.asdict(disposition)
+                self.live[(test["test"], model)] = disposition.status == "continue"
+                shown.append({"stage": stage + 1, "test": test["test"], "model": model, "look": look + 1,
+                              "status": SHOWN[disposition.status]})
+        self.done = stage + 1
+        return shown
+
+    def families(self) -> list[dict]:
+        """Holm once over each family's frozen or final p values, when every member has stopped or ended."""
+        alpha = float(self.plan["stages"]["alpha"])
+        if self.plan["stages"]["family"] == "model":
+            groups = [(f"model {model}", [(test["test"], model) for test in self.tests]) for model in self.models]
+        else:
+            groups = [(f"test {test['test']}", [(test["test"], model) for model in self.models]) for test in self.tests]
+        found = []
+        for name, members in groups:
+            settled = [self.record[test][model]["disposition"] for test, model in members]
+            closed = all(item is not None and item["status"] != "continue" for item in settled)
+            adjusted = STAGES.holm([item["p"] for item in settled]) if closed else None
+            found.append({"family": name, "members": [{"test": test, "model": model} for test, model in members],
+                          "closed": closed, "p_holm": adjusted,
+                          "rejected": None if adjusted is None else [value < alpha for value in adjusted]})
+        return found
+
+    def summary(self, digest: str) -> dict:
+        spec = self.plan["stages"]
+        tests = [{**test, "look_stages": [stage + 1 for stage in test["look_stages"]],
+                  "models": self.record[test["test"]]} for test in self.tests]
+        return {"plan": self.plan["name"], "plan_sha256": digest, "fractions": spec["fractions"], "alpha": spec["alpha"],
+                "family": spec["family"], "family_size": family_size(self.plan), "futility": spec.get("futility"),
+                "stages": self.count, "stages_done": self.done, "tests": tests, "families": self.families()}
+
+    def line(self, entry: dict) -> str:
+        """What the operator sees of a look: the look and the model's status, never b, c, n or p."""
+        test = self.tests[entry["test"] - 1]
+        return (f"look {entry['look']}/{len(test['looks'])} after stage {entry['stage']}/{self.count}: test "
+                f"{entry['test']} set {test['task_set']} {test['arms'][0]} vs {test['arms'][1]}: {entry['model']} "
+                f"{entry['status']}")
+
+
+def run_stages(staged: Staged, state: dict, launch_cells, outcomes: Outcomes, *, run_dir: Path, digest: str) -> str:
+    """Each stage: its cells, one retry of its invalid cells, then the look. A look that state.json already holds is
+    recomputed and must be the same."""
+    recorded, held = list(state["stages"]["looks"]), int(state["stages"]["stage"])
+    looks: list[dict] = []
+    starts: dict = {}
+    for stage in range(staged.count):
+        cells = staged.cells(stage)
+        for retry in (False, True):
+            pending = pending_of(cells, state["finished"], retry)
+            if pending:
+                what = "invalid cells to retry" if retry else "cells to run"
+                log(run_dir, f"stage {stage + 1}/{staged.count}: {len(pending)} {what}")
+                reason = launch_cells(pending, starts)
+                if reason != "done":
+                    return reason
+        shown = staged.look(stage, state["finished"], outcomes)
+        replay = stage < held
+        if replay and shown != [entry for entry in recorded if entry["stage"] == stage + 1]:
+            raise SystemExit(f"refused: the looks after stage {stage + 1}, recomputed from the trial folders, differ "
+                             "from state.json")
+        for entry in shown:
+            line = staged.line(entry) + (" (recomputed on resume)" if replay else "")
+            log(run_dir, line)
+            print(line)
+        looks += shown
+        state["stages"] = {"stage": max(held, stage + 1),
+                           "looks": looks + [entry for entry in recorded if entry["stage"] > stage + 1]}
+        save_state(run_dir / STAGES_FILE, staged.summary(digest))
+        save_state(run_dir / "state.json", state)
+    return "done"
+
+
+def stage_lines(plan: dict, staged: Staged, most: int, fewest: int) -> list[str]:
+    spec = plan["stages"]
+    futility = spec.get("futility")
+    rule = f"delta {futility['delta']}, beta_f {futility['beta_f']}" if futility else "off"
+    fractions = ", ".join(str(value) for value in spec["fractions"])
+    head = (f"stages: fractions {fractions}; alpha {spec['alpha']}; family {spec['family']} (Holm family size "
+            f"{family_size(plan)}); non-binding futility {rule}; each stage retries its invalid cells once, then "
+            f"looks; the log shows each model's status only, {STAGES_FILE} the counts")
+    lines = [head]
+    tested = {test["task_set"] for test in staged.tests}
+    for index, task_set in enumerate(plan["task_sets"]):
+        counts = STAGES.stage_counts(len(task_set["instances"]), spec["fractions"])
+        shown = ", ".join(f"stage {stage + 1} {count}" for stage, count in enumerate(counts))
+        note = "" if index in tested else " (no test: every stage runs in full)"
+        lines.append(f"  set {index}: instances by the end of {shown}{note}")
+    for test in staged.tests:
+        stops = ""
+        if futility:
+            bounds = ", ".join(str(bound) for bound in staged.rules[test["test"]].futility_bounds[:-1])
+            stops = f"; futility if max(b, c) <= {bounds} at the interim looks (all pairs valid)"
+        lines.append(f"  test {test['test']}: set {test['task_set']} {test['arms'][0]} vs {test['arms'][1]} "
+                     f"({test['outcome']}); looks after stage {', '.join(str(s + 1) for s in test['look_stages'])} at "
+                     f"{', '.join(str(count) for count in test['looks'])} pairs{stops}")
+    lines.append(f"  trials: most {most} (every test runs to its last look), fewest {fewest} (every test stops at "
+                 "its first look)")
+    return lines
+
+
+def print_staged_dry_run(plan: dict, staged: Staged, scripted: list[list[str] | None], keys: str,
+                         most: list[dict], fewest: list[dict], forecasts: tuple[list[str], list[str]]) -> None:
+    print_head(plan, most, scripted, keys)
+    for line in stage_lines(plan, staged, len(most), len(fewest)):
+        print(line)
+    for label, cells, forecast in (("most", most, forecasts[0]), ("fewest", fewest, forecasts[1])):
+        print(f"forecast, {label} ({len(cells)} trials):")
+        for line in forecast:
+            print(line)
+    for index, cell in enumerate(most, 1):
+        print(f"{index}. stage {staged.block_stage(cell) + 1} set {cell['task_set']} instance {cell['instance']} "
+              f"{cell['arm']} {label_of(cell)}")
+
+
 def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, retry_invalid: bool = False,
         harbor: Path = HARBOR, jobs_dir: Path | None = None, wrapper: Path = WRAPPER,
         sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None, clock=None,
@@ -1122,8 +1470,17 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         declared = sorted(plan.get("scripted_seats") or [])
         order = order_of(wave, None, [declared if seats is None else seats for seats in scripted])
         fetch = sources.catalog if smoke is None else refuse_catalog
+        zdr = PRICING.zdr_lines(models, repo / ".flotilla-local" / "cache", sources.zdr)
+        if "stages" in wave:
+            staged = Staged(wave, order)
+            most, fewest = staged.planned(True), staged.planned(False)
+            forecasts = [PRICING.forecast_lines(wave, cells, repo, history_jobs, fetch_catalog=fetch)
+                         for cells in (most, fewest)]
+            print_staged_dry_run(wave, staged, scripted, key_line(base, models), most, fewest,
+                                 (forecasts[0] + zdr, forecasts[1]))
+            return []
         print_dry_run(wave, order, scripted, key_line(base, models),
-                      PRICING.forecast_lines(wave, order, repo, history_jobs, fetch_catalog=fetch))
+                      PRICING.forecast_lines(wave, order, repo, history_jobs, fetch_catalog=fetch) + zdr)
         return []
     assert_committed(plan_path, repo)
     if wave["make_jobs"]["env"] == "docker" and not wrapper.is_file():
@@ -1136,6 +1493,8 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     run_dir.mkdir(parents=True, exist_ok=True)
     jobs_dir = jobs_dir or (repo / ".flotilla-local" / "jobs")
     jobs_dir.mkdir(parents=True, exist_ok=True)
+    staged = Staged(wave, order) if "stages" in wave else None
+    outcomes = Outcomes(wave, repo, jobs_dir, paths) if staged else None
     digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
     state_path = run_dir / "state.json"
     state = json.loads(state_path.read_text()) if state_path.is_file() else None
@@ -1149,18 +1508,30 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     if smoke is not None:
         log(run_dir, smoke_line(wave))
     log(run_dir, key_line(base, models))
+    if smoke is not None:
+        for line in PRICING.zdr_lines(models, repo / ".flotilla-local" / "cache", sources.zdr):
+            print(line.strip())
+            log(run_dir, line.strip())
     if any(scripted):
         log(run_dir, scripted_line(wave, scripted))
     if smoke is None:
         freeze_prices(sources, models, state)
+    if staged:
+        state.setdefault("stages", {"stage": 0, "looks": []})
     save_state(state_path, state)
-    pending = pending_of(order, state["finished"], retry_invalid)
     events: list[dict] = []
     env = harbor_env(base, models, keep_modal=smoke is None)
     with ThreadPoolExecutor(max_workers=wave["make_jobs"]["concurrency"]) as pool:
-        reason = schedule(wave, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
-                          harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
-                          namer=namer or secrets.token_hex, sleep=sleep or time.sleep, clock=clock or time.monotonic)
+        def launch_cells(pending: list[dict], starts: dict | None = None) -> str:
+            return schedule(wave, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
+                            harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
+                            namer=namer or secrets.token_hex, sleep=sleep or time.sleep,
+                            clock=clock or time.monotonic, starts=starts)
+
+        if staged is None:
+            reason = launch_cells(pending_of(order, state["finished"], retry_invalid))
+        else:
+            reason = run_stages(staged, state, launch_cells, outcomes, run_dir=run_dir, digest=digest)
     events.append({"kind": "stop", "reason": reason, "spent": state["spent_usd"]})
     log(run_dir, f"stop {reason}: spent ${state['spent_usd']:.4f}")
     save_state(state_path, state)
@@ -1174,7 +1545,8 @@ def main(argv: list[str] | None = None) -> int:
                         "adds -smoke)")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the order, the cost reserve and the cost forecast; do not call Harbor")
-    parser.add_argument("--retry-invalid", action="store_true", help="rerun a finished cell whose trial was not valid")
+    parser.add_argument("--retry-invalid", action="store_true", help="rerun a finished cell whose trial was not valid "
+                        "(a staged wave retries its invalid cells inside each stage by itself)")
     parser.add_argument("--harbor", type=Path, default=HARBOR)
     parser.add_argument("--jobs-dir", type=Path, help="where Harbor writes trial results")
     parser.add_argument("--docker-wrapper", type=Path, default=WRAPPER)
@@ -1182,7 +1554,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="finished Harbor jobs the dry-run forecast reads (default <repo>/.flotilla-local/jobs)")
     parser.add_argument("--smoke", nargs="?", const=1, type=int, metavar="N",
                         help="free smoke: first N instances per task set (default 1), local docker, cap $0; only "
-                        "the oracle agent with no model or OpenRouter :free models; write --smoke=N before the plan")
+                        "the oracle agent with no model or OpenRouter :free models; ignores the plan's stages; "
+                        "write --smoke=N before the plan")
     args = parser.parse_args(argv)
     events = run(args.plan, run_dir=args.run_dir, dry_run=args.dry_run, retry_invalid=args.retry_invalid,
                  harbor=args.harbor, jobs_dir=args.jobs_dir, wrapper=args.docker_wrapper, smoke=args.smoke,

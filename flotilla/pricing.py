@@ -15,6 +15,10 @@ Forecast (run_wave.py --dry-run): use the same model's mean charge for the same 
 5 seat samples. Otherwise, price the kind's median tokens per model seat (DeepSeek direct at the peak rate).
 If that estimate is unavailable, use the same model's mean charge across any kind, or report unknown.
 Exclude trials with exceptions and seats with no tokens. Modal adds MODAL_PER_TRIAL_USD per trial.
+
+Data policy: the account has zero data retention (ZDR) on. zdr_lines reads OpenRouter's public ZDR endpoint list
+(https://openrouter.ai/api/v1/endpoints/zdr, cached 24 h like the catalog, offline-safe) and warns for each
+OpenRouter model without a ZDR endpoint, which such an account gets a 404 for.
 """
 
 from __future__ import annotations
@@ -36,6 +40,8 @@ PEAK_FACTOR_MAX = 2.0
 MODAL_PER_TRIAL_USD = 0.0021  # Modal sandbox per trial, measured 2026-11-24 (docs/NEXT-WAVE.md)
 CATALOG_CACHE = "openrouter-models.json"
 CATALOG_MAX_AGE_S = 24 * 3600
+ZDR_CACHE = "openrouter-zdr.json"
+ZDR_WARNING = "no zero-data-retention endpoint: an account with ZDR on gets 404"
 HISTORY_MIN_SEATS = 5
 ORACLE = "oracle (no model)"
 
@@ -173,6 +179,16 @@ def parse_openrouter_models(payload: dict) -> dict[str, dict[str, str]]:
         if "input_cache_read" in pricing and pricing["input_cache_read"] not in (None, ""):
             item["input_cache_read"] = str(pricing["input_cache_read"])
         found[row["id"]] = item
+    return found
+
+
+def parse_zdr_endpoints(payload: dict) -> dict[str, list[str]]:
+    """model id -> the providers that serve it with zero data retention (GET /api/v1/endpoints/zdr, no key)."""
+    found: dict[str, list[str]] = {}
+    for row in payload.get("data") or []:
+        model = row.get("model_id") if isinstance(row, dict) else None
+        if isinstance(model, str) and model:
+            found.setdefault(model, []).append(str(row.get("provider_name") or ""))
     return found
 
 
@@ -329,8 +345,11 @@ class Catalog:
     (then cached with its fetch time), else an older cache. An ordinary fetch error leaves no prices; SystemExit
     propagates."""
 
+    CACHE = CATALOG_CACHE
+    parse = staticmethod(parse_openrouter_models)
+
     def __init__(self, cache_dir: Path, fetch_catalog: Callable[[], dict], now: datetime):
-        self.path = cache_dir / CATALOG_CACHE
+        self.path = cache_dir / self.CACHE
         self.fetch_catalog = fetch_catalog
         self.now = now
         self.status: str | None = None
@@ -350,7 +369,7 @@ class Catalog:
             return None
         fetched = _instant(data.get("fetched_at"))
         try:
-            priced = parse_openrouter_models(data["payload"])
+            priced = self.parse(data["payload"])
         except (AttributeError, TypeError):
             return None
         if fetched is None or not priced:
@@ -371,18 +390,40 @@ class Catalog:
     def _load(self) -> tuple[dict | None, str]:
         cached = self._cached()
         if cached and (self.now - cached[0]).total_seconds() < CATALOG_MAX_AGE_S:
-            return parse_openrouter_models(cached[1]), f"cache fetched {_shown(cached[0])} ({self.path})"
+            return self.parse(cached[1]), f"cache fetched {_shown(cached[0])} ({self.path})"
         try:
             payload = self.fetch_catalog()
-            prices = parse_openrouter_models(payload)
+            prices = self.parse(payload)
             if not prices:
-                raise ValueError("catalog has no priced models")
+                raise ValueError("empty payload")
         except (HTTPException, OSError, AttributeError, RuntimeError, TypeError, ValueError) as exc:
             if cached:
-                return (parse_openrouter_models(cached[1]),
+                return (self.parse(cached[1]),
                         f"stale cache fetched {_shown(cached[0])} ({self.path}); refresh failed: {type(exc).__name__}")
             return None, f"unavailable ({type(exc).__name__}); no cache at {self.path}"
         return prices, f"fetched {_shown(self.now)}, {self._store(payload)}"
+
+
+class ZdrList(Catalog):
+    """OpenRouter's zero-data-retention endpoints (public list, no key), cached and offline-safe like the catalog."""
+
+    CACHE = ZDR_CACHE
+    parse = staticmethod(parse_zdr_endpoints)
+
+
+def zdr_lines(models: list, cache_dir: Path, fetch_zdr: Callable[[], dict], now: datetime | None = None) -> list[str]:
+    """One warning per OpenRouter model without a zero-data-retention endpoint: the account has ZDR on, so such a
+    model answers 404 (Qwen3.8 Flash and the ':free' models on 2026-11-23). No OpenRouter model: no lines, no read."""
+    wanted = [model for model in dict.fromkeys(models) if isinstance(model, str) and model.startswith("openrouter/")]
+    if not wanted:
+        return []
+    feed = ZdrList(cache_dir, fetch_zdr, now or datetime.now(UTC))
+    endpoints = feed.prices()
+    if endpoints is None:
+        return [f"  zero-data-retention list: {feed.status}; not checked"]
+    return [f"  zero-data-retention list: {feed.status}"] + [
+        f"  ZDR warning: {model}: {ZDR_WARNING}" for model in wanted
+        if model.removeprefix("openrouter/") not in endpoints]
 
 
 def _mean(values: list[float]) -> float:

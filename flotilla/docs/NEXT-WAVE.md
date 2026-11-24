@@ -41,7 +41,7 @@ Record the planned pair counts, arm contrasts, stopping rules, and Holm family b
 At each look, record the actual valid pair count under the `pc1` rule. Keep the planned looks.
 If you enable optional non-binding futility, record `delta`, `beta_f`, and the bounds for the planned counts.
 Calculate each interim bound from the actual valid pair count.
-`flotilla/stages.py` plans and scores stages; `run_wave.py` does not use it yet.
+`flotilla/stages.py` plans and scores stages; `run_wave.py` runs a plan with a `stages` key (see "Staged waves").
 Do not add interim looks to an existing fixed-size pre-registration.
 
 1. Commit the plan. The runner refuses a plan that is not at HEAD.
@@ -331,3 +331,48 @@ python3 flotilla/trust_card.py report --plan flotilla/plans/cards/card-<short>.j
   needs reports that come first, work the seat cannot redo, or a check that costs something. One sentence
   that put the reports first took GPT-6 Luna from 0 to 32 of 32 false subtotals passed through (`rf1`).
 - An argument that the seat's own instructions refute lowers doubt instead of raising it (`pa1`).
+
+## Staged waves
+
+`run_wave.py` runs a plan with a `stages` key stage by stage, by the method in PROBE.md ("Staged runs"). A plan
+without `stages` runs as before.
+
+1. Add the block to the plan, commit it, and record the same values in the pre-registration:
+
+```json
+"stages": {"fractions": [0.25, 0.5, 1.0], "alpha": 0.05, "family": "model",
+           "futility": {"delta": 0.25, "beta_f": 0.05},
+           "tests": [{"task_set": 0, "arms": ["talk-quiet", "talk-false"], "outcome": "correct"}]}
+```
+
+   - `family`: `model` gives one Holm family per model over its tests (one test: no correction, as the trust
+     card); `holm` gives one family per test over the plan's models.
+   - `futility` is optional (the non-binding rule). `outcome` is `correct` only. `b` counts the pairs in which
+     only the first arm is correct.
+   - The runner refuses unknown keys, `seat_assignments`, arms that are not in the set, and a repeated test.
+2. Run `run_wave.py --dry-run <plan>`. It prints the instances by the end of each stage per task set, the looks
+   of each test with the futility bounds, the most and the fewest trials, and a cost forecast for both.
+3. Run the wave with the usual command. Each stage runs its new blocks, then retries each invalid cell once,
+   then looks. `--retry-invalid` is not necessary. A task set with a test runs its later blocks only for the
+   models whose test on that set continues. A task set without a test runs in full. The cap (the full-wave
+   cap), reserve, floors, invalid-streak guard and exit codes do not change.
+4. The operator sees one line per look and model on stdout and in `progress.log`, for example `look 2/3 after
+   stage 2/3: test 1 set 0 talk-quiet vs talk-false: openrouter/openai/gpt-6-luna stop-efficacy`. The status
+   is `continue`, `stop-efficacy`, `stop-futility` or `final`. The line never shows b, c, n or p.
+5. The decisions are in `<run dir>/stages.json`, written after each look. For each test and model:
+   `history` ([b, c, n] per look), `looks` (with the counted trials as `job/trial`) and `disposition`
+   (`status`; `p`, the staged p; `direction`, +1 when the first arm is more accurate; `look`; `n`).
+   `families` gives the Holm-adjusted p and `rejected` when every member of the family has stopped or ended.
+   `state.json` keeps the stage and the status lines only.
+6. To resume, run the same command. The runner recomputes each earlier look from the trial folders and stops
+   if a look differs from `state.json`. It refuses a changed plan, also a changed `stages` block.
+7. After the run, read `stages.json` for the staged decisions and apply the pre-registered direction gate to
+   `direction`. Run `probe_analysis.py` as usual for the secondaries. Its p values are fixed-size values, not
+   the staged ones.
+8. `--smoke` ignores `stages` and runs its first N instances as before.
+
+Data policy: the account has zero data retention on. The dry run, and a smoke with OpenRouter models, print
+`ZDR warning: <model>: no zero-data-retention endpoint: an account with ZDR on gets 404` for each OpenRouter
+model that has no ZDR endpoint in the public list (`/api/v1/endpoints/zdr`, cached 24 h in
+`.flotilla-local/cache`). On 2026-11-23 Qwen3.8 Flash and all 12 `:free` models had none, so a `:free` smoke
+fails on this account.
