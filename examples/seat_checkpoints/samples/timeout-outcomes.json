@@ -1,0 +1,269 @@
+{
+  "schema": "harbor.seat-cut.timeout-qualification/v1",
+  "source": "native scripted seats at the collective agent deadline",
+  "task": {
+    "name": "harbor/shift-board-checkpoint",
+    "digest": "sha256:e086df3414a2b2682883cf574b28ddea4ebbc9f37c3706886d04ead430e13353",
+    "checksum": "41e230fbbdda4b6a2c941975988e9d4dd0058f895393d7f5c45e60d5aff45e3d"
+  },
+  "task_files": "sha256:9a9d2ff7406aeeecda3c4a0fd09fe82dddb986ff90280f61e4dad6075da87874",
+  "agent_timeout_seconds": 30.0,
+  "registered": 10,
+  "qualified_cells": 10,
+  "failed_cells": 0,
+  "checks": 474,
+  "failed_checks": 0,
+  "statuses": {
+    "bounded": 0,
+    "no_clean_return": 0,
+    "unobserved_control": 0,
+    "native_error": 10,
+    "journal_incomplete": 0,
+    "journal_invalid": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "ambiguous": 0,
+    "duplicate_id": 0,
+    "missing": 0
+  },
+  "native_dispositions": {
+    "agent_timeout": 10
+  },
+  "observation_statuses": {
+    "bounded": 4,
+    "no_clean_return": 4,
+    "unobserved_control": 2
+  },
+  "cells": [
+    {
+      "ticket": "sb-2309c5a88ac6a4f6",
+      "team": "timeout-peer-after",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "dispatcher"
+      ],
+      "observation_status": "bounded",
+      "final_grade": 0,
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "checks": 50,
+      "failed": []
+    },
+    {
+      "ticket": "sb-079920519b7b59f8",
+      "team": "timeout-peer-after",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "dispatcher"
+      ],
+      "observation_status": "bounded",
+      "final_grade": 1,
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        4,
+        4
+      ],
+      "peer_open_after_return": true,
+      "checks": 50,
+      "failed": []
+    },
+    {
+      "ticket": "sb-ec145acf3bf9f7d0",
+      "team": "timeout-peer-before",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "dispatcher"
+      ],
+      "observation_status": "bounded",
+      "final_grade": 0,
+      "grade_at_return": [
+        0,
+        0
+      ],
+      "prefix_at_return": [
+        6,
+        6
+      ],
+      "peer_open_after_return": true,
+      "checks": 50,
+      "failed": []
+    },
+    {
+      "ticket": "sb-b28cbc597a6f8b21",
+      "team": "timeout-peer-before",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "dispatcher"
+      ],
+      "observation_status": "bounded",
+      "final_grade": 1,
+      "grade_at_return": [
+        1,
+        1
+      ],
+      "prefix_at_return": [
+        6,
+        6
+      ],
+      "peer_open_after_return": true,
+      "checks": 50,
+      "failed": []
+    },
+    {
+      "ticket": "sb-06e44c1f810dbb72",
+      "team": "timeout-target",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "planner"
+      ],
+      "observation_status": "no_clean_return",
+      "final_grade": 0,
+      "grade_at_return": [
+        null,
+        null
+      ],
+      "prefix_at_return": [
+        null,
+        null
+      ],
+      "peer_open_after_return": false,
+      "checks": 48,
+      "failed": []
+    },
+    {
+      "ticket": "sb-4866408c434b4772",
+      "team": "timeout-target",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "planner"
+      ],
+      "observation_status": "no_clean_return",
+      "final_grade": 1,
+      "grade_at_return": [
+        null,
+        null
+      ],
+      "prefix_at_return": [
+        null,
+        null
+      ],
+      "peer_open_after_return": false,
+      "checks": 48,
+      "failed": []
+    },
+    {
+      "ticket": "sb-e7790888d9746eb8",
+      "team": "timeout-both",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "planner",
+        "dispatcher"
+      ],
+      "observation_status": "no_clean_return",
+      "final_grade": 1,
+      "grade_at_return": [
+        null,
+        null
+      ],
+      "prefix_at_return": [
+        null,
+        null
+      ],
+      "peer_open_after_return": false,
+      "checks": 48,
+      "failed": []
+    },
+    {
+      "ticket": "sb-23ef5fba43da970d",
+      "team": "timeout-both",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "planner",
+        "dispatcher"
+      ],
+      "observation_status": "no_clean_return",
+      "final_grade": 0,
+      "grade_at_return": [
+        null,
+        null
+      ],
+      "prefix_at_return": [
+        null,
+        null
+      ],
+      "peer_open_after_return": false,
+      "checks": 48,
+      "failed": []
+    },
+    {
+      "ticket": "sb-f928b56245c1c486",
+      "team": "timeout-off",
+      "seed": 17,
+      "fixture": "planner-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "dispatcher"
+      ],
+      "observation_status": "unobserved_control",
+      "final_grade": 0,
+      "grade_at_return": null,
+      "prefix_at_return": null,
+      "peer_open_after_return": null,
+      "checks": 41,
+      "failed": []
+    },
+    {
+      "ticket": "sb-1924e29b1bfb2884",
+      "team": "timeout-off",
+      "seed": 17,
+      "fixture": "dispatcher-fit",
+      "status": "native_error",
+      "native_disposition": "agent_timeout",
+      "timed_out_seats": [
+        "dispatcher"
+      ],
+      "observation_status": "unobserved_control",
+      "final_grade": 1,
+      "grade_at_return": null,
+      "prefix_at_return": null,
+      "peer_open_after_return": null,
+      "checks": 41,
+      "failed": []
+    }
+  ]
+}
