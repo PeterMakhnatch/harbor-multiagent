@@ -106,7 +106,7 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
             assert json.loads(env["SEAT_BRIEFING"]) == json.loads(json.dumps(expected))
         task_json = json.loads((task / "environment" / "task.json").read_text())
         assert task_json["answer_key"] == inst["answer_key"] and task_json["seats"] == seats
-        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (12, 4000, 200)
+        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (13, 4000, 200)
         assert task_json["seed"] == meta["seed"] == 1
         for script in (task / "tests" / "test.sh", task / "solution" / "solve.sh"):
             assert script.stat().st_mode & 0o111
@@ -424,6 +424,6 @@ def test_a_gated_split_task_looks_like_talk_to_its_seats_and_turns_the_read_gate
             assert not any("gated" in text for text in seat_visible_texts(gated, seat, services["gated"]))
         for condition, task in (("talk", talk), ("gated", gated), ("propose", tasks[("split", i, "propose")])):
             task_json = json.loads((task / "environment" / "task.json").read_text())
-            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 12)
-            assert "WORLD_VERSION = 12\n" in (task / "environment" / "world.py").read_text()
+            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 13)
+            assert "WORLD_VERSION = 13\n" in (task / "environment" / "world.py").read_text()
             assert ('"counter"' in (task / "instructions" / "p1.md").read_text()) == (condition == "propose")

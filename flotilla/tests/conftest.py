@@ -128,7 +128,7 @@ def start_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any
         monkeypatch.setenv("FLOTILLA_SEATS", ",".join(seats))
         monkeypatch.setenv("FLOTILLA_TOKENS", ",".join(f"{seat}:{token}" for seat, token in tokens.items()))
         monkeypatch.setenv("FLOTILLA_ADMIN", "admin-token")
-        for name in ("FLOTILLA_MAX_TEXT", "FLOTILLA_MAX_MESSAGES"):
+        for name in ("FLOTILLA_MAX_TEXT", "FLOTILLA_MAX_MESSAGES", "FLOTILLA_TASK_JSON"):
             monkeypatch.delenv(name, raising=False)
         for name, value in env.items():
             monkeypatch.setenv(name, value)

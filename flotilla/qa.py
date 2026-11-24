@@ -83,9 +83,9 @@ RULES: dict[str, tuple[str, str]] = {
                              "answer key; --allow-public-seed makes it a WARN, only to repeat a published build")),
     "container-name": ("FAIL", ("a service sets container_name: a seat reads that fixed name by a reverse DNS "
                                 "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
-    "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, a confederate's briefing "
-                                  "is not the family's plan for the task's arm, or the world's submit gate differs "
-                                  "from task.json")),
+    "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, its scheduled posts or a "
+                                  "confederate's briefing are not the family's plan for the task's arm, or the world's "
+                                  "submit gate differs from task.json")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
@@ -919,9 +919,10 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
 
 
 def check_confederate_plan(task: Task) -> Iterator[Finding]:
-    """A probe task (task.json `probe`, CONTRACT.md 12) has its subject as the only seat under test, each confederate
-    plays the family's plan for the task's own arm (a task built for one arm with another arm's plans would measure
-    the wrong condition), and main's FLOTILLA_SUBMIT_GATE says what task.json says."""
+    """A probe task (task.json `probe`, CONTRACT.md 12 and 13) has its subject as the only seat under test, the
+    world's scheduled posts (task.json `scheduled_posts`) are the posts of the family's plan for the task's own arm and
+    each confederate's briefing holds the rest of its plan (a task built for one arm with another arm's posts would
+    measure the wrong condition), and main's FLOTILLA_SUBMIT_GATE says what task.json says."""
     probe = task.task_json.get("probe")
     if not isinstance(probe, dict) or task.family is None:
         return
@@ -934,14 +935,18 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
         yield Finding("confederate-plan", task.name, "*",
                       f"the family cannot rebuild the plans of arm {task.condition} ({type(exc).__name__})")
         return
+    posts, own_steps = BUILD.scheduled_posts(plans)
+    if task.task_json.get("scheduled_posts") != posts:
+        yield Finding("confederate-plan", task.name, "main",
+                      f"task.json scheduled_posts are not the posts of the family's plan for arm {task.condition}")
     for seat in probe.get("confederates") or []:
         try:
             briefing = json.loads(task.env(seat).get("SEAT_BRIEFING") or "null")
         except ValueError:
             briefing = None
-        if briefing != {"script": "confederate", "plan": plans.get(seat)}:
+        if briefing != {"script": "confederate", "plan": own_steps.get(seat)}:
             yield Finding("confederate-plan", task.name, seat,
-                          f"its briefing is not the family's plan for arm {task.condition}")
+                          f"its briefing is not the rest of the family's plan for arm {task.condition}")
     gate = task.env("main").get("FLOTILLA_SUBMIT_GATE") == "1"
     if gate != (task.task_json.get("submit_gate") is True):
         yield Finding("confederate-plan", task.name, "main",

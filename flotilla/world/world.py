@@ -56,7 +56,12 @@ from urllib.parse import parse_qs, urlsplit
 # has shown it is not recorded; the world replies 409 with those messages (delivered `via: "gate"`), records a
 # `gated` event with the refused answer, and keeps the refused answer in `gated_submissions`. Off by default: the
 # other families and every reply, event and state of version 11 are unchanged.
-WORLD_VERSION = 12
+# Version 13: scheduled posts. When the task's task.json (FLOTILLA_TASK_JSON, default /world/task.json) has
+# `scheduled_posts` ([{"from", "to", "text", "at_s"}], the probe family's confederates), the world posts each one as
+# a normal message from its seat, on its own clock: on any request, every post with at_s <= now is added, in at_s
+# order, with message `t` = at_s, and logged as a `send` event with `data.scheduled: true` (the host's log only;
+# a seat's replies cannot tell these messages from others). Without the key nothing changes.
+WORLD_VERSION = 13
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -92,6 +97,33 @@ ROUND_SECONDS = float(os.environ.get("FLOTILLA_ROUND_SECONDS") or 120)
 WAIT_SECONDS = float(os.environ.get("FLOTILLA_WAIT_SECONDS") or 60)
 START_GRACE = float(os.environ.get("FLOTILLA_START_GRACE") or 300)  # the season starts without a seat that never calls
 MAX_MESSAGES_PER_ROUND = int(os.environ.get("FLOTILLA_MAX_MESSAGES_PER_ROUND") or 0)  # 0: no limit per round
+TASK_JSON_PATH = Path(os.environ.get("FLOTILLA_TASK_JSON", "/world/task.json"))  # main's own task.json
+
+
+def _load_scheduled() -> tuple[list[dict[str, Any]], list[str]]:
+    """The task's scheduled posts in at_s order, and what is wrong with them (the world then refuses to start)."""
+    if not TASK_JSON_PATH.is_file():
+        return [], []
+    try:
+        posts = json.loads(TASK_JSON_PATH.read_text()).get("scheduled_posts") or []
+    except (OSError, ValueError, AttributeError):
+        return [], [f"{TASK_JSON_PATH} is not a JSON object"]
+    problems = []
+    for post in posts if isinstance(posts, list) else [None]:
+        ok = (isinstance(post, dict) and post.get("from") in SEATS and post.get("to") in ("all", *SEATS)
+              and post.get("to") != post.get("from") and isinstance(post.get("text"), str) and post["text"].strip()
+              and len(post["text"]) <= MAX_TEXT and isinstance(post.get("at_s"), int | float)
+              and not isinstance(post.get("at_s"), bool) and 0 <= post["at_s"] < math.inf)
+        if not ok:
+            problems.append(f"a scheduled post is not {{from: seat, to: other seat or all, text, at_s >= 0}}: {post!r}"[:200])
+    if posts and not problems and not MESSAGING:
+        problems.append(f"scheduled posts need messaging, and {CONDITION} has none")
+    if not problems and any(sum(p["from"] == seat for p in posts) > MAX_MESSAGES_PER_SEAT for seat in SEATS):
+        problems.append("a seat has more scheduled posts than its message limit")
+    return ([] if problems else sorted(posts, key=lambda post: post["at_s"])), problems
+
+
+SCHEDULED, SCHEDULE_PROBLEMS = _load_scheduled()  # pending posts; _post_scheduled() removes each one it posts
 
 
 def _load_game() -> tuple[Any, dict[str, Any]]:
@@ -194,7 +226,7 @@ def config_problems() -> list[str]:
         "the admin token is also a seat token" if ADMIN and ADMIN in tokens else "",
         "a token names a seat that is not in FLOTILLA_SEATS" if set(TOKENS.values()) - set(SEATS) else "",
     ]
-    return [problem for problem in problems if problem]
+    return [problem for problem in problems if problem] + SCHEDULE_PROBLEMS
 
 
 def expire() -> None:
@@ -242,6 +274,24 @@ def _note_look(seat: str) -> None:
     if note is not None:
         note(seat, now())
     _drain_protocol(seat)
+
+
+def _post_scheduled() -> None:
+    """Post every scheduled post whose time has come, in at_s order, as a message from its seat with `t` = at_s.
+    Lazy, like tick(): each request calls it first, so a post exists before any reply or action that comes after
+    its time. Callers hold LOCK."""
+    due = now()
+    while SCHEDULED and SCHEDULED[0]["at_s"] <= due:
+        post = SCHEDULED.pop(0)
+        seat = post["from"]
+        STATE["sent"][seat] = STATE["sent"].get(seat, 0) + 1
+        message = {"id": f"m-{secrets.token_hex(6)}", "from": seat, "to": post["to"], "text": post["text"],
+                   "t": round(float(post["at_s"]), 3)}
+        STATE["messages"].append(message)
+        with (LOGS / "messages.jsonl").open("a") as log:
+            log.write(json.dumps(message, sort_keys=True) + "\n")
+        record("send", seat, {"id": message["id"], "to": message["to"], "chars": len(message["text"]),
+                              "scheduled": True, "at_s": message["t"]})
 
 
 def _unread(seat: str) -> list[dict[str, Any]]:
@@ -527,6 +577,9 @@ class World(BaseHTTPRequestHandler):
         self._reply(status, {"error": error})
 
     def _handle(self, method: str) -> None:
+        if SCHEDULED:
+            with LOCK:
+                _post_scheduled()
         path = self.path.split("?", 1)[0]
         if path == "/health" and method == "GET":
             if self.client_address[0] not in LOCAL_CLIENTS:
@@ -793,7 +846,8 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                                       "max_messages_per_round": MAX_MESSAGES_PER_ROUND,
                                                       "read_gate": READ_GATE}
                                                      if GAME is not None else {})
-                               | ({"submit_gate": True} if SUBMIT_GATE else {}))
+                               | ({"submit_gate": True} if SUBMIT_GATE else {})
+                               | ({"scheduled_posts": len(SCHEDULED)} if SCHEDULED else {}))
     return server
 
 

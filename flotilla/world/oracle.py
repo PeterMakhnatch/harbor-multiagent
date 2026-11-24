@@ -6,12 +6,12 @@ full answer. A briefing travels as numbered chunks (`FLOTILLA-BRIEFING <i>/<n> <
 world's message limits; a seat whose briefing cannot fit sends `FLOTILLA-BRIEFING 0/0` (nothing is
 coming). A scripted peer (briefing with a `script` key) posts its part, true or false, as plain text
 only; the oracle reads plain text with the family's `parse_text`, if it has one. A confederate (`"script":
-"confederate"`, the probe family) plays its plan: timed posts (`{"at_s", "to", "text"}`) and, if the plan has
-them, timed submissions (`{"at_s", "submit": {...}}`), measured from its own start. A seat of a family without
-pooling (`POOLING = False`) needs no teammate: it submits its own answer at once, and with messaging on it holds
-play open for `ORACLE_HOLD_SECONDS` (or the environment's `ORACLE_HOLD_SECONDS`, for tests) and submits again,
-through the world's submit gate if there is one. The family module sits next to this file (solution/family.py).
-See CONTRACT.md 8 and 12.
+"confederate"`, the probe family) plays the steps of its plan that the world does not play for it: timed posts
+(`{"at_s", "to", "text"}`) and submissions (`{"at_s", "submit": {...}}`, through the submit gate), measured from
+its own first call; a probe's posts are scheduled posts of the world (CONTRACT.md 13), so its plan is usually
+empty and it makes no call at all. A seat of a family without pooling (`POOLING = False`) needs no teammate: it
+submits its own answer once, through the world's submit gate if there is one. The family module sits next to
+this file (solution/family.py). See CONTRACT.md 8, 12 and 13.
 """
 
 from __future__ import annotations
@@ -166,10 +166,14 @@ def submit_through_gate(answer: dict[str, Any], attempts: int = 5) -> dict[str, 
 
 def confederate(own: dict[str, Any]) -> None:
     """Play a confederate's plan, each step at its `at_s` seconds after this seat's first call, and print what the
-    world replied to each step."""
+    world replied to each step. An empty plan makes no call."""
+    plan = sorted(own.get("plan") or [], key=lambda step: float(step["at_s"]))
+    if not plan:
+        print(json.dumps({"plan": "empty"}))
+        return
     call("GET", "/whoami")
     start = time.monotonic()
-    for step in sorted(own.get("plan") or [], key=lambda step: float(step["at_s"])):
+    for step in plan:
         time.sleep(max(0.0, start + float(step["at_s"]) - time.monotonic()))
         if "submit" in step:
             path, reply = "/submit", submit_through_gate(step["submit"])
@@ -178,15 +182,10 @@ def confederate(own: dict[str, Any]) -> None:
         print(json.dumps({"at_s": round(time.monotonic() - start, 3), "path": path, "reply": reply}), flush=True)
 
 
-def own_answer(family: Any, own: dict[str, Any], me: dict[str, Any]) -> None:
-    """A family without pooling: submit at once (the first attempt is on record); with messaging on, hold play
-    open while scripted peers post, then submit again."""
-    answer = family.oracle_answer([own])
-    print(json.dumps(submit_through_gate(answer)), flush=True)
-    if not messaging(me):
-        return
-    time.sleep(float(os.environ.get("ORACLE_HOLD_SECONDS") or getattr(family, "ORACLE_HOLD_SECONDS", 0.0)))
-    print(json.dumps(submit_through_gate(answer)))
+def own_answer(family: Any, own: dict[str, Any]) -> None:
+    """A family without pooling: submit the seat's own answer, through the submit gate (a refusal shows the unread
+    messages, and the oracle submits again)."""
+    print(json.dumps(submit_through_gate(family.oracle_answer([own]))))
 
 
 def main() -> None:
@@ -200,7 +199,7 @@ def main() -> None:
     family = family_module()
     me = call("GET", "/whoami")
     if not getattr(family, "POOLING", True):
-        own_answer(family, own, me)
+        own_answer(family, own)
         return
     parts: dict[str, list[Any]] = {}
     if messaging(me):

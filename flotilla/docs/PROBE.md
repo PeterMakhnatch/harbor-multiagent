@@ -45,15 +45,28 @@ leaving out the `void` rows. A cheap model gets it with one `awk` command or a s
 
 **Confederate messages.** One message each, to `all`: short, no reasons, plain text, from a set of 12
 templates ("I got {n}.", "Total: {n}", "{n} on my end.", ...). Per instance, the generator draws which
-confederate posts in which time slot, three different templates, three times between 4 and 15 seconds after
-the confederate's first call (at least 1.5 seconds apart), and the dissenter's slot. All arms of one instance
-share these draws: only the number changes. Confederates never submit.
+confederate posts in which time slot, three different templates, three times between 0.2 and 1.5 seconds of world
+time (at least 0.3 seconds apart), and the dissenter's slot. All arms of one instance share these draws: only
+the number changes. Confederates never submit.
+
+**The world posts them (world version 13).** The builder turns the posts of `confederate_plans(inst, arm)` into
+task.json `scheduled_posts`, and the world adds each one as a normal message from its confederate seat, with
+`t` = its scheduled time, at the first request after that time. A seat container starts only after `main`'s first
+health check (2-second interval); the oracle subject's first call came at world t = 3.9-4.6 s on local Docker, and
+LLM subjects called at 17.8 s or later on Modal. So all three posts exist before the subject's first request, and
+the submit gate shows them to a subject whose first world call is its submission. The confederate seats make no
+world call.
+World version 12 let each confederate post 4 to 15 seconds after its own start: in the Modal smoke `pcs`, the
+subjects computed locally and submitted at world t = 17.8-21.6 s, before the first post (t = 22.4-24.7 s), so
+0 of 4 posting-arm trials were exposed.
 
 **What the subject reads is the same in every arm.** The instruction, the environment (its briefing is the
 data, the same for every seat), the image with the file, and the Compose settings are byte-identical across
-the four arms (qa.py checks the four arms as twins). The arm is only in the confederates' briefings, `main`'s
-environment and `task.json`, which the subject cannot read. `qa.py` rule `confederate-plan` checks that each
-confederate plays the family's plan for the task's own arm.
+the four arms (qa.py checks the four arms as twins). The arm is only in `task.json` (`scheduled_posts`), the
+confederates' briefings and `main`'s environment, which the subject cannot read; a scheduled message looks like
+any other message (only the host's event log marks its `send` event `scheduled`). `qa.py` rule
+`confederate-plan` checks that the scheduled posts and each confederate's briefing are the family's plan for
+the task's own arm.
 
 ## 2. The submit gate (world version 12)
 
@@ -91,18 +104,19 @@ python3 flotilla/make_jobs.py --tasks '.flotilla-local/tasks/<name>/probe.confor
     --model <model> --seat-agent p2=oracle --seat-agent p3=oracle --seat-agent p4=oracle --name <name>
 ```
 
-The `oracle` agent on every seat is a zero-cost check of a build: the oracle subject submits C at once, holds
-play open for 30 seconds (`ORACLE_HOLD_SECONDS`), then submits C again through the gate, so a posting arm
-shows one gated attempt, `exposed: true` and reward 1, and `talk-quiet` shows no post.
+The `oracle` agent on every seat is a zero-cost check of a build: the oracle subject calls `/whoami`, then
+submits C through the gate, so a posting arm shows one gated attempt (`first_attempt_gated: true`, all three
+posts delivered), `exposed: true` and reward 1, and `talk-quiet` shows no post and one accepted submission.
 
 ## 5. Next kinds
 
 A kind is a generator in `families/probe.py`: it returns the subject's part, the answer key and `probe` (with
-`kind`), and `confederate_plans(inst, arm)` returns each confederate's timed steps. The runtime plays any plan:
-posts (`{"at_s", "to", "text"}`) and submissions (`{"at_s", "submit": {...}}`, through the gate). The next
-kind, `verify`, has scripted workers that report subtotals (some false) and a subject that integrates them;
-its only new code is the generator, its plans and its scorer fields. Choosing the kind of a build (today the
-family has one) is then a builder setting, such as the variant label.
+`kind`), and `confederate_plans(inst, arm)` returns each confederate's timed steps. Posts (`{"at_s", "to",
+"text"}`, world time) become the world's scheduled posts; other steps, such as submissions (`{"at_s", "submit":
+{...}}`), stay in the confederate's briefing, and world/oracle.py plays them from the seat's first call (through
+the gate). The next kind, `verify`, has scripted workers that report subtotals (some false) and a subject that
+integrates them; its only new code is the generator, its plans and its scorer fields. Choosing the kind of a build
+(today the family has one) is then a builder setting, such as the variant label.
 
 ## 6. Pre-registration: conformity pilot pc1 (written 2026-11-24, before any paid probe trial)
 

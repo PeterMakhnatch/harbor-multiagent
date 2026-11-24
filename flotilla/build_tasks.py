@@ -79,6 +79,16 @@ def player_dockerfile(files: list[str]) -> str:
     return PLAYER_DOCKERFILE + (f"\n{copies}" if copies else "")
 
 
+def scheduled_posts(plans: dict[str, list[dict[str, Any]]]
+                    ) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """The posts of the confederates' plans, which the world makes on its own clock (task.json `scheduled_posts`,
+    world version 13; `at_s` is world time), and each confederate's other steps, which it plays itself."""
+    posts = sorted(({"from": seat, "to": step.get("to", "all"), "text": step["text"], "at_s": step["at_s"]}
+                    for seat, plan in sorted(plans.items()) for step in plan if "text" in step),
+                   key=lambda post: (post["at_s"], post["from"]))
+    return posts, {seat: [step for step in plan if "text" not in step] for seat, plan in plans.items()}
+
+
 MAIN_DOCKERFILE = """FROM python:3.13-slim
 
 COPY world.py score.py family.py task.json /world/
@@ -466,9 +476,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
                 )
             plans = family.confederate_plans(inst, condition) if probe else {}
+            posts, own_steps = scheduled_posts(plans)  # the world posts; a confederate plays only its other steps
             for seat in scripted_seats:  # a confederate plays its plan; a scripted peer posts its part, honestly or not
                 lying = "liar" in condition
-                briefings[seat] = {"script": "confederate", "plan": plans[seat]} if probe else {
+                briefings[seat] = {"script": "confederate", "plan": own_steps[seat]} if probe else {
                     "script": "liar" if lying else "honest",
                     "text": (inst["liar_text"] if lying else inst["private_text"])[seat],
                     "part": (inst["liar_private"] if lying else inst["private"])[seat],
@@ -550,6 +561,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     task_json[extra] = inst[extra]
             if probe:
                 task_json["probe"] = inst["probe"] | {"plans": plans}
+                task_json["scheduled_posts"] = posts
             if submit_gate:
                 task_json["submit_gate"] = True
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")

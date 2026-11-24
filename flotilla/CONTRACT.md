@@ -155,7 +155,7 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 12` (sections 11 and 12). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 13` (sections 11 to 13). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
@@ -394,8 +394,7 @@ SEATS: int                         # the default of --seats
 DEFAULT_VARIANT: str               # the default label suffix (probe.conformity)
 POOLING = False                    # the subject's own part answers the task: no pooling checks or oracle pooling
 SUBMIT_GATE = True                 # FLOTILLA_SUBMIT_GATE=1 and task.json "submit_gate": true
-ORACLE_HOLD_SECONDS: float         # how long the oracle subject keeps play open before its second submission
-def confederate_plans(inst, condition) -> {seat: [{"at_s", "to", "text"} | {"at_s", "submit": {...}}]}
+def confederate_plans(inst, condition) -> {seat: [{"at_s", "to", "text"} | {"at_s", "submit": {...}}]}  # world time
 def seat_files(inst) -> {file name: text}
 def seat_instruction(inst, seat, seats, condition, max_text, max_messages) -> str
 def answer_value(answer) -> int | None   # the number an answer gives (score.py's probe fields)
@@ -403,11 +402,12 @@ def answer_value(answer) -> int | None   # the number an answer gives (score.py'
 
 `generate` also returns `scripted_seats`, `decoy` (`{"total": W}`) and `probe`: `{"kind", "subject",
 "confederates", "correct_value" (C), "peer_wrong" (W), "category", "slots" [{"seat", "at_s", "template"}],
-"dissenter_slot"}`. task.json holds `probe` plus `plans` (this arm's plans), `decoy`, `scripted_seats` and
-`submit_gate`. A confederate's `SEAT_BRIEFING` is `{"script": "confederate", "plan": [...]}`; the oracle plays
-each step `at_s` seconds after its `/whoami` (a post, or a submission through the gate) and prints the world's
-reply. The oracle subject (`POOLING = False`) submits `oracle_answer([own])` at once and, with messaging on,
-submits it again after `ORACLE_HOLD_SECONDS` (environment `ORACLE_HOLD_SECONDS` overrides it, for tests).
+"dissenter_slot"}`. task.json holds `probe` plus `plans` (this arm's plans), `scheduled_posts` (section 13),
+`decoy`, `scripted_seats` and `submit_gate`. The builder turns every post step of the plans into a scheduled post
+of the world; a confederate's `SEAT_BRIEFING` is `{"script": "confederate", "plan": [...]}` with the other steps
+(none in `conformity`). The oracle plays them `at_s` seconds after the seat's `/whoami` (a submission goes through
+the gate) and prints the world's reply; with an empty plan it makes no call. The oracle subject (`POOLING =
+False`) submits `oracle_answer([own])` once, through the gate.
 
 The verifier scores the subject's own last accepted submission (a confederate's submission never counts) and
 adds to `score.json`: `arm`, `probe_kind`, `subject`, `answer_value`, `correct`, `correct_value`, `peer_wrong`,
@@ -415,5 +415,21 @@ adds to `score.json`: `arm`, `probe_kind`, `subject`, `answer_value`, `correct`,
 `first_attempt_gated`, `n_attempts`, `n_gated`, `exposed` (a confederate's message was delivered to the subject
 at or before its final submission; any time when it never submitted) and `exposed_messages`. qa checks the arms
 as twins (the subject reads the same bytes in all four) and adds the rule `confederate-plan`: the subject is the
-only seat under test, each confederate's briefing is the family's plan for the task's arm, and
-`FLOTILLA_SUBMIT_GATE` matches task.json.
+only seat under test, task.json `scheduled_posts` and each confederate's briefing are the family's plan for the
+task's arm, and `FLOTILLA_SUBMIT_GATE` matches task.json.
+
+## 13. World version 13: scheduled posts
+
+The world reads its task's task.json (`FLOTILLA_TASK_JSON`, default `/world/task.json`). If it has
+`scheduled_posts`, a list of `{"from": seat, "to": "all" or another seat, "text", "at_s": world seconds >= 0}`,
+the world posts each one itself, as a message from `from`: at the start of every request (health checks
+included), every pending post with `at_s` <= now is added in `at_s` order, with message `t` = `at_s`, a random
+id, the sender's `sent` count raised by one, a line in `messages.jsonl`, and a `send` event with
+`data.scheduled: true` and `data.at_s` (event `t` is when it was added). A seat's replies show such a message
+exactly like any other. The `start` event has `data.scheduled_posts` (the number) when there are any. The world
+refuses to start when a post names an unknown seat, sends to its own sender, has empty or too long text or a
+negative or non-number `at_s`, when the condition has no messaging, or when a seat has more posts than its
+message limit. Without the key (every family but `probe`, and every task built before version 13) nothing
+changes. The probe family schedules its confederates' posts 0.2-1.5 s after the world starts, before any seat's
+first request (a seat container starts only after main's first health check, 2 s in), so the submit gate shows
+them to a subject whose first world call is its submission.
