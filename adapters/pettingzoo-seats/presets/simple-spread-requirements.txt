@@ -1,0 +1,9 @@
+mpe2==1.1.1
+pettingzoo==1.26.1
+gymnasium==1.4.0
+pygame-ce==2.5.8
+numpy==2.5.5
+scipy==1.18.1
+cloudpickle==3.1.3
+Farama-Notifications==0.0.6
+typing_extensions==4.16.0

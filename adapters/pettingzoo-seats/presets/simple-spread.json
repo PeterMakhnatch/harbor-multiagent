@@ -1,0 +1,9 @@
+{
+  "schema": "seatlab.pz-world/v1",
+  "api": "parallel",
+  "factory": "mpe2.simple_spread_v3:parallel_env",
+  "kwargs": {"N": 3, "continuous_actions": false, "max_cycles": 4},
+  "roles": {"p0": "agent_0", "p1": "agent_1", "p2": "agent_2"},
+  "seed": 19,
+  "max_world_steps": 128
+}
