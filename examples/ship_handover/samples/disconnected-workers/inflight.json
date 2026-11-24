@@ -1,0 +1,64 @@
+{
+  "schema": "harbor.ship-inflight.study/v1",
+  "task": {
+    "name": "harbor/ship-inflight",
+    "digest": "sha256:9a712fac1b44e4b70c91cb717b9b2cb2cbc2a3a43198839cc4f75be38c1c713e",
+    "checksum": "411796f5aee862b63b0c3a9c1a6a43149813422db5d715d8634ab865f09f8bda"
+  },
+  "teams": {
+    "draft-resume": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "draft"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "resume"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "si-e74454a2d7d5befa",
+      "team": "draft-resume",
+      "fate": "settles",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "si-95380f4cceb16f77",
+      "team": "draft-resume",
+      "fate": "fails",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "si-a287d6ee2658a883",
+      "team": "draft-resume",
+      "fate": "fails",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "si-3506e3a027e59c63",
+      "team": "draft-resume",
+      "fate": "settles",
+      "channel": "withhold"
+    }
+  ]
+}
