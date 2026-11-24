@@ -332,8 +332,7 @@ def _groups(rows: list[Record]) -> list[Record]:
     return [groups[key] for key in sorted(groups)]
 
 
-def collect(registration_path: Path, roots: list[Path]) -> Record:
-    registration = load_registration(registration_path)
+def collect_registered(registration: Record, roots: list[Path]) -> Record:
     task = registration["task"]
     cells = registration["cells"]
     tickets = [cell["ticket"] for cell in cells]
@@ -359,6 +358,10 @@ def collect(registration_path: Path, roots: list[Path]) -> Record:
         "groups": _groups(rows),
         "cells": rows,
     }
+
+
+def collect(registration_path: Path, roots: list[Path]) -> Record:
+    return collect_registered(load_registration(registration_path), roots)
 
 
 def _tsv(rows: list[Record]) -> list[str]:

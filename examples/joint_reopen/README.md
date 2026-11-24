@@ -14,6 +14,29 @@ uv run harbor trial start -c examples/joint_reopen/sample-trial.yaml
 
 To test regular agents, copy the config. Set each participant's native `name` and `model_name`, keep distinct `seat` values, and remove `JR_POLICY`. Configure credentials through the approved provider adapter outside the task. The world and the verifier need no provider credentials. Record the exact task checksum, roster, exposure limit, and first attempts before a model study. A configured model name is not proof of which model served a turn.
 
+## Register a private study for your own harness
+
+The 32 public controls are for qualification. Do not use their two published seeds to measure model performance. A new registration can cover every private card layout for one public incumbent, without oversampling layouts where both seats guess the same fallback.
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1
+study=$(mktemp -d)
+reg="$study/private.json"
+uv run python -m examples.joint_reopen.design register \
+  --participants examples/joint_reopen/samples/recheck-team.json --incumbent A --out "$reg"
+python3 -BS -m examples.joint_reopen.design audit "$reg" --json
+```
+
+The sample uses no model. For regular seats, give `--participants` a public native roster with one `east` and one `west` participant. Each needs its harness `name` and `model_name`. Do not put a credential value in that file. Registration checks the installed native task. It selects 60 private seeds and covers each ordered pair of cards once per fixture and channel. Each of the 240 trials in one arm has the same seed and fixture in the other. Registration does **not** launch these 480 trials. Set a separate spending limit before running any models.
+
+Keep the registration, emitted configs, and workspaces private. A worker that starts Harbor needs these files. A participating agent must not see them. `design audit` reports only aggregate support. It rejects mismatched seed pairs even when the two arms have the same number of each card layout. A valid but unbalanced registration exits 0 with `balanced_paired: false`.
+
+### What can seats do with their own card alone?
+
+Run `python3 -BS -m examples.joint_reopen.information`. It checks all 1,048,576 pairs of vetoed-card rules. Without peer reports, timing, previous trials or the seed, the best expected team reward on the balanced block is **81/240 (27/80)**. Using the same fixed rule in both seats gives at most **80/240**. Sharing truthful cards makes **240/240** possible. These are reference values, not results from live models.
+
+The key constraint is the seat whose original booking still works. Its card alone cannot say whether its partner must change. Over the 3 cases where at most one seat must change, the team can win at most 60 of 180 equally weighted states. When both must change, the best two private vote rules agree on the required slot in 21 of 60 states. An explicit pair of rules reaches both limits. Live Harbor retains phase timing, so the number is not a hard limit for its `withhold` arm. A partial shard cannot be compared to the full balanced block without accounting for the missing trials.
+
 ## Distribute a registered study
 
 The [registration](samples/control-registration.json) fixes the task identity, native teams, and all 32 tickets. The [predictions](samples/control-predictions.json) distinguish access to a peer report, its accuracy, the two individual votes, joint feasibility, and team reward. Use the **same manifest bytes and fork revision** for each worker.
@@ -21,26 +44,47 @@ The [registration](samples/control-registration.json) fixes the task identity, n
 ```bash
 study=$(mktemp -d)
 reg=examples/joint_reopen/samples/control-registration.json
-uv run python -m examples.joint_reopen.study emit "$reg" --out "$study/east-worker" --shard 0/2
-uv run python -m examples.joint_reopen.study emit "$reg" --out "$study/west-worker" --shard 1/2
+uv run python -m examples.joint_reopen.study emit "$reg" --out "$study/worker-0" --shard 0/2
+uv run python -m examples.joint_reopen.study emit "$reg" --out "$study/worker-1" --shard 1/2
 ```
 
-Each worker runs only the files emitted for its shard. These are ordinary Harbor trial configs. Use a new workspace. Do not rerun a started ticket or reuse the same shard on another worker. On a shared host, use your normal Docker concurrency gate. Starting one shard does not start the other.
+Each ticket runs a whole two-seat team. Give all workers on a host the same workspace for each shard. Do not loop over `configs/*.json`: after an interruption that can restart a ticket and replace its first history. Use `take` to reserve one new first attempt. The command prints a config path; it never starts a model or a container.
 
 ```bash
-for cfg in "$study/east-worker"/configs/*.json; do
-  uv run harbor trial start -c "$cfg" || break
+while :; do
+  if cfg=$(python3 -BS -m examples.native_worklist take \
+      --study "$reg" "$study/worker-0" 0/2 \
+      --study "$reg" "$study/worker-1" 1/2); then
+    uv run harbor trial start -c "$cfg" || exit 1
+  else
+    rc=$?
+    [ "$rc" -eq 3 ] && break
+    exit "$rc"
+  fi
 done
 ```
 
-After both workers finish, collect the original first attempts. The cold reader uses only Python's standard library. Omitting a worker must not shrink the denominator.
+Use a local Docker concurrency limit around `harbor trial start`. Replace `take` with `status` to see available tickets, reservations without a native directory, directories without a result file, and result files. A crash after `take` leaves the reservation in place. Do not remove it to retry. A result file alone does not prove a valid grade. On different machines, assign disjoint shards. Independent copies of a workspace cannot coordinate.
+
+After the workers stop, collect the original first attempts. The cold reader uses only Python's standard library. Omitting a worker must not shrink the denominator.
 
 ```bash
 python3 -BS -m examples.joint_reopen.collect "$reg" \
-  "$study/east-worker/trials" "$study/west-worker/trials" --json
+  "$study/worker-0/trials" "$study/worker-1/trials" --json
 ```
 
-Keep the native records private. Publish the redacted outcomes, not raw trajectories, provider configs, or calendars. Preserve valid zeroes, incomplete trials, and native failures separately. Compare channel arms within the same seed, roster and fixture. Withheld content is not the same as a seat receiving a report and ignoring it. No claim about a real model follows from the scripted controls.
+Keep `collect` output private: it contains seeds and tickets. Use the public comparison when reporting a run to another team or monitoring an unfinished block:
+
+```bash
+python3 -BS -m examples.joint_reopen.effect "$reg" \
+  "$study/worker-0/trials" "$study/worker-1/trials" --json
+```
+
+`effect` validates the native records. It reports a team index and a fixture, not private seeds, team names, IDs, local paths, or individual traces. It compares reports delivered minus reports withheld, on the same seed, roster, and fixture. A block needs the same positive ticket count in both arms. One-arm controls stay in the registered count but do not estimate a channel effect. Repeated tickets without an individual pair ID contribute to arm averages, not a count of pairs that changed direction.
+
+The interval covers every possible binary value of each unknown grade. It is **not** a confidence interval. A missing receipt does not count as a zero. For example, 1 observed delivered success and no other observations in a 60-pair fixture give a difference between −59/60 and +60/60. These bounds describe missing evidence. They do not justify stopping, and they do not show that a real model used its partner's report.
+
+**Operator qualification.** On one host, 24 concurrent processes competed for the remaining 8 of 12 assigned tickets across Joint Reopen and Shift Board. Exactly 8 returned unique configs; 16 reported no work left. Neither an abandoned reservation nor a pre-existing partial directory was reissued. The two native teams actually launched through that worklist each produced one valid grade. The collectors retained the original registrations of 480 and 4 tickets. This was a scripted operations check, not another model experiment.
 
 ## What happened in the 32 registered controls?
 
@@ -55,8 +99,8 @@ All 32 scripted teams finished on the native Docker runner. Two workers ran 16 f
 
 The one-sided cases distinguish sharing from guessing. The seat that could keep the booking had to change its vote to repair the team decision. Without the report, that seat kept the booking and the other seat changed. When both had to change, both picked the same fallback on these two seeds without a report. Success alone is not evidence of communication.
 
-The other controls separate access from use. On one seed, `keep` and `ack-keep` each scored 1/4. Only `ack-keep` returned both accurate reports before voting. An always-switch team scored 3/4. Its two votes also agreed on a feasible slot in the fourth trial, but it gave up a booking that still worked. In the four one-sided trials with just one rechecking seat, all four teams split their votes.
+The other controls separate access from use. On one seed, `keep` and `ack-keep` each scored 1/4. Only in `ack-keep` did both seats receive accurate peer reports before voting. An always-switch team scored 3/4. Its two votes also agreed on a feasible slot in the fourth trial, but it gave up a booking that still worked. In the four one-sided trials with just one rechecking seat, all four teams split their votes.
 
 An independent calendar model and verifier replay matched on 10,000 bounded histories, including partially played games and reads after a vote. Those histories are not extra teams. The cold reader checks the native task, roster, setting, grade, and non-repeated IDs. The world publishes no second receipt for its UUID. A hash identifies the observation file, but cannot establish its origin outside the trial directory.
 
-For a model study, keep the seats blind to the condition and seed. Use new, private seeds and repeat both channel arms. A return proves availability, not attention. The phase barrier and elapsed time still exist in both arms. Do not count timing as withheld.
+For a model study, keep the seats blind to the condition and seed. Use new, private seeds and repeat both channel arms. A returned report proves availability, not attention. Both arms retain the phase barrier and elapsed time. Withholding report contents does not rule out timing signals.
