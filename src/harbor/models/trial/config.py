@@ -214,10 +214,21 @@ class Participant(AgentConfig):
     """The agent and model for the service a task names ``[agents.<seat>]``.
 
     Timeouts, concurrency, skills, trajectory loading and network allowlists
-    apply to the whole trial, so a participant cannot set them.
+    apply to the whole trial, so a participant cannot set them. The idle limit
+    is the exception: only an agent that writes its trajectory while it runs
+    can be judged idle, so each participant opts in.
     """
 
     seat: str
+    idle_timeout_sec: float | None = Field(
+        default=None,
+        gt=0,
+        exclude_if=lambda v: v is None,
+        description=(
+            "Stop this seat with SeatIdleTimeoutError when its trajectory gains "
+            "no step for this many seconds. Off when unset."
+        ),
+    )
 
     @model_validator(mode="after")
     def _refuse_per_agent_run_settings(self):

@@ -5,16 +5,22 @@ has a service per agent, each named by an ``[agents.<service>]`` table in
 task.toml. We call that service the agent's seat. The trial starts the project
 as any Compose task, installs every participant's agent into its seat at once,
 starts them together under the task's agent timeout, and ends play when every
-agent under test has ended. It then collects every seat alike, gives ``main``
-the seats' logs at /logs/seats, and runs the shared verifier once with every
-container still up.
+agent under test has ended. A participant with ``idle_timeout_sec`` is stopped
+early when its trajectory gains no step for that long. The trial then collects
+every seat alike, records how long each seat went without a step, gives
+``main`` the seats' logs at /logs/seats, and runs the shared verifier once with
+every container still up.
 """
 
 import asyncio
 import contextlib
+import json
 import logging
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, override
 from uuid import UUID
 
@@ -31,14 +37,26 @@ from harbor.models.task.verifier_mode import (
 )
 from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
-from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
+from harbor.models.trial.result import (
+    ExceptionInfo,
+    SeatLiveness,
+    SeatResult,
+    TimingInfo,
+)
 from harbor.tasks.client import TaskDownloadResult
-from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
+from harbor.trial.errors import (
+    AgentSetupTimeoutError,
+    AgentTimeoutError,
+    SeatIdleTimeoutError,
+)
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
 from harbor.trial.single_step import SingleStepTrial
 from harbor.trial.sync_trajectory import sync_trajectory
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
+
+STALL_FRACTION = 0.5
+IDLE_POLL_SEC = 1.0
 
 
 @dataclass
@@ -104,6 +122,40 @@ async def _seat_tasks() -> AsyncIterator[asyncio.TaskGroup]:
         if current is not None and current.cancelling():
             raise asyncio.CancelledError
         raise errors.exceptions[0]
+
+
+def _trajectory_steps(agent_dir: Path) -> list[dict[str, Any]]:
+    """The steps of a seat's ATIF trajectory files, without steps copied from
+    an earlier segment. A file that does not parse, such as one being
+    rewritten, adds no steps."""
+    steps: list[dict[str, Any]] = []
+    for path in sorted(agent_dir.glob("trajectory*.json")):
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict) or not isinstance(data.get("steps"), list):
+            continue
+        steps.extend(
+            step
+            for step in data["steps"]
+            if isinstance(step, dict) and not step.get("is_copied_context")
+        )
+    return steps
+
+
+def _step_times(steps: list[dict[str, Any]]) -> list[datetime]:
+    times = []
+    for step in steps:
+        text = step.get("timestamp")
+        if not isinstance(text, str):
+            continue
+        try:
+            moment = datetime.fromisoformat(text)
+        except ValueError:
+            continue
+        times.append(moment if moment.tzinfo else moment.replace(tzinfo=UTC))
+    return times
 
 
 class SeatsTrial(SingleStepTrial):
@@ -287,6 +339,7 @@ class SeatsTrial(SingleStepTrial):
             execution.finished_at = self._now()
             await self._emit(TrialEvent.AGENT_END)
         await self._collect_seats()
+        self._record_liveness()
         self._record_seat_errors()
         await self._collect_artifacts()
         if not self.config.verifier.disable:
@@ -300,6 +353,7 @@ class SeatsTrial(SingleStepTrial):
     @override
     async def _recover_outputs(self) -> None:
         await self._collect_seats()
+        self._record_liveness()
         await self._collect_artifacts(stop_main_before_sidecars=False)
         await self._stop_agent_environment()
 
@@ -308,13 +362,20 @@ class SeatsTrial(SingleStepTrial):
         ended or the agent timeout ([agent] timeout_sec) runs out; the runs
         still going are then cancelled, as Trial cancels a single agent at its
         timeout, and their processes in the seat are killed so nothing acts
-        during collection and verification. The containers stay up. A seat's
-        error is recorded on the seat and does not stop the others; the trial
-        then grades by its error policy, as a single-agent trial does."""
+        during collection and verification. The containers stay up. A seat
+        whose participant sets idle_timeout_sec is stopped as soon as it is
+        idle that long. A seat's error is recorded on the seat and does not
+        stop the others; the trial then grades by its error policy, as a
+        single-agent trial does."""
         timeout_sec = self._agent_timeout_sec
         tasks = {
             seat.name: asyncio.create_task(self._play_seat(seat)) for seat in self.seats
         }
+        watchers = [
+            asyncio.create_task(self._stop_when_idle(seat, tasks[seat.name], limit_sec))
+            for seat in self.seats
+            if (limit_sec := seat.participant.idle_timeout_sec) is not None
+        ]
         try:
             under_test = [tasks[seat.name] for seat in self.seats if seat.under_test]
             _, pending = await asyncio.wait(under_test, timeout=timeout_sec)
@@ -326,14 +387,92 @@ class SeatsTrial(SingleStepTrial):
                         )
                     )
         finally:
+            for watcher in watchers:
+                watcher.cancel()
             for seat in self.seats:
                 if not tasks[seat.name].done():
                     seat.stopped = True
                     tasks[seat.name].cancel()
-            await asyncio.gather(*tasks.values(), return_exceptions=True)
+            await asyncio.gather(*tasks.values(), *watchers, return_exceptions=True)
         for seat in self.seats:
             if seat.stopped:
                 await seat.environment.kill_exec_processes()
+
+    async def _stop_when_idle(
+        self, seat: Seat, play: asyncio.Task[None], limit_sec: float
+    ) -> None:
+        """Stop the seat, recording SeatIdleTimeoutError, once its trajectory
+        has gained no step for limit_sec. The idle clock starts with play and
+        restarts whenever the seat's step count changes."""
+        poll_sec = min(IDLE_POLL_SEC, limit_sec / 4)
+        count = len(await asyncio.to_thread(_trajectory_steps, seat.paths.agent_dir))
+        changed_at = time.monotonic()
+        while not play.done():
+            await asyncio.wait({play}, timeout=poll_sec)
+            steps = await asyncio.to_thread(_trajectory_steps, seat.paths.agent_dir)
+            now = time.monotonic()
+            if len(steps) != count:
+                count, changed_at = len(steps), now
+            elif now - changed_at >= limit_sec and not play.done():
+                seat.logger.warning(
+                    f"Seat {seat.name!r}: no trajectory step for {limit_sec} "
+                    "seconds; stopping it"
+                )
+                seat.result.exception_info = self._exception_info(
+                    SeatIdleTimeoutError(
+                        f"No trajectory step for {limit_sec} seconds "
+                        f"(idle_timeout_sec) after {count} steps"
+                    )
+                )
+                seat.stopped = True
+                play.cancel()
+                return
+
+    def _stall_threshold_sec(self, seat: Seat) -> float | None:
+        if seat.participant.idle_timeout_sec is not None:
+            return seat.participant.idle_timeout_sec
+        if self._agent_timeout_sec is None:
+            return None
+        return self._agent_timeout_sec * STALL_FRACTION
+
+    def _record_liveness(self) -> None:
+        """Record on every seat that played how long it went without a step
+        before its run ended, from its collected trajectory, and log a seat
+        that stalled: one the idle limit stopped, or one the agent timeout
+        ended after at least its stall threshold without a step. The
+        threshold is the participant's idle_timeout_sec, else STALL_FRACTION
+        of the agent timeout."""
+        for seat in self.seats:
+            execution = seat.result.agent_execution
+            if execution is None or execution.started_at is None:
+                continue
+            if execution.finished_at is None:
+                continue
+            steps = _trajectory_steps(seat.paths.agent_dir)
+            times = _step_times(steps)
+            last = max(times, default=execution.started_at)
+            idle_sec = max(0.0, (execution.finished_at - last).total_seconds())
+            threshold = self._stall_threshold_sec(seat)
+            info = seat.result.exception_info
+            error = info.exception_type if info is not None else None
+            stalled = error == SeatIdleTimeoutError.__name__ or (
+                error == AgentTimeoutError.__name__
+                and threshold is not None
+                and idle_sec >= threshold
+            )
+            seat.result.liveness = SeatLiveness(
+                n_steps=len(steps),
+                first_step_at=min(times, default=None),
+                last_step_at=max(times, default=None),
+                idle_sec=round(idle_sec, 3),
+                stall_threshold_sec=threshold,
+                stalled=stalled,
+            )
+            if stalled:
+                seat.logger.warning(
+                    f"Seat {seat.name!r} stalled: {error} after {idle_sec:.0f} "
+                    f"seconds without a trajectory step ({len(steps)} steps)"
+                )
 
     async def _play_seat(self, seat: Seat) -> None:
         """Mirrors Trial._run_agent_phase for one seat, without a timeout of

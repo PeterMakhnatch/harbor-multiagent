@@ -90,6 +90,27 @@ class StepResult(BaseModel):
     verifier: TimingInfo | None = None
 
 
+class SeatLiveness(BaseModel):
+    """How long a seat's trajectory went without a step, read after its run.
+
+    Steps are those of the seat's ATIF trajectory files, without steps copied
+    from an earlier segment. ``idle_sec`` runs from the last step, or from the
+    seat's start when it has no timed step, to the end of its run. A seat is
+    ``stalled`` when its idle limit stopped it (``SeatIdleTimeoutError``), or
+    when the agent timeout ended it (``AgentTimeoutError``) after at least
+    ``stall_threshold_sec`` without a step. The threshold is the participant's
+    ``idle_timeout_sec``, else half the agent timeout, and None when the trial
+    has neither.
+    """
+
+    n_steps: int
+    first_step_at: datetime | None = None
+    last_step_at: datetime | None = None
+    idle_sec: float
+    stall_threshold_sec: float | None = None
+    stalled: bool
+
+
 class SeatResult(BaseModel):
     """One seat's agent run, recorded like a step's."""
 
@@ -100,6 +121,7 @@ class SeatResult(BaseModel):
     agent_setup: TimingInfo | None = None
     agent_execution: TimingInfo | None = None
     exception_info: ExceptionInfo | None = None
+    liveness: SeatLiveness | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class TrialResult(BaseModel):

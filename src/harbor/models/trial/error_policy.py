@@ -56,6 +56,7 @@ _POLICY_GROUPS: Final[dict[ErrorPolicy, tuple[str, ...]]] = {
         "ApiOverloadedError",
         "ApiConnectionClosedError",
         "ApiResponseStalledError",
+        "SeatIdleTimeoutError",
         "UnknownApiError",
         "NetworkConnectionError",
         "ApiConnectionError",
