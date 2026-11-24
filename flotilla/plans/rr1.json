@@ -93,5 +93,28 @@
    "openrouter": 2.0
   }
  },
- "order_seed": 20261125
+ "order_seed": 20261125,
+ "stages": {
+  "fractions": [
+   0.25,
+   0.5,
+   1.0
+  ],
+  "alpha": 0.05,
+  "family": "model",
+  "futility": {
+   "delta": 0.25,
+   "beta_f": 0.05
+  },
+  "tests": [
+   {
+    "task_set": 0,
+    "arms": [
+     "talk-quiet",
+     "talk-false"
+    ],
+    "outcome": "correct"
+   }
+  ]
+ }
 }
