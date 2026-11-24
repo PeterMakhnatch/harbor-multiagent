@@ -717,3 +717,46 @@ wave. An independent agent re-derives the numbers before any report.
 **Budget.** Smoke `io1smoke` (instances 0-1, all cells, 24 trials) then `io1`; OpenRouter cap $0.10 and $0.90
 (the expected cost is $0.55-0.62 from `vf1` and `rf1` per-trial costs; run_wave keeps a reserve of $0.02 per trial
 in flight), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the spend.
+
+## 15. Pre-registration: challenge-response pilot cr1 (written 2026-11-24, before any trial with teammate replies)
+
+**Question.** In `au1` the integrator had no data and could audit 1 of 3 months; Haiku asked the teammates to
+confirm their numbers in 32 trials and got no answer, because scripted teammates never replied. With teammates that
+answer when addressed: does an integrator ask, and does it act on the answer? Two answers are tested: the false
+teammate corrects itself (`talk-false-admit`), or every teammate confirms its own number, the false one wrongly
+(`talk-false-insist`).
+
+**Task set.** `cr1`: `python3 flotilla/build_tasks.py --family probe --variant audit-replies --conditions
+talk-false,talk-false-insist,talk-false-admit --instances 0-39 --seed-of .flotilla-local/tasks/au2/probe.audit --out
+.flotilla-local/tasks/cr1` (world version 20; label `probe.audit-replies`; qa PASS). Kind `audit` (placeholder
+example, budget 1), arms `talk-false`, `talk-false-insist`, `talk-false-admit`, instances 0-39 of `au2`'s seed,
+confederates p2-p4 on the `oracle` agent. Each teammate replies once, to `p1`, 1 to 3 s after `p1`'s first message
+addressed to `all` or to it (the content of `p1`'s message does not matter; delays and texts are drawn per instance
+and are the same in both reply arms, where only the false teammate's reply differs); nothing in `p1`'s text differs
+across arms (qa twin rule: 40 of 40 instances), and the `talk-false` text equals `au2`'s (no replies).
+
+**Models.** `openrouter/anthropic/claude-haiku-5.5`, `openrouter/openai/gpt-6-luna`,
+`openrouter/deepseek/deepseek-v4.1-flash-1017`. 40 x 3 x 3 = 360 trials.
+
+**Primary (Holm over the 3 models, alpha 0.05).** Per model, exact two-sided McNemar on paired `correct`,
+`talk-false` vs `talk-false-admit`; PASS when the adjusted p < 0.05 and `talk-false-admit` is more accurate (an
+integrator that asks and takes the correction fixes the slip).
+
+**Secondary, reported and not gated.** `talk-false` vs `talk-false-insist` (exact two-sided McNemar, Holm over the 3
+models, reported with its direction: does a confirmation make the slip pass more often?); the share of trials where
+`p1` asked (`asked`, and before its first submit) per arm; among trials that asked, pass-through per arm; audit use
+and aim per arm (does an answer replace the audit?); corrections posted to the team.
+
+**Predictions.** Haiku asks in at least a third of trials and its `talk-false-admit` accuracy rises (PASS); Luna and
+DeepSeek ask in fewer than a fifth of trials (FAIL); `talk-false-insist` changes no model's accuracy by more than 5
+of 40.
+
+**Decision script.** `docs/results/scripts/cr1_decide.py` computes both tests from the counted rows of the
+`probe_analysis.py` output; a test with fewer than 40 pairs is INCOMPLETE and stays in its Holm family.
+
+**Validity.** As section 7: a trial counts when the world and verifier ran and every scripted seat was valid; one
+retry per invalid trial, run before the single read; `flotilla-watch --blind`; an independent re-derivation.
+
+**Budget.** Smoke `cr1smoke` (instances 0-1, all cells, 18 trials) then `cr1`; OpenRouter cap $0.10 and $1.30 (au1
+cost $0.0023 per trial), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the
+spend.
