@@ -98,13 +98,14 @@ No output names a token, an answer key or a secret seed. `--allow-readable-names
 | `seat-network` | FAIL | a seat is not alone with `main` on a network of its own: a shared network, the default network, a shared namespace or volume |
 | `seat-secrets` | FAIL | a seat gets the answer key, the build's secret seed, `task.json`, `task.toml`, the build's `manifest.json`, a world, family or score file, `FLOTILLA_ADMIN` or another seat's token (environment, volumes, files that its image copies) |
 | `token-map` | FAIL | seat tokens are not distinct, or `main`'s `FLOTILLA_TOKENS` does not map each one to its seat |
-| `stale-code` | FAIL | the task ships a `world.py`, `score.py`, `oracle.py` or family file that differs from this checkout: build the set again |
+| `stale-code` | FAIL | the task ships a `world.py`, `score.py`, `oracle.py` or family file that differs from this checkout: build the set again, except a frozen pre-registered set (NEXT-WAVE.md), which runs as built |
 | `qa-error` | FAIL | a task file is missing or cannot be read |
 | `runtime-names` | FAIL | the set has readable names (`--readable-names`, or a build before opaque names): the Docker names that Harbor derives from a task folder say its condition or label; a WARN with `--allow-readable-names` |
 | `public-seed` | FAIL | the set was built with a public seed: below 1,000,000 (such as the canonical `--seed 1`) or named in this checkout's documentation; a WARN with `--allow-public-seed`, only to repeat a published build |
 | `container-name` | FAIL | a service sets `container_name`: a seat reads that fixed name by a reverse DNS lookup (Harbor's own names are opaque), and concurrent trials would share it |
 | `confederate-plan` | FAIL | a probe task's subject is not the only seat under test, a confederate's briefing is not the family's plan for the task's arm, or `FLOTILLA_SUBMIT_GATE` differs from `task.json` |
 | `audit-data` | FAIL | a probe `audit` task's subject can read month data (a CSV line, C, W or a subtotal), the world's audit files do not give the answer key and the workers' numbers, the false post is not the slip that gives the decoy, or the tell is outside the false worker's post in `talk-false-tell` |
+| `policy-data` | FAIL | a conformity task built with `--policy-file`: `policy.md` is not the instance's rule text, the rule applied to the data does not give C or the misreading does not give W, or the peer's claim is not the rule's false claim, is in `policy.md`, or is posted outside `talk-policy` |
 | `push` | FAIL | `task.json` `push` is set but not `true`, is on a task that is not a probe task with messaging, or the subject's push note does not match it |
 | `inbox` | FAIL | `task.json` `inbox` is set but not `true`, is on a task that is not a probe task with messaging, the subject's "Team messages so far" block is not `task.json`'s scheduled posts exactly, or a seat has a block without `inbox` |
 | `solo-sufficient` | WARN | in a team condition, one seat's own briefing gives a correct answer (`oracle_answer`) |

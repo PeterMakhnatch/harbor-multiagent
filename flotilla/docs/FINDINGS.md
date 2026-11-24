@@ -742,6 +742,7 @@ Inferred:
 Validity note: the example month in the prompt sets where untold seats audit. It does not bias the primary
 (both false arms share the prompt, and the false month is drawn uniformly), but the next audit wave should use
 a placeholder in the example (`{"month": "<month>"}`), as the 2026-11-19 entry on answer examples already advised.
+(Done in world version 18 as `{"month": "<month name>"}`, task set `au2`.)
 
 Lesson: to measure verification, give the checker less than the whole job; report audit use, aim and
 pass-through separately, because each model fails in a different one; keep real values out of examples.

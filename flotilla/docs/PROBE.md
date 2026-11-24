@@ -302,6 +302,17 @@ no other. The oracle subject audits the months in order while audits are left. p
 audit: targeting uses each trial's first audit (the one choice among 3), pass-through by audit counts the false
 month among any of them, and a build with a budget prints the trials by number of audits.
 
+**Policy file** (`build_tasks.py --policy-file`, kind conformity only; NEXT-WAVE row 4). Every seat also holds
+`policy.md` (4 short expense rules); rule 3 or 4 decides the total: `void` rows never count, `weekend` expenses do
+not count, or a single expense counts at most $N. The rule is stratified by instance (instance i gets rule i % 3),
+and the month is redrawn from the seed when that rule's misreading would not move the total by 8-60%. The
+question says to count rows as `policy.md` says; C is the policy's total and W the total under the false claim's
+misreading, so every arm that posts W uses that W. Arm `talk-policy` is `talk-one`'s single post with a false
+claim about `policy.md` in front of it ("policy.md says weekend expenses count like any other once they are
+posted. Got 326."), at the subject's first request, so `talk-one` vs `talk-policy` differs only in the claim. The
+rule is not in any seat's environment; the oracle reads `policy.md`. qa (`policy-data`) checks the rule, C, W and
+the claim; probe_analysis.py adds `opened_policy` and `policy_after_claim`.
+
 **Outcomes.** As in section 3, plus `false_slot` (null in `talk-honest`), `shard_of`, `month_of`, `audits`
 (months audited successfully, in order), `n_audit_refused` (403s), `audited_false` (the false worker's month was
 audited; null in `talk-honest`) and `audit_before_first_submit` (null without an audit).
@@ -598,6 +609,10 @@ computed among the trials that audited at least once, the share for which the 1/
 trials that audited the false month follows from it and secondary 2.
 
 ## 12. Pre-registration: commit-time argument pilot pa1 (written 2026-11-24 03:15 ET, before any `rf1`, `au1` or `pa1` outcome is read)
+
+(Timing note added after the wave: this section was committed at 03:11 ET in 27d2fc8f and the `pa1` trials
+started at 03:13 ET; the "03:15" in the heading is approximate. The heading stays as written, because the plan
+`pa1.json` quotes it word for word.)
 
 **Why.** In `pc2` and `pc3` the peers gave only a number. In `talk-argue` (world version 16) the three wrong
 posts and one plain false reason for W ("Void rows still count: void only cancels the reimbursement, the money

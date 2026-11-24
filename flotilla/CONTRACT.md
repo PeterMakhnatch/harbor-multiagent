@@ -391,12 +391,12 @@ verifier and qa read (other families define none of them, and nothing changes fo
 
 ```python
 ARMS: tuple[str, ...]              # the default of --conditions
-EXTRA_ARMS: tuple[str, ...]        # further arms, built only when --conditions names them (conformity: talk-one, talk-lead)
+EXTRA_ARMS: tuple[str, ...]        # further arms, built only when --conditions names them (conformity: talk-one, talk-lead, talk-push, talk-argue, talk-policy with --policy-file; verify and audit: talk-false-insist, talk-false-admit)
 SEATS: int                         # the default of --seats
 DEFAULT_VARIANT: str               # the default label suffix (probe.conformity)
 POOLING = False                    # the subject's own part answers the task: no pooling checks or oracle pooling
 SUBMIT_GATE = True                 # FLOTILLA_SUBMIT_GATE=1 and task.json "submit_gate": true
-KINDS: tuple[str, ...]             # the family's kinds: conformity, verify
+KINDS: tuple[str, ...]             # the family's kinds: conformity, verify, audit
 def kind(variant) -> namespace     # the family for the kind the variant label starts with (the builder uses it)
 def confederate_plans(inst, condition) -> {seat: [{"before_s", "to", "text"} | {"at_s", "submit": {...}}]}  # section 14
 def seat_files(inst) -> {file name: text}
