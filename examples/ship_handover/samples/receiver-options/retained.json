@@ -1,0 +1,739 @@
+{
+  "schema": "harbor.shipping.receiver-archive/v1",
+  "receiver_question_sha256": "sha256:76a2384505c4295b22210602aca5437b8bc725abab23e33986681ae78812c299",
+  "question_sha256": "sha256:6b531512f6dcabfa6c05b01a8fa32668ca6d199b68d05f96c5518bf3153f2434",
+  "task_files": "sha256:cb5294288f62b79fe69c780c2e5287bfef0dbb7b05fb3e17b03f1ebbd4d0d94c",
+  "world": "inflight",
+  "basis": {
+    "observed": "native seat and reward claims plus the public cut ledger after the pinned inflight verifier replays it",
+    "conditional": "receiver-options frontier grade sets for the observed view and action under a stated knowledge model"
+  },
+  "records": [
+    {
+      "ticket": "si-8b457c4e64fa243d",
+      "outgoing": "idle",
+      "relief": "blind-fresh",
+      "fate": "fails",
+      "channel": "deliver",
+      "status": "outside_template",
+      "reason": "no accepted sender handoff",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "fresh",
+        "sender_handoff": "absent",
+        "served": null,
+        "receipt": "absent",
+        "view": null,
+        "action": null
+      },
+      "conditional": null
+    },
+    {
+      "ticket": "si-c7aa9cf61cbbb83e",
+      "outgoing": "idle",
+      "relief": "blind-fresh",
+      "fate": "settles",
+      "channel": "deliver",
+      "status": "outside_template",
+      "reason": "no accepted sender handoff",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "duplicate",
+        "relief_action": "fresh",
+        "sender_handoff": "absent",
+        "served": null,
+        "receipt": "absent",
+        "view": null,
+        "action": null
+      },
+      "conditional": null
+    },
+    {
+      "ticket": "si-1c1135b3a2a365be",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "settles",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "replace-original",
+        "sender_handoff": "original",
+        "served": "original",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "replace_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            1
+          ],
+          "guaranteed": [
+            "replace_received"
+          ],
+          "action_guaranteed": true,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-d6a136ca7e4bf8d1",
+      "outgoing": "draft",
+      "relief": "replace",
+      "fate": "settles",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "duplicate",
+        "relief_action": "replace-draft",
+        "sender_handoff": "draft",
+        "served": "draft",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "replace_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": false,
+          "reason": "sender handed over draft, not the original"
+        }
+      }
+    },
+    {
+      "ticket": "si-24618ead1522e201",
+      "outgoing": "draft",
+      "relief": "resume",
+      "fate": "fails",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "join-draft",
+        "sender_handoff": "draft",
+        "served": "draft",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "resume_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": false,
+          "reason": "sender handed over draft, not the original"
+        }
+      }
+    },
+    {
+      "ticket": "si-42d32f515443a2d3",
+      "outgoing": "idle",
+      "relief": "idle",
+      "fate": "fails",
+      "channel": "deliver",
+      "status": "no_decision",
+      "reason": "native ledger has no resolve",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "omission",
+        "relief_action": "absent",
+        "sender_handoff": "absent",
+        "served": null,
+        "receipt": "absent",
+        "view": null,
+        "action": null
+      },
+      "conditional": null
+    },
+    {
+      "ticket": "si-3c710acdaa429092",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "settles",
+      "channel": "withhold",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "close",
+        "sender_handoff": "original",
+        "served": "none",
+        "receipt": "before_decision",
+        "view": "empty",
+        "action": "close"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-8d37d0777f34c365",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "fails",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "replace-original",
+        "sender_handoff": "original",
+        "served": "original",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "replace_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            1
+          ],
+          "guaranteed": [
+            "replace_received"
+          ],
+          "action_guaranteed": true,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-7570d87c985c30ea",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "fails",
+      "channel": "withhold",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "omission",
+        "relief_action": "close",
+        "sender_handoff": "original",
+        "served": "none",
+        "receipt": "before_decision",
+        "view": "empty",
+        "action": "close"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-16628251379828d3",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "fails",
+      "channel": "withhold",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "omission",
+        "relief_action": "close",
+        "sender_handoff": "original",
+        "served": "none",
+        "receipt": "before_decision",
+        "view": "empty",
+        "action": "close"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-93b4d29020345eb5",
+      "outgoing": "idle",
+      "relief": "idle",
+      "fate": "settles",
+      "channel": "deliver",
+      "status": "no_decision",
+      "reason": "native ledger has no resolve",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "absent",
+        "sender_handoff": "absent",
+        "served": null,
+        "receipt": "absent",
+        "view": null,
+        "action": null
+      },
+      "conditional": null
+    },
+    {
+      "ticket": "si-58eb44feac2e10ee",
+      "outgoing": "draft",
+      "relief": "resume",
+      "fate": "settles",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "duplicate",
+        "relief_action": "join-draft",
+        "sender_handoff": "draft",
+        "served": "draft",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "resume_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": false,
+          "reason": "sender handed over draft, not the original"
+        }
+      }
+    },
+    {
+      "ticket": "si-56eb464e42a3b592",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "fails",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 0
+        },
+        "grade": 0,
+        "outcome": "omission",
+        "relief_action": "join-original",
+        "sender_handoff": "original",
+        "served": "original",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "resume_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [
+            "replace_received"
+          ],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-5b7b9dbc720d7132",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "settles",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "join-original",
+        "sender_handoff": "original",
+        "served": "original",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "resume_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [
+            "replace_received"
+          ],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        }
+      }
+    },
+    {
+      "ticket": "si-3c1dd43fb19073e1",
+      "outgoing": "draft",
+      "relief": "replace",
+      "fate": "fails",
+      "channel": "deliver",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "replace-draft",
+        "sender_handoff": "draft",
+        "served": "draft",
+        "receipt": "before_decision",
+        "view": "received",
+        "action": "replace_received"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": false,
+          "reason": "sender handed over draft, not the original"
+        }
+      }
+    },
+    {
+      "ticket": "si-a05885b6627797a5",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "settles",
+      "channel": "withhold",
+      "status": "analyzed",
+      "reason": "",
+      "observed": {
+        "native": {
+          "outgoing_disposition": "returned",
+          "relief_disposition": "returned",
+          "reward_valid": true,
+          "reward": 1
+        },
+        "grade": 1,
+        "outcome": "exactly_one",
+        "relief_action": "close",
+        "sender_handoff": "original",
+        "served": "none",
+        "receipt": "before_decision",
+        "view": "empty",
+        "action": "close"
+      },
+      "conditional": {
+        "opaque": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        },
+        "original_only": {
+          "applies": true,
+          "grades": [
+            0,
+            1
+          ],
+          "guaranteed": [],
+          "action_guaranteed": false,
+          "grade_in_range": true
+        }
+      }
+    }
+  ],
+  "totals": {
+    "cases": {
+      "registered": 16,
+      "missing": 0,
+      "unqualified": 0,
+      "no_decision": 2,
+      "outside_template": 2,
+      "unobserved": 0,
+      "off_view": 0,
+      "analyzed": 12,
+      "uncertain": 4
+    },
+    "observed": {
+      "qualified": 16,
+      "grade_1": 9,
+      "grade_0": 7,
+      "receipt_absent": 4,
+      "receipt_before_decision": 12,
+      "receipt_after_decision": 0,
+      "receipt_without_decision": 0,
+      "sender_absent": 4,
+      "sender_original": 8,
+      "sender_draft": 4,
+      "sender_none": 0,
+      "view_received": 8,
+      "view_empty": 4,
+      "action_stop": 0,
+      "action_close": 4,
+      "action_fresh": 0,
+      "action_resume_received": 4,
+      "action_replace_received": 4,
+      "reads_unrecorded": 12
+    },
+    "conditional": {
+      "opaque": {
+        "applies": 12,
+        "not_applicable": 0,
+        "grade_in_range": 12,
+        "grade_out_of_range": 0,
+        "action_guaranteed": 0
+      },
+      "original_only": {
+        "applies": 8,
+        "not_applicable": 4,
+        "grade_in_range": 8,
+        "grade_out_of_range": 0,
+        "action_guaranteed": 2
+      }
+    },
+    "deviations": 0,
+    "verdict": "within_range"
+  },
+  "limits": [
+    "retrospective classification of 16 scripted Oracle controls, not an independent replication or a model result",
+    "public cuts record handoff, inbox and resolve events only; relief GET /brief, /status and the ready flag are not recorded and are never inferred",
+    "an inbox event shows what the handler served, not what a seat read, perceived or intended",
+    "original and draft labels in handoff and served fields are assessor-side identities the relief seat cannot see",
+    "a missing resolve is reported as no_decision, never as the frontier stop action",
+    "the pinned verifier rejects a repeated inbox, an inbox before the handoff, or a served value that contradicts the handoff and channel; such rows are unqualified",
+    "original_only grades apply only where the sender handed over the original; otherwise that model is not applicable",
+    "grade sets are ranges over compatible hidden states, never probabilities",
+    "native seats, reward_valid and reward are producer claims; this recipient cannot reauthenticate raw trials, locks or identities",
+    "replayed grades come from the pinned repo verifier over redacted public cuts with a fixed placeholder run",
+    "scripted controls only; no estimate of model behavior"
+  ],
+  "frontier_limits": [
+    "pinned role handlers and native verifiers called in process; HTTP framing, bearer checks, seat containers and models are not exercised",
+    "hidden cases are enumerated, never sampled or weighted; a grade set is a range, not a rate",
+    "the delivered value is one fixed public stand-in X; the draft case swaps the private identities, never the delivered bytes",
+    "explicit null handoffs keep the unswapped identity order; the relief view carries no reference in those cases",
+    "original_only is an assumed sender convention that filters hidden cases; it is not a signal in the relief view",
+    "view digests cover only relief GET /brief, /status and /inbox before the decision; outgoing replies and later reads are excluded",
+    "one accepted handoff and one irreversible relief move; not a bound on multi-turn team protocols",
+    "archived native cuts are not read; whether their grades fall inside these sets is a separate report that needs eligible evidence",
+    "a nonpass group is not assessed: its empty aggregate grades and guarantees are not proof of absence; per-case cells keep raw grades, null where no grade exists"
+  ]
+}
