@@ -28,6 +28,7 @@ _CAMPAIGN = f"{_SHIPPING}/samples/disconnected-workers"
 _OPTIONS = f"{_SHIPPING}/samples/receiver-options"
 _JOURNAL = f"{_RESULTS}/seat-event-stream"
 _GATE = f"{_JOURNAL}/return-gate"
+_JOBS = f"{_JOURNAL}/native-jobs"
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,6 +372,28 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_GATE}/gate-stopped.wait.json",
         exit_code=1,
         sha256="1b2e9aa23b84218bc73a469f4de139ca4a848823b1710320d7a3a7c04e7b20d7",
+    ),
+    Study(
+        id="seat-job-observed",
+        question="Can the operator bind both attempts in a native job to their complete seat journals?",
+        kind="native-scripted-calibration",
+        guide=f"{_JOBS}/results.md",
+        module="examples.seatlab.workbench.job_stream",
+        argv=(f"{_JOBS}/job-return", "--json"),
+        report=f"{_JOBS}/job-return.panel.json",
+        exit_code=0,
+        sha256="0f48515c97d91c451a04012f2fa2f3ade74a64f3b8acb2bc4d93a1cf1aa6e442",
+    ),
+    Study(
+        id="seat-job-unobserved",
+        question="Does a completed native job remain unobserved when it resumes with the plugin?",
+        kind="native-scripted-calibration",
+        guide=f"{_JOBS}/results.md",
+        module="examples.seatlab.workbench.job_stream",
+        argv=(f"{_JOBS}/job-default", "--json"),
+        report=f"{_JOBS}/job-default.panel.json",
+        exit_code=1,
+        sha256="9f0fa04ea6a51658cd52a9692e7fce4355a57226c3d80f602cf1110249723aaa",
     ),
 )
 
