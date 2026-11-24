@@ -1,0 +1,24 @@
+{
+  "schema": "harbor.schedule-exit-pack.question/v1",
+  "question": "Can a second operator recover the standing-grade bounds at a clean seat return on real two-seat teams, change the clock allowance, and lose a worker shard, without receiving raw trials or answer strings?",
+  "population": "The same 8 original Flotilla scheduling job locks as schedule-seat-exit-question.json. Keep locked slots, invalid results and verified seat timeouts separate. No new model trials.",
+  "inputs_already_known": "The stock results at null, 0, 1000 and 5000 milliseconds were available before this protocol. This is an archival systems qualification, not a new independent model cohort.",
+  "drift_ms": [null, 0, 100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000],
+  "observation_models": "Null means no clock alignment. The other settings assume a fresh stock world and the stated bound on the discrepancy between elapsed host and world intervals. A time recorded before one write is not an upper bound on that write.",
+  "primary_population": "Trials where both seats completed. Repeat with verified standing grades after seat timeouts. Infer shared task keys independently in each population, from all its present eligible rows. A job filter changes measured rows, not the key reference population.",
+  "pass": [
+    "The owner exports one shard per native lock. The complete cold replay matches the raw stock reader on every registered setting and both populations for native successes, gains, losses, net changes and frozen-board successes.",
+    "On missing, duplicated, changed or foreign shards, no reader can silently shrink the 192-slot registered population or treat unknown grades as zero. Reject invalid files or mark their whole shard unscored.",
+    "The public sample contains only allowed fields. It must contain no original run or job UUID, task digest, answer string, message, model identifier, timestamp, path, secret, or task-to-label map. It may reveal within-pack equality, trial lengths, ordering, coarse return windows and reward. It is not anonymous proof of data origin."
+  ],
+  "secondary_readout": "Report which tested clock allowances still force loss of at least one completed native success, and whether any tested allowance forces a signed net effect. Do not interpolate between settings or present partial-identification bounds as confidence intervals.",
+  "wire_contract": {
+    "manifest": "{schema:harbor.schedule-exit-pack.manifest/v1,pack:random_uuid4,drift_ms:fixed_grid,jobs:[{job:1_based_contiguous_index,slots:locked_count,sha256:hex_digest_of_exact_shard_bytes}]}",
+    "shard": "{schema:harbor.schedule-exit-pack.shard/v1,pack:manifest_uuid,job:index,rows:[one row per locked slot]}. Public slot numbers are 1-based row positions. They do not identify native attempts.",
+    "unscored_row": "{status:missing_slot|ambiguous_slot|missing_evidence|invalid_evidence|rubric_ambiguous|duplicate_trial|not_two_seats}. The reader also computes conflicting_reference and seat_timeout where appropriate.",
+    "evidence_row": "{status:evidence,task:random_release_local_64hex,condition:talk|silent,timed_out:bool,reward:0|1,writes:[opaque_task_local_choice_or_null],trigger:observed|unknown|absent,first:p1|p2|null,clean:0|1|2|null,cuts:[[start_grid_index,stock_reason,lo,hi],...]}. Cuts are run-length encoded, start at index 0, include all changes and end at the last grid setting. Writes preserve equality within one release-local task, not preimages. Null includes a write with no legal normalized answer. Prefix zero has no valid answer.",
+    "blinding": "Choose fresh random task labels and a fresh uniform permutation of the 35 possible choices per task for each export. The pack contains no native identifiers and not even a hash of the raw records. The manifest hashes its published shards only. Exports from different releases are not joinable by the protocol. Distinctive behavior can still be recognizable.",
+    "scope": "This pack supports the frozen-answer shadow question only. It does not contain enough data to revalidate raw native evidence, check the operator's clock assumption, change the trigger or assess model intent, speedup or an enforced stop."
+  },
+  "cost_usd": 0
+}
