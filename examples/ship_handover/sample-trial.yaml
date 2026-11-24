@@ -1,0 +1,17 @@
+task:
+  path: examples/tasks/ship-handover
+environment:
+  type: docker
+  delete: true
+  env:
+    SH_PRIOR: dropped
+    SH_CHANNEL: deliver
+participants:
+  - seat: outgoing
+    name: oracle
+    env:
+      SH_POLICY: original
+  - seat: relief
+    name: oracle
+    env:
+      SH_POLICY: resume

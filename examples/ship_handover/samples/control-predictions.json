@@ -1,0 +1,511 @@
+{
+  "schema": "harbor.ship-handover.control-predictions/v1",
+  "registered_utc": "2026-11-24T08:51:03.403443+00:00",
+  "question": "Can the native task distinguish safe recovery under seat turnover from an inherited success, an omission, or duplicate dispatch?",
+  "unit": "One unique first attempt with two scripted native seats. No model performance is inferred.",
+  "arms": "Cross committed and dropped prior requests with delivering or withholding a handoff. Add named known-role policies and nonwaiting controls. No fixture hint or supplier state returns to seats. Opaque handles are newly generated for every run.",
+  "pass": "All 26 tickets must be present exactly once and produce a valid native grade with both seats under test. Compare all 9 listed fields per team. Report any bad or missing cells without replacement. The outgoing and relief briefs must not distinguish the hidden supplier result at fixed private references. Inaction must preserve a pre-existing dispatch, not count as an active recovery.",
+  "expense_usd": 0,
+  "cells": [
+    {
+      "ticket": "sh-b948b3ba0415b4b4",
+      "outgoing_handoff": "absent",
+      "relief_action": "fresh",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "first_dispatch",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 1
+      },
+      "timeline": [
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-dfebc293dfd46fe2",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "none",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-0543aaa04e80f7da",
+      "outgoing_handoff": "draft",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "none",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-d309a143a10761a3",
+      "outgoing_handoff": "original",
+      "relief_action": "fresh",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "original",
+      "effect_change": "duplicate_dispatch",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 1
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "duplicate",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-6161d87f1647ab47",
+      "outgoing_handoff": "original",
+      "relief_action": "absent",
+      "inbox_before_resolve": null,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-e44e0683e00f9611",
+      "outgoing_handoff": "none",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "none",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-d70fa9165058dcf4",
+      "outgoing_handoff": "original",
+      "relief_action": "original",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "original",
+      "effect_change": "first_dispatch",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-0eaad13de7fa90fa",
+      "outgoing_handoff": "absent",
+      "relief_action": "absent",
+      "inbox_before_resolve": null,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-22c73be98e3f0b9b",
+      "outgoing_handoff": "absent",
+      "relief_action": "close",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-b2ca0dd795858f27",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "resolve",
+        "handoff",
+        "inbox"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-9b7a44887d3d680e",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "resolve",
+        "handoff",
+        "inbox"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-2e48bd7445c13492",
+      "outgoing_handoff": "original",
+      "relief_action": "original",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "original",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-90960c2b25dc21f3",
+      "outgoing_handoff": "absent",
+      "relief_action": "close",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "resolve"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-0c8a5db89b8b371d",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "resolve",
+        "handoff",
+        "inbox"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-62cd44a0680734d6",
+      "outgoing_handoff": "draft",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "none",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-6bd8cfc80c5cb6b2",
+      "outgoing_handoff": "none",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "none",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-e73e1687ff6d7047",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "none",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-ec79649690f4b3ed",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "original",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-3bc8168d59f1177a",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "original",
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-5420923ff432828b",
+      "outgoing_handoff": "original",
+      "relief_action": "fresh",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "original",
+      "effect_change": "first_dispatch",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 1
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-70a345bb012b07c5",
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "resolve",
+        "handoff",
+        "inbox"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-7253e3fa1ef043dc",
+      "outgoing_handoff": "absent",
+      "relief_action": "fresh",
+      "inbox_before_resolve": false,
+      "reference_before_resolve": null,
+      "effect_change": "duplicate_dispatch",
+      "effects": {
+        "original": 1,
+        "draft": 0,
+        "fresh": 1
+      },
+      "timeline": [
+        "resolve"
+      ],
+      "outcome": "duplicate",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-401fe321d0a3ae24",
+      "outgoing_handoff": "absent",
+      "relief_action": "absent",
+      "inbox_before_resolve": null,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [],
+      "outcome": "omission",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-9ea94502c35bef66",
+      "outgoing_handoff": "draft",
+      "relief_action": "draft",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "draft",
+      "effect_change": "first_dispatch",
+      "effects": {
+        "original": 0,
+        "draft": 1,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "exactly_one",
+      "grade": 1
+    },
+    {
+      "ticket": "sh-d96dd3388f9bd018",
+      "outgoing_handoff": "draft",
+      "relief_action": "draft",
+      "inbox_before_resolve": true,
+      "reference_before_resolve": "draft",
+      "effect_change": "duplicate_dispatch",
+      "effects": {
+        "original": 1,
+        "draft": 1,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff",
+        "inbox",
+        "resolve"
+      ],
+      "outcome": "duplicate",
+      "grade": 0
+    },
+    {
+      "ticket": "sh-8bb758aabfa4019b",
+      "outgoing_handoff": "original",
+      "relief_action": "absent",
+      "inbox_before_resolve": null,
+      "reference_before_resolve": null,
+      "effect_change": "unchanged",
+      "effects": {
+        "original": 0,
+        "draft": 0,
+        "fresh": 0
+      },
+      "timeline": [
+        "handoff"
+      ],
+      "outcome": "omission",
+      "grade": 0
+    }
+  ]
+}
