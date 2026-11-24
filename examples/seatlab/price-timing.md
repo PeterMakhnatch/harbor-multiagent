@@ -15,3 +15,27 @@
 **Pass/fail rule, fixed before the first live turn.** Require both valid deliveries, actual acknowledgments, verified subscription sessions, and fresh stock settlements for every registered pair. Average the 2 profit differences within each company, then weight the 8 companies equally. Count a benefit only if the mean is positive, at least one price choice differs, and the one-sided exact sign test across companies gives `p ≤ 0.05`. Drop exact zero company differences only from that sign test; if all tie, use `p = 1`. This tests a consistent positive direction under independent equally likely signs, not the magnitude of a population effect. A nonpassing complete panel means this experiment does not establish a benefit. A pre-checkpoint bankruptcy, invalid reply, missing verified receipt or ungraded pair makes the registered benefit test inconclusive. Keep every first attempt. Show observable price commitments even if a later acknowledgment fails. Never price a missing branch as zero or claim that missing token usage is zero.
 
 **Scope.** This is a restricted price-setting task in the released stock simulator. It is not the published open-ended benchmark, an estimate of profit for real retailers, or 32 independent companies. The two finance continuations in each pair implement alternative futures, not two directors jointly running one company.
+
+## Run one new comparison
+
+Use Python 3.12 with NumPy 2.1.3 for `STOCK_PYTHON`. Point `BESPOKE_STOCK` at the [released benchmark checkout](https://github.com/bespokelabsai/multi-agent-coordination-bench/tree/dbec43ff757c86c17077e61b37c7f584c880bdee) at the registered revision. Use the [fork's isolated native setup](../../README.md#seatlab-workbench) for `HARBOR_PYTHON`. Do not replace a global Harbor installation. Docker must run locally. `SLOT_WRAPPER` must be the shared launcher that limits concurrent Docker trials. On the study host it is `/tmp/crucible-docker-slot.sh`.
+
+The live adapter supports personal `agy` 1.5.15 with `gemini-4-carbon-low`. Each live turn checks the route, client version, zero spendable AI credits, and the remaining quota. It denies tools and paid fallback. The client runs in an empty workspace. Never put credentials in the task, trial config, or Docker environment. The control does not call the model.
+
+```sh
+m=examples.seatlab.market_handoff
+root=$(cd "$(mktemp -d)" && pwd -P)
+client=$(command -v agy)
+"$STOCK_PYTHON" -B -m "$m.timing_study" run --root "$root" \
+  --stock "$BESPOKE_STOCK" --world 8 --repeat 0 --control \
+  --native-python "$HARBOR_PYTHON" --client "$client" --slot "$SLOT_WRAPPER"
+```
+
+For a **new live team**, use `--world 0 --repeat 0` instead of `--world 8 --repeat 0 --control`. For the full design, issue worlds 0–7 with repetitions 0 and 1. Two operators can share `root` and issue distinct cells. A cell refuses a second launch. Keep the private root; it contains the native trial and original client receipts.
+
+To inspect an existing cell without starting seats or Docker, run:
+
+```sh
+"$STOCK_PYTHON" -B -m "$m.timing_study" inspect --root "$root" \
+  --stock "$BESPOKE_STOCK" --world 0 --repeat 0
+```

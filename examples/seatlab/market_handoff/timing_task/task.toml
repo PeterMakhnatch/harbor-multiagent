@@ -1,0 +1,30 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/timing.json", "/logs/world/timing-journal.json"]
+
+[task]
+name = "harbor/seatlab-price-timing-native"
+description = "A sales analyst reports once, and two finance leads each commit one price for the same simulated retail company, one before and one after reading the report."
+keywords = ["seats", "docker-compose", "multi-agent", "seatlab"]
+
+[metadata]
+difficulty = "medium"
+category = "example"
+tags = ["seats", "coordination", "timing"]
+
+[verifier]
+timeout_sec = 30.0
+
+[agent]
+timeout_sec = 900.0
+
+[environment]
+build_timeout_sec = 120.0
+
+[agents.sales]
+under_test = true
+
+[agents.finance_a]
+under_test = true
+
+[agents.finance_b]
+under_test = true

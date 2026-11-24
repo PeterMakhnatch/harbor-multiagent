@@ -14,6 +14,8 @@ Prospective protocol, 2026-11-23. No study company, sender, or receiver has run 
 
 Source: [released Seed to Profit task and simulator](https://github.com/bespokelabsai/multi-agent-coordination-bench/tree/dbec43ff757c86c17077e61b37c7f584c880bdee/tasks/seed-to-profit). Prior experiment: [selection using the public team board](continuation-study.md). The selection study asks which recorded team to continue. This study instead asks which action two new agents should take in a fresh world.
 
+Follow-up: [deliver the same report before or after a live finance decision](price-timing.md). This experiment changes the timing, not the company behind the report. Its primary outcome is operating profit in simulated dollars.
+
 ## Native transport test (separate from the 12-pair experiment)
 
 Question: does Olam Harbor deliver the same sales message to the finance seat and return the selected stock reward? Test world 0 with its own sales agent and world 1 with a donor. These cells are fixed before inspecting any target payoff. Start a real local Docker session for each cell. First use the sealed picks; then use one fresh direct Flash turn per seat if the shared meter permits. Do not retry a model to match an earlier choice. This is a transport test, not a second efficacy estimate.
