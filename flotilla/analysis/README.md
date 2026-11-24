@@ -243,6 +243,41 @@ requests by event kind (send, deliver, submit, whoami, denied, probe) and except
   example a newer world) changed; the world version then follows the folder unless the trial's own
   events record it. A `world_version` field in the world's `start` event would make it exact.
 
+## Trial timeline
+
+```bash
+cd flotilla/analysis
+python3 -m flotilla_analysis.timeline TRIAL_DIR -o trial.html            # one trial
+python3 -m flotilla_analysis.timeline --index JOBS 'lw1-*' -o OUTDIR     # a page per trial + index.html
+python3 -m flotilla_analysis.timeline TRIAL_DIR -o t.html --gap 60 --tasks TASKS --manifest FILE
+```
+
+`flotilla-timeline` (installed by `pip install .`) writes one self-contained HTML page per trial (inline
+CSS and a few lines of JavaScript, no external files). The page has one column per seat plus a `world`
+column, on one clock:
+
+- world events from `events.jsonl` (send, deliver with `via: gate`, gated, request, propose/accept/decline,
+  submit, late, denied, probe, freeze, and the polls look/wait/state/whoami);
+- messages (sender → recipients; the full text expands), taken from `world-state.json` when the event log
+  lacks their `send` event;
+- agent steps from the ATIF trajectories: model request time (Harbor's `api_request_times_msec`, when it
+  has one entry per step), keystrokes, an observation excerpt, the model's text, tokens and cost;
+- agent start and end per seat and the verifier start.
+
+The header gives the task label, family and variant, condition, instance, seat models, reward and the
+`score.json` fields, the phase durations (environment setup, agent setup, agent execution, verifier),
+the total cost, flags and evidence problems. World zero is `play.world_start_bound` (above): the
+world started at or after it, so a world event is shown at or before the moment it happened. A step
+is shown at its ATIF timestamp, after its commands ran. A step more than `--gap` seconds (default 120)
+after the seat's previous step or agent start, and an agent end that long after the last step, is
+outlined and flagged `stall`. Every trial text is HTML-escaped. Long texts are cut and the cut states
+the full length: observations at 1,500 characters, each keystroke batch at 600, messages at 4,000.
+
+With `--index`, PATH is a jobs folder and GLOB selects job folders in it. `index.html` lists every trial
+(label, condition, instance, models, reward, agent time, cost, messages, steps and flags: stall,
+error, unscored, gated/denied/probe/late/invalid/bad_token counts, evidence problems) and links its
+page; click a column head to sort. `--tasks` and `--manifest` work as for `flotilla-analyze`.
+
 ## Tests
 
 ```bash

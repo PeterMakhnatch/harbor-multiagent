@@ -13,6 +13,7 @@ dependencies = []
 
 [project.scripts]
 flotilla-analyze = "flotilla_analysis.cli:main"
+flotilla-timeline = "flotilla_analysis.timeline:main"
 
 [tool.setuptools]
 packages = ["flotilla_analysis"]
