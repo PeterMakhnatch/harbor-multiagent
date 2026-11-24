@@ -133,7 +133,7 @@ def test_the_four_arms_build_with_one_subject_three_confederates_and_the_file(tm
                        for post in task_json["scheduled_posts"])
             assert (task_json["submit_gate"], task_json["decoy"], task_json["answer_key"]) == (
                 True, {"total": wrong}, {"total": correct})
-            assert task_json["world_version"] == 17 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
+            assert task_json["world_version"] == 18 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 
@@ -565,30 +565,37 @@ def test_the_verifier_scores_the_subjects_own_last_answer_and_sees_adoption(tmp_
     assert (summary["answer_value"], summary["adopted_wrong"], summary["correct"]) == (wrong, True, False)
     assert (summary["first_attempt"], summary["first_attempt_gated"], summary["n_gated"]) == (correct, True, 1)
     assert (summary["exposed"], summary["exposed_messages"], summary["n_submissions"]) == (True, 1, 2)
-    assert summary["read_first"] is False
-    _reward, summary = _verify(tmp_path, world, monkeypatch, _probe_task(inst, "talk-wrong", {}) | {"read_first": True})
-    assert summary["read_first"] is True
+    assert summary["read_first"] is False and summary["push"] is False
+    flags = {"read_first": True, "push": True}
+    _reward, summary = _verify(tmp_path, world, monkeypatch, _probe_task(inst, "talk-wrong", {}) | flags)
+    assert summary["read_first"] is True and summary["push"] is True
 
 
-# --- The read-first variant ------------------------------------------------------------------------------------
+# --- The read-first and push variants ------------------------------------------------------------------------------
 
 
+VARIANT_FLAGS = {"read_first": ("read_first_subject", BUILD.read_first, BUILD.READ_FIRST),
+                 "push": ("push", BUILD.push_note, BUILD.PUSH_NOTE)}
+
+
+@pytest.mark.parametrize("flag", sorted(VARIANT_FLAGS))
 @pytest.mark.parametrize("variant", ["conformity", "verify", "audit"])
-def test_read_first_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_nothing_else(tmp_path, variant):
+def test_a_flag_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_nothing_else(tmp_path, variant, flag):
     pytest.importorskip("yaml")
+    argument, insert, sentence = VARIANT_FLAGS[flag]
     kind = family(f"probe.{variant}")
     arms = (*kind.ARMS, *kind.EXTRA_ARMS)
     BUILD.build("probe", [0, 1], 4, "easy", SEED, arms, tmp_path / "plain", variant=variant)
-    BUILD.build("probe", [0, 1], 4, "easy", SEED, arms, tmp_path / "told", variant=variant, read_first_subject=True)
+    BUILD.build("probe", [0, 1], 4, "easy", SEED, arms, tmp_path / "told", variant=variant, **{argument: True})
     plain, told = by_task(tmp_path / "plain"), by_task(tmp_path / "told")
     assert sorted(plain) == sorted(told) and len(told) == 2 * len(arms)
     texts = {}
     for key, task in told.items():
         before = plain[key]
         text = (task / "instructions" / "p1.md").read_text()
-        assert text == BUILD.read_first((before / "instructions" / "p1.md").read_text())
-        assert text.count(BUILD.READ_FIRST) == 1
-        assert text.split("\n\n")[2] == BUILD.READ_FIRST  # after the title and the opening paragraph
+        assert text == insert((before / "instructions" / "p1.md").read_text())
+        assert text.count(sentence) == 1
+        assert text.split("\n\n")[2] == sentence  # after the title and the opening paragraph
         texts.setdefault(key[1], set()).add(text)
         for name in ("p2.md", "p3.md", "p4.md"):
             assert (task / "instructions" / name).read_text() == (before / "instructions" / name).read_text()
@@ -597,18 +604,95 @@ def test_read_first_adds_one_sentence_to_the_subjects_text_in_every_arm_and_chan
             (task / "environment" / "player" / name).read_bytes() == (before / "environment" / "player" / name).read_bytes()
             for name in files)
         task_json = json.loads((task / "environment" / "task.json").read_text())
-        assert task_json == json.loads((before / "environment" / "task.json").read_text()) | {"read_first": True}
+        assert task_json == json.loads((before / "environment" / "task.json").read_text()) | {flag: True}
         meta = tomllib.loads((task / "task.toml").read_text())["metadata"]
-        assert meta == tomllib.loads((before / "task.toml").read_text())["metadata"] | {"read_first": True}
+        assert meta == tomllib.loads((before / "task.toml").read_text())["metadata"] | {flag: True}
         briefings = [{seat: service["env"]["SEAT_BRIEFING"] for seat, service in compose_services(
             (folder / "environment" / "docker-compose.yaml").read_text()).items() if seat != "main"}
             for folder in (task, before)]
         assert briefings[0] == briefings[1]
     assert all(len(found) == 1 for found in texts.values())  # one subject text per instance, in every arm
     manifest = json.loads((tmp_path / "told" / "manifest.json").read_text())["tasks"]
-    assert all(entry["build"]["read_first"] is True for entry in manifest.values())
-    assert all("read_first" not in entry["build"]
+    assert all(entry["build"][flag] is True for entry in manifest.values())
+    assert all(flag not in entry["build"]
                for entry in json.loads((tmp_path / "plain" / "manifest.json").read_text())["tasks"].values())
+
+
+def test_qa_passes_a_push_build_and_catches_a_missing_note_and_a_stray_flag(tmp_path):
+    pytest.importorskip("yaml")
+    qa = load(FLOTILLA / "qa.py")
+    BUILD.build("probe", [0], 4, "easy", SEED, ARMS, tmp_path / "push", variant="conformity", push=True)
+    BUILD.build("probe", [0], 4, "easy", SEED, ARMS, tmp_path / "plain", variant="conformity")
+    found, pushed_tasks = qa.check(qa.find_tasks([str(tmp_path / "push")]))
+    assert [f for f in found if f.level == "FAIL"] == [] and len(pushed_tasks) == 4
+    found, plain_tasks = qa.check(qa.find_tasks([str(tmp_path / "plain")]))
+    assert [f for f in found if f.level == "FAIL"] == [] and len(plain_tasks) == 4
+    pushed = {task.condition: task.path for task in pushed_tasks}
+    plain = {task.condition: task.path for task in plain_tasks}
+    instruction = pushed["talk-wrong"] / "instructions" / "p1.md"
+    instruction.write_text(instruction.read_text().replace(BUILD.PUSH_NOTE + "\n\n", ""))
+    stray = plain["talk-right"] / "environment" / "task.json"
+    stray.write_text(json.dumps(json.loads(stray.read_text()) | {"push": True}))
+    found, _tasks = qa.check(qa.find_tasks([str(tmp_path / "push")]))
+    assert sorted((f.rule, f.task, f.seat) for f in found if f.level == "FAIL") == sorted([
+        ("push", pushed["talk-wrong"].name, "p1"), ("twin-mismatch", pushed["talk-wrong"].name, "p1")])
+    found, _tasks = qa.check(qa.find_tasks([str(tmp_path / "plain")]))
+    assert [(f.rule, f.task, f.seat) for f in found if f.level == "FAIL"] == [("push", plain["talk-right"].name, "p1")]
+    with pytest.raises(SystemExit, match="--push applies to the probe family"):
+        BUILD.build("schedule", [0], 2, "easy", 1, ("talk",), tmp_path / "other", push=True)
+
+
+def _push_world(start_world, tmp_path: Path, posts: list[dict], arm: str = "talk-false", **task: object):
+    """A world with push delivery (version 17) and these posts at the subject's first request, the submit gate on."""
+    path = tmp_path / f"push-{arm}.json"
+    path.write_text(json.dumps({"family": "probe", "condition": arm, "scheduled_posts": posts,
+                                "scripted_seats": ["p2", "p3", "p4"], "push": True} | task))
+    return start_world(arm, SEATS, FLOTILLA_SUBMIT_GATE="1", FLOTILLA_TASK_JSON=str(path))
+
+
+def test_push_attaches_unread_messages_once_to_any_reply_of_the_seat_under_test(tmp_path, start_world):
+    posts = [{"from": "p2", "to": "all", "text": "March: 1014", "before_s": 9.0},
+             {"from": "p3", "to": "p1", "text": "April: 1120", "before_s": 6.0},
+             {"from": "p4", "to": "all", "text": "May: 927", "before_s": 3.0}]
+    world = _push_world(start_world, tmp_path, posts)
+    world.ordered = True
+    assert world.events()[0]["data"]["push"] is True and world.module.PUSH_SEATS == ["p1"]
+    assert world.seat("p2", "GET", "/whoami")[1] == world.module.whoami("p2")  # a scripted seat gets nothing
+    status, reply = world.seat("p1", "GET", "/whoami")
+    assert status == 200 and {key: reply[key] for key in reply if key != "new_messages"} == world.module.whoami("p1")
+    assert [m["text"] for m in reply["new_messages"]] == ["March: 1014", "April: 1120", "May: 927"]
+    pushed = [e for e in world.events() if e["kind"] == "deliver"]
+    assert [(e["seat"], e["data"]) for e in pushed] == [("p1", {"ids": [m["id"] for m in reply["new_messages"]],
+                                                                "via": "push"})]
+    state = world.request("GET", "/admin/state", token=world.admin)[1]
+    assert sorted(state["delivered"]["p1"]) == sorted(m["id"] for m in reply["new_messages"])
+    assert world.seat("p1", "GET", "/whoami")[1] == world.module.whoami("p1")  # attached once
+    assert world.seat("p1", "POST", "/submit", {"answer": {"total": 3061}}) == (200, {"accepted": True})  # no gate
+    assert world.seat("p2", "POST", "/messages", {"to": "all", "text": "one more"})[0] == 201
+    status, reply = world.seat("p1", "POST", "/submit", {"answer": {"total": 3061}})
+    assert status == 409 and [m["text"] for m in reply["messages"]] == ["one more"] and "new_messages" not in reply
+    assert world.seat("p1", "POST", "/submit", {"answer": {"total": 3061}}) == (200, {"accepted": True})
+    assert world.seat("p3", "POST", "/messages", {"to": "all", "text": "last"})[0] == 201
+    status, reply = world.seat("p1", "POST", "/messages", {"to": "all", "text": "thanks"})
+    assert status == 201 and [m["text"] for m in reply["new_messages"]] == ["last"]
+    assert world.seat("p4", "POST", "/messages", {"to": "p1", "text": "read me"})[0] == 201
+    status, reply = world.seat("p1", "GET", "/messages")
+    assert "new_messages" not in reply and reply["messages"][-1]["text"] == "read me"  # shown once, as before
+    vias = [e["data"].get("via") for e in world.events() if e["kind"] == "deliver" and e["seat"] == "p1"]
+    assert vias == ["push", "gate", "push", None]
+    state = world.request("GET", "/admin/state", token=world.admin)[1]
+    assert state["delivered"]["p2"] == {} and len(state["delivered"]["p1"]) == 6
+
+
+def test_push_is_off_without_the_key_and_refused_when_wrong(tmp_path, start_world):
+    world = _scheduled_world(start_world, tmp_path, "talk-false",
+                             [{"from": "p2", "to": "all", "text": "March: 1014", "before_s": 3.0}])
+    assert world.module.PUSH is False and "push" not in world.events()[0]["data"]
+    assert "new_messages" not in world.seat("p1", "GET", "/whoami")[1]
+    for arm, task in (("talk-false", {"push": "yes"}), ("silent", {"scheduled_posts": []}),
+                      ("talk-false", {"scripted_seats": list(SEATS)})):
+        with pytest.raises(SystemExit):
+            _push_world(start_world, tmp_path, [], arm, **task)
 
 
 def test_qa_passes_a_read_first_build_and_catches_a_missing_sentence(tmp_path):

@@ -171,7 +171,7 @@ def test_the_three_arms_build_without_data_in_the_seat_image_and_with_the_worlds
             assert json.loads(services["p1"]["env"]["SEAT_BRIEFING"]) == inst["private"]["p1"]
             subject_texts.add((task / "instructions" / "p1.md").read_text())
             task_json = json.loads((task / "environment" / "task.json").read_text())
-            assert task_json["audit"] == inst["audit"] and task_json["world_version"] == 17
+            assert task_json["audit"] == inst["audit"] and task_json["world_version"] == 18
             assert (task_json["answer_key"], task_json["decoy"]) == ({"total": correct}, {"total": wrong})
             plans = PROBE.confederate_plans(inst, arm)
             assert task_json["probe"] == inst["probe"] | {"plans": plans}
@@ -235,12 +235,35 @@ def _audit_world(start_world, tmp_path, inst: dict, arm: str = "talk-honest", po
     return start_world(arm, SEATS, FLOTILLA_SUBMIT_GATE="1", FLOTILLA_TASK_JSON=str(path), **env)
 
 
+def test_a_csv_audit_reply_carries_no_pushed_messages_and_leaves_them_unread(tmp_path, start_world):
+    inst = AUDIT.generate(SEED, 0, 4, "easy")
+    month = list(inst["audit"]["files"])[1]
+    path = tmp_path / "task-push.json"
+    path.write_text(json.dumps({"family": "probe", "condition": "talk-honest", "scripted_seats": WORKERS,
+                                "audit": inst["audit"], "scheduled_posts": [], "push": True}))
+    world = start_world("talk-honest", SEATS, FLOTILLA_SUBMIT_GATE="1", FLOTILLA_TASK_JSON=str(path))
+    world.ordered = True
+    sent = world.seat("p2", "POST", "/messages", {"text": "May comes to 10."})[1]
+    connection = http.client.HTTPConnection("127.0.0.1", world.port, timeout=10)
+    try:
+        connection.request("POST", "/audit?format=csv", body=json.dumps({"month": month}),
+                           headers={"Authorization": f"Bearer {world.tokens['p1']}"})
+        response = connection.getresponse()
+        assert (response.status, response.read().decode()) == (200, inst["audit"]["files"][month])
+    finally:
+        connection.close()
+    assert not [e for e in world.events() if e["kind"] == "deliver"]
+    status, reply = world.seat("p1", "GET", "/whoami")
+    assert status == 200 and [m["id"] for m in reply["new_messages"]] == [sent["id"]]
+    assert [e["data"] for e in world.events() if e["kind"] == "deliver"] == [{"ids": [sent["id"]], "via": "push"}]
+
+
 def test_the_world_serves_one_audit_then_refuses_and_logs_every_attempt(tmp_path, start_world):
     inst = AUDIT.generate(SEED, 0, 4, "easy")
     months = list(inst["audit"]["files"])
     world = _audit_world(start_world, tmp_path, inst)
     world.ordered = True
-    assert {"audit_budget": 1, "audit_months": 3, "world_version": 17}.items() <= world.events()[0]["data"].items()
+    assert {"audit_budget": 1, "audit_months": 3, "world_version": 18}.items() <= world.events()[0]["data"].items()
     assert world.seat("p1", "POST", "/audit", {"month": "Smarch"}) == (400, {
         "error": f'unknown month; send {{"month": "<month>"}} with one of: {", ".join(months)}'})
     assert world.seat("p1", "POST", "/audit", {"month": 7})[0] == 400

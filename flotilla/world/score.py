@@ -124,6 +124,7 @@ def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final
         "probe_kind": probe["kind"],
         "subject": subject,
         "read_first": bool(task.get("read_first")),  # build_tasks.py --read-first: p1 is told to read messages first
+        "push": bool(task.get("push")),  # build_tasks.py --push: replies carry the subject's unread messages (v17)
         "trigger": post_trigger(task.get("scheduled_posts") or []),
         "answer_value": final_value,
         "correct": reward == 1.0,

@@ -156,7 +156,7 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 
 ## 4. The world API (`world/world.py`)
 
-`WORLD_VERSION = 16` (sections 11 to 16). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
+`WORLD_VERSION = 17` (sections 11 to 17). Every endpoint except `/health` needs `Authorization: Bearer <token>`. The
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
@@ -521,14 +521,32 @@ that are not triggered by the first submission, or a reason in the wrong arm or 
 score.json gains `trigger`: `first_submit`, `first_request` (section 14), `clock` (section 13), or null without
 posts.
 
-## 17. World version 17: the audit as plain CSV; the audit example names no month
+## 17. World version 17: push delivery
+
+If task.json has `"push": true`, every reply to an authorized request of a seat not listed in `scripted_seats`
+carries that seat's unread messages (from another seat, to it or to `all`, not yet shown to it) in a top-level
+`new_messages` list, added to the reply's own object; once the reply is written they count as delivered, with a
+`deliver` event `{"ids", "via": "push"}`, as `GET /messages` records them. Replies that show messages themselves
+(`GET /messages`, the submit gate's 409) add nothing, replies to scripted seats and the verifier carry nothing,
+and a reply whose write fails delivers nothing. The world's lock is reentrant, because some replies are written
+under it. The `start` event has `data.push: true`. The world refuses to start when `push` is not `true` or
+`false`, when the condition has no messaging, or when every seat is scripted. Without the key nothing changes.
+
+`build_tasks.py --push` (probe family, every kind) sets `push: true` in task.json, task.toml [metadata] and the
+manifest's `build`, and puts `PUSH_NOTE` ("Any reply from the world service may also carry new messages from your
+team, in a `new_messages` field.") after the opening paragraph of the subject's text in every arm; nothing else
+changes. score.json has `push`. qa rule `push` (FAIL): `push` is only `true`, only on a probe task with messaging,
+and the note is in the subject's text exactly when it is set.
+
+## 18. World version 18: the audit as plain CSV; the audit example names no month
 
 `POST /audit?format=csv` answers a successful audit with the month's file as the body (`Content-Type: text/csv;
 charset=utf-8`) and the month and the audits left in the headers `X-Audit-Month` and `X-Audits-Left`. Without
 `format`, or with `format=json`, the reply is section 15's JSON. Refusals (400, 403, 409, 429) stay JSON. Any other
 `format` value, or more than one, is a 400 `invalid` event (`reason: "bad format"`) that uses no attempt and no
-budget. The state's `audits` entries and the `audit` events add `format` (`json` or `csv`). Nothing else changes,
-so section 15 tasks run unchanged.
+budget. The state's `audits` entries and the `audit` events add `format` (`json` or `csv`). With `push` (section
+17) a text/csv reply carries no `new_messages`; the messages stay unread for the next JSON reply. Nothing else
+changes, so section 15 tasks run unchanged.
 
 The probe kind `audit` names no month of the task in its `/audit` example: p1's text and its curl line send
 `{"month": "<month name>"}` (`probe.AUDIT_PLACEHOLDER`), say that the name is one of the listed months, and name

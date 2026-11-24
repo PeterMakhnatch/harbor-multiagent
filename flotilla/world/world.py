@@ -75,10 +75,15 @@ from urllib.parse import parse_qs, urlsplit
 # world adds every post when a seat under test sends its first /submit with an answer object, before the submit gate
 # looks at it, so the gate refuses that submission (409) and shows the posts; each is dated `before_s` seconds
 # before that moment. Tasks with `at_s` or `before_s` posts work as before.
-# Version 17: POST /audit?format=csv returns a successful audit's file as `text/csv` (the month and the audits left in
+# Version 17: push delivery. When task.json has `"push": true`, every reply to an authorized request of a seat that
+# task.json does not list in `scripted_seats` carries that seat's unread messages in a top-level `new_messages` list,
+# recorded as delivered (a `deliver` event with `via: "push"`) once the reply is written, as GET /messages records
+# them. Replies that already show messages (GET /messages, the gates' 409) add nothing. Without the key nothing changes.
+# Version 18: POST /audit?format=csv returns a successful audit's file as `text/csv` (the month and the audits left in
 # the headers X-Audit-Month and X-Audits-Left); without `format` (or with format=json) the reply is version 15's JSON.
-# Refusals stay JSON. The `audit` event and the state's audit entries add `format`. Other format values get 400.
-WORLD_VERSION = 17
+# Refusals stay JSON. The `audit` event and the state's audit entries add `format`. Other format values get 400. A
+# text/csv reply carries no pushed messages.
+WORLD_VERSION = 18
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -192,6 +197,31 @@ def _load_audit() -> tuple[dict[str, Any] | None, list[str], list[str]]:
 AUDIT, AUDITORS, AUDIT_PROBLEMS = _load_audit()
 
 
+def _load_push() -> tuple[bool, list[str], list[str]]:
+    """Whether replies push unread messages (version 17: task.json `push`), to which seats (those task.json does not
+    list in `scripted_seats`), and what is wrong (the world then refuses to start)."""
+    if not TASK_JSON_PATH.is_file():
+        return False, [], []
+    try:
+        task = json.loads(TASK_JSON_PATH.read_text())
+        push, scripted = task.get("push", False), task.get("scripted_seats") or []
+    except (OSError, ValueError, AttributeError):
+        return False, [], [f"{TASK_JSON_PATH} is not a JSON object"]
+    if push is False:
+        return False, [], []
+    if push is not True:
+        return False, [], ["push is not true or false"]
+    if not MESSAGING:
+        return False, [], [f"push needs messaging, and {CONDITION} has none"]
+    seats = [seat for seat in SEATS if seat not in scripted]
+    if not seats:
+        return False, [], ["push needs a seat that is not in scripted_seats"]
+    return True, seats, []
+
+
+PUSH, PUSH_SEATS, PUSH_PROBLEMS = _load_push()
+
+
 def _load_game() -> tuple[Any, dict[str, Any]]:
     if not GAME_PATH:
         return None, {}
@@ -222,7 +252,7 @@ if AUDIT is not None:
     ROUTES["/audit"] = ("POST",)
 
 START = time.monotonic()
-LOCK = threading.Lock()
+LOCK = threading.RLock()  # reentrant: a reply written under LOCK may push messages (version 17), which takes it again
 _PROTOCOL_ACTORS: set[str] = set()
 STATE: dict[str, Any] = {
     "messages": [],  # {"id", "from", "to", "text", "t"}
@@ -299,7 +329,7 @@ def config_problems() -> list[str]:
         "the admin token is also a seat token" if ADMIN and ADMIN in tokens else "",
         "a token names a seat that is not in FLOTILLA_SEATS" if set(TOKENS.values()) - set(SEATS) else "",
     ]
-    return [problem for problem in problems if problem] + SCHEDULE_PROBLEMS + AUDIT_PROBLEMS
+    return [problem for problem in problems if problem] + SCHEDULE_PROBLEMS + AUDIT_PROBLEMS + PUSH_PROBLEMS
 
 
 def expire() -> None:
@@ -544,6 +574,9 @@ def _no_constants(name: str) -> Any:
 
 
 class World(BaseHTTPRequestHandler):
+    push_seat: str | None = None  # version 17: the seat under test whose replies carry its unread messages
+    delivering = False  # a reply that shows messages itself is being written
+
     def version_string(self) -> str:
         """The Server header of every reply, error pages of the server library included."""
         return SERVER
@@ -575,7 +608,13 @@ class World(BaseHTTPRequestHandler):
         self._handle("POST")
 
     def _reply(self, status: int, body: object, headers: dict[str, str] | None = None) -> None:
+        pushed = self._pushed(body)
+        if pushed:
+            body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
         self._write(status, json.dumps(body).encode(), "application/json", headers)
+        if pushed:
+            with LOCK:
+                _deliver(self.push_seat or "", [m["id"] for m in pushed], "push")
 
     def _write(self, status: int, data: bytes, content_type: str, headers: dict[str, str] | None = None) -> None:
         self.send_response(status)
@@ -587,6 +626,14 @@ class World(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(data)
 
+    def _pushed(self, body: object) -> list[dict[str, Any]]:
+        """Version 17: the unread messages that this reply carries to a seat under test, or none (push off, another
+        caller, a reply that already shows messages, or nothing unread)."""
+        if not PUSH or self.push_seat is None or self.delivering or not isinstance(body, dict):
+            return []
+        with LOCK:
+            return _unread(self.push_seat)
+
     def _deliver_reply(self, status: int, body: dict[str, Any], seat: str, via: str = "") -> None:
         """Write a reply that shows messages, outside LOCK and within REPLY_WRITE_SECONDS; the messages from other
         seats count as delivered only once the write succeeded. Until then they stay unread, so an action that
@@ -596,11 +643,13 @@ class World(BaseHTTPRequestHandler):
         previous = connection.gettimeout()
         try:
             connection.settimeout(REPLY_WRITE_SECONDS)
+            self.delivering = True  # this reply shows its messages itself: nothing more is pushed with it
             self._reply(status, body)
         except OSError:  # a reset, a broken pipe or the timeout
             self.close_connection = True
             return
         finally:
+            self.delivering = False
             try:
                 connection.settimeout(previous)
             except OSError:
@@ -662,6 +711,7 @@ class World(BaseHTTPRequestHandler):
         self._reply(status, {"error": error})
 
     def _handle(self, method: str) -> None:
+        self.push_seat, self.delivering = None, False  # a connection serves several requests
         if SCHEDULED and SCHEDULE_KEY == "at_s":
             with LOCK:
                 _post_scheduled(None)
@@ -681,6 +731,7 @@ class World(BaseHTTPRequestHandler):
             self._reply(403, {"error": "the admin token is for /admin/ only"})
             return
         if seat != "admin":
+            self.push_seat = seat if PUSH and seat in PUSH_SEATS else None
             with LOCK:
                 STATE["first_call"] = now() if STATE["first_call"] is None else STATE["first_call"]
                 expire()
@@ -987,7 +1038,8 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                | ({"submit_gate": True} if SUBMIT_GATE else {})
                                | ({"scheduled_posts": len(SCHEDULED), "scheduled_by": SCHEDULE_KEY} if SCHEDULED else {})
                                | ({"audit_budget": AUDIT["budget"], "audit_months": len(AUDIT["files"])}
-                                  if AUDIT is not None else {}))
+                                  if AUDIT is not None else {})
+                               | ({"push": True} if PUSH else {}))
     return server
 
 
