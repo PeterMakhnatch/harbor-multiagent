@@ -210,6 +210,12 @@ def _number(value: Any) -> float | None:
     return float(value)
 
 
+def scheduled(event: dict[str, Any]) -> bool:
+    """A world event that the world made on a seat's behalf (a world v13 scheduled post), not a request."""
+    data = event.get("data")
+    return isinstance(data, dict) and data.get("scheduled") is True
+
+
 def world_start_bound(
     trial: Trial, evidence: Evidence, trajectories: dict[str, Trajectory]
 ) -> datetime | None:
@@ -217,12 +223,15 @@ def world_start_bound(
 
     The world starts during environment setup, so not before ``environment_setup.started_at``. A seat
     makes its first request after its agent started, so the world started no earlier than (agent start
-    - world time of that seat's first request), for every seat. The bound is the latest of these.
+    - world time of that seat's first request), for every seat. A ``send`` that the world posted on a
+    seat's behalf (``data.scheduled``, world v13) is no request of that seat and is left out.
     """
     bounds = [trial.environment_started] if trial.environment_started else []
     first: dict[str, float] = {}
     for event in evidence.events or []:
         seat, t = event.get("seat"), _number(event.get("t"))
+        if scheduled(event):
+            continue
         if isinstance(seat, str) and t is not None:
             first[seat] = min(first.get(seat, t), t)
     for seat, t in sorted(first.items()):
@@ -650,7 +659,11 @@ def seat_play(seat: str, trial: Trial, evidence: Evidence, trajectory: Trajector
     requests = None
     if evidence.events is not None:
         requests = dict(
-            sorted(Counter(str(e.get("kind")) for e in evidence.events if e.get("seat") == seat).items())
+            sorted(
+                Counter(
+                    str(e.get("kind")) for e in evidence.events if e.get("seat") == seat and not scheduled(e)
+                ).items()
+            )
         )
     if trajectory is None:
         return SeatPlay(seat, None, None, None, None, None, requests, exception)
