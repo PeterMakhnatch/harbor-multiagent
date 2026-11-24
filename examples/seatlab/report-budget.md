@@ -23,6 +23,19 @@ python3.12 -BS -m examples.seatlab.workbench verify native-report-budget
 
 The [48 public rows](results/report-budget/rows.json) retain the synthetic first replies, rejected reports, native grades and actual stock settlements. The [stock replay](results/report-budget/replay.json) rebuilt 24 companies, 96 role prompts and all 46 committed prices. It rejected a finance prompt from the other arm and a one-cent change to a settlement in separate negative checks. The [format diagnosis](results/report-budget/diagnosis.json) shows every over-limit reply. Across 96 subscription requests, 93 verified receipts report 800,040 client tokens. Usage for 3 requests is unknown. No paid API or rented infrastructure was used. The client requested `gemini-4-carbon-low`; it did not attest the served model.
 
+### Could the 2 missing prices reverse the profit difference?
+
+**Yes.** After the live study, we checked all 9 ways the 2 missing finance seats could have priced their companies. Each had 3 legal choices. We kept the other 46 committed prices fixed. On all 24 companies, the attainable mean difference ranges from **−$36,457.19 to +$40,093.21**. If the missing short-arm seat on company 1 had raised prices, every choice by the other missing seat would have produced a negative mean. Neither seat actually chose a price.
+
+This is a sensitivity check, not a new result for the agents. The [bounds](results/report-budget/bounds.json) list the affected companies, choices and exact amounts. An independent continuation of the stock simulator matched all 6 price branches to the cent.
+
+```sh
+"$STOCK_PYTHON" -B -m examples.seatlab.report_budget.bounds \
+  examples/seatlab/results/report-budget/rows.json --stock "$BESPOKE_STOCK"
+```
+
+**Next question.** Finance followed the sales recommendation on 34 of the 36 delivered reports that it priced. That is not evidence that the recommendation helped. Give matched finance seats the same verified sales facts. Reveal the seller's original price recommendation to only one. Measure the price each seat chooses and settle it against the same company. Do not change the channel limit again to answer that question.
+
 ## Registered plan
 
 **Decision.** Should a Harbor task ask for fewer characters than its delivery channel accepts? In the [previous Bespoke study](price-timing.md#live-result-more-agreement-no-established-profit-benefit), 4 first sales replies had valid prices but explanations of 161–172 characters. The maximum was 160. This study does not edit those replies or reuse those companies.

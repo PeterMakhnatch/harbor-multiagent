@@ -545,7 +545,10 @@ def _arms(slots: dict[Slot, Record]) -> Record:
 
 
 def summarize(rows: list[Record]) -> Record:
-    slots = _parse(rows)
+    return summarize_slots(_parse(rows))
+
+
+def summarize_slots(slots: dict[Slot, Record]) -> Record:
     primary, secondary = _primary(slots), _secondary(slots)
     return {
         "schema": SCHEMA,

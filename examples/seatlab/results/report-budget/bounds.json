@@ -1,0 +1,239 @@
+{
+  "schema": "seatlab.report-budget-missing-price-bounds/v1",
+  "question": "Could any admissible menu price for a missing finance decision reverse the positive observed paired short-minus-long continuation profit difference?",
+  "criterion": "reversal is ruled out only if the minimum attainable 24-world mean short-minus-long continuation profit is > 0; the identified-pair mean cannot rule it out",
+  "menu": {
+    "1": "keep",
+    "2": "raise",
+    "3": "discount"
+  },
+  "hypothetical": "stock continuations of admissible menu prices at each existing confirmed day-90 checkpoint; not model actions, not commits, not trials; an absent commit has no actual stock outcome",
+  "original_result": {
+    "primary_verdict": "improvement",
+    "primary_pairs": {
+      "both": 13,
+      "short_only": 11,
+      "long_only": 0,
+      "neither": 0,
+      "unknown": 0
+    },
+    "settled_pairs": 22,
+    "mean_short_minus_long_usd": "43738.0468",
+    "economic_guard": {
+      "met": false,
+      "requires": "all 24 pairs settled and mean short-long >= 0"
+    },
+    "recommend_short_for_this_cohort": false,
+    "adoption": "FAIL",
+    "decision": "unchanged; these bounds are sensitivity analysis and make no new recommendation"
+  },
+  "identified": {
+    "pairs": 22,
+    "sum_short_minus_long_usd": "962237.0300",
+    "mean_short_minus_long_usd": "43738.0468",
+    "sign": "positive"
+  },
+  "affected": [
+    {
+      "world": 1,
+      "checkpoint_sha256": "a786034c7b687df9b0509e1301531cc6665866d22ceb074e4d1ff414ea770c52",
+      "missing_targets": [
+        100
+      ],
+      "committed_partner": {
+        "target": 160,
+        "pick": 3,
+        "price": "discount",
+        "continuation_usd": "972384.3400"
+      },
+      "hypothetical_continuation_usd": {
+        "100": {
+          "1": "530153.3600",
+          "2": "-449405.0600",
+          "3": "972384.3400"
+        }
+      },
+      "admissible": [
+        {
+          "prices": {
+            "100": 1
+          },
+          "short_minus_long_usd": "-442230.9800",
+          "mean_contribution_usd": "-18426.2908"
+        },
+        {
+          "prices": {
+            "100": 2
+          },
+          "short_minus_long_usd": "-1421789.4000",
+          "mean_contribution_usd": "-59241.2250"
+        },
+        {
+          "prices": {
+            "100": 3
+          },
+          "short_minus_long_usd": "0.0000",
+          "mean_contribution_usd": "0.0000"
+        }
+      ],
+      "min": {
+        "short_minus_long_usd": "-1421789.4000",
+        "mean_contribution_usd": "-59241.2250",
+        "prices": [
+          {
+            "100": 2
+          }
+        ]
+      },
+      "max": {
+        "short_minus_long_usd": "0.0000",
+        "mean_contribution_usd": "0.0000",
+        "prices": [
+          {
+            "100": 3
+          }
+        ]
+      },
+      "spread_usd": "1421789.4000"
+    },
+    {
+      "world": 10,
+      "checkpoint_sha256": "fd4bb6b0b199dcae80b6ee5a9b9e5e946ff9549c3a81dfff0504b020428fee6a",
+      "missing_targets": [
+        160
+      ],
+      "committed_partner": {
+        "target": 100,
+        "pick": 3,
+        "price": "discount",
+        "continuation_usd": "-72339.7700"
+      },
+      "hypothetical_continuation_usd": {
+        "160": {
+          "1": "343080.3100",
+          "2": "-15479.8400",
+          "3": "-72339.7700"
+        }
+      },
+      "admissible": [
+        {
+          "prices": {
+            "160": 1
+          },
+          "short_minus_long_usd": "-415420.0800",
+          "mean_contribution_usd": "-17309.1700"
+        },
+        {
+          "prices": {
+            "160": 2
+          },
+          "short_minus_long_usd": "-56859.9300",
+          "mean_contribution_usd": "-2369.1638"
+        },
+        {
+          "prices": {
+            "160": 3
+          },
+          "short_minus_long_usd": "0.0000",
+          "mean_contribution_usd": "0.0000"
+        }
+      ],
+      "min": {
+        "short_minus_long_usd": "-415420.0800",
+        "mean_contribution_usd": "-17309.1700",
+        "prices": [
+          {
+            "160": 1
+          }
+        ]
+      },
+      "max": {
+        "short_minus_long_usd": "0.0000",
+        "mean_contribution_usd": "0.0000",
+        "prices": [
+          {
+            "160": 3
+          }
+        ]
+      },
+      "spread_usd": "415420.0800"
+    }
+  ],
+  "hypothetical_complete": {
+    "available": true,
+    "denominator": 24,
+    "worlds_excluded": 0,
+    "affected_worlds": [
+      1,
+      10
+    ],
+    "completions": 9,
+    "worst": {
+      "sum_short_minus_long_usd": "-874972.4500",
+      "mean_short_minus_long_usd": "-36457.1854",
+      "mean_exact_cents": "-87497245/24",
+      "prices": {
+        "1": [
+          {
+            "100": 2
+          }
+        ],
+        "10": [
+          {
+            "160": 1
+          }
+        ]
+      }
+    },
+    "best": {
+      "sum_short_minus_long_usd": "962237.0300",
+      "mean_short_minus_long_usd": "40093.2096",
+      "mean_exact_cents": "96223703/24",
+      "prices": {
+        "1": [
+          {
+            "100": 3
+          }
+        ],
+        "10": [
+          {
+            "160": 3
+          }
+        ]
+      }
+    },
+    "mean_range_width_usd": "76550.3950",
+    "reversal_ruled_out": false,
+    "answer": "yes: an admissible completion brings the 24-world mean to <= 0"
+  },
+  "checks": {
+    "rows_checked": 48,
+    "unissued_skipped": 0,
+    "companies_rebuilt": 24,
+    "predecision_confirmed": 0,
+    "checkpoints_matched": 48,
+    "sales_prompt_contracts": 24,
+    "sales_prompts_matched": 48,
+    "sales_replies_parsed": 47,
+    "finance_prompts_matched": 48,
+    "finance_prompts_null_report": 11,
+    "finance_replies_parsed": 46,
+    "committed_settlements_matched": 46,
+    "hypothetical_branches": 6,
+    "fresh_settlements": 38,
+    "branches_reused": 14
+  },
+  "ledger": {
+    "actual_commits_added": 0,
+    "model_calls": 0,
+    "docker_runs": 0,
+    "network_calls": 0,
+    "files_written": 0
+  },
+  "inputs": {
+    "rows_sha256": "d42f481e38c9d6bf819a546b666f9749fece0c1985fd0fdda96a9927c9ea2e5e",
+    "stock_commit": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+    "numpy": "2.1.3",
+    "namespace": "seatlab/report-budget/v1"
+  }
+}
