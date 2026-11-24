@@ -263,6 +263,8 @@ def _slot(row: Any) -> tuple[int, int]:
     slot = (row["world"], row["repeat"])
     if type(slot[1]) is not int or row["early"] != early_seat(*slot):
         raise ValueError(f"row {slot!r} early seat is not the preregistered assignment")
+    if row.get("control", False) is not False or row.get("kind", "live") != "live":
+        raise ValueError(f"row {slot!r} is not a live study cell")
     if row["status"] not in ("complete", "incomplete"):
         raise ValueError(f"row {slot!r} status must be complete or incomplete")
     return slot
@@ -329,6 +331,11 @@ def _partial(row: Record, label: str) -> Record:
         if seat in settlements
     }
     report = row.get("report")
+    reward = row.get("protocol_reward")
+    if reward is not None and (
+        type(reward) not in (int, float, Decimal) or reward not in (0, 1)
+    ):
+        raise ValueError(f"{label} protocol reward must be zero, one or unknown")
     return {
         "native_id": None if native is None else _native(native, label),
         "checkpoint": checkpoint,
@@ -338,7 +345,7 @@ def _partial(row: Record, label: str) -> Record:
         "report_pick": None if report is None else _report(report, label),
         "picks": {arm: chosen.get(arm, arms.get(arm, {}).get("pick")) for arm in ARMS},
         "arms": arms,
-        "grade": row.get("grade"),
+        "grade": reward,
     }
 
 
@@ -386,6 +393,7 @@ def _parse(rows: Any) -> tuple[Trials, Trials]:
     sessions: dict[str, Slot] = {}
     natives: set[str] = set()
     checkpoints: dict[str, int] = {}
+    company_checkpoints: dict[int, str] = {}
     for row in rows:
         slot = _slot(row)
         if slot in complete or slot in partial:
@@ -409,11 +417,12 @@ def _parse(rows: Any) -> tuple[Trials, Trials]:
         for owned in (entry[4] for entry in trial["owner"] if entry[4] is not None):
             if sessions.setdefault(owned, slot) != slot:
                 raise ValueError(f"{label} owner session belongs to another trial")
-        if (
-            trial["checkpoint"] is not None
-            and checkpoints.setdefault(trial["checkpoint"], slot[0]) != slot[0]
-        ):
-            raise ValueError(f"{label} shares a checkpoint with another company")
+        checkpoint = trial["checkpoint"]
+        if checkpoint is not None:
+            if checkpoints.setdefault(checkpoint, slot[0]) != slot[0]:
+                raise ValueError(f"{label} shares a checkpoint with another company")
+            if company_checkpoints.setdefault(slot[0], checkpoint) != checkpoint:
+                raise ValueError(f"{label} differs from the company's other repetition")
     if set(complete) | set(partial) != set(SLOTS):
         raise ValueError("panel misses a registered slot")
     return complete, partial
