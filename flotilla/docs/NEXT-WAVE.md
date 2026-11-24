@@ -38,6 +38,7 @@ and one model. Copy `flotilla/plans/example.json`.
 
 For a new staged wave, use the [staged method](PROBE.md#staged-runs-method-for-future-pre-registrations).
 Record the pair counts, arm contrasts, stopping rules, and Holm family before any trial.
+If you enable optional non-binding futility, record `delta`, `beta_f`, and the interim bounds for each enabled test.
 `flotilla/stages.py` plans and scores stages; `run_wave.py` does not use it yet.
 Do not add interim looks to an existing fixed-size pre-registration.
 

@@ -804,13 +804,46 @@ largest minority discordance count at each total discordance count that meets th
 This guarantees Holm rejection even if all other tests have p-value 1. Freeze the stopped p-value and direction.
 A pre-registered direction gate still applies; rejection in the other direction does not pass that gate.
 
-Stop for futility only if the staged p-value is at least `alpha` and the best possible raw p at the final
+Stop for deterministic futility only if the staged p-value is at least `alpha` and the best possible raw p at the final
 look, multiplied by `K`, is also at least `alpha`. To get that best case, make every remaining pair
 discordant in the current majority direction (either direction for a tie). At a fixed final number of
 discordances, that split gives the smallest tail. Adding a majority discordance cannot increase the
 two-sided tail. Thus no earlier completion can give a better p-value. A current staged p below `alpha`
 can still reject through Holm, so the final boundary alone does not justify futility.
-Otherwise continue to the next look. Close any test still open at its last look.
+
+**Optional non-binding futility.** Unless the pre-registration enables this rule, leave it off.
+Set `delta` to the minimum discordance rate worth detecting in one direction. For example, `0.25`
+means one arm alone succeeds in 25% of pairs. This is not the net difference between arm success rates.
+Set `beta_f` to the maximum probability of stopping for futility at each planned look under that effect.
+Both inputs must be strictly between 0 and 1. Supply both as keyword arguments to `SequentialTest`.
+
+After checking efficacy and deterministic futility at an interim look with `n_j` complete pairs,
+let `k_j` be the largest integer with `Pr[Binomial(n_j, delta) <= k_j] <= beta_f`.
+Use `-1` if even 0 exceeds the probability limit. Stop if `max(b, c) <= k_j`. Report
+`nonbinding_futility`, with p-value 1 and no direction. Otherwise continue. At the last look,
+close any test still open and report its staged p-value; do not apply either futility rule.
+A futility stop does not establish that the effect is absent.
+
+If the pairs are independent and a given discordance direction has probability at least `delta`
+in each pair, its count stochastically dominates `Binomial(n_j, delta)`. A stop requires that count
+to be at most `k_j`. Thus the unconditional probability of the test's own optional stop at a given
+look is at most `beta_f`, and the union bound across `L` interim looks is `L × beta_f`. This is not
+a bound conditional on reaching the look. Stops on other tests can also change Holm decisions.
+
+| Planned pairs | `delta` | `beta_f` | 0.25 look | 0.5 look | 1.0 look (not applied) |
+|---:|---:|---:|---:|---:|---:|
+| 32 | 0.15 | 0.025 | -1 | -1 | 0 |
+| 32 | 0.15 | 0.05 | -1 | -1 | 1 |
+| 32 | 0.25 | 0.025 | -1 | 0 | 2 |
+| 32 | 0.25 | 0.05 | -1 | 0 | 3 |
+| 32 | 0.40 | 0.025 | 0 | 2 | 7 |
+| 32 | 0.40 | 0.05 | 0 | 2 | 7 |
+| 48 | 0.15 | 0.025 | -1 | 0 | 2 |
+| 48 | 0.15 | 0.05 | -1 | 0 | 2 |
+| 48 | 0.25 | 0.025 | -1 | 1 | 5 |
+| 48 | 0.25 | 0.05 | 0 | 2 | 6 |
+| 48 | 0.40 | 0.025 | 1 | 4 | 12 |
+| 48 | 0.40 | 0.05 | 1 | 5 | 13 |
 
 **Family error.** Under each test's null, conditional on which pairs are discordant, the discordance
 directions must be independent fair signs. Each planned look then gives a super-uniform raw p-value.
@@ -818,6 +851,8 @@ For any `u` in `[0,1)`, a stopped staged p-value at most `u` requires some plann
 `u/K`. The union bound gives probability at most `u`. This argument does not require independent looks.
 Apply Holm once to the frozen or final staged p-values of the full family, even if some are 1.
 Holm controls the probability of any false rejection at `alpha` without requiring independent tests.
+Optional futility replaces a test's p-value with 1 and leaves all other settings fixed.
+For the same complete outcomes, the Holm rejection set can only shrink. The type-I error bound is unchanged.
 An incomplete test has p-value 1 and stays in the family. Stop a model's trials only when none of its
 remaining tests or pre-registered non-staged endpoints need those trials.
 
@@ -832,6 +867,12 @@ remaining tests or pre-registered non-staged endpoints need those trials.
 > test's planned looks. We stop for efficacy or deterministic futility by the rules above. We apply Holm once
 > to the frozen or final staged p-values, with rejection at adjusted p strictly below [alpha]. The direction
 > required for each pass is [direction or none]; we use the earliest look with the minimum raw p-value.
+>
+> Optional non-binding futility is [off, or list `delta` and `beta_f` for each enabled test]. The smallest
+> one-direction discordance rate is worth detecting because [reason]. We chose the per-look risk and
+> planned sample sizes based on [pairs and power comparison with futility off, including near `delta`].
+> The interim futility bounds are [bounds by test and look]. Efficacy and deterministic futility
+> take precedence. We assign p-value 1 and no direction to each non-binding futility stop.
 >
 > We inspect outcomes only after the planned pairs for a look are complete and valid. Validity and retries
 > follow [rule and retry limit], without inspecting outcomes to choose retries. If a required pair remains
@@ -875,3 +916,20 @@ establish power for smaller effects. The largest exact staged FWER in this grid 
 With 0 discordant pairs after 24 of 48 pairs, 24 remaining pairs could still cross the boundary.
 The default looks therefore save no pairs for that null. A plan with an additional look at 42
 would stop that profile after 42 pairs, with 4 looks in its spending rule.
+
+To compare optional futility with the same staged test and with the same paired outcomes, run:
+
+```bash
+uvx --quiet --python 3.12 --with pytest --with pyyaml python flotilla/tests/test_stages.py --futility
+```
+
+The comparison enumerates pair counts for expected pairs, the null family error rate, and power
+to reject at least 1 test. It uses seeded draws to estimate model-level Holm power for `au1`.
+The nulls use 3 independent models with 48 pairs each. The one-way effects use 48 pairs and 2 tests
+fixed at p-value 1. The pilot profiles permute the observed counts without replacement.
+
+For a null-heavy 48-pair probe, start with `delta=0.25, beta_f=0.05` only if 25% is the smallest
+one-direction rate worth detecting. The all-tie profile uses 12 pairs instead of 48. At a true one-way
+rate of 25%, power is 85.30% instead of 88.10%. Use `beta_f=0.025` if that power loss is too large:
+the all-tie profile uses 24 pairs, and power at a 25% rate is 87.90%. If smaller effects matter,
+choose a smaller `delta` or leave the rule off. Check power for the planned family before enabling it.

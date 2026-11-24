@@ -25,6 +25,11 @@ count of pairs still planned. The exact p grows with the minority count and fall
 reachable later state (b', c') with b' >= b, c' >= c and b' + c' - b - c <= R has p at least p(minority, majority + R).
 Hence p_seq can never fall below alpha, Holm can never reject the test, and a p value at or above alpha does not
 change the decision for any other test.
+
+Optional non-binding futility: set both delta and beta_f before trials. At an interim look of n pairs, stop without
+rejection if max(b, c) is at most the largest k with Pr[Binomial(n, delta) <= k] <= beta_f. Report p = 1 and no
+direction. This can only increase a p value relative to the same full history with the rule disabled. Holm can only
+lose rejections. Efficacy and deterministic futility take precedence; no futility rule applies at the final look.
 """
 
 from __future__ import annotations
@@ -168,6 +173,19 @@ def holm(pvalues) -> list[float]:
     return adjusted
 
 
+def _futility_bound(n: int, delta: Fraction, beta_f: Fraction) -> int:
+    """Largest count in the lower binomial tail at or below beta_f; -1 if even zero is too likely."""
+    a, d = delta.numerator, delta.denominator
+    limit = beta_f.numerator * d**n // beta_f.denominator
+    tail, term = 0, (d - a)**n
+    for k in range(n + 1):
+        tail += term
+        if tail > limit:
+            return k - 1
+        term = term * (n - k) * a // ((k + 1) * (d - a))
+    raise ArithmeticError("binomial mass did not exceed the futility limit")
+
+
 @dataclass(frozen=True)
 class Disposition:
     status: str
@@ -179,7 +197,15 @@ class Disposition:
 class SequentialTest:
     """Group-sequential exact McNemar test at fixed absolute complete pair counts. Stateless: see disposition()."""
 
-    def __init__(self, look_sizes, family_size: int = 1, alpha: float = 0.05):
+    def __init__(
+        self,
+        look_sizes,
+        family_size: int = 1,
+        alpha: float = 0.05,
+        *,
+        delta: float | Fraction | None = None,
+        beta_f: float | Fraction | None = None,
+    ):
         if not isinstance(look_sizes, (list, tuple)) or not look_sizes:
             raise ValueError("refused: look_sizes must be a nonempty list")
         if any(not _is_int(size) for size in look_sizes):
@@ -194,6 +220,15 @@ class SequentialTest:
         self.look_sizes = tuple(look_sizes)
         self.family_size = family_size
         self.alpha = float(alpha)
+        if delta is None and beta_f is None:
+            self.futility_bounds = (-1,) * len(self.look_sizes)
+        elif delta is None or beta_f is None:
+            raise ValueError("refused: specify both delta and beta_f, or neither")
+        else:
+            rate, risk = _fraction_of(delta), _fraction_of(beta_f)
+            if not (0 < rate < 1 and 0 < risk < 1):
+                raise ValueError("refused: delta and beta_f must both be in (0, 1)")
+            self.futility_bounds = tuple(_futility_bound(n, rate, risk) for n in self.look_sizes)
         self.boundary = self._boundary()
 
     def _sequential(self, raw: float) -> float:
@@ -254,4 +289,6 @@ class SequentialTest:
                 return Disposition("efficacy", p, direction, look + 1)
             if p >= self.alpha and self._hopeless(b, c, look):
                 return Disposition("futility", p, direction, look + 1)
+            if max(b, c) <= self.futility_bounds[look]:
+                return Disposition("nonbinding_futility", 1.0, 0, look + 1)
         return Disposition("continue", self._sequential(best_raw), direction, len(states))

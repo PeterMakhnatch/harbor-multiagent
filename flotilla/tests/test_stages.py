@@ -4,6 +4,8 @@ The fast tests run under pytest. The full simulation (100000 replicates per scen
 pytest test; it runs only when this file is run directly, and prints its assumptions and a markdown table:
 
     uvx --quiet --python 3.12 --with pytest --with pyyaml python flotilla/tests/test_stages.py [--reps N] [--seed S]
+
+Pass --futility to compare the optional futility rules with the staged baseline on the same paths.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import random
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from fractions import Fraction
 from functools import cache
 from itertools import pairwise
 
@@ -27,6 +30,7 @@ ALPHA = 0.05
 FRACTIONS = (0.25, 0.5, 1.0)
 SEED = 20261124
 REPS = 100_000
+FUTILITY_RULES = tuple((delta, beta_f) for delta in (0.15, 0.25, 0.4) for beta_f in (0.025, 0.05))
 
 PLAN = {
     "name": "staged-test",
@@ -192,17 +196,63 @@ def test_invalid_histories_are_rejected(history):
         STAGES.SequentialTest((10, 20, 30), family_size=1, alpha=ALPHA).disposition(history)
 
 
+@pytest.mark.parametrize("n", (32, 48))
+@pytest.mark.parametrize(("delta", "beta_f"), FUTILITY_RULES)
+def test_futility_bounds_are_the_largest_counts_at_or_below_the_exact_tail_limit(n, delta, beta_f):
+    looks = STAGES.stage_counts(n)
+    test = STAGES.SequentialTest(looks, delta=delta, beta_f=beta_f)
+    rate, risk = Fraction(str(delta)), Fraction(str(beta_f))
+    for size, bound in zip(looks, test.futility_bounds):
+        masses = [math.comb(size, j) * rate**j * (1 - rate)**(size - j) for j in range(size + 1)]
+        assert sum(masses[:bound + 1]) <= risk < sum(masses[:bound + 2])
+    assert STAGES.SequentialTest((2,), delta=0.5, beta_f=0.25).futility_bounds == (0,)
+
+
+@pytest.mark.parametrize("options", [
+    {"delta": 0.25}, {"beta_f": 0.05}, {"delta": 0.0, "beta_f": 0.05}, {"delta": 0.25, "beta_f": 1.0},
+    {"delta": True, "beta_f": 0.05}, {"delta": 0.25, "beta_f": float("nan")},
+])
+def test_invalid_futility_settings_are_rejected(options):
+    with pytest.raises((TypeError, ValueError)):
+        STAGES.SequentialTest((8, 16, 32), **options)
+
+
+def test_futility_replays_the_first_stop_without_a_rejection_or_direction():
+    looks = (12, 24, 48)
+    baseline = STAGES.SequentialTest(looks, family_size=3)
+    optional = STAGES.SequentialTest(looks, family_size=3, delta=0.25, beta_f=0.05)
+    path = ((0, 0), (6, 0), (20, 0))
+    stopped = STAGES.Disposition("nonbinding_futility", 1.0, 0, 1)
+    assert optional.disposition(path[:1]) == optional.disposition(path) == stopped
+    assert baseline.disposition(path).p < ALPHA / 3
+    assert optional.disposition(((1, 0),)).status == optional.disposition(((0, 1),)).status == "continue"
+    assert optional.disposition(((0, 12),)) == baseline.disposition(((0, 12),))
+    assert STAGES.SequentialTest((12,), delta=0.25, beta_f=0.05).disposition(((0, 0),)).status == "final"
+
+
+def test_nonbinding_stop_cannot_enter_holm_with_a_small_interim_p():
+    looks = (24, 36, 48)
+    baseline = STAGES.SequentialTest(looks, family_size=3)
+    optional = STAGES.SequentialTest(looks, family_size=3, delta=0.55, beta_f=0.05)
+    path = ((8, 0), (8, 0), (8, 0))
+    before, after = baseline.disposition(path), optional.disposition(path)
+    assert ALPHA / 3 < before.p < ALPHA / 2
+    assert after == STAGES.Disposition("nonbinding_futility", 1.0, 0, 1)
+    assert STAGES.holm([0.001, before.p, 0.04])[2] < ALPHA
+    assert STAGES.holm([0.001, after.p, 0.04])[2] >= ALPHA
+
+
 # --- simulation machinery ------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Model:
-    """One model's paired outcomes: an observed (b, c) profile permuted without replacement, or (profile None)
-    independent pairs, each discordant with probability q and then b or c with probability 1/2."""
+    """Observed (b, c) counts to permute, or independent pairs with discordance rate q and share b_share for b."""
 
     name: str
     n: int
     profile: tuple[int, int] | None = None
     q: float = 0.0
+    b_share: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -257,10 +307,11 @@ def table(outcomes: dict[tuple[int, int, int], float]) -> Table:
 
 
 @cache
-def iid_steps(q: float, m: int) -> Table:
-    """(db, dc, dt) for m new independent pairs: multinomial(m; q/2, q/2, 1 - q)."""
-    return table({(db, dc, m - db - dc): math.comb(m, db) * math.comb(m - db, dc) * (q / 2) ** (db + dc)
-                  * (1 - q) ** (m - db - dc) for db in range(m + 1) for dc in range(m + 1 - db)})
+def iid_steps(q: float, m: int, b_share: float) -> Table:
+    """(db, dc, dt) for m independent pairs, with probabilities q*b_share, q*(1-b_share), 1-q."""
+    return table({(db, dc, m - db - dc): math.comb(m, db) * math.comb(m - db, dc) * (q * b_share)**db
+                  * (q * (1 - b_share))**dc
+                  * (1 - q)**(m - db - dc) for db in range(m + 1) for dc in range(m + 1 - db)})
 
 
 @cache
@@ -275,7 +326,7 @@ def draw_steps(left: tuple[int, int, int], m: int) -> Table:
 
 def steps(model: Model, counts: tuple[int, int, int], m: int) -> Table:
     if model.profile is None:
-        return iid_steps(model.q, m)
+        return iid_steps(model.q, m, model.b_share)
     b, c = model.profile
     return draw_steps((b - counts[0], c - counts[1], model.n - b - c - counts[2]), m)
 
@@ -302,24 +353,23 @@ def trajectory(model: Model, looks: tuple[int, ...], rng: random.Random) -> tupl
 class Staged:
     """SequentialTest dispositions look by look until a terminal status, cached per trajectory."""
 
-    def __init__(self, looks: tuple[int, ...], family_size: int):
-        self.looks = looks
-        self.test = STAGES.SequentialTest(looks, family_size=family_size, alpha=ALPHA)
+    def __init__(self, test):
+        self.test = test
         self.cache: dict[tuple, tuple[str, float, int]] = {}
 
     def stop(self, path: tuple[tuple[int, int], ...]) -> tuple[str, float, int]:
         """(status, p, pairs used)"""
         if path not in self.cache:
             result = self.test.disposition(path)
-            assert result.status in ("efficacy", "futility", "final"), result
-            self.cache[path] = (result.status, result.p, self.looks[result.look - 1])
+            assert result.status in ("efficacy", "futility", "nonbinding_futility", "final"), result
+            self.cache[path] = (result.status, result.p, self.test.look_sizes[result.look - 1])
         return self.cache[path]
 
 
-def exact(model: Model, looks: tuple[int, ...], family_size: int) -> tuple[float, float, float]:
+def exact(model: Model, test) -> tuple[float, float, float]:
     """Exact (P staged family_size * p < alpha, P fixed family_size * p < alpha, E[pairs staged]) for one model, by
     enumerating the transition distributions: a staged run crosses at early efficacy or at the last look."""
-    test = STAGES.SequentialTest(looks, family_size=family_size, alpha=ALPHA)
+    looks, family_size = test.look_sizes, test.family_size
     live: dict[tuple, float] = {((0, 0, 0), ()): 1.0}
     crossed = pairs = settled = 0.0
     done = 0
@@ -333,7 +383,7 @@ def exact(model: Model, looks: tuple[int, ...], family_size: int) -> tuple[float
         live, done = {}, size
         for (counts, path), mass in grown.items():
             status = test.disposition(list(path)).status
-            assert status in ("continue", "efficacy", "futility"), status
+            assert status in ("continue", "efficacy", "futility", "nonbinding_futility"), status
             if status == "continue":
                 live[(counts, path)] = mass
                 continue
@@ -347,18 +397,19 @@ def exact(model: Model, looks: tuple[int, ...], family_size: int) -> tuple[float
         for p, step in zip(probs, outs):
             b, c, _ = add(counts, step)
             settled, pairs = settled + mass * p, pairs + mass * p * looks[-1]
-            crossed += mass * p if family_size * len(looks) * raw(b, c) < ALPHA else 0.0
+            crossed += mass * p if family_size * len(looks) * raw(b, c) < test.alpha else 0.0
     probs, _, outs = steps(model, (0, 0, 0), looks[-1])
-    fixed = sum(p for p, (b, c, _) in zip(probs, outs) if family_size * raw(b, c) < ALPHA)
+    fixed = sum(p for p, (b, c, _) in zip(probs, outs) if family_size * raw(b, c) < test.alpha)
     assert abs(settled - 1.0) < 1e-9, settled
     return crossed, fixed, pairs
 
 
-def simulate(scenario: Scenario, reps: int, seed: int) -> list[Row]:
+def simulate(scenario: Scenario, reps: int, seed: int, **futility) -> list[Row]:
     """One row per model and one family row (any rejection) from reps seeded replicates, with exact columns."""
     assert reps > 0
     looks, models, m = scenario.looks, scenario.models, scenario.family_size
-    rng, staged = random.Random(seed), Staged(looks, m)
+    rng = random.Random(seed)
+    staged = Staged(STAGES.SequentialTest(looks, family_size=m, alpha=ALPHA, **futility))
     pairs = [0] * len(models)
     rejected = [[0, 0, 0] for _ in models]  # staged, fixed, agree
     family = [0, 0, 0]
@@ -385,7 +436,7 @@ def simulate(scenario: Scenario, reps: int, seed: int) -> list[Row]:
     kind = "null" if scenario.null else "effect"
     rows, survive_staged, survive_fixed = [], 1.0, 1.0
     for i, model in enumerate(models):
-        cross_staged, cross_fixed, expected = exact(model, looks, m)
+        cross_staged, cross_fixed, expected = exact(model, staged.test)
         survive_staged, survive_fixed = survive_staged * (1 - cross_staged), survive_fixed * (1 - cross_fixed)
         rows.append(Row(scenario.name, kind, model.name, model.n, looks, reps, pairs[i] / reps, expected, model.n,
                         rejected[i][0] / reps, rejected[i][1] / reps, rejected[i][2] / reps, None, None, stops[i]))
@@ -407,7 +458,7 @@ def test_seeded_null_simulation_matches_the_exact_rates_and_stays_under_alpha():
     assert family.staged <= ALPHA + 4 * math.sqrt(ALPHA * (1 - ALPHA) / reps)
     for row in rows[:-1]:
         assert abs(row.pairs_staged - row.pairs_exact) <= 5 * 24 / math.sqrt(reps)
-    alone = exact(Model("a", 32, None, 0.5), (8, 16, 32), 1)
+    alone = exact(Model("a", 32, None, 0.5), STAGES.SequentialTest((8, 16, 32), alpha=ALPHA))
     assert alone[0] <= ALPHA and alone[1] <= ALPHA
 
 
@@ -429,6 +480,28 @@ SCENARIOS = (
     *(Scenario(f"null discordance q={q}", True, tuple(Model(name, 48, None, q) for name in ("A", "B", "C")))
       for q in (0.1, 0.2, 0.3, 0.4, 0.5)),
 )
+
+
+def test_futility_only_removes_holm_rejections_on_paired_seeded_trajectories():
+    looks = (12, 24, 48)
+    models = (Model("null", 48, q=0.3), Model("near", 48, q=0.25, b_share=1.0),
+              Model("strong", 48, q=0.4, b_share=0.0))
+    baseline = STAGES.SequentialTest(looks, family_size=3)
+    tests = [STAGES.SequentialTest(looks, family_size=3, delta=d, beta_f=b) for d, b in FUTILITY_RULES]
+    rng = random.Random(SEED)
+    baseline_rejections = removed_rejections = 0
+    for _ in range(300):
+        paths = [trajectory(model, looks, rng) for model in models]
+        before = [baseline.disposition(path) for path in paths]
+        reject = [p < ALPHA for p in STAGES.holm([result.p for result in before])]
+        baseline_rejections += sum(reject)
+        for test in tests:
+            after = [test.disposition(path) for path in paths]
+            assert all(new.p >= old.p and new.look <= old.look for old, new in zip(before, after))
+            with_futility = [p < ALPHA for p in STAGES.holm([result.p for result in after])]
+            assert all(not new or old for old, new in zip(reject, with_futility))
+            removed_rejections += sum(reject) - sum(with_futility)
+    assert baseline_rejections > 0 and removed_rejections > 0
 
 
 # --- full simulation (run this file directly) ----------------------------------------------------------------------
@@ -482,15 +555,58 @@ def print_report(rows: list[Row], reps: int, seed: int) -> None:
               f"| {stops} | {meaning} |")
 
 
+def futility_metrics(scenario: Scenario, reps: int, seed: int, **futility) -> dict[str, str]:
+    rows = simulate(scenario, reps, seed, **futility)
+    family, name = rows[-1], scenario.name
+    if scenario.null or len(scenario.models) == 1:
+        pairs = family.pairs_exact / len(scenario.models)
+        return {name: f"{pairs:.2f} / {pct(family.exact_staged, 3)}"}
+    return {
+        **{f"{name} {row.unit}": f"{row.pairs_exact:.2f} / {pct(row.staged, 3)}" for row in rows[:-1]},
+        f"{name} family (total)": f"{family.pairs_exact:.2f} / {pct(family.exact_staged, 3)}",
+    }
+
+
+def print_futility_report(reps: int, seed: int) -> None:
+    synthetic = tuple(Scenario(f"one-way {q} (48 pairs)", False, (Model("effect", 48, q=q, b_share=1.0),),
+                               fixed_ones=2) for q in (0.15, 0.25, 0.4, 0.6))
+    labels = ["Off", *(f"{d}/{b}" for d, b in FUTILITY_RULES)]
+    options = [{}, *({"delta": d, "beta_f": b} for d, b in FUTILITY_RULES)]
+    print("## Exact futility bounds (last look shown but not applied)")
+    print("| n | looks | " + " | ".join(labels[1:]) + " |")
+    print("|---" * (len(labels) + 1) + "|")
+    for n in (32, 48):
+        looks = STAGES.stage_counts(n)
+        bounds = [STAGES.SequentialTest(looks, **rule).futility_bounds for rule in options[1:]]
+        print(f"| {n} | {'/'.join(map(str, looks))} | " + " | ".join("/".join(map(str, b)) for b in bounds) + " |")
+    print(f"\n## Expected pairs / Holm rejection rate ({reps:,} replicates per scenario, seed {seed})")
+    print("Each row uses a 3-test family and looks at 25%, 50%, and 100% of the planned pairs.")
+    print("Expected pairs are exact. The au1 family row sums pairs. Rates are exact except for au1 model rows.")
+    print("Null rates are family-wise error; the au1 family rate is power to reject at least one test.")
+    print("For Luna rf1v and the one-way profiles, the other 2 members have p = 1.")
+    columns: list[dict[str, str]] = [{} for _ in options]
+    for scenario in (*SCENARIOS[2:], *synthetic, *SCENARIOS[:2]):
+        for column, rule in zip(columns, options):
+            column.update(futility_metrics(scenario, reps, seed, **rule))
+    print("\n| Profile | " + " | ".join(labels) + " |")
+    print("|---" * (len(labels) + 1) + "|")
+    for name in columns[0]:
+        print(f"| {name} | " + " | ".join(column[name] for column in columns) + " |")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reps", type=int, default=REPS)
     parser.add_argument("--seed", type=int, default=SEED)
+    parser.add_argument("--futility", action="store_true", help="compare futility rules with the staged baseline")
     args = parser.parse_args(argv)
     if args.reps < 1:
         parser.error("--reps must be at least 1")
-    rows = [row for scenario in SCENARIOS for row in simulate(scenario, args.reps, args.seed)]
-    print_report(rows, args.reps, args.seed)
+    if args.futility:
+        print_futility_report(args.reps, args.seed)
+    else:
+        rows = [row for scenario in SCENARIOS for row in simulate(scenario, args.reps, args.seed)]
+        print_report(rows, args.reps, args.seed)
     return 0
 
 
