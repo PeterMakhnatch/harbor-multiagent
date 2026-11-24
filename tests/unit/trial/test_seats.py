@@ -293,6 +293,45 @@ async def test_regrade_refuses_seat_tasks(tmp_path: Path):
         await Trial.create(config)
 
 
+async def test_regrade_refuses_seat_source_even_if_target_is_single_agent(
+    tmp_path: Path,
+):
+    source = await _seats_trial(
+        _config(
+            _task_dir(tmp_path / "original"),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    await source.run()
+    task = tmp_path / "updated" / source.task.name
+    (task / "environment").mkdir(parents=True)
+    (task / "environment" / "Dockerfile").write_text("FROM ubuntu\n")
+    (task / "instruction.md").write_text("Do it.")
+    (task / "task.toml").write_text("[agent]\ntimeout_sec = 5\n")
+    (task / "tests").mkdir()
+    (task / "tests" / "test.sh").write_text("#!/bin/bash\n")
+    trial = await Trial.create(
+        TrialConfig(
+            task=TaskConfig(path=task),
+            trials_dir=tmp_path / "regrades",
+            source_trial=SourceTrialConfig(
+                action="regrade", type="local", path=source.paths.trial_dir
+            ),
+        )
+    )
+
+    result = await trial.run()
+
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "RegradeError"
+    assert (
+        "regrade does not support multi-agent trials"
+        in result.exception_info.exception_message
+    )
+
+
 @pytest.mark.parametrize(
     "participants, kwargs, extra, message",
     [
