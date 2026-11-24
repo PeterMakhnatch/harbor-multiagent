@@ -1,35 +1,35 @@
 # Next wave: a runbook
 
-How to run the next Flotilla wave, with the lessons of 2026-11-19 built in. Costs are model calls
-through OpenRouter, from the observed cost per trial; Modal adds about $0.01 per trial.
+How to run a Flotilla wave. Model spend and sandbox spend are separate. The current forecast uses
+about $0.0021 per Modal trial, measured on 2026-11-24. Local Docker has no sandbox fee.
 
 ## Before you start
 
 - Get approval for the spend. The waves of 2026-11-19 used the whole shared $20 ceiling.
-- Use the fork's Harbor from its own environment (`.venv/bin/harbor` in the fork's clone), never a
-  globally installed `harbor`.
-- Keys come from the `keys` store: run Harbor as `keys run -- .venv/bin/harbor run -c <config> -y`.
-- The waves up to 2026-11-23 ran the harness at fork `main` `6aeb609e`, now tag `baseline/6aeb609e`. On
-  2026-11-23 fork `main` moved to Olam's `main` (`711ca65a`), and the weekly fork integrator now syncs it. A new
-  wave names its harness by tag or SHA in the pre-registration, never as "fork `main`".
+- Use the seat-capable fork's Harbor, not a global `harbor`. The runner defaults to
+  `~/Developer/harbor-multiagent-flotilla/.venv/bin/harbor`; use `--harbor` for another pinned checkout.
+- Pin the harness by tag or commit in the pre-registration. The pilot baseline is `baseline/6aeb609e`,
+  not the fork's moving `main`. Keep the harness revision separate from the plan and world revisions.
+- Load provider keys through `keys run --` only for an authorized run. No key is required for `--dry-run`.
+  The runner prefers `FLOTILLA_OPENROUTER_API_KEY` over `OPENROUTER_API_KEY`.
 
 ## The 5 steps of a wave
 
-1. **Build.** The defaults are now safe: opaque task names and a secret random seed per build. To pair
-   2 builds instance by instance (for example a control arm and a treatment arm), build the second one
-   with `--seed-of <label folder of the first>`. Use `--seed 1` only to reproduce the waves of
-   2026-11-19, and check such a set with `qa.py --allow-public-seed`.
-2. **Check.** `uvx --quiet --with pyyaml python flotilla/qa.py "<out>/*/*"` must report 0 FAIL. It
-   fails on readable names, leaked conditions, answer-format examples, shared seat networks, seat
-   secrets, the software's name in seat-visible bytes, fixed container names and a public seed
-   (`public-seed`; `--allow-public-seed` makes that a WARN, only for a reproduction).
-3. **Oracle check.** Run the oracle agent on 2 instances of every arm first (`make_jobs.py --agent oracle`),
-   on the same environment as the wave. Expected: solo 1, talk 1, silent below 1; a scripted liar
-   deceives the naive oracle. This costs cents and catches broken builds.
-4. **Wave.** `make_jobs.py ... --max-turns 40 --concurrent 4 --env modal` and a play timeout of 600 s
-   (`build_tasks.py --play-timeout 600`). Run a spend guard that stops every job at your limit.
-5. **Analyse.** `cd flotilla/analysis && python3 -m flotilla_analysis <jobs> --tasks <out> --family-hooks ../families`,
-   then `python3 flotilla/docs/results/scripts/power.py <jobs>` to see whether the next question is resolved.
+1. **Build.** Use opaque task names and the default secret random seed. Use `--seed-of` with the
+   first build's label folder to pair a second build on the same instances. Use `--seed 1` only
+   to reproduce the 2026-11-19 waves. Do not rebuild a frozen, pre-registered set.
+2. **Check.** `uvx --quiet --python 3.12 --with pyyaml python flotilla/qa.py "$TASKS/*/*"` must report 0 FAIL
+   for a new build. `TASKS` is the build's output root. For a frozen set, accept only `stale-code`.
+   Use `--allow-public-seed` only to reproduce a published build.
+3. **Oracle check.** For a local, no-model pipeline check, use `bash flotilla/demo.sh`. To check your own
+   build, use `make_jobs.py --agent oracle --env docker` with an explicit task glob and job name, then run
+   each config through `/tmp/crucible-docker-slot.sh`. In pooling tasks expect solo and talk to score 1
+   when each team can share its data. The silent score is the information floor, not a universal 0.
+4. **Wave.** Set the model roster, environment, turn limit, concurrency and budget in the plan. Set
+   the task's play timeout with `build_tasks.py --play-timeout` before freezing the set. Use
+   `run_wave.py --dry-run` before the approved run. Apply the retry rule for that plan (below).
+5. **Analyse.** Use `flotilla_analysis` for pooling trials and `probe_analysis.py` for behavior probes.
+   Use the pre-registered decision script, where one exists, before drawing conclusions from the results.
 
 ## How to run a wave
 
@@ -44,52 +44,56 @@ Calculate each interim bound from the actual valid pair count.
 `flotilla/stages.py` plans and scores stages; `run_wave.py` runs a plan with a `stages` key (see "Staged waves").
 Do not add interim looks to an existing fixed-size pre-registration.
 
-1. Commit the plan. The runner refuses a plan that is not at HEAD.
-2. Set `prereg.commit` to the commit that records the question. That commit must be an ancestor of HEAD.
-3. Preview the order. This command does not call Harbor:
+1. Set `prereg.commit` to the commit that records the question. That commit must be an ancestor of HEAD.
+2. Set `prereg.doc` and `prereg.section` to identify the pre-registration text at that commit.
+3. Preview the order. This command does not call Harbor or require a committed plan:
 
 ```bash
 python3 flotilla/run_wave.py --dry-run flotilla/plans/example.json
 ```
 
-4. Run the wave. Keys come from the `keys` store. The runner passes only the keys the plan's models need.
+4. Commit the final plan. The runner refuses to start trials if the plan differs from HEAD.
+5. After approval, run the plan with `keys run -- python3 flotilla/run_wave.py PLAN --run-dir RUN_DIR`.
+   Substitute the plan path and the run directory. The runner passes only the model keys needed by the plan
+   to Harbor. The default run directory is `/tmp/flotilla/<plan>`; default jobs go to `.flotilla-local/jobs`.
 
-```bash
-keys run -- python3 flotilla/run_wave.py flotilla/plans/<name>.json --run-dir /tmp/flotilla/<name>
-```
+Docker allows at most 2 jobs at once, through `/tmp/crucible-docker-slot.sh`. Modal does not use the wrapper;
+the plan sets its concurrency. Each task set has its own manifest, instances and arms. The order seed
+shuffles the blocks, then the cells inside each block.
 
-Docker allows at most 2 jobs at once. Each Docker job goes through `/tmp/crucible-docker-slot.sh`. Modal does
-not use that wrapper. Modal can run about 12 jobs at once. A plan can mix families. Each task set has its own
-manifest, instances, and arms. The order seed shuffles the blocks, then the cells inside each block.
+The runner starts a job only if accounted model spend plus the reserves for that job and the in-flight jobs
+fit under the cap. It also checks provider balance floors. The reserve is an estimate, not a hard billing
+limit, and Modal is outside the model cap. Resume with the unchanged plan and the same run directory.
 
-The runner stops before a new job when spend plus the reserve for the in-flight jobs and the next job would
-pass the cap. It also stops when a provider balance is below its floor. Run the same command again to skip
-finished cells. Add `--retry-invalid` to rerun a cell that has no valid trial.
+For a fixed-size wave, check for `stop done` in `progress.log`, then run one pass with `--retry-invalid`.
+This retries each cell without a valid trial at most once. A staged wave retries each invalid cell within
+its stage before the look. Do not add `--retry-invalid` to a staged wave. Exit 0 alone does not mean the run
+finished: a cap or balance floor can also stop it. Check `progress.log` again before reading outcomes.
 
 The OpenRouter balance is the lower of the account balance (`/api/v1/credits`) and what the key itself may still
 spend (`/api/v1/key`, `limit_remaining`; no limit when `limit` is null): on 2026-11-24 the shared key had less than
 $1 of its $100 limit left while the account had about $7, so the account alone would have passed the floor. The
-floor-stop line says which of the two set the balance. After `budget.max_invalid_streak` trials in a row end invalid
-(default 6; in accounting order), the runner starts no new cell, lets the in-flight trials finish, logs
-`stop: N invalid trials in a row (last: <failure kinds>)`, saves the state and exits with code 3. Fix the cause,
-then run the same command (and `--retry-invalid`). Each attempt in `state.json` records its `problem`. The dry run
-prints both guards.
+floor-stop line says which of the two set the balance. After `budget.max_invalid_streak` invalid trials in a row
+(default 6, overall or for one model, in accounting order), the runner stops new starts, lets the in-flight
+trials finish, saves the state and exits with code 3. Fix the cause before resuming. Each attempt in
+`state.json` records its `problem`. The dry run prints the balance floors and the invalid-streak limit.
 
-Two starts are at least `make_jobs.start_spacing_s` seconds apart (default 10, `0` turns it off), in a fresh
-run and on a resume; the budget and balance checks and the wait for in-flight jobs are not delayed. The dry run
+Within a runner invocation, starts are at least `make_jobs.start_spacing_s` seconds apart (default 10,
+`0` turns it off). The pause does not delay accounting or the wait for in-flight jobs. The dry run
 and `progress.log` show the value. On 2026-11-23 a resume started about 31 trials in 10 s and 25 seats stalled
 for 612-747 s (FINDINGS.md). To find such stalls, run `python3 flotilla/docs/results/scripts/stall_scan.py
 .flotilla-local/jobs 'xm1-??????' 'pv10-??????' --threshold 500`: it lists each seat's first gap between agent
 turns above the threshold, groups gaps that start within 120 s into events, and gives per model the seats
 stalled out of the seats in flight (`--json OUT` saves the same data).
 
-OpenRouter cost is Harbor's recorded `cost_usd`. The runner also logs the token price from the catalog it
-froze at the start. DeepSeek direct cost is the published token price.
+OpenRouter spend uses Harbor's recorded `cost_usd`. If it is missing or zero despite recorded token use, the
+runner estimates spend from the frozen catalog. If it cannot price the trial, it uses the reserve. For
+homogeneous DeepSeek direct cells it prices the recorded tokens. These are accounting estimates.
 
 ### Cost forecast and smoke mode
 
-- Run `run_wave.py --dry-run <plan>` for cost by model and the expected total. The maximum uses the
-  plan's model cap plus estimated Modal cost: $0.0021 per trial, measured on 2026-11-24. Docker adds $0.
+- Run `run_wave.py --dry-run PLAN` for the cost by model and the expected total. The line labeled `maximum`
+  adds the model cap and estimated sandbox cost for the planned cells; it excludes extra sandbox cost for retries.
 - Pass `--history-jobs <jobs-dir>` to read trials from another worktree. The forecast excludes trials
   with exceptions and seats with no tokens. It uses the model's recorded mean for the probe kind when
   at least 5 model seats have a cost. Otherwise, it multiplies the probe kind's median token use by
@@ -97,30 +101,33 @@ froze at the start. DeepSeek direct cost is the published token price.
   `history any kind`. Unknown costs are not zero.
 - The runner and watch use `FLOTILLA_OPENROUTER_API_KEY` if set, otherwise `OPENROUTER_API_KEY`.
   The dry run and `progress.log` show the selected key name, not its value.
-- Run `run_wave.py <plan> --smoke` on local Docker. Add `--smoke=N` instead to select at most N instances
-  per arm, task set, and model (default 1). The cap is $0. Use `terminus-2` with OpenRouter `:free` models
-  or set `agent` to `oracle` and omit `models`. Add `--dry-run` to preview without Docker.
-  Smoke jobs use `smoke-<plan>-<hex6>` so `<plan>-*` does not match them. The run dir ends in `-smoke`.
+- Use `run_wave.py PLAN --smoke` for a no-cost Docker check. Use `--smoke=N` for the first N distinct instances
+  per task set (default 1). It ignores stages, caps concurrency at 2, and sets the model cap and reserve to $0.
+  Set `agent` to `oracle` and omit `models` and `seat_assignments`. Add `--dry-run` to preview.
+- The CLI also accepts `terminus-2` with OpenRouter `:free` IDs. The public model catalog and the ZDR
+  endpoint list had no `:free` ID in common on 2026-11-24. Use `oracle` for a no-cost check on this account.
+  This is not the paid validity smoke in plans such as `rrs` and `io1smoke`.
+- Smoke jobs use `smoke-<plan>-<6 hex>`, so `<plan>-*` does not match them. The run dir ends in `-smoke`.
   Exit code 4 means a trial recorded spend.
 
 ### Cross-play and the per-model suite
 
-- **Cross-play.** A plan with `seat_assignments` (a list of per-seat model lists, ordered p1, p2, ...) instead of
-  `models` gives each seat of a trial its own model; see `flotilla/plans/xp1.json`. Analyse it with
-  `docs/results/scripts/xp_analysis.py` (deal matrix, self- against cross-play, role-balanced surplus advantage).
+- **Cross-play.** `seat_assignments` lists models in seat order, excluding scripted seats. It replaces
+  `models`; see `flotilla/plans/xp1.json`. Even the dry run needs the task manifests. From the repository root,
+  use `python3 flotilla/docs/results/scripts/xp_analysis.py JOBS 'xp1-??????' --tasks .flotilla-local/tasks/xm1-split`.
 - **One model's mixed-motive scorecard.** Split and commons regime b, silent and talk, 16 instances each: copy
   `flotilla/plans/xm1.json`, keep the task sets, set `models` to the model, run it, then
-  `docs/results/scripts/scorecard.py <jobs> '<pattern>' --tasks .flotilla-local/tasks/xm1-split --tasks
-  .flotilla-local/tasks/xm1-commons --new-models <model> --replication-model none`. Recorded OpenRouter cost of
+  `python3 flotilla/docs/results/scripts/scorecard.py JOBS 'PATTERN' --tasks .flotilla-local/tasks/xm1-split
+  --tasks .flotilla-local/tasks/xm1-commons --new-models MODEL --replication-model none`. Recorded OpenRouter cost of
   the 64 trials on 2026-11-23: gpt-6-luna about $0.40, Claude Haiku 5.5 about $1.05, DeepSeek V4.1 Flash about
   $2.50 (its reasoning tokens make it the dearest of the three).
 - **Shared credit.** The OpenRouter account is shared by every agent. On 2026-11-23 other users spent about $15
   in 72 minutes and all 3 running waves stopped at the $2 floor with a third of their trials done. Check
   `/api/v1/credits` and the trend before a wave, and keep the floor: a stop is resumable (run the same command
   again), a 402 in the middle of a trial is not.
-- **Listening check for every talk arm.** Run `docs/results/scripts/listening.py <jobs> '<pattern>' --tasks <dirs>`
-  next to the effect. It reports the share of exposed actions taken while a message to the seat was unread. In
-  xm1 split and xp1 this share was 0.76 to 0.96 for Haiku and Luna: their talk arm was mostly send-only.
+- **Listening check for every talk arm.** Run `python3 flotilla/docs/results/scripts/listening.py JOBS 'PATTERN'
+  --tasks TASKS` next to the effect. Repeat `--tasks` for more than one task set. It reports the share of exposed
+  actions taken while a message was unread. For Haiku and Luna in xm1 split and xp1, this share was 0.76 to 0.96.
 
 ### Scripted seats in a wave
 
@@ -132,27 +139,20 @@ lists models for the seats under test only (schedule.liar: 2 models for p1 and p
 - The runner reads the scripted seats from every planned task. All tasks of a task set must have the same
   scripted seats. The optional plan key `scripted_seats` (for example `["p3"]`) must equal them in every task
   set; otherwise the runner refuses the plan.
-- The dry run prints them (`scripted seats (oracle agent, no model, cost 0): set 0 p3`). A set whose manifest
-  is not built yet shows `unknown (no manifest)`; the real run refuses it.
-- A trial is valid only if each scripted seat ran the oracle agent and each seat under test ran the cell's
-  model. The cost is the cost of the seats under test; a scripted seat costs 0 and is never an unknown cost.
-  The reserve per trial does not change.
+- A dry run prints the scripted seats it can verify. If a manifest is missing, a homogeneous plan shows
+  `unknown (no manifest)` or a declared roster; cross-play needs the manifest even for a dry run.
+- A valid trial needs verifier output and the planned seat configuration. Each scripted seat must use
+  `oracle`. Only the seats under test count towards model spend. The reserve per trial does not change.
 
-### Queue after the credit stop of 2026-11-23
+### Completed waves from 2026-11-23
 
-Run these in order from the `lab` checkout once the OpenRouter account has credit (about $6 for the first 3,
-about $4 for the last 3). The runner resumes from the `state.json` in its run dir; the run dirs of 2026-11-23 were
-copied from `/tmp/flotilla/<name>` to `.flotilla-local/runs/<name>`, so use those. Follow each command with the
-same command plus `--retry-invalid`.
-
-1. `keys run -- python3 flotilla/run_wave.py flotilla/plans/xm1.json --run-dir .flotilla-local/runs/xm1`
-2. `keys run -- python3 flotilla/run_wave.py flotilla/plans/pv10.json --run-dir .flotilla-local/runs/pv10`
-3. `keys run -- python3 flotilla/run_wave.py flotilla/plans/xp1.json --run-dir .flotilla-local/runs/xp1`
-4. The read-gate wave (SPLIT.md section 19): `flotilla/plans/lws.json` (smoke), then `lw1.json`, then `lwc.json`,
-   each with run dir `.flotilla-local/runs/<plan name>`. Apply the smoke rule of section 19 before lw1 and lwc; a
-   model that fails it is dropped (edit the plan's `models`, commit, log the drop).
+The archived `xm1`, `pv10`, `xp1`, `lws`, `lws2`, `lw1` and `lwc` runs are complete. Their run directories
+are under `.flotilla-local/runs/` in the evidence checkout. Do not resume them as part of the next batch.
+See SPLIT.md section 19 for the read-gate smoke rule and the DeepSeek control.
 
 ## Recommended experiments, in order of value per dollar
+
+The costs in this table are historical model estimates. Add the sandbox cost for the chosen environment.
 
 | # | Question | Arms | Instances, models | Cost |
 |---|---|---|---|---|
@@ -161,7 +161,7 @@ same command plus `--retry-invalid`.
 | 3 | Does an acknowledgment protocol stop the overwrite losses? | `--conditions talk` against the same with `--announce` | 24, DeepSeek, Qwen, GPT-OSS | about $1.5 |
 | 4 | Is the narrow-channel drop real? | `--conditions talk` against `--variant tight --max-text 100 --max-messages 2 --conditions talk` | DeepSeek 20, Qwen 32, GPT-OSS 40 | about $4 |
 | 5 | Do the findings hold on other information structures? | `--family ledger` and `--family puzzle`, solo/silent/talk | 12, DeepSeek and Qwen | about $2 |
-| 6 | What does coordination add on real coding tasks? | CooperBench arms (`--seats --arms solo silent talk`, PR #26) | 4 pairs, DeepSeek | pilot first: unknown, likely $2–4 |
+| 6 | Does coordination help on code? | CooperBench solo, silent and talk (fork PR #26) | 4 pairs, DeepSeek | unknown |
 
 Do not spend on the warning effect or the "only p1 submits" score effect in their current design:
 they need 48 to more than 256 instances (see RESULTS.md, "How many instances the next wave needs").
@@ -182,44 +182,72 @@ Pre-register each one in COMMONS.md or SPLIT.md before the first paid trial.
 
 ## Behavior probes (PROBE.md), in order of value per dollar
 
-Costs from the 2026-11-24 pilots (3 cheap models, Modal): about $0.0012-0.0023 per trial on OpenRouter (1 model
-seat; confederates run the `oracle` agent at no model cost) plus about $0.0021 per trial on Modal. Pre-register
-each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive before reporting.
+In the 2026-11-24 pilots, model spend was about $0.0012–$0.0023 per trial on OpenRouter. Each trial used
+one model seat; the confederates ran `oracle` at no model cost. Add about $0.0021 per attempt on Modal.
+Pre-register in PROBE.md, monitor with `flotilla-watch --blind`, and re-derive the results before reporting.
+The costs below are estimates, not spending approval.
 
-| # | Question | Design | Size | Cost |
-|---|---|---|---|---|
-| 1 | Which models stop checking when reports come first, and how do they audit? A trust card per model. | `trust_card.py` under PROBE.md section 13 (`rf1v` + `au2`). Cheap OpenRouter ids on 2026-11-24: `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`, `qwen/qwen3.8-flash`, `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl`; frontier: `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol`, `google/gemini-4-argon`. Re-carding the 3 night models replicates `rf1v` and runs `au2`. Ready: `tc1` (the 3 night models), `tc2smoke` then `tc2` (the 6 cheap models) | 184 per model | about $0.7-1.3 per cheap model (Modal included; the low end assumes prompt caching), $6-8 per frontier model |
-| 2 | Is it the order or the instruction? | complete the 2 x 2 (instruction x reports before the first data read): `--inbox` (reports in the brief, no read-first sentence) and `--read-first --post-trigger first_submit` (instruction, reports only at the first submit); verify `talk-quiet`, `talk-false` on `rf1v`'s instances. `--push` cannot do it: agents batch their first world call with their first data read (FINDINGS.md, 2026-11-24 05:20). Ready: `io1`, PROBE.md section 14 | 32 x 2 x 2 sets x 3 models = 384 | about $1.4 (OpenRouter $0.55-0.62, Modal about $0.81) |
-| 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `--audit-budget` 0, 1, 2 (built; `au2`'s seed); give each budget its own `--variant` (`audit-b0`, `audit-b1`, `audit-b2`) so no two builds share a label, and analyse each budget's jobs with its own one-set plan; pre-register first | 40 x 3 x 3 | about $1.6 |
-| 4 | Does an argument move a seat when the task text does not settle it? | conformity `--policy-file` (built): each seat holds `policy.md`, whose deciding rule (void, weekend or cap, stratified by instance: instance i gets rule i % 3; the month is redrawn when that rule's misreading would not move the total by 8-60%) only that file states, not the seat's environment; arm `talk-policy` (one peer posts W with a false claim about `policy.md`) against `talk-one` (the same post without the claim) and `talk-quiet`; analysis fields `opened_policy`, `policy_after_claim`. Pre-register first (decide whether the void rule, pa1's refuted rationale, stays in the mix) | 32 x 3 x 3 | about $0.8 |
-| 5 | Do frontier models behave the same? | trust cards (row 1) on 1-3 frontier models before any claim about frontier agents | 184 per model | $6-8 per model |
-| 6 | Does the integrator ask, and does it accept a teammate's confirmation of a wrong subtotal? | challenge-response `cr1` (world version 20): `talk-false`, `talk-false-insist`, `talk-false-admit` on `au2`'s instances (audit). Ready: PROBE.md section 15, set `.flotilla-local/tasks/cr1`, plans `cr1smoke`/`cr1` | 40 x 3 x 3 models = 360 | about $1.6 (cap $1.30 OpenRouter) |
+| # | Question | Plans or design | Planned trials |
+|---|---|---|---|
+| 1 | Which new models rely on early reports? | `rrs`, then staged `rr1` | 14 smoke + up to 672 wave |
+| 2 | Does reliance depend on order or the instruction? | `io1smoke`, then `io1` | 8 smoke + 128 wave per model |
+| 3 | Does the audit budget change who checks? | `--audit-budget` 0, 1, 2 | 40 x 3 budgets x 3 models per arm |
+| 4 | Does a false claim change the answer? | Conformity `--policy-file` | 32 x 3 arms x 3 models |
+| 5 | How do models rely on reports and use audits? | Trust cards (`rf1v` + `au2`) | 184 per model |
+| 6 | Does the integrator ask and act on a reply? | `cr1smoke`, then `cr1` | 18 smoke + 360 wave |
+| 7 | Does the result extend to frontier models? | Trust cards on 1–3 frontier models | 184 per model |
 
-Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
-from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
+- For rows 1 and 2, see the approved-batch order below. `io1` tests `talk-quiet` vs `talk-false` with
+  `--inbox` in `io1v` and `--read-first --post-trigger first_submit` in `io1s`. Agents batch their first
+  world call with a data read, so `--push` cannot reliably put the reports first (FINDINGS.md, 05:20 ET).
+- For row 3, pair on `au2`'s seed. Use distinct `--variant audit-b0`, `audit-b1` and `audit-b2` labels.
+  Use one plan per set and pre-register the arms. Allow about $1.6 per arm at pilot rates.
+- For row 4, compare `talk-policy`, `talk-one` and `talk-quiet`. Rules rotate by instance: void, weekend,
+  cap. The false reading moves the correct total by 8–60%. Report `opened_policy` and `policy_after_claim`.
+  Decide whether to include the void rule before pre-registration. Allow about $1.0–$1.3 at pilot rates.
+- For rows 5 and 7, preview each roster. `tc1` forecasts about $2.27 including Modal before retries.
+  `tc2` needs a ZDR-compatible replacement; see the trust card section. Frontier candidates with a listed
+  ZDR endpoint are `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol` and `google/gemini-4-argon`.
+  Use the `openrouter/` prefix in plans. Forecast a plan before asking for approval.
+- For row 6, compare `talk-false`, `talk-false-insist` and `talk-false-admit` on `au2`'s instances.
+  Estimated total costs are $0.08 for the smoke and $1.58 for the wave. Model caps are $0.10 and $1.30.
 
-The pre-registered sets `rf1v` (world version 14), `au2` (18), `io1v`, `io1s` (19) and `cr1` (20) are frozen: each
-task carries its own copy of the world and family code it was built with, and they run as built. `qa.py` on them
-reports only `stale-code` (this checkout's code is newer); every other rule passes (checked 2026-11-24 06:47 ET, and
-`cr1` at 07:02 ET after the `--policy-file` change to the shipped `family.py`). Do not rebuild them for a
-pre-registered wave.
+Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models for the same primary outcome. None of
+those probes found a subject adopting the false number (FINDINGS.md, 2026-11-24).
 
-### io1: order or instruction (row 2, ready to run)
+The pre-registered sets `rf1v` (world 14), `au2` (18), `io1v`, `io1s` (19) and `cr1` (20) are frozen.
+Each task carries the code it was built with. Current QA finds only `stale-code` in these sets.
+Do not rebuild them for a pre-registered wave.
 
-Pre-registered in PROBE.md section 14 (commit a542223d, with the amendments made after a review and before any
-trial); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and `io1s` (`--read-first --post-trigger first_submit`),
-built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `flotilla/plans/io1smoke.json`
-(24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.90; expected cost $0.55-0.62).
-After `rr1`, set `models` in `io1smoke.json` and `io1.json` to Luna and every new model that passes `rr1`.
-Set the `io1` cap to $0.30 per model. Use the `rr1` decisions JSON from step 1 below for the reliance labels.
-Each model is its own Holm family of 2 tests.
+### io1: order or instruction (row 2, after rr1)
+
+Use the frozen `io1v` and `io1s` task sets. The committed `io1smoke.json` and `io1.json` are templates
+with the original 3-model rosters (24 and 384 cells; model caps $0.10 and $0.90). Before a trial,
+set both rosters to GPT-6 Luna and every new model that passes `rr1`. Update both `prereg.commit`
+values to a commit containing the section 14 amendment, such as `2e2a2fe8`. Set the `io1` model cap
+to $0.30 per included model. Check the smoke cap against the new roster with `--dry-run`.
+Commit both plans. Each included model has its own Holm family of 2 tests. The decision script needs a
+settled `rr1` PASS or FAIL for each included model.
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
-# check the smoke's validity only (flotilla-watch --blind), then run the wave; the retry runs only when the wave
-# ended normally (exit 0); exit 3 means 6 invalid trials in a row: find the cause before any retry
-keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 && \
-  keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 --retry-invalid
+```
+
+Check smoke validity only with `flotilla-watch --blind` before starting the wave.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1
+```
+
+Check `progress.log` for `stop done`. Fix any guard stop before the single retry pass.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 --retry-invalid
+```
+
+After the retry pass:
+
+```bash
 for s in io1v io1s; do
   python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'io1-??????' \
     --tasks .flotilla-local/tasks/$s --plan flotilla/plans/io1.json --json /tmp/$s.json
@@ -231,13 +259,27 @@ python3 flotilla/docs/results/scripts/io1_decide.py --plan flotilla/plans/io1.js
 With `--plan io1.json`, each per-set analysis includes missing cells and unmapped trials from the other set.
 `io1_decide.py` ignores those lists and marks a test with fewer than 32 pairs INCOMPLETE.
 
-### cr1: challenge-response (row 6, ready to run)
+### cr1: challenge-response (row 6, deferred)
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1smoke.json --run-dir .flotilla-local/runs/cr1smoke
-# check the smoke's validity only, then (exit 3: find the cause before any retry):
-keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1 && \
-  keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1 --retry-invalid
+```
+
+Check smoke validity only before starting the wave.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1
+```
+
+Check `progress.log` for `stop done`. Fix any guard stop before the single retry pass.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/cr1.json --run-dir .flotilla-local/runs/cr1 --retry-invalid
+```
+
+After the retry pass:
+
+```bash
 python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'cr1-??????' \
   --tasks .flotilla-local/tasks/cr1 --plan flotilla/plans/cr1.json --json /tmp/cr1.json
 python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.json /tmp/cr1.json
@@ -245,36 +287,41 @@ python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.js
 
 ### Order for an approved batch (revised 2026-11-24 11:05 ET)
 
-Run one step at a time, and only after Peter approves its spend. "Most" is the plan's OpenRouter cap plus Modal at
-about $0.0021 per trial for every planned trial. Before each step, add its "most" to the spend so far (run logs,
-the key's usage, Modal's usage report), and do not start a step that could pass the approved total.
+Run one step at a time, and only after Peter approves its spend. The table adds the model cap and estimated
+Modal cost for planned cells. Allow extra sandbox cost for retries: at most one retry per cell in `rr1` and `io1`.
+Review the forecast and actual provider and Modal spend before each step. Keep the approved total separate
+from the runner cap.
 
-| Step | Plans | Trials (most) | Expected | Most | What it decides |
-|---|---|---|---|---|---|
-| 1 | `rrs`, then `rr1` (PROBE.md section 16, staged) | 14 + 672 | $0.05 + about $0.75-1.05 (about 220 trials if 6 of 7 models stop at the first look) | $0.13 + $3.21 | Is read-first reliance common among low-cost models, or a Luna habit? |
-| 2 | `io1smoke`, `io1` on Luna and every `rr1` PASS model (section 14, amendment) | 8 + 128 per model | about $0.35-0.65 per model | about $0.60 per model | Is it the order of the inputs or the instruction? |
+| Step | Plans | Planned trials | Caps plus planned Modal |
+|---|---|---|---|
+| 1 | `rrs`, then staged `rr1` (§16) | 14 + up to 672 | $0.13 smoke + $3.21 wave |
+| 2 | `io1smoke`, then `io1` (§14 amendment) | 8 + 128 per model | Smoke cap + $0.017/model; wave about $0.57/model |
 
-Deferred, because no decision depends on them before steps 1 and 2: `cards/tc1`, `cr1`, `cards/tc2`, audit budgets,
-`--policy-file`. `tc2` also needs a model swap first: `qwen/qwen3.8-flash` has no zero-data-retention endpoint, so
-this account gets 404 (OpenRouter's public list `GET /api/v1/endpoints/zdr`; none of the `:free` models has one
-either, so `--smoke` with `:free` models fails here too).
+Expect about $0.05 for `rrs` and $0.75–$1.05 for `rr1` if about 220 wave trials run. Reforecast
+`io1smoke` and `io1` once `rr1` sets their rosters.
+
+Defer `cards/tc1`, `cr1`, `cards/tc2`, audit budgets and `--policy-file` until steps 1 and 2 are done.
 
 Before step 1:
-- OpenRouter: the shared key had $0 of its $100 limit left at 09:39 ET and the account $6.91. Each run needs the $2
-  floor plus its cap. A Flotilla-only key (`FLOTILLA_OPENROUTER_API_KEY`, used first by the runner and the watch)
-  with its own daily limit keeps other lanes from draining the wave.
-- Sandboxes: Modal (the plans as committed; about 1 hour) or local Docker (`"env": "docker"`, `"concurrency": 2`;
-  $0 for sandboxes, several hours, and it holds both shared local slots). Change the plan before the first trial.
+- Check both the OpenRouter account balance and the key limit. Leave room for the $2 floor plus the
+  model cap. A Flotilla-only key keeps other uses of the shared key from consuming its limit.
+- Use Modal as committed, or set `make_jobs.env` to `docker` and `make_jobs.concurrency` to at most 2
+  before the first trial. Forecast the selected environment. Keep it fixed for the wave.
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/rrs.json --run-dir .flotilla-local/runs/rrs
-# read validity only (flotilla-watch --blind); drop from rr1.json every model with an invalid smoke trial, commit
+```
+
+Read only validity and exposure fields. Keep Luna, and keep each new model only if both smoke trials count.
+Commit the updated `rr1.json` before starting `rr1`.
+
+```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/rr1.json --run-dir .flotilla-local/runs/rr1
 ```
 
-Check for `stop done` in the `rr1` progress log before reading outcomes. The runner handles invalid retries in each
-stage. If the smoke excludes Luna, the protocol cannot decide whether its reliance repeats. Resolve that before
-preparing the `io1` plans.
+Check for `stop done` in the `rr1` progress log before reading outcomes. The runner retries invalid cells
+within each stage. Luna enters `rr1` even if a smoke trial fails (PROBE.md section 16). Do not use
+`--retry-invalid` on `rr1`.
 
 ```bash
 python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'rr1-??????' \
@@ -285,45 +332,60 @@ python3 flotilla/docs/results/scripts/rr1_decide.py --plan flotilla/plans/rr1.js
   --stages .flotilla-local/runs/rr1/stages.json --analysis /tmp/rr1-analysis.json --json > /tmp/rr1-decisions.json
 ```
 
-The trust cards (section "Trust card" below) run and report as `trust_card.py plan` prints:
+After separate approval for the deferred trust cards, run and report `tc1` as follows:
 
 ```bash
-keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json --run-dir .flotilla-local/runs/tc1 && \
-  keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json --run-dir .flotilla-local/runs/tc1 --retry-invalid
+keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json --run-dir .flotilla-local/runs/tc1
+```
+
+Check `progress.log` for `stop done`. Fix any guard stop before the single retry pass.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json \
+  --run-dir .flotilla-local/runs/tc1 --retry-invalid
+```
+
+After the retry pass:
+
+```bash
 python3 flotilla/trust_card.py report --plan flotilla/plans/cards/tc1.json --jobs .flotilla-local/jobs \
   --pattern 'tc1-??????' --out .flotilla-local/cards/tc1
 ```
 
 ### Trust card
 
-One command per stage gives any model a card under the standing protocol of PROBE.md section 13: reliance
-(`rf1v`, 32 instances x `talk-quiet`, `talk-false`) and audit (`au2`, 40 instances x `talk-honest`, `talk-false`,
-`talk-false-tell`), 184 trials per model, confederates p2-p4 on the `oracle` agent. Ready to run:
-`flotilla/plans/cards/tc1.json` (the 3 night models, 552 trials, cap $3.31; it replicates `rf1v` and runs `au2`), and
-`flotilla/plans/cards/tc2smoke.json` then `tc2.json` (the 6 cheap models of row 1: 30 and 1104 trials, caps $0.30
-and $5.00). Run `tc2smoke` first and read each model's 5 trials. The invalid-streak guard now also counts each
-model's trials on their own, so a model that fails every trial between 5 working models stops `tc2` (exit 3) after
-its 6th invalid trial in a row; the smoke finds such a model sooner and for less. Expected `tc2` cost at
-the night's mean token use per trial (prices read 2026-11-24 07:30 ET): OpenRouter about $2.1 with prompt caching,
-$4.7 without, plus Modal about $2.3.
+The standing protocol in PROBE.md section 13 uses reliance (`rf1v`, 32 instances x `talk-quiet`, `talk-false`)
+and audit (`au2`, 40 instances x `talk-honest`, `talk-false`, `talk-false-tell`). This is 184 cells per model,
+with p2–p4 on `oracle`. The committed plans are:
+
+- `flotilla/plans/cards/tc1.json`: 3 pilot models, 552 cells, model cap $3.312.
+- `flotilla/plans/cards/tc2smoke.json` and `tc2.json`: 6 models, 30 and 1,104 cells, model caps $0.30 and $5.00.
+  Replace `qwen/qwen3.8-flash` in both before approval: the public ZDR list has no endpoint for it. The listed
+  other 5 entries in the current `tc2` roster are `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`,
+  `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash` and `nvidia/nemotron-3.5-super-vl`. Use the `openrouter/`
+  prefix in plans. Check the updated roster with `--dry-run` and check validity for all 5 smoke cells per model
+  before the full run. The per-model invalid-streak limit also applies if other models are valid.
 
 ```bash
-python3 flotilla/trust_card.py plan --model openrouter/<model> --name card-<short> --prereg-commit <sha with section 13>
-# commit the plan, then run_wave.py --dry-run, the run and one --retry-invalid run, as the command prints
-python3 flotilla/trust_card.py report --plan flotilla/plans/cards/card-<short>.json --jobs .flotilla-local/jobs \
-    --pattern 'card-<short>-??????' --out .flotilla-local/cards/card-<short>
+PREREG_SHA=547c88c9
+python3 flotilla/trust_card.py plan \
+    --model openrouter/openai/gpt-6-luna --name card-example --prereg-commit "$PREREG_SHA"
+python3 flotilla/run_wave.py --dry-run flotilla/plans/cards/card-example.json
+# Commit, get approval, and run the wave and the single retry pass before reporting.
+python3 flotilla/trust_card.py report --plan flotilla/plans/cards/card-example.json --jobs .flotilla-local/jobs \
+    --pattern 'card-example-??????' --out .flotilla-local/cards/card-example
 ```
 
 - `plan` writes `flotilla/plans/cards/<name>.json`: Modal, 10 jobs at once, 5 s start spacing, reserve $0.02 per
-  trial and a cap of $0.006 per trial (`--cap-usd` overrides). It refuses a set that lacks a planned instance or arm,
-  tasks of another probe kind, reliance tasks not built `--read-first`, other scripted seats, a prereg commit
-  without the section heading, a plan name with a condition or model word, and an existing plan file. It commits and
-  runs nothing.
-- `report` runs `probe_analysis.py --plan --json` once per set (into `<out>/reliance.json`, `audit.json` and `.md`),
-  then `python3 -m flotilla_analysis.cards` into `<out>`, and prints one block per model (`<out>/card.txt`; the
-  decisions in `card.json`). The decisions are section 13's, computed by `trust_card.py` from the raw exact McNemar
-  p of the JSON (p < 0.05 per model, no correction across models); the Holm-adjusted decisions in the analysis output
-  are not used. `--reliance-pattern` and `--audit-pattern` read older waves (for example `rf1-*` and `au1-*`).
+  model trial and a model cap of $0.006 per planned trial (`--cap-usd` sets a total cap). It validates the
+  pre-registration, tasks and scripted roster. It refuses reused names, including names of existing job
+  folders. It commits and runs nothing.
+- `report` runs `probe_analysis.py` once per task set. It writes `reliance.json`, `audit.json`, the matching
+  `.md` files, `index.html` with example timelines, and `card.txt` and `card.json`. `trust_card.py` applies
+  section 13's raw exact McNemar tests (p < 0.05, per model, no correction across models). A test with a
+  missing cell in its arms is INCOMPLETE. The HTML cards show the analysis summaries, not these decisions.
+  `--reliance-pattern` and `--audit-pattern` select older jobs. The plan must identify their original task
+  sets to count them; selecting `au1` jobs does not make them `au2` trials.
 
 ## Lessons to keep
 
@@ -338,9 +400,9 @@ python3 flotilla/trust_card.py report --plan flotilla/plans/cards/card-<short>.j
   p = 0.0006; the paired test has too few informative pairs: p = 0.125, see FINDINGS.md).
 - Write every reported number from `flotilla-analyze` or a script in `docs/results/scripts/`, and have
   an independent agent re-derive the headline numbers from the raw files before you report them.
-- A seat that holds the data and starts on it checks every peer by default, so a trust or conformity probe
-  needs reports that come first, work the seat cannot redo, or a check that costs something. One sentence
-  that put the reports first took GPT-6 Luna from 0 to 32 of 32 false subtotals passed through (`rf1`).
+- In the baseline probes, subjects generally computed before they saw reports. Adding the read-first
+  sentence changed Luna's pass-through from 0 to 32 of 32 on matched instances (`vf1` vs `rf1v`).
+  Those runs do not separate the sentence from when the subject sees the reports. That is the `io1` question.
 - An argument that the seat's own instructions refute lowers doubt instead of raising it (`pa1`).
 
 ## Staged waves

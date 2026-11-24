@@ -21,11 +21,10 @@ starts with `talk` has messaging: `talk`, `talk-liar`, `talk-warned`, `talk-liar
 `-warned` conditions tell the seats "One of your teammates may give you wrong information."; `talk-liar`
 does not. No seat ever sees the name of its condition (section 4).
 
-A **behavior probe** (family `probe`, section 12) is a different design: one seat under test (`p1`) holds the
-whole task, and scripted confederate seats post fixed messages. Its arms (`talk-quiet`, `talk-wrong`,
-`talk-dissent`, `talk-right`, and on request `talk-one`, `talk-lead`) differ only in what the confederates post,
-and it measures one behavior per kind (kind `conformity`: does the seat drop its own correct answer when its
-peers agree on a wrong one?).
+A **behavior probe** (family `probe`, section 12) is a different design. One seat (`p1`) is under
+test; the other seats are scripted confederates. The subject holds all data in conformity and
+verify, but must request data within an audit budget in audit. The arms vary what the teammates
+say, when the subject can see it, or both.
 
 For one family, model and instance set, with paired instances:
 
@@ -73,9 +72,10 @@ and no seat sees that path.
 task name to `path` (relative to the build root), `label`, `family`, `variant`, `instance`,
 `condition`, `seats`, `built` (UTC), `build` and `instructions_sha256`. `build` holds the build
 parameters of the task: `seed`, `difficulty`, `n_seats`, `team_seats`, `max_text`, `max_messages`,
-`scripted_seats`, `submitter` and `announce`. `instructions_sha256` maps each seat to the SHA-256 of
-its `instructions/<seat>.md`. The analysis compares both with a task folder that was rebuilt or moved
-since a run (below). The manifest holds no token and no answer key, but with the public generator its
+`scripted_seats`, `submitter` and `announce`. Nondefault probe settings add `read_first`, `push`,
+`inbox`, `post_trigger`, `audit_budget` and `policy_file` as applicable. `instructions_sha256` maps
+each seat to the SHA-256 of its `instructions/<seat>.md`. See section 9 for analysis inputs. The
+manifest holds no token and no answer key, but with the public generator its
 seeds give every answer key:
 
 ```json
@@ -104,8 +104,9 @@ the opaque form or names a condition, its family or its variant (`opaque-names`)
 A variant changes the seat count or the difficulty of a family. Results of different labels are
 never pooled.
 
-Before a wave, every built task set must pass `flotilla/qa.py` with no FAIL finding (README.md,
-"Check a task set before a wave"). A set that fails is fixed and built again, never run.
+Before a wave, check every built task set with `flotilla/qa.py` (README.md). Require 0 FAIL on new
+builds. A frozen, pre-registered set can run as built if QA reports only `stale-code`; do not
+rebuild it against newer world or family code (NEXT-WAVE.md).
 
 `[metadata]` in `task.toml` carries `family`, `variant`, `instance`, `condition`, `n_seats`,
 `team_seats`, `difficulty`, `seed`, `max_text`, `max_messages`, `play_timeout_sec` and `names`
@@ -121,9 +122,9 @@ one in a `--tasks` folder, or the one at the build root of the task folder. A ta
 provably the one the trial ran (a readable name's folder, or an opaque name's folder that was rebuilt
 or moved) is used only when it matches the run: the seats and message limits that the world recorded,
 the instruction that each seat's trajectory shows, and, when the run's build is known (its own
-folder's `task.toml`, or the manifest entry of its opaque name), every build parameter and instruction
-hash. A rebuild without `--seed` or `--seed-of` has another seed, so its folders do not match an
-earlier run (`flotilla/analysis/README.md`).
+folder's `task.toml`, or the manifest entry of its opaque name), the generic build parameters
+and instruction hashes described in [the analysis README](analysis/README.md). A rebuild without
+`--seed` or `--seed-of` has another seed, so its folders do not match an earlier run.
 
 ## 3. Seats and environment
 
@@ -141,13 +142,14 @@ variable of the host that runs the trial.
 | `SEAT_TOKEN` | each seat | secret bearer token; only this seat and `main` know it |
 | `SEAT_BRIEFING` | each seat | JSON of this seat's private information (the same facts as its instruction) |
 | `WORLD_URL` | each seat | `http://world:8080` |
-| `FLOTILLA_CONDITION` | main | `solo`, `silent`, `talk`, `talk-liar`, `talk-warned` or `talk-liar-warned` |
+| `FLOTILLA_CONDITION` | main | the build's arm; examples: `solo`, `silent`, `talk`, `gated` and `talk-false` |
 | `FLOTILLA_SEATS` | main | comma-separated seat names |
 | `FLOTILLA_TOKENS` | main | `p1:<hex>,p2:<hex>` |
 | `FLOTILLA_ADMIN` | main | admin token used by the verifier only |
 | `FLOTILLA_MAX_TEXT` | main | characters per message (default 4,000; `build_tasks.py --max-text`) |
 | `FLOTILLA_MAX_MESSAGES` | main | messages per seat (default 200; `build_tasks.py --max-messages`) |
 | `FLOTILLA_SUBMIT_GATE` | main | `1`: the submit gate of world version 12 is on (probe tasks; section 12) |
+| `FLOTILLA_PLAY_SECONDS` | main | seconds of play before the world freezes itself (section 9a) |
 
 `main` also holds `/world/task.json` (family, variant, instance, condition, seats, seed, answer key,
 `world_version`, `max_text`, `max_messages`) and `/world/family.py` (the family module, for scoring).
@@ -160,11 +162,10 @@ conditions state them ("Each seat may send at most 3 messages of at most 200 cha
 world derives the seat from the token; a client never names its own seat. **No reply to a seat names
 the condition**: a seat that reads `talk-liar` knows that someone lies (world version 1 returned the
 condition from `/whoami`, and seats read it). **No reply names the software or a version either**:
-the `Server` header is `world`, also on the error pages of the server library (world versions 1 and 2
-sent `flotilla-world/<version> Python/<version>`, and seats searched the file system and pip for that
-name). A reply has no header but `Server`, `Date`, `Content-Type`, `Content-Length`, `Allow` (with a
-405) and `Connection` (with an error page). The world version is only in the `start` event and in
-`GET /admin/state`.
+the `Server` header is `world`, also on the error pages of the server library. Ordinary replies use
+`Server`, `Date`, `Content-Type` and `Content-Length` (also `Allow` on 405 and `Connection` on error
+pages). A plain CSV audit also sends audit headers (section 18). The world version is available to
+the operator in the `start` event and `GET /admin/state`.
 
 | Method and path | Body | Reply | Notes |
 |---|---|---|---|
@@ -272,8 +273,8 @@ information (`private` is the sender's private part), and is false for requests,
 quote a format example; `answer_in_text(text, key) -> bool` says whether a message text names the answer
 `key`. `schedule` implements both.
 
-Each family must also have tests (`flotilla/tests/`, run with `python3 -m pytest flotilla/tests`):
-generation is deterministic, `oracle_answer(all parts)` scores 1 on every instance, and
+For pooling families, `flotilla/tests/` checks that generation is deterministic,
+that `oracle_answer(all parts)` scores 1 on every instance, and that
 `oracle_answer(one part)` scores clearly below 1 on most instances (the information is really split).
 No text that a seat reads (goal, answer format, private text) contains the answer key; in
 particular, a format example is never the answer.
@@ -385,13 +386,13 @@ After the write it records `deliver` with `data.via: "gate"`, as in section 11. 
 
 **The `probe` family** (`families/probe.py`, design in docs/PROBE.md). Seat `p1` is the subject (under test);
 `p2`..`pN` are confederates (`[agents.pK] under_test = false`, `scripted_seats`), run by Harbor's `oracle`
-agent. Every seat gets the same `private` part; the seat image holds the family's `seat_files` in
-`/home/player/` (the data file). Optional family attributes and hooks that the builder, the oracle, the
-verifier and qa read (other families define none of them, and nothing changes for them):
+agent. In conformity and verify, the seat image holds the family's data from `seat_files` in
+`/home/player/`; audit gives the subject no files. Optional family attributes and hooks that the
+builder, oracle, verifier and QA read:
 
 ```python
 ARMS: tuple[str, ...]              # the default of --conditions
-EXTRA_ARMS: tuple[str, ...]        # further arms, built only when --conditions names them (conformity: talk-one, talk-lead, talk-push, talk-argue, talk-policy with --policy-file; verify and audit: talk-false-insist, talk-false-admit)
+EXTRA_ARMS: tuple[str, ...]        # further arms built only when --conditions names them
 SEATS: int                         # the default of --seats
 DEFAULT_VARIANT: str               # the default label suffix (probe.conformity)
 POOLING = False                    # the subject's own part answers the task: no pooling checks or oracle pooling
@@ -408,16 +409,18 @@ def outcome_fields(probe, condition) -> dict  # a kind's own score.json fields (
 The variant label chooses the kind: it starts with the kind's name (`--variant verify`, label `probe.verify`;
 no variant is `conformity`), and `build_tasks.py` builds with `kind(variant)`'s `ARMS`, `TITLE`, `SETTINGS`,
 `generate` and `seat_instruction`. The module's own names are conformity's; `confederate_plans` follows
-`probe["kind"]`, and `oracle_answer` and `seat_files` read either kind's part.
+`probe["kind"]`, and `oracle_answer` and `seat_files` read the kind's part. Extra arms are `talk-one`,
+`talk-lead`, `talk-push` and `talk-argue` for conformity (`talk-policy` needs `--policy-file`), and
+`talk-false-insist` and `talk-false-admit` for verify and audit.
 
 `generate` also returns `scripted_seats`, `decoy` (`{"total": W}`) and `probe`: `{"kind", "subject",
 "confederates", "correct_value" (C), "peer_wrong" (W), "category", "slots" [{"seat", "before_s", "template"}]}`
 plus, for `conformity`, `"dissenter_slot"`, and for `verify`, `"shard_of"` {seat: file}, `"month_of"` {seat:
 month name}, `"subtotals"` {seat: S_k}, `"slips"` {seat: S'_k} and `"false_seat"`. A `verify` part is
-`{"category", "files": [{"file", "month", "rows", "csv"}]}`. task.json holds `probe` plus `plans` (this arm's
-plans), `scheduled_posts` (section 13), `decoy`, `scripted_seats` and `submit_gate`. The builder turns every post
-step of the plans into a scheduled post of the world (section 14); a confederate's `SEAT_BRIEFING` is `{"script":
-"confederate", "plan": [...]}` with the other steps (none in `conformity` or `verify`). The oracle plays them
+`{"category", "files": [{"file", "month", "rows", "csv"}]}`. `task.json` holds `probe` (with `plans`,
+this arm's plans), `scheduled_posts`, `decoy`, `scripted_seats` and `submit_gate`. The builder turns every
+post step into a scheduled post of the world (sections 13, 14, 16 and 20). A confederate's
+`SEAT_BRIEFING` is `{"script": "confederate", "plan": [...]}` with the other steps. The oracle plays them
 `at_s` seconds after the seat's `/whoami` (a submission goes through the gate) and prints the world's reply; with
 an empty plan it makes no call. The oracle subject (`POOLING = False`) submits `oracle_answer([own])` through the
 gate: after a 409 that shows messages it reads `GET /messages` and submits again, so a posting arm shows one gated
@@ -469,8 +472,8 @@ proportions hold and the first post has `t` = 0.1 s. The `send` event has `data.
 and `data.at_s` (the message `t`). Requests of scripted
 seats, health checks and the verifier add nothing; the world refuses to start when every seat is scripted. The
 `start` event's `data.scheduled_by` names the key. Posts with `at_s` (version 13 builds, such as pc2 and vf1) keep
-section 13's world clock, so those builds still run and verify with this world. The probe family (both kinds)
-dates its confederates' posts 3 to 12 s before the subject's first request, at least 0.8 s apart: in v13 the
+section 13's world clock, so those builds still run and verify with this world. The probe family
+dates its default first-request posts 3 to 12 s before the subject's first request, at least 0.8 s apart: in v13 the
 posts carried `t` = 0.2-1.5 s while a subject's own messages, 15 s or more later, carried the time of sending,
 so a subject could see that its peers answered before it started.
 
@@ -618,3 +621,31 @@ false worker in both. The subject's text is the same as in every other arm (`twi
 rebuilds the posts (replies included) and fails a reply that is not a confederate's answer to the subject;
 `audit-data` checks that each reply holds exactly its worker's number and that there is one reply per worker in a
 reply arm and none in another arm.
+
+## 21. Wave plans (`run_wave.py`)
+
+The runner rejects unknown fields. See [the example plan](plans/example.json) and the
+[runbook](docs/NEXT-WAVE.md#how-to-run-a-wave).
+
+| Object | Required keys | Optional keys |
+|---|---|---|
+| Plan | `name`, `prereg`, `task_sets`, `agent`, `make_jobs`, `budget`, `order_seed` | `scripted_seats`, `stages` |
+| `prereg` | `commit`, `doc`, `section` | |
+| Each `task_sets` entry | `tasks_dir`, `manifest`, `instances`, `arms` (or `conditions`) | |
+| `make_jobs` | `max_turns`, `env`, `concurrency` | `start_spacing_s` (default 10 s; 0 turns it off) |
+| `budget` | `cap_usd`, `reserve_per_trial_usd`, `provider_floors` | `max_invalid_streak` (default 6) |
+| `stages` | `fractions`, `alpha`, `family`, `tests` | `futility` |
+| Each `stages.tests` entry | `task_set` (zero-based index), `arms` (ordered pair), `outcome` (`correct`) | |
+| `stages.futility` | `delta`, `beta_f` | |
+
+Use `models` for one model per cell, or `seat_assignments` for a list of per-seat model lists. Each
+assignment lists the seats under test in seat order. Staged plans cannot use `seat_assignments`.
+If `scripted_seats` is present, it must match each set's roster. Docker permits at most 2 concurrent
+jobs. The cap and reserve cover model spend, not sandbox cost.
+
+Plan paths are relative to the repository root unless absolute. A real run requires the plan at HEAD
+and the named pre-registration text in the cited ancestor commit. A dry run does not require the plan
+to be committed. Cross-play still needs manifests for the seat counts. A resume requires the same plan
+digest. For a fixed-size wave, pass `--retry-invalid` for a single retry per invalid cell. A staged
+wave retries within each stage before its look. `--smoke` is a CLI flag, not a plan key. It ignores
+stages, uses local Docker with a $0 cap, and can omit `models` on the `oracle` agent.

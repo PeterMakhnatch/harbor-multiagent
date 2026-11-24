@@ -15,9 +15,9 @@ pip install .   # optional: installs the `flotilla-analyze` command
 
 `PATH` is a trial folder, a job folder, or any folder that holds job folders. The walk stops at the
 first folder whose `result.json` has `trial_name` (as Sextant does) and never follows directory links.
-`--tasks DIR` names where to find task folders when the path in `result.json` no longer exists.
-`--manifest FILE` names a build manifest (`manifest.json` at the root of a `build_tasks.py` output) for
-opaque task names whose task folder is gone.
+`--tasks DIR` adds a root to search when the original task folder is missing or no longer holds the task.
+`--manifest FILE` maps opaque names to tasks and adds the manifest's parent as a search root.
+Both options may repeat. The analysis also reads `DIR/manifest.json` for each `--tasks DIR`.
 
 Analyze one compatible run set at a time. `--allow-mixed-builds` permits pooling when the build
 checks report a difference. The report keeps a warning that names the differing fields.
@@ -65,7 +65,8 @@ with different parameters (<what differs>)", and the details are listed per tria
 - when the run's build is known (its own folder's `task.toml`, or for an opaque name the manifest entry
   of that name, which `build_tasks.py` writes with `build`: seed, difficulty, `n_seats`, `team_seats`,
   `max_text`, `max_messages`, `scripted_seats`, `submitter`, `announce`, and `instructions_sha256`):
-  every build parameter, and the sha256 of each instruction file not checked by its trajectory.
+  the generic build parameters listed above and the SHA-256 of each instruction file not checked by its trajectory.
+  The generic parameter comparison does not cover probe-specific settings such as `audit_budget` or `post_trigger`.
 
 A readable name's manifest entry is not used (a later build of the same name replaces it), and a
 manifest written before build parameters existed gives none: then only the world record and the
@@ -239,9 +240,8 @@ requests by event kind (send, deliver, submit, whoami, denied, probe) and except
   conclusion with a cue word counts as data ("the only common free slot is Tue 13:00"), and a request
   that names the sender's own attendees next to an unmarked example ("I have Ana; send yours as Mon
   09,10") counts. *Received* means fetched, not read.
-- A task folder rebuilt with the same instances passes the score check even if other files (for
-  example a newer world) changed; the world version then follows the folder unless the trial's own
-  events record it. A `world_version` field in the world's `start` event would make it exact.
+- A rebuild can pass the score and build checks even if shipped code changed. The analysis uses the recorded
+  world version when available. Keep the original task set for probe analysis.
 
 ## Trial timeline
 
@@ -282,12 +282,14 @@ page; click a column head to sort. `--tasks` and `--manifest` work as for `floti
 
 ```bash
 cd flotilla/analysis
-python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan>    # a run_wave.py run folder
-python3 -m flotilla_analysis.watch ../../.flotilla-local/jobs --once    # any Harbor jobs (or job) folder
-python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan> --html /tmp/wave   # live dashboard
-flotilla-watch TARGET [--interval 30] [--once] [--json PATH] [--html DIR] [--notify] [--stall-seconds 300]
-               [--cap-usd X] [--blind]
+PLAN=rr1
+python3 -m flotilla_analysis.watch "../../.flotilla-local/runs/$PLAN" --blind
+python3 -m flotilla_analysis.watch ../../.flotilla-local/jobs --once
+python3 -m flotilla_analysis.watch "../../.flotilla-local/runs/$PLAN" --blind --html /tmp/wave
 ```
+
+The target can be a run folder, a jobs folder or a single job folder. The default interval is 30 s;
+the default stall threshold is 300 s. `--once` prints one status and exits.
 
 Each pass (every `--interval` seconds) prints the wave's progress (cells or trials done, valid, invalid,
 running, pending and abandoned), the spend against the cap (`spent_usd` in `state.json`, the cap from the
@@ -306,8 +308,9 @@ For a run folder, one `provider` line per provider of the wave's models (the pla
 `flotilla/run_wave.py`; for OpenRouter the lower of the account balance and the key's limit left, or "no key
 limit"), the plan's `provider_floors` value, and `STOP` under the floor or `WARN` under twice it (each a
 notified alert, once). It reads each provider at most once per 60 s and waits 8 s for an answer. A failed or
-slow read shows "balance unknown (<error>)" and the watch goes on. The key comes from the environment (run
-the watch under `keys run --`); without one the line says "no key in environment". `--blind` keeps it.
+slow read shows "balance unknown (<error>)" and the watch goes on. The watch prefers
+`FLOTILLA_OPENROUTER_API_KEY` over `OPENROUTER_API_KEY`, like the runner. Without a key it shows
+"no key in environment". Use `keys run --` for authorized live monitoring. `--blind` keeps the balance line.
 
 `--html DIR` replaces `DIR/index.html` atomically each pass with a self-contained dashboard (inline CSS, no
 other files; it reloads itself every `--interval` seconds, and with `--once` it does not reload): the same
@@ -354,7 +357,7 @@ stuck behind provider retries, shows as a stall; the retries also show in `trial
 
 ```bash
 cd flotilla/analysis
-python3 -m flotilla_analysis.cards OUTDIR --analysis pc2.json --analysis vf1.json --jobs JOBS [--examples 3]
+python3 -m flotilla_analysis.cards OUTDIR --analysis pc2.json --analysis vf1.json --jobs JOBS --examples 3
 ```
 
 Reads the JSON of `flotilla/docs/results/scripts/probe_analysis.py ... --json PATH` (repeat `--analysis`
@@ -364,7 +367,9 @@ tests, and the kind's key secondaries (conformity: reversal, talk-wrong errors =
 verify: pass-through with its Wilson interval, verified share; audit: the talk-false vs talk-false-tell
 test without decision, pass-through per false arm, targeting against 1/3, pass-through by audit, audit
 use). Every number is copied from the JSON, or is a share k/n of two JSON counts; a value the JSON lacks
-is "-". No test or interval is recomputed.
+is "-". No test or interval is recomputed. For a trust card, read `trust_card.py report`'s `card.txt`
+or `card.json` for the protocol decisions, not the generic cards' tests. For a staged wave, use
+`stages.json` and the protocol decision script.
 
 Examples per card: counted trials of the card's kind and model, at most N per category, ordered by job
 name then trial name: wrong final answers; posting-arm trials (the arms of the summary's `exposure`) in
@@ -374,10 +379,25 @@ page, written to `OUTDIR/trials/<job>.html`. The tool reads only the trial folde
 The page is plain HTML with inline CSS and no script. `--tasks` and `--manifest` work as for
 `flotilla-analyze`.
 
+## Exploratory features from the behavior pilots
+
+Run this from the repository root, with the original job and task folders available:
+
+```bash
+python3 flotilla/docs/results/scripts/trace_features.py --jobs .flotilla-local/jobs \
+    --analysis .flotilla-local/cards/2026-11-24/analysis --out /tmp/trace-features.csv --summary --check
+```
+
+This script selects the archived jobs `vf1`, `pc2`, `pc3`, `pa1`, `rf1` and `au1`. It does not select `rr1`.
+It writes one row per finished probe trial. It uses heuristics for file reads, message use and costs after
+submission. `--check` compares the derived rows with the supplied analysis JSON and exits 1 on disagreement.
+Use `--sample N --seed 1` to select up to N valid trials per set, arm and model for reading.
+Use `--show JOB/TRIAL` to print a specific trajectory excerpt. These are exploratory features, not decisions.
+
 ## Tests
 
 ```bash
-cd flotilla/analysis && python3 -m unittest discover -s tests -t .   # or: pytest tests
+cd flotilla/analysis && uvx --quiet --python 3.12 --with pytest pytest -q tests
 ```
 
 Synthetic job folders come from `tests/fixtures.py`. `tests/data/` holds the real oracle-check jobs
