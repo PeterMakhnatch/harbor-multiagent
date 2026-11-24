@@ -1,0 +1,36 @@
+{
+  "schema": "harbor.ship-inflight.visibility/v1",
+  "question": "same offer, relief decision, receipt order and channel: are role replies through freeze identical in the fails and settles worlds?",
+  "verdict": "identical",
+  "groups": {
+    "all": {
+      "pairs": 168,
+      "sound": 168,
+      "visible_equal": 168,
+      "reward_differs": 144,
+      "outcome_differs": 144,
+      "visible_equal_reward_differs": 144
+    },
+    "cooperative": {
+      "pairs": 76,
+      "sound": 76,
+      "visible_equal": 76,
+      "reward_differs": 75,
+      "outcome_differs": 75,
+      "visible_equal_reward_differs": 75
+    },
+    "probe": {
+      "pairs": 92,
+      "sound": 92,
+      "visible_equal": 92,
+      "reward_differs": 69,
+      "outcome_differs": 69,
+      "visible_equal_reward_differs": 69
+    }
+  },
+  "limits": [
+    "in-process pinned InflightWorld.handle/freeze; HTTP framing, bearer checks and seat containers are not exercised",
+    "scripted role calls with fixed public references; resume/replace not fed by an earlier inbox receipt are held-reference protocol probes",
+    "no model behavior or timing evidence"
+  ]
+}

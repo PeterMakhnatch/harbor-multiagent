@@ -1,0 +1,574 @@
+{
+  "schema": "harbor.ship-inflight.public-cuts/v1",
+  "question_sha256": "sha256:6b531512f6dcabfa6c05b01a8fa32668ca6d199b68d05f96c5518bf3153f2434",
+  "task_files": "sha256:cb5294288f62b79fe69c780c2e5287bfef0dbb7b05fb3e17b03f1ebbd4d0d94c",
+  "rows": [
+    {
+      "ticket": "si-8b457c4e64fa243d",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "resolve",
+            "choice": "fresh"
+          }
+        ],
+        "replace": null,
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ]
+      }
+    },
+    {
+      "ticket": "si-c7aa9cf61cbbb83e",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "resolve",
+            "choice": "fresh"
+          }
+        ],
+        "replace": null,
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh",
+          "original"
+        ]
+      }
+    },
+    {
+      "ticket": "si-1c1135b3a2a365be",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "original"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "fresh"
+          }
+        ],
+        "replace": "original",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ]
+      }
+    },
+    {
+      "ticket": "si-d6a136ca7e4bf8d1",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "draft"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "draft"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "fresh"
+          }
+        ],
+        "replace": "draft",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh",
+          "original"
+        ]
+      }
+    },
+    {
+      "ticket": "si-24618ead1522e201",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "draft"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "draft"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "draft"
+          }
+        ],
+        "replace": null,
+        "settled": [
+          "draft"
+        ],
+        "drained": [
+          "draft"
+        ]
+      }
+    },
+    {
+      "ticket": "si-42d32f515443a2d3",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "deliver",
+        "events": [],
+        "replace": null,
+        "settled": [],
+        "drained": []
+      }
+    },
+    {
+      "ticket": "si-3c710acdaa429092",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "withhold",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "none"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "close"
+          }
+        ],
+        "replace": null,
+        "settled": [],
+        "drained": [
+          "original"
+        ]
+      }
+    },
+    {
+      "ticket": "si-8d37d0777f34c365",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "original"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "fresh"
+          }
+        ],
+        "replace": "original",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ]
+      }
+    },
+    {
+      "ticket": "si-7570d87c985c30ea",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "withhold",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "none"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "close"
+          }
+        ],
+        "replace": null,
+        "settled": [],
+        "drained": []
+      }
+    },
+    {
+      "ticket": "si-16628251379828d3",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "withhold",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "none"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "close"
+          }
+        ],
+        "replace": null,
+        "settled": [],
+        "drained": []
+      }
+    },
+    {
+      "ticket": "si-93b4d29020345eb5",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "deliver",
+        "events": [],
+        "replace": null,
+        "settled": [],
+        "drained": [
+          "original"
+        ]
+      }
+    },
+    {
+      "ticket": "si-58eb44feac2e10ee",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "draft"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "draft"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "draft"
+          }
+        ],
+        "replace": null,
+        "settled": [
+          "draft"
+        ],
+        "drained": [
+          "draft",
+          "original"
+        ]
+      }
+    },
+    {
+      "ticket": "si-56eb464e42a3b592",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 0
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "original"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "original"
+          }
+        ],
+        "replace": null,
+        "settled": [],
+        "drained": []
+      }
+    },
+    {
+      "ticket": "si-5b7b9dbc720d7132",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "original"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "original"
+          }
+        ],
+        "replace": null,
+        "settled": [],
+        "drained": [
+          "original"
+        ]
+      }
+    },
+    {
+      "ticket": "si-3c1dd43fb19073e1",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "fails",
+        "channel": "deliver",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "draft"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "draft"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "fresh"
+          }
+        ],
+        "replace": "draft",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ]
+      }
+    },
+    {
+      "ticket": "si-a05885b6627797a5",
+      "native": {
+        "seats": {
+          "outgoing": "returned",
+          "relief": "returned"
+        },
+        "reward_valid": true,
+        "reward": 1
+      },
+      "cut": {
+        "schema": "harbor.ship-inflight.cut/v1",
+        "fate": "settles",
+        "channel": "withhold",
+        "events": [
+          {
+            "seq": 1,
+            "kind": "handoff",
+            "choice": "original"
+          },
+          {
+            "seq": 2,
+            "kind": "inbox",
+            "choice": "none"
+          },
+          {
+            "seq": 3,
+            "kind": "resolve",
+            "choice": "close"
+          }
+        ],
+        "replace": null,
+        "settled": [],
+        "drained": [
+          "original"
+        ]
+      }
+    }
+  ]
+}

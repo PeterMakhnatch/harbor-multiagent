@@ -1,0 +1,312 @@
+{
+  "schema": "harbor.ship-inflight.controls/v1",
+  "question": "When work is still in flight, is handing over the original reference enough, or does the relief action have to account for the unresolved original?",
+  "task_name": "harbor/ship-inflight",
+  "stock_source_tree": "c09e2f59e06ac324e5d9f2dbdc74d4da423de08e",
+  "eligibility": "16 new native Docker first attempts. Both seats under test in separate containers; scripted Oracle controls, no models. One attempt per ticket, no replacement. Native error, bad lock, missing cut or conflicting grade cannot pass.",
+  "primary_pass": "All 16 cases have both native seats returned, equal replayed and recorded final rewards, and the registered pre-drain and final effects. Only original-to-replace gives a correct final parcel for both delivered fates among the four inspected reference strategies. Dropping a reference removes that guarantee.",
+  "contrast": "The same hidden fate must leave all observable role replies identical until freeze for the same role actions and reference tokens. An idle or blind team may earn a valid inherited grade; do not call this successful coordination.",
+  "cutoff": "Pre-drain is the last settled state at the trusted freeze, not a sample of the instant a particular seat returned.",
+  "scope": "One scripted control per condition. Do not estimate a model effect. No background settlement or wall-clock assumptions.",
+  "cases": [
+    {
+      "ticket": "si-8b457c4e64fa243d",
+      "outgoing": "idle",
+      "relief": "blind-fresh",
+      "fate": "fails",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "absent",
+        "relief_action": "fresh",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ],
+        "grade_before_drain": 1,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-c7aa9cf61cbbb83e",
+      "outgoing": "idle",
+      "relief": "blind-fresh",
+      "fate": "settles",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "absent",
+        "relief_action": "fresh",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh",
+          "original"
+        ],
+        "grade_before_drain": 1,
+        "reward": 0,
+        "outcome": "duplicate"
+      }
+    },
+    {
+      "ticket": "si-1c1135b3a2a365be",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "settles",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "replace-original",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ],
+        "grade_before_drain": 1,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-d6a136ca7e4bf8d1",
+      "outgoing": "draft",
+      "relief": "replace",
+      "fate": "settles",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "draft",
+        "relief_action": "replace-draft",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh",
+          "original"
+        ],
+        "grade_before_drain": 1,
+        "reward": 0,
+        "outcome": "duplicate"
+      }
+    },
+    {
+      "ticket": "si-24618ead1522e201",
+      "outgoing": "draft",
+      "relief": "resume",
+      "fate": "fails",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "draft",
+        "relief_action": "join-draft",
+        "settled": [
+          "draft"
+        ],
+        "drained": [
+          "draft"
+        ],
+        "grade_before_drain": 1,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-42d32f515443a2d3",
+      "outgoing": "idle",
+      "relief": "idle",
+      "fate": "fails",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "absent",
+        "relief_action": "absent",
+        "settled": [],
+        "drained": [],
+        "grade_before_drain": 0,
+        "reward": 0,
+        "outcome": "omission"
+      }
+    },
+    {
+      "ticket": "si-3c710acdaa429092",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "settles",
+      "channel": "withhold",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "settled": [],
+        "drained": [
+          "original"
+        ],
+        "grade_before_drain": 0,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-8d37d0777f34c365",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "fails",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "replace-original",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ],
+        "grade_before_drain": 1,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-7570d87c985c30ea",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "fails",
+      "channel": "withhold",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "settled": [],
+        "drained": [],
+        "grade_before_drain": 0,
+        "reward": 0,
+        "outcome": "omission"
+      }
+    },
+    {
+      "ticket": "si-16628251379828d3",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "fails",
+      "channel": "withhold",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "settled": [],
+        "drained": [],
+        "grade_before_drain": 0,
+        "reward": 0,
+        "outcome": "omission"
+      }
+    },
+    {
+      "ticket": "si-93b4d29020345eb5",
+      "outgoing": "idle",
+      "relief": "idle",
+      "fate": "settles",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "absent",
+        "relief_action": "absent",
+        "settled": [],
+        "drained": [
+          "original"
+        ],
+        "grade_before_drain": 0,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-58eb44feac2e10ee",
+      "outgoing": "draft",
+      "relief": "resume",
+      "fate": "settles",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "draft",
+        "relief_action": "join-draft",
+        "settled": [
+          "draft"
+        ],
+        "drained": [
+          "draft",
+          "original"
+        ],
+        "grade_before_drain": 1,
+        "reward": 0,
+        "outcome": "duplicate"
+      }
+    },
+    {
+      "ticket": "si-56eb464e42a3b592",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "fails",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "join-original",
+        "settled": [],
+        "drained": [],
+        "grade_before_drain": 0,
+        "reward": 0,
+        "outcome": "omission"
+      }
+    },
+    {
+      "ticket": "si-5b7b9dbc720d7132",
+      "outgoing": "original",
+      "relief": "resume",
+      "fate": "settles",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "join-original",
+        "settled": [],
+        "drained": [
+          "original"
+        ],
+        "grade_before_drain": 0,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-3c1dd43fb19073e1",
+      "outgoing": "draft",
+      "relief": "replace",
+      "fate": "fails",
+      "channel": "deliver",
+      "expected": {
+        "outgoing_handoff": "draft",
+        "relief_action": "replace-draft",
+        "settled": [
+          "fresh"
+        ],
+        "drained": [
+          "fresh"
+        ],
+        "grade_before_drain": 1,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    },
+    {
+      "ticket": "si-a05885b6627797a5",
+      "outgoing": "original",
+      "relief": "replace",
+      "fate": "settles",
+      "channel": "withhold",
+      "expected": {
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "settled": [],
+        "drained": [
+          "original"
+        ],
+        "grade_before_drain": 0,
+        "reward": 1,
+        "outcome": "exactly_one"
+      }
+    }
+  ]
+}
