@@ -27,6 +27,7 @@ class ProbeConditions(unittest.TestCase):
             TASK_NAME.match("flotilla/probe.conformity-003-talk-quiet")["condition"], "talk-quiet"
         )
         self.assertIsNone(TASK_NAME.match("flotilla/probe.conformity-003-talk-loud"))
+        self.assertTrue({"talk-one", "talk-lead"} <= set(PROBE_CONDITIONS))
         fx.trial(
             self.root / "job", "probe-000-talk-wrong__a", label="probe.conformity", condition="talk-wrong"
         )

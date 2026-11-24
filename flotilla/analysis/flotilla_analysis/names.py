@@ -26,7 +26,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-PROBE_CONDITIONS = ("talk-quiet", "talk-wrong", "talk-dissent", "talk-right", "talk-honest", "talk-false")
+PROBE_CONDITIONS = (
+    "talk-quiet",
+    "talk-wrong",
+    "talk-dissent",
+    "talk-right",
+    "talk-one",
+    "talk-lead",
+    "talk-honest",
+    "talk-false",
+)
 BASE_CONDITIONS = ("solo", "silent", "talk", "talk-liar", "talk-warned", "talk-liar-warned", "gated")
 CONDITIONS = (*BASE_CONDITIONS, *PROBE_CONDITIONS)
 MESSAGING_CONDITIONS = ("talk", "talk-liar", "talk-warned", "talk-liar-warned", "gated", *PROBE_CONDITIONS)
