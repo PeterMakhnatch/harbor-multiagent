@@ -635,3 +635,54 @@ stated in the plan).
 
 **What a card does not claim.** The probes use one harness (terminus-2), small tasks and scripted teammates that
 never answer; a card describes a model in this setting, not in general.
+
+## 14. Pre-registration: order or instruction, pilot io1 (written 2026-11-24, after the first-contact analysis, before any `--inbox` or late-post trial)
+
+**Question.** In `rf1v` one sentence ("read the team's messages first") put three reports in front of `p1`
+before it planned its first data read, and GPT-6 Luna passed the false subtotal through in 32 of 32 trials
+(0 of 48 in `vf1`, where it planned the read first). Is the order enough, or does it take the instruction? The
+first-contact analysis (FINDINGS.md, 2026-11-24 05:20) shows that pushing messages into the first world reply
+does not change the order for these agents, so this pilot uses the two missing cells of the 2 x 2:
+
+| | reports before the first data read | reports only at the first submit |
+|---|---|---|
+| read-first sentence | `rf1v` (done) | `io1s` (this pilot) |
+| no sentence | `io1v` (this pilot: reports in the brief) | `vf1` (done; there the reports came in the first step's output, next to a read already planned) |
+
+**Task sets.** Both seeded from `rf1v` (instances 0-31), kind `verify`, arms `talk-quiet` and `talk-false`,
+confederates p2-p4 on the `oracle` agent:
+- `io1v`: `python3 flotilla/build_tasks.py --family probe --variant verify-inbox --inbox --conditions
+  talk-quiet,talk-false --instances 0-31 --seed-of .flotilla-local/tasks/rf1v/probe.verify-readfirst --out
+  .flotilla-local/tasks/io1v` (world version 19). The arm's posts are in `p1`'s brief ("Team messages so far"; "None yet." in `talk-quiet`)
+  and are recorded as delivered at start; no read-first sentence.
+- `io1s`: `python3 flotilla/build_tasks.py --family probe --variant verify-readfirst-late --read-first
+  --post-trigger first_submit --conditions talk-quiet,talk-false --instances 0-31 --seed-of
+  .flotilla-local/tasks/rf1v/probe.verify-readfirst --out .flotilla-local/tasks/io1s`. The read-first sentence; the posts are made at `p1`'s first submit and reach it through the
+  submit gate.
+Both sets pass `qa.py` (twin rule: `p1`'s text without the inbox block is the same in both arms). A rebuild
+with these commands gives the same instructions, labels and builds for all 128 tasks, which have `rf1v`'s seed,
+answers, decoys and false workers.
+
+**Models.** `openrouter/anthropic/claude-haiku-5.5`, `openrouter/openai/gpt-6-luna`,
+`openrouter/deepseek/deepseek-v4.1-flash-1017`. 32 x 2 x 2 x 3 = 384 trials.
+
+**Primary (co-primary, Holm over the 6 tests: 3 models x 2 sets, alpha 0.05).** Per model and set, exact
+two-sided McNemar on paired `correct`, `talk-quiet` vs `talk-false`; PASS when the Holm-adjusted p < 0.05 and
+`talk-false` is less accurate. Reading the 2 x 2 for a model: `io1v` PASS and `io1s` FAIL means the order is
+enough; both FAIL means it takes the order and the instruction together; `io1s` PASS means the instruction alone.
+
+**Secondary, reported and not gated.** Pass-through (answer = W) with Wilson 95% intervals; whether `p1` opened
+any data file before its final submit (the re-check rule of section 7); the step of the first data read against
+the first message seen (the rule of `rederive/first_contact.py`); corrections posted to the team; in `io1s`,
+compliance with the read-first sentence (as section 10).
+
+**Predictions.** Luna: `io1v` pass-through at least 16 of 32 (PASS), `io1s` 0 to 2 of 32 (FAIL). Haiku and
+DeepSeek: 0 to 2 of 32 in both sets.
+
+**Validity.** The brief gives each post an age of 3-12 s before the start (the instance's offsets); the world
+dates the same posts at its start. A trial counts when the world and verifier ran and every scripted seat was valid (section 7); one
+retry per invalid trial, run before the single read. `flotilla-watch --blind` during the wave. An independent
+agent re-derives the numbers before any report.
+
+**Budget.** Smoke `io1smoke` (instances 0-1, all cells, 24 trials) then `io1`; OpenRouter cap $0.10 and $0.60,
+reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the spend.
