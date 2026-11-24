@@ -24,7 +24,8 @@ MAX_JOBS = 32
 MAX_PATH = 4096
 MAX_FINDINGS = 2**53 - 1
 CAPABILITIES = ("seats", "handoffs", "accounts", "witness")
-ROW_KEYS = frozenset({"job", *CAPABILITIES})
+OPTIONAL = ("starts",)
+ROW_KEYS = frozenset({"job", *CAPABILITIES, *OPTIONAL})
 STATUSES = {True: "closed", False: "open", None: "unknown"}
 EXIT = {"clear": 0, "needs_attention": 1, "outstanding": 3}
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -38,6 +39,10 @@ CAVEAT = (
     "commitment to the exact spool bytes parsed; it does not authenticate the author or manage any worker. Only "
     "--expected-spool pins those bytes before any job is read; without it, the report cannot prove that no row was "
     "deleted."
+)
+STARTS_CAVEAT = (
+    "starts checks only the presence and identity of private START receipts by native job, attempt and slot; it "
+    "never shows a treatment, an input binding, a grade, a cost or a cause."
 )
 
 Entry = dict[str, str | None]
@@ -97,7 +102,7 @@ def load_spool(path: str, expected: str | None) -> tuple[list[Entry], str]:
         )
         entry: Entry = {
             key: _location(base, row[key], f"{label} {key}") if key in row else None
-            for key in ("job", *CAPABILITIES)
+            for key in ("job", *CAPABILITIES, *OPTIONAL)
         }
         job = os.path.normpath(str(entry["job"]))
         _require(job not in seen, f"{label} repeats a job path")
@@ -164,6 +169,9 @@ def _findings(job: str, packet: Record, entry: Entry) -> dict[str, int]:
     from . import attention_details
 
     assert packet["job_closed"] is True
+    optional = {
+        name: path for name in OPTIONAL if (path := _optional(entry[name])) is not None
+    }
     found = attention_details.analyze(
         Path(job),
         packet,
@@ -171,6 +179,7 @@ def _findings(job: str, packet: Record, entry: Entry) -> dict[str, int]:
         handoffs=_optional(entry["handoffs"]),
         accounts=_optional(entry["accounts"]),
         witness=_optional(entry["witness"]),
+        **optional,
     )
     known = attention_details.ACTIONS
     _require(type(found) is dict, "attention analysis did not return counts")
@@ -190,6 +199,9 @@ def _checks(entry: Entry, closed: bool) -> dict[str, str]:
     checks = {"native_result": asked}
     for capability in CAPABILITIES:
         checks[capability] = asked if entry[capability] else "not_requested"
+    for capability in OPTIONAL:
+        if entry[capability]:
+            checks[capability] = asked
     return checks
 
 
@@ -256,13 +268,16 @@ def report(entries: list[Entry]) -> Record:
             if counts["open"] + counts["unknown"] + counts["absent"]
             else "clear"
         )
+    caveat = CAVEAT
+    if any(entry["starts"] for entry in entries):
+        caveat = f"{CAVEAT} {STARTS_CAVEAT}"
     return {
         "schema": SCHEMA,
         "status": state,
         "counts": {"jobs": len(rows), "needs_attention": attention, **counts},
         "actions": dict(sorted(actions.items())),
         "jobs": rows,
-        "caveat": CAVEAT,
+        "caveat": caveat,
     }
 
 

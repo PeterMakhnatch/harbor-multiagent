@@ -30,6 +30,34 @@ To check which registered team inputs the retained final grades support, use the
 
 Do not add those columns. They can describe the same call. Keep JSON for exact source decimals. Digits beyond billing precision can come from the harness's serialized floating-point estimate.
 
+### Prepare observation before a future job
+
+Use `instrument` when you control the host that will run a native **multi-seat job**. It prepares the host observers and the manifest for the morning check in one step. It does not run Harbor, create the job directory, reserve capacity, contact a provider, or grant spending permission.
+
+```sh
+umask 077
+root=$(mktemp -d)
+root=$(cd "$root" && pwd -P)
+job="$root/native-team-one"
+bundle="$root/evidence-one"
+python3.12 -BS -m "$wb" instrument "$job" "$bundle" > "$root/prepared.json"
+pin=$(python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["spool_sha256"])' "$root/prepared.json")
+```
+
+Both paths must be new. This example uses temporary storage. For a future campaign, use durable parent directories on the same filesystem that you control. Keep the bundle outside the job and all seat mounts. Give each job its own bundle. Add `--handoffs` only for a benchmark that emits the [message evidence contract](../../seat_handoffs/author.md).
+
+Keep the spool digest outside the worker's write access. `flags.json` contains one JSON array: each string is a separate argument for a future, separately authorized local `harbor run`. Preserve element boundaries, including spaces. Do not pass the file as one flag or evaluate its contents in a shell. The arguments select the observers, not the task, budget, or output. Set the native output to the enrolled path (`-o` for its parent and `--job-name` for its name). The first observer refuses a different job directory before native trials run. Do not combine bundles or add a second seat observer. Server jobs and `harbor trial start` do not support these local job plugins.
+
+To inspect the prepared bundle, use only the reader:
+
+```sh
+python3.12 -BS -m "$wb" attention "$bundle/spool.json" --expected-spool "$pin"
+```
+
+Before the job exists, the correct result is `absent`, exit `3`. After a stationary job closes, the report compares START receipts, seat journals and END accounts by execution and slot. Matching totals alone are not enough. A missing END account does not prove an execution failed or cost nothing. A START match does not identify a treatment; use [`cohort --starts`](input-isolation.md#capture-which-inputs-started) for that check.
+
+For workers on separate disks, each worker sends only `prepared.json` before assignment. Keep a coordinator-owned list of all expected workers and their pins. Later, request each worker's `attention --json` report and exit status. Match the spool pin and requested checks, and reject duplicate job UUIDs. Report **not received** when a worker sends nothing; **absent** means a worker checked its enrolled path and found no job. Neither means a team failed. The worker reports are not signed. Do not send `spool.json` or `flags.json`: they contain private paths.
+
 ### Hand off independently collected jobs
 
 Each worker exports one stationary job. The receiver needs no access to its machine, model key, prompts or trajectories. These packets contain job and execution identifiers, seat labels and numeric evidence. Inspect labels before sharing them.
@@ -89,7 +117,7 @@ The pin compares the exact manifest bytes before the command reads a job. A remo
 
 Each report row has `row`, the 1-based position in the private manifest, and `job`, the native job UUID. A row is `absent` when its job directory does not exist or has no top-level `result.json`. An absent row has `job: null`. It is not a grade, a failure or a finding. A broken symlink, a file in place of a directory, an invalid result, or a job that appears during the read gives exit `2`, not `absent`. The report shows job UUIDs and row numbers, not paths, prompts or seat labels. Keep the manifest local; its paths can identify workers.
 
-`accounts` checks attempt receipts against the surviving final results. `seats` checks host seat journals. `handoffs` checks message receipts. Add `witness` only with `seats` to compare each execution with an independent slot observation. Without these fields, the command checks only the native results. Two paths to the same job do not count twice; the operator rejects the manifest.
+`starts` checks the native START receipts. `accounts` checks END accounts against the surviving final results. `seats` checks host seat journals. `handoffs` checks message receipts. Add `witness` only with `seats` for an independent slot observation. Without these fields, the command checks only the native results. Two paths to the same job do not count twice.
 
 | Exit | Meaning | What to do |
 | --- | --- | --- |
@@ -98,7 +126,9 @@ Each report row has `row`, the 1-based position in the private manifest, and `jo
 | `2` | The manifest does not match the pin, or the manifest or its evidence is invalid, unreadable or changed during the read. | Use a stationary copy. Fix the input before interpreting any result. Do not edit the manifest to match; enroll again before new work. |
 | `3` | No closed job has a finding, but a row is open, unknown or absent. | Obtain the final native result if available. Do not treat the job as a failure or start a replacement. |
 
-Try the [included manifest](morning-example.json) with `attention examples/seatlab/workbench/morning-example.json`. It has no pin. Its two published job excerpts omit finish records. The expected exit is `3`. In a separate retained closed job, all 20 final attempt accounts matched. Checking its message receipts reported `handoff_receipt_unavailable: 20`. This means the records cannot tell what the seats exchanged. It does not mean the seats were silent.
+Try the [included manifest](morning-example.json) with `attention examples/seatlab/workbench/morning-example.json`. Its two published job excerpts omit finish records. The expected exit is `3`.
+
+On a separate closed job with 20 final attempts, replaying the saved END records reproduced all 20 final accounts. This does not establish that an observer captured them during the job. The saved finals had no supported message receipts. Without an independent START archive, the report gave `start_receipt_final_missing: 20` and `start_receipts_under_expected: 20`. These describe the same 20 finals, not 40 failed teams.
 
 ### Recover evidence without changing a grade
 
@@ -127,6 +157,8 @@ python3.12 -BS -m "$wb" account native "$job" --ledger "$events" --owners "$owne
 `--ledger` accepts the host's saved OpenRouter settlement JSONL, not a dashboard CSV or arbitrary JSON. It verifies `openrouter_generation.total_cost` against the ledger's nanodollar rounding policy. Omit `--owners` to see how much is unassigned. A failed or unsettled call is not proof that it was free.
 
 A trusted host that has the native attempt UUID, seat and returned generation ID can produce an ownership row with `examples.seatlab.workbench.generation_receipts.owner(trial, seat, generation_id)`. Store one JSON object per line in a private file. The row contains a domain-separated hash, not the raw generation ID. Duplicate delivery is safe. Conflicting owners are an error. Never match using the model name, time, cost, or seat label alone. The provider subtotal covers executions in the supplied packets. Executions from an open job can later be replaced. Retries absent from the packets and detached candidates are outside the subtotal.
+
+The stock native seat adapters do not supply this trusted three-way link in an OpenRouter settlement file. A trajectory's self-reported response ID is not independent evidence. If you lack an ownership file, read the ledger on its own. Do not charge a Harbor seat just because the model and time match.
 
 ### Which workload incurred these charges?
 

@@ -251,7 +251,7 @@ def _shared(rows: list[Record]) -> dict[str, Record]:
     }
 
 
-def history(final: Record, archive_directory: str) -> Record:
+def _history(final: Record, archive_directory: str) -> tuple[Record, dict[str, Record]]:
     packet = validate(final)
     _require(packet["source"] == SOURCE, "final packet is not a native-job account")
     job_closed = packet.get("job_closed")
@@ -318,4 +318,18 @@ def history(final: Record, archive_directory: str) -> Record:
         "complete": complete,
         "attempts": _shared(confirmed),
         "caveat": CAVEAT,
-    }
+    }, rows
+
+
+def history(final: Record, archive_directory: str) -> Record:
+    report, _ = _history(final, archive_directory)
+    return report
+
+
+def history_slots(
+    final: Record, archive_directory: str
+) -> tuple[Record, dict[str, str]]:
+    report, rows = _history(final, archive_directory)
+    executions = {trial: row["slot"] for trial, row in rows.items()}
+    assert len(executions) == report["archive_accounts"]
+    return report, executions

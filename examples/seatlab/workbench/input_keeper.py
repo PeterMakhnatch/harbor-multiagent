@@ -23,16 +23,34 @@ if TYPE_CHECKING:
     from harbor.trial.hooks import TrialHookEvent
 
 LOCK = "lock.json"
-RESULT_FIELDS = {"id", "trial_name", "config", "task_id", "task_checksum", "finished_at"}
+RESULT_FIELDS = {
+    "id",
+    "trial_name",
+    "config",
+    "task_id",
+    "task_checksum",
+    "finished_at",
+}
 REJECTED = "InputStartKeeper archive_dir rejected."
 NESTED = "InputStartKeeper archive_dir must not nest with the job directory."
 REUSED = "InputStartKeeper serves exactly one job."
+WRONG_JOB = "InputStartKeeper job directory differs from the enrolled path."
 WARNING = "Warning: input start witness not retained."
 
 
 class InputStartKeeper(BaseJobPlugin):
-    def __init__(self, archive_dir: str) -> None:
+    def __init__(
+        self, archive_dir: str, *, expected_job_dir: str | None = None
+    ) -> None:
         super().__init__()
+        if expected_job_dir is not None and (
+            type(expected_job_dir) is not str
+            or "\0" in expected_job_dir
+            or not os.path.isabs(expected_job_dir)
+            or os.path.realpath(expected_job_dir) != expected_job_dir
+        ):
+            raise ValueError(WRONG_JOB)
+        self._expected_job_dir = expected_job_dir
         if (
             type(archive_dir) is not str
             or not os.path.isabs(archive_dir)
@@ -59,6 +77,11 @@ class InputStartKeeper(BaseJobPlugin):
             raise TypeError(REJECTED)
         self._job = job_id
         job_dir = Path(job.job_dir).resolve()
+        if (
+            self._expected_job_dir is not None
+            and str(job_dir) != self._expected_job_dir
+        ):
+            raise ValueError(WRONG_JOB)
         archive = Path(self._archive)
         if archive.is_relative_to(job_dir) or job_dir.is_relative_to(archive):
             raise ValueError(NESTED)

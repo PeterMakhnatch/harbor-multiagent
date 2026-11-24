@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...seat_handoffs import attempt_report, lifecycle_join
-from . import account_history, attempt_history, native_account
+from . import account_history, attempt_history, attention_starts, native_account
 from .account_contract import validate
 from .seat_stream import Record, _require
 
@@ -68,10 +68,11 @@ ACTIONS = tuple(
             *ACCOUNT_FINALS.values(),
             *ACCOUNT_NONFINAL.values(),
             *OTHER,
+            *attention_starts.ACTIONS,
         }
     )
 )
-assert len(ACTIONS) == len(OTHER) + 18
+assert len(ACTIONS) == len(OTHER) + 18 + len(attention_starts.ACTIONS)
 assert set(LIFECYCLE) | {"sealed"} == set(lifecycle_join.STATUSES)
 assert set(SEAT_CLASSES) | {"closed_full_roster"} == set(attempt_history.CLASSES)
 assert attempt_report.SOURCES[0] == "sealed" and set(UNSEALED) <= set(LIFECYCLE)
@@ -121,14 +122,9 @@ def _envelope(job: Path, packet: Record) -> None:
 def _finals_in_archive(
     found: dict[str, int],
     packet: Record,
-    report: Record,
+    where: dict[str, str],
     rosters: dict[str, list[str] | None],
 ) -> None:
-    where = {
-        attempt: slot["slot_key"]
-        for slot in report["slots"]
-        for attempt in slot["attempts"]
-    }
     assert where.keys() == rosters.keys()
     for final in packet["attempts"]:
         slot = where.get(final["trial"])
@@ -156,7 +152,7 @@ def _seats(
     seats: Path,
     witness: Path | None,
     handoffs: Path | None,
-) -> None:
+) -> dict[str, str]:
     report, rosters = attempt_history.closed_history(
         packet["scope"],
         packet["registered"],
@@ -174,13 +170,19 @@ def _seats(
     )
     for name, code in SEAT_CLASSES.items():
         _add(found, code, report["classifications"][name])
-    _finals_in_archive(found, packet, report, rosters)
+    where = {
+        attempt: slot["slot_key"]
+        for slot in report["slots"]
+        for attempt in slot["attempts"]
+    }
+    _finals_in_archive(found, packet, where, rosters)
     if witness is not None:
         for name, code in WITNESS.items():
             _add(found, code, report["witness"][name])
     if handoffs is not None:
         _lifecycle(found, report["handoff_coverage"])
     assert report["complete"] or found
+    return where
 
 
 def _handoffs(found: dict[str, int], packet: Record, handoffs: Path) -> None:
@@ -209,8 +211,14 @@ def _handoffs(found: dict[str, int], packet: Record, handoffs: Path) -> None:
     assert record["coverage_complete"] or found
 
 
-def _accounts(found: dict[str, int], packet: Record, accounts: Path) -> None:
-    history = account_history.history(packet, str(accounts))
+def _accounts(
+    found: dict[str, int], packet: Record, accounts: Path, *, slots: bool
+) -> dict[str, str] | None:
+    executions: dict[str, str] | None = None
+    if slots:
+        history, executions = account_history.history_slots(packet, str(accounts))
+    else:
+        history = account_history.history(packet, str(accounts))
     nonfinal, expected = history["nonfinal"], history["expected_nonfinal"]
     assert history["job_closed"] is True and nonfinal["other_unordered_slot"] == 0
     for state, code in ACCOUNT_FINALS.items():
@@ -235,6 +243,28 @@ def _accounts(found: dict[str, int], packet: Record, accounts: Path) -> None:
         found, "account_staging_unpublished", history["skipped"]["staging_unpublished"]
     )
     assert history["complete"] or found
+    return executions
+
+
+def _starts(
+    found: dict[str, int],
+    packet: Record,
+    starts: Path,
+    *,
+    seat_slots: dict[str, str] | None,
+    account_slots: dict[str, str] | None,
+) -> None:
+    counts = attention_starts.findings(
+        packet["scope"],
+        packet["registered"],
+        packet["retries"],
+        {e["trial"]: e["slot"] for e in packet["attempts"]},
+        starts,
+        seat_slots=seat_slots,
+        account_slots=account_slots,
+    )
+    for code, count in counts.items():
+        _add(found, code, count)
 
 
 def analyze(
@@ -245,24 +275,31 @@ def analyze(
     handoffs: Path | None,
     accounts: Path | None,
     witness: Path | None,
+    starts: Path | None = None,
 ) -> dict[str, int]:
     assert isinstance(job, Path)
-    assert all(
-        p is None or isinstance(p, Path) for p in (seats, handoffs, accounts, witness)
-    )
+    sources = (seats, handoffs, accounts, witness, starts)
+    assert all(p is None or isinstance(p, Path) for p in sources)
     _require(witness is None or seats is not None, "a witness needs a seat archive")
     final = validate(packet)
     _require(final["source"] == SOURCE, "packet is not a native-job account")
     _require(final["job_closed"] is True, "native job is not closed")
     _envelope(job, final)
-    requested = any(p is not None for p in (seats, handoffs, accounts))
+    requested = any(p is not None for p in (seats, handoffs, accounts, starts))
     found = _base(final, requested)
+    seat_slots: dict[str, str] | None = None
+    account_slots: dict[str, str] | None = None
     if seats is not None:
-        _seats(found, final, seats, witness, handoffs)
+        seat_slots = _seats(found, final, seats, witness, handoffs)
     elif handoffs is not None:
         _handoffs(found, final, handoffs)
     if accounts is not None:
-        _accounts(found, final, accounts)
+        slots = starts is not None
+        account_slots = _accounts(found, final, accounts, slots=slots)
+    if starts is not None:
+        _starts(
+            found, final, starts, seat_slots=seat_slots, account_slots=account_slots
+        )
     result = {code: found[code] for code in ACTIONS if code in found}
     assert result.keys() == found.keys()
     assert all(type(n) is int and n > 0 for n in result.values())
