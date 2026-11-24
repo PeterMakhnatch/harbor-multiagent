@@ -386,20 +386,50 @@ def audit_month(verdict: dict, spec: dict, task_dir: Path) -> dict[str, Any]:
 
 
 def read_plan(path: Path) -> dict[str, Any]:
-    """The plan's models, scripted seats, instances and arms (run_wave plan JSON)."""
+    """The plan's models, scripted seats, instances and arms (run_wave plan JSON), and per task set its probe kind
+    (from the set's manifest, else from its arms), instances and arms."""
     plan = json.loads(path.read_text())
     assert plan.get("models"), f"{path}: a probe plan names its models"
     sets = plan.get("task_sets") or []
     return {"name": plan.get("name"), "models": list(plan["models"]),
             "scripted": None if plan.get("scripted_seats") is None else set(plan["scripted_seats"]),
             "instances": {int(i) for s in sets for i in s.get("instances") or []} or None,
-            "arms": {a for s in sets for a in s.get("arms") or s.get("conditions") or []} or None}
+            "arms": {a for s in sets for a in s.get("arms") or s.get("conditions") or []} or None,
+            "sets": [{"kind": manifest_kind(s.get("manifest")), "instances": {int(i) for i in s.get("instances") or []},
+                      "arms": set(s.get("arms") or s.get("conditions") or [])} for s in sets]}
+
+
+def manifest_kind(manifest: str | None) -> str | None:
+    """The probe kind of a task set's manifest (one `probe.<kind>` label), or None when it cannot be read."""
+    data = XM.read_json(Path(manifest)) if manifest else None
+    labels = {entry.get("label") for entry in ((data or {}).get("tasks") or {}).values()}
+    if len(labels) != 1:
+        return None
+    (label,) = labels
+    family, _dot, kind = str(label).partition(".")
+    return kind if family == "probe" and kind in ARMS else None
+
+
+def set_kind(task_set: dict[str, Any]) -> str | None:
+    """A task set's kind: its manifest's, else the first kind whose arms hold all the set's arms."""
+    if task_set.get("kind"):
+        return task_set["kind"]
+    return next((kind for kind, arms in ARMS.items() if task_set["arms"] <= set(arms)), None)
+
+
+def plan_sets(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    """The plan's task sets; a plan without them (--models, or built by hand) is one set of all its cells."""
+    if plan.get("sets"):
+        return plan["sets"]
+    if plan["instances"] is None or plan["arms"] is None:
+        return []
+    return [{"kind": None, "instances": plan["instances"], "arms": plan["arms"]}]
 
 
 def models_plan(models: str) -> dict[str, Any]:
     found = [m.strip() for m in models.split(",") if m.strip()]
     assert found, "--models names at least one model"
-    return {"name": None, "models": found, "scripted": None, "instances": None, "arms": None}
+    return {"name": None, "models": found, "scripted": None, "instances": None, "arms": None, "sets": []}
 
 
 def plan_problems(config: dict, result: dict, model: str, task: dict, confederates: set[str],
@@ -633,13 +663,14 @@ def audit_secondaries(by_arm: dict[str, list[dict]], counted: dict[tuple, dict],
 
 
 def primary_arms(kind: str, plan: dict[str, Any] | None) -> tuple[str, str, bool]:
-    """The primary pair of a kind and whether the plan chose it: a conformity plan of exactly two arms, one of them
-    talk-quiet, pre-registers talk-quiet vs the other (pa1: talk-quiet vs talk-argue); else section 7's or 8's."""
-    arms = (plan or {}).get("arms")
-    if kind == "conformity" and arms is not None and len(arms) == 2 and "talk-quiet" in arms:
-        (other,) = sorted(set(arms) - {"talk-quiet"})
-        return "talk-quiet", other, True
+    """The primary pair of a kind and whether the plan chose it: when the plan's task sets of this kind have exactly
+    two arms together, one of them talk-quiet, a conformity plan pre-registers talk-quiet vs the other (pa1:
+    talk-quiet vs talk-argue); else, and when that pair is section 7's anyway, section 7's or 8's."""
     first, second = PRIMARY.get(kind, ("", ""))
+    arms = {arm for s in plan_sets(plan) if set_kind(s) == kind for arm in s["arms"]} if plan else set()
+    if kind == "conformity" and len(arms) == 2 and "talk-quiet" in arms:
+        (other,) = sorted(arms - {"talk-quiet"})
+        return "talk-quiet", other, other != second
     return first, second, False
 
 
@@ -674,13 +705,16 @@ def model_summary(kind: str, model: str, counted: dict[tuple, dict],
 
 
 def missing_cells(plan: dict[str, Any], counted: dict[tuple, dict]) -> list[str]:
-    """Plan cells (kind, instance, arm, model) without a counted trial."""
-    if plan["instances"] is None or plan["arms"] is None:
-        return []
-    kinds = [kind for kind, arms in ARMS.items() if plan["arms"] <= set(arms)]
-    return [f"probe.{kind} instance {i} {arm} {model}" for kind in kinds[:1] for model in plan["models"]
-            for arm in ARMS[kind] if arm in plan["arms"] for i in sorted(plan["instances"])
-            if (f"probe.{kind}", i, arm, model) not in counted]
+    """Plan cells (kind, instance, arm, model) without a counted trial, task set by task set."""
+    found = []
+    for task_set in plan_sets(plan):
+        kind = set_kind(task_set)
+        if kind is None:
+            continue
+        found += [f"probe.{kind} instance {i} {arm} {model}" for model in plan["models"]
+                  for arm in ARMS[kind] if arm in task_set["arms"] for i in sorted(task_set["instances"])
+                  if (f"probe.{kind}", i, arm, model) not in counted]
+    return found
 
 
 def analyse(rows: list[dict], alpha: float = FAMILY_ALPHA, plan: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -701,7 +735,8 @@ def analyse(rows: list[dict], alpha: float = FAMILY_ALPHA, plan: dict[str, Any] 
                 summary["tell"]["decision"] = decide(summary["tell"], alpha, second_higher=True)
             summary["card"] = card(summary)
         summaries += found
-    return {"alpha": alpha, "plan": plan and {k: sorted(v) if isinstance(v, set) else v for k, v in plan.items()},
+    return {"alpha": alpha, "plan": plan and {k: sorted(v) if isinstance(v, set) else v for k, v in plan.items()
+                                              if k != "sets"},
             "summaries": summaries, "rows": [r | {"counted": (r["job"], r["trial"]) in chosen} for r in rows],
             "duplicates": [f"{r['job']}/{r['trial']}" for r in duplicates],
             "excluded": [f"{r['job']}/{r['trial']}: {'; '.join(r['reasons'])}" for r in rows if not r["valid"]],

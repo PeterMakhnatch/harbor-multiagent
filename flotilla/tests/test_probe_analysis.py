@@ -190,6 +190,38 @@ def test_a_two_arm_plan_with_talk_quiet_makes_the_other_arm_the_primary(capsys):
     assert "Primary (the plan's two arms) talk-quiet vs talk-argue: 8 pairs, b = 8" in capsys.readouterr().out
 
 
+def test_missing_cells_and_the_primary_come_from_each_task_set_of_a_two_kind_plan(tmp_path):
+    manifests = {}
+    for name, label in (("c", "probe.conformity"), ("v", "probe.verify"), ("mixed", None)):
+        path = tmp_path / name / "manifest.json"
+        path.parent.mkdir()
+        labels = [label] if label else ["probe.conformity", "probe.verify"]
+        path.write_text(json.dumps({"tasks": {f"t{k}": {"label": lab} for k, lab in enumerate(labels)}}))
+        manifests[name] = str(path)
+    plan_path = tmp_path / "rf.json"
+    plan_path.write_text(json.dumps({"name": "rf", "models": ["m/a"], "task_sets": [
+        {"manifest": manifests["c"], "instances": [0, 1, 2], "arms": ["talk-quiet", "talk-wrong"]},
+        {"manifest": manifests["v"], "instances": [0, 1], "arms": ["talk-quiet", "talk-false"]}]}))
+    plan = PA.read_plan(plan_path)
+    assert [s["kind"] for s in plan["sets"]] == ["conformity", "verify"]
+    assert PA.manifest_kind(manifests["mixed"]) is None and PA.manifest_kind(str(tmp_path / "none.json")) is None
+    rows = [row("m/a", "talk-quiet", 0, True), row("m/a", "talk-wrong", 0, True),
+            row("m/a", "talk-quiet", 1, True, kind="verify")]
+    result = PA.analyse(rows, plan=plan)
+    assert result["missing"] == [
+        "probe.conformity instance 1 talk-quiet m/a", "probe.conformity instance 2 talk-quiet m/a",
+        "probe.conformity instance 1 talk-wrong m/a", "probe.conformity instance 2 talk-wrong m/a",
+        "probe.verify instance 0 talk-quiet m/a", "probe.verify instance 0 talk-false m/a",
+        "probe.verify instance 1 talk-false m/a"]
+    assert "sets" not in result["plan"] and result["plan"]["arms"] == ["talk-false", "talk-quiet", "talk-wrong"]
+    assert PA.primary_arms("conformity", plan) == ("talk-quiet", "talk-wrong", False)  # section 7's pair
+    argue = plan | {"sets": [plan["sets"][0] | {"arms": {"talk-quiet", "talk-argue"}}, plan["sets"][1]]}
+    assert PA.primary_arms("conformity", argue) == ("talk-quiet", "talk-argue", True)
+    unread = plan | {"sets": [s | {"kind": None} for s in plan["sets"]]}  # kinds from the arms
+    assert PA.analyse(rows, plan=unread)["missing"] == result["missing"]
+    assert PA.missing_cells(PA.models_plan("m/a"), {}) == []
+
+
 def test_wilson_and_sign_test():
     low, high = PA.wilson(0, 10)
     assert round(low, 9) == 0.0 and round(high, 4) == 0.2775

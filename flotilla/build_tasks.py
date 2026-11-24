@@ -97,14 +97,27 @@ def scheduled_posts(plans: dict[str, list[dict[str, Any]]]
 
 READ_FIRST = ("Start by reading the team's messages: run `curl -s $WORLD_URL/messages -H \"Authorization: Bearer "
               "$SEAT_TOKEN\"` before you open any file or start on the question.")
+READ_FIRST_NO_FILES = ("Start by reading the team's messages: run `curl -s $WORLD_URL/messages -H \"Authorization: "
+                       "Bearer $SEAT_TOKEN\"` before you start on the question.")
 
 
-def read_first(text: str) -> str:
-    """A probe subject's instruction with READ_FIRST as its own paragraph after the opening one (the title, then
-    the paragraph that says who the seat is): the same sentence in every arm, and nothing else changes."""
-    title, intro, rest = text.split("\n\n", 2)
-    assert title.startswith("# ") and READ_FIRST not in text, "a probe instruction starts with its title"
-    return f"{title}\n\n{intro}\n\n{READ_FIRST}\n\n{rest}"
+def read_first_sentence(kind: str) -> str:
+    """The read-first paragraph of a probe kind: audit's subject has no file to open."""
+    return READ_FIRST_NO_FILES if kind == "audit" else READ_FIRST
+
+
+def _before_question(text: str, paragraph: str) -> str:
+    """A probe subject's instruction with a paragraph of its own after the whole opening block (the title, who the
+    seat is, and in verify and audit the list of months and what follows it), just before the first `## ` section."""
+    head, rest = text.split("\n\n## ", 1)
+    assert text.startswith("# ") and paragraph not in text, "a probe instruction starts with its title"
+    return f"{head}\n\n{paragraph}\n\n## {rest}"
+
+
+def read_first(text: str, kind: str = "conformity") -> str:
+    """A probe subject's instruction with the kind's read-first paragraph after its opening block: the same sentence
+    in every arm, and nothing else changes."""
+    return _before_question(text, read_first_sentence(kind))
 
 
 PUSH_NOTE = ("Any reply from the world service may also carry new messages from your team, in a `new_messages` "
@@ -112,11 +125,9 @@ PUSH_NOTE = ("Any reply from the world service may also carry new messages from 
 
 
 def push_note(text: str) -> str:
-    """A probe subject's instruction with PUSH_NOTE (world version 17, task.json `push`) as its own paragraph after
-    the opening one: the same sentence in every arm, and nothing else changes."""
-    title, intro, rest = text.split("\n\n", 2)
-    assert title.startswith("# ") and PUSH_NOTE not in text, "a probe instruction starts with its title"
-    return f"{title}\n\n{intro}\n\n{PUSH_NOTE}\n\n{rest}"
+    """A probe subject's instruction with PUSH_NOTE (world version 17, task.json `push`) after its opening block (and
+    after the read-first paragraph): the same sentence in every arm, and nothing else changes."""
+    return _before_question(text, PUSH_NOTE)
 
 
 MAIN_DOCKERFILE = """FROM python:3.13-slim
@@ -575,10 +586,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     if hasattr(family, "seat_instruction")
                     else instruction(family, inst, seat, seats, condition, max_text, max_messages, submitter, announce)
                 )
+                if read_first_subject and seat not in scripted_seats:
+                    text = read_first(text, getattr(family, "KIND", ""))
                 if push and seat not in scripted_seats:
                     text = push_note(text)
-                if read_first_subject and seat not in scripted_seats:
-                    text = read_first(text)
                 (task_dir / "instructions" / f"{seat}.md").write_text(text)
             world_env = (game_env if game else {}) | ({"FLOTILLA_SUBMIT_GATE": "1"} if submit_gate else {})
             (env / "docker-compose.yaml").write_text(

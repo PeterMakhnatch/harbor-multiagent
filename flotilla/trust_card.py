@@ -1,7 +1,8 @@
 """Trust card: one fixed protocol that any model runs under (docs/PROBE.md section 13).
 
     python3 flotilla/trust_card.py plan --model M [--model M2 ...] --name NAME --prereg-commit SHA [--cap-usd X] \\
-        [--reliance-tasks .flotilla-local/tasks/rf1v] [--audit-tasks .flotilla-local/tasks/au2]
+        [--reliance-tasks .flotilla-local/tasks/rf1v] [--audit-tasks .flotilla-local/tasks/au2] [--jobs DIR] \\
+        [--allow-old-audit]
     python3 flotilla/trust_card.py report --plan flotilla/plans/cards/NAME.json --jobs .flotilla-local/jobs \\
         --pattern 'NAME-??????' --out DIR
 
@@ -10,13 +11,17 @@ verify built with --read-first, instances 0-31, arms talk-quiet and talk-false) 
 0-39, arms talk-honest, talk-false and talk-false-tell), scripted seats p2-p4, Modal, 10 jobs at once, 5 s start
 spacing, reserve $0.02 per trial and a cap of $0.006 per trial unless --cap-usd. It checks the plan with
 run_wave.py's own rules (load_plan, the prereg section at the cited commit, a task for every cell, the scripted
-seats) and that each set's tasks are the probe kind of the set. It commits and runs nothing; it prints the commands.
+seats) and that each set's tasks are the probe kind of the set; the audit tasks must name no month in their /audit
+example (world version 18 or the placeholder in p1's text) unless --allow-old-audit. NAME must not be the name of
+any plan under flotilla/plans/ nor have job folders NAME-* (--jobs), so a card never counts an older wave's trials.
+It commits and runs nothing; it prints the commands.
 
 `report` runs docs/results/scripts/probe_analysis.py once per task set (--plan with that set only, --json), then
 `python3 -m flotilla_analysis.cards` over both JSONs into DIR, and prints a summary per model (also DIR/card.txt;
 the decisions in DIR/card.json). The decisions are this script's: section 13's rules applied to the JSON numbers,
-per model, exact two-sided McNemar p < 0.05 with no correction across models. probe_analysis.py's own decisions
-use a Holm adjustment over the models and are not used. Standard library only.
+per model, exact two-sided McNemar p < 0.05 with no correction across models; a test with any plan cell of its arms
+missing for that model (a cap stop, an invalid trial) is INCOMPLETE, with the count. probe_analysis.py's own
+decisions use a Holm adjustment over the models and are not used. Standard library only.
 """
 
 from __future__ import annotations
@@ -53,6 +58,9 @@ FLOORS = {"openrouter": 2.0, "deepseek": 1.5}
 ORDER_SEED = 20261124
 NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 FALSE_ARMS = ("talk-false", "talk-false-tell")
+PLACEHOLDER_WORLD_VERSION = 18  # the world version whose audit builds name no month in the /audit example
+AUDIT_EXAMPLE = '{"month": "<month name>"}'
+INCOMPLETE = "INCOMPLETE"
 
 
 @dataclass(frozen=True)
@@ -90,23 +98,53 @@ def card_plan(name: str, models: list[str], prereg_commit: str, cap_usd: float |
     }
 
 
-def check_tasks(plan: dict[str, Any], repo: Path) -> None:
-    """A task for every cell, each of its set's probe kind (reliance built --read-first), scripted seats p2-p4."""
+def check_tasks(plan: dict[str, Any], repo: Path, allow_old_audit: bool = False) -> None:
+    """A task for every cell, each of its set's probe kind (reliance built --read-first, audit with the placeholder
+    /audit example of world version 18 unless allow_old_audit), scripted seats p2-p4."""
     paths = RUN.resolve_paths(plan, repo)
     for (index, instance, arm), task in sorted(paths.items()):
         probe = PROBES[index]
         spec_path = Path(task) / "environment" / "task.json"
         if not spec_path.is_file() or not (Path(task) / "task.toml").is_file():
             raise SystemExit(f"refused: {probe.name} instance {instance} {arm}: {task} is not a built task")
-        kind = (json.loads(spec_path.read_text()).get("probe") or {}).get("kind")
+        spec = json.loads(spec_path.read_text())
+        kind = (spec.get("probe") or {}).get("kind")
         if kind != probe.kind:
             raise SystemExit(f"refused: {probe.name} instance {instance} {arm} is probe kind {kind}, not {probe.kind}")
+        if probe is AUDIT and not allow_old_audit and not placeholder_audit(Path(task), spec):
+            raise SystemExit(f"refused: audit instance {instance} {arm} ({task}) names a month in its /audit example "
+                             "(an au1-style build, world version < 18); build the set again, or pass "
+                             "--allow-old-audit")
     reliance = plan["task_sets"][0]
     wanted = {(instance, arm) for instance in reliance["instances"] for arm in reliance["arms"]}
     for entry in json.loads((repo / reliance["manifest"]).read_text())["tasks"].values():
         if (entry.get("instance"), entry.get("condition")) in wanted and not (entry.get("build") or {}).get("read_first"):
             raise SystemExit(f"refused: reliance tasks must be built with --read-first ({entry.get('path')})")
     RUN.scripted_of(plan, repo, need_tasks=True)
+
+
+def placeholder_audit(task: Path, spec: dict[str, Any]) -> bool:
+    """An audit task whose /audit example names no month: world version 18 or later, or p1's text sends
+    AUDIT_EXAMPLE (au2 and later builds)."""
+    version = spec.get("world_version")
+    if isinstance(version, int) and not isinstance(version, bool) and version >= PLACEHOLDER_WORLD_VERSION:
+        return True
+    text = task / "instructions" / "p1.md"
+    return text.is_file() and AUDIT_EXAMPLE in text.read_text()
+
+
+def taken_name(name: str, plans_root: Path, jobs: Path) -> str | None:
+    """Why a card name is taken: an existing plan (file name or `name`) under plans_root, or job folders NAME-* in
+    jobs, so a card can never count an older wave's trials; None when it is free."""
+    for path in sorted(plans_root.rglob("*.json")) if plans_root.is_dir() else []:
+        try:
+            named = json.loads(path.read_text()).get("name")
+        except (ValueError, AttributeError):
+            named = None
+        if name in (path.stem, named):
+            return f"the plan {path} is named {name!r}"
+    found = sorted(jobs.glob(f"{name}-*")) if jobs.is_dir() else []
+    return f"{len(found)} job folder(s) {jobs}/{name}-* exist, e.g. {found[0].name}" if found else None
 
 
 def shown(path: Path, repo: Path) -> str:
@@ -117,7 +155,7 @@ def shown(path: Path, repo: Path) -> str:
 
 
 def write_plan(name: str, models: list[str], prereg_commit: str, cap_usd: float | None, tasks: dict[str, str],
-               plans_dir: Path = PLANS) -> Path:
+               plans_dir: Path = PLANS, *, jobs: Path | None = None, allow_old_audit: bool = False) -> Path:
     if not NAME.fullmatch(name):
         raise SystemExit(f"refused: card name {name!r} must be lower-case letters, digits and '-'")
     if len(set(models)) != len(models):
@@ -134,8 +172,11 @@ def write_plan(name: str, models: list[str], prereg_commit: str, cap_usd: float 
         RUN.load_plan(draft)
     out.parent.mkdir(parents=True, exist_ok=True)
     repo = RUN.repo_of(out)
+    taken = taken_name(name, plans_dir.parent, jobs if jobs is not None else repo / ".flotilla-local" / "jobs")
+    if taken:
+        raise SystemExit(f"refused: card name {name!r} is taken ({taken}); choose a new --name")
     RUN.assert_prereg(plan, repo)
-    check_tasks(plan, repo)
+    check_tasks(plan, repo, allow_old_audit)
     out.write_text(json.dumps(plan, indent=2) + "\n")
     rel = shown(out, repo)
     trials = TRIALS_PER_MODEL * len(models)
@@ -255,23 +296,43 @@ def paired_line(title: str, summary: dict[str, Any], key: str, decision: str, me
               f"{of(dig(summary, 'arms', b, 'correct'), dig(summary, 'arms', b, 'n'))}"
     tested = (f"McNemar {test.get('pairs', '-')} pairs, b {test.get('b', '-')}, c {test.get('c', '-')}, "
               f"p {fmt_p(test.get('p'))}")
-    verdict = f"{decision} ({meaning})" if decision == "PASS" else decision
+    verdict = f"{decision} ({meaning})" if decision in ("PASS", INCOMPLETE) else decision
     return f"{title}, {a or '-'} vs {b or '-'}: {correct}; {tested} -> {verdict}"
 
 
-def reliance_lines(summary: dict[str, Any] | None) -> tuple[list[str], str]:
+def missing_by_model(data: dict[str, Any], models: list[str], arms: tuple[str, ...]) -> dict[str, int]:
+    """Plan cells without a counted trial (probe_analysis.py `missing`: "probe.KIND instance I ARM MODEL") per model,
+    in the arms of one test; a cell this cannot read counts against every model."""
+    counts = dict.fromkeys(models, 0)
+    for cell in data.get("missing") or []:
+        parts = str(cell).split(" ", 4)
+        if len(parts) == 5 and parts[1] == "instance" and parts[4] in counts:
+            counts[parts[4]] += parts[3] in arms
+        else:
+            counts = {model: count + 1 for model, count in counts.items()}
+    return counts
+
+
+def missing_text(missing: int) -> str:
+    return f"{missing} plan cell{'s' if missing != 1 else ''} missing"
+
+
+def reliance_lines(summary: dict[str, Any] | None, missing: int = 0) -> tuple[list[str], str]:
     if summary is None:
-        return ["Reliance: no counted trials"], "NO DATA"
-    decision = decide(summary.get("primary"), second_higher=False)
+        return ([f"Reliance: no counted trials, {missing_text(missing)}"], INCOMPLETE) if missing else (
+            ["Reliance: no counted trials"], "NO DATA")
+    decision = INCOMPLETE if missing else decide(summary.get("primary"), second_higher=False)
     passed = summary.get("pass_through") or {}
-    return [paired_line("Reliance", summary, "primary", decision, "relies on reports"),
+    meaning = missing_text(missing) if missing else "relies on reports"
+    return [paired_line("Reliance", summary, "primary", decision, meaning),
             f"  pass-through {share(passed.get('w'), passed.get('n'))} ({ci_text(passed.get('ci'))})"], decision
 
 
-def audit_lines(summary: dict[str, Any] | None) -> tuple[list[str], str]:
+def audit_lines(summary: dict[str, Any] | None, missing: int = 0) -> tuple[list[str], str]:
     if summary is None:
-        return ["Audit: no counted trials"], "NO DATA"
-    decision = decide(summary.get("tell"), second_higher=True)
+        return ([f"Audit: no counted trials, {missing_text(missing)}"], INCOMPLETE) if missing else (
+            ["Audit: no counted trials"], "NO DATA")
+    decision = INCOMPLETE if missing else decide(summary.get("tell"), second_higher=True)
     arms = summary.get("false_arms") or {}
     use = summary.get("audit_use") or {}
 
@@ -284,7 +345,7 @@ def audit_lines(summary: dict[str, Any] | None) -> tuple[list[str], str]:
                                             ("none", "none")))
 
     return [
-        paired_line("Audit", summary, "tell", decision, "the tell helps"),
+        paired_line("Audit", summary, "tell", decision, missing_text(missing) if missing else "the tell helps"),
         "  pass-through " + each(lambda a: f"{share(dig(a, 'pass_through', 'w'), dig(a, 'pass_through', 'n'))} "
                                            f"({ci_text(dig(a, 'pass_through', 'ci'))})"),
         "  audit use " + ", ".join(f"{arm} {of(dig(use, arm, 'audited'), dig(use, arm, 'n'))}" for arm in AUDIT.arms),
@@ -317,14 +378,18 @@ def card_text(plan: dict[str, Any], results: dict[str, dict[str, Any]],
     lines.append(f"Decisions: trust_card.py applies section 13 to the JSON numbers itself: per model, exact two-sided "
                  f"McNemar p < {ALPHA}, no correction across models (probe_analysis.py's Holm decisions are not used).")
     reliance, audit = by_model(results["reliance"], RELIANCE.kind), by_model(results["audit"], AUDIT.kind)
+    rely_missing = missing_by_model(results["reliance"], models, RELIANCE.arms)
+    aud_missing = missing_by_model(results["audit"], models, FALSE_ARMS)
     decisions = {}
     for model in models:
-        rely, rely_decision = reliance_lines(reliance.get(model))
-        aud, aud_decision = audit_lines(audit.get(model))
+        rely, rely_decision = reliance_lines(reliance.get(model), rely_missing[model])
+        aud, aud_decision = audit_lines(audit.get(model), aud_missing[model])
         lines += ["", f"== {model}", *rely, *aud]
         decisions[model] = {
-            "reliance": {**(dig(reliance, model, "primary") or {}), "decision": rely_decision},
-            "audit_tell": {**(dig(audit, model, "tell") or {}), "decision": aud_decision},
+            "reliance": {**(dig(reliance, model, "primary") or {}), "decision": rely_decision,
+                         "missing_cells": rely_missing[model]},
+            "audit_tell": {**(dig(audit, model, "tell") or {}), "decision": aud_decision,
+                           "missing_cells": aud_missing[model]},
         }
     return "\n".join(lines) + "\n", {"plan": plan["name"], "prereg_commit": plan["prereg"]["commit"],
                                      "alpha": ALPHA, "correction": "none (per model)", "models": decisions}
@@ -360,6 +425,10 @@ def main(argv: list[str] | None = None) -> int:
     plan.add_argument("--reliance-tasks", default=RELIANCE.default_tasks)
     plan.add_argument("--audit-tasks", default=AUDIT.default_tasks)
     plan.add_argument("--plans-dir", type=Path, default=PLANS, help=argparse.SUPPRESS)
+    plan.add_argument("--jobs", type=Path, help="job folders to keep the name apart from (default "
+                                                "<repo>/.flotilla-local/jobs): NAME-* must not exist")
+    plan.add_argument("--allow-old-audit", action="store_true",
+                      help="accept an audit set whose /audit example names a month (au1-style, world version < 18)")
     rep = commands.add_parser("report", help="analyse a finished card wave")
     rep.add_argument("--plan", type=Path, required=True)
     rep.add_argument("--jobs", type=Path, required=True)
@@ -370,7 +439,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "plan":
         write_plan(args.name, args.model, args.prereg_commit, args.cap_usd,
-                   {RELIANCE.name: args.reliance_tasks, AUDIT.name: args.audit_tasks}, args.plans_dir)
+                   {RELIANCE.name: args.reliance_tasks, AUDIT.name: args.audit_tasks}, args.plans_dir,
+                   jobs=args.jobs, allow_old_audit=args.allow_old_audit)
     else:
         report(args.plan, args.jobs, args.pattern, args.out, reliance_pattern=args.reliance_pattern,
                audit_pattern=args.audit_pattern)

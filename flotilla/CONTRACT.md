@@ -434,11 +434,13 @@ subject is the only seat under test, task.json `scheduled_posts` and each confed
 plan for the task's arm, `FLOTILLA_SUBMIT_GATE` matches task.json, and the subject's text holds `READ_FIRST`
 exactly when task.json has `read_first: true`.
 
-`build_tasks.py --read-first` (probe family only) puts `READ_FIRST`, one fixed paragraph telling the subject to
-read `GET /messages` before it opens any file or starts on the question, after the opening paragraph of the
-subject's text in every arm, and records `read_first: true` in task.json, task.toml [metadata] and the manifest's
-`build`; without the flag nothing changes (docs/PROBE.md 4). It applies to every probe kind; in `audit` the
-paragraph comes after the opening one, before the list of the workers' months.
+`build_tasks.py --read-first` (probe family only) puts one fixed paragraph telling the subject to read `GET
+/messages` first (`READ_FIRST`: "before you open any file or start on the question"; kind `audit`, whose subject has
+no file, `READ_FIRST_NO_FILES`: "before you start on the question") after the whole opening block of the subject's
+text (just before `## The question`, so in verify and audit the months' list stays under its lead-in line) in every
+arm, and records `read_first: true` in task.json, task.toml [metadata] and the manifest's `build`; without the flag
+nothing changes (docs/PROBE.md 4). Conformity's opening block is one paragraph, so its text is the same as before;
+verify and audit builds made before 2026-11-24 night have the paragraph between the lead-in line and the list.
 
 ## 13. World version 13: scheduled posts
 
@@ -528,13 +530,15 @@ carries that seat's unread messages (from another seat, to it or to `all`, not y
 `new_messages` list, added to the reply's own object; once the reply is written they count as delivered, with a
 `deliver` event `{"ids", "via": "push"}`, as `GET /messages` records them. Replies that show messages themselves
 (`GET /messages`, the submit gate's 409) add nothing, replies to scripted seats and the verifier carry nothing,
-and a reply whose write fails delivers nothing. The world's lock is reentrant, because some replies are written
+and a reply whose write fails delivers nothing. A HEAD reply has no body, so it carries nothing and delivers nothing
+(push or `GET /messages` alike). The world's lock is reentrant, because some replies are written
 under it. The `start` event has `data.push: true`. The world refuses to start when `push` is not `true` or
 `false`, when the condition has no messaging, or when every seat is scripted. Without the key nothing changes.
 
 `build_tasks.py --push` (probe family, every kind) sets `push: true` in task.json, task.toml [metadata] and the
 manifest's `build`, and puts `PUSH_NOTE` ("Any reply from the world service may also carry new messages from your
-team, in a `new_messages` field.") after the opening paragraph of the subject's text in every arm; nothing else
+team, in a `new_messages` field.") after the whole opening block of the subject's text (after the read-first
+paragraph when both flags are set) in every arm; nothing else
 changes. score.json has `push`. qa rule `push` (FAIL): `push` is only `true`, only on a probe task with messaging,
 and the note is in the subject's text exactly when it is set.
 

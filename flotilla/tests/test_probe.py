@@ -574,15 +574,20 @@ def test_the_verifier_scores_the_subjects_own_last_answer_and_sees_adoption(tmp_
 # --- The read-first and push variants ------------------------------------------------------------------------------
 
 
-VARIANT_FLAGS = {"read_first": ("read_first_subject", BUILD.read_first, BUILD.READ_FIRST),
-                 "push": ("push", BUILD.push_note, BUILD.PUSH_NOTE)}
+VARIANT_FLAGS = {"read_first": ("read_first_subject", BUILD.read_first),
+                 "push": ("push", lambda text, _kind: BUILD.push_note(text))}
+
+
+def flag_sentence(flag: str, variant: str) -> str:
+    return BUILD.read_first_sentence(variant) if flag == "read_first" else BUILD.PUSH_NOTE
 
 
 @pytest.mark.parametrize("flag", sorted(VARIANT_FLAGS))
 @pytest.mark.parametrize("variant", ["conformity", "verify", "audit"])
 def test_a_flag_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_nothing_else(tmp_path, variant, flag):
     pytest.importorskip("yaml")
-    argument, insert, sentence = VARIANT_FLAGS[flag]
+    argument, insert = VARIANT_FLAGS[flag]
+    sentence = flag_sentence(flag, variant)
     kind = family(f"probe.{variant}")
     arms = (*kind.ARMS, *kind.EXTRA_ARMS)
     BUILD.build("probe", [0, 1], 4, "easy", SEED, arms, tmp_path / "plain", variant=variant)
@@ -593,9 +598,12 @@ def test_a_flag_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_
     for key, task in told.items():
         before = plain[key]
         text = (task / "instructions" / "p1.md").read_text()
-        assert text == insert((before / "instructions" / "p1.md").read_text())
+        plain_text = (before / "instructions" / "p1.md").read_text()
+        assert text == insert(plain_text, variant)
         assert text.count(sentence) == 1
-        assert text.split("\n\n")[2] == sentence  # after the title and the opening paragraph
+        opening, rest = plain_text.split("\n\n## The question\n", 1)
+        assert text == f"{opening}\n\n{sentence}\n\n## The question\n{rest}"  # after the whole opening block
+        assert flag != "read_first" or ("open any file" in sentence) == (variant != "audit")
         texts.setdefault(key[1], set()).add(text)
         for name in ("p2.md", "p3.md", "p4.md"):
             assert (task / "instructions" / name).read_text() == (before / "instructions" / name).read_text()
@@ -616,6 +624,21 @@ def test_a_flag_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_
     assert all(entry["build"][flag] is True for entry in manifest.values())
     assert all(flag not in entry["build"]
                for entry in json.loads((tmp_path / "plain" / "manifest.json").read_text())["tasks"].values())
+
+
+@pytest.mark.parametrize("variant", ["conformity", "verify", "audit"])
+def test_both_flags_put_read_first_then_the_push_note_after_the_opening_block(tmp_path, variant):
+    pytest.importorskip("yaml")
+    kind = family(f"probe.{variant}")
+    BUILD.build("probe", [0], 4, "easy", SEED, kind.ARMS[:1], tmp_path / "plain", variant=variant)
+    BUILD.build("probe", [0], 4, "easy", SEED, kind.ARMS[:1], tmp_path / "both", variant=variant,
+                read_first_subject=True, push=True)
+    (plain,), (both,) = by_task(tmp_path / "plain").values(), by_task(tmp_path / "both").values()
+    opening, rest = (plain / "instructions" / "p1.md").read_text().split("\n\n## The question\n", 1)
+    assert (both / "instructions" / "p1.md").read_text() == (
+        f"{opening}\n\n{BUILD.read_first_sentence(variant)}\n\n{BUILD.PUSH_NOTE}\n\n## The question\n{rest}")
+    if variant != "conformity":  # the months' list stays under the line that introduces it
+        assert opening.split("\n\n")[1].endswith("to the team:") and opening.split("\n\n")[2].startswith("- p2: ")
 
 
 def test_qa_passes_a_push_build_and_catches_a_missing_note_and_a_stray_flag(tmp_path):
@@ -682,6 +705,20 @@ def test_push_attaches_unread_messages_once_to_any_reply_of_the_seat_under_test(
     assert vias == ["push", "gate", "push", None]
     state = world.request("GET", "/admin/state", token=world.admin)[1]
     assert state["delivered"]["p2"] == {} and len(state["delivered"]["p1"]) == 6
+
+
+def test_a_head_request_pushes_nothing_so_the_gate_still_holds_the_submission(tmp_path, start_world):
+    posts = [{"from": "p2", "to": "all", "text": "March: 1014", "before_s": 3.0}]
+    world = _push_world(start_world, tmp_path, posts)
+    world.ordered = True
+    for path in ("/whoami", "/messages", "/submit"):
+        status, reply, _headers = world.request("HEAD", path, token=world.tokens["p1"])
+        assert status == 405 and reply is None  # headers only: no body, so no message reached the seat
+    assert not [e for e in world.events() if e["kind"] == "deliver"]
+    assert world.request("GET", "/admin/state", token=world.admin)[1]["delivered"]["p1"] == {}
+    status, reply = world.seat("p1", "POST", "/submit", {"answer": {"total": 3061}})
+    assert status == 409 and [m["text"] for m in reply["messages"]] == ["March: 1014"]
+    assert [e["data"]["via"] for e in world.events() if e["kind"] == "deliver"] == ["gate"]
 
 
 def test_push_is_off_without_the_key_and_refused_when_wrong(tmp_path, start_world):

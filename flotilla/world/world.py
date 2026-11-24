@@ -611,25 +611,29 @@ class World(BaseHTTPRequestHandler):
         pushed = self._pushed(body)
         if pushed:
             body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
-        self._write(status, json.dumps(body).encode(), "application/json", headers)
-        if pushed:
+        written = self._write(status, json.dumps(body).encode(), "application/json", headers)
+        if pushed and written:  # pushed messages count as delivered only once a body carrying them was written
             with LOCK:
                 _deliver(self.push_seat or "", [m["id"] for m in pushed], "push")
 
-    def _write(self, status: int, data: bytes, content_type: str, headers: dict[str, str] | None = None) -> None:
+    def _write(self, status: int, data: bytes, content_type: str, headers: dict[str, str] | None = None) -> bool:
+        """Send a reply; True when its body was written (a HEAD reply has the headers only)."""
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         for name, value in (headers or {}).items():
             self.send_header(name, value)
         self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(data)
+        if self.command == "HEAD":
+            return False
+        self.wfile.write(data)
+        return True
 
     def _pushed(self, body: object) -> list[dict[str, Any]]:
         """Version 17: the unread messages that this reply carries to a seat under test, or none (push off, another
-        caller, a reply that already shows messages, or nothing unread)."""
-        if not PUSH or self.push_seat is None or self.delivering or not isinstance(body, dict):
+        caller, a reply that already shows messages, a HEAD reply without a body, or nothing unread)."""
+        if (not PUSH or self.push_seat is None or self.delivering or self.command == "HEAD"
+                or not isinstance(body, dict)):
             return []
         with LOCK:
             return _unread(self.push_seat)
@@ -654,8 +658,9 @@ class World(BaseHTTPRequestHandler):
                 connection.settimeout(previous)
             except OSError:
                 self.close_connection = True
-        with LOCK:
-            _deliver(seat, ids, via)
+        if self.command != "HEAD":  # a HEAD reply shows no messages
+            with LOCK:
+                _deliver(seat, ids, via)
 
     def _caller(self) -> str | None:
         """The seat (or "admin") behind the bearer token; None for a missing or unknown token."""

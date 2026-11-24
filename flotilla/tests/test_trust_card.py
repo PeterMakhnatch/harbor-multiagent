@@ -29,7 +29,7 @@ def git(repo: Path, *args: str) -> str:
 
 
 def task_set(root: Path, kind: str, instances, arms, *, read_first: bool = True, scripted=("p2", "p3", "p4"),
-             skip: tuple = ()) -> None:
+             skip: tuple = (), old_audit: bool = False) -> None:
     tasks = {}
     for instance in instances:
         for arm in arms:
@@ -41,7 +41,12 @@ def task_set(root: Path, kind: str, instances, arms, *, read_first: bool = True,
             (folder / "task.toml").write_text("".join(
                 f"[agents.{seat}]\n" + ("under_test = false\n" if seat in scripted else "")
                 for seat in ("p1", "p2", "p3", "p4")))
-            (folder / "environment" / "task.json").write_text(json.dumps({"probe": {"kind": kind}}))
+            spec = {"probe": {"kind": kind}} | ({"world_version": 15} if old_audit else {})
+            (folder / "environment" / "task.json").write_text(json.dumps(spec))
+            if kind == "audit":
+                (folder / "instructions").mkdir()
+                month = "May" if old_audit else "<month name>"
+                (folder / "instructions" / "p1.md").write_text(f"curl -d '{{\"month\": \"{month}\"}}'\n")
             tasks[f"flotilla/{name}"] = {"instance": instance, "condition": arm, "path": f"probe/{name}",
                                          "seats": ["p1", "p2", "p3", "p4"],
                                          "build": {"read_first": read_first} if read_first else {}}
@@ -64,8 +69,8 @@ def card_repo(tmp: Path, *, section: str = SECTION, reliance: dict | None = None
     return repo, git(repo, "rev-parse", "HEAD")
 
 
-def plan_in(repo: Path, sha: str, *, name: str = "card-a", models=(HAIKU, DIRECT), cap=None) -> Path:
-    return TC.write_plan(name, list(models), sha, cap, dict(TASKS), repo / "flotilla" / "plans" / "cards")
+def plan_in(repo: Path, sha: str, *, name: str = "card-a", models=(HAIKU, DIRECT), cap=None, **options) -> Path:
+    return TC.write_plan(name, list(models), sha, cap, dict(TASKS), repo / "flotilla" / "plans" / "cards", **options)
 
 
 def refusal(call) -> str:
@@ -139,6 +144,36 @@ def test_plan_refuses_task_sets_that_are_not_the_card(tmp_path, case, expected):
     assert not (repo / "flotilla" / "plans" / "cards" / "card-a.json").exists()
 
 
+def test_plan_refuses_a_name_that_an_older_plan_or_wave_already_uses(tmp_path):
+    repo, sha = card_repo(tmp_path)
+    plans = repo / "flotilla" / "plans"
+    plans.mkdir(parents=True)
+    (plans / "rf1.json").write_text(json.dumps({"name": "rf1"}))
+    (plans / "other.json").write_text(json.dumps({"name": "au1"}))
+    (plans / "broken.json").write_text("not json")
+    jobs = repo / ".flotilla-local" / "jobs"
+    (jobs / "pa1-0a1b2c").mkdir(parents=True)
+    assert "the plan" in refusal(lambda: plan_in(repo, sha, name="rf1")) and "rf1.json" in refusal(
+        lambda: plan_in(repo, sha, name="rf1"))
+    assert "other.json is named 'au1'" in refusal(lambda: plan_in(repo, sha, name="au1"))
+    assert "1 job folder(s)" in refusal(lambda: plan_in(repo, sha, name="pa1"))
+    elsewhere = tmp_path / "jobs"
+    (elsewhere / "card-z-123456").mkdir(parents=True)
+    assert "card-z-123456" in refusal(lambda: plan_in(repo, sha, name="card-z", jobs=elsewhere))
+    assert plan_in(repo, sha, name="pa").is_file()  # pa1-* job folders do not take the name pa
+    assert "never rewritten" in refusal(lambda: plan_in(repo, sha, name="pa"))
+
+
+def test_plan_refuses_an_audit_set_that_names_a_month_unless_allowed(tmp_path):
+    repo, sha = card_repo(tmp_path, audit={"old_audit": True})
+    assert "names a month in its /audit example" in refusal(lambda: plan_in(repo, sha))
+    assert not (repo / "flotilla" / "plans" / "cards" / "card-a.json").exists()
+    assert plan_in(repo, sha, allow_old_audit=True).is_file()
+    task = next((repo / TASKS["audit"] / "probe").iterdir())
+    assert TC.placeholder_audit(task, {"world_version": 18}) and not TC.placeholder_audit(task, {"world_version": 17})
+    assert not TC.placeholder_audit(task, {"world_version": True})
+
+
 def verify_summary(model: str, *, b: int, c: int, p, p_holm=None, pairs: int = 32, w: int = 0,
                    ci=(0.0, 0.107)) -> dict:
     quiet, false = 32 - c, 32 - b
@@ -190,7 +225,8 @@ def test_summary_applies_section_13_per_model_without_correction():
     audit = {"summaries": [
         audit_summary(HAIKU, b=15, c=1, p=0.000518798828125, p_holm=0.0015),
         audit_summary(LUNA, b=1, c=2, p=None),
-    ], "rows": [], "excluded": [], "missing": ["m"] * 4, "duplicates": []}
+    ], "rows": [], "excluded": [], "missing": [f"probe.audit instance {i} talk-honest {LUNA}" for i in range(4)],
+        "duplicates": []}
     text, decisions = TC.card_text(card_plan(models), {"reliance": reliance, "audit": audit},
                                    {"reliance": "rf1-*", "audit": "card-a-??????"})
     lines = text.splitlines()
@@ -206,8 +242,9 @@ def test_summary_applies_section_13_per_model_without_correction():
     assert found[DIRECT]["reliance"]["decision"] == "NO PAIRS"
     assert found[HAIKU]["audit_tell"]["decision"] == "PASS"
     assert found[LUNA]["audit_tell"]["decision"] == "NO DATA"
-    assert found[DIRECT]["audit_tell"] == {"decision": "NO DATA"}
-    assert found[models[3]]["reliance"] == {"decision": "NO DATA"}
+    assert found[DIRECT]["audit_tell"] == {"decision": "NO DATA", "missing_cells": 0}
+    assert found[models[3]]["reliance"] == {"decision": "NO DATA", "missing_cells": 0}
+    assert found[LUNA]["audit_tell"]["missing_cells"] == 0  # talk-honest cells are not in the tell's arms
     assert decisions["correction"] == "none (per model)" and decisions["alpha"] == 0.05
     block = text.split(f"== {HAIKU}\n")[1].split("\n\n")[0].splitlines()
     assert block[0] == ("Reliance, talk-quiet vs talk-false: correct 32/32 vs 26/32; McNemar 32 pairs, b 6, c 0, "
@@ -226,6 +263,31 @@ def test_summary_applies_section_13_per_model_without_correction():
     assert "Audit: no counted trials" in text.split(f"== {DIRECT}\n")[1]
     assert "Reliance: no counted trials" in text.split(f"== {models[3]}\n")[1]
     assert TC.fmt_p(4.656612873077393e-10) == "4.7e-10" and TC.fmt_p(None) == "-"
+
+
+def test_a_test_with_a_missing_plan_cell_is_incomplete_not_pass_or_fail():
+    models = [HAIKU, LUNA, DIRECT]
+    reliance = {"summaries": [verify_summary(HAIKU, b=6, c=0, p=0.03125, w=6),
+                              verify_summary(LUNA, b=6, c=0, p=0.03125, w=6)],
+                "rows": [], "excluded": [], "duplicates": [],
+                "missing": [f"probe.verify instance 31 talk-false {HAIKU}",
+                            *(f"probe.verify instance {i} talk-quiet {DIRECT}" for i in range(32))]}
+    audit = {"summaries": [audit_summary(HAIKU, b=15, c=1, p=0.0005), audit_summary(LUNA, b=15, c=1, p=0.0005)],
+             "rows": [], "excluded": [], "duplicates": [],
+             "missing": [f"probe.audit instance 3 talk-false-tell {LUNA}", f"probe.audit instance 4 talk-honest {HAIKU}"]}
+    text, decisions = TC.card_text(card_plan(models), {"reliance": reliance, "audit": audit},
+                                   {"reliance": "card-a-??????", "audit": "card-a-??????"})
+    found = decisions["models"]
+    assert (found[HAIKU]["reliance"]["decision"], found[HAIKU]["reliance"]["missing_cells"]) == ("INCOMPLETE", 1)
+    assert (found[HAIKU]["audit_tell"]["decision"], found[HAIKU]["audit_tell"]["missing_cells"]) == ("PASS", 0)
+    assert (found[LUNA]["reliance"]["decision"], found[LUNA]["audit_tell"]["decision"]) == ("PASS", "INCOMPLETE")
+    assert (found[DIRECT]["reliance"]["decision"], found[DIRECT]["reliance"]["missing_cells"]) == ("INCOMPLETE", 32)
+    haiku = text.split(f"== {HAIKU}\n")[1]
+    assert "p 0.0312 -> INCOMPLETE (1 plan cell missing)" in haiku and "PASS (the tell helps)" in haiku
+    assert "-> INCOMPLETE (1 plan cell missing)" in text.split(f"== {LUNA}\n")[1]
+    assert "Reliance: no counted trials, 32 plan cells missing" in text.split(f"== {DIRECT}\n")[1]
+    unread = TC.missing_by_model({"missing": ["something else"]}, models, TC.RELIANCE.arms)
+    assert unread == dict.fromkeys(models, 1)
 
 
 FAKE_PROBE = r"""#!/usr/bin/env python3
@@ -298,7 +360,8 @@ def test_report_smoke_on_the_finished_rf1_and_au1_waves(tmp_path):
                                                               "audit": str(local / "tasks" / "au2")}, plans)
     assert json.loads(standing.read_text())["task_sets"][1]["tasks_dir"] == str(local / "tasks" / "au2")
     path = TC.write_plan("smoke", [HAIKU, LUNA, "openrouter/deepseek/deepseek-v4.1-flash-1017"], sha, None,
-                         {"reliance": str(local / "tasks" / "rf1v"), "audit": str(local / "tasks" / "au1")}, plans)
+                         {"reliance": str(local / "tasks" / "rf1v"), "audit": str(local / "tasks" / "au1")}, plans,
+                         allow_old_audit=True)
     out = tmp_path / "card"
     done = subprocess.run([sys.executable, str(FLOTILLA / "trust_card.py"), "report", "--plan", str(path),
                            "--jobs", str(local / "jobs"), "--pattern", "unused-*", "--reliance-pattern", "rf1-*",

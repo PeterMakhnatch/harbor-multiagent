@@ -965,7 +965,8 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
         yield Finding("confederate-plan", task.name, "main",
                       f"FLOTILLA_SUBMIT_GATE is {'on' if gate else 'off'}, but task.json says otherwise")
     subject = probe.get("subject")
-    told = BUILD.READ_FIRST in (task.view(subject).get("instruction") or "") if subject in task.under_test else False
+    sentence = BUILD.read_first_sentence(str(probe.get("kind")))
+    told = sentence in (task.view(subject).get("instruction") or "") if subject in task.under_test else False
     if told != (task.task_json.get("read_first") is True):
         yield Finding("confederate-plan", task.name, str(subject),
                       f"its instruction {'tells' if told else 'does not tell'} it to read the messages first, but "
