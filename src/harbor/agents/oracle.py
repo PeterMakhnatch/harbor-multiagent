@@ -1,3 +1,4 @@
+import re
 from typing import override
 from pathlib import Path
 
@@ -5,6 +6,7 @@ from harbor.agents.base import BaseAgent
 from harbor.agents.capabilities import AgentCapabilities
 from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.environments.base import BaseEnvironment
+from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
 from harbor.utils.scripts import (
@@ -12,6 +14,7 @@ from harbor.utils.scripts import (
     needs_chmod,
     quote_shell_arg,
 )
+from harbor.models.task.config import TaskOS
 from harbor.models.task.task import Task
 from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 from harbor.utils.env import resolve_env_vars
@@ -80,6 +83,53 @@ class OracleAgent(BaseAgent):
             return self._task.paths.solution_dir, discovered
         return self._task.paths.solution_dir, self._task.paths.solve_path
 
+    def _seat_caller_uid(self, environment: BaseEnvironment) -> int | None:
+        if (
+            not isinstance(environment, SeatEnvironment)
+            or self._task.config.environment.os == TaskOS.WINDOWS
+        ):
+            return None
+        uid = environment.default_user
+        if isinstance(uid, bool) or not isinstance(uid, int) or uid <= 0:
+            return None
+        return uid
+
+    async def _grant_seat_caller_access(
+        self,
+        environment: BaseEnvironment,
+        uid: int,
+        solution_dir: str,
+        solve_path: str | None,
+    ) -> None:
+        root = quote_shell_arg(solution_dir, TaskOS.LINUX)
+        files = f"find {root} -xdev -depth -type f -links 1 "
+        if solve_path is None:
+            files += "-exec chmod u+rX,u-w {} +"
+        else:
+            pattern = re.sub(r"([*?\[\\])", r"\\\1", solve_path)
+            entry = quote_shell_arg(pattern, TaskOS.LINUX)
+            files += (
+                f"\\( -path {entry} -exec chmod u+rx,u-w {{}} + "
+                "-o -exec chmod u+rX,u-w {} + \\)"
+            )
+        # Children are chowned before their parent (-depth), so the caller never
+        # owns a directory whose entries are still pending; -h and -links 1 keep
+        # symlink and hardlink targets outside the upload untouched.
+        result = await environment.exec(
+            command=(
+                f"find {root} -xdev -depth -type d -exec chmod u+rx,u-w {{}} + && "
+                f"{files} && "
+                f"find {root} -xdev -depth \\( -type d -o -type f -links 1 \\) "
+                f"-exec chown -h {uid} {{}} +"
+            ),
+            user="root",
+        )
+        if result.return_code != 0:
+            self.logger.error(
+                f"Seat solution preparation failed; user {uid} was not granted "
+                f"access to {solution_dir}: {result.stdout}{result.stderr or ''}"
+            )
+
     @override
     async def run(
         self,
@@ -116,7 +166,15 @@ class OracleAgent(BaseAgent):
                 task_os=task_os,
             )
 
-            if needs_chmod(container_solve_path):
+            seat_uid = self._seat_caller_uid(environment)
+            if seat_uid is not None:
+                await self._grant_seat_caller_access(
+                    environment,
+                    seat_uid,
+                    str(env_paths.solution_dir),
+                    container_solve_path if needs_chmod(container_solve_path) else None,
+                )
+            elif needs_chmod(container_solve_path):
                 await environment.exec(
                     command=f"chmod +x {quote_shell_arg(container_solve_path, task_os)}",
                     user="root",
