@@ -169,6 +169,17 @@ def card_plan(models) -> dict:
     return TC.card_plan("card-a", list(models), "0123456789abcdef", None, dict(TASKS))
 
 
+def test_provider_floors_follow_the_model_routes(tmp_path):
+    routed_deepseek = "openrouter/deepseek/deepseek-v4.1-flash-1017"
+    assert card_plan([HAIKU, LUNA, routed_deepseek])["budget"]["provider_floors"] == {"openrouter": 2.0}
+    assert card_plan([DIRECT])["budget"]["provider_floors"] == {"deepseek": 1.5}
+    assert card_plan([routed_deepseek, DIRECT])["budget"]["provider_floors"] == {"deepseek": 1.5, "openrouter": 2.0}
+    repo, sha = card_repo(tmp_path)
+    path = plan_in(repo, sha, name="card-routed", models=(HAIKU, routed_deepseek))
+    assert json.loads(path.read_text())["budget"]["provider_floors"] == {"openrouter": 2.0}
+    assert RUN.load_plan(path)["budget"]["provider_floors"] == {"openrouter": 2.0}
+
+
 def test_summary_applies_section_13_per_model_without_correction():
     models = [HAIKU, LUNA, DIRECT, "openrouter/qwen/qwen3.8-27b"]
     reliance = {"summaries": [
