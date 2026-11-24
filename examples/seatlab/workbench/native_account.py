@@ -302,8 +302,15 @@ def project_result(document: Record, *, job_id: str, slot_name: str) -> Record:
     return attempt(trial, slot, grade_state, reward, rows)
 
 
+Root = tuple[str, int, int | None, bool | None, int]
+
+
 def build(job: str) -> Record:
-    job_id, registered, retries, job_closed, remaining = _root(job)
+    return collect(job, _root(job))
+
+
+def collect(job: str, root: Root) -> Record:
+    job_id, registered, retries, job_closed, remaining = root
     attempts: list[Record] = []
     trials: set[str] = set()
     rows = 0

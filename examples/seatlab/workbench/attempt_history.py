@@ -208,19 +208,24 @@ def _agreement(slots: dict[str, list[str]], owners: dict[str, str]) -> Record:
     return {**counts, "agrees": matched == len(archive) == len(owners)}
 
 
-def build(
-    job_path: str, archive: str, witness: str | None = None, handoffs: str | None = None
-) -> Record:
-    job = _job(job_path)
+def _build(
+    job: Record,
+    archive: str,
+    witness: str | None,
+    handoffs: str | None,
+    *,
+    keep_rosters: bool,
+) -> tuple[Record, dict[str, list[str] | None]]:
     owners = None if witness is None else _witness(witness, job["id"])
     slots, counts, rosters = _scan(
-        job["id"], archive, keep_rosters=handoffs is not None
+        job["id"], archive, keep_rosters=keep_rosters or handoffs is not None
     )
     observed = sum(counts.values())
     _require(
         len(slots) <= job["total"], "archive holds more slots than registered trials"
     )
-    expected = job["total"] + job["retries"] if job["final"] else None
+    counted = job["final"] and job["retries"] is not None
+    expected = job["total"] + job["retries"] if counted else None
     _require(
         expected is None or observed <= expected,
         "archive holds more executions than expected",
@@ -266,7 +271,38 @@ def build(
         )
         report["handoff_coverage"] = coverage
         report["complete"] = report["complete"] and coverage["complete"]
+    return report, rosters
+
+
+def build(
+    job_path: str, archive: str, witness: str | None = None, handoffs: str | None = None
+) -> Record:
+    report, _ = _build(_job(job_path), archive, witness, handoffs, keep_rosters=False)
     return report
+
+
+def closed_history(
+    job_id: str,
+    registered: int,
+    retries: int | None,
+    archive: str,
+    *,
+    witness: str | None,
+    handoffs: str | None,
+) -> tuple[Record, dict[str, list[str] | None]]:
+    assert type(job_id) is str and UUID.fullmatch(job_id) is not None
+    assert type(registered) is int and 0 <= registered <= MAX_TRIALS
+    assert retries is None or (type(retries) is int and 0 <= retries <= MAX_RETRIES)
+    job = {
+        "id": job_id,
+        "total": registered,
+        "retries": retries,
+        "finished_at": None,
+        "final": True,
+    }
+    report, rosters = _build(job, archive, witness, handoffs, keep_rosters=True)
+    assert rosters.keys() == {a for s in report["slots"] for a in s["attempts"]}
+    return report, rosters
 
 
 def text(report: Record) -> str:

@@ -1,0 +1,7 @@
+{
+  "schema": "seatlab.workbench.spool/v1",
+  "jobs": [
+    {"job": "../results/seat-event-stream/native-jobs/job-default"},
+    {"job": "../results/seat-event-stream/native-jobs/job-stopped"}
+  ]
+}

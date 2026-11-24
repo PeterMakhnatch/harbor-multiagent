@@ -41,6 +41,36 @@ python3.12 -BS -m "$wb" account merge worker-a.json worker-b.json worker-a.json 
 
 An identical projection counts once, even if the JSON layout changes. Different snapshots of one job do not merge by timestamp. Select the authoritative copy. Two jobs that claim the same execution fail validation. Missing participants retain null costs. An entire worker that sent no packet is outside the report: the command cannot reconstruct an unseen job registration.
 
+### Check finished jobs from several workers
+
+Give the coordinator one JSON manifest. Each row points to one saved native job. Paths resolve from the manifest, not the shell. Add only the evidence you intend to check. Keep the manifest local; its paths can identify workers.
+
+```json
+{
+  "schema": "seatlab.workbench.spool/v1",
+  "jobs": [
+    {"job": "worker-a/job", "accounts": "worker-a/account-receipts"},
+    {"job": "worker-b/job", "seats": "worker-b/seat-journals", "handoffs": "worker-b/handoff-receipts", "witness": "worker-b/witness.json"}
+  ]
+}
+```
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench attention spool.json
+python3.12 -BS -m examples.seatlab.workbench attention spool.json --json
+```
+
+`accounts` checks attempt receipts against the surviving final results. `seats` checks host seat journals. `handoffs` checks message receipts. Add `witness` only with `seats` to compare each execution with an independent slot observation. Without these fields, the command checks only the native results. Two paths to the same job do not count twice; the operator rejects the manifest.
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | Every listed job closed. The requested checks found no gaps. | Report the scope checked, not a blanket pass. This is not an authorization to spend. |
+| `1` | At least one closed job has a finding. | Inspect its job UUID and finding codes. The same job can have more than one kind of gap. Do not sum them as failed trials. |
+| `2` | The manifest or its evidence is invalid, unreadable or changed during the read. | Use a stationary copy. Fix the input before interpreting any result. |
+| `3` | No closed job has a finding, but a job is open or its finish is unknown. | Obtain its final native result if available. Do not treat the job as a failure or start a replacement. |
+
+Try the [included manifest](morning-example.json) with `attention examples/seatlab/workbench/morning-example.json`. Its two published job excerpts omit finish records. The expected exit is `3`. In a separate retained closed job, all 20 final attempt accounts matched. Checking its message receipts reported `handoff_receipt_unavailable: 20`. This means the records cannot tell what the seats exchanged. It does not mean the seats were silent.
+
 ### Recover evidence without changing a grade
 
 Use `--fragment` when trial directories from this job were moved to another directory. Repeat the option for another archive. The reader checks each result's job UUID, execution UUID and native directory name. It does not use a task label, timestamp, filename prefix or trajectory to guess membership.
