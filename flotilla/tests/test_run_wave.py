@@ -1051,6 +1051,54 @@ def test_invalid_streak_stops_new_starts_drains_and_resumes(tmp_path, monkeypatc
     assert RUN.main([str(path)]) == 0
 
 
+def slow_invalid() -> dict:
+    """Ends invalid (a trial exception) about 0.3 s after its start."""
+    return {**spec_for("hold"), "exception": "boom"}
+
+
+def test_a_streak_filled_while_waiting_for_the_cap_wins_over_the_balance_read(tmp_path):
+    def floor_later(_provider, n):
+        return 10.0 if n == 1 else 0.5
+
+    def fail_later(_provider, n):
+        if n == 1:
+            return 10.0
+        raise RuntimeError("down")
+
+    for name, balance in (("floor", floor_later), ("read", fail_later)):
+        plan = plan_for([0, 1], ["silent"], [DEEPSEEK], concurrency=2, cap=0.15, reserve=0.10)
+        plan["budget"]["max_invalid_streak"] = 1
+        order = plain_order(tmp_path / name / "preview", plan)
+        behaviors = {cell["key"]: slow_invalid() for cell in order}
+        sources = Sources({}, balance)
+        events, _order, _path, _env = launch(tmp_path / name / "wave", plan, behaviors, sources,
+                                             sleep=lambda _delay: None)
+        assert events[-1]["reason"] == "invalid", name
+        assert len([event for event in events if event["kind"] == "start"]) == 1
+        assert sources.balance_calls == ["deepseek"]
+        log = (tmp_path / name / "wave" / "run" / "progress.log").read_text()
+        assert "stop: 1 invalid trials in a row (last: boom); draining in-flight jobs" in log
+        assert "below floor" not in log and "balance read failed" not in log
+
+
+def test_a_streak_formed_in_the_final_drain_exits_3(tmp_path):
+    plan = plan_for([0, 1], ["silent"], [DEEPSEEK], concurrency=2, cap=1.0, reserve=0.05)
+    plan["budget"]["max_invalid_streak"] = 2
+    order = plain_order(tmp_path / "preview", plan)
+    behaviors = {cell["key"]: slow_invalid() for cell in order}
+    events, _order, _path, _env = launch(tmp_path / "wave", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert len([event for event in events if event["kind"] == "start"]) == 2
+    assert [event["valid"] for event in events if event["kind"] == "end"] == [False, False]
+    assert events[-1]["reason"] == "invalid"
+    log = (tmp_path / "wave" / "run" / "progress.log").read_text()
+    assert "stop: 2 invalid trials in a row (last: boom; boom); found after the in-flight jobs finished" in log
+    assert "stop invalid: spent" in log
+    healthy = plan_for([0, 1], ["silent"], [DEEPSEEK], concurrency=2, cap=1.0, reserve=0.05)
+    healthy["budget"]["max_invalid_streak"] = 3
+    events, _order, _path, _env = launch(tmp_path / "under", healthy, behaviors, Sources({}, lambda *_args: 10.0))
+    assert events[-1]["reason"] == "done"
+
+
 def test_max_invalid_streak_defaults_to_6_and_is_validated(tmp_path):
     plan = plan_for([0], ["silent"], [DEEPSEEK])
     blob = tmp_path / "plan.json"

@@ -781,12 +781,12 @@ def invalid_streak(events: list[dict]) -> list[dict]:
     return streak[::-1]
 
 
-def streak_stop(events: list[dict], limit: int, run_dir: Path) -> bool:
+def streak_stop(events: list[dict], limit: int, run_dir: Path, note: str = "draining in-flight jobs") -> bool:
     streak = invalid_streak(events)
     if len(streak) < limit:
         return False
     kinds = "; ".join(event.get("problem") or "unknown" for event in streak[-STREAK_KINDS_SHOWN:])
-    log(run_dir, f"stop: {len(streak)} invalid trials in a row (last: {kinds}); draining in-flight jobs")
+    log(run_dir, f"stop: {len(streak)} invalid trials in a row (last: {kinds}); {note}")
     return True
 
 
@@ -852,8 +852,14 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             if wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap) == "cap":
                 stop = "cap"
                 break
+            if streak_stop(events, limit, run_dir):
+                stop = "invalid"
+                break
             kind, provider, money = cell_gate(cell, floors, sources, sleep)
             drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+            if streak_stop(events, limit, run_dir):
+                stop = "invalid"
+                break
             if len(futures) >= concurrency or over_cap(state["spent_usd"], len(futures), reserve, cap):
                 continue
             if kind == "balance":
@@ -870,10 +876,11 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
                 break
             if pause_before_start(spacing_of(plan), last_start, clock, sleep):
                 drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+                if streak_stop(events, limit, run_dir):
+                    stop = "invalid"
+                    break
                 if over_cap(state["spent_usd"], len(futures), reserve, cap):
                     continue
-            if len(invalid_streak(events)) >= limit:
-                continue
             job = new_job(plan["name"], jobs_dir, namer)
             config_path = run_dir / "configs" / f"{job}.json"
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -889,6 +896,8 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
     finally:
         while futures:
             account(wait_one(futures), futures, state, events, jobs_dir, reserve, run_dir, lock)
+    if stop != "invalid" and streak_stop(events, limit, run_dir, note="found after the in-flight jobs finished"):
+        stop = "invalid"
     return stop or "done"
 
 
