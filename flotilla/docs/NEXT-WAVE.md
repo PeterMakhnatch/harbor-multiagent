@@ -82,15 +82,18 @@ froze at the start. DeepSeek direct cost is the published token price.
 
 - Run `run_wave.py --dry-run <plan>` for cost by model and the expected total. The maximum uses the
   plan's model cap plus estimated Modal cost: $0.0021 per trial, measured on 2026-11-24. Docker adds $0.
-- Pass `--history-jobs <jobs-dir>` to read trials from another worktree. The forecast uses the model's
-  recorded mean for the probe kind first, then its mean across kinds. For a new model, it prices the
-  probe kind's median token use with the cached public OpenRouter catalog. Unknown costs are not zero.
-- The runner uses `FLOTILLA_OPENROUTER_API_KEY` if set, otherwise `OPENROUTER_API_KEY`. The dry run and
-  `progress.log` show the selected key name, not its value.
+- Pass `--history-jobs <jobs-dir>` to read trials from another worktree. The forecast excludes trials
+  with exceptions and seats with no tokens. It uses the model's recorded mean for the probe kind when
+  at least 5 model seats have a cost. Otherwise, it multiplies the probe kind's median token use by
+  list prices. If that estimate is unavailable, it uses the model's mean across any kind and labels it
+  `history any kind`. Unknown costs are not zero.
+- The runner and watch use `FLOTILLA_OPENROUTER_API_KEY` if set, otherwise `OPENROUTER_API_KEY`.
+  The dry run and `progress.log` show the selected key name, not its value.
 - Run `run_wave.py <plan> --smoke` on local Docker. Add `--smoke=N` instead to select at most N instances
   per arm, task set, and model (default 1). The cap is $0. Use `terminus-2` with OpenRouter `:free` models
   or set `agent` to `oracle` and omit `models`. Add `--dry-run` to preview without Docker.
-  Smoke jobs and state use a separate `-smoke` name. Exit code 4 means a trial recorded spend.
+  Smoke jobs use `smoke-<plan>-<hex6>` so `<plan>-*` does not match them. The run dir ends in `-smoke`.
+  Exit code 4 means a trial recorded spend.
 
 ### Cross-play and the per-model suite
 

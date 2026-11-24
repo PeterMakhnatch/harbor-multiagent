@@ -20,7 +20,7 @@ def usage(total: int, cached: int, out: int, cost: float | None = None) -> dict:
 
 
 def trial(jobs: Path, name: str, label: str, seats: list[tuple[str, str | None, dict | None]], *,
-          finished: bool = True, started: str = "2026-11-24T12:00:00+00:00") -> None:
+          finished: bool = True, started: str = "2026-11-24T12:00:00+00:00", failed: str | None = None) -> None:
     """One history trial; a seat with model None is a scripted oracle. seat_results come in reverse seat order so
     only a join by seat ID gets the models right."""
     participants = [{"seat": seat, "name": "oracle" if model is None else "terminus-2", "model_name": model}
@@ -31,6 +31,14 @@ def trial(jobs: Path, name: str, label: str, seats: list[tuple[str, str | None, 
     record = {"config": {"task": {"path": path}, "participants": participants}, "task_id": {"path": path},
               "seat_results": results, "started_at": started,
               "finished_at": "2026-11-24T12:05:00+00:00" if finished else None}
+    if failed is not None:
+        exception = {"exception_type": "AgentTimeoutError"}
+        if failed == "trial":
+            record["exception_info"] = exception
+        elif failed == "step":
+            record["step_results"] = [{"exception_info": exception}]
+        else:
+            next(seat for seat in results if seat["seat"] == failed)["exception_info"] = exception
     target = jobs / f"job-{name}" / f"t-{name}__abc" / "result.json"
     target.parent.mkdir(parents=True)
     target.write_text(json.dumps(record))
@@ -136,28 +144,64 @@ def test_kind_is_the_label_prefix_before_the_first_dash():
     assert PRICING.MODAL_PER_TRIAL_USD == 0.0021
 
 
-def test_history_prefers_the_same_kind_then_any_kind(where):
+def test_five_same_kind_seats_outrank_list_price_and_other_kinds(where):
     repo, jobs = where
-    solo(jobs, "v1", "probe.verify", ONE, usage(10, 0, 1, 0.002))
-    solo(jobs, "v2", "probe.verify-readfirst", ONE, usage(10, 0, 1, 0.004))
-    solo(jobs, "v3", "probe.verify", ONE, usage(10, 0, 1, 9.0), finished=False)
+    for index, cost in enumerate((0.002, 0.004, 0.003, 0.003, 0.003)):
+        solo(jobs, f"v{index}", "probe.verify-readfirst", ONE, usage(10, 0, 1, cost))
+    solo(jobs, "unfinished", "probe.verify", ONE, usage(10, 0, 1, 9.0), finished=False)
     solo(jobs, "a1", "probe.audit", ONE, usage(10, 0, 1, 0.5))
     solo(jobs, "a2", "probe.audit-b0", TWO, usage(10, 0, 1, 0.01))
     solo(jobs, "c1", "probe.conformity", TWO, usage(10, 0, 1, 0.03))
     manifest(repo, "s1", "probe.verify-inbox", [1, 2], ["a"])
-    fetch = Fetch(error=RuntimeError("offline"))
-    lines = forecast(make_plan([ONE, TWO], env="docker"), repo, jobs, fetch)
-    assert lines[0] == f"cost forecast fc: history {jobs} (5 finished trial records)"
+    fetch = Fetch(catalog((ONE, "0.000001", "0.000002", None)))
+    lines = forecast(make_plan([ONE], env="docker"), repo, jobs, fetch)
+    assert lines[0] == f"cost forecast fc: history {jobs} (8 usable finished trial records)"
     assert row(lines, ONE).endswith("2 trials, 2 model seats, $0.003000/trial, total $0.0060 "
-                                    "[history probe.verify n=2]")
-    assert row(lines, TWO).endswith("2 trials, 2 model seats, $0.020000/trial, total $0.0400 "
-                                    "[history any kind (probe.audit, probe.conformity) n=2]")
+                                    "[history probe.verify n=5]")
     assert fetch.calls == 0
     assert line(lines, "catalog:") == "  catalog: not read (no model needed list prices)"
+    assert not (repo / ".flotilla-local" / "cache").exists()
+
+    lines = forecast(make_plan([ONE, TWO], env="docker"), repo, jobs, fetch)
+    assert row(lines, TWO).endswith("2 trials, 2 model seats, $0.020000/trial, total $0.0400 "
+                                    "[history any kind (probe.audit, probe.conformity) n=2]")
+    assert fetch.calls == 1
     assert line(lines, "docker:") == "  docker: 4 trials, $0 sandbox cost"
     assert line(lines, "expected:") == "  expected: $0.0460 = OpenRouter $0.0460 + Modal $0.0000"
     assert line(lines, "maximum:") == "  maximum: $1.0000 = model cap $1.0000 + Modal $0.0000"
-    assert not (repo / ".flotilla-local" / "cache").exists()
+
+
+def test_same_kind_list_price_outranks_sparse_and_other_kind_history(where):
+    repo, jobs = where
+    for index in range(4):
+        solo(jobs, f"v{index}", "probe.verify", ONE, usage(1000, 400, 100, 0.004))
+    solo(jobs, "a1", "probe.audit", ONE, usage(30_000, 0, 2000, 0.45))
+    solo(jobs, "a2", "probe.audit", TWO, usage(30_000, 0, 2000, 0.45))
+    manifest(repo, "s1", "probe.verify", [1, 2], ["a"])
+    fetch = Fetch(catalog(*((model, "0.000001", "0.000002", "0.0000001") for model in (ONE, TWO))))
+    lines = forecast(make_plan([ONE, TWO]), repo, jobs, fetch)
+    assert line(lines, "token profile") == ("  token profile probe.verify (median per model seat, 4 trials): "
+                                            "1000 input (400 cached, 600 uncached), 100 output")
+    for model in (ONE, TWO):
+        assert row(lines, model).endswith("$0.000840/trial, total $0.0017 [price-estimate probe.verify]")
+
+
+def test_history_excludes_trial_exceptions_and_zero_token_seats(where):
+    repo, jobs = where
+    label = "probe.verify"
+    for failed in ("trial", "step", "p2"):
+        solo(jobs, f"failed-{failed}", label, ONE, usage(9000, 0, 9000, 0.5), failed=failed)
+    solo(jobs, "empty", label, ONE, usage(0, 0, 0, 0.0))
+    trial(jobs, "mixed", label, [("p1", ONE, usage(1000, 400, 100, 0.004)),
+                                 ("p2", ONE, usage(0, 0, 0, 0.9))])
+    manifest(repo, "s1", label, [1, 2], ["a"])
+    fetch = Fetch(catalog((NEW, "0.000001", "0.000002", "0.0000001")))
+    lines = forecast(make_plan([ONE, NEW]), repo, jobs, fetch)
+    assert lines[0] == f"cost forecast fc: history {jobs} (1 usable finished trial records)"
+    assert row(lines, ONE).endswith("$0.004000/trial, total $0.0080 [history any kind (probe.verify) n=1]")
+    assert row(lines, NEW).endswith("$0.000840/trial, total $0.0017 [price-estimate probe.verify]")
+    assert line(lines, "token profile") == ("  token profile probe.verify (median per model seat, 1 trials): "
+                                            "1000 input (400 cached, 600 uncached), 100 output")
 
 
 def test_price_estimate_uses_median_tokens_of_the_same_kind_only(where):
@@ -193,7 +237,7 @@ def test_a_model_missing_from_the_catalog_does_not_hide_the_others(where):
     lines = forecast(make_plan([NEW, OTHER, ONE]), repo, jobs, fetch)
     assert row(lines, NEW).endswith("$0.001200/trial, total $0.0024 [price-estimate probe.verify]")
     assert row(lines, OTHER).endswith("2 trials, 2 model seats, cost UNKNOWN [unknown (not in catalog)]")
-    assert row(lines, ONE).endswith("$0.001000/trial, total $0.0020 [history probe.verify n=1]")
+    assert row(lines, ONE).endswith("$0.001000/trial, total $0.0020 [history any kind (probe.verify) n=1]")
     assert line(lines, "expected:") == ("  expected: at least $0.0170 = OpenRouter $0.0044 + Modal $0.0126; UNKNOWN "
                                         f"cost for 2 model trials: {OTHER} (2 trials)")
 
@@ -246,16 +290,17 @@ def test_mixed_assignments_count_every_planned_model_seat(where):
     solo(jobs, "v1", "probe.verify", ONE, usage(10, 0, 1, 0.003))
     solo(jobs, "v2", "probe.verify", TWO, usage(10, 0, 1, 0.001))
     manifest(repo, "s1", "probe.verify", [1, 2], ["a"], seats=["p1", "p2", "p3", "p4"], scripted=["p3", "p4"])
-    lines = forecast(make_plan(assignments=[[ONE, ONE], [ONE, TWO]]), repo, jobs, Fetch())
+    fetch = Fetch(error=RuntimeError("offline"))
+    lines = forecast(make_plan(assignments=[[ONE, ONE], [ONE, TWO]]), repo, jobs, fetch)
     assert row(lines, ONE).endswith("4 trials, 6 model seats, $0.004500/trial, total $0.0180 "
-                                    "[history probe.verify n=1]")
+                                    "[history any kind (probe.verify) n=1]")
     assert row(lines, TWO).endswith("2 trials, 2 model seats, $0.001000/trial, total $0.0020 "
-                                    "[history probe.verify n=1]")
+                                    "[history any kind (probe.verify) n=1]")
     assert line(lines, "Modal:").endswith("= $0.0084")
 
-    lines = forecast(make_plan([ONE]), repo, jobs, Fetch())
+    lines = forecast(make_plan([ONE]), repo, jobs, fetch)
     assert row(lines, ONE).endswith("2 trials, 4 model seats, $0.006000/trial, total $0.0120 "
-                                    "[history probe.verify n=1]")
+                                    "[history any kind (probe.verify) n=1]")
 
 
 def test_without_any_manifest_a_trial_has_one_model_seat_and_no_kind(where):
@@ -273,21 +318,24 @@ def test_without_any_manifest_a_trial_has_one_model_seat_and_no_kind(where):
 
 def test_the_manifest_beside_the_history_jobs_sets_the_kind(where):
     repo, jobs = where
-    solo(jobs, "a1", "probe.audit-b0", ONE, usage(10, 0, 1, 0.004))
+    for index in range(5):
+        solo(jobs, f"a{index}", "probe.audit-b0", ONE, usage(10, 0, 1, 0.004))
     solo(jobs, "v1", "probe.verify", ONE, usage(10, 0, 1, 0.1))
     manifest(jobs.parent.parent, "s1", "probe.audit-b1", [1, 2], ["a"])
     lines = forecast(make_plan([ONE]), repo, jobs, Fetch())
-    assert row(lines, ONE).endswith("$0.004000/trial, total $0.0080 [history probe.audit n=1]")
+    assert row(lines, ONE).endswith("$0.004000/trial, total $0.0080 [history probe.audit n=5]")
 
 
 def test_deepseek_direct_history_is_charged_from_tokens_and_named(where):
     repo, jobs = where
-    solo(jobs, "d1", "probe.verify", DIRECT, usage(1_000_000, 400_000, 100_000, 99.0))
-    solo(jobs, "d2", "probe.verify", DIRECT, usage(1_000_000, 400_000, 100_000, 99.0), started="2026-11-24T07:00:00Z")
+    for index in range(3):
+        seat = usage(1_000_000, 400_000, 100_000, 99.0)
+        solo(jobs, f"d{index}-off", "probe.verify", DIRECT, seat)
+        solo(jobs, f"d{index}-peak", "probe.verify", DIRECT, seat, started="2026-11-24T07:00:00Z")
     solo(jobs, "v1", "probe.verify", ONE, usage(10, 0, 1, 0.001))
     manifest(repo, "s1", "probe.verify", [1, 2], ["a"])
     lines = forecast(make_plan([DIRECT, ONE], cap=0.1), repo, jobs, Fetch())
-    assert row(lines, DIRECT).endswith("$0.226800/trial, total $0.4536 [history probe.verify n=2]")
+    assert row(lines, DIRECT).endswith("$0.226800/trial, total $0.4536 [history probe.verify n=6]")
     assert line(lines, "expected:") == ("  expected: $0.4640 = OpenRouter $0.0020 + DeepSeek direct $0.4536 + Modal "
                                         "$0.0084")
     assert line(lines, "maximum:") == ("  maximum: $0.1084 = model cap $0.1000 + Modal $0.0084; expected model spend "

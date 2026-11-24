@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 from datetime import UTC, datetime
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 import pytest
@@ -1291,7 +1292,8 @@ def test_oracle_smoke_runs_the_first_instances_on_docker_for_free(tmp_path):
     assert cells == [(0, 0, "silent", None), (0, 0, "talk", None), (0, 2, "silent", None), (0, 2, "talk", None)]
     assert max(event["in_flight"] for event in starts) <= 2
     assert all(event["command"][0] == str(tmp_path / "oracle" / "wrapper") for event in starts)
-    assert all(event["job"].startswith("wave-smoke-") for event in starts)
+    assert all(re.fullmatch(r"smoke-wave-[0-9a-f]{6}", event["job"]) for event in starts)
+    assert not any(fnmatchcase(event["job"], "wave-*") for event in starts)
     assert (sources.price_calls, sources.catalog_calls, sources.balance_calls) == (0, 0, [])
     ends = [event for event in events if event["kind"] == "end"]
     assert all(event["valid"] and event["cost"] == 0 and event["source"] == "oracle" for event in ends)

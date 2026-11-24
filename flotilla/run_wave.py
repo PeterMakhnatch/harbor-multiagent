@@ -31,8 +31,8 @@ The dry run also prints a cost forecast (pricing.forecast_lines); --history-jobs
 and model once per instance, on local Docker through the wrapper (at most 2 jobs), cap and reserve $0, no provider
 floor, no balance or price catalog read. Every subject must be free: Harbor's oracle agent with no model (agent
 "oracle", models omitted or [null]), or an OpenRouter id ending ":free" on terminus-2, with each model in at most one
-seat_assignments row. Run dir and job names end in -smoke, also with --run-dir. A trial that records spend stops new
-starts and the command exits 4.
+seat_assignments row. The run dir ends in -smoke, also with --run-dir. Jobs are named smoke-<plan>-<hex6> so
+they do not match the wave's job patterns. A trial that records spend stops new starts and the command exits 4.
 """
 
 from __future__ import annotations
@@ -1004,6 +1004,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
     futures: dict = {}
     lock = threading.Lock()
     smoke = plan.get("smoke")
+    job_prefix = f"smoke-{plan['name'].removesuffix(SMOKE_SUFFIX)}" if smoke else plan["name"]
     index, spins, stop, last_start = 0, 0, None, None
     bound = len(pending) * 16 + 32
     try:
@@ -1060,7 +1061,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
                     break
                 if over_cap(state["spent_usd"], len(futures), reserve, cap):
                     continue
-            job = new_job(plan["name"], jobs_dir, namer)
+            job = new_job(job_prefix, jobs_dir, namer)
             config_path = run_dir / "configs" / f"{job}.json"
             config_path.parent.mkdir(parents=True, exist_ok=True)
             config = job_config(job, jobs_dir, cell["task"], plan["agent"], cell["model"], options["max_turns"],

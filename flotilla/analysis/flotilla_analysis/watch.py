@@ -205,7 +205,7 @@ def find_plan(run_dir: Path, state: dict[str, Any]) -> dict[str, Any] | None:
 @functools.cache
 def run_wave_module() -> Any:
     """``flotilla/run_wave.py`` of this checkout, loaded as ``trust_card.py`` loads it, for its provider
-    rules and balance reads (``HttpSources``, ``KEYS``, ``provider_of``, ``used_models``)."""
+    rules and balance reads (``HttpSources``, ``key_name``, ``provider_of``, ``used_models``)."""
     if not RUN_WAVE.is_file():
         raise FileNotFoundError(f"{RUN_WAVE} not found (run from a Flotilla checkout)")
     spec = importlib.util.spec_from_file_location("flotilla_watch_run_wave", RUN_WAVE)
@@ -273,7 +273,7 @@ class Balances:
         row |= {"error": None, "level": None, "read_at": None}
         try:
             rw = run_wave_module()
-            key = rw.KEYS[provider]
+            key = rw.key_name(self.env, provider)
         except (Exception, SystemExit) as exc:
             return row | {"error": f"balance unknown ({_read_error(exc)})"}
         if not self.env.get(key):
