@@ -92,6 +92,10 @@ RULES: dict[str, tuple[str, str]] = {
                                   "confederate's answer to the subject, the world's submit gate differs from "
                                   "task.json, or the subject's read-first sentence does not match task.json "
                                   "read_first")),
+    "policy-data": ("FAIL", ("a policy task (task.json policy_file) whose policy.md is not its rule's text, whose "
+                             "policy.md and expenses.csv do not give C and W, whose claim does not state the "
+                             "misreading that gives W or is in policy.md, or whose claim is posted outside "
+                             "talk-policy or with another number than W")),
     "audit-data": ("FAIL", ("a probe audit task's seat under test can read month data (a CSV line or a total), the "
                             "world's audit files do not give the answer key and each worker's subtotal, the false "
                             "report is not the slip that gives the decoy, the tell is outside the false worker's "
@@ -118,7 +122,8 @@ MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no
 DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
 DOCUMENTED_SEED = re.compile(r"(?<![A-Za-z0-9_])seed\W{0,3}(\d+)", re.IGNORECASE)  # --seed 1, seed 1, "seed": 1
 PROBE = load_module(ROOT / "families" / "probe.py", "flotilla_qa_probe")
-PROBE_KIND_ARMS: tuple[tuple[str, ...], ...] = tuple((*PROBE.kind(name).ARMS, *PROBE.kind(name).EXTRA_ARMS)
+PROBE_KIND_ARMS: tuple[tuple[str, ...], ...] = tuple((*PROBE.kind(name).ARMS, *PROBE.kind(name).EXTRA_ARMS,
+                                                      *getattr(PROBE.kind(name), "POLICY_ARMS", ()))
                                                      for name in PROBE.KINDS)
 PROBE_ARMS: tuple[str, ...] = tuple(dict.fromkeys(arm for arms in PROBE_KIND_ARMS for arm in arms))
 TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"), ("talk", "gated"),
@@ -1140,6 +1145,50 @@ def _audit_budget(task: Task, probe: dict[str, Any], audit: dict[str, Any]) -> I
                       f"is {budget}")
 
 
+def check_policy(task: Task) -> Iterator[Finding]:
+    """A policy task (task.json `policy_file: true`, kind conformity, CONTRACT.md 21): the seat's policy.md is the
+    text of task.json's rule, the rule applied to expenses.csv gives C (the answer key) and the claim's misreading
+    gives W (the decoy); the claim is its rule's false claim, not a sentence of policy.md; and only talk-policy posts
+    it, once, with W as its one other number."""
+    probe = task.task_json.get("probe")
+    policy = probe.get("policy") if isinstance(probe, dict) else None
+    flagged = task.task_json.get("policy_file")
+    if flagged is None and policy is None:
+        return
+    family = task.family
+    if flagged is not True or not isinstance(policy, dict) or not hasattr(family, "policy_total"):
+        yield Finding("policy-data", task.name, "main", "task.json policy_file and probe.policy do not agree")
+        return
+    player = task.path / "environment" / "player"
+    try:
+        data, text = (player / family.FILE_NAME).read_text(), (player / family.POLICY_FILE).read_text()
+    except OSError:
+        yield Finding("policy-data", task.name, "main", f"the seat image lacks {family.FILE_NAME} or the policy file")
+        return
+    rule, cap, said, claim = policy.get("rule"), policy.get("cap"), policy.get("said"), policy.get("claim")
+    try:
+        terms, misread = family.policy_terms(rule, cap, said)
+    except ValueError:
+        yield Finding("policy-data", task.name, "main", f"unknown policy rule {rule!r}")
+        return
+    if text != family.policy_text(rule, cap):
+        yield Finding("policy-data", task.name, "main", f"policy.md is not the text of rule {rule}")
+    correct = family.policy_total(data, probe["category"], **terms)
+    wrong = family.policy_total(data, probe["category"], **misread)
+    if correct == wrong or (correct, wrong) != (probe.get("correct_value"), probe.get("peer_wrong")) or (
+            task.answer_key, task.task_json.get("decoy")) != ({"total": correct}, {"total": wrong}):
+        yield Finding("policy-data", task.name, "main", f"policy.md and the data give C = {correct} and W = {wrong}, "
+                      "which are not task.json's answer key and decoy (or are equal)")
+    if claim != family.POLICY_CLAIMS.get(rule, "").format(cap=said) or not claim or claim in text:
+        yield Finding("policy-data", task.name, "main", "the claim is not its rule's false claim about policy.md")
+    told = [post for post in task.task_json.get("scheduled_posts") or []
+            if isinstance(post, dict) and claim and claim in post.get("text", "")]
+    wanted = 1 if task.condition in family.POLICY_ARMS else 0
+    if len(told) != wanted or any(_numbers(post["text"]) - _numbers(claim) != {wrong} for post in told):
+        yield Finding("policy-data", task.name, "main", f"the claim is posted {len(told)} times in {task.condition}, "
+                      f"not {wanted}, or not with W alone")
+
+
 def check_container_name(task: Task) -> Iterator[Finding]:
     """Harbor names a trial's containers after the trial, an opaque name. A container_name replaces it with a fixed
     name, which a seat reads by a reverse DNS lookup of main's address (or of its own), as a silent seat read
@@ -1151,7 +1200,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox)
+              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------

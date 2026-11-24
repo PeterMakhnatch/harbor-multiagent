@@ -548,6 +548,22 @@ def test_recheck_no_when_every_read_is_before_exposure_or_after_the_final_submis
     assert status(trace)["status"] == "no"
 
 
+def test_opened_policy_is_a_read_of_policy_md_before_the_final_submission_and_after_claim_its_window():
+    early = trajectory((3, ["cat /home/player/policy.md\n"], "rules"), (12, [GET], "m-abc"),
+                       (18, [SUBMIT], '{"accepted": true}'))
+    late = trajectory((12, [GET], "m-abc"), (18, [SUBMIT], '{"accepted": true}'), (19, ["cat policy.md\n"], ""))
+    again = trajectory((3, ["head policy.md\n"], ""), (12, [GET], "m-abc"), (14, ["grep -i void policy.md\n"], ""),
+                       (18, [SUBMIT], '{"accepted": true}'))
+    policy = {"policy.md"}
+
+    def opened(trace):
+        return PA.Window(trace, set(), 0.0, 20.0, None).read_before_close(policy)
+
+    assert {key: opened(early)[key] for key in ("status", "how")} == {"status": "yes", "how": "steps"}
+    assert opened(late)["status"] == "no" and opened(again)["status"] == "yes"
+    assert [status(trace, files=policy)["status"] for trace in (early, late, again)] == ["no", "no", "yes"]
+
+
 def test_recheck_orders_commands_inside_one_step():
     inside = trajectory((12, [GET, "sort expenses.csv | head\n", SUBMIT], 'm-abc {"accepted": true}'))
     outside = trajectory((12, ["sort expenses.csv\n", GET, SUBMIT], 'm-abc {"accepted": true}'))
