@@ -1419,8 +1419,15 @@ def test_a_smoke_refuses_paid_unknown_and_repeated_subjects(tmp_path):
     assert loaded({**oracle, "models": [None]})["models"] == [None]
     assert "takes no model" in refused({**oracle, "models": [FREE]})
     assert "takes no model" in refused({**oracle, "seat_assignments": [[FREE]]})
-    assert "plan missing models" in refused(oracle, smoke=False)
-    assert "None is not a model pricing.py can price" in refused({**oracle, "models": [None]}, smoke=False)
+    assert "must run on docker" in refused(oracle, smoke=False)
+    local = {**oracle, "make_jobs": {**oracle["make_jobs"], "env": "docker", "concurrency": 2}}
+    for plan in (local, {**local, "models": [None]}):
+        blob.write_text(json.dumps(plan))
+        assert RUN.load_plan(blob)["models"] == [None]
+    assert "takes no model" in refused({**local, "models": [OPENROUTER]}, smoke=False)
+    assert "takes no model" in refused({**local, "seat_assignments": [[OPENROUTER]]}, smoke=False)
+    assert "None is not a model pricing.py can price" in refused(
+        {**local, "agent": "terminus-2", "models": [None]}, smoke=False)
     assert "lists a model twice" in refused({**free, "models": [FREE, FREE]})
     assert "in seat_assignments[0] and [1]" in refused({**free, "seat_assignments": [[FREE, OTHER_FREE],
                                                                                       [OTHER_FREE, FREE]]})
@@ -1633,9 +1640,9 @@ from pathlib import Path
 args = sys.argv[1:]
 config = json.loads(Path(args[args.index("-c") + 1]).read_text())
 task = config["tasks"][0]["path"]
-model = next(item["model_name"] for item in config["participants"] if item.get("model_name"))
-spec = json.loads(Path(__CONTROL__).read_text())[task + "|" + model]
-tries = Path(__TRIES__) / (Path(task).name + "--" + model.replace("/", "_"))
+model = next((item["model_name"] for item in config["participants"] if item.get("model_name")), None)
+spec = json.loads(Path(__CONTROL__).read_text())[task + "|" + str(model)]
+tries = Path(__TRIES__) / (Path(task).name + "--" + str(model).replace("/", "_"))
 with tries.open("a") as handle:
     handle.write("x")
 attempt = tries.stat().st_size
@@ -1661,8 +1668,8 @@ if not invalid:
         "seats": ["p1", "p2"], "correct": spec["correct"]}))
     (trial / "verifier" / "world-state.json").write_text("{}")
 """
-LOOK_LINE = re.compile(r"look \d+/\d+ after stage \d+/\d+: test \d+ set \d+ talk-quiet vs talk-false: openrouter/\S+ "
-                       r"(continue|stop-efficacy|stop-futility|final)( \(recomputed on resume\))?")
+LOOK_LINE = re.compile(r"look \d+/\d+ after stage \d+/\d+: test \d+ set \d+ talk-quiet vs talk-false: "
+                       r"(?:openrouter/\S+|oracle) (continue|stop-efficacy|stop-futility|final)( \(recomputed on resume\))?")
 
 
 def probe_tree(repo: Path, sets, *, arms=PROBE_ARMS) -> None:
@@ -1711,8 +1718,8 @@ class Wave:
         control = {}
         for cell in self.order:
             correct, invalid = outcome(cell)
-            control[cell["task"] + "|" + cell["model"]] = {"instance": cell["instance"], "arm": cell["arm"],
-                                                           "correct": correct, "invalid": invalid}
+            control[cell["task"] + "|" + str(cell["model"])] = {
+                "instance": cell["instance"], "arm": cell["arm"], "correct": correct, "invalid": invalid}
         (tmp / "control.json").write_text(json.dumps(control))
         (tmp / "tries").mkdir()
         self.harbor = tmp / "harbor"
@@ -1805,6 +1812,40 @@ def test_an_all_tie_model_stops_at_the_futility_look_only_with_futility_on(tmp_p
     assert off.run()[-1]["reason"] == "done"
     assert off.entry(M1)["disposition"]["status"] == "final" and len(off.starts()) == 32 * 2
     capsys.readouterr()
+
+
+def test_staged_oracle_stops_at_12_ties_without_a_provider(tmp_path, monkeypatch, capsys):
+    plan = staged_plan(range(48), [], family="model", futility=(0.25, 0.05))
+    plan.update(models=[None], agent="oracle")
+    plan["make_jobs"].update(env="docker", concurrency=2)
+    plan["budget"].update(cap_usd=0, reserve_per_trial_usd=0)
+    wave = Wave(tmp_path, plan, lambda _cell: (True, 0))
+    wrapper = tmp_path / "wrapper"
+    write_executable(wrapper, '#!/bin/sh\nexec "$@"\n')
+
+    def no_key(*_args):
+        pytest.fail("an oracle wave must not look up a provider key")
+
+    monkeypatch.setattr(RUN, "key_name", no_key)
+    sources = Sources({}, lambda *_args: pytest.fail("an oracle wave must not read a provider balance"))
+    options = {"sources": sources, "base_env": {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}}
+    RUN.run(wave.path, dry_run=True, **options)
+    assert "trials: most 96 (every test runs to its last look), fewest 24" in capsys.readouterr().out
+    events = RUN.run(wave.path, run_dir=tmp_path / "run", jobs_dir=tmp_path / "jobs", harbor=wave.harbor,
+                     wrapper=wrapper, **options)
+    assert events[-1] == {"kind": "stop", "reason": "done", "spent": 0}
+    assert_invariants(events, concurrency=2, cap=0, reserve=0)
+    assert len(wave.starts()) == 24
+    assert wave.entry("oracle")["history"] == [[0, 0, 12]]
+    assert wave.entry("oracle")["disposition"]["status"] == "nonbinding_futility"
+    assert [(row["model"], row["status"]) for row in wave.state()["stages"]["looks"]] == [("oracle", "stop-futility")]
+    assert (sources.price_calls, sources.catalog_calls, sources.zdr_calls, sources.balance_calls) == (0, 0, 0, [])
+    for path in (tmp_path / "run" / "configs").glob("*.json"):
+        config = json.loads(path.read_text())
+        assert config["environment"]["type"] == "docker"
+        assert [(p["name"], p.get("model_name")) for p in config["participants"]] == [("oracle", None)] * 2
+    assert_blind(capsys.readouterr().out, (tmp_path / "run" / "progress.log").read_text())
+
 
 def test_a_stopped_test_skips_only_its_exclusive_arms_for_its_model(tmp_path):
     plan = staged_plan(range(16), [M1, M2], family="model", fractions=(0.5, 1.0))

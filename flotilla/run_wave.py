@@ -17,6 +17,9 @@ A scripted seat (`[agents.<seat>] under_test = false` in task.toml) runs Harbor'
 costs nothing. All tasks of a task set must have the same scripted seats; the optional plan key scripted_seats
 must equal them. seat_assignments rows then list models for the seats under test only.
 
+A plan with agent "oracle" and no model (models omitted or [null]) runs every seat on the oracle, on Docker only.
+It can run stages and reads no provider key, balance, or prices.
+
 Guards: before each start, each provider's balance must be at or above its floor; the OpenRouter balance is the
 lower of the account balance (/api/v1/credits) and the key's own limit left (/api/v1/key). After
 budget.max_invalid_streak (default 6) trials in a row end invalid, in accounting order, overall or counting only one
@@ -80,7 +83,7 @@ FREE_OPTIONS = frozenset({"max_turns"})
 SMOKE_SUFFIX = "-smoke"
 SMOKE_MAX_CONCURRENCY = 2
 KEEP = frozenset({
-    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "LANG",
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "LANG", "HARBOR_TELEMETRY",
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
 })
 KEEP_PREFIXES = ("LC_", "XDG_", "MODAL_", "DOCKER_")
@@ -165,7 +168,7 @@ def assert_free(plan: dict) -> None:
     """A smoke runs only subjects that cost nothing, each model at most once per instance and arm."""
     if plan["agent"] == "oracle":
         if plan.get("seat_assignments") or plan.get("models") != [None]:
-            raise SystemExit("refused: a smoke on the oracle agent takes no model: omit models (or use [null]) and "
+            raise SystemExit("refused: the oracle agent takes no model: omit models (or use [null]) and "
                              "seat_assignments")
         return
     if plan["agent"] not in FREE_AGENTS:
@@ -192,7 +195,8 @@ def load_plan(path: Path, *, smoke: bool = False) -> dict:
     plan = json.loads(path.read_text())
     refuse_unknown(plan, PLAN_KEYS, "plan")
     required = ["name", "prereg", "task_sets", "agent", "make_jobs", "budget", "order_seed"]
-    model_less = smoke and plan.get("agent") == "oracle" and "seat_assignments" not in plan
+    oracle = plan.get("agent") == "oracle"
+    model_less = oracle and "seat_assignments" not in plan
     if "seat_assignments" not in plan and not (model_less and "models" not in plan):
         required.append("models")
     for field in required:
@@ -244,9 +248,11 @@ def load_plan(path: Path, *, smoke: bool = False) -> dict:
     if isinstance(streak, bool) or not isinstance(streak, int) or streak < 1:
         raise SystemExit("refused: max_invalid_streak must be an integer >= 1")
     floors = plan["budget"]["provider_floors"]
-    if smoke:
+    if smoke or oracle:
         assert_free(plan)
-    for model in [] if smoke else used_models(plan):
+    if oracle and not smoke and options["env"] != "docker":
+        raise SystemExit("refused: an oracle wave must run on docker")
+    for model in [] if smoke or oracle else used_models(plan):
         if not PRICING.known_model(model):
             raise SystemExit(f"refused: {model} is not a model pricing.py can price")
         provider = provider_of(model)
@@ -318,7 +324,7 @@ def check_stages(plan: dict, *, smoke: bool) -> None:
         for test in stage_tests(plan):
             sequential(plan, test)
         if not smoke:
-            STAGES.stage_cells(plan, spec["fractions"])
+            stage_cells(plan)
     except (TypeError, ValueError) as exc:
         raise SystemExit(str(exc)) from None
 
@@ -876,6 +882,8 @@ def assigned_charge(cell: dict, result: dict, prices: dict, reserve: float) -> d
 
 
 def charge(cell: dict, result: dict | None, prices: dict, reserve: float) -> dict:
+    if cell["model"] is None:
+        return smoke_charge(cell, result)
     if result is None:
         return {"cost": reserve, "estimate": None, "source": "reserve", "flag": "no-result"}
     result = tested_result(cell, result)
@@ -951,8 +959,8 @@ def initial_state(plan: dict, order: list[dict], digest: str, smoke: int | None 
             "smoke": smoke, "order": order, "prices": {}, "spent_usd": 0.0, "finished": {}}
 
 
-def freeze_prices(sources, models: list[str], state: dict) -> None:
-    if any(model.startswith("openrouter/") for model in models) and not state["prices"]:
+def freeze_prices(sources, models: list[str | None], state: dict) -> None:
+    if any(model is not None and model.startswith("openrouter/") for model in models) and not state["prices"]:
         state["prices"] = sources.prices(models)
 
 
@@ -1084,6 +1092,8 @@ def pause_before_start(spacing: float, last_start: float | None, clock, sleep) -
 def cell_gate(cell: dict, floors: dict, sources, sleep):
     seen = {}
     for model in cell.get("assignment") or [cell["model"]]:
+        if model is None:
+            continue
         provider = provider_of(model)
         if provider in seen:
             continue
@@ -1239,6 +1249,15 @@ def probe_analysis():
     return module
 
 
+def stage_model(model: str | None) -> str:
+    return "oracle" if model is None else model
+
+
+def stage_cells(plan: dict) -> list[list[dict]]:
+    models = [stage_model(model) for model in plan["models"]]
+    return STAGES.stage_cells({**plan, "models": models}, plan["stages"]["fractions"])
+
+
 class Outcomes:
     """Paired outcomes from trial folders, read with probe_analysis.trial_row (the analysis's own validity rules and
     score.json reading). A cell's counted trial is the analysis's: the first valid one by start time."""
@@ -1248,7 +1267,7 @@ class Outcomes:
         self.roots = list(dict.fromkeys((repo / task_set["tasks_dir"]).resolve() for task_set in plan["task_sets"]))
         self.tasks = self.analysis.XM.load_manifests(self.roots)
         scripted = plan.get("scripted_seats")
-        self.plans = [{"name": plan["name"], "models": list(plan["models"]),
+        self.plans = [{"name": plan["name"], "models": [stage_model(model) for model in plan["models"]],
                        "scripted": None if scripted is None else set(scripted), "instances": set(task_set["instances"]),
                        "arms": set(arms_of(task_set)), "sets": []} for task_set in plan["task_sets"]]
         tested = {test["task_set"] for test in stage_tests(plan)}
@@ -1288,10 +1307,10 @@ class Staged:
         self.tests = stage_tests(plan)
         self.rules = {test["test"]: sequential(plan, test) for test in self.tests}
         self.stage_of: dict[tuple[int, int], int] = {}
-        for stage, cells in enumerate(STAGES.stage_cells(plan, spec["fractions"])):
+        for stage, cells in enumerate(stage_cells(plan)):
             for cell in cells:
                 self.stage_of.setdefault((cell["task_set"], cell["instance"]), stage)
-        self.models = list(plan["models"])
+        self.models = [stage_model(model) for model in plan["models"]]
         self.live = {(test["test"], model): True for test in self.tests for model in self.models}
         self.record = {test["test"]: {model: {"history": [], "looks": [], "disposition": None}
                                       for model in self.models} for test in self.tests}
@@ -1312,7 +1331,7 @@ class Staged:
             if self.block_stage(cell) != stage:
                 continue
             tests = tests_by_arm.get((cell["task_set"], cell["arm"]))
-            if not tests or any(live[(test, cell["model"])] for test in tests):
+            if not tests or any(live[(test, stage_model(cell["model"]))] for test in tests):
                 found.append(cell)
         return found
 
@@ -1335,8 +1354,8 @@ class Staged:
                 if len(entry["history"]) != look:
                     raise SystemExit(f"refused: test {test['test']} {model} would skip a planned look")
                 jobs = [attempt["job"] for cell in self.order if cell["task_set"] == test["task_set"]
-                        and cell["model"] == model and cell["arm"] in test["arms"] and self.block_stage(cell) <= stage
-                        for attempt in attempts_of(finished.get(cell["key"]))]
+                        and stage_model(cell["model"]) == model and cell["arm"] in test["arms"]
+                        and self.block_stage(cell) <= stage for attempt in attempts_of(finished.get(cell["key"]))]
                 found = outcomes.paired(test["task_set"], jobs, model, test["arms"])
                 entry["history"].append([found["b"], found["c"], found["n"]])
                 disposition = self.rules[test["test"]].disposition(entry["history"])
@@ -1527,7 +1546,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         state.setdefault("stages", {"stage": 0, "looks": []})
     save_state(state_path, state)
     events: list[dict] = []
-    env = harbor_env(base, models, keep_modal=smoke is None)
+    env = harbor_env(base, models, keep_modal=smoke is None and models != [None])
     with ThreadPoolExecutor(max_workers=wave["make_jobs"]["concurrency"]) as pool:
         def launch_cells(pending: list[dict], starts: dict | None = None) -> str:
             return schedule(wave, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
