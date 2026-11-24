@@ -284,7 +284,9 @@ page; click a column head to sort. `--tasks` and `--manifest` work as for `floti
 cd flotilla/analysis
 python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan>    # a run_wave.py run folder
 python3 -m flotilla_analysis.watch ../../.flotilla-local/jobs --once    # any Harbor jobs (or job) folder
-flotilla-watch TARGET [--interval 30] [--once] [--json PATH] [--notify] [--stall-seconds 300] [--cap-usd X]
+python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan> --html /tmp/wave   # live dashboard
+flotilla-watch TARGET [--interval 30] [--once] [--json PATH] [--html DIR] [--notify] [--stall-seconds 300]
+               [--cap-usd X]
 ```
 
 Each pass (every `--interval` seconds) prints the wave's progress (cells or trials done, valid, invalid,
@@ -296,7 +298,19 @@ reward of finished trials per label, condition and team. Abandoned trials (no `r
 for 3 h or their job or wave already ended) do not count as running and never stall. `--json PATH`
 replaces `PATH` atomically with the same status each pass. `--notify` sends one macOS notification per new
 stall or error (at most 5 per pass, then a count) and never repeats one. Errors of trials that had
-finished before the first pass are shown but not notified. It reads its inputs and writes only `--json`.
+finished before the first pass are shown but not notified. It reads its inputs and writes only `--json`
+and `--html`.
+
+`--html DIR` replaces `DIR/index.html` atomically each pass with a self-contained dashboard (inline CSS, no
+other files; it reloads itself every `--interval` seconds, and with `--once` it does not reload): the same
+status as the text (progress and spend bars, ETA, running trials with one row per seat, its last activity
+and `STALL`, alerts with the time each was first seen, errors, rewards), then a sortable table of finished
+trials with reward, duration, cost, flags and a link to the trial's timeline page. Each finished trial's
+page (`flotilla-timeline`'s renderer) is written once to `DIR/trials/<job>__<trial>.html` and rewritten
+only when its `result.json` changes. The flags are the timeline's (stall, error, unscored, world counts,
+problems) plus provider errors from `trial.log`. A trial without a page says why in its flags (`no
+timeline: ...` for a trial whose task is not resolved, `timeline failed: <error>` when rendering fails); the
+watch goes on. `--once --html DIR` builds the dashboard of a finished wave. Every text is HTML-escaped.
 
 What the host can see during a trial (fork Harbor, read 2026-11-24, Docker and Modal):
 

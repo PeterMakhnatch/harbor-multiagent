@@ -27,5 +27,7 @@ uvx --quiet --python "$PY" python flotilla/build_tasks.py --family schedule --sc
     --conditions talk,talk-liar,talk-warned,talk-liar-warned --out "$tmp" >/dev/null
 uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --instances 0-1 --out "$tmp" \
     >/dev/null  # a behavior probe: 4 seats, the 4 arms (docs/PROBE.md)
+uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --variant verify --instances 0-1 \
+    --out "$tmp" >/dev/null  # the probe's verify kind: 4 seats, its 3 arms (docs/PROBE.md)
 uvx --quiet --python "$PY" --with pyyaml python flotilla/qa.py "$tmp/*/*"
 echo "flotilla checks: OK"
