@@ -40,6 +40,8 @@ python3 -BS -m examples.seat_seals.qualify "$work/study.json" "$work/trials"
 
 `run` starts one ticket. It refuses to replace an occupied directory. Do not rerun failed or incomplete tickets. Multiple operators can receive disjoint tickets and keep separate trial roots. Give all roots to `collect`. A duplicate ticket in two roots is ambiguous. A registration alone is not a cluster lock.
 
+For separate worker machines, use [the paired-worker operator](workers.md). It assigns tickets, refuses conflicting starts, and shows what can still be concluded before every worker returns.
+
 For named seats, give `register` a private native roster with `--team roster.json --seeds 2` instead of `--controls`. It draws fresh seeds and matches both arms within each calendar fixture. Nothing calls a model during registration. An authorized operator must pass `--allow-named-seats` to `run`. Set provider limits separately. Use `collect --json`, not the scripted qualifier, for these natural schedules. A natural schedule has no stage gate. This study did not run the named-seat route.
 
 ## What each receipt proves

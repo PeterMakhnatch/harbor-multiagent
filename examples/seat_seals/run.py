@@ -3,6 +3,7 @@ import asyncio
 import json
 import math
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -38,6 +39,19 @@ CONTROL_INTERVAL = 0.4
 NAMED_INTERVAL = 10.0
 MAX_SAMPLES = 32
 TIMEOUT_SECONDS = 7.0
+
+
+class AlreadyStarted(FileExistsError):
+    pass
+
+
+def reserve(directory: Path) -> None:
+    try:
+        directory.mkdir(mode=0o700, exist_ok=False)
+    except FileExistsError:
+        raise AlreadyStarted(
+            f"trial {directory.name} already has an entry; no trial was started"
+        ) from None
 
 
 def trusted_task(
@@ -113,10 +127,10 @@ def inputs(
     return TrialConfig.model_validate(request), cell, control, interval, files
 
 
-async def run(args: argparse.Namespace) -> bool:
+async def run(args: argparse.Namespace, *, summary_to_stderr: bool = False) -> bool:
     config, cell, control, interval, files = inputs(args)
     directory = config.trials_dir / config.trial_name
-    directory.mkdir(mode=0o700, exist_ok=False)
+    reserve(directory)
     trial = await Trial.create(config)
     if not isinstance(trial, SeatsTrial):
         raise TypeError("seal registration did not create a native SeatsTrial")
@@ -168,7 +182,8 @@ async def run(args: argparse.Namespace) -> bool:
                 "reward_valid": result.reward_valid,
                 "schedule_complete": schedule_ok,
             }
-        )
+        ),
+        file=sys.stderr if summary_to_stderr else sys.stdout,
     )
     return clean and result.reward_valid and schedule_ok
 
