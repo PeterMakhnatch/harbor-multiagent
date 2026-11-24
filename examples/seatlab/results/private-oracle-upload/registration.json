@@ -1,0 +1,88 @@
+{
+  "schema": "harbor.seatlab.private-oracle-control/v1",
+  "question": "Can private checkout permissions be preserved on the host while both non-root native seats really run the same stock oracle? Can a valid team reward mask two execution failures?",
+  "pass": "No retries; 6/6 expected disposition pairs plus valid final grades independently replayed from the world. All tree blobs, modes and task checksum bound. A missing attempt is not a failed grade.",
+  "stock": {
+    "git_tree": "c09e2f59e06ac324e5d9f2dbdc74d4da423de08e",
+    "blobs": {
+      "README.md": "87ee09fb68835896dd4989c05be36edddeab7e3b",
+      "environment/Dockerfile": "66ef8152065b5a294355afe156361df97926484e",
+      "environment/docker-compose.yaml": "f9c61d7fea7020a1aa86b57cccee191d6cb202ea",
+      "environment/seat/Dockerfile": "c9cf413febaedfb826cd021ba35acf8a6cc0250d",
+      "environment/shipment.py": "6d9311510d93eb72742767b6b5f2648bc15c6837",
+      "environment/world.py": "1636ba34a34fb4bb3725c90d9813300b062665dc",
+      "instructions/outgoing.md": "49dd41f2d3a657ddba64a1b41c0615e22936c4e8",
+      "instructions/relief.md": "7c7e08106960d43537eccec2d8f1060c4a1bcbde",
+      "solution/solve.sh": "eee2449cb09e32198f4a8b44fd2baf0d36b483dd",
+      "task.toml": "91b60756016a0ee77818afe0b4fa4e4603934e5d",
+      "tests/test.sh": "900631ccd3c0f16705cdd53bef9c8e86382cf8a3",
+      "tests/verify.py": "7a824c18394f2579216d3798a8b0e0fdd92d2ddf"
+    },
+    "native_lock_digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607"
+  },
+  "base_core": "1553c1d61e3b66ee8b02ec4bd5e9ad220ad7effc",
+  "old_runner": "00aff1ccc1d8b064fa78515d3a762f4a0d4c5491",
+  "private_modes": "directories 0700, nonexecutables 0600, Git executable files 0700; both copies under owner-only parent",
+  "portable_modes": "unmodified Git executable class 0755 or 0644; directories 0755; same bytes",
+  "participants": {
+    "outgoing": "oracle/original",
+    "relief": "oracle/resume"
+  },
+  "cost": "local scripted seats, no paid calls",
+  "cases": [
+    {
+      "ticket": "so-73736d64ffe666f7",
+      "runner": "new",
+      "mode": "private",
+      "prior": "dropped",
+      "channel": "withhold",
+      "expected_disposition": "returned",
+      "expected_reward": 0
+    },
+    {
+      "ticket": "so-2befd73f382a8858",
+      "runner": "old",
+      "mode": "private",
+      "prior": "dropped",
+      "channel": "deliver",
+      "expected_disposition": "raised",
+      "expected_reward": 0
+    },
+    {
+      "ticket": "so-3267dc276a6a2e89",
+      "runner": "new",
+      "mode": "private",
+      "prior": "dropped",
+      "channel": "deliver",
+      "expected_disposition": "returned",
+      "expected_reward": 1
+    },
+    {
+      "ticket": "so-9dfdcc92d9512c67",
+      "runner": "old",
+      "mode": "private",
+      "prior": "committed",
+      "channel": "deliver",
+      "expected_disposition": "raised",
+      "expected_reward": 1
+    },
+    {
+      "ticket": "so-6956cda650484bd5",
+      "runner": "new",
+      "mode": "portable",
+      "prior": "dropped",
+      "channel": "withhold",
+      "expected_disposition": "returned",
+      "expected_reward": 0
+    },
+    {
+      "ticket": "so-1590e86b760ed0cb",
+      "runner": "new",
+      "mode": "portable",
+      "prior": "dropped",
+      "channel": "deliver",
+      "expected_disposition": "returned",
+      "expected_reward": 1
+    }
+  ]
+}
