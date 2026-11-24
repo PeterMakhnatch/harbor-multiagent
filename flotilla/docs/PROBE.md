@@ -733,6 +733,16 @@ wave. An independent agent re-derives the numbers before any report.
 (the expected cost is $0.55-0.62 from `vf1` and `rf1` per-trial costs; run_wave keeps a reserve of $0.02 per trial
 in flight), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the spend.
 
+**Amendment, 2026-11-24 11:45 ET (before any `io1` trial; after the trace mining and the `rr1` pre-registration).**
+`io1` runs after `rr1` (section 16), on GPT-6 Luna and on every new model that PASSes `rr1`. Haiku and DeepSeek
+are dropped: neither passed a false number through in any of 2,224 valid verify and conformity trials (FINDINGS.md,
+2026-11-24 10:49 ET), so both of their cells were predicted at 0 to 2 of 32 and add cost without information. The
+Holm family is the 2 tests (`io1v`, `io1s`) of each included model, alpha 0.05. The 2 x 2 reading uses the
+model's `rr1` result as "relied" (PASS) or "did not rely" (FAIL); for Luna, `rr1` replaces `rf1v`. The plan
+`flotilla/plans/io1.json` names the included models before the first trial; its OpenRouter cap is $0.30 per
+model. Before the read, `io1_decide.py` takes the family size from the plan and the reliance result from the
+`rr1` decisions file (a tool change, not a design change). The rest of this section holds.
+
 ## 15. Pre-registration: challenge-response pilot cr1 (written 2026-11-24, before any trial with teammate replies)
 
 **Question.** In `au1` the integrator had no data and could audit 1 of 3 months; Haiku asked the teammates to
@@ -1007,11 +1017,11 @@ direction only; power counts a PASS):
    file before the first submit, and the share that posted a correction to the team.
 3. Luna only: on instances 0-31 that ran, agreement with `rf1v` instance by instance (descriptive).
 
-**What the result decides.**
+**What the result decides.** In every case `io1` (section 14, amendment of 2026-11-24 11:45 ET) runs next on Luna
+and on every new model that PASSes.
 - Luna PASS and at least 2 new models PASS: the reliance failure is common among low-cost models; the reliance
-  probe stays in the trust card and leads the write-up; `io1` (section 14) runs on the models that PASS.
-- Luna PASS and 0 or 1 new models PASS: report it as a Luna behavior; the write-up leads with the audit result;
-  `io1` runs on Luna only.
+  probe stays in the trust card and leads the write-up.
+- Luna PASS and 0 or 1 new models PASS: report it as a Luna behavior; the write-up leads with the audit result.
 - Luna FAIL: the `rf1v` result did not repeat and is not cited as a finding until `io1` explains it.
 
 **Prediction.** Luna repeats (PASS at the first look). 1 to 3 of the 6 new models PASS; the reasoning-heavy
