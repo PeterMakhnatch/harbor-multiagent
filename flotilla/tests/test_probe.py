@@ -177,6 +177,48 @@ def test_qa_passes_the_arms_and_catches_wrong_posts_a_wrong_briefing_a_missing_g
                              ("twin-mismatch", by_arm["talk-dissent"].name, "p1", "instruction")])
 
 
+def test_the_arms_of_one_confederate_post_talk_wrongs_message_once_and_differ_only_in_the_lead_claim():
+    lone_seats, claims = set(), set()
+    for i in range(30):
+        inst = PROBE.generate(SEED, i, 4, "easy")
+        one, lead = (PROBE.confederate_plans(inst, arm) for arm in PROBE.EXTRA_ARMS)
+        stored = {"probe": json.loads(json.dumps(inst["probe"], sort_keys=True))}  # as task.json holds it (qa)
+        assert (one, lead) == tuple(PROBE.confederate_plans(stored, arm) for arm in PROBE.EXTRA_ARMS)
+        wrong = PROBE.confederate_plans(inst, "talk-wrong")
+        posting = [seat for seat, plan in one.items() if plan]
+        assert len(posting) == 1 and [seat for seat, plan in lead.items() if plan] == posting
+        seat = posting[0]
+        assert one[seat] == wrong[seat] and len(one[seat]) == 1  # the seat's own talk-wrong post, alone
+        text = one[seat][0]["text"]
+        claim = lead[seat][0]["text"].removesuffix(f" {text}")
+        assert claim in PROBE.LEAD_CLAIMS and lead[seat] == [one[seat][0] | {"text": f"{claim} {text}"}]
+        assert not PROBE.numbers_in(claim)
+        lone_seats.add(seat)
+        claims.add(claim)
+    assert lone_seats == set(SEATS[1:]) and len(claims) > 1  # drawn per instance
+
+
+def test_the_arms_of_one_confederate_are_built_only_when_named_and_are_twins_of_the_others(tmp_path):
+    pytest.importorskip("yaml")
+    qa = load(FLOTILLA / "qa.py")
+    result = subprocess.run([sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "probe", "--instances", "0",
+                             "--seed", str(SEED), "--conditions", "talk-one,talk-lead", "--out", str(tmp_path / "cli")],
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.startswith("built 2 tasks")
+    refused = subprocess.run([sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "probe", "--variant",
+                              "verify", "--instances", "0", "--conditions", "talk-one", "--out", str(tmp_path / "v")],
+                             check=False, capture_output=True, text=True)
+    assert refused.returncode != 0 and "unknown conditions" in refused.stderr
+    BUILD.build("probe", [0], 4, "easy", SEED, ARMS + PROBE.EXTRA_ARMS, tmp_path / "all", variant="conformity")
+    found, tasks = qa.check(qa.find_tasks([str(tmp_path / "all")]))
+    assert [f for f in found if f.level == "FAIL"] == [] and len(tasks) == 6
+    assert len({(task.path / "instructions" / "p1.md").read_text() for task in tasks}) == 1
+    posts = {task.condition: json.loads((task.path / "environment" / "task.json").read_text())["scheduled_posts"]
+             for task in tasks}
+    assert [len(posts[arm]) for arm in (*ARMS, *PROBE.EXTRA_ARMS)] == [0, 3, 3, 3, 1, 1]
+    assert posts["talk-one"][0]["text"] in posts["talk-lead"][0]["text"]
+
+
 # --- The world's submit gate ------------------------------------------------------------------------------------
 
 
@@ -292,7 +334,7 @@ def _verify(tmp_path: Path, world, monkeypatch, task: dict) -> tuple[float, dict
 SCALE = 0.1  # the scheduled 0.2-1.5 s become 0.02-0.15 s
 
 
-@pytest.mark.parametrize("arm", ARMS)
+@pytest.mark.parametrize("arm", ARMS + PROBE.EXTRA_ARMS)
 def test_oracle_play_of_each_arm_scores_the_subject_and_records_exposure(tmp_path, start_world, monkeypatch, arm):
     inst = PROBE.generate(SEED, 0, 4, "easy")
     correct, wrong = numbers(inst)
@@ -314,7 +356,7 @@ def test_oracle_play_of_each_arm_scores_the_subject_and_records_exposure(tmp_pat
                                           "exposed_messages", "n_gated", "n_attempts", "n_submissions")} == {
         "arm": arm, "subject": "p1", "answer_value": correct, "correct": True, "correct_value": correct,
         "peer_wrong": wrong, "adopted_wrong": False, "first_attempt": correct, "first_attempt_gated": posting,
-        "exposed": posting, "exposed_messages": 3 if posting else 0, "n_gated": 1 if posting else 0,
+        "exposed": posting, "exposed_messages": len(posts), "n_gated": 1 if posting else 0,
         "n_attempts": 2 if posting else 1, "n_submissions": 1}
     events = world.events()
     assert [e for e in events if e["seat"] in SEATS[1:] and e["kind"] != "send"] == []  # confederates call nothing

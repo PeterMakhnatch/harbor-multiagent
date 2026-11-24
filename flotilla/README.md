@@ -133,7 +133,8 @@ exactly one solution, every clue is needed, and one seat's clues fit many soluti
 (`talk-quiet`, `talk-wrong`, `talk-dissent`, `talk-right`) differ only in what the confederates post. The world's
 submit gate shows a submitting seat its unread messages first and logs the refused answer. The world itself posts
 the confederates' messages 0.2-1.5 s after it starts (task.json `scheduled_posts`, world version 13), before any seat
-calls it.
+calls it. Two more arms are built only when named (`--conditions`): `talk-one` (one confederate posts W) and
+`talk-lead` (the same message behind a claim to lead the team).
 `build_tasks.py --family probe` builds 4 seats and the 4 arms by default (label `probe.conformity`). Kind `verify`
 (`--variant verify`, label `probe.verify`): `p1` holds one file per month and integrates the team's result; each
 confederate posts its month's subtotal. Arms `talk-quiet` (no posts), `talk-honest` (every subtotal right) and

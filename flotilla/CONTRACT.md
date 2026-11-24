@@ -23,8 +23,9 @@ does not. No seat ever sees the name of its condition (section 4).
 
 A **behavior probe** (family `probe`, section 12) is a different design: one seat under test (`p1`) holds the
 whole task, and scripted confederate seats post fixed messages. Its arms (`talk-quiet`, `talk-wrong`,
-`talk-dissent`, `talk-right`) differ only in what the confederates post, and it measures one behavior per kind
-(kind `conformity`: does the seat drop its own correct answer when its peers agree on a wrong one?).
+`talk-dissent`, `talk-right`, and on request `talk-one`, `talk-lead`) differ only in what the confederates post,
+and it measures one behavior per kind (kind `conformity`: does the seat drop its own correct answer when its
+peers agree on a wrong one?).
 
 For one family, model and instance set, with paired instances:
 
@@ -389,7 +390,8 @@ agent. Every seat gets the same `private` part; the seat image holds the family'
 verifier and qa read (other families define none of them, and nothing changes for them):
 
 ```python
-ARMS: tuple[str, ...]              # the only conditions; the default of --conditions
+ARMS: tuple[str, ...]              # the default of --conditions
+EXTRA_ARMS: tuple[str, ...]        # further arms, built only when --conditions names them (conformity: talk-one, talk-lead)
 SEATS: int                         # the default of --seats
 DEFAULT_VARIANT: str               # the default label suffix (probe.conformity)
 POOLING = False                    # the subject's own part answers the task: no pooling checks or oracle pooling
