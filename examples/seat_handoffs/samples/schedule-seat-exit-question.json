@@ -1,0 +1,30 @@
+{
+  "schema": "harbor.seatlab.schedule-seat-exit-question/v1",
+  "registered_utc": "2026-11-24T08:25:51.345844+00:00",
+  "jobs": [
+    "c1-ds-2seat",
+    "c1-glm47-2seat",
+    "c1-gptoss-2seat",
+    "c1-qwen36-2seat",
+    "w1-schedule-ds-2seat",
+    "w2-schedule-glm-4-7-flash-2seat",
+    "w2-schedule-gpt-oss-120b-2seat",
+    "w2-schedule-qwen3-6-35b-2seat"
+  ],
+  "world_source_revision": "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3",
+  "study": "Prespecified analysis of existing records, not newly randomized teams. Previously analyzed for other questions; a scout examined timeout outcomes for this idea. Treat the timeout stratum as exploratory.",
+  "question": "If the last accepted board answer were frozen when the first clean native seat returned while its peer’s recorded execution interval remained open, would the eventual native successes survive?",
+  "trigger": "Exactly two distinct under-test stock seats. Use explicit per-seat exception and execution records, not the top-level exception. A clean return triggers only strictly inside the other recorded execution interval. Equal recorded finish times are not ordered under this policy. If no clean seat meets the rule, keep the native final grade. If execution evidence cannot establish the trigger, include both all ordered prefixes (including zero writes) and the no-trigger result. A clean record is not proof every child process stopped.",
+  "observation_models": {
+    "unanchored": "Use no numerical relation between native finish times and world elapsed time. A valid trigger permits every ordered prefix unless the world supplies a trusted cross-domain cut. Report resulting grade bounds, not an imputed exit-time answer.",
+    "conditional_fresh_world": "Only if the operator attests a fresh same-trial stock world, no timer discontinuities beyond the chosen bound, and causal native start/frozen-verifier brackets. Do not silently substitute agent start, the exiting role’s last write or wall-time zero as the world epoch. Treat quantization, ties and ambiguous boundaries conservatively. The primary conditional tolerance is 1000 ms; repeat at 0 and 5000 ms. Zero excludes extra clock error, not recording precision. Invalid or incompatible clock evidence reverts to the unanchored prefix set, never the final grade by default."
+  },
+  "population": "All slots in the eight existing job locks, both conditions; primary: the native-completed cohort. Secondary: include valid native timeouts and report zero, one or two clean recorded seats separately. Keep missing, invalid, duplicate and out-of-scope teams in coverage.",
+  "grade": "Each prefix, including the empty prefix, is one ordered world state, not a seat vote. One original answer key per exact task checksum must explain all valid native final grades in that analysis. Vary prefix per team, keep the same candidate key across all trials for a task. Report sharp bounds on gains, losses and net for the stated feasible prefix sets, rather than summing single-team key bounds or treating a missing clock as a failed trial.",
+  "decision": "Reject losslessness on a stratum if its minimum lost native successes is positive. Call the freeze lossless on these fixed records only if its maximum losses is zero AND at least one completed team certainly had a later accepted write. Otherwise report unresolved. No claims about interventions, live liveness, tokens, speed, provider or savings. Distinguish unconditional from conditional result.",
+  "qualification": [
+    "Independently enumerate small finite histories and shared keys, including unresolved clock origin, empty state, ties, equal answers, timed-out peer, conflicting witnesses, missing data and no trigger.",
+    "Check available original checksum-bound task keys independently against published bounds. Validate the entire known cohort before reporting any standout case. Private calendars, raw message contents, provider traces and machine paths must not appear in the public report."
+  ],
+  "budget_usd": 0
+}

@@ -1,0 +1,293 @@
+{
+  "schema": "harbor.seatlab.shared-schedule-study/v1",
+  "cohort_registration": {
+    "registered_utc": "2026-11-24T06:05:03.918479+00:00",
+    "jobs": [
+      "c1-ds-2seat",
+      "c1-glm47-2seat",
+      "c1-gptoss-2seat",
+      "c1-qwen36-2seat",
+      "w1-schedule-ds-2seat",
+      "w2-schedule-glm-4-7-flash-2seat",
+      "w2-schedule-gpt-oss-120b-2seat",
+      "w2-schedule-qwen3-6-35b-2seat"
+    ],
+    "source_revision": "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3",
+    "scope": "Every collected native two-seat trial in the fixed c1/w1/w2 SeatLab panel (not selected by reward); count total scheduled from job results separately; include failed/missing/excluded directories.",
+    "question": "Without a task folder, which changes by a different seat can an operator prove correct or incorrect? Does adding outcomes from identical task digests establish more than inspecting trials separately? Had the final writer received a freshly returned message from the previous writer inside the interval?",
+    "test": "All known before/after correctness values agree with an independent official stock rubric on checksum-bound retained original tasks. Never use the reference key in production/primary analysis. No cross-task credit, duplicate credit or invisible missing trials. Preserve unknowns and separate native returns from proof a model read content. Report analysis without extrapolating effect or power. Only descriptive; measure rather than assume pooled coverage increases.",
+    "paid": 0,
+    "native_models": "archived only"
+  },
+  "registration_sha256": "f3d60490cbfc626f10d21879ce2256c65eb94d094ce119e20ebac66c60aa63c1",
+  "upstream_credit": "Flotilla stock scheduling worlds, archive and original keyed last-write analysis, flotilla/lab",
+  "native_job_coverage": {
+    "registered_jobs": 8,
+    "registered_slots": 192,
+    "matched_slots": 180,
+    "missing_slots": 12,
+    "ambiguous_slots": 0,
+    "surplus_directories": 0,
+    "unassigned_directories": 0
+  },
+  "modes": {
+    "completed": {
+      "used_teams": 117,
+      "native_evidence": {
+        "statuses": {
+          "usable": 117,
+          "missing_evidence": 9,
+          "invalid_evidence": 0,
+          "seat_timeout": 54,
+          "rubric_ambiguous": 0,
+          "duplicate_trial": 0,
+          "conflicting_reference": 0
+        },
+        "includes_timed_out": false,
+        "valid_native_grades": 171,
+        "graded_timeouts": 54,
+        "transitions": 299,
+        "same_seat_transitions": 161,
+        "cross_seat_transitions": 138,
+        "cross_seat_improved": 9,
+        "cross_seat_worsened": 15,
+        "cross_seat_unchanged": 74,
+        "cross_seat_unknown": 40,
+        "final_cross_seat_improved": 4,
+        "final_cross_seat_worsened": 9,
+        "cross_seat_by_peer_return": {
+          "new_return": {
+            "improved": 1,
+            "worsened": 0,
+            "unchanged": 9,
+            "unknown": 0
+          },
+          "previous_return": {
+            "improved": 2,
+            "worsened": 8,
+            "unchanged": 34,
+            "unknown": 4
+          },
+          "sent_not_returned": {
+            "improved": 0,
+            "worsened": 0,
+            "unchanged": 0,
+            "unknown": 0
+          },
+          "not_sent": {
+            "improved": 6,
+            "worsened": 7,
+            "unchanged": 31,
+            "unknown": 36
+          },
+          "unknown": {
+            "improved": 0,
+            "worsened": 0,
+            "unchanged": 0,
+            "unknown": 0
+          }
+        },
+        "bounds": {
+          "cross_seat_improved": [
+            9,
+            18
+          ],
+          "cross_seat_worsened": [
+            15,
+            38
+          ],
+          "final_cross_seat_worsened": [
+            9,
+            28
+          ]
+        }
+      },
+      "single_trial_witnesses": {
+        "unchanged": 55,
+        "unknown": 77,
+        "improved": 4,
+        "worsened": 2
+      },
+      "newly_classified_using_same_task": {
+        "unchanged": 19,
+        "worsened": 13,
+        "improved": 5
+      },
+      "independent_task_bound_check": {
+        "teams": 116,
+        "directions": {
+          "unchanged": 103,
+          "worsened": 23,
+          "final_cross_seat_worsened": 14,
+          "improved": 11
+        },
+        "checks": {
+          "teams": 116,
+          "adjacent": 298,
+          "verified_endpoint_labels": 449,
+          "checked_known_changes": 203,
+          "cross_changes": 137,
+          "checked_known_cross": 98
+        },
+        "restricted_keyless_bounds": {
+          "cross_seat_improved": [
+            9,
+            18
+          ],
+          "cross_seat_worsened": [
+            15,
+            37
+          ],
+          "final_cross_seat_worsened": [
+            9,
+            27
+          ]
+        }
+      },
+      "independent_world_return_check": {
+        "server_return_labels_checked": 299,
+        "counts": {
+          "not_sent": 80,
+          "not_applicable": 161,
+          "previous_return": 48,
+          "new_return": 10
+        }
+      }
+    },
+    "including_timeouts": {
+      "used_teams": 171,
+      "native_evidence": {
+        "statuses": {
+          "usable": 171,
+          "missing_evidence": 9,
+          "invalid_evidence": 0,
+          "seat_timeout": 0,
+          "rubric_ambiguous": 0,
+          "duplicate_trial": 0,
+          "conflicting_reference": 0
+        },
+        "includes_timed_out": true,
+        "valid_native_grades": 171,
+        "graded_timeouts": 54,
+        "transitions": 1969,
+        "same_seat_transitions": 1609,
+        "cross_seat_transitions": 360,
+        "cross_seat_improved": 18,
+        "cross_seat_worsened": 24,
+        "cross_seat_unchanged": 194,
+        "cross_seat_unknown": 124,
+        "final_cross_seat_improved": 5,
+        "final_cross_seat_worsened": 11,
+        "cross_seat_by_peer_return": {
+          "new_return": {
+            "improved": 1,
+            "worsened": 0,
+            "unchanged": 10,
+            "unknown": 0
+          },
+          "previous_return": {
+            "improved": 2,
+            "worsened": 10,
+            "unchanged": 36,
+            "unknown": 5
+          },
+          "sent_not_returned": {
+            "improved": 0,
+            "worsened": 0,
+            "unchanged": 1,
+            "unknown": 0
+          },
+          "not_sent": {
+            "improved": 15,
+            "worsened": 14,
+            "unchanged": 147,
+            "unknown": 119
+          },
+          "unknown": {
+            "improved": 0,
+            "worsened": 0,
+            "unchanged": 0,
+            "unknown": 0
+          }
+        },
+        "bounds": {
+          "cross_seat_improved": [
+            18,
+            46
+          ],
+          "cross_seat_worsened": [
+            24,
+            63
+          ],
+          "final_cross_seat_worsened": [
+            11,
+            29
+          ]
+        }
+      },
+      "single_trial_witnesses": {
+        "unchanged": 109,
+        "unknown": 238,
+        "improved": 8,
+        "worsened": 5
+      },
+      "newly_classified_using_same_task": {
+        "unchanged": 85,
+        "worsened": 19,
+        "improved": 10
+      },
+      "independent_task_bound_check": {
+        "teams": 170,
+        "directions": {
+          "unchanged": 289,
+          "worsened": 41,
+          "final_cross_seat_worsened": 16,
+          "improved": 29
+        },
+        "checks": {
+          "teams": 170,
+          "adjacent": 1968,
+          "verified_endpoint_labels": 3059,
+          "checked_known_changes": 1452,
+          "cross_changes": 359,
+          "checked_known_cross": 236
+        },
+        "restricted_keyless_bounds": {
+          "cross_seat_improved": [
+            18,
+            46
+          ],
+          "cross_seat_worsened": [
+            24,
+            62
+          ],
+          "final_cross_seat_worsened": [
+            11,
+            28
+          ]
+        }
+      },
+      "independent_world_return_check": {
+        "server_return_labels_checked": 1969,
+        "counts": {
+          "not_sent": 295,
+          "not_applicable": 1609,
+          "previous_return": 53,
+          "new_return": 11,
+          "sent_not_returned": 1
+        }
+      }
+    }
+  },
+  "scope": "Retrospective descriptive cross-seat write transitions, not independent samples of an intervention. Unknown does not mean unchanged. No new agent trial; no model or cloud spend.",
+  "independent_reference": {
+    "raw_exact": 155,
+    "exact_after_excluding_only_generated_python_caches": 15,
+    "unmatched": 1,
+    "unmatched_withheld": true,
+    "null_write_labels_on_bound_trials": 0,
+    "keyed_reference_uses_answer_keys": true,
+    "operator_uses_answer_keys": false,
+    "private_raw_trials_public": false
+  }
+}

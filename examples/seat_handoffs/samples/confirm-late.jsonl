@@ -1,0 +1,9 @@
+{"seq":0,"type":"start","schema":"harbor.handoffs/v1","run":"5325bfa9-c062-4075-b3c3-546a1865f986","edges":[{"message":"initial","sender":"reporter","receiver":"booker"},{"message":"revision","sender":"reporter","receiver":"booker"}],"acknowledgements":true}
+{"seq":1,"type":"sent","message":"initial","sender":"reporter"}
+{"seq":2,"type":"returned","message":"initial","receiver":"booker"}
+{"seq":3,"type":"acknowledged","message":"initial","receiver":"booker"}
+{"seq":4,"type":"commit","receiver":"booker"}
+{"seq":5,"type":"sent","message":"revision","sender":"reporter"}
+{"seq":6,"type":"returned","message":"revision","receiver":"booker"}
+{"seq":7,"type":"acknowledged","message":"revision","receiver":"booker"}
+{"seq":8,"type":"closed","reward":1}

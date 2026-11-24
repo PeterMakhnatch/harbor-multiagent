@@ -1,0 +1,14 @@
+task:
+  path: examples/tasks/revised-dispatch
+trials_dir: trials
+environment:
+  type: docker
+  delete: true
+  env:
+    HANDOFF_SEED: "39"
+    HANDOFF_VARIANT: "replace"
+participants:
+  - seat: booker
+    name: oracle
+  - seat: reporter
+    name: oracle

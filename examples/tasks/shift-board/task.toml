@@ -1,0 +1,30 @@
+schema_version = "1.4"
+artifacts = ["/logs/world/shift-board-id.json"]
+
+[task]
+name = "harbor/shift-board"
+description = "A planner seat and a dispatcher seat, both under test, settle one shared meeting slot through a revisioned board."
+keywords = ["seats", "docker-compose", "multi-agent", "scheduling"]
+
+[metadata]
+difficulty = "easy"
+category = "example"
+tags = ["seats", "scheduling"]
+
+[verifier]
+timeout_sec = 60.0
+
+[agent]
+timeout_sec = 600.0
+
+[environment]
+build_timeout_sec = 600.0
+
+[environment.env]
+BOARD_SEED = "0"
+BOARD_FIXTURE = "planner-fit"
+BOARD_RULE = "guard"
+
+[agents.planner]
+
+[agents.dispatcher]

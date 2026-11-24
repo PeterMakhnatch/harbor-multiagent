@@ -1,0 +1,242 @@
+{
+  "schema": "harbor.joint-reopen.study/v1",
+  "task": {
+    "name": "harbor/joint-reopen",
+    "digest": "sha256:ec969b116cab9718db6f8a1e35337529c0e5c60e1cc86160746ce8497b8fdf44",
+    "checksum": "d39605c284edbf87a396d75d273bb096f0b17ceca2ef09f9fb57a671acc2dfd8"
+  },
+  "teams": {
+    "both-read": [
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/read-peer",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/read-peer",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "own-cards": [
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/own-card",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/own-card",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "east-reads": [
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/read-peer",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/own-card",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "keep": [
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/keep",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/keep",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "east-stops": [
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/stop-vote",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/read-peer",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ],
+    "stock-east": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "JR_POLICY": "recheck"
+        },
+        "mcp_servers": [],
+        "seat": "east"
+      },
+      {
+        "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+        "model_name": "operator/read-peer",
+        "skip_model_parsing": true,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "west"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "jr-b73aabbad331d4b0",
+      "team": "both-read",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-1f9c23a04eea014d",
+      "team": "both-read",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-23f0f4100a9129a6",
+      "team": "own-cards",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-d490f8d4bd422ad9",
+      "team": "own-cards",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "jr-7eaccb1c6fdb243b",
+      "team": "east-reads",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-367a54e937ffbd85",
+      "team": "east-reads",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-d6814f9a441fb16b",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-9d83fde0c7544c4d",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-c4eef083e0cd5e01",
+      "team": "east-stops",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-54d4c99eca7c5d4d",
+      "team": "stock-east",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-8553113e8679890d",
+      "team": "both-read",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "jr-d1fd71f150c9dc11",
+      "team": "both-read",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "withhold"
+    }
+  ]
+}

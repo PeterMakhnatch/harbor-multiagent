@@ -1,0 +1,14 @@
+task:
+  path: examples/tasks/shift-board
+environment:
+  type: docker
+  delete: true
+  env:
+    BOARD_SEED: "913"
+    BOARD_FIXTURE: planner-fit
+    BOARD_RULE: guard
+participants:
+  - seat: planner
+    name: oracle
+  - seat: dispatcher
+    name: oracle

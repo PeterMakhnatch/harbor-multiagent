@@ -1,0 +1,974 @@
+{
+  "schema": "harbor.joint-reopen.control-outcomes/v1",
+  "question": "After both seats really endorse one provisional booking, does receipt of a truthful peer report help a team revise only when private availability invalidates the booking? Can receiving and even accurately reporting the evidence be separated from using it in a joint decision?",
+  "preregistration_commit": "0cf6ce4ed7045b06e27b50a28e493663ed8805cd",
+  "registration_sha256": "c69cf3a108d4ce3fc3d7e198d5be63f120700da5e7e5ae47f7d5dc7b7fbba03c",
+  "predictions_sha256": "d7bd15801ba3f0b118b49799920a62886f88aa6dc1981331c3629748e9b591b7",
+  "task": {
+    "name": "harbor/joint-reopen",
+    "digest": "sha256:ec969b116cab9718db6f8a1e35337529c0e5c60e1cc86160746ce8497b8fdf44",
+    "checksum": "d39605c284edbf87a396d75d273bb096f0b17ceca2ef09f9fb57a671acc2dfd8"
+  },
+  "native": {
+    "runner": "PeterMakhnatch/harbor-multiagent",
+    "package_version": "0.26.0",
+    "python_version": "3.13.17",
+    "participant": "oracle",
+    "first_attempts_by_shard": [
+      16,
+      16
+    ],
+    "max_local_trials": 2,
+    "actual_model_calls": 0,
+    "new_provider_usd": 0
+  },
+  "statuses": {
+    "usable": 32,
+    "missing": 0,
+    "incomplete": 0,
+    "ambiguous": 0,
+    "duplicate": 0,
+    "native_error": 0,
+    "invalid": 0
+  },
+  "comparison": {
+    "registered": 32,
+    "predicted_scalar_fields": 928,
+    "differences": 0,
+    "unique_native_trials": 32,
+    "unique_world_runs": 32,
+    "predeclared_seeds": [
+      2339,
+      7331
+    ]
+  },
+  "independent_state_verifier_qualification": {
+    "histories": 10000,
+    "generated": 8000,
+    "neighboring_order_variations": 2000,
+    "partially_played_among_generated": 1633,
+    "complete_among_generated": 6367,
+    "unnecessary_feasible_switch_among_generated": 120,
+    "late_own_inbox_after_vote": 907,
+    "late_own_card_after_vote": 458
+  },
+  "native_enrollment": {
+    "model_seats_emitted_not_run": 2,
+    "changed_task_without_workspace": true,
+    "existing_workspace_unchanged": true,
+    "per_seat_world_override_refused": true
+  },
+  "cold_reader_qualification": {
+    "registered_cases": 45,
+    "matched_cases": 45,
+    "original_native_files_unchanged": true,
+    "trial_with_no_finish_timestamp_incomplete": true,
+    "native_failure_with_standing_reward_not_credited": true,
+    "isolated_valid_zero_kept_with_31_missing": true,
+    "scope": "Isolated copies of the first rewarded and first unrewarded native trials; no trial reruns."
+  },
+  "limitations": [
+    "Scripted policies and two fixed seeds. These trials do not estimate a model effect or a population rate.",
+    "Private report returned before a vote does not prove attention. Withholding content does not remove the phase or all timing information.",
+    "An observation hash identifies the bytes under that ticket. The world publishes no second receipt binding its UUID to the native trial ID.",
+    "A frozen seed in the public test is a control fixture, not suitable as an unseen model test."
+  ],
+  "rows": [
+    {
+      "ticket": "jr-c89234ed4c2b6008",
+      "native_id": "4906601b-3c35-4547-8be4-a1a086563ae8",
+      "world_run": "2c1e69a0-b100-4196-9187-439eeaeb596f",
+      "observation_sha256": "3f3e98804f0310de560ef05856d830c0ac104f32894b6ae71352a920b24c627b",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-45ac72925ddbc15f",
+      "native_id": "5d0f1919-29ab-4947-85a7-1957a8647048",
+      "world_run": "2a254bfc-3e72-4ba7-b04c-724c3e568bea",
+      "observation_sha256": "9c703f7db1fb1ea19594ebefc0bcb3579b425770949c097d23c52241b7827d3a",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "withhold",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-9f1096b77f1fb2d4",
+      "native_id": "8b437ac4-bb8b-4f76-822a-fad4755be1c4",
+      "world_run": "670b3411-b6b3-4b29-ae29-08609a42bd2f",
+      "observation_sha256": "f1412c9d08c5d2b0a4ba40dc116ae88a57ebf9110b8e618f6b3a56cb92005ffb",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-db83c1b1c6d1b83f",
+      "native_id": "0fab90db-ef9b-421d-9aa5-f6cb5c1cd640",
+      "world_run": "859f4e7d-ebb2-498e-917a-6b518463bb9f",
+      "observation_sha256": "bdb02b43ff381532ebe9669fa0d88755ac579ae07f979a4297b98dd8923ca06d",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver",
+      "incumbent_feasible": true,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": false,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-4e01dc74821c5c12",
+      "native_id": "4d1ca960-e28b-44fd-aad8-83dacda11624",
+      "world_run": "f1d6e1f9-576a-4c3f-bedb-8c6181e241dc",
+      "observation_sha256": "c0e72d4b9c8b3572b12b29001a792c21f73a718564cde5a65978bb97f0ac8a92",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "withhold",
+      "incumbent_feasible": true,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": true,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-be848053396f6cb9",
+      "native_id": "33f9a88b-68cf-4763-b99a-684d4e865ca5",
+      "world_run": "a4067b4f-2a6d-4775-9f09-b2effb373d1f",
+      "observation_sha256": "88a5dadd7ba534aa5b71ce39c2ac62889c27876569e2dc066c1f1833e089570f",
+      "team": "west-rechecks",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-0db6ded8bf87ff65",
+      "native_id": "c396760c-9d4f-4e3d-8d4d-680bf8234ecb",
+      "world_run": "e23b43f8-aad9-4e7d-b5b9-ff729e226510",
+      "observation_sha256": "bd1a6fbe2aedb95ff02128fb48923aef9c8bd4cf5ed86778b878ee7490805c0e",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "none",
+      "channel": "deliver",
+      "incumbent_feasible": true,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": true,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-86c6030d0790248a",
+      "native_id": "c494e701-8ef7-491d-9437-c7481e81f8a6",
+      "world_run": "3f39a7a5-e873-443c-bf2e-91fd2eecff93",
+      "observation_sha256": "fc3e28a89a44634e4f3171f9846c0ca182952e5881b30e36f8de2f213ea22f5c",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "west",
+      "channel": "withhold",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-cb9fb2f4cf501c35",
+      "native_id": "d96141ce-2c4a-448e-8fd7-322a9f560551",
+      "world_run": "8f473679-6199-4ec0-84ac-d42bab5b0806",
+      "observation_sha256": "0a70faa810c0b7e01ff1a72f744b16b6be94ee94f5a113e40488d32f43e5074b",
+      "team": "west-rechecks",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-cdf7f23c5d449727",
+      "native_id": "bb097a18-7d4d-4ed9-8455-b67c928ab52d",
+      "world_run": "a574e4c9-8950-4616-b8d7-f31e55d612fb",
+      "observation_sha256": "c8080c7d99863e1f2e9a7673656f87069cb045dba2bfabb2e2b1c2d27bb7f6ca",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": false,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": false,
+      "seats": {
+        "east": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-b3775806ad32ae9c",
+      "native_id": "963c9365-63b2-4913-bcff-2313de9806c1",
+      "world_run": "cd8b7bbb-5bff-4756-a797-62dd9f640a68",
+      "observation_sha256": "bd1f6fe7306de8993ddaae4d6f40876c5a816352568e1d21632a2cc7fd35a758",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "east",
+      "channel": "withhold",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-a5c2d66fa3de3189",
+      "native_id": "e0b47152-4877-4fc3-9547-5844696b9a0a",
+      "world_run": "c4f570b3-4741-4e2b-afb0-0796000fc4ee",
+      "observation_sha256": "917411a9da34f409201916bd6a941956c1522b735cd4211154d9b8a07b6ed9f0",
+      "team": "switch",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-26967c7665dd8ee6",
+      "native_id": "19580189-053c-4866-bccc-593c63d6fec4",
+      "world_run": "6b4837a0-ddb7-49b7-9a7d-af855a8ea1f2",
+      "observation_sha256": "93e64a99242eca8eda0db479b87eb78fe94bd1d3ea3878979602c77d39294488",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver",
+      "incumbent_feasible": true,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": true,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-347928fd87ef0103",
+      "native_id": "194cc7f2-0f98-4fed-b7b9-d05ce47c222c",
+      "world_run": "c5275d50-7b9a-4d0a-8a29-471cc4049ca9",
+      "observation_sha256": "f41182108e7ab315ed542149ac61f289ecd77a59551620a0a43790e3baa26d7e",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": false,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": false,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-170f3257303387bc",
+      "native_id": "63f1e762-f853-48eb-863d-a963ef191f54",
+      "world_run": "fc926add-1cef-42b2-abe3-e64456862632",
+      "observation_sha256": "3446667a3ab307022ec759bba626c88164954093f5972f51f3a2dcca250b610e",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": false,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": false,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-f68e0f2444db10aa",
+      "native_id": "ffd60364-f649-430c-b0ba-abf013044468",
+      "world_run": "7279b503-75f9-42e6-8d04-92048a1f3de5",
+      "observation_sha256": "59f099963e986c72b28c559741203754474e0ff4181cfcdc8e2fa482f48e534f",
+      "team": "east-rechecks",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-7626848d35689eea",
+      "native_id": "37680b8f-b927-494e-8dee-a11055d3e01c",
+      "world_run": "dc65f20e-1c0d-401f-be4a-b1faddd3e240",
+      "observation_sha256": "0cfab3f8d92eed48bc38d6bfb6dcdd79817dfeb392d32c850ed17d1ee82cf11f",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-408b593b9605e0a1",
+      "native_id": "0bd2463b-753d-4d1a-be7b-6581172ec553",
+      "world_run": "ee5c2a92-ebe6-4e7b-ae64-7fadf9a44b61",
+      "observation_sha256": "5a46c9a0c7e2aa5c6b1cc633c011e4d256cf302e10db7fe7cac2a8e6b90a9889",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": false,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": false,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-d45ec31a2bd01d32",
+      "native_id": "f20ae06e-3b53-4e53-a9e0-998316aa3ba5",
+      "world_run": "d7df30d1-879a-4e31-b310-2cfa1227015e",
+      "observation_sha256": "bc66ee12ad66564206404fe74d671d90d096e423c95a03931877b580041b62c8",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": false,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": false,
+      "seats": {
+        "east": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-6c8be835d4529490",
+      "native_id": "1b0de1d0-c1fb-4443-96ec-4a37d74c1931",
+      "world_run": "4ee48c07-dde3-4ebb-ad93-190ac952905b",
+      "observation_sha256": "49eaf9c4f829d3e3cb77360b87f35ac68fc9c01683640341197d1cb2eeb95015",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "both",
+      "channel": "withhold",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-2b39265803149f23",
+      "native_id": "82017da4-4d23-44eb-8cbe-57982f086529",
+      "world_run": "7e8037d0-b268-40a3-9645-a5d4989cfc9a",
+      "observation_sha256": "79634012252def384923ed90df75edaf064d66bd27e279cbad75d040338f2726",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-9983c2dbfb1e0fb5",
+      "native_id": "d588d8fc-1654-48df-b219-0d849b1d0819",
+      "world_run": "26d3b5b5-5f2b-4048-9300-9b7d66d07662",
+      "observation_sha256": "91ebec3ff8a15b3cdf773572fd9481fe0f024a2d04ec9fcf3f74f1a240427f2d",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "withhold",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-38f6020f74ece15f",
+      "native_id": "e0c6ad62-7062-41bc-b0e6-79fbabbf8109",
+      "world_run": "0dc09927-96b3-459a-bd8a-104078957662",
+      "observation_sha256": "11b924f24fd2216d5156e1891ed8aa52008b2d9e3778f3f4fe0a1abc7d3f1ed2",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "both",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-60ce41dc0a5b1f27",
+      "native_id": "5bf8ee41-187b-4b3e-ab74-1d3ddf8d93fd",
+      "world_run": "46db939a-b687-4579-be64-5efd98faee6a",
+      "observation_sha256": "7904928cc2f2979b76e134039d615b79742dd91c59b13cab20bdc21d082d17c9",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "none",
+      "channel": "withhold",
+      "incumbent_feasible": true,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": true,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-ec83ee65ce878a94",
+      "native_id": "7e397cc5-a8a5-4e62-9df3-fd4dd64a0c7b",
+      "world_run": "36e68132-dd81-45c2-bf09-52362556a4c9",
+      "observation_sha256": "e00f22e7f3b5ffa20907b82ff8b4a21009035c3202fba0fa151510e25eab7b9c",
+      "team": "ack-keep",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver",
+      "incumbent_feasible": true,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": true,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-7c8a95e28b05e330",
+      "native_id": "9966616a-4c50-42da-9900-768d1a586840",
+      "world_run": "1239aa47-7b35-4a85-b7ed-a438bb891b60",
+      "observation_sha256": "332c2c92d681b59c0dc4d2f96f2cb7da8796b7cbd81219941c5c6b6eb68ae4a1",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": true,
+      "final_feasible": false,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": false,
+      "seats": {
+        "east": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-126199b5334c1c83",
+      "native_id": "be0a24ed-c710-4f09-a32c-fe080c221285",
+      "world_run": "37072339-1c88-432c-9ceb-c2dcfc45791d",
+      "observation_sha256": "a3328ec13898247db3ec70fb2d748955e31802c2ba3f68aff67a98e4677197d9",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "withhold",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": false,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-27b7eb9dcb7999d4",
+      "native_id": "5f16773d-3dee-40d2-8c63-48af101d6ff2",
+      "world_run": "fa786bfb-8a59-49d5-9b76-bdbe98af454a",
+      "observation_sha256": "e06f46673221d64abfc2bdcebc376efab8649d9d2ef30415f4bde3e6262a7216",
+      "team": "keep",
+      "seed": 2339,
+      "fixture": "none",
+      "channel": "deliver",
+      "incumbent_feasible": true,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": true,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        },
+        "west": {
+          "report_true": null,
+          "peer_report_before_vote": false,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-dea4ad074ad2a435",
+      "native_id": "f974b6b2-6d15-4ec1-9976-f5a53359862b",
+      "world_run": "dfa4811c-884d-421e-884c-596e7b76eb88",
+      "observation_sha256": "4864120409b8f399ab1a2f4c39dbfc6e6b07444ddfcb2a65296c3c1c7eb43904",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "east",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-490180e15a4930b1",
+      "native_id": "92a7cc86-9933-4fdc-9dc2-58229d12d4f0",
+      "world_run": "f05687dd-ef97-470e-b060-d0e8b1e0ef40",
+      "observation_sha256": "63f6d8ce5f8552cf0e2bb2024ef4ce9e53366b965a58ba613c2339ee308991db",
+      "team": "east-rechecks",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 0,
+      "final_joint": false,
+      "final_feasible": null,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": null,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": false
+        }
+      }
+    },
+    {
+      "ticket": "jr-47581a318c7435ad",
+      "native_id": "80fd9db9-b771-4071-a8bb-41549f3f8ded",
+      "world_run": "d767183f-94a3-4bb4-86e3-2acd140b6545",
+      "observation_sha256": "caaa9b3b4482d714b9b70fca14a73d108d8f52ecdee871f0e4b3ae73ea3615a0",
+      "team": "recheck",
+      "seed": 7331,
+      "fixture": "both",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    },
+    {
+      "ticket": "jr-60d9eacf4c707490",
+      "native_id": "14e9546e-0b5f-4eec-9484-344c2b33f7b5",
+      "world_run": "9114a79b-4a80-48f5-b94b-a694c9efe8d7",
+      "observation_sha256": "46ff7a5b119cc7b3936745b54f3bab6d159722155e408db92847905ba0eff479",
+      "team": "recheck",
+      "seed": 2339,
+      "fixture": "west",
+      "channel": "deliver",
+      "incumbent_feasible": false,
+      "reward": 1,
+      "final_joint": true,
+      "final_feasible": true,
+      "kept_preferred_incumbent": null,
+      "repaired_invalid_incumbent": true,
+      "seats": {
+        "east": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        },
+        "west": {
+          "report_true": true,
+          "peer_report_before_vote": true,
+          "changed": true
+        }
+      }
+    }
+  ]
+}
