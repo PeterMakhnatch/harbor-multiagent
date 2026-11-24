@@ -1,0 +1,137 @@
+{
+  "completed_resume": {
+    "job-default": {
+      "exit": 0,
+      "journal_bytes_and_mtime_unchanged": true,
+      "journals_after": 0,
+      "n_retries_after": 0,
+      "retained_trial_uuids": [
+        "a0fd4b43-2d10-4077-8a9b-4497692a3ef8"
+      ],
+      "trial_result_bytes_and_mtime_unchanged": true
+    },
+    "job-return": {
+      "exit": 0,
+      "journal_bytes_and_mtime_unchanged": true,
+      "journals_after": 2,
+      "n_retries_after": 0,
+      "retained_trial_uuids": [
+        "a3f7aaac-7641-4cdc-9f0c-990ca023d0ca",
+        "e3b8fdea-d2fa-4940-87a1-2ff655c2d98f"
+      ],
+      "trial_result_bytes_and_mtime_unchanged": true
+    }
+  },
+  "limit": "Local three-job cohort. Four scripted first attempts, no retries or paid models. Projected results omit settings, raw output, host paths and messages. Missing is not scored as a stop.",
+  "live_host": [
+    {
+      "job": "job-return",
+      "native_cli_running": true,
+      "prefix_file": "prefixes/a3f7aaac-7641-4cdc-9f0c-990ca023d0ca.jsonl",
+      "prefix_rows": 4,
+      "result_existed_after": false,
+      "result_existed_before": false,
+      "trial": "a3f7aaac-7641-4cdc-9f0c-990ca023d0ca"
+    },
+    {
+      "job": "job-return",
+      "native_cli_running": true,
+      "prefix_file": "prefixes/e3b8fdea-d2fa-4940-87a1-2ff655c2d98f.jsonl",
+      "prefix_rows": 4,
+      "result_existed_after": false,
+      "result_existed_before": false,
+      "trial": "e3b8fdea-d2fa-4940-87a1-2ff655c2d98f"
+    },
+    {
+      "job": "job-stopped",
+      "native_cli_running": true,
+      "prefix_file": "prefixes/fd74308e-291f-4cd4-bbcc-3a3ef1413399.jsonl",
+      "prefix_rows": 5,
+      "result_existed_after": false,
+      "result_existed_before": false,
+      "trial": "fd74308e-291f-4cd4-bbcc-3a3ef1413399"
+    }
+  ],
+  "native": {
+    "job-default": [
+      {
+        "external": null,
+        "journal": null,
+        "name": "hello-seats__jEgVBtg",
+        "native_reward": 1,
+        "seat_outcomes": {
+          "p1": "returned",
+          "p2": "returned"
+        },
+        "trial": "a0fd4b43-2d10-4077-8a9b-4497692a3ef8"
+      }
+    ],
+    "job-return": [
+      {
+        "external": {
+          "before_result": true,
+          "peer_at_notice": "entered_only",
+          "prefix_rows": 4,
+          "target": "returned"
+        },
+        "journal": {
+          "mode": "0600",
+          "rows": 6,
+          "sha256": "49b87c6ac53c58644461d597de892d8ebe7e77028ea7fee76d020d392b207606"
+        },
+        "name": "hello-seats__MMUm7dq",
+        "native_reward": 1,
+        "seat_outcomes": {
+          "p1": "returned",
+          "p2": "returned"
+        },
+        "trial": "a3f7aaac-7641-4cdc-9f0c-990ca023d0ca"
+      },
+      {
+        "external": {
+          "before_result": true,
+          "peer_at_notice": "entered_only",
+          "prefix_rows": 4,
+          "target": "returned"
+        },
+        "journal": {
+          "mode": "0600",
+          "rows": 6,
+          "sha256": "51ab89f10de5feb5965daf68884377dedae1101b77f7c7439fc2612a75d1c7e6"
+        },
+        "name": "hello-seats__bHfRZtw",
+        "native_reward": 1,
+        "seat_outcomes": {
+          "p1": "returned",
+          "p2": "returned"
+        },
+        "trial": "e3b8fdea-d2fa-4940-87a1-2ff655c2d98f"
+      }
+    ],
+    "job-stopped": [
+      {
+        "external": {
+          "before_result": true,
+          "peer_at_notice": "returned",
+          "prefix_rows": 5,
+          "target": "stop_requested"
+        },
+        "journal": {
+          "mode": "0600",
+          "rows": 6,
+          "sha256": "9fbb2f55cfbbd4deaf384cf8ea89820112ca9d2600632aebeb1b50d0dd63fcff"
+        },
+        "name": "hello-seats__m6A2Eyz",
+        "native_reward": 1,
+        "seat_outcomes": {
+          "p1": "returned",
+          "p2": "stop_requested"
+        },
+        "trial": "fd74308e-291f-4cd4-bbcc-3a3ef1413399"
+      }
+    ]
+  },
+  "registered": "0f56fa57d2b7936ab8d805611a9b8d25abf4c31f",
+  "schema": "seatlab.batch-observer-firsts/v1",
+  "source": "2e0f9a6ebe2424ef6f6e127d4acf79558e47cdd5"
+}

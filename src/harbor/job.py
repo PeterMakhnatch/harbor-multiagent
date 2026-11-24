@@ -56,7 +56,7 @@ from harbor.models.trial.result import TrialResult
 from harbor.tasks.client import TaskClient, TaskDownloadResult, TaskIdType
 from harbor.telemetry import capture_job_finished_async, record_command_job_id
 from harbor.trial.hooks import HookCallback, TrialEvent, TrialHookEvent
-from harbor.trial.queue import TrialQueue
+from harbor.trial.queue import TrialAttemptObserver, TrialQueue
 from harbor.utils.logger import logger
 from harbor.utils.pass_at_k import compute_pass_at_k_by_evals
 
@@ -266,6 +266,11 @@ class Job:
     def on_trial_cancelled(self, callback: HookCallback) -> "Job":
         """Register a callback that runs when a trial is cancelled."""
         return self.add_hook(TrialEvent.CANCEL, callback)
+
+    def observe_trial_attempts(self, factory: TrialAttemptObserver) -> "Job":
+        """Install the single passive context entered around each trial attempt."""
+        self._trial_queue.observe_trial_attempts(factory)
+        return self
 
     def _init_logger(self):
         mode = "a" if self.is_resuming else "w"

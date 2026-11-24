@@ -1,0 +1,20 @@
+{
+  "config": {
+    "job_id": "f66dff1a-bfa7-433c-b381-2b9e0ce13ab6"
+  },
+  "id": "a3f7aaac-7641-4cdc-9f0c-990ca023d0ca",
+  "schema_version": 1,
+  "seat_results": [
+    {
+      "execution_disposition": "returned",
+      "seat": "p1",
+      "under_test": true
+    },
+    {
+      "execution_disposition": "returned",
+      "seat": "p2",
+      "under_test": false
+    }
+  ],
+  "trial_name": "hello-seats__MMUm7dq"
+}
