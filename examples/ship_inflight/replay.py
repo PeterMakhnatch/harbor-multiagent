@@ -29,6 +29,8 @@ SEAT_KEYS = frozenset(("outgoing", "relief"))
 DISPOSITIONS = ("returned", "raised", "cancelled", "stop_requested")
 CASE_KEYS = frozenset(("ticket", "outgoing", "relief", "fate", "channel", "expected"))
 PUBLIC_CUT_KEYS = verify.CUT_KEYS - {"run"}
+if verify.stock.__file__ is None:
+    raise RuntimeError("the stock verifier has no source file to check against the pin")
 VERIFIERS = (
     ("tests/inflight_verify.py", Path(verify.__file__)),
     ("tests/verify.py", Path(verify.stock.__file__)),
@@ -110,6 +112,13 @@ def load_rows(
     pack_path: Path, question_sha: str, task_files: str, tickets: list[str]
 ) -> dict[str, dict[str, Any]]:
     raw = read_bounded(pack_path, MAX_PACK_BYTES, "pack")
+    return parse_rows(raw, question_sha, task_files, tickets)
+
+
+def parse_rows(
+    raw: bytes, question_sha: str, task_files: str, tickets: list[str]
+) -> dict[str, dict[str, Any]]:
+    require(0 < len(raw) <= MAX_PACK_BYTES, "pack is empty or too large")
     pack = as_record(strict_json(raw, "pack"), "pack", PACK_KEYS)
     require(pack["schema"] == SCHEMA, "pack schema differs")
     bound = as_text(pack["question_sha256"], "pack question_sha256", DIGEST)

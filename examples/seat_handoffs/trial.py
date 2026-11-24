@@ -19,8 +19,9 @@ from .core import (
     unique_object,
 )
 
-DECISION_V1 = "harbor.revised-dispatch.decision/v1"
-DECISION_V2 = "harbor.revised-dispatch.decision/v2"
+DECISION_FAMILY = "harbor.revised-dispatch.decision"
+DECISION_V1 = DECISION_FAMILY + "/v1"
+DECISION_V2 = DECISION_FAMILY + "/v2"
 DECISION_KEYS = frozenset(
     {"schema", "run", "draft_changed", "decision_correct", "event_counts"}
 )
@@ -35,6 +36,14 @@ TASK_EDGES = (
 )
 REVISION_EDGE = ("revision", "booker")
 DECIDER = "booker"
+
+
+class UnsealedDecision(ValueError):
+    pass
+
+
+class MissingJournal(ValueError):
+    pass
 
 
 def _grade(result: dict[str, Any]) -> tuple[str, float | None]:
@@ -89,7 +98,21 @@ def _sealed(sealed: Path, world: Path) -> Replay:
     return replay
 
 
-def _unsealed(world: Path) -> Replay:
+def _unsealed(sealed: Path, decision: Path, world: Path) -> Replay:
+    try:
+        claimed = _in_scope_decision(decision) is not None
+    except (OSError, ValueError) as error:
+        raise UnsealedDecision(
+            "verifier decision has no sealed handoff log"
+        ) from error
+    if claimed:
+        raise UnsealedDecision("verifier decision has no sealed handoff log")
+    if not world.is_file():
+        if sealed.exists() or world.exists():
+            raise ValueError("handoff log is not a regular file")
+        raise MissingJournal(
+            "no handoff log in the trial directory; coverage is unknown"
+        )
     frames, _ = read_frames(world)
     replay = replay_frames(frames)
     if replay.closed:
@@ -154,12 +177,25 @@ def _revision(
     }
 
 
-def _decision(
-    path: Path, replay: Replay, grade: float | None
-) -> dict[str, bool | None] | None:
+def _in_scope_decision(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     record = _load(path, "verifier decision", MAX_LINE_BYTES)
+    schema = record.get("schema")
+    if (
+        isinstance(schema, str)
+        and schema != DECISION_FAMILY
+        and not schema.startswith(DECISION_FAMILY + "/")
+    ):
+        return None
+    return record
+
+
+def _decision(
+    record: dict[str, Any] | None, replay: Replay, grade: float | None
+) -> dict[str, bool | None] | None:
+    if record is None:
+        return None
     schema = record.get("schema")
     if (
         not isinstance(schema, str)
@@ -211,23 +247,25 @@ def read_trial(path: Path, *, boundary: str) -> tuple[list[Finding], dict[str, o
     sealed = path / "verifier" / "handoffs.jsonl"
     decision_path = path / "verifier" / "decision.json"
     world = path / "artifacts" / "logs" / "world" / "handoffs.jsonl"
-    if sealed.is_file():
+    is_sealed = sealed.is_file()
+    if is_sealed:
         replay = _sealed(sealed, world)
-    elif decision_path.exists():
-        raise ValueError("verifier decision has no sealed handoff log")
-    elif world.is_file():
-        replay = _unsealed(world)
     else:
-        raise ValueError("no handoff log in the trial directory; coverage is unknown")
+        replay = _unsealed(sealed, decision_path, world)
     findings = [replay.finding(edge, boundary) for edge in replay.edges]
     native_id, status, grade = read_native_result(path)
     if grade is not None and replay.reward is not None and replay.reward != grade:
         raise ValueError("world closure and native verifier disagree on reward")
+    decision = (
+        _decision(_in_scope_decision(decision_path), replay, grade)
+        if is_sealed
+        else None
+    )
     link: dict[str, object] = {
         "world_run": replay.run,
         "native_trial": native_id,
-        "log": "verifier" if sealed.is_file() else "world",
+        "log": "verifier" if is_sealed else "world",
         "native_grade_status": status,
-        "decision": _decision(decision_path, replay, grade),
+        "decision": decision,
     }
     return [replace(row, reward=grade) for row in findings], link

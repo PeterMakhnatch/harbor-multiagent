@@ -182,6 +182,4 @@ To see what the continuing model actually recorded, run the [post-return work re
 
 ## Add an instrumented world
 
-Start with the [reference producer](../tasks/revised-dispatch/environment/world.py) and [verifier](../tasks/revised-dispatch/tests/verify.py). The producer declares the possible message/receiver edges at startup. It records only the first send, reply prepared, and optional acknowledgement for each relevant edge. Each receiver can make one irreversible commit. A monotonically increasing `seq` orders the events within one world instance. Use symbolic message IDs, never message bodies or secrets.
-
-Set `schema` to `harbor.handoffs/v1`. Declare `acknowledgements: true` only if the world records them. Emit one JSON object per line; the final newline commits that frame. The verifier must stop world mutations before appending a `closed` frame to its exported copy. Otherwise the absence of an event cannot establish that it never occurred. Validation of a supplied journal does not authenticate its producer.
+Start with the [benchmark author kit and pre-spend check](author.md). Install the same writer in the world and verifier build contexts. With two saved controls, check whether the declared edge can distinguish an on-time receipt from a late or absent one. The guide also checks an existing world whose native ledger does not use the journal format.

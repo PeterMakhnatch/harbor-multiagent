@@ -5,7 +5,7 @@ from typing import Any
 
 from .core import BOUNDARIES, Finding, check_choice, summarize
 from .job_members import members
-from .trial import read_native_result, read_trial
+from .trial import MissingJournal, UnsealedDecision, read_native_result, read_trial
 
 SCHEMA = "harbor.handoff-job/v1"
 SEALED = ("verifier", "handoffs.jsonl")
@@ -82,15 +82,12 @@ def _read_child(
     name = child.name
     if any(_linked(child, parts) for parts in (SEALED, DECISION, WORLD, RESULT)):
         return _failed(child, group, "invalid_evidence"), []
-    sealed = child.joinpath(*SEALED).exists()
-    decision = child.joinpath(*DECISION).exists()
-    world = child.joinpath(*WORLD).exists()
-    if not (sealed or decision or world):
-        return _failed(child, group, "missing_journal"), []
-    if decision and not sealed:
-        return _failed(child, group, "unsealed_decision"), []
     try:
         found, link = read_trial(child, boundary=boundary)
+    except UnsealedDecision:
+        return _failed(child, group, "unsealed_decision"), []
+    except MissingJournal:
+        return _failed(child, group, "missing_journal"), []
     except (OSError, ValueError):
         return _failed(child, group, "invalid_evidence"), []
     if link["log"] == "verifier":
