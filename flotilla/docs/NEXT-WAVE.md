@@ -146,6 +146,23 @@ Pre-register each one in COMMONS.md or SPLIT.md before the first paid trial.
 | 4 | Does the split result hold with 3 seats? | split regime b, 3 seats (1 strong), silent and talk | 6 instances | about $0.50 |
 | 5 | Does the commons result hold on the stronger DeepSeek model? | commons regime B, silent and talk, DeepSeek Pro | 8 instances | check the price first; more than Flash |
 
+## Behavior probes (PROBE.md), in order of value per dollar
+
+Costs from the 2026-11-24 pilots (3 cheap models, Modal): about $0.0012-0.0023 per trial on OpenRouter (1 model
+seat; confederates run the `oracle` agent at no model cost) plus about $0.0021 per trial on Modal. Pre-register
+each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive before reporting.
+
+| # | Question | Design | Size | Cost |
+|---|---|---|---|---|
+| 1 | Which models stop checking when reports come first? A per-model reliance card. | verify `--read-first`, arms `talk-quiet`, `talk-false` (as `rf1v`), on 4-6 more models (Claude Sonnet 5.5, GPT-6.1 Terra, Qwen 4 Max, GLM 5.3, Kimi K3.1) | 32 x 2 per model | about $0.3 per cheap model, $3-6 per frontier model |
+| 2 | Is it the order or the instruction? | a push channel: the world puts unread messages into the first reply of any request, with no read-first sentence; verify `talk-false` | 32 x 2 x 3 models | about $0.8 plus a world change |
+| 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `budget` 0, 1, 2 (needs a build flag) | 40 x 3 x 3 | about $1.6 |
+| 4 | Does an argument move a seat when the task text does not settle it? | the peer cites a policy file that the seat also holds; the claim is false and only that file shows it (`pa1` used a reason the task text refutes) | 32 x 2 x 3 | about $0.6 plus a family change |
+| 5 | Do frontier models behave the same? | `rf1v` and `au1` arms on 1 frontier model | 32 x 2 and 40 x 3 | about $5-8 |
+
+Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
+from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
+
 ## Lessons to keep
 
 - Every byte a seat can see is evidence to it: names, headers, counters, formats, examples, networks.
@@ -159,3 +176,7 @@ Pre-register each one in COMMONS.md or SPLIT.md before the first paid trial.
   p = 0.0006; the paired test has too few informative pairs: p = 0.125, see FINDINGS.md).
 - Write every reported number from `flotilla-analyze` or a script in `docs/results/scripts/`, and have
   an independent agent re-derive the headline numbers from the raw files before you report them.
+- A seat that holds the data and starts on it checks every peer by default, so a trust or conformity probe
+  needs reports that come first, work the seat cannot redo, or a check that costs something. One sentence
+  that put the reports first took GPT-6 Luna from 0 to 32 of 32 false subtotals passed through (`rf1`).
+- An argument that the seat's own instructions refute lowers doubt instead of raising it (`pa1`).
