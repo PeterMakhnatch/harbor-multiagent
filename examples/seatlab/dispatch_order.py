@@ -10,7 +10,8 @@ from . import run_panel
 from .capsule import view_hash
 from .dispatch_native_return import checked_trial
 from .dispatch_opportunity import _WORLD_SOURCE, _checkout_world
-from .dispatch_order_pair import OrderPair, build_pair
+from .dispatch_order_pair import OrderPair, build_pair, report_bests
+from .dispatch_order_repeat import allocate, equal_world_excess, score_repeats
 from .dispatch_order_score import score_pairs
 from .dispatch_returns import _latent_evidence
 from .receiver_panel import _print_json, _read_replies, _shard
@@ -23,6 +24,7 @@ _MATERIAL = (
     "seatlab/dispatch_opportunity.py",
     "seatlab/dispatch_order.py",
     "seatlab/dispatch_order_pair.py",
+    "seatlab/dispatch_order_repeat.py",
     "seatlab/dispatch_order_score.py",
     "seatlab/dispatch_plan.py",
     "seatlab/dispatch_returns.py",
@@ -115,18 +117,17 @@ def _prepare(args: argparse.Namespace) -> tuple[dict[str, Any], list[OrderPair]]
         name: hashlib.sha256((run_panel.EXAMPLES_DIR / name).read_bytes()).hexdigest()
         for name in _MATERIAL
     }
-    scope = view_hash(["seatlab.dispatch-order-source/v1", origin, source, material])
+    scope = view_hash(
+        ["seatlab.dispatch-order-source/v1", origin, source, material, args.draws]
+    )
     pairs = [build_pair(block, scope, cases) for block, cases in enumerate(blocks)]
-    subjects = [[p.chronological.id, p.reversed.id] for p in pairs]
+    subjects = [[allocate(p, wave).id for wave in range(2 * args.draws)] for p in pairs]
     pin = view_hash(["seatlab.dispatch-order-panel/v1", scope, subjects])
     different = 0
     for p in pairs:
         for case in p.cases:
-            rank = case["utilities"].__getitem__
-            old, new = case["reports"]
-            different += max(old["available"], key=rank) != max(
-                new["available"], key=rank
-            )
+            old, new = report_bests(case)
+            different += old != new
     return {
         "schema": "seatlab.dispatch-order-panel/v1",
         "source": origin,
@@ -134,7 +135,8 @@ def _prepare(args: argparse.Namespace) -> tuple[dict[str, Any], list[OrderPair]]
         "worlds": len(pairs),
         "unique_shipments": sum(len(p.cases) for p in pairs),
         "different_recommendations": different,
-        "expected_first_replies": 2 * len(pairs),
+        "draws_per_order": args.draws,
+        "expected_first_replies": 2 * args.draws * len(pairs),
     }, pairs
 
 
@@ -174,11 +176,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     for sub in (setup, emit, score):
         _add_source(sub)
+        sub.add_argument(
+            "--draws",
+            type=int,
+            choices=(1, 2),
+            default=1,
+            help="independent first replies per order; 2 adds same-prompt comparisons",
+        )
     for sub in (emit, score):
         sub.add_argument(
             "--panel-sha256", required=True, help="separately held digest from prepare"
         )
-    emit.add_argument("--wave", required=True, type=int, choices=(0, 1))
+    emit.add_argument("--wave", required=True, type=int, choices=range(4))
     emit.add_argument("--shard", type=_shard, default=(0, 1), metavar="INDEX/COUNT")
     score.add_argument(
         "replies",
@@ -197,12 +206,12 @@ def main(argv: list[str] | None = None) -> int:
                 "panel SHA-256 does not match the inputs and scoring protocol"
             )
         if args.mode == "emit":
+            if args.wave >= 2 * args.draws:
+                raise ValueError("this wave is not in the registered design")
             slot, size = args.shard
             for pair in pairs:
                 if pair.block % size == slot:
-                    arm = (pair.chronological, pair.reversed)[
-                        (pair.block + args.wave) % 2
-                    ]
+                    arm = allocate(pair, args.wave)
                     _print_json(
                         {
                             "id": arm.id,
@@ -211,19 +220,26 @@ def main(argv: list[str] | None = None) -> int:
                         }
                     )
             return 0
-        if len(args.replies) > 2 * len(pairs):
+        if len(args.replies) > plan["expected_first_replies"]:
             raise ValueError("more first-reply files than requested replies")
-        routes = {arm.id: arm for p in pairs for arm in (p.chronological, p.reversed)}
+        assigned = (allocate(p, wave) for p in pairs for wave in range(2 * args.draws))
+        routes = {arm.id: arm for arm in assigned}
         try:
             replies = _read_replies(args.replies, routes)
         except (OSError, ValueError, RecursionError):
             raise ValueError(
                 "invalid worker file, duplicate subject or mismatched prompt digest"
             ) from None
-        result = score_pairs(pairs, replies)
+        if args.draws == 2:
+            result = score_repeats(pairs, replies)
+            result["equal_world_excess"] = equal_world_excess(result)
+            complete = result["coverage"]["complete_worlds"]
+        else:
+            result = score_pairs(pairs, replies)
+            complete = result["coverage"]["paired_worlds"]
         result.update(panel_sha256=plan["panel_sha256"], source=plan["source"])
         _print_json(result)
-        return 0 if result["coverage"]["paired_worlds"] == len(pairs) else 3
+        return 0 if complete == len(pairs) else 3
     except _Unavailable as exc:
         print(f"Unavailable: {exc}", file=sys.stderr)
         return 3

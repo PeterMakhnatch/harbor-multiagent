@@ -32,6 +32,12 @@ class OrderPair:
     reversed: OrderArm
 
 
+def report_bests(case: dict[str, Any]) -> tuple[str, str]:
+    rank = case["utilities"].__getitem__
+    old, new = case["reports"]
+    return max(old["available"], key=rank), max(new["available"], key=rank)
+
+
 def _fields(value: object, *names: str) -> TypeGuard[dict[str, Any]]:
     return (
         type(value) is dict

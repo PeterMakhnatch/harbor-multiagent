@@ -96,6 +96,23 @@ After authorized calls, use `order score --panel-sha256 "$order_pin" first-*.jso
 
 To use a real inventory seat's reports, replace `--registration … --sha256 …` with `--trial "$trial_dir" --trial-id "$expected_uuid"`. Repeat the arguments for distinct worlds. The reader requires a matching dispatch view acknowledgment and a valid native result. It retains incorrect peer reports. It regenerates the replay prompt, not the original model session. In the retained `2001` and `2003` worlds, the same check found 7 informative shipments among 24. No altered order has a measured team reward.
 
+#### Compare different orderings against repeated answers to identical prompts
+
+If the receiver can vary its answer, two different decisions do not isolate an order effect. Register `--draws 2` before distributing any work. For the example above, this registers 8 first replies across 2 worlds. It does not make any calls.
+
+```sh
+order prepare --draws 2 > "$root/repeated.json"
+repeat_pin=$(python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["panel_sha256"])' "$root/repeated.json")
+for wave in 0 1 2 3; do
+  order emit --draws 2 --panel-sha256 "$repeat_pin" --wave "$wave" > "$root/repeat-$wave.jsonl"
+done
+order score --draws 2 --panel-sha256 "$repeat_pin"  # exit 3: 8 replies missing
+```
+
+Each ordering gets 2 fresh sessions with identical messages and different request IDs. In successive waves, one world uses chronological, reversed, reversed, chronological. The next world uses the opposite sequence. Give the receiver only its own messages. Keep the model, settings and first-reply policy fixed. The scorer cannot verify which model or session produced a reply.
+
+For each shipment, the scorer compares both pairs with identical inputs and all 4 pairs with opposite orderings. It reports disagreement on all shipments and on the subset where the two reports recommend different bays. These comparisons reuse answers. They are not independent trials. The primary descriptive contrast is the cross-order disagreement rate minus the same-order disagreement rate, averaged with equal weight per world. It can be negative. The full-panel contrast stays null until every registered world returns all 4 valid replies. Worlds with no informative shipments do not enter the informative contrast. This is not an estimate of team reward.
+
 ## Runtime and retention
 
 The initial study targets Olam commit `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, not stock Harbor 0.26. Run the maintained `hello-seats` task as an independent positive control first. Use local Docker with at most 1 trial at a time for this run. No cloud provisioning or metered API is required for the controls. Use fresh output directories. Keep all failed attempts and their reason in the study record. Keep host paths, personal credentials and raw provider traces out of public evidence. Publish to the personal fork only.

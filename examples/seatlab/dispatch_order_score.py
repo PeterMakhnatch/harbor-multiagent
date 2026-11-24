@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING, Any, Literal
 
 from .capsule import _reject_constant, _unique_object
+from .dispatch_order_pair import report_bests
 
 if TYPE_CHECKING:
     from .dispatch_order_pair import OrderPair
@@ -67,12 +68,9 @@ def _count(
     }
     for case in pair.cases:
         subject = case["id"]
-        ranks = case["utilities"].__getitem__
-        rev1, rev2 = case["reports"]
-        earlier = max(rev1["available"], key=ranks)
-        latest = max(rev2["available"], key=ranks)
+        earlier, latest = report_bests(case)
         after = case["after"]
-        optimal = max(after, key=ranks)
+        optimal = max(after, key=case["utilities"].__getitem__)
         first, second = chronological[subject], reverse[subject]
         different = earlier != latest
         changed = first != second
