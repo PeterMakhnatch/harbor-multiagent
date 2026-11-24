@@ -496,7 +496,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
           max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False,
           readable_names: bool = False, round_seconds: float = 240.0, start_grace: float = 300.0,
           max_messages_per_round: int = 2, read_first_subject: bool = False, push: bool = False,
-          inbox: bool = False, post_trigger: str = "") -> list[Path]:
+          inbox: bool = False, post_trigger: str = "", audit_budget: int = 1) -> list[Path]:
     """Write every instance in every condition to <out>/<label>/<name>/ and add them to <out>/manifest.json. A task
     of the same instance and condition that an earlier build wrote under <out>/<label>/ is replaced (removed), so
     that a label never holds two folders of one task."""
@@ -521,6 +521,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         raise SystemExit(f"--post-trigger is one of {POST_TRIGGERS}, not {post_trigger!r}")
     if inbox and (read_first_subject or push or post_trigger):
         raise SystemExit("--inbox gives the posts in the brief: --read-first, --push and --post-trigger do not apply")
+    if audit_budget != 1 and audit_budget not in getattr(family, "AUDIT_BUDGETS", ()):
+        raise SystemExit(f"--audit-budget applies to the probe kind audit, with a budget in 0-3, not {audit_budget} "
+                         f"for {family_name} {getattr(family, 'KIND', '')}".rstrip())
+    budget_fields = {"audit_budget": audit_budget} if audit_budget != 1 else {}  # 1: today's builds, byte for byte
     game_env = {"FLOTILLA_GAME": "/world/family.py", "FLOTILLA_GAME_PARAMS": "/world/task.json",
                 "FLOTILLA_ROUND_SECONDS": str(round_seconds), "FLOTILLA_START_GRACE": str(start_grace),
                 "FLOTILLA_MAX_MESSAGES_PER_ROUND": str(max_messages_per_round)}
@@ -548,6 +552,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
     built = []
     for i in instances:
         inst = family.generate_scripted(seed, i, difficulty) if scripted else family.generate(seed, i, n_seats, difficulty)
+        if budget_fields:
+            inst = family.with_audit_budget(inst, audit_budget)
         team_seats = list(inst["seats"]) if game else sorted(inst["private"])
         scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted or probe else ()
         for condition in conditions:
@@ -616,6 +622,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 meta["inbox"] = True
             if post_trigger:
                 meta["post_trigger"] = post_trigger
+            meta |= budget_fields
             (task_dir / "task.toml").write_text(
                 task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats, play_timeout)
             )
@@ -677,6 +684,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 task_json["inbox"] = True
             if post_trigger:
                 task_json["post_trigger"] = post_trigger
+            task_json |= budget_fields
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
@@ -696,7 +704,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          | ({"read_first": True} if read_first_subject else {})
                          | ({"push": True} if push else {})
                          | ({"inbox": True} if inbox else {})
-                         | ({"post_trigger": post_trigger} if post_trigger else {}),
+                         | ({"post_trigger": post_trigger} if post_trigger else {})
+                         | budget_fields,
                 "instructions_sha256": {seat: hashlib.sha256((task_dir / "instructions" / f"{seat}.md").read_bytes())
                                         .hexdigest() for seat in seats},
             }
@@ -785,6 +794,10 @@ def main() -> None:
                         "first submission (dated 1-3 s before it; the submit gate then shows them) instead of its "
                         "first request (task.json and [metadata] post_trigger); with --read-first, e.g. --variant "
                         "verify-readfirst-late")
+    parser.add_argument("--audit-budget", type=int, default=1,
+                        help="probe kind audit: the months the subject may audit, 0 to 3 (default %(default)s, as "
+                        "before; 0: its text does not mention /audit, and the world refuses every audit); task.json, "
+                        "[metadata] and the manifest record audit_budget when it is not 1; e.g. --variant audit-b2")
     parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
                         help="messages per seat (world default %(default)s)")
     parser.add_argument("--round-seconds", type=float, default=240.0,
@@ -831,7 +844,7 @@ def main() -> None:
                   submitter=args.submitter, announce=args.announce, readable_names=args.readable_names,
                   round_seconds=args.round_seconds, start_grace=args.start_grace,
                   max_messages_per_round=args.max_messages_per_round, read_first_subject=args.read_first,
-                  push=args.push, inbox=args.inbox, post_trigger=args.post_trigger)
+                  push=args.push, inbox=args.inbox, post_trigger=args.post_trigger, audit_budget=args.audit_budget)
     print(f"built {len(built)} tasks under {args.out}")
     print(f"manifest: {args.out / MANIFEST} ({'readable' if args.readable_names else 'opaque'} names)")
     print(f"seed: {said}")

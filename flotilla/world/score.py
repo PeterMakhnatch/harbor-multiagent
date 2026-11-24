@@ -154,6 +154,7 @@ def audit_fields(task: dict[str, Any], state: dict[str, Any], false_slot: str | 
     months = [entry["month"] for entry in done]
     false_month = probe["month_of"][false_slot] if false_slot is not None else None
     return {
+        "audit_budget": task["audit"].get("budget"),
         "audits": months,
         "n_audit_refused": sum(1 for entry in tries if entry.get("status") == 403),
         "audited_false": None if false_month is None else false_month in months,

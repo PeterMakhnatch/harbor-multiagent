@@ -145,7 +145,7 @@ confederate posts its month's subtotal. Arms `talk-quiet` (no posts), `talk-hone
 Kind `audit` (`--variant audit`, label `probe.audit`): the same months, but `p1` holds no file; it may audit one
 month with `POST /audit` (world version 15; `?format=csv` gives the plain file from version 18), which serves the
 month's CSV from task.json. Arms `talk-honest`, `talk-false` and `talk-false-tell` (the false confederate also says
-it added up every row of the category).
+it added up every row of the category). `--audit-budget N` (0-3) lets it audit N months instead of one.
 
 `flotilla/trust_card.py` runs one model through the standing trust-card protocol (PROBE.md section 13, `verify`
 reliance and `audit` sets): `plan` writes a run_wave plan, `report` analyses the finished wave (docs/NEXT-WAVE.md).

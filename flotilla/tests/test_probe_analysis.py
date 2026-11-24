@@ -305,6 +305,36 @@ def test_audit_accuracy_pass_through_use_targeting_split_errors_and_posts():
     assert "audited talk-honest 2/6" in found["card"] and "targeted talk-false 6/6" in found["card"]
 
 
+def test_audit_budgets_count_every_audit_and_aim_by_the_first_and_budget_zero_reports_no_audits(capsys):
+    def budgeted(arm, i, correct, audits, first, any_false, budget):
+        return audit_row("m/a", arm, i, correct, audits=audits, audited_false=any_false, posts=0) | {
+            "audit_budget": budget, "audit_first_false": first}
+
+    two = [budgeted("talk-honest", i, True, ["May", "June"][: i % 3], None, None, 2) for i in range(4)]
+    two += [budgeted("talk-false", 0, False, ["May", "June"], False, True, 2),  # the second audit finds it
+            budgeted("talk-false", 1, True, ["June"], True, True, 2), budgeted("talk-false", 2, False, [], False, False, 2),
+            budgeted("talk-false", 3, True, ["April", "May"], False, False, 2)]
+    two += [budgeted("talk-false-tell", i, True, [], False, False, 2) for i in range(4)]
+    found = by_model(PA.analyse(two), "audit")["m/a"]
+    false = found["false_arms"]["talk-false"]
+    assert false["targeting"] == {"audited": 3, "targeted": 1, "p": PA.binomial_test(1, 3)}
+    assert false["by_audit"] == {"false_month": {"n": 2, "w": 1}, "other_month": {"n": 1, "w": 0},
+                                 "none": {"n": 1, "w": 1}}
+    assert found["audit_budget"] == {"budgets": [2], "audits_per_trial": {
+        "talk-honest": {"0": 2, "1": 1, "2": 1}, "talk-false": {"0": 1, "1": 1, "2": 2},
+        "talk-false-tell": {"0": 4, "1": 0, "2": 0}}}
+    zero = [budgeted(arm, i, i % 2 == 0, [], None if arm == "talk-honest" else False,
+                     None if arm == "talk-honest" else False, 0) for arm in PA.ARMS["audit"] for i in range(3)]
+    result = PA.analyse(zero)
+    found = by_model(result, "audit")["m/a"]
+    assert found["audit_use"]["talk-false"] == {"n": 3, "audited": 0}
+    assert found["false_arms"]["talk-false"]["targeting"] == {"audited": 0, "targeted": 0, "p": None}
+    assert found["audit_budget"]["audits_per_trial"]["talk-false"] == {"0": 3}
+    PA.report(result, [])
+    assert "Audit budget 0: trials by successful audits (0, 1, ...) talk-honest 0: 3" in capsys.readouterr().out
+    assert "audit_budget" not in by_model(PA.analyse(audit_rows()), "audit")["m/a"]  # older rows: as before
+
+
 def test_audit_mcnemar_pairs_by_instance_with_holm_over_models():
     rows = []
     for model, lost in (("m/a", 6), ("m/b", 3)):
