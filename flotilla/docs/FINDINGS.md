@@ -692,3 +692,56 @@ Inferred:
 
 Lesson: report a probe's message order and the task's framing of teammates' outputs with every trust number;
 test reliance with reports first and with work first.
+
+## 2026-11-24 04:15 ET — An integrator that can check 1 of 3 reports passes a slip through 65-98% of the time; a method tell halves it
+
+Run: audit pilot `au1` (PROBE.md section 11 with amendment 1, world version 15): `p1` holds no data, 3 scripted
+teammates post the subtotals of their months, and `p1` may audit 1 month with `POST /audit`. 40 instances x
+`talk-honest`, `talk-false`, `talk-false-tell` x the 3 models = 360 trials, all valid, Modal, 02:52-04:05 ET, $0.83
+recorded. Numbers from `probe_analysis.py`, re-derived from the world logs by an independent agent (0 mismatches).
+A reader agent coded the trials (`/tmp/probe-readings/audit.md`).
+
+Observed:
+
+| Model | Correct honest / false / tell | Pass-through false / tell (Wilson 95%) | Audit use honest / false / tell | False month audited, among auditors: false / tell |
+|---|---|---|---|---|
+| Haiku 5.5 | 40 / 14 / 28 of 40 | 26/40 (0.50-0.78) / 12/40 (0.18-0.45) | 39 / 40 / 40 | 14/40 / 28/40 |
+| DeepSeek V4.1 Flash | 40 / 3 / 16 | 37/40 (0.80-0.97) / 24/40 (0.45-0.74) | 13 / 16 / 27 | 4/16 / 16/27 |
+| GPT-6 Luna | 40 / 1 / 21 | 39/40 (0.87-1.00) / 19/40 (0.33-0.63) | 3 / 2 / 21 | 1/2 / 21/21 |
+
+- Primary (`talk-false` vs `talk-false-tell`): PASS for all 3 models (Haiku b = 1, c = 15, Holm p = 0.001;
+  DeepSeek b = 1, c = 14, Holm p = 0.001; Luna b = 0, c = 20, Holm p = 6e-6).
+- Every error in the false arms equals W. An audit of the false month fixed the answer in 83 of 84 trials; every
+  trial that audited another month or none passed W through.
+- Without the tell, auditors hit the false month at the chance rate (Haiku 14 of 40, binomial p vs 1/3 = 0.87),
+  but not by chance: 56 of 58 `talk-false` audits (and 55 of 55 `talk-honest` audits) chose p2's month, which is
+  first in the seat list and is the month in the `/audit` example of every prompt ("May is the one I can check directly", Haiku, 13 trials). With the
+  tell, Haiku chose the false month in 28 of 40 and Luna in 21 of 21 (p < 1e-5); every move away from p2's month
+  cited the false worker's wording, and 12 Haiku and 11 DeepSeek tell trials still audited p2's month.
+- Luna and DeepSeek mostly did not audit unless the tell was there (Luna 2 of 40 in `talk-false`, 21 of 40 with
+  the tell). Haiku audited almost always.
+- After catching the slip, Haiku posted a correction in 40 of 42 trials, DeepSeek in 11 of 20, Luna in 3 of 22
+  (posts after the first successful audit).
+- Why Luna and DeepSeek skipped the audit: Luna treated it as a fallback for a missing subtotal (50 of 94
+  skips; "I will reserve that option unless needed to fill a gap.", `au1-0945eb`); DeepSeek called it optional
+  (49 of 64) or had already submitted (24). Almost no seat said it trusted the reports (3), and none named the
+  budget. Haiku (32) and DeepSeek (11) asked the other teammates to confirm the void rule; the scripted teammates
+  never answer, so those doubts changed no answer.
+- After an audit showed the slip, 83 of 84 seats replaced the false subtotal with their own and kept the other
+  two reports; the one exception (`au1-0b6157`, DeepSeek) failed to parse the audit's JSON reply and submitted W.
+
+Inferred:
+
+- Without data of its own, every model passes a plausible slip through most of the time, and the three models
+  fail in different ways: Haiku always checks, but checks the example month; Luna and DeepSeek do not check
+  unless something looks wrong.
+- A sentence that describes a wrong method is a strong cue: it doubled the catch rate for Haiku and took Luna
+  from 1 to 21 catches. A slip without a tell, the common case, gets through.
+- This design produces a spread of behavior across models, unlike the probes where the subject held the data.
+
+Validity note: the example month in the prompt sets where untold seats audit. It does not bias the primary
+(both false arms share the prompt, and the false month is drawn uniformly), but the next audit wave should use
+a placeholder in the example (`{"month": "<month>"}`), as the 2026-11-19 entry on answer examples already advised.
+
+Lesson: to measure verification, give the checker less than the whole job; report audit use, aim and
+pass-through separately, because each model fails in a different one; keep real values out of examples.
