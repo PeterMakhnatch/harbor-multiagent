@@ -9,6 +9,7 @@ from typing import Any, NamedTuple
 
 from . import native_account
 from .input_keys import Cell, cell, result_view
+from .input_witness import binding
 from .job_stream import RESULT, _children, _present
 from .seat_stream import (
     MAX_RESULT_BYTES,
@@ -73,6 +74,8 @@ class Final(NamedTuple):
     cell: Cell | None
     agrees: bool | None
     grade: str
+    slot: str | None = None
+    binding: str | None = None
 
 
 class Evidence(NamedTuple):
@@ -86,7 +89,8 @@ class Evidence(NamedTuple):
 
 
 class _Reader:
-    def __init__(self, remaining: int) -> None:
+    def __init__(self, remaining: int, bind_starts: bool) -> None:
+        self.bind_starts = bind_starts
         self.remaining = remaining
         self.watched: list[tuple[str, Stamp]] = []
         self.cells: dict[bytes, Cell] = {}
@@ -201,9 +205,17 @@ def _final(reader: _Reader, job_id: str, folder: str, saved: Cell | None) -> Fin
         slot_name=os.path.basename(folder),
     )
     _require(len(row["seats"]) >= MIN_SEATS, RESULT_TEAM)
-    view = result_view(_strict_json(data, RESULT_JSON), raw=data)
+    document = _strict_json(data, RESULT_JSON)
+    view = result_view(document, raw=data)
     agrees = None if saved is None or view is None else view == saved.view
-    return Final(row["trial"], saved, agrees, _grade(row))
+    return Final(
+        row["trial"],
+        saved,
+        agrees,
+        _grade(row),
+        row["slot"] if reader.bind_starts else None,
+        binding(document) if reader.bind_starts else None,
+    )
 
 
 def _traverse(
@@ -234,12 +246,12 @@ def _traverse(
     return sorted(finals, key=lambda final: final.execution), lock_only
 
 
-def _read_job(path: Path, expected: str | None) -> Evidence:
+def _read_job(path: Path, expected: str | None, bind_starts: bool) -> Evidence:
     _require(isinstance(path, Path), NOT_PATH)
     pinned = type(expected) is str and PIN.fullmatch(expected) is not None
     _require(expected is None or pinned, PIN_SHAPE)
     job = os.fspath(path)
-    reader = _Reader(native_account.MAX_TOTAL_BYTES)
+    reader = _Reader(native_account.MAX_TOTAL_BYTES, bind_starts)
     _require(stat.S_ISDIR(reader.watch(job, "job directory")[2]), NOT_DIRECTORY)
     data = reader.snapshot(os.path.join(job, LOCK), MAX_JOB_LOCK_BYTES, "job lock")
     digest = f"sha256:{hashlib.sha256(data).hexdigest()}"
@@ -266,11 +278,13 @@ def _read_job(path: Path, expected: str | None) -> Evidence:
     )
 
 
-def read_job(path: Path, expected: str | None) -> Evidence:
+def read_job(
+    path: Path, expected: str | None, *, bind_starts: bool = False
+) -> Evidence:
     reason = UNREADABLE
     malformed = True
     try:
-        return _read_job(path, expected)
+        return _read_job(path, expected, bind_starts)
     except Malformed as error:
         reason = str(error)
     except ValueError as error:

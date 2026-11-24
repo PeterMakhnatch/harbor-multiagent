@@ -66,3 +66,28 @@ The registration is a **multiset** of full input records. It contains no slot na
 A file next to a grade is not a signature. Different full locks can have the same visible result inputs, for example if only their timeout differs. The checker withholds the grades for those groups. It also withholds all grades for an overrepresented group instead of choosing winners from it. Counts concern retained final directories, not all retries. The report does not prove that the promised task bytes ran or that a seat received a message.
 
 **Check on an existing job:** 20 saved three-seat finals matched 10 distinct full input records, with 2 copies of each. The results reported 2 valid ones and 18 valid zeros. All 10 used one participant configuration across 10 tasks. Nominating two of those records as the whole comparison returned `outside_pair`. This job does not compare two models.
+
+### Capture which inputs started
+
+Use this when a registered difference is absent from the final result's comparable inputs. Before a future authorized job, create a separate owner-only directory on the trusted host. Keep it outside the job and outside all seat mounts. Use a separate directory from END, seat, and billing receipts.
+
+```sh
+mkdir -m 700 "$start_archive"
+```
+
+Add the following arguments to the job configuration. Use an absolute, resolved path. This guide does not start a job.
+
+```text
+--plugin examples.seatlab.workbench.input_keeper:InputStartKeeper --plugin-kwarg archive_dir=/absolute/private/starts
+```
+
+At the native START event, the plugin checks the job, slot, execution ID, saved lock and native inputs. It stores their keys and a digest of the full start configuration, local task ID and task checksum. It does not record prompts, settings values, rewards or seat messages. It writes once per execution. A failed capture warns and does not stop play. An END event cannot fill the gap.
+
+```sh
+"$py" -B -m "$wb" cohort "$job" --expected-job-lock "$job_lock_pin" \
+  --pair "$left_key" "$right_key" --starts "$start_archive"
+```
+
+With `--starts`, every retained final needs its own matching receipt. Two full locks that have the same result view can now be separated. If the final lacks its receipt, its grade stays unattributed. A conflicting receipt withholds all grades for that lock. An extra START without a final counts separately. It is not a grade, failure or proof of a retry.
+
+This check trusts the host and its private archive. The saved evidence is not a signature. START proves neither the eventual deployment nor the content of a seat's context. On the retained 20-final job above, requiring START receipts withheld all 20 grades: no such archive was available. Do not create receipts from final results.
