@@ -12,8 +12,33 @@ from pathlib import Path
 from typing import override
 
 from harbor.environments.base import BaseEnvironment, ExecResult
+from harbor.environments.ssh import StreamHandle
 from harbor.models.task.config import EnvironmentConfig
 from harbor.models.trial.paths import TrialPaths
+
+_KILL_EXEC_PROCESSES = r"""
+ppid() { while read -r key value; do
+  if [ "$key" = PPid: ]; then echo "$value"; return 0; fi
+done < "/proc/$1/status"; return 1; }
+own=" "
+pid=$$
+while [ "$pid" -gt 0 ]; do own="$own$pid "; pid=$(ppid "$pid" 2>/dev/null) || break; done
+while :; do
+  targets=""
+  for dir in /proc/[0-9]*; do
+    target=${dir#/proc/}
+    pid=$target
+    while [ "$pid" -gt 1 ]; do
+      case "$own" in *" $pid "*) break ;; esac
+      parent=$(ppid "$pid" 2>/dev/null) || break
+      if [ "$parent" = 0 ]; then targets="$targets $target"; break; fi
+      pid=$parent
+    done
+  done
+  [ -z "$targets" ] && exit 0
+  kill -9 $targets 2>/dev/null
+done
+"""
 
 
 class SeatEnvironment(BaseEnvironment):
@@ -46,6 +71,27 @@ class SeatEnvironment(BaseEnvironment):
     @override
     def type() -> str:
         return "seat"
+
+    @property
+    @override
+    def stream_enabled(self) -> bool:
+        return (
+            self.project.stream_enabled
+            and "service" in self.project.stream_handle.reference
+        )
+
+    @property
+    @override
+    def stream_handle(self) -> StreamHandle:
+        handle = self.project.stream_handle
+        if "service" not in handle.reference:
+            return super().stream_handle
+        return handle.model_copy(
+            update={
+                "reference": {**handle.reference, "service": self.service},
+                "workspace": None,
+            }
+        )
 
     @override
     def _validate_definition(self):
@@ -81,6 +127,20 @@ class SeatEnvironment(BaseEnvironment):
                 env=self._merge_env(env),
                 timeout_sec=timeout_sec,
                 user=user,
+            )
+
+    async def kill_exec_processes(self) -> None:
+        """Kill every process in the seat that an exec started (its parent is
+        outside the container), with its descendants, so a stopped agent stops
+        acting. The service's own processes, under PID 1, keep running."""
+        with self.project.scoped_output_callback(self._output_callback()):
+            result = await self.project.service_exec(
+                _KILL_EXEC_PROCESSES, service=self.service, user="root"
+            )
+        if result.return_code != 0:
+            raise RuntimeError(
+                f"Seat {self.service!r}: could not kill its agent's processes: "
+                f"{result.stdout}{result.stderr or ''}"
             )
 
     @override

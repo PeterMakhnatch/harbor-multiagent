@@ -28,6 +28,8 @@ class _FakeOperation:
 
     def __await__(self):
         yield from ()
+        if isinstance(self._value, BaseException):
+            raise self._value
         return self._value
 
 
@@ -166,20 +168,26 @@ class _FakeSandbox:
         timeout_seconds: float | None = None,
         stdin: bool = False,
     ) -> _FakeOperation:
-        self.exec_calls.append(
-            {
-                "command": list(command),
-                "cwd": cwd,
-                "check": check,
-                "timeout_seconds": timeout_seconds,
-                "stdin": stdin,
-            }
-        )
+        call = {
+            "command": list(command),
+            "cwd": cwd,
+            "check": check,
+            "timeout_seconds": timeout_seconds,
+            "stdin": stdin,
+        }
+        self.exec_calls.append(call)
         if self.exec_errors:
-            raise self.exec_errors.pop(0)
-        if self.exec_results:
-            return _FakeOperation(self.exec_results.pop(0))
-        return _FakeOperation(self.next_result)
+            value = self.exec_errors.pop(0)
+        else:
+            value = self.exec_results.pop(0) if self.exec_results else self.next_result
+        operation = _FakeOperation(value)
+        if stdin:
+
+            async def write(data: bytes) -> None:
+                call["stdin_payload"] = data
+
+            operation.stdin = SimpleNamespace(write=write, close=AsyncMock())
+        return operation
 
     def get_status(self) -> str:
         return self.status
