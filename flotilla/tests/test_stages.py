@@ -117,78 +117,95 @@ def test_holm_adjusts_step_down_and_rejection_is_strict():
 
 # --- SequentialTest ------------------------------------------------------------------------------------------------
 
-def seq_p(looks: tuple[int, ...], history: list[tuple[int, int]]) -> float:
-    return min(1.0, len(looks) * min(STAGES.mcnemar_p(b, c) for b, c in history))
+def seq_p(looks: tuple[int, ...], history: list[tuple[int, int, int]]) -> float:
+    return min(1.0, len(looks) * min(STAGES.mcnemar_p(b, c) for b, c, _ in history))
 
 
 def test_early_efficacy_needs_family_size_times_sequential_p_below_alpha():
     looks = (8, 16, 32)  # rf1v Luna: 32 pairs, b = 32
     family = STAGES.SequentialTest(looks, family_size=3, alpha=ALPHA)
-    first = family.disposition([(8, 0)])  # p < alpha but 3 * p >= alpha: continue, and not futility either
+    first = family.disposition([(8, 0, 8)])  # p < alpha but 3 * p >= alpha: continue, and not futility either
     assert first.status == "continue" and first.p == pytest.approx(3 * 2 / 2 ** 8) and first.p < ALPHA
-    second = family.disposition([(8, 0), (16, 0)])
+    second = family.disposition([(8, 0, 8), (16, 0, 16)])
     assert (second.status, second.direction) == ("efficacy", 1)
     assert second.p == pytest.approx(3 * 2 / 2 ** 16)
     alone = STAGES.SequentialTest(looks, family_size=1, alpha=ALPHA)
-    assert alone.disposition([(8, 0)]).status == "efficacy"
-    assert alone.disposition([(0, 8)]).direction == -1
+    assert alone.disposition([(8, 0, 8)]).status == "efficacy"
+    assert alone.disposition([(0, 8, 8)]).direction == -1
     empty = alone.disposition([])
     assert (empty.status, empty.p, empty.direction) == ("continue", 1.0, 0)
 
 
 def test_futility_only_when_the_majority_cannot_reach_alpha_by_the_last_look():
     test = STAGES.SequentialTest((10, 20, 30), family_size=1, alpha=ALPHA)
-    assert test.disposition([(5, 5)]).status == "continue"  # (5, 25) would still reach
-    stopped = test.disposition([(5, 5), (10, 10)])  # (10, 20) at best: 3 * 0.099 >= 0.05
+    assert test.disposition([(5, 5, 10)]).status == "continue"  # (5, 25) would still reach
+    stopped = test.disposition([(5, 5, 10), (10, 10, 20)])  # (10, 20) at best: 3 * 0.099 >= 0.05
     assert (stopped.status, stopped.p, stopped.direction) == ("futility", 1.0, 0)
-    majority = test.disposition([(3, 6), (6, 13)])  # p >= alpha now, but 10 more for c give (6, 23): 3 * 0.0023
-    assert majority.status == "continue" and majority.p == pytest.approx(seq_p((10, 20, 30), [(3, 6), (6, 13)]))
-    earliest = test.disposition([(0, 5), (5, 5)])  # (5, 15) at best: 3 * 0.041; the minimum raw p is at look 1
+    path = [(3, 6, 10), (6, 13, 20)]  # p >= alpha now, but 10 more for c give (6, 23): 3 * 0.0023
+    majority = test.disposition(path)
+    assert majority.status == "continue" and majority.p == pytest.approx(seq_p((10, 20, 30), path))
+    earliest = test.disposition([(0, 5, 10), (5, 5, 20)])  # minimum is at look 1; (5, 15) at best: 3 * 0.041
     assert (earliest.status, earliest.direction) == ("futility", -1)
     assert earliest.p == pytest.approx(3 * 2 / 32)
     early = STAGES.SequentialTest((20, 24, 28), family_size=1, alpha=ALPHA)
-    assert early.disposition([(10, 10)]).status == "futility"  # (10, 18) at best: 3 * 0.185
+    assert early.disposition([(10, 10, 20)]).status == "futility"  # (10, 18) at best: 3 * 0.185
     quiet = STAGES.SequentialTest((12, 24, 42, 48), family_size=3, alpha=ALPHA)
-    ties = [(0, 0)] * 3  # at 42 the best is (0, 6): 4 * 0.031 >= 0.05; at 24, (0, 24) would still reach
+    ties = [(0, 0, 12), (0, 0, 24), (0, 0, 40)]  # 6 pairs remain; the 2 invalid pairs cannot return
     assert [quiet.disposition(ties[:k]).status for k in (1, 2, 3)] == ["continue", "continue", "futility"]
     assert (quiet.disposition(ties).p, quiet.disposition(ties).direction) == (1.0, 0)
     default = STAGES.SequentialTest((12, 24, 48), family_size=3, alpha=ALPHA)
-    assert [default.disposition(ties[:k]).status for k in (1, 2, 3)] == ["continue", "continue", "final"]
+    path = [*ties[:2], (0, 0, 48)]
+    assert [default.disposition(path[:k]).status for k in (1, 2, 3)] == ["continue", "continue", "final"]
 
 
 def test_looks_after_a_terminal_status_replay_the_first_terminal_result():
     test = STAGES.SequentialTest((10, 20, 30), family_size=1, alpha=ALPHA)
-    first = test.disposition([(0, 10)])  # 3 * 2 / 1024 < 0.05: efficacy at look 1
-    later = test.disposition([(0, 10), (0, 11)])
+    first = test.disposition([(0, 10, 10)])  # 3 * 2 / 1024 < 0.05: efficacy at look 1
+    later = test.disposition([(0, 10, 10), (0, 11, 20)])
     assert first.status == "efficacy" and first.look == later.look == 1
-    assert (later.status, later.p, later.direction) == (first.status, first.p, first.direction)
+    assert later == first
     early = STAGES.SequentialTest((20, 24, 28), family_size=1, alpha=ALPHA)
-    stopped = early.disposition([(10, 10), (10, 10), (12, 12)])
+    stopped = early.disposition([(10, 10, 20), (10, 10, 24), (12, 12, 28)])
     assert (stopped.status, stopped.look) == ("futility", 1)
 
 
 def test_the_last_look_is_final_whatever_its_p():
     looks = (10, 20, 30)
     test = STAGES.SequentialTest(looks, family_size=1, alpha=ALPHA)
-    weak = [(1, 2), (2, 4), (3, 7)]
+    weak = [(1, 2, 10), (2, 4, 20), (3, 7, 30)]
     assert test.disposition(weak[:2]).status == "continue"
     result = test.disposition(weak)
     assert (result.status, result.direction) == ("final", -1) and result.p == pytest.approx(1.0)
-    strong = [(0, 3), (0, 6), (0, 14)]
+    strong = [(0, 3, 10), (0, 6, 20), (0, 14, 30)]
     assert [test.disposition(strong[:k]).status for k in (1, 2)] == ["continue", "continue"]
     result = test.disposition(strong)
     assert (result.status, result.direction) == ("final", -1)
     assert result.p == pytest.approx(seq_p(looks, strong)) and result.p < ALPHA
 
 
+def test_missing_pairs_do_not_remove_a_test_or_change_its_planned_looks():
+    looks = (10, 20, 30)
+    test = STAGES.SequentialTest(looks)
+    path = [(0, 3, 9), (0, 6, 19), (0, 14, 29)]
+    result = test.disposition(path)
+    assert result == STAGES.Disposition("final", seq_p(looks, path), -1, 3, 29)
+    assert result.p < ALPHA
+    assert test.disposition([(0, 0, 0), (0, 0, 0), (0, 10, 10)]) == STAGES.Disposition(
+        "final", 3 * 2 / 2 ** 10, -1, 3, 10,
+    )
+
+
 @pytest.mark.parametrize("history", [
-    [(0, 1), (0, 2), (0, 3), (0, 4)],  # more looks than planned
-    [(3, 2), (2, 4)],  # cumulative counts fall
-    [(6, 6)],  # more discordant pairs than pairs at the look
-    [(0, 0), (6, 6)],  # 12 new discordant pairs among 10 new pairs
-    [(-1, 2)],
-    [(True, 2)],
-    [(1, 2, 3)],
+    [(0, 1, 10), (0, 2, 20), (0, 3, 30), (0, 4, 40)],  # more looks than planned
+    [(3, 2, 10), (2, 4, 20)],  # cumulative counts fall
+    [(6, 4, 9)],  # more discordant pairs than valid pairs
+    [(0, 0, 10), (6, 4, 19)],  # 10 new discordant pairs among 9 new valid pairs
+    [(0, 0, 11)],  # more valid pairs than planned
+    [(0, 0, 9), (0, 0, 20)],  # cannot recover a pair excluded at the first look
+    [(0, 0, 10), (0, 0, 9)],  # valid pairs cannot decrease
+    [(-1, 2, 10)],
+    [(0, 0, True)],
+    [(1, 2)],  # actual n is required
     {"b": 0, "c": 1},  # not a sequence of looks
 ])
 def test_invalid_histories_are_rejected(history):
@@ -221,25 +238,32 @@ def test_futility_replays_the_first_stop_without_a_rejection_or_direction():
     looks = (12, 24, 48)
     baseline = STAGES.SequentialTest(looks, family_size=3)
     optional = STAGES.SequentialTest(looks, family_size=3, delta=0.25, beta_f=0.05)
-    path = ((0, 0), (6, 0), (20, 0))
-    stopped = STAGES.Disposition("nonbinding_futility", 1.0, 0, 1)
+    path = ((0, 0, 12), (6, 0, 24), (20, 0, 48))
+    stopped = STAGES.Disposition("nonbinding_futility", 1.0, 0, 1, 12)
     assert optional.disposition(path[:1]) == optional.disposition(path) == stopped
     assert baseline.disposition(path).p < ALPHA / 3
-    assert optional.disposition(((1, 0),)).status == optional.disposition(((0, 1),)).status == "continue"
-    assert optional.disposition(((0, 12),)) == baseline.disposition(((0, 12),))
-    assert STAGES.SequentialTest((12,), delta=0.25, beta_f=0.05).disposition(((0, 0),)).status == "final"
+    assert optional.disposition(((1, 0, 12),)).status == optional.disposition(((0, 1, 12),)).status == "continue"
+    assert optional.disposition(((0, 12, 12),)) == baseline.disposition(((0, 12, 12),))
+    assert STAGES.SequentialTest((12,), delta=0.25, beta_f=0.05).disposition(((0, 0, 12),)).status == "final"
 
 
-def test_nonbinding_stop_cannot_enter_holm_with_a_small_interim_p():
+def test_nonbinding_futility_uses_the_actual_valid_pair_count():
+    test = STAGES.SequentialTest((12, 24, 48), delta=0.25, beta_f=0.04)
+    assert test.disposition([(0, 0, 12)]).status == "nonbinding_futility"
+    assert test.disposition([(0, 0, 11)]) == STAGES.Disposition("continue", 1.0, 0, 1, 11)
+
+
+def test_nonbinding_futility_does_not_discard_a_staged_p_below_alpha():
     looks = (24, 36, 48)
     baseline = STAGES.SequentialTest(looks, family_size=3)
     optional = STAGES.SequentialTest(looks, family_size=3, delta=0.55, beta_f=0.05)
-    path = ((8, 0), (8, 0), (8, 0))
-    before, after = baseline.disposition(path), optional.disposition(path)
-    assert ALPHA / 3 < before.p < ALPHA / 2
-    assert after == STAGES.Disposition("nonbinding_futility", 1.0, 0, 1)
-    assert STAGES.holm([0.001, before.p, 0.04])[2] < ALPHA
-    assert STAGES.holm([0.001, after.p, 0.04])[2] >= ALPHA
+    path = ((8, 0, 24), (8, 0, 36), (8, 0, 48))
+    assert optional.futility_bounds[0] >= 8
+    first = optional.disposition(path[:1])
+    assert first.status == "continue" and ALPHA / 3 < first.p < ALPHA / 2
+    result = optional.disposition(path)
+    assert result == baseline.disposition(path) == STAGES.Disposition("final", first.p, 1, 3, 48)
+    assert all(p < ALPHA for p in STAGES.holm([0.001, result.p, 0.04]))
 
 
 # --- simulation machinery ------------------------------------------------------------------------------------------
@@ -340,13 +364,13 @@ def raw(b: int, c: int) -> float:
     return STAGES.mcnemar_p(b, c)
 
 
-def trajectory(model: Model, looks: tuple[int, ...], rng: random.Random) -> tuple[tuple[int, int], ...]:
-    """The cumulative (b, c) at every planned look: the whole run, drawn before either design reads it."""
+def trajectory(model: Model, looks: tuple[int, ...], rng: random.Random) -> tuple[tuple[int, int, int], ...]:
+    """The cumulative (b, c, n) at every planned look: the whole run, drawn before either design reads it."""
     counts, done, path = (0, 0, 0), 0, []
     for size in looks:
         _, cumulative, outs = steps(model, counts, size - done)
         counts, done = add(counts, outs[min(bisect.bisect_right(cumulative, rng.random()), len(outs) - 1)]), size
-        path.append(counts[:2])
+        path.append((*counts[:2], size))
     return tuple(path)
 
 
@@ -357,12 +381,12 @@ class Staged:
         self.test = test
         self.cache: dict[tuple, tuple[str, float, int]] = {}
 
-    def stop(self, path: tuple[tuple[int, int], ...]) -> tuple[str, float, int]:
+    def stop(self, path: tuple[tuple[int, int, int], ...]) -> tuple[str, float, int]:
         """(status, p, pairs used)"""
         if path not in self.cache:
             result = self.test.disposition(path)
             assert result.status in ("efficacy", "futility", "nonbinding_futility", "final"), result
-            self.cache[path] = (result.status, result.p, self.test.look_sizes[result.look - 1])
+            self.cache[path] = (result.status, result.p, result.n)
         return self.cache[path]
 
 
@@ -379,7 +403,7 @@ def exact(model: Model, test) -> tuple[float, float, float]:
             probs, _, outs = steps(model, counts, size - done)
             for p, step in zip(probs, outs):
                 after = add(counts, step)
-                grown[(after, path + (after[:2],))] += mass * p
+                grown[(after, path + ((*after[:2], size),))] += mass * p
         live, done = {}, size
         for (counts, path), mass in grown.items():
             status = test.disposition(list(path)).status
@@ -421,7 +445,7 @@ def simulate(scenario: Scenario, reps: int, seed: int, **futility) -> list[Row]:
             path = trajectory(model, looks, rng)
             status, p, used = staged.stop(path)
             staged_p.append(p)
-            fixed_p.append(raw(*path[-1]))
+            fixed_p.append(raw(*path[-1][:2]))
             pairs[i] += used
             stops[i][status] += 1
         s = [p < ALPHA for p in STAGES.holm(staged_p + extras)][:len(models)]
@@ -466,7 +490,7 @@ def test_permuted_profiles_keep_their_totals_and_rf1v_stops_at_the_second_look()
     rng = random.Random(SEED)
     for model in SCENARIOS[1].models:
         for _ in range(50):
-            assert trajectory(model, SCENARIOS[1].looks, rng)[-1] == model.profile
+            assert trajectory(model, SCENARIOS[1].looks, rng)[-1] == (*model.profile, model.n)
     rows = simulate(SCENARIOS[0], 200, SEED)
     assert [(row.pairs_staged, row.staged, row.fixed, row.agree) for row in rows] == [(16, 1, 1, 1)] * 2
     assert rows[0].stops == Counter(efficacy=200) and rows[-1].exact_staged == pytest.approx(1.0)

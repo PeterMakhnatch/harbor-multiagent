@@ -7,18 +7,20 @@ prefix of stage k+1, and every model sees the same instances. Rounding can make 
 look sizes are then the distinct planned complete pair counts, e.g. sorted(set(stage_counts(n, fractions))).
 
 SequentialTest(look_sizes, family_size, alpha) runs one exact McNemar test at K = len(look_sizes) fixed looks. Each
-look's history entry is the cumulative discordant pair counts (b, c). The sequential p is min(1, K * min raw p).
+look's history entry is (b, c, n): the cumulative counts for each discordance direction and the actual count of
+valid pairs. After the retry limit, exclude pairs missing a valid trial in either arm without changing the look or K.
+The sequential p is min(1, K * min raw p).
 
-Alpha: under H0, conditional on which pairs are discordant, the signs are independent and fair. Each look's exact p
-is then super-uniform. A union bound over the K planned looks makes the sequential p valid; stopping reports the
-minimum over fewer looks, which can only increase it. holm() over the family of family_size sequential p values
-then controls the family-wise error at alpha with strict rejection adjusted < alpha.
+Alpha: validity must not depend on outcomes. Under H0, conditional on which included pairs are discordant, the signs
+are independent and fair. Each look's exact p is then super-uniform. A union bound over the K planned looks makes
+the sequential p valid; stopping reports the minimum over fewer looks, which can only increase it.
+Holm over the family of family_size sequential p values controls the family-wise error at alpha with strict
+rejection adjusted < alpha.
 
 Efficacy: an interim look stops when family_size * p_seq < alpha. Holm's adjusted p for this test is a running max of
 (m - j) * p_(j) with m - j <= family_size and p_(j) <= p_seq, so it is below alpha whatever the other p values are.
 The stop therefore equals the later Holm rejection. Final: the last look reports p and direction only; rejection is
-decided by holm() over the whole family. Callers keep every test in the family: a stopped test keeps its frozen p and
-an incomplete or invalid test enters with p = 1.
+decided by holm() over the whole family. Callers keep every test in the family with its frozen or final p.
 
 Futility: an interim look stops when p_seq >= alpha and also K * p(minority, majority + R) >= alpha, where R is the
 count of pairs still planned. The exact p grows with the minority count and falls with the majority count, so any
@@ -26,10 +28,11 @@ reachable later state (b', c') with b' >= b, c' >= c and b' + c' - b - c <= R ha
 Hence p_seq can never fall below alpha, Holm can never reject the test, and a p value at or above alpha does not
 change the decision for any other test.
 
-Optional non-binding futility: set both delta and beta_f before trials. At an interim look of n pairs, stop without
-rejection if max(b, c) is at most the largest k with Pr[Binomial(n, delta) <= k] <= beta_f. Report p = 1 and no
-direction. This can only increase a p value relative to the same full history with the rule disabled. Holm can only
-lose rejections. Efficacy and deterministic futility take precedence; no futility rule applies at the final look.
+Optional non-binding futility: set both delta and beta_f before trials. At an interim look of n valid pairs, stop
+if p_seq >= alpha and max(b, c) is at most the largest k with Pr[Binomial(n, delta) <= k] <= beta_f. Report p = 1
+and no direction. This can only increase a p value relative to the same full history with the rule disabled.
+Holm can only lose rejections. Efficacy and deterministic futility take precedence; neither futility rule applies
+at the final look.
 """
 
 from __future__ import annotations
@@ -192,10 +195,11 @@ class Disposition:
     p: float
     direction: int
     look: int
+    n: int
 
 
 class SequentialTest:
-    """Group-sequential exact McNemar test at fixed absolute complete pair counts. Stateless: see disposition()."""
+    """Group-sequential exact McNemar test at fixed planned looks. Stateless: see disposition()."""
 
     def __init__(
         self,
@@ -221,15 +225,19 @@ class SequentialTest:
         self.family_size = family_size
         self.alpha = float(alpha)
         if delta is None and beta_f is None:
-            self.futility_bounds = (-1,) * len(self.look_sizes)
+            self._futility_rule = None
         elif delta is None or beta_f is None:
             raise ValueError("refused: specify both delta and beta_f, or neither")
         else:
             rate, risk = _fraction_of(delta), _fraction_of(beta_f)
             if not (0 < rate < 1 and 0 < risk < 1):
                 raise ValueError("refused: delta and beta_f must both be in (0, 1)")
-            self.futility_bounds = tuple(_futility_bound(n, rate, risk) for n in self.look_sizes)
+            self._futility_rule = (rate, risk)
+        self.futility_bounds = tuple(self._nonbinding_bound(n) for n in self.look_sizes)
         self.boundary = self._boundary()
+
+    def _nonbinding_bound(self, n: int) -> int:
+        return -1 if self._futility_rule is None else _futility_bound(n, *self._futility_rule)
 
     def _sequential(self, raw: float) -> float:
         return min(1.0, len(self.look_sizes) * raw)
@@ -251,21 +259,24 @@ class SequentialTest:
             bounds.append(bound)
         return tuple(bounds)
 
-    def _validated(self, history) -> list[tuple[int, int]]:
+    def _validated(self, history) -> list[tuple[int, int, int]]:
         if not isinstance(history, (list, tuple)) or len(history) > len(self.look_sizes):
             raise ValueError(f"refused: history must be a list of at most {len(self.look_sizes)} looks")
-        states: list[tuple[int, int]] = []
-        before_b, before_c, before_size = 0, 0, 0
+        states: list[tuple[int, int, int]] = []
+        before_b, before_c, before_n, before_planned = 0, 0, 0, 0
         for look, entry in enumerate(history):
-            if (not isinstance(entry, (list, tuple)) or len(entry) != 2
+            if (not isinstance(entry, (list, tuple)) or len(entry) != 3
                     or any(not _is_int(count) or count < 0 for count in entry)):
-                raise ValueError(f"refused: look {look} must be (b, c) integers >= 0")
-            b, c = entry
-            size = self.look_sizes[look]
-            if b < before_b or c < before_c or (b + c) - (before_b + before_c) > size - before_size:
+                raise ValueError(f"refused: look {look} must be (b, c, n) integers >= 0")
+            b, c, n = entry
+            planned = self.look_sizes[look]
+            added = n - before_n
+            if not 0 <= added <= planned - before_planned:
+                raise ValueError(f"refused: look {look} valid pair count {n} is not reachable from the look before")
+            if b < before_b or c < before_c or (b + c) - (before_b + before_c) > added:
                 raise ValueError(f"refused: look {look} counts {b}, {c} are not reachable from the look before")
-            states.append((b, c))
-            before_b, before_c, before_size = b, c, size
+            states.append((b, c, n))
+            before_b, before_c, before_n, before_planned = b, c, n, planned
         return states
 
     def _hopeless(self, b: int, c: int, look: int) -> bool:
@@ -273,22 +284,24 @@ class SequentialTest:
         return self._sequential(mcnemar_p(min(b, c), max(b, c) + remaining)) >= self.alpha
 
     def disposition(self, history) -> Disposition:
-        """Replay cumulative (b, c) per completed look; return the first terminal result, else continue."""
+        """Replay cumulative (b, c, actual valid n) at each closed look, including looks with no new valid pairs."""
         states = self._validated(history)
-        best_raw, direction = 1.0, 0
+        best_raw, direction, n = 1.0, 0, 0
         last = len(self.look_sizes) - 1
-        for look, (b, c) in enumerate(states):
+        for look, (b, c, n) in enumerate(states):
             raw = mcnemar_p(b, c)
             if look == 0 or raw < best_raw:
                 best_raw, direction = raw, (b > c) - (b < c)
             p = self._sequential(best_raw)
             if look == last:
-                return Disposition("final", p, direction, look + 1)
+                return Disposition("final", p, direction, look + 1, n)
             if min(b, c) <= self.boundary[b + c]:
                 assert self._crosses(best_raw) and direction != 0
-                return Disposition("efficacy", p, direction, look + 1)
+                return Disposition("efficacy", p, direction, look + 1, n)
             if p >= self.alpha and self._hopeless(b, c, look):
-                return Disposition("futility", p, direction, look + 1)
-            if max(b, c) <= self.futility_bounds[look]:
-                return Disposition("nonbinding_futility", 1.0, 0, look + 1)
-        return Disposition("continue", self._sequential(best_raw), direction, len(states))
+                return Disposition("futility", p, direction, look + 1, n)
+            if p >= self.alpha and self._futility_rule is not None:
+                bound = self.futility_bounds[look] if n == self.look_sizes[look] else self._nonbinding_bound(n)
+                if max(b, c) <= bound:
+                    return Disposition("nonbinding_futility", 1.0, 0, look + 1, n)
+        return Disposition("continue", self._sequential(best_raw), direction, len(states), n)

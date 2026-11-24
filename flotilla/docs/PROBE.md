@@ -787,11 +787,17 @@ The seed shuffles the instances within each task set once. Each cumulative stage
 `ceil(fraction × instance count)` instances of each set, with the same instances for every model.
 It includes all arms of each selected instance. The default fractions are `0.25, 0.5, 1.0`.
 Run only the newly added blocks of cells for each model and task set that still needs trials.
-For each test, record its distinct cumulative pair counts as the looks. Rounding can give the same
-count at two stages; inspect that count only once. A paired test uses 2 named arms, even when a
+For each test, record its distinct cumulative planned pair counts as the looks. Rounding can give the same
+planned count at two stages; inspect that count only once. A paired test uses 2 named arms, even when a
 stage also contains other arms. If multiple live tests need a cell, run it once.
+A model can take its planned look while other models are still at an earlier stage.
+This is valid: the look schedule is fixed for each test, and Holm does not require synchronized looks.
 
-**Test.** At each look use all counted, complete pairs assigned to that test through the look.
+**Test.** At each look use all complete valid pairs assigned to that test through the look. A pair
+counts only if both arms have a counted trial under the [`pc1` rule in section 7](#7-pre-registration-conformity-pilot-pc1-written-2026-11-24-before-any-paid-probe-trial).
+After the pre-registered retry limit, exclude any pair that still lacks a counted trial in either arm.
+Record the actual valid pair count `n_j` at every look, including 0. Keep the planned looks and `K`,
+even when the valid count does not increase. Pass cumulative `(b, c, n_j)` to `SequentialTest`.
 Let `b` and `c` count pairs in which only the first or only the second arm succeeds.
 For each look compute the exact two-sided McNemar p-value, `min(1, 2 × Pr[Binomial(b+c, 1/2) ≤ min(b,c)])`.
 It is 1 with no discordance. A test with `K` planned looks spends an equal share at each look.
@@ -806,7 +812,8 @@ A pre-registered direction gate still applies; rejection in the other direction 
 
 Stop for deterministic futility only if the staged p-value is at least `alpha` and the best possible raw p at the final
 look, multiplied by `K`, is also at least `alpha`. To get that best case, make every remaining pair
-discordant in the current majority direction (either direction for a tie). At a fixed final number of
+discordant in the current majority direction (either direction for a tie). Excluded pairs cannot return,
+so only pairs planned for later looks can contribute. At a fixed final number of
 discordances, that split gives the smallest tail. Adding a majority discordance cannot increase the
 two-sided tail. Thus no earlier completion can give a better p-value. A current staged p below `alpha`
 can still reject through Holm, so the final boundary alone does not justify futility.
@@ -817,11 +824,11 @@ means one arm alone succeeds in 25% of pairs. This is not the net difference bet
 Set `beta_f` to the maximum probability of stopping for futility at each planned look under that effect.
 Both inputs must be strictly between 0 and 1. Supply both as keyword arguments to `SequentialTest`.
 
-After checking efficacy and deterministic futility at an interim look with `n_j` complete pairs,
-let `k_j` be the largest integer with `Pr[Binomial(n_j, delta) <= k_j] <= beta_f`.
-Use `-1` if even 0 exceeds the probability limit. Stop if `max(b, c) <= k_j`. Report
-`nonbinding_futility`, with p-value 1 and no direction. Otherwise continue. At the last look,
-close any test still open and report its staged p-value; do not apply either futility rule.
+After checking efficacy and deterministic futility at an interim look, use the actual valid pair count `n_j`.
+Let `k_j` be the largest integer with `Pr[Binomial(n_j, delta) <= k_j] <= beta_f`.
+Use `-1` if even 0 exceeds the probability limit. Stop only if the staged p-value is at least `alpha`
+and `max(b, c) <= k_j`. Report `nonbinding_futility`, with p-value 1 and no direction. Otherwise continue.
+At the last look, close any test still open and report its staged p-value. Do not apply either futility rule.
 A futility stop does not establish that the effect is absent.
 
 If the pairs are independent and a given discordance direction has probability at least `delta`
@@ -829,6 +836,8 @@ in each pair, its count stochastically dominates `Binomial(n_j, delta)`. A stop 
 to be at most `k_j`. Thus the unconditional probability of the test's own optional stop at a given
 look is at most `beta_f`, and the union bound across `L` interim looks is `L × beta_f`. This is not
 a bound conditional on reaching the look. Stops on other tests can also change Holm decisions.
+
+The table assumes all planned pairs are valid. Recalculate the bound from `n_j` if any pair is missing.
 
 | Planned pairs | `delta` | `beta_f` | 0.25 look | 0.5 look | 1.0 look (not applied) |
 |---:|---:|---:|---:|---:|---:|
@@ -845,16 +854,17 @@ a bound conditional on reaching the look. Stops on other tests can also change H
 | 48 | 0.40 | 0.025 | 1 | 4 | 12 |
 | 48 | 0.40 | 0.05 | 1 | 5 | 13 |
 
-**Family error.** Under each test's null, conditional on which pairs are discordant, the discordance
-directions must be independent fair signs. Each planned look then gives a super-uniform raw p-value.
+**Family error.** This method is valid when invalid trials do not depend on outcomes. Under each test's null,
+conditional on which valid pairs are discordant, the discordance directions must be independent fair signs.
+Each planned look then gives a super-uniform raw p-value.
 For any `u` in `[0,1)`, a stopped staged p-value at most `u` requires some planned look with raw p at most
 `u/K`. The union bound gives probability at most `u`. This argument does not require independent looks.
 Apply Holm once to the frozen or final staged p-values of the full family, even if some are 1.
 Holm controls the probability of any false rejection at `alpha` without requiring independent tests.
 Optional futility replaces a test's p-value with 1 and leaves all other settings fixed.
 For the same complete outcomes, the Holm rejection set can only shrink. The type-I error bound is unchanged.
-An incomplete test has p-value 1 and stays in the family. Stop a model's trials only when none of its
-remaining tests or pre-registered non-staged endpoints need those trials.
+Keep every test in the family. Stop a model's trials only when none of its remaining tests or
+pre-registered non-staged endpoints need those trials.
 
 **Copy into a new pre-registration.** Fill in every bracket before the first trial:
 
@@ -871,13 +881,16 @@ remaining tests or pre-registered non-staged endpoints need those trials.
 > Optional non-binding futility is [off, or list `delta` and `beta_f` for each enabled test]. The smallest
 > one-direction discordance rate is worth detecting because [reason]. We chose the per-look risk and
 > planned sample sizes based on [pairs and power comparison with futility off, including near `delta`].
-> The interim futility bounds are [bounds by test and look]. Efficacy and deterministic futility
-> take precedence. We assign p-value 1 and no direction to each non-binding futility stop.
+> The interim futility bounds if all pairs count are [bounds by test and look]. Use the actual valid pair
+> count to calculate each bound. Efficacy and deterministic futility take precedence. We assign p-value 1
+> and no direction to each non-binding futility stop.
 >
-> We inspect outcomes only after the planned pairs for a look are complete and valid. Validity and retries
-> follow [rule and retry limit], without inspecting outcomes to choose retries. If a required pair remains
-> invalid, mark that test incomplete and assign it p-value 1; do not replace its instance or move its look.
-> We keep incomplete tests in the family. After a test stops, we do not update its p-value or direction.
+> We inspect outcomes only after the planned cells for a model's look finish, including retries. Validity
+> follows the `pc1` counting rule in section 7, and retries follow [retry limit]. We do not use outcomes
+> to choose retries. At each look, we record the actual valid pair count and use only pairs with counted
+> trials in both arms. We do not replace invalid pairs, change planned looks, or change `K`. The method
+> requires that invalid trials do not depend on outcomes. Each model can reach its looks independently
+> of the others. After a test stops, we do not update its p-value or direction.
 > We continue collecting cells for [other tests and endpoints that need them, or none].
 
 **Simulation.** Run this command for the full table (100,000 replicates per scenario, seed `20261124`):
