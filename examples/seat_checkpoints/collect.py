@@ -3,7 +3,6 @@ import json
 import sys
 import types
 from collections import Counter
-from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 
@@ -73,6 +72,17 @@ from .bracket import (
     SeatCutInvalid,
     analyze,
 )
+from .native_timeout import (
+    DISPOSITIONS,
+    MAX_MESSAGE_BYTES,
+    TIMEOUT_LABELS,
+    TIMEOUT_MULTIPLIER,
+    TIMEOUT_SECONDS,
+    Disposition,
+    check_deadline,
+    classify,
+    deadline_seconds,
+)
 
 REGISTRATION_SCHEMA = "harbor.seat-cut.study/v1"
 SCHEMA = "harbor.seat-cut.collection/v1"
@@ -119,6 +129,37 @@ STATUSES = (
     "missing",
 )
 BOUND_STATUSES = frozenset({"bounded", "no_clean_return"})
+OBSERVATIONS = (
+    "bounded",
+    "no_clean_return",
+    "unobserved_control",
+    "journal_incomplete",
+    "journal_invalid",
+    "unavailable",
+)
+UNADMITTED = frozenset(
+    {"incomplete", "invalid", "ambiguous", "duplicate_id", "missing"}
+)
+ATTEMPT_FIELDS = frozenset(
+    {
+        "schema",
+        "ticket",
+        "trial_id",
+        "team",
+        "target",
+        "peer",
+        "observe",
+        "task_files",
+        "interval_seconds",
+        "max_samples",
+        "timeout_seconds",
+    }
+)
+TIMEOUT_ATTEMPT_FIELDS = ATTEMPT_FIELDS | {
+    "agent_timeout_multiplier",
+    "agent_timeout_seconds",
+}
+EXCEPTION_MESSAGE = ("exception.txt",)
 MAX_TEAMS = 64
 MAX_REGISTRATION_BYTES = 1 << 20
 MAX_JOURNAL_BYTES = 64 << 10
@@ -130,9 +171,22 @@ class Native(NamedTuple):
     native_id: str
     run: str | None
     grade: int | None
-    error: str | None
+    disposition: Disposition
     scores: list[int] | None
     revisions: list[int] | None
+
+
+class Outcome(NamedTuple):
+    status: str
+    grade: int | None
+    bound: Record | None
+    reason: str | None
+    disposition: Disposition
+    observation: str
+    observation_reason: str | None
+
+
+UNKNOWN = Disposition("unknown", None, None)
 
 
 def _other(seat: str) -> str:
@@ -274,7 +328,11 @@ def _check_lock(
 
 
 def _check_result(
-    result: Record, cell: Record, team: dict[str, Record], task: Record
+    result: Record,
+    cell: Record,
+    team: dict[str, Record],
+    task: Record,
+    timeout_cell: bool,
 ) -> str:
     version = result.get("schema_version")
     require(
@@ -299,64 +357,19 @@ def _check_result(
     require(type(config) is dict, "result.json has no config")
     assert type(config) is dict
     _check_config(config, cell, team, "result.json config")
+    check_deadline(config, timeout_cell, "result.json config")
     return native_id
 
 
-def _native_time(value: object, seat: str) -> datetime:
-    if not isinstance(value, str):
-        raise Invalid(f"native {seat} execution has no timestamp")
+def _timeout_cell(cell: Record, team: dict[str, Record]) -> bool:
+    return cell["team"] in TIMEOUT_LABELS and _roster(team) == "scripted"
+
+
+def _message_file(trial: Path) -> bytes | None:
     try:
-        stamp = datetime.fromisoformat(value)
-    except ValueError as error:
-        raise Invalid(f"native {seat} execution has an invalid timestamp") from error
-    require(stamp.utcoffset() is not None, f"native {seat} execution has no time zone")
-    return stamp
-
-
-def _native_error(result: Record) -> str | None:
-    require("exception_info" in result, "native trial error record is absent")
-    trial_error = result["exception_info"]
-    require(
-        trial_error is None or type(trial_error) is dict, "invalid native trial error"
-    )
-    rows = result.get("seat_results")
-    if trial_error is not None and (rows is None or rows == []):
-        return "native error recorded for trial"
-    require(
-        type(rows) is list and len(rows) == 2, "native seat results are not two seats"
-    )
-    assert type(rows) is list
-    failed = [] if trial_error is None else ["trial"]
-    executions: list[tuple[str, object]] = []
-    seats: set[str] = set()
-    for row in rows:
-        require(type(row) is dict, "native seat result is not an object")
-        require(row.get("under_test") is True, "native seat is not under test")
-        require("exception_info" in row, "native seat error record is absent")
-        seat = row.get("seat")
-        require(
-            seat in SEATS and seat not in seats,
-            "native seat results repeat or misname a seat",
-        )
-        seats.add(seat)
-        require(
-            row["exception_info"] is None or type(row["exception_info"]) is dict,
-            f"native {seat} error is not an object",
-        )
-        if row["exception_info"] is not None:
-            failed.append(seat)
-            continue
-        executions.append((seat, row.get("agent_execution")))
-    require(seats == set(SEATS), "native seat results are not planner and dispatcher")
-    if failed:
-        return "native error recorded for " + " and ".join(failed)
-    for seat, execution in executions:
-        if type(execution) is not dict:
-            raise Invalid(f"native {seat} seat has no finished execution and no error")
-        started = _native_time(execution.get("started_at"), seat)
-        finished = _native_time(execution.get("finished_at"), seat)
-        require(started <= finished, f"native {seat} execution ends before it starts")
-    return None
+        return read_bytes(trial, EXCEPTION_MESSAGE, MAX_MESSAGE_BYTES)
+    except (Incomplete, Invalid):
+        return None
 
 
 def _prefixes(
@@ -388,25 +401,19 @@ def _prefixes(
     return scores, revisions
 
 
-def _attempt(trial: Path, cell: Record, native_id: str, files: str) -> None:
+def _attempt(
+    trial: Path, cell: Record, native_id: str, files: str, timeout_cell: bool
+) -> None:
     receipt = strict_object(
         read_bytes(trial, ("seat-cut-attempt.json",), MAX_SMALL_BYTES), "attempt"
     )
-    keys = {
-        "schema",
-        "ticket",
-        "trial_id",
-        "team",
-        "target",
-        "peer",
-        "observe",
-        "task_files",
-        "interval_seconds",
-        "max_samples",
-        "timeout_seconds",
-    }
+    fields, schema = (
+        (TIMEOUT_ATTEMPT_FIELDS, "harbor.seat-cut.attempt/v2")
+        if timeout_cell
+        else (ATTEMPT_FIELDS, "harbor.seat-cut.attempt/v1")
+    )
     require(
-        set(receipt) == keys and receipt["schema"] == "harbor.seat-cut.attempt/v1",
+        set(receipt) == fields and receipt["schema"] == schema,
         "attempt fields or version differ",
     )
     require(
@@ -436,6 +443,17 @@ def _attempt(trial: Path, cell: Record, native_id: str, files: str) -> None:
             count == 0 and interval is None and timeout is None,
             "unobserved attempt configured marks",
         )
+    if timeout_cell:
+        multiplier, seconds = (
+            receipt[k] for k in ("agent_timeout_multiplier", "agent_timeout_seconds")
+        )
+        require(
+            type(multiplier) is float
+            and multiplier == TIMEOUT_MULTIPLIER
+            and type(seconds) is float
+            and seconds == TIMEOUT_SECONDS,
+            "attempt does not bind the short native agent deadline",
+        )
 
 
 def _native(
@@ -445,16 +463,29 @@ def _native(
     task: Record,
     verifier: types.ModuleType,
 ) -> Native:
+    timeout_cell = _timeout_cell(cell, team)
     result = strict_object(read_bytes(trial, RESULT, MAX_RESULT_BYTES), "result.json")
-    native_id = _check_result(result, cell, team, task)
-    _attempt(trial, cell, native_id, task["files"])
-    error = _native_error(result)
+    native_id = _check_result(result, cell, team, task, timeout_cell)
+    _attempt(trial, cell, native_id, task["files"], timeout_cell)
+    disposition = classify(
+        result,
+        SEATS,
+        deadline_seconds(timeout_cell),
+        _message_file(trial) if result.get("exception_info") is not None else None,
+    )
     config = strict_object(read_bytes(trial, CONFIG, MAX_CONFIG_BYTES), "config.json")
     _check_config(config, cell, team, "config.json")
+    check_deadline(config, timeout_cell, "config.json")
     lock = strict_object(read_bytes(trial, LOCK, MAX_CONFIG_BYTES), "lock.json")
     _check_lock(lock, cell, team, task)
-    if error is not None and result.get("reward_valid") is not True:
-        return Native(native_id, None, None, error, None, None)
+    check_deadline(lock, timeout_cell, "lock.json")
+    valid = result.get("reward_valid") is True
+    if disposition.kind == "agent_timeout" and not valid:
+        disposition = Disposition(
+            "other_error", None, f"{disposition.reason}; no valid native reward"
+        )
+    if disposition.kind == "other_error" and not valid:
+        return Native(native_id, None, None, disposition, None, None)
     identity = read_bytes(trial, IDENTITY, MAX_SMALL_BYTES)
     run = _check_identity(strict_object(identity, "world identity"), cell["ticket"])
     require(native_id != run, "native id repeats the world run")
@@ -470,7 +501,7 @@ def _native(
     require(expected["reward"] == reward, "native reward differs from the replay")
     scores, revisions = _prefixes(verifier, cut, cell)
     require(scores[-1] == expected["reward"], "full prefix differs from the replay")
-    return Native(native_id, run, expected["reward"], error, scores, revisions)
+    return Native(native_id, run, expected["reward"], disposition, scores, revisions)
 
 
 def _marker_log(trial: Path, cell: Record, run: str) -> Record:
@@ -509,6 +540,8 @@ def _host(trial: Path, cell: Record, native_id: str) -> Record | None:
 
 def _journal(trial: Path, cell: Record, native: Native) -> tuple[str, Record | None]:
     assert native.run is not None
+    timed_out = native.disposition.timed_out
+    assert timed_out is not None and set(timed_out) <= set(SEATS)
     world = _marker_log(trial, cell, native.run)
     host = _host(trial, cell, native.native_id)
     if not cell["observe"]:
@@ -518,11 +551,12 @@ def _journal(trial: Path, cell: Record, native: Native) -> tuple[str, Record | N
     if host is None:
         raise Incomplete("host journal is missing")
     assert native.scores is not None and native.revisions is not None
+    states = {seat: "error" if seat in timed_out else "clean" for seat in SEATS}
     bound = analyze(
         host,
         world,
-        native_target="clean",
-        native_peer="clean",
+        native_target=states[cell["target"]],
+        native_peer=states[cell["peer"]],
         scores=native.scores,
         revisions=native.revisions,
     )
@@ -536,23 +570,40 @@ def _trial(
     team: dict[str, Record],
     task: Record,
     verifier: types.ModuleType,
-) -> tuple[str, int | None, Record | None, str | None]:
+) -> Outcome:
     try:
         native = _native(trial, cell, team, task, verifier)
     except Incomplete as error:
-        return "incomplete", None, None, str(error)
+        return Outcome(
+            "incomplete", None, None, str(error), UNKNOWN, "unavailable", None
+        )
     except Invalid as error:
-        return "invalid", None, None, str(error)
-    if native.error is not None:
-        return "native_error", native.grade, None, native.error
-    assert native.grade is not None
+        return Outcome("invalid", None, None, str(error), UNKNOWN, "unavailable", None)
+    disposition = native.disposition
+    if disposition.kind == "other_error":
+        return Outcome(
+            "native_error",
+            native.grade,
+            None,
+            disposition.reason,
+            disposition,
+            "unavailable",
+            None,
+        )
+    assert disposition.kind in ("clean", "agent_timeout") and native.grade is not None
+    note: str | None = None
+    bound: Record | None = None
     try:
-        status, bound = _journal(trial, cell, native)
+        observation, bound = _journal(trial, cell, native)
     except Incomplete as error:
-        return "journal_incomplete", native.grade, None, str(error)
+        observation, note = "journal_incomplete", str(error)
     except (Invalid, SeatCutInvalid) as error:
-        return "journal_invalid", native.grade, None, str(error)
-    return status, native.grade, bound, None
+        observation, note = "journal_invalid", str(error)
+    if disposition.kind == "agent_timeout":
+        status, reason = "native_error", disposition.reason
+    else:
+        status, reason = observation, note
+    return Outcome(status, native.grade, bound, reason, disposition, observation, note)
 
 
 def _roster(team: dict[str, Record]) -> str:
@@ -561,6 +612,27 @@ def _roster(team: dict[str, Record]) -> str:
     }
     assert kinds and kinds <= {"scripted", "named"}
     return kinds.pop() if len(kinds) == 1 else "mixed"
+
+
+def _check_outcome(outcome: Outcome) -> None:
+    kind = outcome.disposition.kind
+    timed_out = outcome.disposition.timed_out
+    assert outcome.status in STATUSES and kind in DISPOSITIONS
+    assert outcome.observation in OBSERVATIONS
+    assert (outcome.bound is not None) == (outcome.observation in BOUND_STATUSES)
+    assert outcome.observation != "unobserved_control" or outcome.grade is not None
+    assert (kind == "unknown") == (outcome.status in UNADMITTED)
+    if kind in ("unknown", "other_error"):
+        assert timed_out is None and outcome.observation == "unavailable"
+    if kind == "unknown":
+        assert outcome.grade is None
+    if kind == "other_error":
+        assert outcome.status == "native_error"
+    if kind == "clean":
+        assert timed_out == () and outcome.status == outcome.observation
+    if kind == "agent_timeout":
+        assert timed_out and outcome.status == "native_error"
+        assert outcome.grade is not None and outcome.observation != "unavailable"
 
 
 def _row(
@@ -573,30 +645,41 @@ def _row(
 ) -> Record:
     row: Record = {field: cell[field] for field in CELL_FIELDS}
     row["roster"] = _roster(team)
-    grade: int | None = None
-    bound: Record | None = None
-    reason: str | None = None
     if cell["ticket"] in quarantined:
-        status, reason = (
+        outcome = Outcome(
             "duplicate_id",
+            None,
+            None,
             "a native or world id repeats under another ticket",
+            UNKNOWN,
+            "unavailable",
+            None,
         )
     elif not paths:
-        status = "missing"
+        outcome = Outcome("missing", None, None, None, UNKNOWN, "unavailable", None)
     elif len(paths) > 1:
-        status, reason = "ambiguous", f"{len(paths)} directories claim the ticket"
+        reason = f"{len(paths)} directories claim the ticket"
+        outcome = Outcome("ambiguous", None, None, reason, UNKNOWN, "unavailable", None)
     else:
-        status, grade, bound, reason = _trial(paths[0], cell, team, task, verifier)
-    assert status in STATUSES
-    assert (bound is not None) == (status in BOUND_STATUSES)
-    assert status != "unobserved_control" or grade is not None
-    row.update(status=status, reason=reason, native_grade=grade, bound=bound)
+        outcome = _trial(paths[0], cell, team, task, verifier)
+    _check_outcome(outcome)
+    timed_out = outcome.disposition.timed_out
+    row.update(
+        status=outcome.status,
+        reason=outcome.reason,
+        native_grade=outcome.grade,
+        bound=outcome.bound,
+        native_disposition=outcome.disposition.kind,
+        timed_out_seats=None if timed_out is None else list(timed_out),
+        observation_status=outcome.observation,
+        observation_reason=outcome.observation_reason,
+    )
     return row
 
 
 def _unknowns(rows: list[Record]) -> Record:
     observed = [row for row in rows if row["observe"]]
-    bounded = [row for row in observed if row["bound"] is not None]
+    bounded = [row for row in observed if row["status"] in BOUND_STATUSES]
     identified = sum(row["bound"]["grade_identified"] is True for row in bounded)
     return {
         "observed_cells": len(observed),
@@ -629,7 +712,10 @@ def collect(registration_path: Path, roots: list[Path]) -> Record:
         for cell in cells
     ]
     statuses = Counter(row["status"] for row in rows)
+    dispositions = Counter(row["native_disposition"] for row in rows)
+    observations = Counter(row["observation_status"] for row in rows)
     assert sum(statuses.values()) == len(rows) == len(cells)
+    assert sum(dispositions.values()) == sum(observations.values()) == len(rows)
     return {
         "schema": SCHEMA,
         "task": {
@@ -639,6 +725,8 @@ def collect(registration_path: Path, roots: list[Path]) -> Record:
         "registered": len(rows),
         "statuses": {status: statuses[status] for status in STATUSES},
         "unknowns": _unknowns(rows),
+        "native_dispositions": {kind: dispositions[kind] for kind in DISPOSITIONS},
+        "observation_statuses": {kind: observations[kind] for kind in OBSERVATIONS},
         "directories": directories,
         "cells": rows,
     }
@@ -660,6 +748,11 @@ def _cell_line(row: Record) -> Record:
         "min_grade": bound.get("min_grade"),
         "max_grade": bound.get("max_grade"),
         "grade_identified": bound.get("grade_identified"),
+        "native_disposition": row["native_disposition"],
+        "timed_out_seats": None
+        if row["timed_out_seats"] is None
+        else ",".join(row["timed_out_seats"]) or "none",
+        "observation_status": row["observation_status"],
     }
 
 
@@ -668,6 +761,8 @@ def render(report: Record) -> str:
         "registered": report["registered"],
         **report["statuses"],
         **report["unknowns"],
+        **{f"native_{k}": v for k, v in report["native_dispositions"].items()},
+        **{f"observation_{k}": v for k, v in report["observation_statuses"].items()},
         **{f"{key}_dirs": value for key, value in report["directories"].items()},
     }
     sections = [_tsv([totals]), _tsv([_cell_line(row) for row in report["cells"]])]
