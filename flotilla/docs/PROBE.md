@@ -977,8 +977,9 @@ built and never ran); the smoke uses instance 48.
 `openrouter/nvidia/nemotron-3.5-lightning`, `openrouter/minimax/minimax-m3.1-flash`. Each has a zero-data-retention
 endpoint in OpenRouter's public list (read 2026-11-24 10:50 ET); the account refuses models without one.
 
-**Smoke `rrs`.** Instance 48 x the 2 arms x the 7 models = 14 trials. A model enters `rr1` only if both of its
-smoke trials count (section 7). Only validity and exposure fields are read.
+**Smoke `rrs`.** Instance 48 x the 2 arms x the 7 models = 14 trials. A new model enters `rr1` only if both of its
+smoke trials count (section 7). Luna enters `rr1` in any case, because all 64 of its `rf1v` trials on this set
+counted; its smoke trials still run and are reported. Only validity and exposure fields are read.
 
 **Pilot `rr1`.** The models that pass the smoke, in stages by the staged method above (`flotilla/stages.py` at
 commit b42623b9): order seed 20261125 shuffles instances 0-47 once; stage fractions 0.25, 0.5, 1.0, so each
