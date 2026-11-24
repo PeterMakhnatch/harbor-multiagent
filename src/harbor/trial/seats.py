@@ -13,7 +13,7 @@ container still up.
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from typing import Any, override
 from uuid import UUID
@@ -41,6 +41,7 @@ from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
+from harbor.trial.seat_events import SeatEventRecorder, SeatEventStream
 from harbor.trial.single_step import SingleStepTrial
 from harbor.trial.sync_trajectory import sync_trajectory
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
@@ -118,6 +119,8 @@ class SeatsTrial(SingleStepTrial):
     """SingleStepTrial with one agent per seat, all in the one environment."""
 
     seats: list[Seat]
+    _seat_events: SeatEventRecorder | None = None
+    _seat_events_opened: bool = False
 
     def __init__(
         self,
@@ -136,6 +139,29 @@ class SeatsTrial(SingleStepTrial):
             _trial_id=_trial_id,
         )
         self._seat_error_on_trial = False
+
+    @contextlib.contextmanager
+    def seat_events(self) -> Iterator[SeatEventStream]:
+        """Opt in, before the trial runs, to one in-memory stream of the seats'
+        native play lifecycle. The stream yields its open row at once, a
+        run_enter row as a seat's agent run starts and a play_end row with the
+        seat's execution_disposition when its play ends, then a closed row
+        once this context exits. Exiting early stops recording; it never
+        changes the trial or a seat. A trial opens at most one stream."""
+        if self._seat_events_opened:
+            raise RuntimeError("seat_events() opens at most once per trial")
+        if self._result is not None:
+            raise RuntimeError("seat_events() must open before the trial runs")
+        recorder = SeatEventRecorder(
+            self._id, [(seat.name, seat.under_test) for seat in self.seats]
+        )
+        self._seat_events_opened = True
+        self._seat_events = recorder
+        try:
+            yield SeatEventStream(recorder)
+        finally:
+            self._seat_events = None
+            recorder.close()
 
     @override
     def _init_agent(self) -> None:
@@ -320,6 +346,8 @@ class SeatsTrial(SingleStepTrial):
         error is recorded on the seat and does not stop the others; the trial
         then grades by its error policy, as a single-agent trial does."""
         timeout_sec = self._agent_timeout_sec
+        if (recorder := self._seat_events) is not None:
+            recorder.begin_play()
         tasks = {
             seat.name: asyncio.create_task(self._play_seat(seat)) for seat in self.seats
         }
@@ -358,6 +386,8 @@ class SeatsTrial(SingleStepTrial):
                     async with sync_trajectory(
                         seat.environment, seat.agent, seat.paths.agent_dir
                     ):
+                        if (recorder := self._seat_events) is not None:
+                            recorder.run_enter(seat.name)
                         await seat.agent.run(
                             instruction=seat.instruction,
                             environment=seat.environment,
@@ -377,6 +407,8 @@ class SeatsTrial(SingleStepTrial):
             execution.finished_at = self._now()
             if not seat.stop_requested:
                 seat.result.execution_disposition = disposition
+            if (recorder := self._seat_events) is not None:
+                recorder.play_end(seat.name, seat.result.execution_disposition)
 
     async def _collect_seats(self) -> None:
         """Mirrors Trial._sync_agent_output for every seat, under test or not."""

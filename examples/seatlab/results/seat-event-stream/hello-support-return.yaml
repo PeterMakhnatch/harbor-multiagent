@@ -1,0 +1,15 @@
+task:
+  path: examples/tasks/hello-seats
+trial_name: observed-hello-team
+trials_dir: ./trials
+environment:
+  type: docker
+  delete: true
+  force_build: false
+participants:
+  - seat: p1
+    import_path: examples.seatlab.workbench.lifecycle_oracle:LifecycleOracle
+    kwargs: {behavior: delay}
+  - seat: p2
+    import_path: examples.seatlab.workbench.lifecycle_oracle:LifecycleOracle
+    kwargs: {behavior: return}
