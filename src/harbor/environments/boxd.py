@@ -338,8 +338,12 @@ class _BoxdComposeOps(DinDComposeOps):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
-        return await self._env._compose_exec(subcommand, timeout_sec=timeout_sec)
+        return await self._env._compose_exec(
+            subcommand, timeout_sec=timeout_sec, env=env
+        )
 
     @override
     async def _host_exec(
@@ -1143,13 +1147,12 @@ class BoxdEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         command: str,
         *,
         cwd: str | None = None,
-        env: dict[str, str] | None = None,
         sudo: bool = False,
     ) -> str:
         """Wrap *command* for boxd's ``exec``, which runs ``/bin/sh -c``.
 
         boxd's exec has no ``user`` or ``cwd`` parameter and lands as the
-        unprivileged ``boxd`` user, so the working directory, environment, and
+        unprivileged ``boxd`` user, so the working directory and
         privilege escalation are all expressed in the command line itself.
         """
         script = command
@@ -1159,9 +1162,6 @@ class BoxdEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         parts: list[str] = []
         if sudo:
             parts.append("sudo")
-        if env:
-            parts.append("env")
-            parts.extend(f"{key}={value}" for key, value in env.items())
         parts.extend(["sh", "-c", script])
         return shlex.join(parts)
 
@@ -1180,8 +1180,9 @@ class BoxdEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         try:
             result = await client.machines.exec(
                 machine_id,
-                self._shell_command(command, cwd=cwd, env=env, sudo=sudo),
+                self._shell_command(command, cwd=cwd, sudo=sudo),
                 timeout=timeout_sec,
+                **({"env": env} if env else {}),
             )
         except BoxdError as exc:
             # The SDK reports an expired `timeout=` as a BoxdError with this
@@ -1332,23 +1333,9 @@ class BoxdEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             flags.extend(["-f", path])
         return flags
 
-    def _docker_parts(self, env_vars: dict[str, str] | None = None) -> list[str]:
-        if self._docker_cmd == "sudo docker":
-            parts = ["sudo", "env"]
-            if env_vars:
-                parts.extend(f"{key}={value}" for key, value in env_vars.items())
-            parts.append("docker")
-            return parts
-        return ["docker"]
-
-    def _compose_cmd(
-        self,
-        subcommand: list[str],
-        *,
-        env_vars_for_sudo: dict[str, str] | None = None,
-    ) -> str:
+    def _compose_cmd(self, subcommand: list[str]) -> str:
         parts = [
-            *self._docker_parts(env_vars_for_sudo),
+            "docker",
             "compose",
             "-p",
             self._compose_project_name,
@@ -1363,20 +1350,21 @@ class BoxdEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
-        env_vars = self._compose_env_vars()
-        if self._docker_cmd == "sudo docker":
+        command = self._compose_cmd(subcommand)
+        env_vars = {**self._compose_env_vars(), **(env or {})}
+        if self._docker_cmd != "sudo docker":
             return await self._vm_exec(
-                self._compose_cmd(subcommand, env_vars_for_sudo=env_vars),
-                cwd="/",
-                timeout_sec=timeout_sec,
+                command, cwd="/", env=env_vars, timeout_sec=timeout_sec
             )
-        return await self._vm_exec(
-            self._compose_cmd(subcommand),
-            cwd="/",
-            env=env_vars,
-            timeout_sec=timeout_sec,
-        )
+        async with self._compose_ops._staged_compose_command(
+            command, env_vars
+        ) as command:
+            return await self._vm_exec(
+                command, cwd="/", sudo=True, timeout_sec=timeout_sec
+            )
 
     async def _stage_resources_compose_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

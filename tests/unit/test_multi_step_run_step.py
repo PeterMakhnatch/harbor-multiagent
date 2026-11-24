@@ -19,7 +19,7 @@ from harbor.models.trial.config import TaskConfig as TrialTaskConfig, TrialConfi
 from harbor.models.trial.error_policy import ErrorPolicyOverride
 from harbor.models.trial.paths import EnvironmentPaths, TrialPaths
 from harbor.models.trial.result import ExceptionInfo, StepResult
-from harbor.trial.errors import AgentTimeoutError
+from harbor.trial.errors import AgentTimeoutError, VerifierTimeoutError
 from harbor.trial.multi_step import MultiStepTrial
 
 
@@ -370,6 +370,36 @@ async def test_step_error_policy_controls_grading(
     )
     assert verifier.await_count == int(grade)
     assert result.exception_info.exception_type == type(error).__name__
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", list(VerifierEnvironmentMode))
+async def test_step_verifier_error_replaces_graded_agent_error(mode) -> None:
+    trial = object.__new__(MultiStepTrial)
+    trial.config = TrialConfig(task=TrialTaskConfig(path=Path(".")))
+    trial._emit = AsyncMock()
+    trial._step_verifier_user = MagicMock(return_value=None)
+    trial._step_verifier_timeout_sec = MagicMock(return_value=10)
+    trial._reset_shared_step_verifier_dirs = AsyncMock()
+    error = VerifierTimeoutError("Verifier execution timed out after 10 seconds")
+    trial._run_shared_verifier = AsyncMock(side_effect=error)
+    trial._run_separate_verifier = AsyncMock(side_effect=error)
+    step = StepConfig(name="agent")
+    result = StepResult(step_name=step.name)
+
+    trial.task = MagicMock()
+    trial._step_agent_timeout_sec = MagicMock(return_value=10)
+    trial._step_agent_user = MagicMock(return_value=None)
+    trial._run_agent_phase = AsyncMock(
+        side_effect=AgentTimeoutError("Agent execution timed out after 10 seconds")
+    )
+    trial._sync_agent_output = AsyncMock()
+    await trial._run_step_agent(step, result, resume=False)
+
+    await trial._run_step_verifier(step, result, artifacts_dir=Path("."), mode=mode)
+
+    assert result.verifier_result is None
+    assert result.exception_info.exception_type == "VerifierTimeoutError"
 
 
 @pytest.mark.asyncio

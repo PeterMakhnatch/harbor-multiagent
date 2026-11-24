@@ -105,9 +105,15 @@ class _PrimeCompose(DinDComposeOps):
 
     @override
     async def _compose_exec(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
-        return await self._host_exec(self._compose_cmd(subcommand), timeout_sec)
+        return await self._env._host_exec(
+            self._compose_cmd(subcommand), env=env, timeout_sec=timeout_sec
+        )
 
     async def _resolve_config(self, variables: dict[str, str]) -> None:
         # Resolve interpolation once on the VM, keeping credentials out of all
@@ -487,10 +493,13 @@ class PrimeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         client, sandbox_id = self._require_sandbox()
         user = user if self._compose else self._resolve_user(user)
         command_env = (env or {}) if self._compose else (self._merge_env(env) or {})
+        home_override = None
         if user is not None and str(user) not in {"root", "0"}:
             # su supplies the account's HOME unless Harbor explicitly overrides it.
             if "HOME" in command_env:
-                command = f"export HOME={shlex.quote(command_env['HOME'])}; {command}"
+                key = f"_HARBOR_HOME_{uuid.uuid4().hex}"
+                home_override = (key, command_env["HOME"])
+                command = f'export HOME="${{{key}}}"; unset {key}; {command}'
             if isinstance(user, int) or str(user).isdigit():
                 command = (
                     f"account=$(id -un {user} 2>/dev/null); "
@@ -509,6 +518,9 @@ class PrimeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             for key, value in command_env.items()
             if self._compose or self._persistent_env.get(key) != value
         }
+        if home_override is not None:
+            key, home = home_override
+            command_env[key] = home
         result = await client.execute_command(
             sandbox_id,
             command,

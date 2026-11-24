@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import math
 import logging
@@ -22,14 +23,21 @@ import re
 import shlex
 import tempfile
 from abc import abstractmethod
-from collections.abc import Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import aclosing
 from pathlib import Path
 from typing import Any, cast, override
 
-from pydantic import Field
+import httpx
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from harbor.constants import MAIN_SERVICE_NAME
-from harbor.environments.base import BaseEnvironment, ExecResult, HealthcheckError
+from harbor.environments.base import (
+    BaseEnvironment,
+    ExecResult,
+    HealthcheckError,
+    OutputStream,
+)
 from harbor.environments.capabilities import (
     EnvironmentCapabilities,
     EnvironmentResourceCapabilities,
@@ -59,6 +67,8 @@ from harbor.environments.docker.compose_env import (
 )
 from harbor.environments.docker.docker import _sanitize_docker_image_name
 from harbor.environments.options import EnvironmentOptions
+from harbor.environments.ssh import SSHAccess, SSHAccessError, StreamHandle, run_local
+from harbor.models.asp import ASPConfig, ASPConnection, ASPIdentityFile
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import (
     EnvironmentConfig,
@@ -82,7 +92,9 @@ try:
         RegistryLogin,
         Sailbox,
         Secret,
+        TcpEndpoint,
     )
+    from sail._core_client import MIN_DISK_GIB, memory_range_gib
 
     _HAS_SAIL = True
 except ImportError:
@@ -124,9 +136,11 @@ def _bash_argv(command: str, cwd: str | None = None) -> list[str]:
 def _registry_logins(docker_config_path: str | Path | None) -> list[RegistryLogin]:
     """The logins in a Docker ``config.json``, for Sail's image builds.
 
-    Each ``auths`` entry becomes a login for its registry host, with the
-    password sent only with the request that uses it. Docker Hub's entry is
-    keyed by its index URL, which is the registry ``docker.io``.
+    Each ``auths`` entry that carries a credential becomes a login for its
+    registry host, with the password sent only with the request that uses it;
+    an entry without one, as Docker writes when a credential helper holds the
+    secret, is skipped. Docker Hub's entry is keyed by its index URL, which is
+    the registry ``docker.io``.
     """
     if not docker_config_path:
         return []
@@ -137,8 +151,10 @@ def _registry_logins(docker_config_path: str | Path | None) -> list[RegistryLogi
             username, _, password = (
                 base64.b64decode(entry["auth"]).decode().partition(":")
             )
-        else:
+        elif entry.get("username") or entry.get("password"):
             username, password = entry.get("username", ""), entry.get("password", "")
+        else:
+            continue
         host = registry.split("://", 1)[-1].split("/", 1)[0]
         logins.append(
             RegistryLogin(
@@ -148,6 +164,15 @@ def _registry_logins(docker_config_path: str | Path | None) -> list[RegistryLogi
             )
         )
     return logins
+
+
+def _qualified_reference(image: str) -> str:
+    """The image reference with its registry host, as Docker resolves it: a
+    reference whose first component is not a host is on Docker Hub."""
+    first, _, rest = image.partition("/")
+    if rest and ("." in first or ":" in first or first == "localhost"):
+        return image
+    return f"docker.io/{image}" if rest else f"docker.io/library/{image}"
 
 
 def _referenced_env_names(text: str) -> set[str]:
@@ -211,11 +236,12 @@ class _SailDirect(_SailStrategy):
         if docker_image and should_use_prebuilt_docker_image(
             env.environment_dir, docker_image=docker_image, force_build=force_build
         ):
+            reference = _qualified_reference(docker_image)
             login = max(
                 (
                     login
                     for login in env._registry_logins
-                    if docker_image.startswith(f"{login.prefix}/")
+                    if reference.startswith(f"{login.prefix}/")
                 ),
                 key=lambda login: len(login.prefix),
                 default=None,
@@ -449,9 +475,6 @@ class _SailDinD(DinDComposeOps, _SailStrategy):
                 cpu_limit=self._env._resource_limit_value(
                     "cpu", auto_mode=ResourceMode.REQUEST
                 ),
-                memory_request_mb=self._env._resource_request_value(
-                    "memory", auto_mode=ResourceMode.REQUEST
-                ),
                 memory_limit_mb=self._env._resource_limit_value(
                     "memory", auto_mode=ResourceMode.REQUEST
                 ),
@@ -481,11 +504,13 @@ class _SailDinD(DinDComposeOps, _SailStrategy):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a docker compose subcommand on the VM."""
         return await self._env._sdk_exec(
             self._compose_argv(subcommand),
-            env=self._compose_env_vars(),
+            env={**self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
         )
 
@@ -506,19 +531,39 @@ class _SailDinD(DinDComposeOps, _SailStrategy):
                 f"Failed to create the working directory {workdir}: {result.stderr}"
             )
 
+    async def _wait_until(
+        self, what: str, check: Callable[[], Awaitable[ExecResult]]
+    ) -> None:
+        """Run ``check`` every second until it succeeds; on timeout, raise
+        with the last attempt's output."""
+        timeout_sec = self._env._build_timeout_sec
+        result: ExecResult | None = None
+        try:
+            async with asyncio.timeout(timeout_sec):
+                while (result := await check()).return_code != 0:
+                    await asyncio.sleep(1)
+        except TimeoutError:
+            last = (
+                f"{result.stdout or ''}{result.stderr or ''}".strip()
+                if result
+                else "no attempt finished"
+            )
+            raise TimeoutError(
+                f"{what} not ready after {timeout_sec} seconds: {last}"
+            ) from None
+
     async def _wait_for_docker(self) -> None:
         """Wait for the VM's Docker daemon, which starts at boot, to answer."""
-        async with asyncio.timeout(self._env._build_timeout_sec):
-            while (await self._host_exec("docker info")).return_code != 0:
-                await asyncio.sleep(1)
+        await self._wait_until(
+            "The Sailbox's Docker daemon", lambda: self._host_exec("docker info")
+        )
 
     async def _wait_for_main_container(self) -> None:
         """Wait for the main service to take commands."""
-        async with asyncio.timeout(self._env._build_timeout_sec):
-            while (
-                await self._compose_exec(["exec", "-T", MAIN_SERVICE_NAME, "true"])
-            ).return_code != 0:
-                await asyncio.sleep(1)
+        await self._wait_until(
+            "The main service",
+            lambda: self._compose_exec(["exec", "-T", MAIN_SERVICE_NAME, "true"]),
+        )
 
     async def _stage_docker_login(self) -> None:
         """Give the VM's Docker the logins in ``docker_config_path``, as the
@@ -607,8 +652,8 @@ class SailOptions(EnvironmentOptions):
         default="harbor",
         description="Name of the Sail app that owns the Sailboxes.",
     )
-    max_lifetime_seconds: int | None = Field(
-        default=None,
+    max_lifetime_seconds: int = Field(
+        default=172800,
         description="Seconds after creation at which Sail terminates the Sailbox, even if Harbor never stops it.",
     )
     docker_config_path: str | None = Field(
@@ -652,6 +697,7 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         # An egress policy covers the whole VM, so compose services are
         # restricted the same way as a directly run task.
         return EnvironmentCapabilities(
+            stream=True,
             disable_internet=True,
             network_allowlist=True,
             network_allowlist_hostnames=True,
@@ -718,7 +764,8 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
                 created with the same app name share one app, which is created
                 on first use. Default is "harbor".
             max_lifetime_seconds: Seconds after creation at which Sail terminates
-                the Sailbox, even if Harbor never stops it. Default is no limit.
+                the Sailbox, even if Harbor never stops it. Default is 172800
+                (two days).
             docker_config_path: A Docker ``config.json`` whose registry logins
                 pull private images, as the local docker environment uses the
                 host's login: Sail's image build gets them for a
@@ -732,7 +779,11 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         options = self.options
         app_name = options.app_name
         max_lifetime_seconds = options.max_lifetime_seconds
-        docker_config_path = options.docker_config_path
+        docker_config_path = (
+            str(Path(options.docker_config_path).expanduser())
+            if options.docker_config_path
+            else None
+        )
         if not _HAS_SAIL:
             raise MissingExtraError(package="sail", extra="sail")
 
@@ -806,51 +857,43 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         cpus = self._effective_cpus
         memory_mb = self._effective_memory_mb
         storage_mb = self._effective_storage_mb
+        vcpu_count = math.ceil(cpus) if cpus else None
+        memory_range = memory_range_gib(vcpu_count or 1)
+        if memory_range is None:
+            raise ValueError(f"No Sailbox has {vcpu_count} vCPUs")
         app = await App.find.aio(self._app_name, mint_if_missing=True)
-        create_task = asyncio.create_task(
-            Sailbox.create.aio(
-                app=app,
-                image=image,
-                name=self.session_id,
-                vcpu_count=math.ceil(cpus) if cpus else None,
-                memory_limit_gib=math.ceil(memory_mb / 1024) if memory_mb else None,
-                disk_limit_gib=math.ceil(storage_mb / 1024) if storage_mb else None,
-                max_lifetime_seconds=self._max_lifetime_seconds,
-                image_build_timeout=self._build_timeout_sec,
-                egress_policy=self._to_egress_policy(self.network_policy)
-                if egress_policy is None
-                else egress_policy,
-            )
+        self._sailbox = await Sailbox.create.aio(
+            app=app,
+            image=image,
+            name=self.session_id,
+            vcpu_count=vcpu_count,
+            memory_limit_gib=max(memory_range[0], math.ceil(memory_mb / 1024))
+            if memory_mb
+            else None,
+            disk_limit_gib=max(MIN_DISK_GIB, math.ceil(storage_mb / 1024))
+            if storage_mb
+            else None,
+            max_lifetime_seconds=self._max_lifetime_seconds,
+            image_build_timeout=self._build_timeout_sec,
+            egress_policy=self._to_egress_policy(self.network_policy)
+            if egress_policy is None
+            else egress_policy,
         )
-        # Shield the create and, after a cancellation, give it 30 seconds to
-        # finish, so a Sailbox created mid-request has a handle for start()'s
-        # cleanup to terminate.
-        try:
-            self._sailbox = await asyncio.shield(create_task)
-        except asyncio.CancelledError:
-            try:
-                self._sailbox = await asyncio.wait_for(create_task, timeout=30)
-            except (asyncio.CancelledError, Exception):
-                create_task.cancel()
-            raise
 
     async def _release_sailbox(self, delete: bool) -> None:
         if not self._sailbox:
             return
         sailbox = self._sailbox
+        if delete:
+            await sailbox.terminate.aio()
+        else:
+            await sailbox.sleep.aio()
+            self.logger.debug(
+                f"Put Sailbox {sailbox.sailbox_id} to sleep because "
+                f"delete=False; reopen it with `sail box shell "
+                f"{sailbox.sailbox_id}`."
+            )
         self._sailbox = None
-        try:
-            if delete:
-                await sailbox.terminate.aio()
-            else:
-                await sailbox.sleep.aio()
-                self.logger.debug(
-                    f"Put Sailbox {sailbox.sailbox_id} to sleep because "
-                    f"delete=False; reopen it with `sail box shell "
-                    f"{sailbox.sailbox_id}`."
-                )
-        except Exception as e:
-            self.logger.warning(f"Failed to stop Sailbox {sailbox.sailbox_id}: {e}")
 
     async def _sdk_exec(
         self,
@@ -859,13 +902,51 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         timeout_sec: int | None = None,
         user: str | int | None = None,
     ) -> ExecResult:
-        result = await self._require_sailbox().run.aio(
-            argv,
-            env=env,
-            timeout=timeout_sec,
-            user=user,
-            output_buffer_bytes=_OUTPUT_BUFFER_BYTES,
-        )
+        sailbox = self._require_sailbox()
+        callback = self._output_callback()
+        if callback is None:
+            result = await sailbox.run.aio(
+                argv,
+                env=env,
+                timeout=timeout_sec,
+                user=user,
+                output_buffer_bytes=_OUTPUT_BUFFER_BYTES,
+            )
+        else:
+            process = await sailbox.exec.aio(
+                argv,
+                env=env,
+                timeout=timeout_sec,
+                user=user,
+                output_mode="pipe",
+                output_buffer_bytes=_OUTPUT_BUFFER_BYTES,
+            )
+
+            async def read_output(
+                chunks: AsyncGenerator[str, None], stream: OutputStream
+            ) -> None:
+                async with aclosing(chunks):
+                    async for chunk in chunks:
+                        await callback(chunk, stream)
+
+            try:
+                try:
+                    async with asyncio.TaskGroup() as group:
+                        group.create_task(read_output(process.stdout, "stdout"))
+                        group.create_task(read_output(process.stderr, "stderr"))
+                    result = await process.wait()
+                except ExceptionGroup as exc:
+                    if len(exc.exceptions) == 1:
+                        raise exc.exceptions[0] from None
+                    raise
+            except BaseException:
+                try:
+                    await process.cancel(force=True)
+                except Exception as exc:
+                    self.logger.warning("Failed to cancel Sailbox command: %s", exc)
+                raise
+            finally:
+                process.close()
         if result.timed_out:
             raise RuntimeError(f"Command timed out after {timeout_sec} seconds")
         if result.stdout_truncated or result.stderr_truncated:
@@ -896,11 +977,45 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
     @override
     async def start(self, force_build: bool) -> None:
         try:
+            if self.stream_enabled and any(
+                policy.network_mode == NetworkMode.NO_NETWORK
+                for policy in [self.network_policy, *self._phase_network_policies]
+            ):
+                raise ValueError(
+                    "Sail stream mode requires SSH ingress and cannot use a no_network policy."
+                )
             await self._strategy.start(force_build)
+            if self.stream_enabled:
+                await self._require_sailbox().enable_ssh.aio()
         except BaseException:
-            # A Sailbox left behind by a failed start would keep billing.
-            await self._release_sailbox(delete=True)
+            try:
+                await self._release_sailbox(delete=True)
+            except Exception as exc:
+                self.logger.warning(
+                    "Failed to terminate Sailbox after start failed: %s", exc
+                )
             raise
+
+    @property
+    @override
+    def stream_handle(self) -> StreamHandle:
+        reference = {"sailbox_id": self._require_sailbox().sailbox_id}
+        if isinstance(self._strategy, _SailDinD):
+            reference.update(
+                project=self._strategy._PROJECT_NAME, service=MAIN_SERVICE_NAME
+            )
+        return StreamHandle(
+            provider=self.type().value,
+            reference=reference,
+            workspace=self.task_env_config.workdir,
+        )
+
+    @classmethod
+    @override
+    def connect_ssh(
+        cls, handle: StreamHandle
+    ) -> contextlib.AbstractAsyncContextManager[SSHAccess]:
+        return _connect_ssh(handle)
 
     @override
     async def stop(self, delete: bool) -> None:
@@ -977,3 +1092,170 @@ class SailEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
     @override
     async def attach(self) -> None:
         await self._strategy.attach()
+
+
+class SailStreamReference(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    sailbox_id: str = Field(min_length=1, max_length=256, pattern=r"^[\w.-]+$")
+    project: str | None = Field(
+        default=None, min_length=1, max_length=256, pattern=r"^[a-z0-9][a-z0-9_-]*$"
+    )
+    service: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$",
+    )
+
+    @model_validator(mode="after")
+    def require_compose_project_and_service(self) -> SailStreamReference:
+        if (self.project is None) != (self.service is None):
+            raise ValueError("Compose SSH access requires both project and service")
+        return self
+
+
+class _SailComposeSSHAccess(SSHAccess):
+    def __init__(
+        self, config: ASPConfig, reference: SailStreamReference, workspace: str | None
+    ):
+        super().__init__(config)
+        self._host = SSHAccess(config.model_copy(update={"workspace": "/"}))
+        self._reference = reference
+        self._workspace = workspace
+        self._container: str | None = None
+
+    @override
+    async def __aenter__(self) -> _SailComposeSSHAccess:
+        await self._host.__aenter__()
+        try:
+            containers = (
+                (
+                    await self._host.run(
+                        shlex.join(
+                            [
+                                "/usr/bin/docker",
+                                "ps",
+                                "-q",
+                                "--filter",
+                                f"label=com.docker.compose.project={self._reference.project}",
+                                "--filter",
+                                f"label=com.docker.compose.service={self._reference.service}",
+                            ]
+                        )
+                    )
+                )
+                .decode()
+                .split()
+            )
+            if len(containers) != 1:
+                raise SSHAccessError(
+                    "Compose SSH access requires exactly one running container for the service"
+                )
+            self._container = containers[0]
+            workspace = self._workspace
+            if workspace is None:
+                workspace = (
+                    json.loads(
+                        (
+                            await self._host.run(
+                                shlex.join(
+                                    [
+                                        "/usr/bin/docker",
+                                        "inspect",
+                                        "--format",
+                                        "{{json .Config.WorkingDir}}",
+                                        self._container,
+                                    ]
+                                )
+                            )
+                        ).decode()
+                    )
+                    or "/"
+                )
+            self.config = self.config.model_copy(update={"workspace": workspace})
+            return self
+        except BaseException:
+            await self._host.__aexit__(None, None, None)
+            raise
+
+    @override
+    async def __aexit__(self, *exc: object) -> None:
+        self._container = None
+        await self._host.__aexit__(*exc)
+
+    @contextlib.asynccontextmanager
+    @override
+    async def process(
+        self, command: str, *, forward: tuple[int, int] | None = None
+    ) -> AsyncIterator[asyncio.subprocess.Process]:
+        if self._container is None:
+            raise SSHAccessError("Compose SSH access must be opened before use")
+        if forward is not None:
+            raise SSHAccessError(
+                "Sail Compose stream access runs commands in the service container; port forwarding is not supported"
+            )
+        wrapped = shlex.join(
+            [
+                "/usr/bin/docker",
+                "exec",
+                "-i",
+                "-w",
+                self.config.workspace,
+                self._container,
+                "sh",
+                "-c",
+                command,
+            ]
+        )
+        async with self._host.process(wrapped) as process:
+            yield process
+
+
+@contextlib.asynccontextmanager
+async def _connect_ssh(handle: StreamHandle) -> AsyncIterator[SSHAccess]:
+    reference = SailStreamReference.model_validate(handle.reference)
+    sailbox = await Sailbox.get.aio(reference.sailbox_id)
+    if sailbox.status != "running":
+        raise SSHAccessError("Sailbox is not running. Resume it before connecting.")
+    listener = await sailbox.listener.aio(22, protocol="tcp")
+    endpoint = listener.endpoint
+    if not isinstance(endpoint, TcpEndpoint):
+        raise SSHAccessError(
+            "Sail SSH access is unavailable. Start the trial with --stream."
+        )
+    host_key = await sailbox.fs.read.aio("/etc/ssh/ssh_host_ed25519_key.pub")
+    config = Config.from_env()
+    with tempfile.TemporaryDirectory(prefix="harbor-sail-ssh-") as temporary:
+        identity = Path(temporary) / "identity"
+        await run_local(
+            "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(identity)
+        )
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{config.sailbox_api_url.rstrip('/')}/v1/ssh/certificate",
+                headers={"Authorization": f"Bearer {config.api_key}"},
+                json={"public_key": identity.with_suffix(".pub").read_text()},
+            )
+            response.raise_for_status()
+        identity.with_name("identity-cert.pub").write_text(
+            response.json()["certificate"]
+        )
+        access_config = ASPConfig(
+            version="0",
+            transport="ssh",
+            connection=ASPConnection(
+                host=endpoint.host,
+                port=endpoint.port,
+                user="root",
+                identity=ASPIdentityFile(file=str(identity)),
+                host_key=" ".join(host_key.decode().split()[:2]),
+            ),
+            workspace=handle.workspace or "/",
+        )
+        access = (
+            _SailComposeSSHAccess(access_config, reference, handle.workspace)
+            if reference.service is not None
+            else SSHAccess(access_config)
+        )
+        async with access:
+            yield access
