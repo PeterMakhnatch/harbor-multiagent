@@ -1,0 +1,175 @@
+{
+  "arms": {
+    "100": {
+      "finance_seen": 24,
+      "protocol_reward": {
+        "0": 1,
+        "1": 23,
+        "unknown": 0
+      },
+      "sales_status": {
+        "accepted": 24,
+        "invalid": 0,
+        "unanswered": 0,
+        "unobserved": 0
+      },
+      "status": {
+        "not_issued": 0,
+        "observed": 24,
+        "predecision": 0,
+        "unobserved": 0
+      }
+    },
+    "160": {
+      "finance_seen": 24,
+      "protocol_reward": {
+        "0": 1,
+        "1": 23,
+        "unknown": 0
+      },
+      "sales_status": {
+        "accepted": 13,
+        "invalid": 10,
+        "unanswered": 1,
+        "unobserved": 0
+      },
+      "status": {
+        "not_issued": 0,
+        "observed": 24,
+        "predecision": 0,
+        "unobserved": 0
+      }
+    }
+  },
+  "checkpoints_matched_within_world": 24,
+  "primary": {
+    "alpha": "1/20",
+    "delivered": {
+      "100": {
+        "false": 0,
+        "true": 24,
+        "unknown": 0
+      },
+      "160": {
+        "false": 11,
+        "true": 13,
+        "unknown": 0
+      }
+    },
+    "discordant": 11,
+    "endpoint": "delivered: verified accepted sales report reached a proven finance request",
+    "p_float": 0.00048828125,
+    "p_one_sided": "1/2048",
+    "pairs": {
+      "both": 13,
+      "long_only": 0,
+      "neither": 0,
+      "short_only": 11,
+      "unknown": 0
+    },
+    "reason": "short delivers more often and p <= alpha",
+    "test": "exact one-sided conditional sign test over discordant pairs",
+    "verdict": "improvement"
+  },
+  "recommend_short_for_this_cohort": false,
+  "schema": "seatlab.report-budget-summary/v1",
+  "secondary": {
+    "commitments": {
+      "100": {
+        "bankruptcies": 0,
+        "committed": 23,
+        "issued": 24,
+        "mean_continuation_profit_usd": "208256.0935",
+        "missing": 1
+      },
+      "160": {
+        "bankruptcies": 0,
+        "committed": 23,
+        "issued": 24,
+        "mean_continuation_profit_usd": "211842.4883",
+        "missing": 1
+      }
+    },
+    "economic_guard": {
+      "met": false,
+      "requires": "all 24 pairs settled and mean short-long >= 0"
+    },
+    "long_wins": 2,
+    "mean_short_minus_long_usd": "43738.0468",
+    "metric": "continuation_profit_usd of the actual stock settlement of each committed finance price, day 90 to closure; exact cents; a missing price is missing, not zero",
+    "pair_deltas_usd": {
+      "0": "0.0000",
+      "11": "0.0000",
+      "12": "61601.2000",
+      "13": "0.0000",
+      "14": "64791.3600",
+      "15": "0.0000",
+      "16": "0.0000",
+      "17": "163930.5700",
+      "18": "113148.9300",
+      "19": "-221411.9400",
+      "2": "439275.1500",
+      "20": "133084.6900",
+      "21": "0.0000",
+      "22": "0.0000",
+      "23": "48319.9500",
+      "3": "0.0000",
+      "4": "-58682.8800",
+      "5": "0.0000",
+      "6": "0.0000",
+      "7": "0.0000",
+      "8": "0.0000",
+      "9": "218180.0000"
+    },
+    "settled_pairs": 22,
+    "short_wins": 8,
+    "ties": 12
+  },
+  "slots": 48,
+  "targets": [
+    100,
+    160
+  ],
+  "usage": {
+    "billing": "not claimed",
+    "by_role_target": {
+      "finance:100": {
+        "issued": 24,
+        "known_client_tokens": 165849,
+        "requests": 24,
+        "unknown_tokens": 1,
+        "verified": 23
+      },
+      "finance:160": {
+        "issued": 24,
+        "known_client_tokens": 196423,
+        "requests": 24,
+        "unknown_tokens": 1,
+        "verified": 23
+      },
+      "sales:100": {
+        "issued": 24,
+        "known_client_tokens": 210381,
+        "requests": 24,
+        "unknown_tokens": 0,
+        "verified": 24
+      },
+      "sales:160": {
+        "issued": 24,
+        "known_client_tokens": 227387,
+        "requests": 24,
+        "unknown_tokens": 1,
+        "verified": 23
+      }
+    },
+    "source": "client-reported usage.total_tokens on verified turns only; not a billing, provider or server attestation",
+    "totals": {
+      "issued": 96,
+      "known_client_tokens": 800040,
+      "requests": 96,
+      "unknown_tokens": 3,
+      "verified": 93
+    }
+  },
+  "worlds": 24
+}

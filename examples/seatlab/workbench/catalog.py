@@ -168,6 +168,17 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="7bc0f088d57527694cca3b14bb65ca609da28eca177d4c5c25f6fd52b4455e32",
     ),
+    Study(
+        id="native-report-budget",
+        question="Does asking sales for a shorter report help it reach finance without costing profit?",
+        kind="native-model-team",
+        guide="examples/seatlab/report-budget.md",
+        module="examples.seatlab.report_budget.panel",
+        argv=(f"{_RESULTS}/report-budget/rows.json",),
+        report=f"{_RESULTS}/report-budget/result.json",
+        exit_code=0,
+        sha256="2f5f10f542a5fc20273c486c922eb38f71f9db7d3fd1fdcabcf48d052cc61bc3",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

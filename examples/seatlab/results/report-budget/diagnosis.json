@@ -1,0 +1,77 @@
+{
+  "arms": [
+    {
+      "accepted_above_prompt_target": 3,
+      "accepted_reason_chars_min_median_max": [
+        85,
+        98.5,
+        128
+      ],
+      "accepted_reports": 24,
+      "finance_choices_matching_delivered_advice": 22,
+      "finance_choices_with_delivered_advice": 23,
+      "other_parse_failures": {},
+      "over_wire_limit": [],
+      "target": 100,
+      "verified_sales_replies": 24
+    },
+    {
+      "accepted_above_prompt_target": 0,
+      "accepted_reason_chars_min_median_max": [
+        133,
+        154,
+        160
+      ],
+      "accepted_reports": 13,
+      "finance_choices_matching_delivered_advice": 12,
+      "finance_choices_with_delivered_advice": 13,
+      "other_parse_failures": {},
+      "over_wire_limit": [
+        {
+          "chars": 163,
+          "world": 0
+        },
+        {
+          "chars": 162,
+          "world": 2
+        },
+        {
+          "chars": 165,
+          "world": 3
+        },
+        {
+          "chars": 162,
+          "world": 9
+        },
+        {
+          "chars": 168,
+          "world": 10
+        },
+        {
+          "chars": 162,
+          "world": 12
+        },
+        {
+          "chars": 168,
+          "world": 14
+        },
+        {
+          "chars": 165,
+          "world": 16
+        },
+        {
+          "chars": 172,
+          "world": 18
+        },
+        {
+          "chars": 162,
+          "world": 20
+        }
+      ],
+      "target": 160,
+      "verified_sales_replies": 23
+    }
+  ],
+  "schema": "seatlab.report-budget-diagnosis/v1",
+  "scope": "Descriptive. Agreement is not decision accuracy or profit."
+}
