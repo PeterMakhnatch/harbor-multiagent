@@ -518,6 +518,34 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="30b1564f8c53eac77c0ab9b6bc2be0829c41e8be68f6ef599c944677ecf097f4",
     ),
+    Study(
+        id="dispatch-native-choices",
+        question="Which accepted dispatch decisions agree with the latest or the last report when their recommendations differ?",
+        kind="secondary-native-receipt-analysis",
+        guide="examples/seatlab/native-model-results.md",
+        module="examples.seatlab.dispatch_opportunity",
+        argv=(
+            "observed",
+            "--report",
+            f"{_RESULTS}/native-model-primary.json",
+            "--sha256",
+            "79eec3d776c0a00d218637aa88f118989cfc3f5b1116db221e88ad57a2da7bb9",
+        ),
+        report=f"{_RESULTS}/dispatch-order/retained-choices.json",
+        exit_code=3,
+        sha256="5c7aab0f4e9f8b3913943ba6dd11c9430be4e7c01da6368ac4be5773b8cda784",
+    ),
+    Study(
+        id="dispatch-order-ready",
+        question="What can the registered same-input and changed-order comparison distinguish before anyone runs a receiver?",
+        kind="native-plan-preflight",
+        guide="examples/seatlab/protocol.md",
+        module="examples.seatlab.dispatch_order",
+        argv=("prepare", "--example", "--draws", "2"),
+        report=f"{_RESULTS}/dispatch-order/prepared.json",
+        exit_code=0,
+        sha256="db8a26aad3f9e2aa4797ebc4f3ed0537bd0ff6bb75f9d2b08b2f0dbad64a2557",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

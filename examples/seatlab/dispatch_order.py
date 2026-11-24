@@ -19,6 +19,8 @@ from .receiver_panel import _print_json, _read_replies, _shard
 
 _MAX_WORLDS = 128
 _MAX_SHIPMENTS = 4096
+_EXAMPLE = "seatlab/results/dispatch-order/registration.json"
+_EXAMPLE_SHA256 = "73c2bef70dc72a4705d3e4e0348481d24bc46a003da53e0930ffe29b7339a75a"
 _MATERIAL = (
     "seatlab/capsule.py",
     "seatlab/dispatch_issue.py",
@@ -104,12 +106,17 @@ def _retained(
 
 
 def _prepare(args: argparse.Namespace) -> tuple[dict[str, Any], list[OrderPair]]:
-    if args.registration is not None:
-        if args.sha256 is None or args.trial_id:
+    registration, pin = args.registration, args.sha256
+    if args.example:
+        if pin is not None:
+            raise ValueError("the released example has its own held source digest")
+        registration, pin = run_panel.EXAMPLES_DIR / _EXAMPLE, _EXAMPLE_SHA256
+    if registration is not None:
+        if pin is None or args.trial_id:
             raise ValueError(
                 "a registration requires its separate --sha256 and accepts no trial ID"
             )
-        source, blocks = _planned(args.registration, args.sha256)
+        source, blocks = _planned(registration, pin)
         origin = "planned_truthful_reports"
     else:
         if args.sha256 is not None:
@@ -155,6 +162,11 @@ def _prepare(args: argparse.Namespace) -> tuple[dict[str, Any], list[OrderPair]]
 
 def _add_source(parser: argparse.ArgumentParser) -> None:
     group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "--example",
+        action="store_true",
+        help="use the released, source-pinned two-world registration; no setup or model needed",
+    )
     group.add_argument(
         "--registration", type=Path, help="source-pinned native Dispatch registration"
     )

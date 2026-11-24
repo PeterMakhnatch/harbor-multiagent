@@ -16,13 +16,14 @@ This branch combines the [team operator](examples/seatlab/workbench/team-account
 git clone --depth 1 --branch seatlab/offline-team-receipts https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
 python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete ship-decision-evidence ship-worker-plans
+python3.12 -BS -m examples.seatlab.workbench verify dispatch-native-choices dispatch-order-ready
 ```
 
 The first two reports show what changes when one worker is missing or all workers return. They keep archived model teams separate from scripted controls. The shipping report asks a different question: did the receiver have a usable parcel reference before deciding? The original runs did not record whether the receiver cited it. The [new benchmark](examples/seatlab/decision_receipt/README.md) records the citation separately from the delivery outcome. Preparing its four control configurations does not run them.
 
 To see why the **same two-seat decisions** can earn different rewards, [inspect two saved shipping controls](examples/seatlab/decision_receipt/README.md#compare-two-saved-decisions). The decision card shows the sender's handoff, the receiver's accepted action, and what the supplier did afterward. No seat runs.
 
-To design a new comparison without paying for teams, [prepare the Dispatch report-order benchmark](examples/seatlab/protocol.md#isolate-report-order-without-changing-what-the-sender-said). It gives independent receivers the same two reports in opposite orders. To diagnose a finished team, [inspect native choices and both role receipts](examples/seatlab/native-model-results.md#check-one-private-native-trial). Neither command calls a model.
+To design a new comparison without paying for teams, run `python3.12 -BS -m examples.seatlab.workbench order prepare --example --draws 2`. The [Dispatch benchmark](examples/seatlab/protocol.md#isolate-report-order-without-changing-what-the-sender-said) changes only the order of two peer reports. Its [worker handoff](examples/seatlab/protocol.md#reserve-work-once-when-multiple-operators-share-a-machine) can prevent duplicate local dispatch. To diagnose a finished team, [inspect native choices and both role receipts](examples/seatlab/native-model-results.md#check-one-private-native-trial). None of these commands calls a model.
 
 `list` shows all studies. `verify` with no names checks the entire catalog. Both commands work offline after cloning and need no Harbor install, Docker, or model key.
 

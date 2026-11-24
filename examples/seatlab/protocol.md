@@ -73,6 +73,8 @@ After a team returns, use the [retained-choice diagnostic](native-model-results.
 
 **Question:** Does a receiver choose a different bay when the same two peer reports arrive in the opposite order? The native `fresh` arm omits the old report. A `fresh` versus `reordered` grade alone cannot isolate order.
 
+For a packaged example, run `python3.12 -BS -m examples.seatlab.workbench order prepare --example --draws 2`. The [public registration](results/dispatch-order/registration.json) produces the [prepared panel](results/dispatch-order/prepared.json). This uses neither a private job folder nor a model. The 8 worker inputs total 19,192 canonical UTF-8 bytes. There are no receiver observations in that file.
+
 Start with the `$packet` and `$pin` from [the registration above](#review-a-dispatch-panel-without-running-it). These commands generate inputs only. They do not start a receiver.
 
 ```sh
@@ -111,6 +113,8 @@ order score --draws 2 --panel-sha256 "$repeat_pin"  # exit 3: 8 replies missing
 
 Each ordering gets 2 fresh sessions with identical messages and different request IDs. In successive waves, one world uses chronological, reversed, reversed, chronological. The next world uses the opposite sequence. Give the receiver only its own messages. Keep the model, settings and first-reply policy fixed. The scorer cannot verify which model or session produced a reply.
 
+Waves specify dispatch order, not elapsed time. If time is part of the design, finish one wave before releasing the next. The queue does not impose a cross-machine barrier.
+
 For each shipment, the scorer compares both pairs with identical inputs and all 4 pairs with opposite orderings. It reports disagreement on all shipments and on the subset where the two reports recommend different bays. These comparisons reuse answers. They are not independent trials. The primary descriptive contrast is the cross-order disagreement rate minus the same-order disagreement rate, averaged with equal weight per world. It can be negative. The full-panel contrast stays null until every registered world returns all 4 valid replies. Worlds with no informative shipments do not enter the informative contrast. This is not an estimate of team reward.
 
 #### Reserve work once when multiple operators share a machine
@@ -126,7 +130,7 @@ order claim --draws 2 --panel-sha256 "$repeat_pin" --wave 0 --shard 0/2 \
 order status --draws 2 --panel-sha256 "$repeat_pin" --spool "$root/claims"
 ```
 
-The request and byte limits apply to the **whole registered panel**, even for one shard of one wave. `prepare` reports the UTF-8 byte count of the canonical message arrays. This is not a token count or a price. `claim` exits `1` without reserving or printing a request if either limit is too low. It does not contact a provider.
+The limits apply to the **whole registered panel**, even for one shard of one wave. `prepare` counts the canonical UTF-8 bytes of the message arrays. It does not count model tokens or quote a price. `claim` exits `1` without reserving or printing anything if either limit is too low. These limits apply to requests issued by this coordinator. They do not cap an external launcher's retries, provider charges, or other jobs.
 
 `claim` persists a subject reservation before printing a worker request. If operators contend for the same subject, only one gets its request. A repeated claim succeeds with empty output for subjects already reserved. A crash after reservation but before delivery leaves an unresolved reservation. This prevents automatic duplicate handoffs; it does **not** prove delivery, payment, exactly-once execution, or model identity. Do not delete claims or create another spool to retry.
 
