@@ -10,15 +10,17 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 ## SeatLab workbench
 
-Check the published SeatLab study reports from one fresh checkout. Start here:
+Use this fork branch to inspect real team traces, replay published studies, or assign new native trials to independent workers. Start with an offline check:
 
 ```sh
-git clone --depth 1 --branch experiments/seatlab-workbench https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch seatlab/team-operator-workbench https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
-python3.12 -BS -m examples.seatlab.workbench verify
+python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete
 ```
 
-`verify` checks every registered study. `list` shows the studies. `verify peer-fanin private-pricing` checks only the named studies. After the clone, the workbench works offline. It needs no Harbor install, Docker, model key, or model call.
+The first profile withholds one worker. The second includes all workers and adds verified timeouts to the archived population. Both keep **archived model teams** separate from **scripted native controls**. See [the team-return operator](examples/seatlab/workbench/team-return.md) to read the findings, change the inputs, or run your own team.
+
+`list` shows all studies. `verify` with no names checks the entire catalog. After the clone, the workbench works offline. It needs no Harbor install, Docker, model key, or model call.
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
 
@@ -52,7 +54,7 @@ To let **two operators collect separate four-seat teams**, use the [campaign com
 
 To **repeat a whole business panel**, give each worker [one of two company shards](examples/seatlab/market-handoff.md#run-or-verify-a-separate-repetition). Both workers use the recorded decisions without starting models. To inspect an existing result first, run `python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat reporter-tokens`. The second check shows why the calendar teams used fewer calls but reported more tokens.
 
-The fork homepage and default branch do not include the workbench yet. Use the `experiments/seatlab-workbench` branch above.
+The fork's default branch does not include this workbench. Use `seatlab/team-operator-workbench` for the combined checkout. You do not need to switch branches for the linked studies.
 
 ## SeatLab: test what a receiver can do with a peer report
 

@@ -10,12 +10,17 @@ Kind = Literal[
     "stock-business-counterfactual",
     "native-replay-team",
     "secondary-native-receipt-analysis",
+    "separate-archive-and-scripted-cohorts",
 ]
 
 _RESULTS = "examples/seatlab/results"
 _WAIT = f"{_RESULTS}/wait-for-peer"
 _OPERATOR = f"{_WAIT}/operator-example"
 _HANDOFF = f"{_RESULTS}/market-handoff"
+_WORK_BOOKS = "examples/seat_handoffs/samples"
+_WORKER = "examples/seat_seals/samples/workers/paired"
+_RETURN_GUIDE = "examples/seatlab/workbench/team-return.md"
+_RETURN_MODULE = "examples.seatlab.workbench.team_return"
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,6 +172,45 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_HANDOFF}/native-repeat-score.json",
         exit_code=0,
         sha256="7bc0f088d57527694cca3b14bb65ca609da28eca177d4c5c25f6fd52b4455e32",
+    ),
+    Study(
+        id="team-return-partial",
+        question="What model work followed a peer return, and what remains known when one native worker has not reported?",
+        kind="separate-archive-and-scripted-cohorts",
+        guide=_RETURN_GUIDE,
+        module=_RETURN_MODULE,
+        argv=(
+            f"{_WORK_BOOKS}/post-return-completed.json",
+            f"{_WORKER}/plan.json",
+            f"{_WORKER}/worker-0.json",
+            f"{_WORKER}/worker-1.json",
+            "--json",
+        ),
+        report=f"{_RESULTS}/seat-return-operator/partial.json",
+        exit_code=0,
+        sha256="d6a62489ebe831f00362c657db8e5bcf2bbdb589615f81fafd084ba649d07eab",
+    ),
+    Study(
+        id="team-return-complete",
+        question="What do all native worker packets establish next to a timeout-inclusive archive with explicit clock margins?",
+        kind="separate-archive-and-scripted-cohorts",
+        guide=_RETURN_GUIDE,
+        module=_RETURN_MODULE,
+        argv=(
+            f"{_WORK_BOOKS}/post-return-with-timeouts.json",
+            f"{_WORKER}/plan.json",
+            f"{_WORKER}/worker-0.json",
+            f"{_WORKER}/worker-1.json",
+            f"{_WORKER}/worker-2.json",
+            "--guard-ms",
+            "5000",
+            "--board-clock-ms",
+            "1000",
+            "--json",
+        ),
+        report=f"{_RESULTS}/seat-return-operator/complete.json",
+        exit_code=0,
+        sha256="944b4a0302b6441c80ee1e1775aabd3bb23a7345e9f1a78586ecae822eaff33f",
     ),
 )
 

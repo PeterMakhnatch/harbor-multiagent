@@ -8,7 +8,7 @@ from typing import Any, cast
 from .core import MAX_LOG_BYTES, reject_constant, unique_object
 
 
-def read_record(path: Path, limit: int = MAX_LOG_BYTES) -> dict[str, Any] | None:
+def _read_bytes(path: Path, limit: int) -> bytes | None:
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
@@ -19,6 +19,10 @@ def read_record(path: Path, limit: int = MAX_LOG_BYTES) -> dict[str, Any] | None
         data = handle.read(limit + 1)
     if len(data) > limit:
         raise ValueError("record exceeds its size bound")
+    return data
+
+
+def _parse(data: bytes) -> dict[str, Any]:
     try:
         record = json.loads(
             data.decode("utf-8"),
@@ -30,6 +34,21 @@ def read_record(path: Path, limit: int = MAX_LOG_BYTES) -> dict[str, Any] | None
     if not isinstance(record, dict):
         raise ValueError("record is not a JSON object")
     return cast(dict[str, Any], record)
+
+
+def read_record(path: Path, limit: int = MAX_LOG_BYTES) -> dict[str, Any] | None:
+    data = _read_bytes(path, limit)
+    return None if data is None else _parse(data)
+
+
+def read_record_with_digest(
+    path: Path, limit: int
+) -> tuple[dict[str, Any], str] | None:
+    data = _read_bytes(path, limit)
+    if data is None:
+        return None
+    record = _parse(data)
+    return record, hashlib.sha256(data).hexdigest()
 
 
 def record_digest(record: dict[str, Any]) -> str:

@@ -33,10 +33,12 @@ from ..seat_checkpoints.collect import (
     WORLD_LOG as WORLD_LOG,
     _host,
     _marker_log,
-    _native_error,
+    _message_file,
     _prefixes,
     _roster,
 )
+from ..seat_checkpoints.native_timeout import Disposition, deadline_seconds
+from ..seat_checkpoints.native_timeout import classify as native_disposition
 from ..shift_board.collect import (
     CONFIG,
     CUT,
@@ -305,6 +307,21 @@ def _graded(
     )
 
 
+def _error_reason(disposition: Disposition) -> str | None:
+    assert disposition.kind in ("clean", "agent_timeout", "other_error")
+    if disposition.kind == "clean":
+        assert disposition.timed_out == () and disposition.reason is None
+        return None
+    assert disposition.reason is not None
+    if disposition.kind == "other_error":
+        assert disposition.timed_out is None
+        assert disposition.reason.startswith("native error recorded for ")
+        return disposition.reason
+    assert disposition.timed_out
+    named = " and ".join(("trial", *disposition.timed_out))
+    return f"native error recorded for {named}; agent timeout: {disposition.reason}"
+
+
 def _native(
     trial: Path,
     cell: Record,
@@ -315,7 +332,13 @@ def _native(
     result = strict_object(read_bytes(trial, RESULT, MAX_RESULT_BYTES), "result.json")
     native_id = _check_result(result, cell, team, task)
     _attempt(trial, cell, native_id, task["files"])
-    error = _native_error(result)
+    disposition = native_disposition(
+        result,
+        SEATS,
+        deadline_seconds(False),
+        _message_file(trial) if result.get("exception_info") is not None else None,
+    )
+    error = _error_reason(disposition)
     config = strict_object(read_bytes(trial, CONFIG, MAX_CONFIG_BYTES), "config.json")
     _check_config(config, cell, team, "config.json")
     lock = strict_object(read_bytes(trial, LOCK, MAX_CONFIG_BYTES), "lock.json")

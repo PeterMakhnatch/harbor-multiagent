@@ -156,6 +156,8 @@ The [registered question](samples/schedule-seat-exit-question.json) fixes the te
 
 You can now [replay the same real teams from public shards](portable-exit.md) without Docker, private trials or a model key. Try changing the clock allowance or omitting one worker's shard. At 1 second, losing one shard made as many as 4 *remaining* teams' grades less certain.
 
+To see what the continuing model actually recorded, run the [post-return work report](post-return-work.md). It separates certain, crossing and unplaced tokens. A missing meter does not remove the team's grade.
+
 ## Add an instrumented world
 
 Start with the [reference producer](../tasks/revised-dispatch/environment/world.py) and [verifier](../tasks/revised-dispatch/tests/verify.py). The producer declares the possible message/receiver edges at startup. It records only the first send, reply prepared, and optional acknowledgement for each relevant edge. Each receiver can make one irreversible commit. A monotonically increasing `seq` orders the events within one world instance. Use symbolic message IDs, never message bodies or secrets.
