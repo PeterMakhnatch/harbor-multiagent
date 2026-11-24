@@ -136,6 +136,22 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="6f88f500316f8f8439e304d25e6efb131034d73d1b94ac2d9195ae9f1253a08d",
     ),
+    Study(
+        id="native-business-repeat",
+        question="Can another operator reproduce all recorded choices and stock grades in new native trials?",
+        kind="native-replay-team",
+        guide="examples/seatlab/market-handoff.md",
+        module="examples.seatlab.market_handoff.native_repeat_panel",
+        argv=(
+            "score",
+            _HANDOFF,
+            f"{_HANDOFF}/native-panel.json",
+            f"{_HANDOFF}/native-repeat-receipts.json",
+        ),
+        report=f"{_HANDOFF}/native-repeat-score.json",
+        exit_code=0,
+        sha256="7bc0f088d57527694cca3b14bb65ca609da28eca177d4c5c25f6fd52b4455e32",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

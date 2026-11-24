@@ -193,3 +193,53 @@ The runner now rejects an invalid command file before it creates trial state. In
 **Pass/fail.** Require 24 native IDs that differ from each other and from every original. For all 48 seats, match the delivered prompts and the choices. Also require all 24 native rewards, company prefixes and selected stock outcomes to match. Withhold the full-panel conclusion if an arm is absent or if one comparison fails. Keep every first attempt. Separately, require the workstation's portable gate to admit business and calendar workers without changing their interfaces. Preserve the site's existing 2-trial cap on every Docker command.
 
 **Separate clean-environment check.** Install the fork's locked dependencies into a new private Python environment. Use it to execute world 0, own sales view, once more. Require the original recorded choices, a new native ID and the real stock grade, including a legitimate zero. Then give a fresh four-seat calendar (1255, certified-stop arm) to the supported signed-in reporters and local booker. Require a native grade and independent owner evidence for each reporter actually requested. Keep missing or wrong first outcomes. This checks portability across benchmarks, not a model or policy effect. Do not use API keys or paid fallback.
+
+### Run or verify a separate repetition
+
+To verify the **original** business study offline, use `python3.12 -BS -m examples.seatlab.workbench verify native-business-replay`. This re-scores published receipts; it does not start teams.
+
+To collect **new native receipts**, complete the [workbench's native setup](../../README.md#seatlab-workbench). Run the following from the checkout root. Use a new, empty private directory. Give both operators the same value of `campaign`:
+
+```sh
+d=examples/seatlab/results/market-handoff
+m=examples.seatlab.market_handoff
+campaign=$(cd "$(mktemp -d)" && pwd -P)
+```
+
+Give the first operator `shard=0/2` and the second `shard=1/2`. Each runs this command once:
+
+```sh
+python3.12 -BS -m "$m.native_panel_work" "$d" "$campaign" \
+  --shard "$shard" --include-anchors \
+  --harbor-python "$HARBOR_PYTHON" --slot-wrapper "$SLOT_WRAPPER"
+```
+
+Without `--include-anchors`, the worker uses the 2 original receipts. With it, all 24 company/arm pairs require new native executions. Rerunning the command recognizes completed trials; it does not issue them again. It preserves incomplete first attempts. No model call is needed.
+
+Check one fresh trial against its original:
+
+```sh
+python3.12 -BS -m "$m.native_repeat" "$d" "$d/native-panel.json" \
+  "$campaign/market-00-own-replay"
+```
+
+An original trial cannot verify as its own repetition. The tool checks the two delivered views and prompts, the two choices and the grade. It expects a different native ID. It does not require the paths, raw configuration bytes or timestamps to stay the same.
+
+After both workers finish, collect and score their fresh trial directories:
+
+```sh
+python3.12 -BS -m "$m.native_repeat_panel" collect "$d" "$d/native-panel.json" \
+  "$campaign"/market-*-replay > "$campaign/new-receipts.json"
+python3.12 -BS -m "$m.native_repeat_panel" score "$d" "$d/native-panel.json" \
+  "$campaign/new-receipts.json"
+```
+
+The scorer withholds the paired result if a company or arm is missing, duplicated or wrong. It rejects an original receipt presented as a fresh one. It reports prompt agreement separately from reward agreement. Redacted receipts let readers check the claims against the released decisions. They do not authenticate a remote runner. An owner can verify the underlying native files with `collect`.
+
+**Full-panel result.** The 24 new native IDs were distinct from each other and from all 24 originals. All 48 delivered role prompts and choices matched. All 24 stock rewards matched, including 11 actual zeros. The recorded decisions still gave 3 wins, 1 loss and 8 ties across 12 companies; the mean own-minus-donor difference was 0.00455. The two business workers shared local capacity with a four-seat calendar. Native timestamps showed at most 2 active trials. This is an independent execution of the same sealed decisions, not 24 fresh model samples.
+
+Verify the [fresh receipts](results/market-handoff/native-repeat-receipts.json) against the [published report](results/market-handoff/native-repeat-score.json) without Docker or a model account:
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat
+```

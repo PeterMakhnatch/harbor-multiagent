@@ -295,8 +295,9 @@ def work(
     roots.append((campaign, "CAMPAIGN"))
     shard, count = args.shard
     mine = [name for index, name in enumerate(CASES) if index % count == shard]
-    report["reused"] = [name for name in mine if name in REUSED]
-    report["assigned"] = [name for name in mine if name not in REUSED]
+    reused = () if args.include_anchors else REUSED
+    report["reused"] = [name for name in mine if name in reused]
+    report["assigned"] = [name for name in mine if name not in reused]
     report["unvisited"] = list(report["assigned"])
     fd = os.open(
         campaign / LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600
@@ -352,6 +353,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=range(1, len(CASES) + 1),
         metavar="1..24",
     )
+    parser.add_argument("--include-anchors", action="store_true")
     args = parser.parse_args(argv)
     signal.signal(signal.SIGTERM, terminate)
     signal.signal(signal.SIGHUP, terminate)
