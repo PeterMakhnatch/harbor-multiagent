@@ -219,7 +219,60 @@ def test_missing_cells_and_the_primary_come_from_each_task_set_of_a_two_kind_pla
     assert PA.primary_arms("conformity", argue) == ("talk-quiet", "talk-argue", True)
     unread = plan | {"sets": [s | {"kind": None} for s in plan["sets"]]}  # kinds from the arms
     assert PA.analyse(rows, plan=unread)["missing"] == result["missing"]
-    assert PA.missing_cells(PA.models_plan("m/a"), {}) == []
+    assert PA.missing_cells(PA.models_plan("m/a"), {}, set()) == []
+
+
+def test_several_builds_of_one_kind_get_their_own_cells_summaries_holm_and_names(tmp_path, capsys):
+    def built(label, *args, **kwargs):
+        return row(*args, **kwargs) | {"build": label}
+
+    plain = [built("probe.conformity", "m/a", arm, i, arm == "talk-quiet") for i in range(6)
+             for arm in ("talk-quiet", "talk-wrong")]
+    plain += [built("probe.conformity", "m/b", arm, i, True) for i in range(6) for arm in ("talk-quiet", "talk-wrong")]
+    argue = [built("probe.conformity-commit", "m/a", arm, i, True, started="2026-11-24T01:00:00Z") for i in range(4)
+             for arm in ("talk-quiet", "talk-argue")]
+    verify = [built("probe.verify", "m/a", "talk-quiet", 0, True, kind="verify")]
+    alone = PA.analyse(plain + verify)
+    assert all("build" not in r for r in alone["rows"]) and {r["family"] for r in alone["rows"]} == {
+        "probe.conformity", "probe.verify"}
+    assert all("build" not in s for s in alone["summaries"])
+    both = PA.analyse(argue + plain + verify)
+    assert both["duplicates"] == [] and sum(r["counted"] for r in both["rows"]) == 33
+    assert {(r["family"], r.get("build")) for r in both["rows"]} == {
+        ("probe.conformity", "probe.conformity"), ("probe.conformity-commit", "probe.conformity-commit"),
+        ("probe.verify", None)}
+    names = [(s["kind"], s.get("build"), s["model"]) for s in both["summaries"]]
+    assert names == [("conformity", "probe.conformity", "m/a"), ("conformity", "probe.conformity", "m/b"),
+                     ("conformity", "probe.conformity-commit", "m/a"), ("verify", None, "m/a")]
+    for build, rows in (("probe.conformity", plain), ("probe.conformity-commit", argue)):
+        mine = [s for s in both["summaries"] if s.get("build") == build]
+        assert [{k: v for k, v in s.items() if k not in ("build", "card")} for s in mine] == [
+            {k: v for k, v in s.items() if k != "card"} for s in PA.analyse(rows)["summaries"]]
+    wrong = next(s for s in both["summaries"] if s.get("build") == "probe.conformity" and s["model"] == "m/a")
+    assert wrong["primary"]["p_holm"] == 2 * wrong["primary"]["p"]  # Holm over m/a and m/b of this build only
+    assert wrong["card"].startswith("m/a conformity (probe.conformity): correct talk-quiet 6/6")
+    manifests = {}
+    for label in ("probe.conformity", "probe.conformity-commit"):
+        path = tmp_path / label / "manifest.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({"tasks": {"t0": {"label": label}}}))
+        manifests[label] = str(path)
+    plan_path = tmp_path / "two.json"
+    plan_path.write_text(json.dumps({"name": "two", "models": ["m/a"], "task_sets": [
+        {"manifest": manifests["probe.conformity"], "instances": [0, 6], "arms": ["talk-quiet"]},
+        {"manifest": manifests["probe.conformity-commit"], "instances": [0, 4], "arms": ["talk-quiet", "talk-argue"]}]}))
+    plan = PA.read_plan(plan_path)
+    assert [s["label"] for s in plan["sets"]] == ["probe.conformity", "probe.conformity-commit"]
+    assert PA.primary_arms("conformity", plan, "probe.conformity-commit") == ("talk-quiet", "talk-argue", True)
+    assert PA.primary_arms("conformity", plan, "probe.conformity") == ("talk-quiet", "talk-wrong", False)
+    found = PA.analyse(argue + plain, plan=plan)
+    assert found["missing"] == ["probe.conformity instance 6 talk-quiet m/a",
+                                "probe.conformity-commit instance 4 talk-quiet m/a",
+                                "probe.conformity-commit instance 4 talk-argue m/a"]
+    PA.report(found, [])
+    text = capsys.readouterr().out
+    assert "Holm over the models of a kind per build (several builds of one kind)" in text
+    assert "\n### m/a (probe.conformity-commit)\n" in text and "| conformity (probe.conformity-commit) | talk-argue |" in text
 
 
 def test_wilson_and_sign_test():
