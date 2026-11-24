@@ -54,3 +54,36 @@ The [question and pass criteria](samples/question.json) and [registration](sampl
 | Observation off | 4 | Native rewards were available. No return grade was reported. |
 
 The native evidence identified the grade in **13 of 14** observed trials, but the exact event position in only **12**. See the [per-ticket results](samples/control-outcomes.json) and [finite order qualification](samples/order-outcomes.json). Identification is not a model success rate. The observer can affect timing. No policy interrupted a team, and this study did not measure time or tokens saved. For real teams with no world marks, see the [more limited stock archive analysis](../seat_handoffs/README.md#what-if-a-supervisor-freezes-the-board-when-one-seat-finishes).
+
+## What if a seat times out?
+
+Keep 3 facts separate: **how native play ended**, **what the verifier graded**, and **what the observer can establish about the earlier board**. A timeout is not a completed trial. It is also not automatically a zero or a missing reward.
+
+The [deadline question](samples/timeout-question.json) and [10 tickets](samples/timeout-registration.json) preceded play. The two seats used the same task and unchanged verifier as the 18 controls. A multiplier of `0.05` shortened only the native agent deadline from 600 s to 30 s. The host left selected scripted seats at a gate. Harbor itself timed them out. No seat reported its own timeout.
+
+| Native schedule | Teams | Evidence at planner return | Valid final rewards |
+|---|---:|---|---|
+| Dispatcher acts after return, then times out | 2 | 1 became 0 on `planner-fit`; 0 became 1 on `dispatcher-fit` | 0, 1 |
+| Dispatcher acts before return, then times out | 2 | 0 stayed 0; 1 stayed 1. The peer still ran at return. | 0, 1 |
+| Only the planner times out | 2 | No clean planner return | 0, 1 |
+| Both seats time out | 2 | No clean planner return | 1, 0 |
+| Observation off; dispatcher times out | 2 | No observation | 0, 1 |
+
+All 10 first attempts had `status=native_error` and `native_disposition=agent_timeout`. The verifier supplied 10 valid grades, including 5 successes. The [independent qualification](samples/timeout-outcomes.json) passed 474 checks. It bound the native error, seat order, deadline configuration, actual cancellation receipts, verifier and host/world evidence. The 18 earlier clean controls still produced their original 114-check result.
+
+Use the materialization command above. Then register a new study and run each ticket once:
+
+```bash
+python -B -m examples.seat_checkpoints.register "$work/shift-board-checkpoint" "$work/deadlines.json" --timeout-controls
+mkdir "$work/deadline-trials"
+python3 -BS -c 'import json,sys; print(*(c["ticket"] for c in json.load(open(sys.argv[1]))["cells"]), sep="\n")' "$work/deadlines.json" > "$work/deadline-tickets"
+while IFS= read -r ticket; do
+  python -B -m examples.seat_checkpoints.run "$work/deadlines.json" "$work/shift-board-checkpoint" "$work/deadline-trials" "$ticket"
+done < "$work/deadline-tickets"
+python3 -BS -m examples.seat_checkpoints.collect "$work/deadlines.json" "$work/deadline-trials" --json
+python3 -BS -m examples.seat_checkpoints.qualify_timeouts "$work/deadlines.json" "$work/deadline-trials"
+```
+
+The runner exits successfully when the registered timeout actually occurs. That exit code does **not** mean native play succeeded. Use the collector for native dispositions, graded outcomes, missing tickets, and observation status.
+
+On a copy of a successful native trial, removing its host journal retained the final 1 and the timeout but removed the standing grade. A host journal from another trial or a world marker from another run did the same. An inconsistent timeout record retained the independently graded 1 but classified the error as `other_error`. An unbound deadline, wrong attempt ID, or missing native result supplied no grade. No trial was retried. These are scripted controls, not model timeout rates.

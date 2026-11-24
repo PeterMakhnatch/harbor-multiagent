@@ -1,0 +1,124 @@
+{
+  "schema": "harbor.seat-cut.timeout-question/v1",
+  "question": "When a two-seat native trial reaches its agent deadline, can an operator distinguish a clean target return with later peer work from no target return, while keeping the failed native disposition and the final verifier grade?",
+  "population": "10 first attempts, 5 scripted native schedules crossed with 2 calendar fixtures. One seed, 17. Planner is target. All members are under test. No model, synthetic exception, or policy override. Do not replace missing or invalid attempts.",
+  "task_files": "sha256:9a9d2ff7406aeeecda3c4a0fd09fe82dddb986ff90280f61e4dad6075da87874",
+  "fixtures": [
+    "planner-fit",
+    "dispatcher-fit"
+  ],
+  "target": "planner",
+  "peer": "dispatcher",
+  "rule": "observe",
+  "agent_timeout_multiplier": 0.05,
+  "agent_timeout_seconds": 30.0,
+  "other_deadlines": "The global multiplier stays 1. Only the native collective play deadline changes; the native verifier retains its ordinary deadline.",
+  "arms": {
+    "timeout-peer-after": {
+      "seeds": [
+        17
+      ],
+      "observe": true,
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "timeouts": [
+        "dispatcher"
+      ],
+      "order": "planner returns, dispatcher publishes, dispatcher remains held after decide"
+    },
+    "timeout-peer-before": {
+      "seeds": [
+        17
+      ],
+      "observe": true,
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "timeouts": [
+        "dispatcher"
+      ],
+      "order": "dispatcher publishes and remains held after decide, then planner returns"
+    },
+    "timeout-target": {
+      "seeds": [
+        17
+      ],
+      "observe": true,
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "timeouts": [
+        "planner"
+      ],
+      "order": "dispatcher publishes and returns, planner remains held after publishing"
+    },
+    "timeout-both": {
+      "seeds": [
+        17
+      ],
+      "observe": true,
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "timeouts": [
+        "planner",
+        "dispatcher"
+      ],
+      "order": "planner remains held after publishing; dispatcher remains held before deciding"
+    },
+    "timeout-off": {
+      "seeds": [
+        17
+      ],
+      "observe": false,
+      "planner_gates": [
+        "after_publish"
+      ],
+      "dispatcher_gates": [
+        "before_decide",
+        "after_decide"
+      ],
+      "dispatcher_policy": "publish",
+      "timeouts": [
+        "dispatcher"
+      ],
+      "order": "planner returns, dispatcher publishes and stays held; observer disabled"
+    }
+  },
+  "pass": [
+    "All 10 first attempts are accounted for with the exact registered timeout roles. A run that hits the collective agent deadline remains a failed native trial, never a clean completion.",
+    "All 10 finals are valid and agree with the unmodified native verifier and the replayed full cut. Final grade is 1 on dispatcher-fit only, except timeout-both where the still-standing planner grade is 1 on planner-fit only.",
+    "In both timeout-peer-after cases, a causal bracket identifies the planner grade (1 on planner-fit, 0 on dispatcher-fit), the peer is seen active after return, and the final grade differs.",
+    "In both timeout-peer-before cases, a causal bracket identifies the dispatcher grade at planner return. The peer is seen active after return, but the grade is already final.",
+    "In target-only and both-timeout, the planner has no clean return. No grade at planner return can be reported, even if the native verifier grades the board.",
+    "In timeout-off no observation can be inferred. Keep its verified final and native timeout disposition without imputing the planner grade.",
+    "Independent receipts must identify only native deadline errors, held stages that never opened, and completed gates. A copied journal, incompatible native failure, missing grade, or invalid world evidence cannot produce a qualified success."
+  ],
+  "limits": [
+    "Qualification of a native observation and accounting contract, not real-model behavior. Native failed disposition, final task reward, and partial causal evidence are separate. No estimate of how often timeouts occur.",
+    "Marks can alter scheduling. No synchronized clock, billing or mitigation claim. In a general timeout Harbor may kill active subprocesses; a cancelled seat finish is not a clean return. These scripted controls use a host gate and run no shell command while held."
+  ],
+  "cost_usd": 0,
+  "docker_parallel_max": 2
+}
