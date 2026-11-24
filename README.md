@@ -30,6 +30,22 @@ git fetch --depth 1 origin 71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
 
 This does not switch branches or fetch model data. Live trials also need the fork's Python environment, local Docker and a slot wrapper. Use the [new-cohort commands](examples/seatlab/shared-read.md#run-the-same-comparison-on-eight-new-worlds) to divide calendars among workers. Use the [business worker commands](examples/seatlab/market-operations.md#how-independent-workers-run-this-study) to divide companies. The offline replay does not need these steps.
 
+For native runs, use **uv 0.13.5 or later** and a local Docker daemon. Install the fork into its own project environment. Do not replace your global `harbor` command:
+
+```sh
+uv sync --locked --no-dev --python 3.12
+export HARBOR_PYTHON="$(pwd -P)/.venv/bin/python"
+```
+
+Keep your existing site admission wrapper on a shared Docker host. On a workstation **without** a site wrapper, use the [`local-slot` executable](examples/seatlab/workbench/local-slot):
+
+```sh
+export DOCKER_SLOT="$(pwd -P)/examples/seatlab/workbench/local-slot"
+export SLOT_WRAPPER="$DOCKER_SLOT"
+```
+
+It admits at most 2 foreground commands that use the wrapper, across checkouts on the same machine and user account. It does not limit other users or programs that bypass it. It is not a distributed scheduler.
+
 To use your own seat programs, follow the [four-program calendar example](examples/seatlab/external-seats.md#run-one-team). Each process reads a seat prompt and returns one answer. Harbor grades the team. The connector records what crossed each socket; it does not guess the model, the token count or the bill.
 
 To let **two operators collect separate four-seat teams**, use the [campaign commands](examples/seatlab/reporter-campaign.md#start-two-independent-operators). The workers share one private directory. A valid grade of 0 releases the next arm. An interruption preserves the first attempt and leaves unrelated calendars available. The [eight-calendar reporter study](examples/seatlab/certified-reporters.md) shows why you should measure client tokens as well as the number of sessions.
