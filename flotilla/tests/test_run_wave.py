@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 from datetime import UTC, datetime
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 import pytest
@@ -29,16 +30,17 @@ args = sys.argv[1:]
 config = json.loads(Path(args[args.index("-c") + 1]).read_text())
 task = config["tasks"][0]["path"]
 names = [item["model_name"] for item in config["participants"] if item.get("model_name")]
-model = names[0]
+model = names[0] if names else None
 oracles = [item["seat"] for item in config["participants"] if item["name"] == "oracle"]
 control = json.loads(Path(__CONTROL__).read_text())
-spec = control.get(task + "|" + "|".join(names)) or control[task + "|" + model]
+spec = control.get(task + "|" + "|".join(names)) or control[task + "|" + (model or "oracle")]
 log = Path(__LOG__)
 gate = Path(__GATE__)
 keys = sorted(name for name in os.environ if name.endswith("_API_KEY"))
 with log.open("a") as handle:
     handle.write(json.dumps({"event": "start", "task": task, "model": model, "keys": keys,
                              "env": sorted(os.environ), "job": config["job_name"],
+                             "openrouter_key": os.environ.get("OPENROUTER_API_KEY"),
                              "concurrent": config["n_concurrent_trials"], "t": time.time()}) + "\n")
 if spec["behavior"] == "slow":
     with gate.open("a") as handle:
@@ -55,14 +57,18 @@ if spec["behavior"] == "crash":
 job = Path(config["jobs_dir"]) / config["job_name"] / "trial"
 job.mkdir(parents=True)
 tokens = spec["tokens"]
+oracle_agent = "terminus-2" if spec["behavior"] == "wrong-agent" else "oracle"
+tested = [] if "p1" in oracles else [
+    {"seat": "p1", "exception_info": spec.get("exception"),
+     "agent_result": {"n_input_tokens": tokens["miss"], "n_cache_tokens": tokens["hit"],
+                      "n_output_tokens": tokens["out"], "cost_usd": spec.get("cost_usd")}}]
 result = {"started_at": spec["started_at"], "exception_info": spec.get("exception"),
-          "seat_results": [{"seat": "p1", "exception_info": spec.get("exception"),
-                            "agent_result": {"n_input_tokens": tokens["miss"], "n_cache_tokens": tokens["hit"],
-                                             "n_output_tokens": tokens["out"], "cost_usd": spec.get("cost_usd")}}]
+          "seat_results": tested
                          + [{"seat": seat, "under_test": False, "exception_info": None,
-                             "agent_info": {"name": "oracle", "model_info": None},
+                             "agent_info": {"name": oracle_agent, "model_info": None},
                              "agent_result": {"n_input_tokens": None, "n_cache_tokens": None,
-                                              "n_output_tokens": None, "cost_usd": None}} for seat in oracles]}
+                                              "n_output_tokens": None, "cost_usd": spec.get("oracle_cost")}}
+                            for seat in oracles]}
 (job / "result.json").write_text(json.dumps(result))
 if spec["behavior"] != "invalid":
     (job / "verifier").mkdir()
@@ -81,7 +87,7 @@ if spec["behavior"] != "invalid":
     else:
         rows = [{"seat": item["seat"], "model_name": used} for item in config["participants"]
                 if item["name"] != "oracle"]
-    rows += [{"seat": seat, "name": "oracle", "model_name": None} for seat in oracles]
+    rows += [{"seat": seat, "name": oracle_agent, "model_name": None} for seat in oracles]
     (job / "config.json").write_text(json.dumps({"participants": rows}))
     (job / "verifier" / "score.json").write_text(json.dumps(score))
     (job / "verifier" / "world-state.json").write_text("{}")
@@ -121,7 +127,7 @@ def task_tree(repo: Path, instances: list[int], arms: list[str], seats: tuple[st
     tasks: dict[str, dict] = {}
     root = repo / "tasks"
     agents = "[agents]\n" + "".join(f"{seat} = {{}}\n" for seat in seats)
-    for instance in instances:
+    for instance in dict.fromkeys(instances):
         for arm in arms:
             name = f"t-{instance:06x}-{arm}"
             folder = root / "split" / name
@@ -156,10 +162,12 @@ def write_executable(path: Path, text: str) -> None:
 
 
 class Sources:
-    def __init__(self, prices: dict, balance):
+    def __init__(self, prices: dict, balance, payload: dict | None = None):
         self._prices = prices
         self._balance = balance
+        self._payload = payload
         self.price_calls = 0
+        self.catalog_calls = 0
         self.balance_calls = []
 
     def prices(self, models):
@@ -169,6 +177,12 @@ class Sources:
     def balance(self, provider):
         self.balance_calls.append(provider)
         return self._balance(provider, len(self.balance_calls))
+
+    def catalog(self):
+        self.catalog_calls += 1
+        if self._payload is None:
+            raise RuntimeError("offline")
+        return self._payload
 
 
 def catalog() -> dict:
@@ -189,7 +203,7 @@ def namer_box(tmp: Path) -> int:
 
 
 def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, seats: tuple[str, ...] = ("p1",),
-            tree=None, **extra):
+            tree=None, env_extra: dict[str, str] | None = None, **extra):
     repo = init_repo(tmp)
     if tree is None:
         task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"], seats=seats)
@@ -202,7 +216,8 @@ def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, 
               .replace("__GATE__", json.dumps(str(tmp / "gate"))))
     write_executable(harbor, script)
     write_executable(wrapper, f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {json.dumps(str(tmp / 'wrapper.log'))}\nexec \"$@\"\n")
-    order = RUN.order_of(plan, RUN.resolve_paths(plan, repo))
+    preview = plan if "models" in plan or plan.get("seat_assignments") else {**plan, "models": [None]}
+    order = RUN.order_of(preview, RUN.resolve_paths(preview, repo))
     mapped = {}
     for cell in order:
         spec = dict(behaviors[cell["key"]])
@@ -211,12 +226,12 @@ def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, 
         if cell.get("assignment"):
             spec["assignment"] = cell["assignment"]
         models = cell.get("assignment") or [cell["model"]]
-        mapped[cell["task"] + "|" + "|".join(models)] = spec
+        mapped[cell["task"] + "|" + "|".join(model or "oracle" for model in models)] = spec
     (tmp / "control.json").write_text(json.dumps(mapped))
     (tmp / "gate").write_text("")
     env = {"PATH": os.environ["PATH"], "HOME": str(tmp), "LC_ALL": "C", "MODAL_TOKEN_ID": "modal",
            "DEEPSEEK_API_KEY": "ds", "OPENROUTER_API_KEY": "or", "OPENAI_API_KEY": "no",
-           "HF_TOKEN": "secret", "SSH_AUTH_SOCK": "/tmp/agent.sock"}
+           "HF_TOKEN": "secret", "SSH_AUTH_SOCK": "/tmp/agent.sock", **(env_extra or {})}
     events = RUN.run(path, run_dir=tmp / "run", jobs_dir=tmp / "jobs", harbor=harbor, wrapper=wrapper,
                      sources=sources, base_env=env, namer=lambda _n: f"{namer_box(tmp):06x}", **extra)
     return events, order, path, env
@@ -461,15 +476,31 @@ def test_missing_cache_price_charges_the_input_price():
     assert PRICING.peak_factor(peak) == 2.0 and PRICING.peak_factor(off) == 1.0
 
 
-def test_help_and_example_dry_run():
+def forecast_block(out: str) -> list[str]:
+    """The cost forecast lines of a dry run: one titled block, right after the key line and before the cells."""
+    lines = out.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith("cost forecast"))
+    assert lines[start - 1].startswith("OpenRouter key: ")
+    cells = [index for index, line in enumerate(lines) if line[:1].isdigit()]
+    assert cells and cells == list(range(cells[0], len(lines))) and start < cells[0]
+    block = lines[start:cells[0]]
+    assert all(line.startswith("  ") for line in block[1:])
+    return block
+
+
+def test_help_and_example_dry_run(tmp_path, monkeypatch, capsys):
     help_run = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--help"], capture_output=True, text=True)
     assert help_run.returncode == 0 and "dry-run" in help_run.stdout
-    dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run",
-                          str(FLOTILLA / "plans" / "example.json")], capture_output=True, text=True)
-    assert dry.returncode == 0, dry.stderr
-    assert "reserve $0.10 per trial" in dry.stdout
-    assert "openrouter/qwen/qwen3.8-27b" in dry.stdout
-    assert "start spacing 10.0 s" in dry.stdout
+    assert "--smoke" in help_run.stdout and "--history-jobs" in help_run.stdout
+    offline = Sources({}, lambda *_args: 10.0)
+    monkeypatch.setattr(RUN, "HttpSources", lambda _env: offline)
+    assert RUN.main(["--dry-run", str(FLOTILLA / "plans" / "example.json"), "--history-jobs", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "reserve $0.10 per trial" in out
+    assert "openrouter/qwen/qwen3.8-27b" in out
+    assert "start spacing 10.0 s" in out
+    assert forecast_block(out)
+    assert offline.price_calls == 0 and offline.balance_calls == []
 
 
 def test_starts_are_spaced_in_a_fresh_run_and_on_retry(tmp_path):
@@ -603,7 +634,7 @@ def test_prereg_section_comes_from_the_cited_commit(tmp_path):
     plan = plan_for([0], ["silent"], [DEEPSEEK], concurrency=1)
     path = commit_plan(repo, plan)
     (repo / "docs" / "plan.md").write_text("# something else\n")
-    assert RUN.run(path, dry_run=True) == []
+    assert RUN.run(path, dry_run=True, sources=Sources({}, lambda *_args: 10.0), history_jobs=tmp_path / "none") == []
     bare = init_repo(tmp_path / "bare")
     (bare / "docs").mkdir()
     (bare / "docs" / "plan.md").write_text("# not the section\n")
@@ -625,7 +656,7 @@ def test_prereg_section_comes_from_the_cited_commit(tmp_path):
         raise AssertionError("a section that is only in the working tree must be refused")
 
 
-def test_xm1_dry_run_alternates_families():
+def test_xm1_dry_run_alternates_families(tmp_path, monkeypatch, capsys):
     plan = json.loads((FLOTILLA / "plans" / "xm1.json").read_text())
     sets = []
     for cell in RUN.order_of(plan):
@@ -633,10 +664,11 @@ def test_xm1_dry_run_alternates_families():
             sets.append(cell["task_set"])
     assert sets == [sets[0], 1 - sets[0]] * (len(sets) // 2)
     assert len(sets) == sum(len(item["instances"]) for item in plan["task_sets"])
-    dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run",
-                          str(FLOTILLA / "plans" / "xm1.json")], capture_output=True, text=True)
-    assert dry.returncode == 0, dry.stderr
-    lines = [line for line in dry.stdout.splitlines() if line[:1].isdigit()]
+    monkeypatch.setattr(RUN, "HttpSources", lambda _env: Sources({}, lambda *_args: 10.0))
+    assert RUN.main(["--dry-run", str(FLOTILLA / "plans" / "xm1.json"), "--history-jobs", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert forecast_block(out)
+    lines = [line for line in out.splitlines() if line[:1].isdigit()]
     families = []
     for line in lines:
         family = int(line.split("set ")[1].split(" ")[0])
@@ -827,18 +859,20 @@ def test_scripted_seat_runs_the_oracle_and_costs_nothing(tmp_path):
     assert "scripted seats (oracle agent, no model, cost 0): set 0 p3" in log
 
 
-def test_dry_run_derives_and_prints_the_scripted_seats(tmp_path):
+def test_dry_run_derives_and_prints_the_scripted_seats(tmp_path, monkeypatch, capsys):
     repo = init_repo(tmp_path)
     scripted_build(repo)
     path = commit_plan(repo, scripted_plan([DEEPSEEK]))
-    dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run", str(path)],
-                         capture_output=True, text=True)
-    assert dry.returncode == 0, dry.stderr
-    lines = dry.stdout.splitlines()
+    monkeypatch.setattr(RUN, "HttpSources", lambda _env: Sources({}, lambda *_args: 10.0))
+    assert RUN.main(["--dry-run", str(path)]) == 0
+    out = capsys.readouterr().out
+    lines = out.splitlines()
     assert lines[1] == "scripted seats (oracle agent, no model, cost 0): set 0 p3"
     assert lines[2] == ("guards: stop after 6 invalid trials in a row, overall or for one model; "
                         "provider floors deepseek $1.00 (account balance)")
-    assert sorted(line.split(" ", 1)[1] for line in lines[3:]) == [
+    assert lines[3] == "OpenRouter key: not used"
+    assert lines[4].startswith("cost forecast") and forecast_block(out)[0] == lines[4]
+    assert sorted(line.split(" ", 1)[1] for line in lines if line[:1].isdigit()) == [
         f"set 0 instance 0 talk {DEEPSEEK}", f"set 0 instance 0 talk-liar {DEEPSEEK}"]
     unbuilt = scripted_plan([DEEPSEEK])
     unbuilt["task_sets"][0]["manifest"] = "missing/manifest.json"
@@ -1142,10 +1176,13 @@ def test_one_model_failing_between_working_models_stops_the_wave(tmp_path, monke
     starts = [event["key"] for event in events if event["kind"] == "start"]
     assert starts == [cell["key"] for cell in order[:len(starts)]]
     assert sixth + 1 <= len(starts) <= sixth + concurrency < len(order)
-    line = f"stop: 6 invalid trials in a row for {bad} (last: boom; boom; boom); draining in-flight jobs"
-    assert line in (tmp_path / "wave" / "run" / "progress.log").read_text()
+    count = "6" if concurrency == 1 else "[67]"
+    stop = (rf"stop: {count} invalid trials in a row for {re.escape(bad)} "
+            r"\(last: boom; boom; boom\); draining in-flight jobs$")
+    assert re.search(stop, (tmp_path / "wave" / "run" / "progress.log").read_text(), re.MULTILINE)
     code, log = main_exit(tmp_path / "wave", path, monkeypatch)
-    assert code == 3 and line in log
+    assert code == 3 and re.search(stop, log, re.MULTILINE)
+    assert sixth + 1 <= len(re.findall(r" ET start wave-", log)) <= sixth + concurrency
 
 
 def test_one_failing_seat_assignment_row_stops_the_wave(tmp_path, monkeypatch):
@@ -1200,3 +1237,374 @@ def test_max_invalid_streak_defaults_to_6_and_is_validated(tmp_path):
     assert RUN.guard_line(RUN.load_plan(blob)) == (
         "guards: stop after 2 invalid trials in a row, overall or for one model; "
         "provider floors deepseek $1.00 (account balance)")
+
+
+FREE = "openrouter/qwen/qwen3.8-27b:free"
+OTHER_FREE = "openrouter/meta/llama-5-8b:free"
+SHARED_SECRET = "sk-or-shared-0f9e8d7c"
+FLOTILLA_SECRET = "sk-or-flotilla-7a6b5c4d"
+BOTH_KEYS = {"OPENROUTER_API_KEY": SHARED_SECRET, "FLOTILLA_OPENROUTER_API_KEY": FLOTILLA_SECRET}
+
+
+class Every(dict):
+    """Behaviors for a fake Harbor: the same spec for every cell."""
+
+    def __init__(self, spec: dict):
+        super().__init__()
+        self.spec = spec
+
+    def __missing__(self, key):
+        return self.spec
+
+
+def smoke_plan_for(instances, arms, *, models=None, agent="oracle", concurrency=8, env="modal") -> dict:
+    """A plan a smoke accepts: the oracle agent with models omitted, or :free models. Modal and concurrency 8 show the
+    smoke moving it to Docker and 2 jobs; the cap, reserve and floor show the smoke replacing them."""
+    plan = plan_for(instances, arms, [], concurrency=concurrency, env=env, cap=10.0, reserve=0.5)
+    plan["agent"] = agent
+    plan["budget"]["provider_floors"] = {"openrouter": 1.0}
+    if models is None:
+        del plan["models"]
+    else:
+        plan["models"] = models
+    return plan
+
+
+def assert_no_secret(*roots: Path, text: str = "") -> None:
+    for root in roots:
+        for item in root.rglob("*"):
+            if item.is_file():
+                body = item.read_bytes()
+                assert SHARED_SECRET.encode() not in body and FLOTILLA_SECRET.encode() not in body, item
+    assert SHARED_SECRET not in text and FLOTILLA_SECRET not in text
+
+
+def harbor_starts(tmp: Path) -> list[dict]:
+    rows = [json.loads(line) for line in (tmp / "harbor.jsonl").read_text().splitlines()]
+    return [row for row in rows if row["event"] == "start"]
+
+
+def test_oracle_smoke_runs_the_first_instances_on_docker_for_free(tmp_path):
+    plan = smoke_plan_for([2, 0, 2, 1], ["silent", "talk"])
+    sources = Sources({}, lambda *_args: RUN.Balance(0.0))
+    events, _order, _path, _env = launch(tmp_path / "oracle", plan, Every(spec_for("ok")), sources, smoke=2)
+    assert events[-1]["reason"] == "done" and events[-1]["spent"] == 0
+    assert_invariants(events, concurrency=2, cap=0.0, reserve=0.0)
+    starts = [event for event in events if event["kind"] == "start"]
+    cells = sorted(tuple(json.loads(event["key"])) for event in starts)
+    assert cells == [(0, 0, "silent", None), (0, 0, "talk", None), (0, 2, "silent", None), (0, 2, "talk", None)]
+    assert max(event["in_flight"] for event in starts) <= 2
+    assert all(event["command"][0] == str(tmp_path / "oracle" / "wrapper") for event in starts)
+    assert all(re.fullmatch(r"smoke-wave-[0-9a-f]{6}", event["job"]) for event in starts)
+    assert not any(fnmatchcase(event["job"], "wave-*") for event in starts)
+    assert (sources.price_calls, sources.catalog_calls, sources.balance_calls) == (0, 0, [])
+    ends = [event for event in events if event["kind"] == "end"]
+    assert all(event["valid"] and event["cost"] == 0 and event["source"] == "oracle" for event in ends)
+    assert {event["model"] for event in ends} == {"oracle (no model)"}
+    run_dir = tmp_path / "oracle" / "run-smoke"
+    assert not (tmp_path / "oracle" / "run").exists()
+    saved = json.loads((run_dir / "state.json").read_text())
+    assert (saved["plan"], saved["mode"], saved["smoke"], saved["spent_usd"]) == ("wave-smoke", "smoke", 2, 0.0)
+    for config_path in (run_dir / "configs").glob("*.json"):
+        config = json.loads(config_path.read_text())
+        assert config["environment"]["type"] == "docker"
+        assert [(row["name"], row.get("model_name")) for row in config["participants"]] == [("oracle", None)]
+    for row in harbor_starts(tmp_path / "oracle"):
+        assert row["keys"] == [] and row["openrouter_key"] is None
+        assert "MODAL_TOKEN_ID" not in row["env"] and "HF_TOKEN" not in row["env"]
+    log = (run_dir / "progress.log").read_text()
+    assert "OpenRouter key: not used" in log
+    assert "smoke: first 2 instances of each task set, local docker, concurrency 2, cap $0.00" in log
+
+
+def test_an_oracle_cell_is_valid_only_when_every_seat_ran_the_oracle(tmp_path):
+    plan = smoke_plan_for([0], ["silent"])
+    events, _order, _path, _env = launch(tmp_path / "agent", plan, Every(spec_for("wrong-agent")),
+                                         Sources({}, lambda *_args: 10.0), smoke=1)
+    end = next(event for event in events if event["kind"] == "end")
+    assert end["valid"] is False and end["problem"] == "seat model mismatch"
+    cell = {"instance": 0, "arm": "talk", "model": None}
+    oracle = {"seat": "p1", "name": "oracle", "model_name": None}
+    cases = [
+        ("oracle", [oracle], None, True),
+        ("ran-oracle", [oracle], [{"seat": "p1", "agent_info": {"name": "oracle"}}], True),
+        ("llm-agent", [{**oracle, "name": "terminus-2"}], None, False),
+        ("model", [{**oracle, "model_name": FREE}], None, False),
+        ("ran-other", [oracle], [{"seat": "p1", "agent_info": {"name": "terminus-2"}}], False),
+        ("no-seat", [], None, False),
+    ]
+    for name, participants, seat_results, expected in cases:
+        trial, result = write_trial(tmp_path / name, participants, seat_results)
+        assert RUN.trial_valid(trial, result, cell) is expected, name
+    charged = {"seat_results": [{"seat": "p1", "agent_result": {"cost_usd": 0.01}},
+                                {"seat": "p2", "agent_result": {"cost_usd": None}}]}
+    assert RUN.smoke_charge({"model": None}, charged) == {"cost": 0.01, "estimate": 0.0, "source": "oracle",
+                                                         "flag": "charged"}
+    assert RUN.smoke_charge({"model": FREE, "scripted": ["p1"]}, charged)["cost"] == 0.01
+    assert RUN.smoke_charge({"model": None}, None)["cost"] == 0.0
+
+
+def test_a_free_smoke_passes_the_flotilla_key_and_never_writes_a_key(tmp_path, capsys):
+    plan = smoke_plan_for([0, 1], ["silent", "talk"], models=[FREE], agent="terminus-2", concurrency=2, env="docker")
+    sources = Sources({}, lambda *_args: RUN.Balance(0.0))
+    events, _order, path, env = launch(tmp_path / "free", plan, Every(spec_for("ok", cost_usd=0.0)), sources,
+                                       env_extra=BOTH_KEYS, smoke=1)
+    assert events[-1]["reason"] == "done" and events[-1]["spent"] == 0
+    ends = [event for event in events if event["kind"] == "end"]
+    assert len(ends) == 2 and all(event["valid"] and event["cost"] == 0 for event in ends)
+    assert (sources.price_calls, sources.catalog_calls, sources.balance_calls) == (0, 0, [])
+    for row in harbor_starts(tmp_path / "free"):
+        assert row["openrouter_key"] == FLOTILLA_SECRET and row["keys"] == ["OPENROUTER_API_KEY"]
+        assert "FLOTILLA_OPENROUTER_API_KEY" not in row["env"] and "MODAL_TOKEN_ID" not in row["env"]
+    run_dir = tmp_path / "free" / "run-smoke"
+    for config_path in (run_dir / "configs").glob("*.json"):
+        rows = json.loads(config_path.read_text())["participants"]
+        assert [(row["name"], row["model_name"], row["kwargs"]) for row in rows] == [
+            ("terminus-2", FREE, {"max_turns": 4})]
+    log = (run_dir / "progress.log").read_text()
+    assert "OpenRouter key: FLOTILLA_OPENROUTER_API_KEY (Harbor gets it as OPENROUTER_API_KEY)" in log
+    assert RUN.run(path, dry_run=True, smoke=1, sources=sources, base_env=env, history_jobs=tmp_path / "none") == []
+    captured = capsys.readouterr()
+    assert "OpenRouter key: FLOTILLA_OPENROUTER_API_KEY" in captured.out
+    assert sources.catalog_calls == 0
+    assert_no_secret(run_dir, tmp_path / "free" / "jobs", text=captured.out + captured.err)
+
+
+def test_a_smoke_that_records_spend_stops_new_starts_and_exits_4(tmp_path, monkeypatch):
+    plan = smoke_plan_for([0, 1], ["silent", "talk"], models=[FREE], agent="terminus-2", concurrency=2, env="docker")
+    events, _order, path, env = launch(tmp_path / "paid", plan, Every(spec_for("hold", cost_usd=0.01)),
+                                       Sources({}, lambda *_args: 10.0), env_extra=BOTH_KEYS, smoke=2)
+    assert events[-1]["reason"] == "charged" and events[-1]["spent"] > 0
+    starts = [event for event in events if event["kind"] == "start"]
+    assert 1 <= len(starts) <= 2
+    run_dir = tmp_path / "paid" / "run-smoke"
+    assert "stop: smoke recorded spend $0.0" in (run_dir / "progress.log").read_text()
+    again = RUN.run(path, run_dir=tmp_path / "paid" / "run", jobs_dir=tmp_path / "paid" / "jobs",
+                    harbor=tmp_path / "paid" / "harbor", wrapper=tmp_path / "paid" / "wrapper",
+                    sources=Sources({}, lambda *_args: 10.0), base_env=env, smoke=2,
+                    namer=lambda _n: f"{namer_box(tmp_path / 'paid'):06x}")
+    assert again[-1]["reason"] == "charged"
+    assert [event for event in again if event["kind"] == "start"] == []
+    monkeypatch.setattr(RUN, "run", lambda *_args, **_kw: [{"kind": "stop", "reason": "charged"}])
+    assert RUN.main([str(path), "--smoke"]) == RUN.EXIT_SMOKE_CHARGED == 4
+
+
+def test_a_smoke_refuses_paid_unknown_and_repeated_subjects(tmp_path):
+    blob = tmp_path / "plan.json"
+
+    def refused(plan: dict, smoke: bool = True) -> str:
+        blob.write_text(json.dumps(plan))
+        return refusal(lambda: RUN.load_plan(blob, smoke=smoke))
+
+    def loaded(plan: dict) -> dict:
+        blob.write_text(json.dumps(plan))
+        return RUN.load_plan(blob, smoke=True)
+
+    free = smoke_plan_for([0], ["silent"], models=[FREE], agent="terminus-2")
+    for paid in (OPENROUTER, DEEPSEEK, FREE + " ", "openrouter/:free", "qwen/qwen3.8-27b:free", OPENROUTER + ":freebie",
+                 None):
+        assert "is not free" in refused({**free, "models": [paid]}), paid
+    assert "only on terminus-2, not claude-code" in refused({**free, "agent": "claude-code"})
+    oracle = smoke_plan_for([0], ["silent"])
+    assert loaded(oracle)["models"] == [None]
+    assert loaded({**oracle, "models": [None]})["models"] == [None]
+    assert "takes no model" in refused({**oracle, "models": [FREE]})
+    assert "takes no model" in refused({**oracle, "seat_assignments": [[FREE]]})
+    assert "plan missing models" in refused(oracle, smoke=False)
+    assert "None is not a model pricing.py can price" in refused({**oracle, "models": [None]}, smoke=False)
+    assert "lists a model twice" in refused({**free, "models": [FREE, FREE]})
+    assert "in seat_assignments[0] and [1]" in refused({**free, "seat_assignments": [[FREE, OTHER_FREE],
+                                                                                      [OTHER_FREE, FREE]]})
+    assert "in seat_assignments[0] and [1]" in refused({**free, "seat_assignments": [[FREE, OTHER_FREE],
+                                                                                      [FREE, OTHER_FREE]]})
+    assert loaded({**free, "seat_assignments": [[FREE, FREE], [OTHER_FREE, OTHER_FREE]]})
+    twice = {**free, "task_sets": [{**free["task_sets"][0], "arms": ["silent", "silent"]}]}
+    assert "lists an arm twice" in refusal(lambda: RUN.smoke_plan(twice, 1))
+    docker = {"type": "docker"}
+    RUN.assert_free_config({"environment": docker, "participants": [
+        {"seat": "p1", "name": "oracle"}, {"seat": "p2", "name": "terminus-2", "model_name": FREE,
+                                           "kwargs": {"max_turns": 4}}]})
+    for seat in ({"seat": "p1", "name": "terminus-2", "model_name": OPENROUTER},
+                 {"seat": "p1", "name": "terminus-2"},
+                 {"seat": "p1", "name": "oracle", "model_name": FREE},
+                 {"seat": "p1", "name": "claude-code", "model_name": FREE},
+                 {"seat": "p1", "name": "terminus-2", "model_name": FREE, "kwargs": {"api_base": "http://x"}},
+                 {"seat": "p1", "name": "terminus-2", "model_name": FREE, "model_info": {}}):
+        assert "is not free" in refusal(lambda seat=seat: RUN.assert_free_config(
+            {"environment": docker, "participants": [seat]}))
+    assert "must run on docker" in refusal(lambda: RUN.assert_free_config(
+        {"environment": {"type": "modal"}, "participants": [{"seat": "p1", "name": "oracle"}]}))
+
+
+def test_a_smoke_still_needs_the_committed_plan_its_tasks_the_wrapper_and_a_key(tmp_path):
+    repo = init_repo(tmp_path)
+    task_tree(repo, [0], ["silent"])
+    path = commit_plan(repo, smoke_plan_for([0], ["silent"]))
+    wrapper = tmp_path / "wrapper"
+    write_executable(wrapper, "#!/bin/sh\nexit 9\n")
+    common = {"run_dir": tmp_path / "run", "jobs_dir": tmp_path / "jobs", "harbor": tmp_path / "harbor",
+              "wrapper": wrapper, "sources": Sources({}, lambda *_args: 10.0), "base_env": {"PATH": os.environ["PATH"]}}
+    for bad in (0, -1, True, 1.5):
+        assert "whole number" in refusal(lambda bad=bad: RUN.run(path, smoke=bad, **common))
+    assert "docker wrapper" in refusal(lambda: RUN.run(path, smoke=1, **{**common, "wrapper": tmp_path / "missing"}))
+    path.write_text(path.read_text() + "\n")
+    assert "differs from HEAD" in refusal(lambda: RUN.run(path, smoke=1, **common))
+    git(repo, "checkout", "--", "plan.json")
+    (repo / "tasks" / "manifest.json").rename(repo / "tasks" / "gone.json")
+    assert "is missing" in refusal(lambda: RUN.run(path, smoke=1, **common))
+    free = init_repo(tmp_path / "free")
+    task_tree(free, [0], ["silent"])
+    free_path = commit_plan(free, smoke_plan_for([0], ["silent"], models=[FREE], agent="terminus-2"))
+    for keys in ({}, {"OPENROUTER_API_KEY": "", "FLOTILLA_OPENROUTER_API_KEY": ""}):
+        assert "a :free smoke needs" in refusal(lambda keys=keys: RUN.run(
+            free_path, smoke=1, **{**common, "base_env": {"PATH": os.environ["PATH"], **keys}}))
+    assert not (tmp_path / "run-smoke").exists() and not (tmp_path / "run").exists()
+
+
+def test_smoke_state_stays_apart_from_the_wave_and_from_other_plans(tmp_path):
+    plan = smoke_plan_for([0, 1], ["silent"], models=[FREE], agent="terminus-2", concurrency=1, env="docker")
+    events, _order, path, env = launch(tmp_path / "a", plan, Every(spec_for("ok", cost_usd=0.0)),
+                                       Sources({}, lambda *_args: 10.0), env_extra=BOTH_KEYS, smoke=1)
+    assert events[-1]["reason"] == "done"
+    run_dir, smoke_dir = tmp_path / "a" / "run", tmp_path / "a" / "run-smoke"
+    assert smoke_dir.is_dir() and not run_dir.exists()
+    common = {"jobs_dir": tmp_path / "a" / "jobs", "harbor": tmp_path / "a" / "harbor",
+              "wrapper": tmp_path / "a" / "wrapper", "base_env": env,
+              "namer": lambda _n: f"{namer_box(tmp_path / 'a'):06x}"}
+    again = RUN.run(path, run_dir=run_dir, smoke=1, sources=Sources({}, lambda *_args: 10.0), **common)
+    assert again[-1]["reason"] == "done" and [event for event in again if event["kind"] == "start"] == []
+    assert "holds a smoke run of 1" in refusal(lambda: RUN.run(
+        path, run_dir=run_dir, smoke=2, sources=Sources({}, lambda *_args: 10.0), **common))
+    wave_sources = Sources({FREE: {"prompt": "0", "completion": "0"}}, lambda *_args: 10.0)
+    assert "holds a smoke run of 1" in refusal(lambda: RUN.run(path, run_dir=smoke_dir, sources=wave_sources, **common))
+    assert (wave_sources.price_calls, wave_sources.balance_calls) == (0, [])
+    other = init_repo(tmp_path / "b")
+    task_tree(other, [0], ["silent"])
+    other_path = commit_plan(other, {**smoke_plan_for([0], ["silent"]), "name": "batch"})
+    assert "belongs to plan wave-smoke" in refusal(lambda: RUN.run(
+        other_path, run_dir=run_dir, smoke=1, sources=Sources({}, lambda *_args: 10.0), **common))
+    same_name = init_repo(tmp_path / "c")
+    task_tree(same_name, [0], ["silent"])
+    same_path = commit_plan(same_name, smoke_plan_for([0], ["silent"]))
+    assert "plan file changed" in refusal(lambda: RUN.run(
+        same_path, run_dir=run_dir, smoke=1, sources=Sources({}, lambda *_args: 10.0), **common))
+    assert not run_dir.exists()
+
+
+def test_the_flotilla_key_replaces_the_shared_key_for_harbor_and_the_balance(tmp_path, monkeypatch):
+    shared = {"PATH": "/bin", "OPENROUTER_API_KEY": SHARED_SECRET}
+    both = {"PATH": "/bin", **BOTH_KEYS}
+    assert RUN.key_name(both, "openrouter") == "FLOTILLA_OPENROUTER_API_KEY"
+    assert RUN.key_name({**both, "FLOTILLA_OPENROUTER_API_KEY": ""}, "openrouter") == "OPENROUTER_API_KEY"
+    assert RUN.key_name(both, "deepseek") == "DEEPSEEK_API_KEY"
+    assert RUN.harbor_env(both, [OPENROUTER]) == {"PATH": "/bin", "OPENROUTER_API_KEY": FLOTILLA_SECRET}
+    assert RUN.harbor_env(shared, [OPENROUTER]) == {"PATH": "/bin", "OPENROUTER_API_KEY": SHARED_SECRET}
+    assert RUN.harbor_env(both, [DEEPSEEK]) == {"PATH": "/bin"} == RUN.harbor_env(both, [None])
+    assert RUN.harbor_env({"MODAL_TOKEN_ID": "m"}, [None], keep_modal=False) == {}
+    assert RUN.key_line(both, [OPENROUTER]) == (
+        "OpenRouter key: FLOTILLA_OPENROUTER_API_KEY (Harbor gets it as OPENROUTER_API_KEY)")
+    assert RUN.key_line(shared, [DEEPSEEK, OPENROUTER]) == "OpenRouter key: OPENROUTER_API_KEY"
+    assert RUN.key_line({}, [OPENROUTER]) == (
+        "OpenRouter key: not set (FLOTILLA_OPENROUTER_API_KEY or OPENROUTER_API_KEY)")
+    assert RUN.key_line(both, [DEEPSEEK]) == RUN.key_line(both, [None]) == "OpenRouter key: not used"
+    pages = {"https://openrouter.ai/api/v1/credits": {"data": {"total_credits": 10, "total_usage": 2}},
+             "https://openrouter.ai/api/v1/key": {"data": {"limit": None}}}
+    seen = []
+
+    def fetch(url, headers):
+        seen.append(headers.get("Authorization"))
+        return pages[url]
+
+    monkeypatch.setattr(RUN, "_fetch_json", fetch)
+    assert RUN.HttpSources(both).balance("openrouter").amount == 8
+    assert seen == ["Bearer " + FLOTILLA_SECRET] * 2
+    seen.clear()
+    RUN.HttpSources(shared).balance("openrouter")
+    assert seen == ["Bearer " + SHARED_SECRET] * 2
+    assert "OPENROUTER_API_KEY is not set" in refusal(lambda: RUN.HttpSources({}).balance("openrouter"))
+    requests = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+        def read(self, *_args):
+            return b'{"data": []}'
+
+    def urlopen(request, timeout):
+        requests.append(request)
+        return Response()
+
+    monkeypatch.setattr(RUN.urllib.request, "urlopen", urlopen)
+    assert RUN.HttpSources(both).catalog() == {"data": []}
+    assert requests[0].full_url == RUN.CATALOG_URL and not requests[0].header_items()
+
+    def down(request, timeout):
+        raise OSError("down")
+
+    monkeypatch.setattr(RUN.urllib.request, "urlopen", down)
+    with pytest.raises(RuntimeError, match="could not read"):
+        RUN.HttpSources(both).catalog()
+    monkeypatch.undo()
+    plan = plan_for([0], ["silent"], [OPENROUTER], concurrency=1, env="modal", cap=1.0, reserve=0.01)
+    order = plain_order(tmp_path / "preview", plan)
+    sources = Sources(catalog(), lambda *_args: 10.0)
+    events, _order, _path, _env = launch(tmp_path / "paid", plan, {order[0]["key"]: spec_for("ok", cost_usd=0.01)},
+                                         sources, env_extra=BOTH_KEYS)
+    assert events[-1]["reason"] == "done"
+    row = harbor_starts(tmp_path / "paid")[0]
+    assert row["openrouter_key"] == FLOTILLA_SECRET and row["keys"] == ["OPENROUTER_API_KEY"]
+    assert "FLOTILLA_OPENROUTER_API_KEY" not in row["env"] and "MODAL_TOKEN_ID" in row["env"]
+    assert sources.balance_calls == ["openrouter"] and sources.price_calls == 1
+    log = (tmp_path / "paid" / "run" / "progress.log").read_text()
+    assert "OpenRouter key: FLOTILLA_OPENROUTER_API_KEY (Harbor gets it as OPENROUTER_API_KEY)" in log
+    assert_no_secret(tmp_path / "paid" / "run", tmp_path / "paid" / "jobs")
+
+
+def test_dry_run_prints_the_key_name_then_the_forecast_block_then_the_cells(tmp_path, monkeypatch, capsys):
+    repo = init_repo(tmp_path)
+    task_tree(repo, [0, 1], ["silent", "talk"])
+    path = commit_plan(repo, smoke_plan_for([0, 1], ["silent", "talk"], models=[FREE], agent="terminus-2"))
+    seen = {}
+
+    def forecast(wave, order, repo_dir, history, *, fetch_catalog):
+        seen.update(wave=wave, order=order, repo=repo_dir, history=history, fetch=fetch_catalog)
+        return ["cost forecast (fake)", "  row"]
+
+    monkeypatch.setattr(RUN.PRICING, "forecast_lines", forecast, raising=False)
+    sources = Sources({}, lambda *_args: 10.0, payload={"data": []})
+    assert RUN.run(path, dry_run=True, smoke=1, sources=sources, base_env={"PATH": "/bin", **BOTH_KEYS},
+                   history_jobs=tmp_path / "history") == []
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    assert lines[0].startswith("wave-smoke: 2 cells, reserve $0.00 per trial, cap $0.00")
+    assert lines[1].startswith("smoke: first 1 instances of each task set, local docker, concurrency 2")
+    assert lines[3].endswith("provider floors none")
+    assert lines[4] == "OpenRouter key: FLOTILLA_OPENROUTER_API_KEY (Harbor gets it as OPENROUTER_API_KEY)"
+    assert lines[5:7] == ["cost forecast (fake)", "  row"] == forecast_block(out)
+    assert len(lines) == 9 and all("instance 0 " in line and line.endswith(FREE) for line in lines[7:])
+    wave = seen["wave"]
+    assert (wave["smoke"], wave["budget"]["cap_usd"], wave["make_jobs"]["env"]) == (1, 0.0, "docker")
+    assert len(seen["order"]) == 2 and seen["history"] == tmp_path / "history"
+    assert Path(seen["repo"]).resolve() == repo.resolve()
+    assert "a smoke reads no price catalog" in refusal(seen["fetch"])
+    assert (sources.catalog_calls, sources.price_calls, sources.balance_calls) == (0, 0, [])
+    assert_no_secret(text=out)
+    assert RUN.run(path, dry_run=True, sources=sources, base_env={}, history_jobs=None) == []
+    out = capsys.readouterr().out
+    assert "smoke" not in seen["wave"] and seen["history"] is None and len(seen["order"]) == 4
+    assert seen["fetch"]() == {"data": []} and sources.catalog_calls == 1
+    assert "OpenRouter key: not set (FLOTILLA_OPENROUTER_API_KEY or OPENROUTER_API_KEY)" in out
+
+
+def test_main_reads_smoke_and_history_jobs(monkeypatch):
+    seen = []
+    monkeypatch.setattr(RUN, "run", lambda _plan, **kw: seen.append(kw) or [{"kind": "stop", "reason": "done"}])
+    assert RUN.main(["--smoke=3", "plan.json"]) == 0
+    assert RUN.main(["plan.json", "--smoke"]) == 0
+    assert RUN.main(["plan.json", "--history-jobs", "/tmp/history"]) == 0
+    assert [(item["smoke"], item["history_jobs"]) for item in seen] == [
+        (3, None), (1, None), (None, Path("/tmp/history"))]

@@ -499,6 +499,13 @@ class Providers(Base):
         self.assertIn("provider openrouter no key in environment; floor $2.00", watch.render(status))
         self.assertEqual(sources.calls, 0)
 
+    def test_flotilla_key_alone_reads_openrouter_balance(self):
+        sources = FakeSources(10.0, 3.0)
+        watcher = self.watcher(sources, env={"FLOTILLA_OPENROUTER_API_KEY": "sk-test-flotilla"})
+        [row] = watcher.poll(now=T0)["wave"]["providers"]
+        self.assertEqual((row["amount_usd"], row["level"], row["error"]), (3.0, "WARN", None))
+        self.assertEqual(sources.calls, 1)
+
     def test_state_models_without_plan_and_blind(self):
         balances = watch.Balances(KEYED, FakeSources(10.0, None))
         status = watch.Watcher(self.make_run(plan=False), balances=balances, blind=True).poll(now=T0)

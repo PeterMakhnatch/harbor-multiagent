@@ -22,6 +22,17 @@ lower of the account balance (/api/v1/credits) and the key's own limit left (/ap
 budget.max_invalid_streak (default 6) trials in a row end invalid, in accounting order, overall or counting only one
 model's trials, no new cell starts; the in-flight trials finish and are accounted, and the command exits 3. A rerun
 resumes as usual.
+
+OpenRouter key: FLOTILLA_OPENROUTER_API_KEY when it is set, else OPENROUTER_API_KEY. Harbor gets it as
+OPENROUTER_API_KEY and the balance check reads with it. The dry run and progress.log name the variable, never its value.
+The dry run also prints a cost forecast (pricing.forecast_lines); --history-jobs DIR picks the finished jobs it reads.
+
+--smoke[=N] (default 1) is a free check of a committed plan: the first N distinct instances of each task set, each arm
+and model once per instance, on local Docker through the wrapper (at most 2 jobs), cap and reserve $0, no provider
+floor, no balance or price catalog read. Every subject must be free: Harbor's oracle agent with no model (agent
+"oracle", models omitted or [null]), or an OpenRouter id ending ":free" on terminus-2, with each model in at most one
+seat_assignments row. The run dir ends in -smoke, also with --run-dir. Jobs are named smoke-<plan>-<hex6> so
+they do not match the wave's job patterns. A trial that records spend stops new starts and the command exits 4.
 """
 
 from __future__ import annotations
@@ -49,6 +60,13 @@ ROOT = Path(__file__).resolve().parent
 HARBOR = Path.home() / "Developer/harbor-multiagent-flotilla/.venv/bin/harbor"
 WRAPPER = Path("/tmp/crucible-docker-slot.sh")
 KEYS = {"deepseek": "DEEPSEEK_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+FLOTILLA_KEY = "FLOTILLA_OPENROUTER_API_KEY"
+CATALOG_URL = "https://openrouter.ai/api/v1/models"
+FREE_SUFFIX = ":free"
+FREE_AGENTS = ("terminus-2",)
+FREE_OPTIONS = frozenset({"max_turns"})
+SMOKE_SUFFIX = "-smoke"
+SMOKE_MAX_CONCURRENCY = 2
 KEEP = frozenset({
     "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TERM", "LANG",
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
@@ -75,6 +93,7 @@ JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
 BUDGET_KEYS = frozenset({"cap_usd", "reserve_per_trial_usd", "provider_floors", "max_invalid_streak"})
 MAX_INVALID_STREAK = 6
 EXIT_INVALID_STREAK = 3
+EXIT_SMOKE_CHARGED = 4
 STREAK_KINDS_SHOWN = 3
 SET_KEYS = frozenset({"tasks_dir", "manifest", "instances", "arms", "conditions"})
 
@@ -109,15 +128,51 @@ def used_models(plan: dict) -> list[str]:
     return found
 
 
-def load_plan(path: Path) -> dict:
+def free_model(model) -> bool:
+    """An OpenRouter id that ends in :free (the free variant OpenRouter bills at $0)."""
+    return (isinstance(model, str) and model.startswith("openrouter/") and model.endswith(FREE_SUFFIX)
+            and len(model) > len("openrouter/") + len(FREE_SUFFIX) and not any(ch.isspace() for ch in model))
+
+
+def assert_free(plan: dict) -> None:
+    """A smoke runs only subjects that cost nothing, each model at most once per instance and arm."""
+    if plan["agent"] == "oracle":
+        if plan.get("seat_assignments") or plan.get("models") != [None]:
+            raise SystemExit("refused: a smoke on the oracle agent takes no model: omit models (or use [null]) and "
+                             "seat_assignments")
+        return
+    if plan["agent"] not in FREE_AGENTS:
+        raise SystemExit(f"refused: a smoke runs a :free model only on {', '.join(FREE_AGENTS)}, not {plan['agent']}")
+    for model in used_models(plan):
+        if not free_model(model):
+            raise SystemExit(f"refused: smoke subject {model} is not free (Harbor's oracle agent with no model, or an "
+                             "OpenRouter id ending :free)")
+    rows = plan.get("seat_assignments")
+    if not rows:
+        if len(set(plan["models"])) != len(plan["models"]):
+            raise SystemExit("refused: a smoke plan lists a model twice")
+        return
+    owner: dict[str, int] = {}
+    for index, row in enumerate(rows):
+        for model in dict.fromkeys(row):
+            if model in owner:
+                raise SystemExit(f"refused: {model} is in seat_assignments[{owner[model]}] and [{index}]; a smoke "
+                                 "runs each model at most once per instance and arm")
+            owner[model] = index
+
+
+def load_plan(path: Path, *, smoke: bool = False) -> dict:
     plan = json.loads(path.read_text())
     refuse_unknown(plan, PLAN_KEYS, "plan")
     required = ["name", "prereg", "task_sets", "agent", "make_jobs", "budget", "order_seed"]
-    if "seat_assignments" not in plan:
+    model_less = smoke and plan.get("agent") == "oracle" and "seat_assignments" not in plan
+    if "seat_assignments" not in plan and not (model_less and "models" not in plan):
         required.append("models")
     for field in required:
         if field not in plan:
             raise SystemExit(f"refused: plan missing {field}")
+    if model_less and "models" not in plan:
+        plan["models"] = [None]
     refuse_unknown(plan["prereg"], PREREG_KEYS, "prereg")
     refuse_unknown(plan["make_jobs"], JOB_KEYS, "make_jobs")
     refuse_unknown(plan["budget"], BUDGET_KEYS, "budget")
@@ -162,7 +217,9 @@ def load_plan(path: Path) -> dict:
     if isinstance(streak, bool) or not isinstance(streak, int) or streak < 1:
         raise SystemExit("refused: max_invalid_streak must be an integer >= 1")
     floors = plan["budget"]["provider_floors"]
-    for model in used_models(plan):
+    if smoke:
+        assert_free(plan)
+    for model in [] if smoke else used_models(plan):
         if not PRICING.known_model(model):
             raise SystemExit(f"refused: {model} is not a model pricing.py can price")
         provider = provider_of(model)
@@ -241,7 +298,7 @@ def seat_models(cell: dict) -> dict[str, str]:
 def label_of(cell: dict) -> str:
     if cell.get("assignment"):
         return "models " + ",".join(f"{seat}={model}" for seat, model in seat_models(cell).items())
-    return cell["model"]
+    return cell["model"] or "oracle (no model)"
 
 
 def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None,
@@ -388,7 +445,7 @@ def assert_assignment_seats(plan: dict, repo: Path, scripted: list[list[str] | N
                                  "under test")
 
 
-def job_config(job: str, jobs_dir: Path, task: str, agent: str, model: str, max_turns: int, env: str,
+def job_config(job: str, jobs_dir: Path, task: str, agent: str, model: str | None, max_turns: int, env: str,
                assignment: list[str] | None = None) -> dict:
     seats, scripted = roster_of(task)
     tested = [seat for seat in seats if seat not in scripted]
@@ -422,13 +479,78 @@ def harbor_command(env: str, harbor: Path, config: Path, wrapper: Path) -> list[
     return [str(wrapper), *command]
 
 
-def harbor_env(base: dict[str, str], models: list[str]) -> dict[str, str]:
-    needed = {KEYS[provider_of(model)] for model in models}
+def key_name(env: dict[str, str], provider: str) -> str:
+    """The variable that holds the provider's key: for OpenRouter the Flotilla-only key when it is set."""
+    if provider == "openrouter" and env.get(FLOTILLA_KEY):
+        return FLOTILLA_KEY
+    return KEYS[provider]
+
+
+def harbor_env(base: dict[str, str], models: list, *, keep_modal: bool = True) -> dict[str, str]:
+    providers = {provider_of(model) for model in models if model is not None}
     kept = {}
     for key, value in base.items():
-        if key in needed or key in KEEP or key.startswith(KEEP_PREFIXES):
+        if key in KEYS.values() or key == FLOTILLA_KEY or (key.startswith("MODAL_") and not keep_modal):
+            continue
+        if key in KEEP or key.startswith(KEEP_PREFIXES):
             kept[key] = value
+    for provider in sorted(providers):
+        value = base.get(key_name(base, provider))
+        if value:
+            kept[KEYS[provider]] = value
     return kept
+
+
+def key_line(env: dict[str, str], models: list) -> str:
+    """Which variable holds the OpenRouter key, by name only."""
+    if not any(model is not None and provider_of(model) == "openrouter" for model in models):
+        return "OpenRouter key: not used"
+    name = key_name(env, "openrouter")
+    if not env.get(name):
+        return f"OpenRouter key: not set ({FLOTILLA_KEY} or {KEYS['openrouter']})"
+    if name == FLOTILLA_KEY:
+        return f"OpenRouter key: {FLOTILLA_KEY} (Harbor gets it as {KEYS['openrouter']})"
+    return f"OpenRouter key: {name}"
+
+
+def smoke_plan(plan: dict, count: int) -> dict:
+    """The plan a smoke runs: the first count distinct instances of each task set, local Docker, a $0 cap and reserve,
+    no provider floor. The smoke key marks it for pricing.forecast_lines (a plan file cannot set it)."""
+    sets = []
+    for index, task_set in enumerate(plan["task_sets"]):
+        arms = arms_of(task_set)
+        if len(set(arms)) != len(arms):
+            raise SystemExit(f"refused: task set {index} lists an arm twice")
+        instances = list(dict.fromkeys(task_set["instances"]))[:count]
+        sets.append({**task_set, "instances": instances})
+    options = {**plan["make_jobs"], "env": "docker",
+               "concurrency": min(plan["make_jobs"]["concurrency"], SMOKE_MAX_CONCURRENCY)}
+    budget = {**plan["budget"], "cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}}
+    return {**plan, "name": plan["name"] + SMOKE_SUFFIX, "task_sets": sets, "make_jobs": options, "budget": budget,
+            "smoke": count}
+
+
+def smoke_line(plan: dict) -> str:
+    return (f"smoke: first {plan['smoke']} instances of each task set, local docker, concurrency "
+            f"{plan['make_jobs']['concurrency']}, cap $0.00, no balance or catalog read; a trial that records spend "
+            "stops new starts")
+
+
+def assert_free_config(config: dict) -> None:
+    """The Harbor config of a smoke job: docker, and every seat on the oracle with no model or on a free agent with a
+    :free model and no other option (no base URL, key or fallback model)."""
+    if config["environment"]["type"] != "docker":
+        raise SystemExit("refused: a smoke job must run on docker")
+    for row in config["participants"]:
+        name, model = row.get("name"), row.get("model_name")
+        free = (name == "oracle" and model is None) or (name in FREE_AGENTS and free_model(model))
+        extra = set(row) - {"seat", "name", "model_name", "kwargs"} or set(row.get("kwargs") or {}) - FREE_OPTIONS
+        if not free or extra:
+            raise SystemExit(f"refused: smoke seat {row.get('seat')} is not free ({name} {model})")
+
+
+def refuse_catalog() -> dict:
+    raise SystemExit("refused: a smoke reads no price catalog")
 
 
 def over_cap(spent: float, in_flight: int, reserve: float, cap: float) -> bool:
@@ -466,18 +588,24 @@ def guard_line(plan: dict) -> str:
     floors = plan["budget"]["provider_floors"]
     sources = {"openrouter": "lower of account balance and key limit left", "deepseek": "account balance"}
     shown = ", ".join(f"{provider} ${float(amount):.2f} ({sources.get(provider, 'balance')})"
-                      for provider, amount in sorted(floors.items()))
+                      for provider, amount in sorted(floors.items())) or "none"
     return (f"guards: stop after {streak_of(plan)} invalid trials in a row, overall or for one model; "
             f"provider floors {shown}")
 
 
-def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None]) -> None:
+def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None], keys: str,
+                  forecast: list[str]) -> None:
     reserve = float(plan["budget"]["reserve_per_trial_usd"])
     cap = float(plan["budget"]["cap_usd"])
     print(f"{plan['name']}: {len(order)} cells, reserve ${reserve:.2f} per trial, cap ${cap:.2f}, "
           f"reserve if every cell starts ${reserve * len(order):.2f}, start spacing {spacing_of(plan):.1f} s")
+    if plan.get("smoke"):
+        print(smoke_line(plan))
     print(scripted_line(plan, scripted))
     print(guard_line(plan))
+    print(keys)
+    for line in forecast:
+        print(line)
     for index, cell in enumerate(order, 1):
         print(f"{index}. set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
 
@@ -489,13 +617,22 @@ class Balance(NamedTuple):
 
 
 class HttpSources:
-    """OpenRouter catalog and provider balances. Tests pass a fake with the same two methods."""
+    """OpenRouter catalog and provider balances. Tests pass a fake with the same three methods."""
 
     def __init__(self, env: dict[str, str]):
         self.env = env
 
+    def catalog(self) -> dict:
+        """The public OpenRouter model list, with no key. A failed read raises RuntimeError (the forecast then
+        falls back to its cache)."""
+        try:
+            with urllib.request.urlopen(urllib.request.Request(CATALOG_URL), timeout=20) as response:
+                return json.load(response)
+        except Exception as exc:
+            raise RuntimeError(f"could not read {CATALOG_URL} ({type(exc).__name__})") from exc
+
     def prices(self, models: list[str]) -> dict:
-        payload = _fetch_json("https://openrouter.ai/api/v1/models", {})
+        payload = _fetch_json(CATALOG_URL, {})
         catalog = PRICING.parse_openrouter_models(payload)
         frozen = {}
         for model in models:
@@ -508,7 +645,7 @@ class HttpSources:
         return frozen
 
     def balance(self, provider: str) -> Balance:
-        key = KEYS[provider]
+        key = key_name(self.env, provider)
         token = self.env.get(key)
         if not token:
             raise SystemExit(f"refused: {key} is not set")
@@ -585,6 +722,9 @@ def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | 
         expected = seat_models(cell)
         actual = {row.get("seat"): row.get("model_name") for row in tested}
         ok = len(tested) == len(expected) and actual == expected
+    elif cell["model"] is None:
+        ok = bool(tested) and all(row.get("name") == "oracle" and row.get("model_name") is None
+                                  and ran.get(row.get("seat"), "oracle") == "oracle" for row in tested)
     else:
         ok = bool(tested) and all(row.get("model_name") == cell["model"] for row in tested)
     return None if ok else "seat model mismatch"
@@ -651,6 +791,13 @@ def charge(cell: dict, result: dict | None, prices: dict, reserve: float) -> dic
     return {"cost": amount, "estimate": estimate, "source": source, "flag": flag}
 
 
+def smoke_charge(cell: dict, result: dict | None) -> dict:
+    seats = (result or {}).get("seat_results") or []
+    amount = sum(max(0.0, float((row.get("agent_result") or {}).get("cost_usd") or 0.0)) for row in seats)
+    source = "oracle" if cell["model"] is None else ("recorded" if amount else "free")
+    return {"cost": amount, "estimate": 0.0, "source": source, "flag": "charged" if amount else None}
+
+
 def run_process(command: list[str], log_path: Path, env: dict[str, str], cwd: Path) -> int:
     with log_path.open("w") as handle:
         return subprocess.run(command, cwd=cwd, env=env, stdout=handle, stderr=subprocess.STDOUT).returncode
@@ -680,7 +827,13 @@ def log_order(run_dir: Path, order: list[dict]) -> None:
         log(run_dir, f"order {index} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
 
 
-def check_resume(state: dict, plan: dict, order: list[dict], digest: str) -> None:
+def check_resume(state: dict, plan: dict, order: list[dict], digest: str, smoke: int | None = None) -> None:
+    held = state.get("mode", "wave")
+    if held != ("wave" if smoke is None else "smoke") or state.get("smoke") != smoke:
+        count = f" of {state.get('smoke')}" if held == "smoke" else ""
+        raise SystemExit(f"refused: this run dir holds a {held} run{count}; use another run dir")
+    if state.get("plan") != plan["name"]:
+        raise SystemExit(f"refused: this run dir belongs to plan {state.get('plan')}; use another run dir")
     if state.get("plan_sha256") != digest:
         raise SystemExit("refused: plan file changed since this run dir was started")
     stored = state.get("order") or []
@@ -692,9 +845,9 @@ def check_resume(state: dict, plan: dict, order: list[dict], digest: str) -> Non
             raise SystemExit("refused: a cell's task path changed; use a new run dir")
 
 
-def initial_state(plan: dict, order: list[dict], digest: str) -> dict:
-    return {"plan": plan["name"], "plan_sha256": digest, "order": order, "prices": {},
-            "spent_usd": 0.0, "finished": {}}
+def initial_state(plan: dict, order: list[dict], digest: str, smoke: int | None = None) -> dict:
+    return {"plan": plan["name"], "plan_sha256": digest, "mode": "wave" if smoke is None else "smoke",
+            "smoke": smoke, "order": order, "prices": {}, "spent_usd": 0.0, "finished": {}}
 
 
 def freeze_prices(sources, models: list[str], state: dict) -> None:
@@ -717,7 +870,7 @@ def account(future, futures, state, events, jobs_dir, reserve, run_dir, lock: th
     cell, job = futures.pop(future)
     exit_code = future.result()
     trial, result = read_trial(jobs_dir, job)
-    bill = charge(cell, result, state["prices"], reserve)
+    bill = smoke_charge(cell, result) if state.get("mode") == "smoke" else charge(cell, result, state["prices"], reserve)
     problem = trial_problem(trial, result, cell)
     valid = problem is None
     attempt = {
@@ -850,6 +1003,8 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
     limit = streak_of(plan)
     futures: dict = {}
     lock = threading.Lock()
+    smoke = plan.get("smoke")
+    job_prefix = f"smoke-{plan['name'].removesuffix(SMOKE_SUFFIX)}" if smoke else plan["name"]
     index, spins, stop, last_start = 0, 0, None, None
     bound = len(pending) * 16 + 32
     try:
@@ -858,6 +1013,9 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             if spins > bound:
                 raise SystemExit("refused: scheduler did not advance")
             drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+            if smoke_charged(plan, state, run_dir):
+                stop = "charged"
+                break
             if streak_stop(events, limit, run_dir):
                 stop = "invalid"
                 break
@@ -866,13 +1024,16 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
                 continue
             cell = pending[index]
             if wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap) == "cap":
-                stop = "cap"
+                stop = "charged" if smoke_charged(plan, state, run_dir) else "cap"
                 break
             if streak_stop(events, limit, run_dir):
                 stop = "invalid"
                 break
-            kind, provider, money = cell_gate(cell, floors, sources, sleep)
+            kind, provider, money = (None, None, None) if smoke else cell_gate(cell, floors, sources, sleep)
             drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+            if smoke_charged(plan, state, run_dir):
+                stop = "charged"
+                break
             if streak_stop(events, limit, run_dir):
                 stop = "invalid"
                 break
@@ -892,17 +1053,22 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
                 break
             if pause_before_start(spacing_of(plan), last_start, clock, sleep):
                 drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+                if smoke_charged(plan, state, run_dir):
+                    stop = "charged"
+                    break
                 if streak_stop(events, limit, run_dir):
                     stop = "invalid"
                     break
                 if over_cap(state["spent_usd"], len(futures), reserve, cap):
                     continue
-            job = new_job(plan["name"], jobs_dir, namer)
+            job = new_job(job_prefix, jobs_dir, namer)
             config_path = run_dir / "configs" / f"{job}.json"
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(json.dumps(job_config(
-                job, jobs_dir, cell["task"], plan["agent"], cell["model"], options["max_turns"], options["env"],
-                cell.get("assignment")), indent=2) + "\n")
+            config = job_config(job, jobs_dir, cell["task"], plan["agent"], cell["model"], options["max_turns"],
+                                options["env"], cell.get("assignment"))
+            if smoke:
+                assert_free_config(config)
+            config_path.write_text(json.dumps(config, indent=2) + "\n")
             command = harbor_command(options["env"], harbor, config_path, wrapper)
             log(run_dir, f"start {job} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
             submit(pool, futures, events, cell, job, command, run_dir / f"{job}.log", env, repo,
@@ -914,29 +1080,59 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             account(wait_one(futures), futures, state, events, jobs_dir, reserve, run_dir, lock)
     if stop != "invalid" and streak_stop(events, limit, run_dir, note="found after the in-flight jobs finished"):
         stop = "invalid"
+    if stop != "charged" and smoke_charged(plan, state, run_dir):
+        stop = "charged"
     return stop or "done"
+
+
+def smoke_charged(plan: dict, state: dict, run_dir: Path) -> bool:
+    """A smoke that recorded any spend: it must cost $0, so no new cell starts."""
+    if not plan.get("smoke") or state["spent_usd"] <= 0:
+        return False
+    log(run_dir, f"stop: smoke recorded spend ${state['spent_usd']:.4f}; a free smoke must cost $0")
+    return True
+
+
+def smoke_run_dir(run_dir: Path | None, wave: dict) -> Path:
+    if run_dir is None:
+        return Path("/tmp/flotilla") / wave["name"]
+    if not wave.get("smoke"):
+        return run_dir
+    resolved = run_dir.resolve()
+    return resolved.with_name(resolved.name + SMOKE_SUFFIX)
 
 
 def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, retry_invalid: bool = False,
         harbor: Path = HARBOR, jobs_dir: Path | None = None, wrapper: Path = WRAPPER,
-        sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None, clock=None) -> list[dict]:
+        sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None, clock=None,
+        smoke: int | None = None, history_jobs: Path | None = None) -> list[dict]:
+    if smoke is not None and (isinstance(smoke, bool) or not isinstance(smoke, int) or smoke < 1):
+        raise SystemExit("refused: --smoke takes a whole number of instances >= 1")
     plan_path = plan_path.resolve()
-    plan = load_plan(plan_path)
+    plan = load_plan(plan_path, smoke=smoke is not None)
     repo = repo_of(plan_path)
     assert_prereg(plan, repo)
     scripted = scripted_of(plan, repo, need_tasks=not dry_run)
     assert_assignment_seats(plan, repo, scripted)
+    wave = plan if smoke is None else smoke_plan(plan, smoke)
+    base = dict(os.environ) if base_env is None else base_env
+    sources = sources or HttpSources(base)
+    models = used_models(wave)
     if dry_run:
         declared = sorted(plan.get("scripted_seats") or [])
-        print_dry_run(plan, order_of(plan, None, [declared if seats is None else seats for seats in scripted]),
-                      scripted)
+        order = order_of(wave, None, [declared if seats is None else seats for seats in scripted])
+        fetch = sources.catalog if smoke is None else refuse_catalog
+        print_dry_run(wave, order, scripted, key_line(base, models),
+                      PRICING.forecast_lines(wave, order, repo, history_jobs, fetch_catalog=fetch))
         return []
     assert_committed(plan_path, repo)
-    if plan["make_jobs"]["env"] == "docker" and not wrapper.is_file():
+    if wave["make_jobs"]["env"] == "docker" and not wrapper.is_file():
         raise SystemExit(f"refused: docker wrapper {wrapper} is missing")
     paths = resolve_paths(plan, repo)
-    order = order_of(plan, paths, scripted)
-    run_dir = run_dir or Path("/tmp/flotilla") / plan["name"]
+    order = order_of(wave, paths, scripted)
+    if smoke is not None and any(model is not None for model in models) and not base.get(key_name(base, "openrouter")):
+        raise SystemExit(f"refused: a :free smoke needs {FLOTILLA_KEY} or {KEYS['openrouter']}")
+    run_dir = smoke_run_dir(run_dir, wave)
     run_dir.mkdir(parents=True, exist_ok=True)
     jobs_dir = jobs_dir or (repo / ".flotilla-local" / "jobs")
     jobs_dir.mkdir(parents=True, exist_ok=True)
@@ -944,22 +1140,25 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     state_path = run_dir / "state.json"
     state = json.loads(state_path.read_text()) if state_path.is_file() else None
     if state is None:
-        state = initial_state(plan, order, digest)
+        state = initial_state(wave, order, digest, smoke)
         log_order(run_dir, order)
     else:
-        check_resume(state, plan, order, digest)
+        check_resume(state, wave, order, digest, smoke)
         log(run_dir, f"resume {len(state['finished'])} finished")
-    log(run_dir, f"start spacing {spacing_of(plan):.1f} s")
+    log(run_dir, f"start spacing {spacing_of(wave):.1f} s")
+    if smoke is not None:
+        log(run_dir, smoke_line(wave))
+    log(run_dir, key_line(base, models))
     if any(scripted):
-        log(run_dir, scripted_line(plan, scripted))
-    sources = sources or HttpSources(base_env or dict(os.environ))
-    freeze_prices(sources, used_models(plan), state)
+        log(run_dir, scripted_line(wave, scripted))
+    if smoke is None:
+        freeze_prices(sources, models, state)
     save_state(state_path, state)
     pending = pending_of(order, state["finished"], retry_invalid)
     events: list[dict] = []
-    env = harbor_env(base_env or dict(os.environ), used_models(plan))
-    with ThreadPoolExecutor(max_workers=plan["make_jobs"]["concurrency"]) as pool:
-        reason = schedule(plan, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
+    env = harbor_env(base, models, keep_modal=smoke is None)
+    with ThreadPoolExecutor(max_workers=wave["make_jobs"]["concurrency"]) as pool:
+        reason = schedule(wave, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
                           harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
                           namer=namer or secrets.token_hex, sleep=sleep or time.sleep, clock=clock or time.monotonic)
     events.append({"kind": "stop", "reason": reason, "spent": state["spent_usd"]})
@@ -971,16 +1170,27 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a pre-registered Flotilla wave, one Harbor job per cell.")
     parser.add_argument("plan", type=Path)
-    parser.add_argument("--run-dir", type=Path, help="state and progress.log (default /tmp/flotilla/<plan>)")
-    parser.add_argument("--dry-run", action="store_true", help="print the order and the cost reserve; do not call Harbor")
+    parser.add_argument("--run-dir", type=Path, help="state and progress.log (default /tmp/flotilla/<plan>; a smoke "
+                        "adds -smoke)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="print the order, the cost reserve and the cost forecast; do not call Harbor")
     parser.add_argument("--retry-invalid", action="store_true", help="rerun a finished cell whose trial was not valid")
     parser.add_argument("--harbor", type=Path, default=HARBOR)
     parser.add_argument("--jobs-dir", type=Path, help="where Harbor writes trial results")
     parser.add_argument("--docker-wrapper", type=Path, default=WRAPPER)
+    parser.add_argument("--history-jobs", type=Path,
+                        help="finished Harbor jobs the dry-run forecast reads (default <repo>/.flotilla-local/jobs)")
+    parser.add_argument("--smoke", nargs="?", const=1, type=int, metavar="N",
+                        help="free smoke: first N instances per task set (default 1), local docker, cap $0; only "
+                        "the oracle agent with no model or OpenRouter :free models; write --smoke=N before the plan")
     args = parser.parse_args(argv)
     events = run(args.plan, run_dir=args.run_dir, dry_run=args.dry_run, retry_invalid=args.retry_invalid,
-                 harbor=args.harbor, jobs_dir=args.jobs_dir, wrapper=args.docker_wrapper)
-    return EXIT_INVALID_STREAK if events and events[-1].get("reason") == "invalid" else 0
+                 harbor=args.harbor, jobs_dir=args.jobs_dir, wrapper=args.docker_wrapper, smoke=args.smoke,
+                 history_jobs=args.history_jobs)
+    reason = events[-1].get("reason") if events else None
+    if reason == "charged":
+        return EXIT_SMOKE_CHARGED
+    return EXIT_INVALID_STREAK if reason == "invalid" else 0
 
 
 if __name__ == "__main__":

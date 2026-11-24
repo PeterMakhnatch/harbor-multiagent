@@ -10,14 +10,34 @@ OpenRouter's generation API; LiteLLM's completion_cost did not. A catalog frozen
 (https://openrouter.ai/api/v1/models, USD per token) is the cross-check. A missing cache-read price charges
 cached tokens at the input price. If the recorded cost is missing, or 0 while tokens are above 0, the charge
 is that token estimate.
+
+Forecast (run_wave.py --dry-run): use the same model's mean charge for the same probe kind with at least
+5 seat samples. Otherwise, price the kind's median tokens per model seat (DeepSeek direct at the peak rate).
+If that estimate is unavailable, use the same model's mean charge across any kind, or report unknown.
+Exclude trials with exceptions and seats with no tokens. Modal adds MODAL_PER_TRIAL_USD per trial.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
+import os
+import statistics
+import tempfile
+from collections.abc import Callable
+from datetime import UTC, datetime
+from http.client import HTTPException
+from pathlib import Path
+from typing import NamedTuple
+from zoneinfo import ZoneInfo
 
 OFF_PEAK = {"hit": 0.003, "miss": 0.15, "out": 0.60}  # USD per million tokens
 PEAK_HOURS_UTC = ((1, 4), (6, 10))
+PEAK_FACTOR_MAX = 2.0
+MODAL_PER_TRIAL_USD = 0.0021  # Modal sandbox per trial, measured 2026-11-24 (docs/NEXT-WAVE.md)
+CATALOG_CACHE = "openrouter-models.json"
+CATALOG_MAX_AGE_S = 24 * 3600
+HISTORY_MIN_SEATS = 5
+ORACLE = "oracle (no model)"
 
 
 def peak_factor(started: datetime) -> float:
@@ -197,3 +217,349 @@ def openrouter_balance(account: float, key_left: float | None) -> tuple[float, s
     if key_left is not None and key_left < account:
         return key_left, f"key limit (account ${account:.2f}, {key_text})"
     return account, f"account balance (account ${account:.2f}, {key_text})"
+
+
+class History(NamedTuple):
+    """Usable finished trial records under a jobs dir. costs: USD per model seat by (kind, model). profiles: per
+    trial, the mean (total input, cached input, output) tokens of its model seats, by kind."""
+    records: int
+    costs: dict[tuple[str, str], list[float]]
+    profiles: dict[str, list[tuple[float, float, float]]]
+
+
+class Estimate(NamedTuple):
+    """USD per model seat in one trial (None when unknown) and where it came from."""
+    usd: float | None
+    source: str
+
+
+def kind_of(label: str) -> str:
+    """Probe kind of a task label: the label up to its first '-' (probe.verify-inbox -> probe.verify)."""
+    return label.split("-", 1)[0]
+
+
+def _instant(text) -> datetime | None:
+    try:
+        moment = datetime.fromisoformat(str(text))
+    except ValueError:
+        return None
+    return (moment if moment.tzinfo else moment.replace(tzinfo=UTC)).astimezone(UTC)
+
+
+def _trial_kind(result: dict) -> str | None:
+    """Kind of a history trial: the task directory's parent is its label."""
+    config = result.get("config") or {}
+    path = (config.get("task") or {}).get("path") or (result.get("task_id") or {}).get("path")
+    label = Path(path).parent.name if path else ""
+    return kind_of(label) if label else None
+
+
+def _history_seat_cost(model: str, usage: dict, tokens: dict[str, int], started: datetime | None) -> float | None:
+    """Charge for a seat with tokens: price DeepSeek directly and use OpenRouter's nonzero recorded cost."""
+    if is_deepseek_direct(model):
+        return deepseek_cost(tokens, started) if started is not None and usage.get("n_input_tokens") is not None else None
+    recorded = _number(usage.get("cost_usd"))
+    if recorded is None or recorded == 0:
+        return None
+    return recorded
+
+
+def read_history(jobs_dir: Path) -> History:
+    """Read finished, exception-free trials with model tokens. Join model seats to participants by seat."""
+    history = History(0, {}, {})
+    paths = sorted(jobs_dir.glob("*/*/result.json")) if jobs_dir.is_dir() else []
+    records = 0
+    for path in paths:
+        try:
+            result = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(result, dict) or not result.get("finished_at"):
+            continue
+        seats = result.get("seat_results") or []
+        if result.get("exception_info") is not None or any(
+            part.get("exception_info") is not None
+            for parts in (seats, result.get("step_results") or []) for part in parts
+        ):
+            continue
+        kind = _trial_kind(result) or "unidentified"
+        started = _instant(result.get("started_at") or result["finished_at"])
+        models = {row.get("seat"): row.get("model_name") for row in (result.get("config") or {}).get("participants")
+                  or [] if row.get("name") != "oracle" and row.get("model_name")}
+        used = []
+        has_tokens = False
+        for seat in seats:
+            model, usage = models.get(seat.get("seat")), seat.get("agent_result") or {}
+            if not model:
+                continue
+            tokens = usage_tokens(usage)
+            if sum(tokens.values()) == 0:
+                continue
+            has_tokens = True
+            amount = _history_seat_cost(model, usage, tokens, started)
+            if amount is not None:
+                history.costs.setdefault((kind, model), []).append(amount)
+            if usage.get("n_input_tokens") is not None:
+                used.append((float(usage["n_input_tokens"]), float(usage.get("n_cache_tokens") or 0),
+                             float(usage.get("n_output_tokens") or 0)))
+        if has_tokens:
+            records += 1
+        if used and kind != "unidentified":
+            mean = tuple(sum(row[i] for row in used) / len(used) for i in range(3))
+            history.profiles.setdefault(kind, []).append(mean)
+    return history._replace(records=records)
+
+
+def token_profile(history: History, kind: str) -> tuple[dict[str, float], int] | None:
+    """Median total input, cached input and output tokens per model seat across trials of a kind (all models); the
+    uncached input is the median total less the median cached, so cached tokens count once. None without trials."""
+    rows = history.profiles.get(kind)
+    if not rows:
+        return None
+    total, cached, out = (statistics.median(row[i] for row in rows) for i in range(3))
+    return {"hit": cached, "miss": max(0.0, total - cached), "out": out}, len(rows)
+
+
+def _shown(moment: datetime) -> str:
+    return moment.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M ET")
+
+
+class Catalog:
+    """OpenRouter list prices, read once on first use: a cache younger than CATALOG_MAX_AGE_S, else fetch_catalog()
+    (then cached with its fetch time), else an older cache. An ordinary fetch error leaves no prices; SystemExit
+    propagates."""
+
+    def __init__(self, cache_dir: Path, fetch_catalog: Callable[[], dict], now: datetime):
+        self.path = cache_dir / CATALOG_CACHE
+        self.fetch_catalog = fetch_catalog
+        self.now = now
+        self.status: str | None = None
+        self._prices: dict | None = None
+
+    def prices(self) -> dict | None:
+        if self.status is None:
+            self._prices, self.status = self._load()
+        return self._prices
+
+    def _cached(self) -> tuple[datetime, dict] | None:
+        try:
+            data = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict) or not isinstance(data.get("payload"), dict):
+            return None
+        fetched = _instant(data.get("fetched_at"))
+        try:
+            priced = parse_openrouter_models(data["payload"])
+        except (AttributeError, TypeError):
+            return None
+        if fetched is None or not priced:
+            return None
+        return fetched, data["payload"]
+
+    def _store(self, payload: dict) -> str:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=self.path.parent) as directory:
+                temporary = Path(directory) / self.path.name
+                temporary.write_text(json.dumps({"fetched_at": self.now.astimezone(UTC).isoformat(), "payload": payload}))
+                os.replace(temporary, self.path)
+        except OSError as exc:
+            return f"not cached ({type(exc).__name__})"
+        return f"cached at {self.path}"
+
+    def _load(self) -> tuple[dict | None, str]:
+        cached = self._cached()
+        if cached and (self.now - cached[0]).total_seconds() < CATALOG_MAX_AGE_S:
+            return parse_openrouter_models(cached[1]), f"cache fetched {_shown(cached[0])} ({self.path})"
+        try:
+            payload = self.fetch_catalog()
+            prices = parse_openrouter_models(payload)
+            if not prices:
+                raise ValueError("catalog has no priced models")
+        except (HTTPException, OSError, AttributeError, RuntimeError, TypeError, ValueError) as exc:
+            if cached:
+                return (parse_openrouter_models(cached[1]),
+                        f"stale cache fetched {_shown(cached[0])} ({self.path}); refresh failed: {type(exc).__name__}")
+            return None, f"unavailable ({type(exc).__name__}); no cache at {self.path}"
+        return prices, f"fetched {_shown(self.now)}, {self._store(payload)}"
+
+
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values)
+
+
+def _profile_estimate(model: str, kind: str | None, history: History, catalog: Catalog) -> Estimate:
+    if kind is None:
+        return Estimate(None, "unknown (no task kind, no history)")
+    profile = token_profile(history, kind)
+    if profile is None:
+        return Estimate(None, f"unknown (no history, no {kind} token profile)")
+    tokens = profile[0]
+    if is_deepseek_direct(model):
+        usd = PEAK_FACTOR_MAX * sum(tokens[key] * OFF_PEAK[key] for key in tokens) / 1e6
+        return Estimate(usd, f"price-estimate {kind}, DeepSeek peak rate")
+    prices = catalog.prices()
+    if prices is None:
+        return Estimate(None, "unknown (no catalog)")
+    try:
+        return Estimate(openrouter_cost(model, tokens, prices), f"price-estimate {kind}")
+    except (KeyError, ValueError):
+        return Estimate(None, "unknown (not in catalog)")
+
+
+def seat_estimate(model: str | None, kind: str | None, history: History, catalog: Catalog, smoke: bool) -> Estimate:
+    """USD for one model seat. Prefer reliable same-kind history, then kind-specific prices, then pooled history."""
+    if model is None:
+        return Estimate(0.0, "free")
+    if smoke:
+        return Estimate(0.0, "free") if model.endswith(":free") else Estimate(None, "unknown (smoke: not free)")
+    same = history.costs.get((kind, model)) if kind else None
+    if same and len(same) >= HISTORY_MIN_SEATS:
+        return Estimate(_mean(same), f"history {kind} n={len(same)}")
+    priced = _profile_estimate(model, kind, history, catalog)
+    if priced.usd is not None:
+        return priced
+    pooled = {seen: amounts for (seen, name), amounts in history.costs.items() if name == model}
+    if pooled:
+        amounts = [amount for values in pooled.values() for amount in values]
+        return Estimate(_mean(amounts), f"history any kind ({', '.join(sorted(pooled))}) n={len(amounts)}")
+    return priced
+
+
+def _manifest_of(task_set: dict, repo: Path, jobs_dir: Path) -> dict | None:
+    """The set's manifest in the plan repo, else the same set beside the history jobs dir
+    (<jobs>/../tasks/<tasks_dir name>/<manifest name>)."""
+    beside = jobs_dir.parent / "tasks" / Path(task_set["tasks_dir"]).name / Path(task_set["manifest"]).name
+    for path in (repo / task_set["manifest"], beside):
+        try:
+            manifest = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(manifest, dict) and isinstance(manifest.get("tasks"), dict):
+            return manifest
+    return None
+
+
+def cell_layouts(plan: dict, repo: Path, jobs_dir: Path) -> dict[tuple, tuple[str | None, list | None, list | None]]:
+    """(kind, seats, scripted seats) per (task set, instance, arm) from the manifests; None where unknown."""
+    found = {}
+    for index, task_set in enumerate(plan["task_sets"]):
+        for entry in ((_manifest_of(task_set, repo, jobs_dir) or {}).get("tasks") or {}).values():
+            label = Path(entry.get("path") or "").parent.name or entry.get("label") or ""
+            seats = entry.get("seats") if isinstance(entry.get("seats"), list) else None
+            scripted = (entry.get("build") or {}).get("scripted_seats")
+            found[(index, entry.get("instance"), entry.get("condition"))] = (
+                kind_of(label) if label else None, seats, scripted if isinstance(scripted, list) else None)
+    return found
+
+
+def cell_models(cell: dict, seats: list | None, scripted: list | None) -> list[str]:
+    """The model of every model seat of a planned trial. Without a roster a model cell has one model seat."""
+    if cell.get("assignment"):
+        return list(cell["assignment"])
+    if cell.get("model") is None:
+        return []
+    skipped = scripted if scripted is not None else cell.get("scripted") or []
+    tested = len([seat for seat in seats if seat not in skipped]) if seats else 0
+    return [cell["model"]] * max(1, tested)
+
+
+def _tally(order: list[dict], layouts: dict, estimate) -> dict[str, dict]:
+    rows: dict[str, dict] = {}
+    for cell in order:
+        kind, seats, scripted = layouts.get((cell["task_set"], cell["instance"], cell["arm"]), (None, None, None))
+        models = cell_models(cell, seats, scripted)
+        for model in dict.fromkeys(models) if models else [None]:
+            count = models.count(model) if model else 0
+            found = estimate(model, kind)
+            row = rows.setdefault(model or ORACLE, {"trials": 0, "seats": 0, "priced": 0, "usd": 0.0, "sources": {}})
+            row["trials"] += 1
+            row["seats"] += count
+            row["sources"][found.source] = row["sources"].get(found.source, 0) + 1
+            if found.usd is not None:
+                row["priced"] += 1
+                row["usd"] += found.usd * count
+    return dict(sorted(rows.items()))
+
+
+def _row_line(model: str, row: dict) -> str:
+    sources = row["sources"]
+    shown = "; ".join(source if len(sources) == 1 else f"{source} x{count}" for source, count in sources.items())
+    head = f"  {model}: {row['trials']} trials, {row['seats']} model seats"
+    if not row["priced"]:
+        return f"{head}, cost UNKNOWN [{shown}]"
+    missing = row["trials"] - row["priced"]
+    tail = f", {missing} trials UNKNOWN" if missing else ""
+    return f"{head}, ${row['usd'] / row['priced']:.6f}/trial, total ${row['usd']:.4f}{tail} [{shown}]"
+
+
+def _profile_lines(history: History, kinds: list[str]) -> list[str]:
+    lines = []
+    for kind in kinds:
+        found = token_profile(history, kind)
+        if found:
+            tokens, count = found
+            lines.append(f"  token profile {kind} (median per model seat, {count} trials): "
+                         f"{tokens['hit'] + tokens['miss']:.0f} input ({tokens['hit']:.0f} cached, "
+                         f"{tokens['miss']:.0f} uncached), {tokens['out']:.0f} output")
+    return lines
+
+
+def _total_lines(plan: dict, trials: int, rows: dict[str, dict]) -> list[str]:
+    modal = MODAL_PER_TRIAL_USD * trials if plan["make_jobs"]["env"] == "modal" else 0.0
+    openrouter = sum(row["usd"] for model, row in rows.items() if model.startswith("openrouter/"))
+    deepseek = sum(row["usd"] for model, row in rows.items() if is_deepseek_direct(model))
+    spend = f"OpenRouter ${openrouter:.4f}"
+    if any(is_deepseek_direct(model) for model in rows):
+        spend += f" + DeepSeek direct ${deepseek:.4f}"
+    if modal:
+        lines = [
+            (f"  Modal: {trials} trials x ${MODAL_PER_TRIAL_USD} (measured 2026-11-24, docs/NEXT-WAVE.md) = "
+             f"${modal:.4f}")
+        ]
+    else:
+        lines = [f"  {plan['make_jobs']['env']}: {trials} trials, $0 sandbox cost"]
+    expected = openrouter + deepseek + modal
+    unknown = {model: row["trials"] - row["priced"] for model, row in rows.items() if row["priced"] < row["trials"]}
+    if unknown:
+        names = ", ".join(f"{model} ({count} trials)" for model, count in unknown.items())
+        lines.append(f"  expected: at least ${expected:.4f} = {spend} + Modal ${modal:.4f}; UNKNOWN cost for "
+                     f"{sum(unknown.values())} model trials: {names}")
+    else:
+        lines.append(f"  expected: ${expected:.4f} = {spend} + Modal ${modal:.4f}")
+    cap = float(plan["budget"]["cap_usd"])
+    note = "; expected model spend is above the cap" if openrouter + deepseek > cap else ""
+    lines.append(f"  maximum: ${cap + modal:.4f} = model cap ${cap:.4f} + Modal ${modal:.4f}{note}")
+    return lines
+
+
+def forecast_lines(plan: dict, order: list[dict], repo: Path, history_jobs: Path | None, *,
+                   fetch_catalog: Callable[[], dict], now: datetime | None = None) -> list[str]:
+    """The dry-run cost block, title first. history_jobs None means <repo>/.flotilla-local/jobs. The catalog cache is
+    <repo>/.flotilla-local/cache. A smoke plan (plan["smoke"]) reads neither history nor catalog: the oracle agent and
+    ':free' models cost $0, anything else is unknown."""
+    repo = Path(repo)
+    smoke = bool(plan.get("smoke"))
+    jobs_dir = Path(history_jobs) if history_jobs is not None else repo / ".flotilla-local" / "jobs"
+    history = History(0, {}, {}) if smoke else read_history(jobs_dir)
+    catalog = Catalog(repo / ".flotilla-local" / "cache", fetch_catalog, now or datetime.now(UTC))
+    layouts = {} if smoke else cell_layouts(plan, repo, jobs_dir)
+    cache: dict[tuple, Estimate] = {}
+
+    def estimate(model: str | None, kind: str | None) -> Estimate:
+        if (model, kind) not in cache:
+            cache[(model, kind)] = seat_estimate(model, kind, history, catalog, smoke)
+        return cache[(model, kind)]
+
+    rows = _tally(order, layouts, estimate)
+    if smoke:
+        lines = [f"cost forecast {plan['name']}: smoke, free subjects only; history and catalog not read"]
+    else:
+        lines = [f"cost forecast {plan['name']}: history {jobs_dir} ({history.records} usable finished trial records)"]
+    lines += [_row_line(model, row) for model, row in rows.items()]
+    kinds = sorted({kind for (_model, kind), found in cache.items() if kind and found.source.startswith("price-")})
+    lines += _profile_lines(history, kinds)
+    if not smoke:
+        lines.append(f"  catalog: {catalog.status or 'not read (no model needed list prices)'}")
+    return lines + _total_lines(plan, len(order), rows)
