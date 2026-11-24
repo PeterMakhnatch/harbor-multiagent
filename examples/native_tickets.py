@@ -75,6 +75,7 @@ WORLDS = {
         study.world_env,
     ),
     ship_handover.SCHEMA: World(*ship_handover.WORLD),
+    ship_handover.INFLIGHT_WORLD[0]: World(*ship_handover.INFLIGHT_WORLD),
 }
 assert all(world.max_cells <= MAX_CELLS for world in WORLDS.values())
 

@@ -4,6 +4,7 @@ import os
 import random
 import re
 import secrets
+import shlex
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,21 +31,24 @@ from .study import (
     MAX_CELLS,
     MAX_REGISTRATION_BYTES,
     MODEL_FIELDS,
-    PRIORS,
     REQUIRED_FIELDS,
     ROLES,
-    SCHEMA,
-    TASK_DIR,
-    TASK_NAME,
+    SPECS,
+    STOCK,
     TEAM,
-    TICKET,
+    Spec,
     load_registration,
+    pinned_task,
+    task_dir_for,
     validate_registration,
     world_env,
 )
 
-WORLDS = tuple((prior, channel) for prior in PRIORS for channel in CHANNELS)
-BLOCK_CELLS = len(WORLDS)
+WORLDS = {
+    name: tuple((state, channel) for state in spec.states for channel in CHANNELS)
+    for name, spec in SPECS.items()
+}
+BLOCK_CELLS = len(WORLDS[STOCK.world])
 MAX_BLOCKS = MAX_CELLS // BLOCK_CELLS
 MAX_SEED = (1 << 63) - 1
 SEED_TEXT = re.compile(r"0|[1-9][0-9]{0,18}")
@@ -57,32 +61,45 @@ PRIVATE_MODE = 0o600
 STAGED = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
 FAILED_EXIT = 1
 INVALID_EXIT = 2
-assert len(WORLDS) == len(set(WORLDS)) == 4
+assert all(len(w) == len(set(w)) == BLOCK_CELLS == 4 for w in WORLDS.values())
 assert 0 < MAX_BLOCKS * BLOCK_CELLS <= MAX_CELLS
 assert BLOCKS_TEXT.fullmatch(str(MAX_BLOCKS)) is not None
 
 DESCRIPTION = """\
-Preregister one stock ship-handover team. This command only writes a
+Preregister one ship-handover team in one world. This command only writes a
 preregistration file. It emits no trial configs, launches no trial, calls no
 model, and reads no credential values. Participant env entries stay bare
 ${KEY} references that the launch host resolves later.
 
+--world stock (default) uses the published harbor/ship-handover package. Its
+cells set prior committed/dropped (SH_PRIOR) and carry sh- tickets.
+--world inflight needs --task MATERIALIZED, made by
+python3 -B -m examples.ship_inflight.materialize OUT. The package must match
+the harbor/ship-inflight identity and files pinned in
+examples/ship_inflight/samples/task-pin.json. Its cells set fate
+settles/fails (SH_FATE) and carry si- tickets. The same participants file
+registers on both worlds, except oracle relief policy replace (inflight only).
+
 The registration holds N complete blocks. Each block holds the 4 worlds
-(prior committed/dropped x channel deliver/withhold) once each, in a fresh
-uniform random order. Every cell gets an independent opaque sh- ticket that
+(state x channel deliver/withhold) once each, in a fresh uniform random
+order. A block holds 2 states x 2 delivery conditions; it does not replay
+the same agent decisions. Every cell gets an independent opaque ticket that
 encodes no world, no seat, and no position.
 
-The host sees the assignment. The native world receives SH_PRIOR and SH_CHANNEL.
-Its role API does not return these fields. Keep the registration outside the
-task package and do not mount it or the launch config in a seat container.
+The host sees the assignment. The native world receives the state and
+SH_CHANNEL. Its role API does not return these fields. Keep the registration
+outside the task package and do not mount it or the launch config in a seat
+container.
 
-Next step (host): python -m examples.ship_handover.study emit REG --out DIR"""
+Next step (host): python -m examples.ship_handover.study emit REG --out DIR
+[--task MATERIALIZED]. An inflight summary lists the next command lines."""
 
 PARTICIPANTS_HELP = """\
 JSON object {"participants": [OUTGOING, RELIEF]} with exactly 2 raw native
-Harbor participants. Each sets "seat" (outgoing or relief) and "name". Stock
-models name a model_name; stock oracle controls set only env SH_POLICY. Native
-Participant normalization must keep every given field unchanged."""
+Harbor participants. Each sets "seat" (outgoing or relief) and "name". Named
+models set a model_name. Oracle controls set only env SH_POLICY. The nop
+runner is not a model: it sets no model field and no env. Native Participant
+normalization must keep every given field unchanged."""
 
 SEED_HELP = f"""\
 Optional integer 0..{MAX_SEED}. Use it only to reproduce the within-block
@@ -176,39 +193,44 @@ def _normalize_team(
     return team
 
 
-def _verified_task(harbor: SimpleNamespace, task_dir: Path) -> dict[str, str]:
+def _verified_task(
+    harbor: SimpleNamespace, task_dir: Path, spec: Spec
+) -> tuple[dict[str, str], str]:
     try:
-        found = task_identity(harbor, task_dir, TASK_NAME)
+        found = task_identity(harbor, task_dir, spec.task_name)
         before = task_files_digest(task_dir, found)
-        again = task_identity(harbor, task_dir, TASK_NAME)
+        again = task_identity(harbor, task_dir, spec.task_name)
         after = task_files_digest(task_dir, again)
     except (ValueError, OSError) as error:
         raise ValueError("native Task/Packager cannot load the task") from error
     require(found == again and before == after, "task changed while it was checked")
-    return dict(found)
+    pin = pinned_task(spec)
+    if pin is not None and pin != (found, before):
+        raise InputError(f"task {task_dir} is not the pinned {spec.task_name} package")
+    return dict(found), before
 
 
-def _schedule(blocks: int, seed: int | None) -> list[tuple[str, str]]:
+def _schedule(blocks: int, seed: int | None, spec: Spec) -> list[tuple[str, str]]:
     assert 0 < blocks <= MAX_BLOCKS
     assert seed is None or 0 <= seed <= MAX_SEED
     order = secrets.SystemRandom() if seed is None else random.Random(seed)
     plan: list[tuple[str, str]] = []
     for _ in range(blocks):
-        block = list(WORLDS)
+        block = list(WORLDS[spec.world])
         order.shuffle(block)
         plan.extend(block)
     assert len(plan) == blocks * BLOCK_CELLS
     return plan
 
 
-def _draw_tickets(count: int) -> list[str]:
+def _draw_tickets(count: int, spec: Spec) -> list[str]:
     assert 0 < count <= MAX_CELLS
     tickets: list[str] = []
     seen: set[str] = set()
     for _ in range(MAX_TICKET_DRAWS):
         if len(tickets) == count:
             break
-        ticket = as_text("sh-" + secrets.token_hex(8), "ticket", TICKET)
+        ticket = as_text(spec.prefix + secrets.token_hex(8), "ticket", spec.ticket)
         if ticket not in seen:
             seen.add(ticket)
             tickets.append(ticket)
@@ -216,29 +238,36 @@ def _draw_tickets(count: int) -> list[str]:
     return tickets
 
 
-def _cells(label: str, plan: list[tuple[str, str]]) -> list[dict[str, Any]]:
-    tickets = _draw_tickets(len(plan))
+def _cells(label: str, plan: list[tuple[str, str]], spec: Spec) -> list[dict[str, Any]]:
+    tickets = _draw_tickets(len(plan), spec)
     return [
-        {"ticket": ticket, "team": label, "prior": prior, "channel": channel}
-        for ticket, (prior, channel) in zip(tickets, plan, strict=True)
+        {"ticket": ticket, "team": label, spec.axis: state, "channel": channel}
+        for ticket, (state, channel) in zip(tickets, plan, strict=True)
     ]
 
 
-def _check_blocks(cells: list[dict[str, Any]], blocks: int, label: str) -> None:
+def _check_blocks(
+    cells: list[dict[str, Any]], blocks: int, label: str, spec: Spec
+) -> None:
     require(len(cells) == blocks * BLOCK_CELLS, "design holds other cell counts")
     require(len({cell["ticket"] for cell in cells}) == len(cells), "tickets repeat")
+    expected = sorted(WORLDS[spec.world])
     for start in range(0, len(cells), BLOCK_CELLS):
         block = cells[start : start + BLOCK_CELLS]
-        worlds = sorted((cell["prior"], cell["channel"]) for cell in block)
-        require(worlds == sorted(WORLDS), f"block {start // BLOCK_CELLS} is incomplete")
+        worlds = sorted((cell[spec.axis], cell["channel"]) for cell in block)
+        require(worlds == expected, f"block {start // BLOCK_CELLS} is incomplete")
         require(all(cell["team"] == label for cell in block), "cell names another team")
 
 
 def _probe_worlds(
-    harbor: SimpleNamespace, task_dir: Path, target: Path, registration: dict[str, Any]
+    harbor: SimpleNamespace,
+    task_dir: Path,
+    target: Path,
+    registration: dict[str, Any],
+    spec: Spec,
 ) -> None:
     team = registration["teams"][registration["cells"][0]["team"]]
-    probes = {(c["prior"], c["channel"]): c for c in registration["cells"]}
+    probes = {(c[spec.axis], c["channel"]): c for c in registration["cells"]}
     require(len(probes) == BLOCK_CELLS, "design misses a world")
     for cell in probes.values():
         env = world_env(cell)
@@ -273,40 +302,59 @@ def _publish(target: Path, registration: dict[str, Any]) -> None:
     _sync_directory(target.parent)
 
 
-def _inputs(args: argparse.Namespace) -> tuple[Path, Path, str, list[dict[str, Any]]]:
+def _inputs(
+    args: argparse.Namespace,
+) -> tuple[Spec, Path, Path, str, list[dict[str, Any]]]:
+    spec = SPECS[args.world]
     try:
-        task_dir = Path(args.task).resolve() if args.task else TASK_DIR
+        task_dir = task_dir_for(spec, args.task)
         target = _fresh_target(args.out, task_dir)
         label = as_text(args.team, "team label", TEAM)
         raws = _read_participants(Path(args.participants))
     except ValueError as error:
         raise InputError(str(error)) from error
-    return task_dir, target, label, raws
+    return spec, task_dir, target, label, raws
+
+
+def _next_commands(target: Path, task_dir: Path) -> list[str]:
+    reg, workspace = str(target), str(target.with_name(f"{target.stem}-w0"))
+    task = ("--task", str(task_dir))
+    module = ("python3", "-BS", "-m")
+    study = ("uv", "run", "python", "-B", "-m", "examples.ship_handover.study")
+    take = shlex.join(
+        (*module, "examples.native_worklist", "take", "--study", reg, workspace, "0/1")
+    )
+    return [
+        shlex.join((*study, "emit", reg, "--out", workspace, *task, "--shard", "0/1")),
+        f'cfg=$({take}) && uv run harbor trial start -c "$cfg"',
+        shlex.join((*module, "examples.ship_handover.collect", reg, workspace, *task)),
+        shlex.join((*module, "examples.ship_handover.contrast", reg, workspace, *task)),
+    ]
 
 
 def register(args: argparse.Namespace) -> dict[str, Any]:
-    task_dir, target, label, raws = _inputs(args)
+    spec, task_dir, target, label, raws = _inputs(args)
     harbor = native()
     try:
         team = _normalize_team(harbor, label, raws)
     except ValueError as error:
         raise InputError(str(error)) from error
-    task = _verified_task(harbor, task_dir)
-    cells = _cells(label, _schedule(args.blocks, args.seed))
-    _check_blocks(cells, args.blocks, label)
+    task, files = _verified_task(harbor, task_dir, spec)
+    cells = _cells(label, _schedule(args.blocks, args.seed, spec), spec)
+    _check_blocks(cells, args.blocks, label, spec)
     registration = {
-        "schema": SCHEMA,
+        "schema": spec.schema,
         "task": task,
         "teams": {label: team},
         "cells": cells,
     }
     try:
         validate_registration(registration)
-        _probe_worlds(harbor, task_dir, target, registration)
+        _probe_worlds(harbor, task_dir, target, registration, spec)
     except (ValueError, TypeError) as error:
         raise InputError(f"team fails the study contract: {error}") from error
     _publish(target, registration)
-    return {
+    summary = {
         "status": "registered",
         "registration": str(target),
         "task": task,
@@ -317,6 +365,13 @@ def register(args: argparse.Namespace) -> dict[str, Any]:
         "worlds_per_block": BLOCK_CELLS,
         "order": "hidden" if args.seed is None else "seeded",
     }
+    if spec is not STOCK:
+        summary |= {
+            "world": spec.world,
+            "task_files": files,
+            "next": _next_commands(target, task_dir),
+        }
+    return summary
 
 
 def _render(summary: dict[str, Any], as_json: bool) -> str:
@@ -351,7 +406,17 @@ def parser() -> argparse.ArgumentParser:
         help="new registration file; written once, atomically, never replaced",
     )
     root.add_argument("--seed", type=_seed, help=SEED_HELP)
-    root.add_argument("--task", help=f"task package directory (default {TASK_DIR})")
+    root.add_argument(
+        "--world",
+        choices=tuple(SPECS),
+        default=STOCK.world,
+        help="stock (default) or inflight; inflight needs --task MATERIALIZED",
+    )
+    root.add_argument(
+        "--task",
+        help=f"task package directory (stock default {STOCK.task_dir}; "
+        "inflight: the materialized harbor/ship-inflight package)",
+    )
     root.add_argument("--json", action="store_true", help="print the summary as JSON")
     return root
 

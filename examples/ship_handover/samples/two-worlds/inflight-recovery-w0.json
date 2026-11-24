@@ -1,0 +1,1 @@
+{"registration_sha256":"sha256:08e790b7ed4abb2c2c51f2e3909b97208ec84b07d4aaf83b4aa89037a35f9688","rows":[{"grade_source":"native_agreed","status":"positive","ticket":"si-c6b0a6a1a18c57ad","world_grade":1},{"grade_source":"native_agreed","status":"zero","ticket":"si-f022cae4e6fb1dce","world_grade":0}],"schema":"harbor.shipping.returns-packet/v1"}
