@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import stat
 from pathlib import Path
@@ -97,7 +98,11 @@ class AttemptKeeper(SeatEventsJobPlugin):
             raise Skipped("unsafe trial name")
         if not isinstance(event.trial_id, UUID):
             raise Skipped("invalid trial id")
-        kept_name = f"{event.trial_id}.jsonl"
+        job_id = event.config.job_id
+        if not isinstance(job_id, UUID):
+            raise Skipped("invalid job id")
+        slot_key = hashlib.sha256(name.encode("utf-8")).hexdigest()
+        kept_name = f"{job_id}.{slot_key}.{event.trial_id}.jsonl"
         archive_fd, _ = _open_private(self._archive, self._pin)
         try:
             trial_fd = os.open(Path(event.config.trials_dir) / name, DIR_FLAGS)
