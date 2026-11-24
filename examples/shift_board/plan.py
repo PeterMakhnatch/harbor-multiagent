@@ -1,9 +1,11 @@
 import argparse
+import hashlib
 import ipaddress
 import json
 import os
 import re
 import secrets
+import stat
 import sys
 import warnings
 from collections.abc import Collection
@@ -34,6 +36,12 @@ DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 CHECKSUM = re.compile(r"[0-9a-f]{64}")
 DECIMAL = re.compile(r"0|[1-9][0-9]{0,9}")
 SHARD = re.compile(r"(0|[1-9][0-9]?)/([1-9][0-9]?)")
+TASK_ENTRY = re.compile(r"[A-Za-z0-9._-]{1,255}")
+TASK_FILES = "task.sha256"
+MAX_TASK_ENTRIES = 256
+MAX_TASK_DEPTH = 8
+MAX_TASK_BYTES = 16 << 20
+PLAIN_FILE = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 AGENT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 IMPORT_PATH = re.compile(
     r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,15}:[A-Za-z_][A-Za-z0-9_]*"
@@ -307,6 +315,59 @@ def task_identity(native: SimpleNamespace, task_dir: Path) -> dict[str, str]:
     return identity
 
 
+def _task_files(task_dir: Path) -> dict[str, Path]:
+    assert task_dir.is_absolute()
+    pending: list[tuple[str, int]] = [("", 0)]
+    files: dict[str, Path] = {}
+    entries = 0
+    while pending:
+        assert len(pending) <= MAX_TASK_ENTRIES + 1
+        prefix, depth = pending.pop()
+        with os.scandir(task_dir / prefix) as listing:
+            for entry in listing:
+                entries += 1
+                _require(
+                    entries <= MAX_TASK_ENTRIES,
+                    f"task package has over {MAX_TASK_ENTRIES} entries",
+                )
+                relative = prefix + _as_text(entry.name, "task entry name", TASK_ENTRY)
+                if entry.is_dir(follow_symlinks=False):
+                    _require(depth < MAX_TASK_DEPTH, f"task entry {relative} is deep")
+                    pending.append((relative + "/", depth + 1))
+                    continue
+                _require(
+                    entry.is_file(follow_symlinks=False),
+                    f"task entry {relative} is not a plain file or directory",
+                )
+                files[relative] = Path(entry.path)
+    return files
+
+
+def _task_file_sha(path: Path, budget: int) -> tuple[str, int]:
+    assert budget >= 0
+    with open(os.open(path, PLAIN_FILE), "rb") as handle:
+        info = os.fstat(handle.fileno())
+        _require(stat.S_ISREG(info.st_mode), f"task file {path} is not a regular file")
+        data = handle.read(budget + 1)
+    _require(len(data) <= budget, f"task files exceed {MAX_TASK_BYTES} bytes")
+    return hashlib.sha256(data).hexdigest(), len(data)
+
+
+def task_files_digest(task_dir: Path, task: dict[str, Any]) -> str:
+    _check_task(task)
+    header = f"{task['name']}\0{task['digest']}\0{task['checksum']}\n"
+    outer = hashlib.sha256(header.encode("ascii"))
+    files = _task_files(task_dir)
+    _require(len(files) > 0, f"task package {task_dir} holds no files")
+    budget = MAX_TASK_BYTES
+    for relative in sorted(files):
+        digest, size = _task_file_sha(files[relative], budget)
+        budget -= size
+        outer.update(f"{relative}\0{digest}\n".encode("ascii"))
+    assert 0 <= budget <= MAX_TASK_BYTES
+    return _as_text("sha256:" + outer.hexdigest(), "task files digest", DIGEST)
+
+
 def scripted_team(native: SimpleNamespace, policy: str) -> list[dict[str, Any]]:
     raw = [
         {"seat": "planner", "name": "oracle"},
@@ -400,6 +461,24 @@ def _write_exclusive(path: Path, data: dict[str, Any], mode: int) -> None:
         raise
 
 
+def _record_task_files(path: Path, digest: str) -> bool:
+    data = (_as_text(digest, "task files digest", DIGEST) + "\n").encode("ascii")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o444)
+    except FileExistsError:
+        with open(os.open(path, PLAIN_FILE), "rb") as handle:
+            same = handle.read(len(data) + 1) == data
+        _require(same, f"{path} binds another task package")
+        return False
+    try:
+        with open(fd, "wb") as handle:
+            handle.write(data)
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return True
+
+
 def register(args: argparse.Namespace) -> None:
     seeds: list[int] = args.seed
     _require(len(set(seeds)) == len(seeds), "duplicate --seed")
@@ -472,9 +551,14 @@ def emit(args: argparse.Namespace) -> None:
     manifest = load_manifest(Path(args.manifest))
     native = _native()
     task_dir = Path(args.task).resolve() if args.task else TASK_DIR
+    identity = manifest["task"]
+    files_digest = task_files_digest(task_dir, identity)
     _require(
-        task_identity(native, task_dir) == manifest["task"],
-        "task differs from registration",
+        task_identity(native, task_dir) == identity, "task differs from registration"
+    )
+    _require(
+        task_files_digest(task_dir, identity) == files_digest,
+        "task changed while it was checked",
     )
     teams = manifest["teams"]
     for label, members in teams.items():
@@ -503,13 +587,17 @@ def emit(args: argparse.Namespace) -> None:
     ]
     configs.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
+    created = False
     try:
+        created = _record_task_files(workspace / TASK_FILES, files_digest)
         for target, request in zip(targets, requests, strict=True):
             _write_exclusive(target, request, 0o644)
             written.append(target)
     except BaseException:
         for path in written:
             path.unlink(missing_ok=True)
+        if created:
+            (workspace / TASK_FILES).unlink(missing_ok=True)
         raise
     for target in targets:
         print(target)

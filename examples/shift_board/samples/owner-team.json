@@ -1,0 +1,16 @@
+{
+  "participants": [
+    {
+      "seat": "planner",
+      "import_path": "examples.shift_board.owner_seat:OwnerSeat",
+      "model_name": "operator/preferred-control",
+      "skip_model_parsing": true
+    },
+    {
+      "seat": "dispatcher",
+      "import_path": "examples.shift_board.owner_seat:OwnerSeat",
+      "model_name": "operator/inspect-stale-control",
+      "skip_model_parsing": true
+    }
+  ]
+}

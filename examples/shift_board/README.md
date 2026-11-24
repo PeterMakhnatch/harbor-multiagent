@@ -28,15 +28,24 @@ uv run python -m examples.shift_board.plan emit "$study/manifest.json" --shard 0
 uv run python -m examples.shift_board.plan emit "$study/manifest.json" --shard 1/2 --out "$study/worker-1"
 ```
 
-Run the emitted configs from this fork. For example, on worker 0:
+Run from this fork. Use the worklist to resume an interrupted worker without repeating a first attempt:
 
 ```bash
-for config in "$study"/worker-0/configs/*.json; do
-  uv run harbor trial start -c "$config" || exit 1
+while :; do
+  if config=$(python3 -BS -m examples.shift_board.worklist \
+      "$study/manifest.json" --shard 0/2 --out "$study/worker-0" --take); then
+    uv run harbor trial start -c "$config" || exit 1
+  else
+    rc=$?
+    [ "$rc" -eq 3 ] && break
+    exit "$rc"
+  fi
 done
 ```
 
-Use your installation's concurrency limit. Run each assigned config only once. Do not retry a failed first attempt into the same registered ticket. If a trial fails, keep its directory. Keep operator failures separate from the team's score. Workspaces contain native configs and logs; do not publish them as anonymous model traces.
+Omit `--take` to list the unclaimed configs without writing anything. Workers on the same filesystem can use the same worklist. Each successful claim reserves exactly one ticket. A crash after the claim does not release it. A pre-existing native trial directory, even an empty one, also prevents reissue. An unused claim is not a completed team. On separate machines, assign disjoint shards; two copies of a workspace cannot coordinate. Use your installation's concurrency limit. Keep failed runs. Do not publish the raw workspaces as anonymous model traces.
+
+`emit` records a fingerprint of the local task files after Harbor verifies the manifest's task checksum. `--take` refuses a different tree without using a ticket. Keep the checkout unchanged, including files that Harbor might ignore. The native checksum in each completed result remains authoritative. Older workspaces without `task.sha256` can still be listed and collected. To claim their remaining tickets, emit the same manifest and shard into a fresh directory against the original task. Copy only that fresh `task.sha256` into the older workspace. Never reset its `claims/` or `trials/` directory.
 
 ## 3. Compare the original arms offline
 
@@ -48,6 +57,39 @@ python3 -BS -m examples.shift_board.collect "$study/manifest.json" "$study/worke
 The second command is intentionally incomplete. The missing worker's trials remain registered. A trial needs the correct native task and participant locks, a valid team reward, the world's startup marker and a consistent verifier cut. A repeated native trial or world UUID is not a second independent team. The collector does not choose the best retry. The offline verifier comes from this checkout, not the supplied archive.
 
 Use two readouts. `first_stale_effect` records whether the proposed stale write would immediately have repaired or damaged the incumbent. `observed_change` records the realized change after a terminal dispatcher action. If the dispatcher stops without one, `observed_change` is unknown even if the final native grade is valid. A `guard_minus_observe` comparison needs both original arms. The study does not infer model attention, intent or what the same team would have done after another response.
+
+## Let a harness make each decision
+
+The native `OwnerSeat` runs the calendar operations in its own seat container. It asks a host executable to choose each move. The executable gets the task rules, its own calendar, and the legal moves. It sees the current board only after it chooses `read`. Looking does not force it to use the newer revision. A `stop` is a choice; an unavailable executable is a seat failure, not a `stop`.
+
+Run a no-model example with a fresh study:
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD"
+export SHIFT_BOARD_PLANNER_OWNER="$PWD/examples/shift_board/scripted_owner.py"
+export SHIFT_BOARD_DISPATCHER_OWNER="$SHIFT_BOARD_PLANNER_OWNER"
+study=$(mktemp -d)
+uv run python -m examples.shift_board.plan register "$study/manifest.json" \
+  --participants examples/shift_board/samples/owner-team.json --seed 4935
+uv run python -m examples.shift_board.plan emit "$study/manifest.json" \
+  --shard 0/1 --out "$study/worker"
+config=$(python3 -BS -m examples.shift_board.worklist "$study/manifest.json" \
+  --shard 0/1 --out "$study/worker" --take) || exit $?
+uv run harbor trial start -c "$config"
+python3 -BS -m examples.shift_board.collect "$study/manifest.json" "$study/worker/trials" --json
+```
+
+This runs 1 of 4 registered teams. For your own harness, register a public `model_name` per role. Set each host variable to an absolute executable path that you trust. The executable runs as your user, **not** in a sandbox. It receives one JSON object on stdin with `schema`, `requested`, `instructions`, and `view`. Return one JSON object on stdout:
+
+```json
+{"schema":"harbor.shift-board.choice/v1","requested":"operator/example","choice":"read","served_model":null}
+```
+
+Use the exact `requested` value and a `choice` from this turn's menu. The example above is a dispatcher decision, not a planner decision. Exit within 90 seconds. The adapter does not pass API keys, seat tokens, or container access. A trusted provider wrapper must arrange its own authorized credentials and billing limits. `served_model` is a declaration from that wrapper, not provider attestation. Use `null` when no model served the decision. The adapter never retries a decision or substitutes a scripted policy.
+
+The collector reports `owner_evidence` only for registered `OwnerSeat` participants. It compares each recorded decision with the ordered world events. A missing receipt does not change a valid world grade. A `matched` stop means the owner declared `stop` and the world recorded no terminal move. It does not prove the owner ran a model or chose to stop without other causes.
+
+The [registered predictions](samples/owner-qualification-predictions.json) and [native outcomes](samples/owner-outcomes.json) cover 12 complete scripted teams and 1 disconnected dispatcher. All 144 predicted fields matched. The world kept its standing reward when the dispatcher failed. The collector rejected that trial as an owner failure, not a completed team.
 
 ## What the native calibration shows
 

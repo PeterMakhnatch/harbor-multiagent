@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, cast
 
+from .owner_evidence import inspect_owners
 from .plan import load_manifest
 
 SCHEMA = "harbor.shift-board.collection/v1"
@@ -337,7 +338,9 @@ def _check_identity(identity: Record, ticket: str) -> str:
     return run
 
 
-def _grade(verifier: types.ModuleType, data: dict[str, bytes], cell: Record) -> Record:
+def _grade(
+    verifier: types.ModuleType, data: dict[str, bytes], cell: Record
+) -> tuple[Record, Record]:
     try:
         cut = verifier.parse_cut(data["cut"])
         expected = verifier.evaluate(
@@ -355,7 +358,7 @@ def _grade(verifier: types.ModuleType, data: dict[str, bytes], cell: Record) -> 
         _same(recorded, {"reward": expected["reward"]}),
         "verifier/reward.json differs from the replay",
     )
-    return expected
+    return cut, expected
 
 
 def _evidence(trial: Path, verifier: types.ModuleType) -> dict[str, bytes]:
@@ -376,19 +379,18 @@ def _evaluate(
     team: dict[str, Record],
     task: Record,
     verifier: types.ModuleType,
-) -> tuple[str, Record]:
+) -> tuple[str, Record, Record | None]:
     data = _evidence(trial, verifier)
-    native_id, reward = _check_result(
-        _object(data["result"], "result.json"), cell, team, task
-    )
+    result = _object(data["result"], "result.json")
+    native_id, reward = _check_result(result, cell, team, task)
     _check_config(_object(data["config"], "config.json"), cell, team, "config.json")
     _check_lock(_object(data["lock"], "lock.json"), cell, team, task)
     run = _check_identity(_object(data["identity"], "world identity"), cell["ticket"])
-    expected = _grade(verifier, data, cell)
+    cut, expected = _grade(verifier, data, cell)
     _require(expected["run"] == run, "world identity run differs from the cut")
     _require(expected["reward"] == reward, "native reward differs from the replay")
     _require(native_id != run, "native id repeats the world run")
-    return native_id, expected
+    return native_id, expected, inspect_owners(team, result, cut)
 
 
 def _identifiers(trial: Path, verifier: types.ModuleType) -> set[str]:
@@ -497,7 +499,11 @@ def _cell(
         status, reason = "duplicate", f"{len(paths)} directories claim the ticket"
     else:
         try:
-            native_id, expected = _evaluate(paths[0], cell, team, task, verifier)
+            native_id, expected, owners = _evaluate(
+                paths[0], cell, team, task, verifier
+            )
+            if owners is not None:
+                row["owner_evidence"] = owners
             status = "usable"
             observation = {field: expected[field] for field in OBSERVATION_FIELDS}
         except Incomplete as error:
