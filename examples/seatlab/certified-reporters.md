@@ -26,6 +26,10 @@ The early-stop teams used **5,512 more** client-reported tokens in this sample. 
 
 Both truthful typed controls scored 1. In the third control the first report was inexact. The other two were exact. The local booker refused; Harbor recorded no submission and a native grade of 0. The [redacted rows](results/certified-reporters/rows.json) contain the 3 controls and all 16 team outcomes. The [report](results/certified-reporters/panel.json) counts missing receipts separately from skipped reporters. The owner also checked the actual arm timestamps and which report was inexact against the private originals. The redacted rows alone do not show either fact.
 
+### Secondary question: which reporting sessions account for the difference?
+
+The total and both skipped sessions are already known. This is an exploratory accounting check, not a second registered experiment. Pair each requested reporter by calendar and physical seat. Separate tokens measured for calls absent in `stop` from changes among calls both teams made. Require the two terms to reproduce the observed total exactly. Count how often the total changes sign when one calendar is omitted. Do not infer a market price, provider bill or causal change in model reasoning from these receipts.
+
 ## Reproduce or collect new evidence
 
 Rebuild the report with the standard library. Run this from the checkout root. No Docker, account or model call is necessary.
