@@ -20,6 +20,8 @@ python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-ret
 
 The first two reports show what changes when one worker is missing or all workers return. They keep archived model teams separate from scripted controls. The shipping report asks a different question: did the receiver have a usable parcel reference before deciding? The original runs did not record whether the receiver cited it. The [new benchmark](examples/seatlab/decision_receipt/README.md) records the citation separately from the delivery outcome. Preparing its four control configurations does not run them.
 
+To see why the **same two-seat decisions** can earn different rewards, [inspect two saved shipping controls](examples/seatlab/decision_receipt/README.md#compare-two-saved-decisions). The decision card shows the sender's handoff, the receiver's accepted action, and what the supplier did afterward. No seat runs.
+
 `list` shows all studies. `verify` with no names checks the entire catalog. Both commands work offline after cloning and need no Harbor install, Docker, or model key.
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
@@ -72,7 +74,7 @@ To let **two operators collect separate four-seat teams**, use the [campaign com
 
 To **repeat a whole business panel**, give each worker [one of two company shards](examples/seatlab/market-handoff.md#run-or-verify-a-separate-repetition). Both workers use the recorded decisions without starting models. To inspect an existing result first, run `python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat reporter-tokens`. The second check shows why the calendar teams used fewer calls but reported more tokens.
 
-The fork's default branch does not include this workbench. Use `seatlab/team-operator-workbench` for the combined checkout. You do not need to switch branches for the linked studies.
+The fork's default branch does not include this workbench. Use `seatlab/offline-team-receipts` for the combined checkout above. You do not need to switch branches for the linked studies.
 
 ## SeatLab: test what a receiver can do with a peer report
 

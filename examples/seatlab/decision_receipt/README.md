@@ -33,6 +33,26 @@ Pass a cut file. The verifier's no-argument entry point is for Harbor's running 
 
 The last state records an action **at** the decision. It does not establish acknowledgement **before** the decision, comprehension, or a change of mind. A `resume` action that names a parcel for shipping does not count as a citation unless the seat also supplies `cite`.
 
+## Compare two saved decisions
+
+Start with a real pair from the older `ship-inflight` benchmark. These commands need only Python 3.12 and the fork checkout:
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench decision \
+  --ticket si-24618ead1522e201 --ticket si-58eb44feac2e10ee
+python3.12 -BS -m examples.seatlab.workbench decision --check-twins
+```
+
+Both outgoing seats sent the draft. Both inboxes returned it. Both relief seats chose to resume it. With a failed supplier, only the draft shipped and the team earned 1. With a settling supplier, the original also shipped and the team earned 0. Those are two observed scripted teams, not two runs of a model. The words `original` and `draft` are labels from the verifier, not information shown to the receiver.
+
+The card also calculates what the **same accepted actions** earn under the other supplier state. `--check-twins` checks those calculations against the other recorded team in each of 8 registered pairs. This checks the parcel ledger as well as the grade. It does not predict what an agent would choose on a second run. Do not count the calculated grades as teams.
+
+In 7 of the 8 pairs, the same accepted actions earned different native rewards across supplier states. In the remaining pair, both relief seats replaced the original and both earned 1. All 16 directional calculations matched the other team's recorded grade and parcel list. Verify the [published check](../results/shipping-decision-pairs.json) with `python3.12 -BS -m examples.seatlab.workbench verify ship-decision-pairs`.
+
+To inspect a different pair, pass `--cut PATH` twice instead. The reader accepts frozen `ship-handover`, `ship-inflight` and `ship-decision-receipt` cuts. Use `--json` for machine output. A file alone identifies neither the native trial nor an enrolled seat. Its grade is a calculation with this checkout's verifier, not an authenticated Harbor result.
+
+Event order shows what the world accepted. Unrecorded polls and rejected actions are not visible. Two cards with the same events need not have the same agent history. In particular, the old shipping worlds did not measure decision-time citation. The stock card starts from the parcel ledger before relief acted. The in-flight card shows parcels after relief acted and before the supplier settled.
+
 ## Why use a separate task?
 
 The [16 saved controls](../../ship_inflight/samples/public-cuts.json) for `harbor/ship-inflight` did not record citations. In 8 cuts, the world returned a reference before relief decided. In 6, relief decided without one. In 2, relief did not decide. These were scripted teams. The new verifier rejects their schema; none count as a negative citation.

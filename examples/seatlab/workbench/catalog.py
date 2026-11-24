@@ -468,6 +468,17 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="aa9e870126c7c5e366101fe494f8300fd90931df2603b33d238e3995122ee613",
     ),
+    Study(
+        id="ship-decision-pairs",
+        question="What do the same accepted shipping actions earn when the hidden supplier state changes?",
+        kind="secondary-native-receipt-analysis",
+        guide="examples/seatlab/decision_receipt/README.md",
+        module="examples.seatlab.decision_receipt.explain",
+        argv=("--check-twins", "--json"),
+        report=f"{_RESULTS}/shipping-decision-pairs.json",
+        exit_code=0,
+        sha256="d52c94257d641c08f85b662f8da5dac7f8f1b974da269855cb792b7ec1f8d34b",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)
