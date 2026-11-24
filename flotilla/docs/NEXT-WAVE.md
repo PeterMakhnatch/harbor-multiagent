@@ -154,11 +154,11 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 
 | # | Question | Design | Size | Cost |
 |---|---|---|---|---|
-| 1 | Which models stop checking when reports come first? A per-model reliance card. | verify `--read-first`, arms `talk-quiet`, `talk-false` (as `rf1v`), on 4-6 more models (Claude Sonnet 5.5, GPT-6.1 Terra, Qwen 4 Max, GLM 5.3, Kimi K3.1) | 32 x 2 per model | about $0.3 per cheap model, $3-6 per frontier model |
-| 2 | Is it the order or the instruction? | a push channel: the world puts unread messages into the first reply of any request, with no read-first sentence; verify `talk-false` | 32 x 2 x 3 models | about $0.8 plus a world change |
+| 1 | Which models stop checking when reports come first, and how do they audit? A trust card per model. | `trust_card.py` under PROBE.md section 13 (`rf1v` + `au2`). Cheap OpenRouter ids on 2026-11-24: `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`, `qwen/qwen3.8-flash`, `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl`; frontier: `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol`, `google/gemini-4-argon`. Re-carding the 3 night models replicates `rf1v` and runs `au2` | 184 per model | about $0.7 per cheap model (Modal included), $6-8 per frontier model |
+| 2 | Is it the order or the instruction? | complete the 2 x 2 (instruction x reports before the first data read): `--inbox` (reports in the brief, no read-first sentence) and `--read-first --post-trigger first_submit` (instruction, reports only at the first submit); verify `talk-quiet`, `talk-false` on `rf1v`'s instances. `--push` cannot do it: agents batch their first world call with their first data read (FINDINGS.md, 2026-11-24 05:20) | 32 x 2 x 2 sets x 3 models = 384 | about $1.3 |
 | 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `budget` 0, 1, 2 (needs a build flag) | 40 x 3 x 3 | about $1.6 |
 | 4 | Does an argument move a seat when the task text does not settle it? | the peer cites a policy file that the seat also holds; the claim is false and only that file shows it (`pa1` used a reason the task text refutes) | 32 x 2 x 3 | about $0.6 plus a family change |
-| 5 | Do frontier models behave the same? | `rf1v` and `au1` arms on 1 frontier model | 32 x 2 and 40 x 3 | about $5-8 |
+| 5 | Do frontier models behave the same? | trust cards (row 1) on 1-3 frontier models before any claim about frontier agents | 184 per model | $6-8 per model |
 
 Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
 from its own data and nothing moved it (FINDINGS.md, 2026-11-24).

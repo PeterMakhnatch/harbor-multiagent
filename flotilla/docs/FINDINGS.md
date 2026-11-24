@@ -745,3 +745,36 @@ a placeholder in the example (`{"month": "<month>"}`), as the 2026-11-19 entry o
 
 Lesson: to measure verification, give the checker less than the whole job; report audit use, aim and
 pass-through separately, because each model fails in a different one; keep real values out of examples.
+
+## 2026-11-24 05:20 ET — Agents plan their first data read before they see any team message, unless told otherwise
+
+Exploratory analysis of finished waves (no new trials; not pre-registered). An agent (TrialTimeline) compared, for
+`p1` in every counted trial of `vf1`, `pc2` and `rf1`, the agent step of the first world request with the step of
+the first data-file read (the `probe_analysis.py` re-check rule, plus file names built from a template). Report
+and script: `.flotilla-local/cards/2026-11-24/readings/first-contact.md` and `rederive/first_contact.py`. The world
+event log agrees with the commands on the first endpoint in 1235 of 1488 trials; all 253 differences are a
+`/submit` the gate refused.
+
+Observed:
+
+- Without read-first, the world reply came in an earlier step than the first data read in 3 of 1008 trials
+  (`vf1` 3 of 432, `pc2` 0 of 576).
+- In `vf1` the first world request shared a step with the first read in 79 of 144 trials (Haiku), 91 of 144
+  (DeepSeek) and 140 of 144 (Luna); in the rest it came later. Luna's first request was `GET /messages` in 118 of
+  144 trials, in the same command batch as its first read: it wrote the read before it saw the reports.
+- Haiku often makes no world contact before its first `/submit` (`vf1` 56 of 144, `pc2` 187 of 192); the submit
+  gate then returns the messages.
+- With read-first (`rf1`), `GET /messages` came one step before the first read in 448 of 448 trials that read
+  data; the other 32 are Luna's `talk-false` trials, which read no data.
+
+Inferred:
+
+- What changed Luna in `rf1v` is that it saw the reports before it planned its first data read. In `vf1` it also
+  saw them in its first step's output, next to the data it had already asked for, and it checked them.
+- Pushing messages into the reply of the first world request (world version 17) would not move the reports
+  before that plan for these agents, so it cannot separate order from instruction. Reports placed in the brief
+  can, with an instruction-only control (read-first, reports at the first submit). NEXT-WAVE.md, behavior probes,
+  row 2.
+
+Lesson: with tool-using agents, "before the work" means before the agent plans its first data read; measure where
+the messages land against that step, not against wall time.
