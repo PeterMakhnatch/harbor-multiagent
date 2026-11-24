@@ -32,6 +32,8 @@ To see which seats and retries account for the money, [inspect a saved team job 
 
 Before a future team job, [prepare the host observers and morning manifest together](examples/seatlab/workbench/team-account.md#prepare-observation-before-a-future-job). Nothing starts. Afterward, [check which finished jobs need attention](examples/seatlab/workbench/team-account.md#check-finished-jobs-from-several-workers). A missing job, seat journal, or END receipt is not a failed team.
 
+To see how much teammates' execution windows overlap, [inspect a saved native job](examples/seatlab/workbench/team-account.md#measure-overlap-and-the-last-seat). This works on older jobs without seat journals. It measures elapsed time, not model work.
+
 To tell whether a teammate received a report before a decision, [retain the message journal for each execution](examples/seat_handoffs/README.md#keep-message-evidence-when-harbor-retries-a-slot). You can [check message coverage against a saved host witness](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md#did-the-message-evidence-survive-too) without running a team.
 
 Before spending on a communication benchmark, [check what the world actually measures](examples/seat_handoffs/author.md). The same offline check distinguishes a returned report from a receiver acknowledgement. A reusable writer lets two authors instrument a new task without changing Harbor.

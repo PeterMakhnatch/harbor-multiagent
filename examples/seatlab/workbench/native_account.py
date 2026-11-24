@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import stat
+from collections.abc import Iterator
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -248,26 +249,23 @@ def _seat_row(entry: Record, under_test: bool, disposition: str | None) -> Recor
     )
 
 
-def _seats(document: Record, roster: list[str] | None) -> tuple[str, list[Record]]:
+def _seats(document: Record, trial: str, roster: list[str] | None) -> list[Record]:
     if document.get("seat_results") is None:
         if roster is None:
             raise Malformed("trial result is not a multi-seat result")
-        trial = document.get("id")
-        if not isinstance(trial, str) or UUID.fullmatch(trial) is None:
-            raise Malformed("result id is not a canonical lowercase UUID")
-        return trial, [seat(name) for name in roster]
-    trial, declared = result_roster(document)
+        return [seat(name) for name in roster]
+    observed, declared = result_roster(document)
+    _require(observed == trial, "trial result id disagrees with its identity")
     _require(
         roster is None or set(roster) == set(declared),
         "trial seat_results disagree with config participants",
     )
-    rows = [
+    return [
         _seat_row(entry, *declared[entry["seat"]]) for entry in document["seat_results"]
     ]
-    return trial, rows
 
 
-def _slot(slot_name: str) -> str:
+def _slot_name(slot_name: str) -> None:
     _require(
         type(slot_name) is str
         and 0 < len(slot_name) <= MAX_SLOT_NAME
@@ -276,16 +274,26 @@ def _slot(slot_name: str) -> str:
         and "\0" not in slot_name,
         "slot name is not one directory name",
     )
+
+
+def _digest(slot_name: str) -> str:
     return hashlib.sha256(os.fsencode(slot_name)).hexdigest()
 
 
-def project_result(document: Record, *, job_id: str, slot_name: str) -> Record:
+def _slot(slot_name: str) -> str:
+    _slot_name(slot_name)
+    return _digest(slot_name)
+
+
+def _identity(
+    document: Record, job_id: str, slot_name: str
+) -> tuple[str, list[str] | None]:
     _require(type(document) is dict, "trial result is not a JSON object")
     _require(
         type(job_id) is str and UUID.fullmatch(job_id) is not None,
         "job id is not a canonical lowercase UUID",
     )
-    slot = _slot(slot_name)
+    _slot_name(slot_name)
     _version_one(document, "trial result")
     config = document.get("config")
     if not isinstance(config, dict):
@@ -297,12 +305,80 @@ def project_result(document: Record, *, job_id: str, slot_name: str) -> Record:
         and config.get("trial_name", slot_name) == slot_name,
         "trial result names another directory",
     )
-    trial, rows = _seats(document, _participants(config))
+    participants = _participants(config)
+    trial = document.get("id")
+    if not isinstance(trial, str) or UUID.fullmatch(trial) is None:
+        raise Malformed("result id is not a canonical lowercase UUID")
+    return trial, participants
+
+
+def _project(
+    document: Record, slot: str, trial: str, participants: list[str] | None
+) -> Record:
+    rows = _seats(document, trial, participants)
     grade_state, reward = _grade(document)
     return attempt(trial, slot, grade_state, reward, rows)
 
 
+def project_result(document: Record, *, job_id: str, slot_name: str) -> Record:
+    trial, participants = _identity(document, job_id, slot_name)
+    return _project(document, _digest(slot_name), trial, participants)
+
+
 Root = tuple[str, int, int | None, bool | None, int]
+Retained = tuple[str, Record, str, list[str] | None]
+
+
+def _result(job: str, name: str) -> str | None:
+    folder = os.path.join(job, name)
+    try:
+        mode = os.lstat(folder).st_mode
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as error:
+        raise Malformed("trial directory is unreadable") from error
+    _require(stat.S_ISDIR(mode), "trial directory is not a real non-symlink directory")
+    path = os.path.join(folder, RESULT)
+    return path if _present(path, "trial result") else None
+
+
+def _roster_size(document: Record, participants: list[str] | None) -> int:
+    declared = len(participants or ())
+    observed = document.get("seat_results")
+    if type(observed) is not list:
+        return declared
+    _require(len(observed) <= MAX_SEATS, "result must record 1 to 256 seat_results")
+    return max(declared, len(observed))
+
+
+def retained(job: str, root: Root) -> Iterator[Retained]:
+    job_id, registered, _, _, remaining = root
+    _require(
+        type(job_id) is str
+        and UUID.fullmatch(job_id) is not None
+        and type(registered) is int
+        and 0 <= registered <= MAX_TRIALS
+        and type(remaining) is int
+        and 0 <= remaining <= MAX_TOTAL_BYTES,
+        "job root is not a native job root",
+    )
+    trials: set[str] = set()
+    rows = 0
+    for name in _children(job):
+        path = _result(job, name)
+        if path is None:
+            continue
+        _require(
+            len(trials) < registered,
+            "job holds more trial results than n_total_trials",
+        )
+        document, remaining = _object(path, "trial result", remaining)
+        trial, participants = _identity(document, job_id, name)
+        _require(trial not in trials, "two directories hold the same trial")
+        rows += _roster_size(document, participants)
+        _require(rows <= MAX_SEAT_ROWS, "job has too many seat rows")
+        trials.add(trial)
+        yield name, document, trial, participants
 
 
 def build(job: str) -> Record:
@@ -310,23 +386,9 @@ def build(job: str) -> Record:
 
 
 def collect(job: str, root: Root) -> Record:
-    job_id, registered, retries, job_closed, remaining = root
-    attempts: list[Record] = []
-    trials: set[str] = set()
-    rows = 0
-    for name in _children(job):
-        path = os.path.join(job, name, RESULT)
-        if not _present(path, "trial result"):
-            continue
-        _require(
-            len(attempts) < registered,
-            "job holds more trial results than n_total_trials",
-        )
-        document, remaining = _object(path, "trial result", remaining)
-        row = project_result(document, job_id=job_id, slot_name=name)
-        _require(row["trial"] not in trials, "two directories hold the same trial")
-        rows += len(row["seats"])
-        _require(rows <= MAX_SEAT_ROWS, "job has too many seat rows")
-        trials.add(row["trial"])
-        attempts.append(row)
+    job_id, registered, retries, job_closed, _ = root
+    attempts = [
+        _project(document, _digest(name), trial, participants)
+        for name, document, trial, participants in retained(job, root)
+    ]
     return packet(SOURCE, job_id, registered, retries, attempts, job_closed=job_closed)

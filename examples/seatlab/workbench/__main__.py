@@ -14,7 +14,7 @@ from .catalog import STUDIES, Study
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = "seatlab.workbench/v1"
-USAGE = "python -m examples.seatlab.workbench list | verify [STUDY ...] | account --help | instrument --help | attention --help | handoffs --help | isolate --help | cohort --help"
+USAGE = "python -m examples.seatlab.workbench list | verify [STUDY ...] | account --help | instrument --help | attention --help | timing --help | handoffs --help | isolate --help | cohort --help"
 STUDY_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 MODULE = re.compile(
     r"examples\.(?:seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}|ship_inflight\.replay|"
@@ -257,6 +257,10 @@ def main(argv: list[str] | None = None) -> int:
         from .attention import main as attention
 
         return attention(args[1:])
+    if args[:1] == ["timing"]:
+        from .team_timing import main as timing
+
+        return timing(args[1:])
     if args[:1] == ["handoffs"]:
         from .handoffs import main as handoffs
 

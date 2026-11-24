@@ -30,6 +30,27 @@ To check which registered team inputs the retained final grades support, use the
 
 Do not add those columns. They can describe the same call. Keep JSON for exact source decimals. Digits beyond billing precision can come from the harness's serialized floating-point estimate.
 
+### Measure overlap and the last seat
+
+Use a stationary native job. The default reads the wall-clock windows saved in `seat_results[].agent_execution`. It needs no observer. For a job with host seat journals, choose the monotonic clock explicitly:
+
+```sh
+python3.12 -BS -m "$wb" timing "$job" --roles
+python3.12 -BS -m "$wb" timing "$job" --clock journal --json
+```
+
+`shared_ns` is time with at least two selected seat windows open. `all_ns` needs every selected seat. `occupied_ns` is the union of their windows; gaps count in `span_ns` but not `occupied_ns`. `seat_ns` sums seat durations and can exceed the span. `last_alone_ns` counts only the final seat's own time after all the others ended. A tied end adds no tail. `--roles` identifies the last seat by its local label. By default labels are hidden.
+
+The result clock includes harness setup inside the seat execution and the wait for trajectory collection. The journal clock starts just before `agent.run` and ends when the harness records `play_end`. A stopped seat can have an end on either clock. A timestamp is not proof that the model returned normally. The operator never combines the two clocks, fills gaps with zero, or aligns different trials on one timeline.
+
+The default selects every seat. `--under-test` omits supporting seats. Fewer than two selected seats cannot yield a team timing measurement. The report separates enrolled slots, retained final results and finals with complete windows. It excludes displaced retries. Totals sum the **measured finals**, not the elapsed time of the job or the time of an unobserved seat.
+
+Exit `0` means a closed job has complete windows for all enrolled finals. Exit `3` means coverage or closure is incomplete. Exit `1` flags a clock contradiction; exit `2` rejects invalid input or an identity mismatch. Missing evidence does not establish that a seat failed. The host windows include waits. Do not infer messages, billed time, or achievable speedup from overlap alone.
+
+On a saved job with 20 three-seat model teams, 20 finals had wall-clock windows. The spans summed to 1,475.87 seconds. The last seat alone accounted for 850.06 seconds (57.6%). Seat `p3` finished last in 8 of 20 finals and accounted for 615.71 of those seconds. None of the 20 had host seat journals. This identifies a role to inspect, not time or money that could have been saved.
+
+For a reproducible example, use `timing examples/seatlab/results/seat-event-stream/native-jobs/job-return --clock journal`. The two published scripted trials record 0.54 seconds of overlap and 10.00 seconds with the last seat alone in total. Their excerpt omits the job finish, so the command returns `3` despite measuring both trials. The same excerpt with `--clock result` gives no timing measurement.
+
 ### Prepare observation before a future job
 
 Use `instrument` when you control the host that will run a native **multi-seat job**. It prepares the host observers and the manifest for the morning check in one step. It does not run Harbor, create the job directory, reserve capacity, contact a provider, or grant spending permission.
