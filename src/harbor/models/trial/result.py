@@ -90,6 +90,9 @@ class StepResult(BaseModel):
     verifier: TimingInfo | None = None
 
 
+SeatExecutionDisposition = Literal["returned", "raised", "cancelled", "stop_requested"]
+
+
 class SeatResult(BaseModel):
     """One seat's agent run, recorded like a step's."""
 
@@ -100,6 +103,9 @@ class SeatResult(BaseModel):
     agent_setup: TimingInfo | None = None
     agent_execution: TimingInfo | None = None
     exception_info: ExceptionInfo | None = None
+    execution_disposition: SeatExecutionDisposition | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
 
 class TrialResult(BaseModel):

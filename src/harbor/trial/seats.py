@@ -31,7 +31,12 @@ from harbor.models.task.verifier_mode import (
 )
 from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
-from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
+from harbor.models.trial.result import (
+    ExceptionInfo,
+    SeatExecutionDisposition,
+    SeatResult,
+    TimingInfo,
+)
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
 from harbor.trial.hooks import TrialEvent
@@ -55,7 +60,10 @@ class Seat:
     result: SeatResult
     setup_timeout_sec: float
     environment: SeatEnvironment = field(init=False)
-    stopped: bool = False
+
+    @property
+    def stop_requested(self) -> bool:
+        return self.result.execution_disposition == "stop_requested"
 
 
 def check_launch(config: TrialConfig, task: Task) -> None:
@@ -328,11 +336,11 @@ class SeatsTrial(SingleStepTrial):
         finally:
             for seat in self.seats:
                 if not tasks[seat.name].done():
-                    seat.stopped = True
+                    seat.result.execution_disposition = "stop_requested"
                     tasks[seat.name].cancel()
             await asyncio.gather(*tasks.values(), return_exceptions=True)
         for seat in self.seats:
-            if seat.stopped:
+            if seat.stop_requested:
                 await seat.environment.kill_exec_processes()
 
     async def _play_seat(self, seat: Seat) -> None:
@@ -343,6 +351,7 @@ class SeatsTrial(SingleStepTrial):
         execution = TimingInfo(started_at=self._now())
         seat.result.agent_result = context
         seat.result.agent_execution = execution
+        disposition: SeatExecutionDisposition | None = None
         try:
             with seat.environment.scoped_exec_env(seat.agent.extra_env):
                 with self._log_context("agent", seat.environment):
@@ -354,13 +363,20 @@ class SeatsTrial(SingleStepTrial):
                             environment=seat.environment,
                             context=context,
                         )
+            disposition = "returned"
+        except asyncio.CancelledError:
+            disposition = "cancelled"
+            raise
         except Exception as exc:
-            if seat.stopped:
+            if seat.stop_requested:
                 seat.logger.warning(f"Seat {seat.name!r} failed while stopping: {exc}")
             else:
                 seat.result.exception_info = self._exception_info(exc)
+                disposition = "raised"
         finally:
             execution.finished_at = self._now()
+            if not seat.stop_requested:
+                seat.result.execution_disposition = disposition
 
     async def _collect_seats(self) -> None:
         """Mirrors Trial._sync_agent_output for every seat, under test or not."""

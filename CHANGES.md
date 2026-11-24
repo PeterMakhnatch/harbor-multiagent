@@ -40,6 +40,8 @@ agent under test. Readers of `exception_info` are untouched too: a seat
 trial puts a seat's error there, as a single-agent trial puts its agent's,
 unless the verifier or the trial itself fails after it.
 
+`SeatResult.execution_disposition` distinguishes a normal play return from a recorded error, independent cancellation, or a stop request by the team runner. Older seat results leave the field unknown. This field does not change which trials Harbor verifies or which rewards are valid.
+
 ## Exec environment forwarding
 
 Original Harbor puts exec environment values in `-e NAME=VALUE` arguments and,

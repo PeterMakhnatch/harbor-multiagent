@@ -97,6 +97,8 @@ class ScriptedAgent(BaseAgent):
                 raise AgentAuthenticationError("401 invalid api key")
             if self.fail == "crash":
                 raise RuntimeError(f"{seat} crashed")
+            if self.fail == "cancel":
+                raise asyncio.CancelledError
             if self.hold:
                 await RELEASE[seat].wait()
             context.cost_usd = 0.5
@@ -105,7 +107,11 @@ class ScriptedAgent(BaseAgent):
             note("stopped", seat)
             if self.fail == "crash-on-cancel":
                 raise RuntimeError(f"{seat} crashed while stopping")
+            if self.fail == "return-on-cancel":
+                return
             raise
+        finally:
+            note("left", seat)
 
 
 AGENT = f"{__name__}:ScriptedAgent"
@@ -481,6 +487,9 @@ async def test_agent_timeout_ends_everyone_still_running_and_still_grades(
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "AgentTimeoutError"
     assert result.exception_info.exception_message.startswith("Seat 'maya': ")
+    assert seats["maya"].execution_disposition == "stop_requested"
+    assert seats["lee"].execution_disposition == "stop_requested"
+    assert seats["raj"].execution_disposition == "returned"
     assert _verified(trial) and result.verifier_result is not None
 
 
@@ -606,6 +615,58 @@ async def test_an_error_while_stopping_a_seat_does_not_fail_the_trial(
     assert result.exception_info is None
     assert _seat_results(result)["lee"].exception_info is None
     assert _verified(trial)
+
+
+@pytest.mark.parametrize(
+    "script, disposition, error",
+    [
+        ({"hold": True}, "stop_requested", None),
+        ({}, "returned", None),
+        ({"fail": "crash"}, "raised", "RuntimeError"),
+        ({"fail": "cancel"}, "cancelled", None),
+        ({"hold": True, "fail": "return-on-cancel"}, "stop_requested", None),
+        ({"hold": True, "fail": "crash-on-cancel"}, "stop_requested", None),
+    ],
+    ids=[
+        "stopped-by-team",
+        "finished-on-its-own",
+        "raised",
+        "cancelled-on-its-own",
+        "returned-after-team-stop",
+        "raised-after-team-stop",
+    ],
+)
+async def test_each_seat_records_how_its_play_ended(
+    tmp_path: Path, script: dict[str, Any], disposition: str, error: str | None
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", hold=True),
+            _participant("raj"),
+            _participant("lee", **script),
+        )
+    )
+
+    run = asyncio.create_task(trial.run())
+    await seen("ended", "raj")
+    if not script.get("hold"):
+        await seen("left", "lee")
+    RELEASE["maya"].set()
+    result = await run
+
+    seats = _seat_results(result)
+    assert seats["maya"].execution_disposition == "returned"
+    assert seats["raj"].execution_disposition == "returned"
+    lee = seats["lee"]
+    assert lee.execution_disposition == disposition
+    assert (lee.exception_info and lee.exception_info.exception_type) == error
+    assert lee.agent_execution is not None
+    assert lee.agent_execution.finished_at is not None
+    assert ("stopped", "lee") in EVENTS or disposition in {"returned", "raised"}
+    assert _verified(trial)
+    written = TrialResult.model_validate_json(trial.paths.result_path.read_text())
+    assert _seat_results(written)["lee"].execution_disposition == disposition
 
 
 async def test_a_verifier_error_after_a_seat_error_is_the_trials_error(
@@ -805,6 +866,12 @@ async def test_a_cancelled_trial_writes_the_usage_collected_so_far(tmp_path: Pat
     assert written.exception_info.exception_type == "CancelledError"
     assert _seat_results(written)["raj"].agent_result.cost_usd == 0.5
     assert written.compute_token_cost_totals()[3] == 0.5
+    dispositions = {s.seat: s.execution_disposition for s in written.seat_results}
+    assert dispositions == {
+        "maya": "stop_requested",
+        "raj": "returned",
+        "lee": "stop_requested",
+    }
 
 
 async def test_lifecycle_events_are_journaled_in_the_trial_dir(tmp_path: Path):
@@ -860,6 +927,37 @@ async def test_result_json_records_every_seat(tmp_path: Path):
     assert "agent" not in config
     reloaded = TrialResult.model_validate_json(trial.paths.result_path.read_text())
     assert [p.seat for p in reloaded.config.participants] == ["maya", "raj", "lee"]
+
+
+async def test_an_older_result_without_dispositions_reloads_as_unknown(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+
+    await trial.run()
+
+    data = json.loads(trial.paths.result_path.read_text())
+    assert [s["execution_disposition"] for s in data["seat_results"]] == [
+        "returned"
+    ] * 3
+    for seat in data["seat_results"]:
+        del seat["execution_disposition"]
+    older = TrialResult.model_validate(data)
+    assert [s.execution_disposition for s in older.seat_results] == [None] * 3
+    dumped = json.loads(older.model_dump_json())
+    assert [s.get("execution_disposition") for s in dumped["seat_results"]] == [
+        None
+    ] * 3
+    again = TrialResult.model_validate(dumped)
+    assert [s.execution_disposition for s in again.seat_results] == [None] * 3
 
 
 async def test_each_seat_logs_under_its_own_name(tmp_path: Path):
