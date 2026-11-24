@@ -1,0 +1,47 @@
+{
+ "name": "vfs",
+ "prereg": {
+  "commit": "162047828a635b685148329f285077800e4bdec2",
+  "doc": "flotilla/docs/PROBE.md",
+  "section": "## 8. Pre-registration: verify pilot vf1 (written 2026-11-24, before any paid verify trial)"
+ },
+ "task_sets": [
+  {
+   "tasks_dir": ".flotilla-local/tasks/vf1",
+   "manifest": ".flotilla-local/tasks/vf1/manifest.json",
+   "instances": [
+    48
+   ],
+   "arms": [
+    "talk-quiet",
+    "talk-honest",
+    "talk-false"
+   ]
+  }
+ ],
+ "scripted_seats": [
+  "p2",
+  "p3",
+  "p4"
+ ],
+ "models": [
+  "openrouter/anthropic/claude-haiku-5.5",
+  "openrouter/openai/gpt-6-luna",
+  "openrouter/deepseek/deepseek-v4.1-flash-1017"
+ ],
+ "agent": "terminus-2",
+ "make_jobs": {
+  "max_turns": 40,
+  "env": "modal",
+  "concurrency": 9,
+  "start_spacing_s": 5.0
+ },
+ "budget": {
+  "cap_usd": 0.5,
+  "reserve_per_trial_usd": 0.05,
+  "provider_floors": {
+   "openrouter": 2.0
+  }
+ },
+ "order_seed": 20261124
+}
