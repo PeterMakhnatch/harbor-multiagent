@@ -538,7 +538,7 @@ run `reliability.py` after each wave and `flotilla-watch` during it.
 Run: verify pilot `vf1` (PROBE.md section 8 with amendments 1-2): 48 instances x `talk-quiet`, `talk-honest`,
 `talk-false` x Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash = 432 trials, Modal, 01:22-02:15 ET, $0.69 recorded.
 Numbers from `probe_analysis.py`; an independent agent re-derived them from the raw files (0 mismatches); a reader
-agent coded every `talk-false` and `talk-honest` trial (`/tmp/probe-readings/verify.md`).
+agent coded every `talk-false` and `talk-honest` trial (`.flotilla-local/cards/2026-11-24/readings/verify.md`).
 
 Observed:
 
@@ -572,7 +572,7 @@ Run: conformity pilot `pc2` (PROBE.md section 7 with amendments 1-2): 48 instanc
 `talk-wrong`, `talk-dissent`, `talk-right` x Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash = 576 trials, Modal,
 01:22-02:26 ET, $0.67 recorded. Numbers from `probe_analysis.py`, re-derived from the raw files by an independent
 agent (0 mismatches); a reader agent coded all 288 `talk-wrong` and `talk-dissent` trials
-(`/tmp/probe-readings/conformity.md`).
+(`.flotilla-local/cards/2026-11-24/readings/conformity.md`).
 
 Observed:
 
@@ -630,7 +630,7 @@ claim, the expense still happened.") are created at `p1`'s first submit, so the 
 over. One trial failed on a sandbox error; its retry is valid (I ran the retry after the single read, not before
 it as section 7 says; the retry is a new trial and its result agrees). Numbers from `probe_analysis.py`, which
 prints the section 12 primary as a follow-up line without Holm; re-derived by an independent agent (0
-mismatches; Holm p = 1). A reader agent coded all 96 `talk-argue` trials (`/tmp/probe-readings/argue.md`).
+mismatches; Holm p = 1). A reader agent coded all 96 `talk-argue` trials (`.flotilla-local/cards/2026-11-24/readings/argue.md`).
 
 Observed:
 
@@ -663,7 +663,7 @@ messages before it opens any file. Conformity `rf1c` (48 instances x `talk-quiet
 02:48-03:44 ET, $0.59 recorded. One trial failed on a sandbox Docker build; its retry ran before the read. Numbers
 from `probe_analysis.py`, re-derived by an independent agent (0 mismatches; for Luna it checked that every final
 answer equals the sum of the 3 posted reports). A reader agent coded every trajectory
-(`/tmp/probe-readings/readfirst.md`).
+(`.flotilla-local/cards/2026-11-24/readings/readfirst.md`).
 
 Observed:
 
@@ -699,7 +699,7 @@ Run: audit pilot `au1` (PROBE.md section 11 with amendment 1, world version 15):
 teammates post the subtotals of their months, and `p1` may audit 1 month with `POST /audit`. 40 instances x
 `talk-honest`, `talk-false`, `talk-false-tell` x the 3 models = 360 trials, all valid, Modal, 02:52-04:05 ET, $0.83
 recorded. Numbers from `probe_analysis.py`, re-derived from the world logs by an independent agent (0 mismatches).
-A reader agent coded the trials (`/tmp/probe-readings/audit.md`).
+A reader agent coded the trials (`.flotilla-local/cards/2026-11-24/readings/audit.md`).
 
 Observed:
 
