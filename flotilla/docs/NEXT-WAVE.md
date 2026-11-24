@@ -163,7 +163,7 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 
 | # | Question | Design | Size | Cost |
 |---|---|---|---|---|
-| 1 | Which models stop checking when reports come first, and how do they audit? A trust card per model. | `trust_card.py` under PROBE.md section 13 (`rf1v` + `au2`). Cheap OpenRouter ids on 2026-11-24: `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`, `qwen/qwen3.8-flash`, `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl`; frontier: `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol`, `google/gemini-4-argon`. Re-carding the 3 night models replicates `rf1v` and runs `au2` | 184 per model | about $0.7 per cheap model (Modal included), $6-8 per frontier model |
+| 1 | Which models stop checking when reports come first, and how do they audit? A trust card per model. | `trust_card.py` under PROBE.md section 13 (`rf1v` + `au2`). Cheap OpenRouter ids on 2026-11-24: `openai/gpt-6-luna-pro`, `xiaomi/mimo-v2.6-flash`, `qwen/qwen3.8-flash`, `z-ai/glm-5.3-flash`, `minimax/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl`; frontier: `anthropic/claude-sonnet-5.5`, `openai/gpt-6.2-sol`, `google/gemini-4-argon`. Re-carding the 3 night models replicates `rf1v` and runs `au2`. Ready: `tc1` (the 3 night models), `tc2smoke` then `tc2` (the 6 cheap models) | 184 per model | about $0.7-1.3 per cheap model (Modal included; the low end assumes prompt caching), $6-8 per frontier model |
 | 2 | Is it the order or the instruction? | complete the 2 x 2 (instruction x reports before the first data read): `--inbox` (reports in the brief, no read-first sentence) and `--read-first --post-trigger first_submit` (instruction, reports only at the first submit); verify `talk-quiet`, `talk-false` on `rf1v`'s instances. `--push` cannot do it: agents batch their first world call with their first data read (FINDINGS.md, 2026-11-24 05:20). Ready: `io1`, PROBE.md section 14 | 32 x 2 x 2 sets x 3 models = 384 | about $1.4 (OpenRouter $0.55-0.62, Modal about $0.81) |
 | 3 | Does a budget of 2 audits, or a cost per audit, change who checks? | `audit` with `--audit-budget` 0, 1, 2 (built; `au2`'s seed); give each budget its own `--variant` (`audit-b0`, `audit-b1`, `audit-b2`) so no two builds share a label, and analyse each budget's jobs with its own one-set plan; pre-register first | 40 x 3 x 3 | about $1.6 |
 | 4 | Does an argument move a seat when the task text does not settle it? | conformity `--policy-file` (built): each seat holds `policy.md`, whose deciding rule (void, weekend or cap, stratified by instance: instance i gets rule i % 3; the month is redrawn when that rule's misreading would not move the total by 8-60%) only that file states, not the seat's environment; arm `talk-policy` (one peer posts W with a false claim about `policy.md`) against `talk-one` (the same post without the claim) and `talk-quiet`; analysis fields `opened_policy`, `policy_after_claim`. Pre-register first (decide whether the void rule, pa1's refuted rationale, stays in the mix) | 32 x 3 x 3 | about $0.8 |
@@ -222,7 +222,12 @@ python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.js
 One command per stage gives any model a card under the standing protocol of PROBE.md section 13: reliance
 (`rf1v`, 32 instances x `talk-quiet`, `talk-false`) and audit (`au2`, 40 instances x `talk-honest`, `talk-false`,
 `talk-false-tell`), 184 trials per model, confederates p2-p4 on the `oracle` agent. Ready to run:
-`flotilla/plans/cards/tc1.json` (the 3 night models, 552 trials, cap $3.31; it replicates `rf1v` and runs `au2`).
+`flotilla/plans/cards/tc1.json` (the 3 night models, 552 trials, cap $3.31; it replicates `rf1v` and runs `au2`), and
+`flotilla/plans/cards/tc2smoke.json` then `tc2.json` (the 6 cheap models of row 1: 30 and 1104 trials, caps $0.30
+and $5.00). Run `tc2smoke` first and read each model's 5 trials: the invalid-streak guard counts trials in start
+order, so a model that fails every trial between 5 working models may never stop the wave. Expected `tc2` cost at
+the night's mean token use per trial (prices read 2026-11-24 07:30 ET): OpenRouter about $2.1 with prompt caching,
+$4.7 without, plus Modal about $2.3.
 
 ```bash
 python3 flotilla/trust_card.py plan --model openrouter/<model> --name card-<short> --prereg-commit <sha with section 13>
