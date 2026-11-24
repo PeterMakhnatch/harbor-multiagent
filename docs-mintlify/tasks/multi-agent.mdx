@@ -259,6 +259,12 @@ The job summary reports each key.
   - Token totals sum every agent. The cost total sums every agent, and is unknown (`null`) when an agent that ran a model reported no cost. An agent without a model, such as `oracle` or `nop`, costs nothing.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
 
+### Export seat trajectories
+
+Use `harbor traces export --path <job-or-trial-directory>` to load text ATIF traces as a Hugging Face dataset. Import `export_traces` from `harbor.utils.traces_utils` to use the dataset locally in Python.
+
+Each episode includes `trial_id`, `seat`, and `under_test`. The export uses that seat's agent and model metadata. It skips seats without a trajectory. `result` describes the shared trial, not the individual seat. `--episodes last` selects the last episode of each seat.
+
 ## Limitations
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `sail`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.
