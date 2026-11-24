@@ -111,6 +111,7 @@ def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final
         "arm": task["condition"],
         "probe_kind": probe["kind"],
         "subject": subject,
+        "read_first": bool(task.get("read_first")),  # build_tasks.py --read-first: p1 is told to read messages first
         "answer_value": final_value,
         "correct": reward == 1.0,
         "correct_value": probe["correct_value"],
