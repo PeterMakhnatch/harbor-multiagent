@@ -51,7 +51,12 @@ from urllib.parse import parse_qs, urlsplit
 # written, outside LOCK; v10 recorded GET delivery before the write. Every action event carries `unread`. A round
 # protocol may define check() (a refusal without side effects), run before the gate. In split, POST /decline takes
 # an optional `counter` proposal, applied in the same locked step.
-WORLD_VERSION = 11
+# Version 12: an optional submit gate (FLOTILLA_SUBMIT_GATE=1; task.json `"submit_gate": true`, set by the probe
+# family): the read gate of version 11 applied to POST /submit. A submission by a seat with messages that no reply
+# has shown it is not recorded; the world replies 409 with those messages (delivered `via: "gate"`), records a
+# `gated` event with the refused answer, and keeps the refused answer in `gated_submissions`. Off by default: the
+# other families and every reply, event and state of version 11 are unchanged.
+WORLD_VERSION = 12
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -62,6 +67,7 @@ PLAY_SECONDS = float(os.environ.get("FLOTILLA_PLAY_SECONDS") or 0)  # 0: no dead
 ADMIN = os.environ.get("FLOTILLA_ADMIN", "")
 READ_GATE = CONDITION == "gated"  # talk, and the world holds a game action until the seat has read its messages
 MESSAGING = CONDITION.startswith("talk") or READ_GATE  # talk, talk-liar, talk-warned, talk-liar-warned, gated
+SUBMIT_GATE = os.environ.get("FLOTILLA_SUBMIT_GATE", "") == "1"  # the world holds a submission until messages are read
 REPLY_WRITE_SECONDS = 5.0  # a reply that shows messages must be written within this time, or nothing is delivered
 DEFAULT_MAX_TEXT = 4000
 DEFAULT_MAX_MESSAGES = 200
@@ -132,6 +138,8 @@ if GAME is not None:
         "round": 1, "stock": PARAMS["capacity"], "opened": None, "requests": {}, "log": [], "over": False,
         "seen": [], "first_seen": None, "sent_round": {},
     }
+if SUBMIT_GATE:
+    STATE["gated_submissions"] = []  # {"seat", "answer", "t", "ids", "after"}: submissions the gate did not record
 _SEQ = [0]
 
 
@@ -272,6 +280,25 @@ def _gate(seat: str, path: str, action: dict[str, Any]) -> dict[str, Any] | None
     ids = [m["id"] for m in pending]
     record("gated", seat, {"round": number, "path": path, "ids": ids, "action": action, "unread": len(ids)})
     return {"error": gate_error(number), "round": number, "messages": pending}
+
+
+SUBMIT_GATE_ERROR = ("not recorded: messages reached you that you have not read; they are below; read them and "
+                     "submit again")
+
+
+def _submit_gate(seat: str, evidence: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any] | None:
+    """The 409 reply that holds a submission when the submit gate is on, or None: record it. As _gate: the caller
+    holds LOCK through the submission, and the messages stay unread until the caller has written this reply."""
+    if not SUBMIT_GATE:
+        return None
+    pending = _unread(seat)
+    if not pending:
+        return None
+    ids = [m["id"] for m in pending]
+    STATE["gated_submissions"].append({"seat": seat, "answer": answer, "t": now(), "ids": ids,
+                                       "after": len(STATE["submissions"])})  # the accepted submissions before it
+    record("gated", seat, {"path": "/submit", "ids": ids, "unread": len(ids), **evidence})
+    return {"error": SUBMIT_GATE_ERROR, "messages": pending}
 
 
 def _close_if_ready(at: float | None = None) -> None:
@@ -660,9 +687,14 @@ class World(BaseHTTPRequestHandler):
                 record("late", seat, {"path": "/submit", **evidence})
                 self._reply(409, {"error": "play has ended; the answer is frozen"})
                 return
-            n = len(STATE["submissions"]) + 1
-            STATE["submissions"].append({"n": n, "seat": seat, "answer": answer, "t": now()})
-            record("submit", seat, {"n": n, **evidence})
+            held = _submit_gate(seat, evidence, answer)
+            if held is None:
+                n = len(STATE["submissions"]) + 1
+                STATE["submissions"].append({"n": n, "seat": seat, "answer": answer, "t": now()})
+                record("submit", seat, {"n": n, **evidence})
+        if held is not None:
+            self._deliver_reply(409, held, seat, "gate")
+            return
         # The reply must not say how many submissions exist: in `silent` that count is a channel.
         self._reply(200, {"accepted": True})
 
@@ -760,7 +792,8 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                "limits": limits()} | ({"game": PARAMS.get("family"), "round_seconds": ROUND_SECONDS,
                                                       "max_messages_per_round": MAX_MESSAGES_PER_ROUND,
                                                       "read_gate": READ_GATE}
-                                                     if GAME is not None else {}))
+                                                     if GAME is not None else {})
+                               | ({"submit_gate": True} if SUBMIT_GATE else {}))
     return server
 
 

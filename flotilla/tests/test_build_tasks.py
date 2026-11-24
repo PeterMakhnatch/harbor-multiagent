@@ -11,7 +11,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from conftest import FAMILIES, FLOTILLA, instance, load
+from conftest import FLOTILLA, TEAM_FAMILIES, instance, load
 
 BUILD = load(FLOTILLA / "build_tasks.py")
 HARBOR_BASE_COMPOSE = FLOTILLA.parent / "src" / "harbor" / "environments" / "docker" / "docker-compose-build.yaml"
@@ -69,7 +69,7 @@ def seat_visible_texts(task: Path, seat: str, services: dict) -> list[str]:
     return texts
 
 
-@pytest.mark.parametrize("family_name", FAMILIES)
+@pytest.mark.parametrize("family_name", TEAM_FAMILIES)
 @pytest.mark.parametrize("n_seats", [2, 3])
 def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_name, n_seats):
     built = build(tmp_path, family_name, n_seats)
@@ -106,13 +106,13 @@ def test_built_tasks_are_valid_and_seats_match_the_condition(tmp_path, family_na
             assert json.loads(env["SEAT_BRIEFING"]) == json.loads(json.dumps(expected))
         task_json = json.loads((task / "environment" / "task.json").read_text())
         assert task_json["answer_key"] == inst["answer_key"] and task_json["seats"] == seats
-        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (11, 4000, 200)
+        assert (task_json["world_version"], task_json["max_text"], task_json["max_messages"]) == (12, 4000, 200)
         assert task_json["seed"] == meta["seed"] == 1
         for script in (task / "tests" / "test.sh", task / "solution" / "solve.sh"):
             assert script.stat().st_mode & 0o111
 
 
-@pytest.mark.parametrize("family_name", FAMILIES)
+@pytest.mark.parametrize("family_name", TEAM_FAMILIES)
 def test_seats_cannot_see_the_answer_key(tmp_path, family_name):
     for task in build(tmp_path, family_name, 3):
         key = json.loads((task / "environment" / "task.json").read_text())["answer_key"]
@@ -424,6 +424,6 @@ def test_a_gated_split_task_looks_like_talk_to_its_seats_and_turns_the_read_gate
             assert not any("gated" in text for text in seat_visible_texts(gated, seat, services["gated"]))
         for condition, task in (("talk", talk), ("gated", gated), ("propose", tasks[("split", i, "propose")])):
             task_json = json.loads((task / "environment" / "task.json").read_text())
-            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 11)
-            assert "WORLD_VERSION = 11\n" in (task / "environment" / "world.py").read_text()
+            assert (task_json["read_gate"], task_json["world_version"]) == (condition == "gated", 12)
+            assert "WORLD_VERSION = 12\n" in (task / "environment" / "world.py").read_text()
             assert ('"counter"' in (task / "instructions" / "p1.md").read_text()) == (condition == "propose")

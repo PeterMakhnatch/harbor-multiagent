@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import FAMILIES, FLOTILLA, family, load
+from conftest import FLOTILLA, TEAM_FAMILIES, family, load
 
 ORACLE = load(FLOTILLA / "world" / "oracle.py")
 
@@ -161,7 +161,7 @@ def _play(tmp_path: Path, start_world, monkeypatch, family_name: str, condition:
     return _result(tmp_path)
 
 
-@pytest.mark.parametrize("family_name", FAMILIES)
+@pytest.mark.parametrize("family_name", TEAM_FAMILIES)  # probe has arms of its own (test_probe.py)
 @pytest.mark.parametrize("condition", ["solo", "silent", "talk"])
 def test_oracle_play_reaches_the_expected_rewards(tmp_path, start_world, monkeypatch, family_name, condition):
     reward, summary = _play(tmp_path, start_world, monkeypatch, family_name, condition)

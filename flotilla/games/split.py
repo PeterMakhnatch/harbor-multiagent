@@ -314,16 +314,16 @@ def _proposal_instruction(seats: Sequence[str]) -> list[str]:
     return [
         "",
         f'To post a proposal, send `{{"split": {{{amounts}}}}}` to `POST /propose`.',
-        "Set a whole number of points for each player. Each number must be 0 or more. "
-        "The total cannot be more than the current pot.",
-        "`/state` shows every open proposal to every player: its ID, who posted it, the split, "
-        "and the round it was posted. "
-        f"You can post at most {MAX_PROPOSALS_PER_SEAT} proposals per round.",
+        ("Set a whole number of points for each player. Each number must be 0 or more. "
+         "The total cannot be more than the current pot."),
+        ("`/state` shows every open proposal to every player: its ID, who posted it, the split, "
+         "and the round it was posted. "
+         f"You can post at most {MAX_PROPOSALS_PER_SEAT} proposals per round."),
         'To accept another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /accept`.',
-        "A proposal is binding when all players other than the player who posted it accept it. "
-        "Then the game ends at once. Each player gets the points in that proposal.",
-        "A proposal stays open in later rounds until it is accepted, declined, replaced by its proposer's "
-        "newer proposal, or the pot becomes smaller than its total.",
+        ("A proposal is binding when all players other than the player who posted it accept it. "
+         "Then the game ends at once. Each player gets the points in that proposal."),
+        ("A proposal stays open in later rounds until it is accepted, declined, replaced by its proposer's "
+         "newer proposal, or the pot becomes smaller than its total."),
         'To decline another player\'s proposal, send its ID as `{"id": "<id>"}` to `POST /decline`.',
         ('To decline it and post your own proposal in the same step, send `{"id": "<id>", "counter": '
          f'{{"split": {{{amounts}}}}}}}` to `POST /decline`. The counter follows the rules of a new proposal; '

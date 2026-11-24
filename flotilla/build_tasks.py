@@ -2,6 +2,7 @@
 
     python3 flotilla/build_tasks.py --family schedule --instances 0-11 --seats 2 --difficulty easy
     python3 flotilla/build_tasks.py --family schedule --variant tight --max-messages 3 --max-text 200
+    python3 flotilla/build_tasks.py --family probe --instances 0-23  # 4 seats, the 4 arms, label probe.conformity
 
 Writes flotilla/tasks/<label>/t-<12 hex>/, one folder per task, and flotilla/tasks/manifest.json, which
 maps each task name to its label, instance, condition, seats and build parameters, the seed among them
@@ -67,6 +68,16 @@ RUN apt-get update \\
     && rm -rf /var/lib/apt/lists/* \\
     && useradd --create-home --shell /bin/bash player
 """
+SEAT_FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")  # a file a family puts in the seat's home folder
+
+
+def player_dockerfile(files: list[str]) -> str:
+    """The seat image; a family's seat files (families/probe.py: the data file) go to the home folder."""
+    if bad := [name for name in files if not SEAT_FILE.match(name)]:
+        raise SystemExit(f"seat file names must be plain file names, not {bad}")
+    copies = "".join(f"COPY --chown=player:player {name} /home/player/{name}\n" for name in files)
+    return PLAYER_DOCKERFILE + (f"\n{copies}" if copies else "")
+
 
 MAIN_DOCKERFILE = """FROM python:3.13-slim
 
@@ -412,6 +423,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
     family = load_family(family_name)
     family_file = family_path(family_name)
     game = getattr(family, "MODE", "") == "rounds"  # a game family (games/<name>.py, docs/COMMONS.md)
+    probe = hasattr(family, "confederate_plans")  # a behavior probe: scripted confederates (families/probe.py)
+    submit_gate = bool(getattr(family, "SUBMIT_GATE", False)) and not game
     game_env = {"FLOTILLA_GAME": "/world/family.py", "FLOTILLA_GAME_PARAMS": "/world/task.json",
                 "FLOTILLA_ROUND_SECONDS": str(round_seconds), "FLOTILLA_START_GRACE": str(start_grace),
                 "FLOTILLA_MAX_MESSAGES_PER_ROUND": str(max_messages_per_round)}
@@ -423,6 +436,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         if difficulty not in family.SETTINGS:
             raise SystemExit(f"{family_name} has the regimes {sorted(family.SETTINGS)} (--difficulty), not {difficulty}")
         play_timeout = max(play_timeout, max(family.ROUNDS) * round_seconds + 120)  # the longest season fits
+    elif hasattr(family, "ARMS") and (unknown := [c for c in conditions if c not in family.ARMS]):
+        raise SystemExit(f"{family_name} has the arms {family.ARMS}, not {unknown}")
+    if scripted and not hasattr(family, "generate_scripted"):
+        raise SystemExit(f"{family_name} has no scripted variant (generate_scripted)")
     label = f"{family_name}.{variant}" if variant else family_name  # e.g. schedule.3seat
     label_dir = out / label
     earlier = earlier_tasks(label_dir, family_name, variant)
@@ -434,7 +451,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
     for i in instances:
         inst = family.generate_scripted(seed, i, difficulty) if scripted else family.generate(seed, i, n_seats, difficulty)
         team_seats = list(inst["seats"]) if game else sorted(inst["private"])
-        scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted else ()
+        scripted_seats = tuple(inst.get("scripted_seats", ())) if scripted or probe else ()
         for condition in conditions:
             seats = ["p1"] if condition == "solo" else team_seats
             if game:
@@ -448,9 +465,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 briefings = (
                     {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
                 )
-            for seat in scripted_seats:  # a scripted peer posts its part, honestly or not
+            plans = family.confederate_plans(inst, condition) if probe else {}
+            for seat in scripted_seats:  # a confederate plays its plan; a scripted peer posts its part, honestly or not
                 lying = "liar" in condition
-                briefings[seat] = {
+                briefings[seat] = {"script": "confederate", "plan": plans[seat]} if probe else {
                     "script": "liar" if lying else "honest",
                     "text": (inst["liar_text"] if lying else inst["private_text"])[seat],
                     "part": (inst["liar_private"] if lying else inst["private"])[seat],
@@ -487,6 +505,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 meta["announce"] = True
             if scripted_seats:
                 meta["scripted_seats"] = list(scripted_seats)
+            if submit_gate:
+                meta["submit_gate"] = True
             (task_dir / "task.toml").write_text(
                 task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats, play_timeout)
             )
@@ -495,14 +515,20 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     SCRIPTED_INSTRUCTION
                     if seat in scripted_seats
                     else game_instruction(family, arm, seat, condition, max_text, max_messages_per_round) if game
+                    else family.seat_instruction(inst, seat, seats, condition, max_text, max_messages)
+                    if hasattr(family, "seat_instruction")
                     else instruction(family, inst, seat, seats, condition, max_text, max_messages, submitter, announce)
                 )
+            world_env = (game_env if game else {}) | ({"FLOTILLA_SUBMIT_GATE": "1"} if submit_gate else {})
             (env / "docker-compose.yaml").write_text(
                 compose(condition, seats, tokens, admin, briefings, max_text, max_messages,
-                        world_env=(game_env if game else {}) | {"FLOTILLA_PLAY_SECONDS": str(play_timeout)})
+                        world_env=world_env | {"FLOTILLA_PLAY_SECONDS": str(play_timeout)})
             )
             (env / "Dockerfile").write_text(MAIN_DOCKERFILE)
-            (env / "player" / "Dockerfile").write_text(PLAYER_DOCKERFILE)
+            files = family.seat_files(inst) if hasattr(family, "seat_files") else {}
+            for file_name, text in sorted(files.items()):
+                (env / "player" / file_name).write_text(text)
+            (env / "player" / "Dockerfile").write_text(player_dockerfile(sorted(files)))
             shutil.copy(ROOT / "world" / "world.py", env / "world.py")
             shutil.copy(ROOT / "world" / "score.py", env / "score.py")
             shutil.copy(family_file, env / "family.py")
@@ -520,8 +546,12 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             if announce:
                 task_json["announce"] = True
             for extra in ("decoy", "witness", "scripted_seats"):
-                if extra in inst and scripted:
+                if extra in inst and scripted_seats:
                     task_json[extra] = inst[extra]
+            if probe:
+                task_json["probe"] = inst["probe"] | {"plans": plans}
+            if submit_gate:
+                task_json["submit_gate"] = True
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
@@ -566,7 +596,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--family", required=True)
     parser.add_argument("--instances", default="0-11", help="e.g. 0-11 or 0,3,5")
-    parser.add_argument("--seats", type=int, default=2)
+    parser.add_argument("--seats", type=positive, default=None,
+                        help="seats per team (default: the family's SEATS, else 2; probe: 4)")
     parser.add_argument("--difficulty", default="easy")
     seeds = parser.add_mutually_exclusive_group()
     seeds.add_argument("--seed", type=int,
@@ -576,7 +607,9 @@ def main() -> None:
     seeds.add_argument("--seed-of", type=Path, metavar="PATH",
                        help="use the seed of the tasks under PATH (a label folder of an earlier build), so that "
                        "this build has the same instances; the seed stays out of the command and the output")
-    parser.add_argument("--conditions", default=",".join(CONDITIONS))
+    parser.add_argument("--conditions", default=",".join(CONDITIONS),
+                        help="default: solo,silent,talk, or the arms of a family that names its own (probe: "
+                        "talk-quiet,talk-wrong,talk-dissent,talk-right)")
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: the tasks go "
                         "to <out>/<family>.<variant>/ and the analysis never pools them with another label")
@@ -609,17 +642,19 @@ def main() -> None:
     parser.add_argument("--max-messages-per-round", type=positive, default=2,
                         help="game families, talk arm: messages per seat in each round (%(default)s)")
     args = parser.parse_args()
+    path = family_path(args.family)
+    module = load_family(args.family) if path.is_file() else None
+    arms = tuple(getattr(module, "ARMS", ()))
+    n_seats = args.seats if args.seats is not None else int(getattr(module, "SEATS", 2))
     conditions = tuple(c for c in args.conditions.split(",") if c)
-    known = set(CONDITION_TEXT)
-    if any(c not in known for c in conditions):
-        path = family_path(args.family)
-        if path.parent == ROOT / "games" and path.is_file():
-            known.update(load_family(args.family).ARMS)
-        if unknown := [c for c in conditions if c not in known]:
-            parser.error(f"unknown conditions {unknown}; known: {sorted(known)}")
+    if arms and path.parent == ROOT / "families" and args.conditions == ",".join(CONDITIONS):
+        conditions = arms  # an answer family with arms of its own (probe)
+    known = set(CONDITION_TEXT) | set(arms)
+    if unknown := [c for c in conditions if c not in known]:
+        parser.error(f"unknown conditions {unknown}; known: {sorted(known)}")
     if args.scripted and args.conditions == ",".join(CONDITIONS):
         conditions = ("talk", "talk-liar")
-    if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else args.seats) + 1)]:
+    if args.submitter and args.submitter not in [f"p{k}" for k in range(1, (3 if args.scripted else n_seats) + 1)]:
         parser.error(f"--submitter {args.submitter} is not a seat of this build")
     if args.seed is not None:
         seed, source = args.seed, "given with --seed"
@@ -630,8 +665,9 @@ def main() -> None:
     said = (f"{seed}, {source}; it is public (below {PUBLIC_SEED_BELOW:,}), so qa.py fails the set (public-seed) "
             "unless --allow-public-seed, which is only for repeating a published build"
             if seed < PUBLIC_SEED_BELOW else f"{source} (only the manifest, task.toml and task.json record it)")
-    built = build(args.family, parse_instances(args.instances), args.seats, args.difficulty, seed,
-                  conditions, args.out, args.variant or ("liar" if args.scripted else ""), args.scripted,
+    variant = args.variant or ("liar" if args.scripted else str(getattr(module, "DEFAULT_VARIANT", "")))
+    built = build(args.family, parse_instances(args.instances), n_seats, args.difficulty, seed,
+                  conditions, args.out, variant, args.scripted,
                   args.play_timeout, max_text=args.max_text, max_messages=args.max_messages,
                   submitter=args.submitter, announce=args.announce, readable_names=args.readable_names,
                   round_seconds=args.round_seconds, start_grace=args.start_grace,
