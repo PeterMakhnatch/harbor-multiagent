@@ -123,7 +123,8 @@ def task_tree(repo: Path, instances: list[int], arms: list[str], seats: tuple[st
     (root / "manifest.json").write_text(json.dumps({"format": "flotilla-manifest", "version": 1, "tasks": tasks}))
 
 
-def plan_for(instances, arms, models, *, concurrency=2, env="docker", cap=10.0, reserve=0.05, seed=1) -> dict:
+def plan_for(instances, arms, models, *, concurrency=2, env="docker", cap=10.0, reserve=0.05, seed=1,
+             spacing=0.0) -> dict:
     floors = {}
     if any(model.startswith("deepseek/") for model in models):
         floors["deepseek"] = 1.0
@@ -134,7 +135,7 @@ def plan_for(instances, arms, models, *, concurrency=2, env="docker", cap=10.0, 
         "prereg": {"commit": "placeholder", "doc": "docs/plan.md", "section": "How to run a wave"},
         "task_sets": [{"tasks_dir": "tasks", "manifest": "tasks/manifest.json", "instances": instances, "arms": arms}],
         "models": models, "agent": "terminus-2",
-        "make_jobs": {"max_turns": 4, "env": env, "concurrency": concurrency},
+        "make_jobs": {"max_turns": 4, "env": env, "concurrency": concurrency, "start_spacing_s": spacing},
         "budget": {"cap_usd": cap, "reserve_per_trial_usd": reserve, "provider_floors": floors},
         "order_seed": seed,
     }
@@ -456,6 +457,50 @@ def test_help_and_example_dry_run():
     assert dry.returncode == 0, dry.stderr
     assert "reserve $0.10 per trial" in dry.stdout
     assert "openrouter/qwen/qwen3.8-27b" in dry.stdout
+    assert "start spacing 10.0 s" in dry.stdout
+
+
+def test_starts_are_spaced_in_a_fresh_run_and_on_retry(tmp_path):
+    plan = plan_for([0, 1], ["silent", "talk"], [OPENROUTER], concurrency=4, env="modal", cap=5.0, reserve=0.05,
+                    spacing=10.0)
+    preview = init_repo(tmp_path / "preview")
+    task_tree(preview, [0, 1], ["silent", "talk"])
+    order = RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+    behaviors = {cell["key"]: spec_for("ok", cost_usd=0.01) for cell in order}
+    behaviors[order[1]["key"]] = spec_for("invalid", cost_usd=0.01)
+    behaviors[order[3]["key"]] = spec_for("invalid", cost_usd=0.01)
+    now, sleeps = [0.0], []
+
+    def sleep(delay):
+        sleeps.append(delay)
+        now[0] += delay
+
+    events, order, path, env = launch(tmp_path / "spaced", plan, behaviors, Sources(catalog(), lambda *_args: 10.0),
+                                      sleep=sleep, clock=lambda: now[0])
+    assert events[-1]["reason"] == "done"
+    assert len([event for event in events if event["kind"] == "start"]) == 4
+    assert sleeps == [10.0, 10.0, 10.0]
+    log = (tmp_path / "spaced" / "run" / "progress.log").read_text()
+    assert log.count("start spacing 10.0 s") == 1
+    now[0] += 3.0
+    sleeps.clear()
+    retried = RUN.run(path, run_dir=tmp_path / "spaced" / "run", jobs_dir=tmp_path / "spaced" / "jobs",
+                      harbor=tmp_path / "spaced" / "harbor", wrapper=tmp_path / "spaced" / "wrapper",
+                      sources=Sources(catalog(), lambda *_args: 10.0), base_env=env,
+                      namer=lambda _n: f"{namer_box(tmp_path / 'spaced'):06x}", retry_invalid=True,
+                      sleep=sleep, clock=lambda: now[0])
+    assert [event["key"] for event in retried if event["kind"] == "start"] == [order[1]["key"], order[3]["key"]]
+    assert sleeps == [10.0]
+    assert (tmp_path / "spaced" / "run" / "progress.log").read_text().count("start spacing 10.0 s") == 2
+    for bad in (-1, True, "10", 601):
+        blob = tmp_path / f"bad-{bad}.json"
+        blob.write_text(json.dumps(plan_for([0], ["silent"], [DEEPSEEK], concurrency=1, spacing=bad)))
+        try:
+            RUN.load_plan(blob)
+        except SystemExit as exc:
+            assert "start_spacing_s" in str(exc)
+        else:
+            raise AssertionError(f"start_spacing_s {bad!r} must be refused")
 
 
 def test_cap_drains_in_flight_before_it_stops(tmp_path):
