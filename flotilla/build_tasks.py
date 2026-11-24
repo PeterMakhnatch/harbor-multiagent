@@ -130,6 +130,34 @@ def push_note(text: str) -> str:
     return _before_question(text, PUSH_NOTE)
 
 
+INBOX_HEADING = "## Team messages so far"
+INBOX_EMPTY = "None yet."
+POST_TRIGGERS = ("first_submit",)
+
+
+def inbox_block(posts: list[dict[str, Any]]) -> str:
+    """The subject's brief of the posts that the world makes at its start (task.json `inbox`, world version 19): one
+    line per post in the order the world adds them, with its seat, its age (`before_s`) and its exact text."""
+    assert all("\n" not in post["text"] and "before_s" in post and "trigger" not in post for post in posts), posts
+    lines = [f"- {post['from']} (posted {post['before_s']:g} s before you started): {post['text']}" for post in posts]
+    return f"{INBOX_HEADING}\n\n" + ("\n".join(lines) if lines else INBOX_EMPTY)
+
+
+def inbox_brief(text: str, posts: list[dict[str, Any]]) -> str:
+    """A probe subject's instruction with the inbox block after its opening block, just before `## The question`."""
+    return _before_question(text, inbox_block(posts))
+
+
+def strip_inbox(text: str) -> tuple[str, str | None]:
+    """The instruction without its inbox block, and the block (None without one)."""
+    start = text.find(f"\n\n{INBOX_HEADING}\n\n")
+    if start < 0:
+        return text, None
+    end = text.find("\n\n## ", start + 2)
+    end = len(text) if end < 0 else end
+    return text[:start] + text[end:], text[start + 2:end]
+
+
 MAIN_DOCKERFILE = """FROM python:3.13-slim
 
 COPY world.py score.py family.py task.json /world/
@@ -467,7 +495,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
           play_timeout: float = PLAY_TIMEOUT_SEC, max_text: int = DEFAULT_MAX_TEXT,
           max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False,
           readable_names: bool = False, round_seconds: float = 240.0, start_grace: float = 300.0,
-          max_messages_per_round: int = 2, read_first_subject: bool = False, push: bool = False) -> list[Path]:
+          max_messages_per_round: int = 2, read_first_subject: bool = False, push: bool = False,
+          inbox: bool = False, post_trigger: str = "") -> list[Path]:
     """Write every instance in every condition to <out>/<label>/<name>/ and add them to <out>/manifest.json. A task
     of the same instance and condition that an earlier build wrote under <out>/<label>/ is replaced (removed), so
     that a label never holds two folders of one task."""
@@ -485,6 +514,13 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         raise SystemExit(f"--push applies to the probe family, not {family_name}")
     if read_first_subject and not probe:
         raise SystemExit(f"--read-first applies to the probe family, not {family_name}")
+    if (inbox or post_trigger) and getattr(family, "KIND", "") not in ("conformity", "verify"):
+        raise SystemExit(f"--inbox and --post-trigger apply to the probe kinds conformity and verify, not "
+                         f"{family_name} {getattr(family, 'KIND', '')}".rstrip())
+    if post_trigger and post_trigger not in POST_TRIGGERS:
+        raise SystemExit(f"--post-trigger is one of {POST_TRIGGERS}, not {post_trigger!r}")
+    if inbox and (read_first_subject or push or post_trigger):
+        raise SystemExit("--inbox gives the posts in the brief: --read-first, --push and --post-trigger do not apply")
     game_env = {"FLOTILLA_GAME": "/world/family.py", "FLOTILLA_GAME_PARAMS": "/world/task.json",
                 "FLOTILLA_ROUND_SECONDS": str(round_seconds), "FLOTILLA_START_GRACE": str(start_grace),
                 "FLOTILLA_MAX_MESSAGES_PER_ROUND": str(max_messages_per_round)}
@@ -528,6 +564,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     {"p1": inst["solo_private"]} if condition == "solo" else {s: inst["private"][s] for s in seats}
                 )
             plans = family.confederate_plans(inst, condition) if probe else {}
+            if post_trigger:
+                plans = family.at_first_submit(inst["probe"], plans)
             posts, own_steps = scheduled_posts(plans)  # the world posts; a confederate plays only its other steps
             for seat in scripted_seats:  # a confederate plays its plan; a scripted peer posts its part, honestly or not
                 lying = "liar" in condition
@@ -574,6 +612,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 meta["read_first"] = True
             if push:
                 meta["push"] = True
+            if inbox:
+                meta["inbox"] = True
+            if post_trigger:
+                meta["post_trigger"] = post_trigger
             (task_dir / "task.toml").write_text(
                 task_toml(f"flotilla/{name}", meta, seats, family.TITLE, scripted_seats, play_timeout)
             )
@@ -590,6 +632,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     text = read_first(text, getattr(family, "KIND", ""))
                 if push and seat not in scripted_seats:
                     text = push_note(text)
+                if inbox and seat not in scripted_seats:
+                    text = inbox_brief(text, posts)
                 (task_dir / "instructions" / f"{seat}.md").write_text(text)
             world_env = (game_env if game else {}) | ({"FLOTILLA_SUBMIT_GATE": "1"} if submit_gate else {})
             (env / "docker-compose.yaml").write_text(
@@ -629,6 +673,10 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 task_json["read_first"] = True
             if push:
                 task_json["push"] = True
+            if inbox:
+                task_json["inbox"] = True
+            if post_trigger:
+                task_json["post_trigger"] = post_trigger
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
@@ -646,7 +694,9 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                           "max_text": max_text, "max_messages": max_messages, "scripted_seats": list(scripted_seats),
                           "submitter": submitter, "announce": announce}
                          | ({"read_first": True} if read_first_subject else {})
-                         | ({"push": True} if push else {}),
+                         | ({"push": True} if push else {})
+                         | ({"inbox": True} if inbox else {})
+                         | ({"post_trigger": post_trigger} if post_trigger else {}),
                 "instructions_sha256": {seat: hashlib.sha256((task_dir / "instructions" / f"{seat}.md").read_bytes())
                                         .hexdigest() for seat in seats},
             }
@@ -725,6 +775,16 @@ def main() -> None:
                         "(world version 17, task.json and [metadata] push = true), and the subject's text says once "
                         "that replies may carry new messages; give such a build its own --variant label, e.g. "
                         "verify-push")
+    parser.add_argument("--inbox", action="store_true",
+                        help="probe kinds conformity and verify: the arm's posts are in the subject's brief (a block "
+                        "'Team messages so far' before the question; 'None yet.' in talk-quiet), and the world makes "
+                        "them at its start, already delivered to the subject (world version 19, task.json and "
+                        "[metadata] inbox = true); give such a build its own --variant label, e.g. verify-inbox")
+    parser.add_argument("--post-trigger", choices=POST_TRIGGERS, default="",
+                        help="probe kinds conformity and verify: the world makes every arm's posts at the subject's "
+                        "first submission (dated 1-3 s before it; the submit gate then shows them) instead of its "
+                        "first request (task.json and [metadata] post_trigger); with --read-first, e.g. --variant "
+                        "verify-readfirst-late")
     parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
                         help="messages per seat (world default %(default)s)")
     parser.add_argument("--round-seconds", type=float, default=240.0,
@@ -771,7 +831,7 @@ def main() -> None:
                   submitter=args.submitter, announce=args.announce, readable_names=args.readable_names,
                   round_seconds=args.round_seconds, start_grace=args.start_grace,
                   max_messages_per_round=args.max_messages_per_round, read_first_subject=args.read_first,
-                  push=args.push)
+                  push=args.push, inbox=args.inbox, post_trigger=args.post_trigger)
     print(f"built {len(built)} tasks under {args.out}")
     print(f"manifest: {args.out / MANIFEST} ({'readable' if args.readable_names else 'opaque'} names)")
     print(f"seed: {said}")

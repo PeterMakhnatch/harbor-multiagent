@@ -557,3 +557,30 @@ The probe kind `audit` names no month of the task in its `/audit` example: p1's 
 `{"month": "<month name>"}` (`probe.AUDIT_PLACEHOLDER`), say that the name is one of the listed months, and name
 the `?format=csv` form in the same sentence. A `--seed-of` build of an older audit set differs only in those two
 lines of `instructions/p1.md` (and the shipped code and `world_version`).
+
+## 19. World version 19: inbox posts; posts at the first submission in every arm
+
+If task.json has `"inbox": true`, the world makes every scheduled post (`before_s` posts only; none in `talk-quiet`)
+when it starts, after the `start` event (which has `data.inbox: true`), dated then, as `send` events with
+`scheduled: true` and `before_s`; then it records them as delivered to each seat not listed in `scripted_seats`, one
+`deliver` event `{"ids", "via": "brief"}`. So the submit gate never holds a submission for them, score.json's
+`exposed` is true in an arm with posts, and `GET /messages` lists them as it lists every message (its read is
+logged as a `deliver` as before; nothing in them is unread). The world refuses to start when `inbox` is not `true`
+or `false`, when the posts are timed by `at_s` or `first_submit`, when the condition has no messaging, or when
+every seat is scripted. Without the key nothing changes.
+
+`build_tasks.py --inbox` (probe kinds conformity and verify; not with `--read-first`, `--push` or `--post-trigger`)
+sets `inbox: true` in task.json, task.toml [metadata] and the manifest's `build`, and puts one block in the
+subject's text after its opening block, just before `## The question`: `## Team messages so far`, then one line per
+post in the order the world adds them, `- <seat> (posted <before_s> s before you started): <text>`, or `None yet.`
+in `talk-quiet`. score.json has `inbox`, and `trigger` is `brief` in an arm with posts. qa rule `inbox` (FAIL):
+`inbox` is only `true`, only on a probe task with messaging, the subject's block is the builder's block of
+task.json's `scheduled_posts` exactly, and no other seat or task has a block; `twin-mismatch` compares the
+subject's text without its block.
+
+`build_tasks.py --post-trigger first_submit` (probe kinds conformity and verify) makes every arm's posts at the
+subject's first submission (section 16): the same posts in the same order, each with `"trigger": "first_submit"` and
+a `before_s` of 1 to 3 s drawn from the instance's values (`probe.at_first_submit`), so every arm and instance stay
+the same; `talk-push` and `talk-argue` keep theirs. task.json, task.toml [metadata] and the manifest's `build` have
+`post_trigger: "first_submit"`, and qa's `confederate-plan` rebuilds the plans with it. With `--read-first` the
+subject's first read finds no message, and its first submission is refused with the reports.

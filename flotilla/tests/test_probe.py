@@ -133,7 +133,7 @@ def test_the_four_arms_build_with_one_subject_three_confederates_and_the_file(tm
                        for post in task_json["scheduled_posts"])
             assert (task_json["submit_gate"], task_json["decoy"], task_json["answer_key"]) == (
                 True, {"total": wrong}, {"total": correct})
-            assert task_json["world_version"] == 18 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
+            assert task_json["world_version"] == 19 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 

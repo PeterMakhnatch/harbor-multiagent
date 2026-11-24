@@ -31,5 +31,9 @@ uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --varia
     --out "$tmp" >/dev/null  # the probe's verify kind: 4 seats, its 3 arms (docs/PROBE.md)
 uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --variant audit --instances 0-1 \
     --out "$tmp" >/dev/null  # the probe's audit kind: 4 seats, its 3 arms, no data in the seat (docs/PROBE.md)
+uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --variant verify-inbox --inbox --instances 0 \
+    --out "$tmp" >/dev/null  # the reports in the subject's brief (world version 19)
+uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --variant verify-readfirst-late --read-first \
+    --post-trigger first_submit --instances 0 --out "$tmp" >/dev/null  # the reports at the first submission
 uvx --quiet --python "$PY" --with pyyaml python flotilla/qa.py "$tmp/*/*"
 echo "flotilla checks: OK"

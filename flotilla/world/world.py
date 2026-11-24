@@ -83,7 +83,12 @@ from urllib.parse import parse_qs, urlsplit
 # the headers X-Audit-Month and X-Audits-Left); without `format` (or with format=json) the reply is version 15's JSON.
 # Refusals stay JSON. The `audit` event and the state's audit entries add `format`. Other format values get 400. A
 # text/csv reply carries no pushed messages.
-WORLD_VERSION = 18
+# Version 19: inbox posts. When task.json has `"inbox": true` (build_tasks.py --inbox, whose subject's brief lists
+# the posts), the world makes every scheduled `before_s` post at its start, dated then, and records them as delivered
+# to each seat that task.json does not list in `scripted_seats` (a `deliver` event with `via: "brief"`): the submit
+# gate never holds a submission for them, and GET /messages lists them as it lists any message. Without the key
+# nothing changes.
+WORLD_VERSION = 19
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -222,6 +227,33 @@ def _load_push() -> tuple[bool, list[str], list[str]]:
 PUSH, PUSH_SEATS, PUSH_PROBLEMS = _load_push()
 
 
+def _load_inbox() -> tuple[bool, list[str], list[str]]:
+    """Whether the world makes the scheduled posts at its start, delivered to the seats under test (version 19:
+    task.json `inbox`), which seats, and what is wrong (the world then refuses to start)."""
+    if not TASK_JSON_PATH.is_file():
+        return False, [], []
+    try:
+        task = json.loads(TASK_JSON_PATH.read_text())
+        inbox, scripted = task.get("inbox", False), task.get("scripted_seats") or []
+    except (OSError, ValueError, AttributeError):
+        return False, [], [f"{TASK_JSON_PATH} is not a JSON object"]
+    if inbox is False:
+        return False, [], []
+    if inbox is not True:
+        return False, [], ["inbox is not true or false"]
+    if not MESSAGING:
+        return False, [], [f"inbox needs messaging, and {CONDITION} has none"]
+    if SCHEDULED and SCHEDULE_KEY != "before_s":
+        return False, [], [f"inbox posts are timed by before_s, not {SCHEDULE_KEY}"]
+    seats = [seat for seat in SEATS if seat not in scripted]
+    if not seats:
+        return False, [], ["inbox needs a seat that is not in scripted_seats"]
+    return True, seats, []
+
+
+INBOX, INBOX_SEATS, INBOX_PROBLEMS = _load_inbox()
+
+
 def _load_game() -> tuple[Any, dict[str, Any]]:
     if not GAME_PATH:
         return None, {}
@@ -329,7 +361,8 @@ def config_problems() -> list[str]:
         "the admin token is also a seat token" if ADMIN and ADMIN in tokens else "",
         "a token names a seat that is not in FLOTILLA_SEATS" if set(TOKENS.values()) - set(SEATS) else "",
     ]
-    return [problem for problem in problems if problem] + SCHEDULE_PROBLEMS + AUDIT_PROBLEMS + PUSH_PROBLEMS
+    return ([problem for problem in problems if problem] + SCHEDULE_PROBLEMS + AUDIT_PROBLEMS + PUSH_PROBLEMS
+            + INBOX_PROBLEMS)
 
 
 def expire() -> None:
@@ -1044,8 +1077,23 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                | ({"scheduled_posts": len(SCHEDULED), "scheduled_by": SCHEDULE_KEY} if SCHEDULED else {})
                                | ({"audit_budget": AUDIT["budget"], "audit_months": len(AUDIT["files"])}
                                   if AUDIT is not None else {})
-                               | ({"push": True} if PUSH else {}))
+                               | ({"push": True} if PUSH else {})
+                               | ({"inbox": True} if INBOX else {}))
+        if INBOX:
+            _post_inbox()
     return server
+
+
+def _post_inbox() -> None:
+    """Version 19: every scheduled post now, then each seat under test has them as already shown (`via: "brief"`,
+    its brief lists them). Callers hold LOCK."""
+    if SCHEDULED:
+        _post_scheduled(SCHEDULE_TRIGGERS[0])
+    assert not SCHEDULED, "the inbox posts are all made at the start"
+    for seat in INBOX_SEATS:
+        ids = [message["id"] for message in _unread(seat)]
+        if ids:
+            _deliver(seat, ids, "brief")
 
 
 def main() -> None:

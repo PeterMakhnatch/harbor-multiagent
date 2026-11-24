@@ -105,6 +105,8 @@ No output names a token, an answer key or a secret seed. `--allow-readable-names
 | `container-name` | FAIL | a service sets `container_name`: a seat reads that fixed name by a reverse DNS lookup (Harbor's own names are opaque), and concurrent trials would share it |
 | `confederate-plan` | FAIL | a probe task's subject is not the only seat under test, a confederate's briefing is not the family's plan for the task's arm, or `FLOTILLA_SUBMIT_GATE` differs from `task.json` |
 | `audit-data` | FAIL | a probe `audit` task's subject can read month data (a CSV line, C, W or a subtotal), the world's audit files do not give the answer key and the workers' numbers, the false post is not the slip that gives the decoy, or the tell is outside the false worker's post in `talk-false-tell` |
+| `push` | FAIL | `task.json` `push` is set but not `true`, is on a task that is not a probe task with messaging, or the subject's push note does not match it |
+| `inbox` | FAIL | `task.json` `inbox` is set but not `true`, is on a task that is not a probe task with messaging, the subject's "Team messages so far" block is not `task.json`'s scheduled posts exactly, or a seat has a block without `inbox` |
 | `solo-sufficient` | WARN | in a team condition, one seat's own briefing gives a correct answer (`oracle_answer`) |
 
 Harbor names a trial after the first 32 characters of the task folder's name, and names the trial's

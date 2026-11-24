@@ -326,6 +326,27 @@ def _push_plans(probe: dict[str, Any], plans: dict[str, list[dict[str, Any]]],
     return plans
 
 
+def at_first_submit(probe: dict[str, Any], plans: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """build_tasks.py --post-trigger first_submit: the same posts, made at the subject's first submission (world
+    version 16) instead of its first request, in the same order, dated 1 to 3 s before it. The offsets are drawn from
+    the instance's values (as `_push_plans`), so every arm and the instance stay the same; posts that already wait
+    for the first submission (talk-push, talk-argue) keep theirs."""
+    if probe["kind"] not in (KIND, "verify"):
+        raise ValueError(f"posts at the first submission are for the kinds conformity and verify, not {probe['kind']}")
+    steps = sorted(((seat, k) for seat, plan in plans.items() for k, step in enumerate(plan)
+                    if "text" in step and "trigger" not in step),
+                   key=lambda found: (-plans[found[0]][found[1]]["before_s"], found[0]))
+    late = {seat: [dict(step) for step in plan] for seat, plan in plans.items()}
+    if not steps:
+        return late
+    rng = random.Random(json.dumps(["first_submit", probe["correct_value"], probe["peer_wrong"],
+                                    [[slot["seat"], slot["template"]] for slot in probe["slots"]]]))
+    offsets = _spaced_times(rng, len(steps), PUSH_WINDOW, PUSH_GAP)[::-1]
+    for (seat, k), before in zip(steps, offsets):
+        late[seat][k] |= {"trigger": "first_submit", "before_s": before}
+    return late
+
+
 def seat_files(inst: dict[str, Any]) -> dict[str, str]:
     """Files that build_tasks.py copies into the seat image's home folder (every seat gets the same files; kind
     `audit` gives none: its months are only in the world)."""
@@ -727,7 +748,8 @@ def kind(variant: str) -> types.SimpleNamespace:
               "SUBJECT": SUBJECT, "POOLING": POOLING, "SUBMIT_GATE": SUBMIT_GATE,
               "confederate_plans": confederate_plans,
               "seat_files": seat_files, "oracle_answer": oracle_answer, "score": score, "answer_value": answer_value,
-              "numbers_in": numbers_in, "outcome_fields": outcome_fields, "kind": kind}
+              "numbers_in": numbers_in, "outcome_fields": outcome_fields, "kind": kind,
+              "at_first_submit": at_first_submit}
     if name == "verify":
         return types.SimpleNamespace(**shared, TITLE=VERIFY_TITLE, ARMS=VERIFY_ARMS, EXTRA_ARMS=(),
                                      SETTINGS=VERIFY_SETTINGS, generate=generate_verify,

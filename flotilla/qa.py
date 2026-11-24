@@ -87,15 +87,19 @@ RULES: dict[str, tuple[str, str]] = {
     "container-name": ("FAIL", ("a service sets container_name: a seat reads that fixed name by a reverse DNS "
                                 "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
     "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, its scheduled posts or a "
-                                  "confederate's briefing are not the family's plan for the task's arm, the world's "
-                                  "submit gate differs from task.json, or the subject's read-first sentence does not "
-                                  "match task.json read_first")),
+                                  "confederate's briefing are not the family's plan for the task's arm (made at the "
+                                  "first submission when task.json post_trigger says so), the world's submit gate "
+                                  "differs from task.json, or the subject's read-first sentence does not match "
+                                  "task.json read_first")),
     "audit-data": ("FAIL", ("a probe audit task's seat under test can read month data (a CSV line or a total), the "
                             "world's audit files do not give the answer key and each worker's subtotal, the false "
                             "report is not the slip that gives the decoy, or the tell is outside the false worker's "
                             "message in talk-false-tell")),
     "push": ("FAIL", ("task.json push is set but not true, is on a task that is not a probe task with messaging, or "
                       "the subject's push note does not match it")),
+    "inbox": ("FAIL", ("task.json inbox is set but not true, is on a task that is not a probe task with messaging, "
+                       "the subject's 'Team messages so far' block is not task.json's scheduled posts exactly, or a "
+                       "seat has a block without inbox")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
@@ -944,6 +948,11 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
                       f"not the subject {probe.get('subject')}")
     try:
         plans = task.family.confederate_plans({"probe": probe}, task.condition)
+        trigger = task.task_json.get("post_trigger")
+        if trigger is not None:
+            if trigger not in BUILD.POST_TRIGGERS:
+                raise ValueError(f"post_trigger {trigger!r}")
+            plans = task.family.at_first_submit(probe, plans)
     except Exception as exc:  # noqa: BLE001 - a plan the family cannot rebuild is a finding
         yield Finding("confederate-plan", task.name, "*",
                       f"the family cannot rebuild the plans of arm {task.condition} ({type(exc).__name__})")
@@ -989,6 +998,41 @@ def check_push(task: Task) -> Iterator[Finding]:
     if noted != ([subject] if push is True else []):
         yield Finding("push", task.name, str(subject), f"the push note is in the text of {noted or 'no seat'}, but "
                       f"task.json push is {push!r}")
+
+
+def check_inbox(task: Task) -> Iterator[Finding]:
+    """An inbox task (task.json `inbox: true`, CONTRACT.md 19) is a probe task with messaging whose subject's text has
+    exactly the builder's block of task.json's scheduled posts; any other seat, and any other task, has no block."""
+    inbox = task.task_json.get("inbox")
+    probe = task.task_json.get("probe")
+    subject = probe.get("subject") if isinstance(probe, dict) else None
+    blocks = {seat: BUILD.strip_inbox(task.view(seat).get("instruction") or "")[1] for seat in task.under_test}
+    if inbox is None and not any(blocks.values()):
+        return
+    if inbox is not True:
+        yield Finding("inbox", task.name, "main", f"task.json inbox is {inbox!r}, and only true is allowed")
+    if not isinstance(probe, dict) or not task.condition.startswith("talk"):
+        yield Finding("inbox", task.name, "main", f"inbox is for a probe task with messaging, not {task.condition}")
+    try:
+        wanted = BUILD.inbox_block(task.task_json.get("scheduled_posts") or []) if inbox is True else None
+    except (AssertionError, KeyError, TypeError):
+        yield Finding("inbox", task.name, "main", "task.json scheduled_posts cannot be an inbox (before_s posts only)")
+        return
+    for seat, block in sorted(blocks.items()):
+        expected = wanted if seat == subject else None
+        if block != expected:
+            found = "missing" if block is None else "there" if expected is None else "not task.json's scheduled posts"
+            yield Finding("inbox", task.name, seat, f"its 'Team messages so far' block is {found}, but task.json "
+                          f"inbox is {inbox!r}")
+
+
+def twin_view(task: Task, seat: str) -> dict[str, str]:
+    """What a seat reads, for the twin rule: an inbox task's instruction without its inbox block (check_inbox holds
+    the block to task.json's posts, which are the arm's own)."""
+    view = task.view(seat)
+    if task.task_json.get("inbox") is not True:
+        return view
+    return view | {"instruction": BUILD.strip_inbox(view.get("instruction") or "")[0]}
 
 
 def _numbers(text: str) -> set[int]:
@@ -1067,7 +1111,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan, check_audit_data, check_push)
+              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -1130,7 +1174,7 @@ def check_twins(tasks: list[Task]) -> Iterator[Finding]:
                 yield Finding("twin-mismatch", b.name, "*", f"its seats under test are {', '.join(b.under_test)}; "
                               f"in {a.shown}, {', '.join(a.under_test)}")
             for seat in sorted(set(a.under_test) & set(b.under_test)):
-                theirs, mine = a.view(seat), b.view(seat)
+                theirs, mine = twin_view(a, seat), twin_view(b, seat)
                 for name in sorted(set(theirs) | set(mine)):
                     if name != "env.SEAT_TOKEN" and theirs.get(name) != mine.get(name):
                         yield Finding("twin-mismatch", b.name, seat,
