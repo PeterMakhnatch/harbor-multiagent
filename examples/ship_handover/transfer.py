@@ -36,6 +36,7 @@ assert GRADED == ("zero", "positive") and set(GRADE_OF) == set(GRADED)
 
 Interval = tuple[Fraction, Fraction]
 Graded = tuple[str, int | None]
+Claimed = dict[str, tuple[list[str], dict[str, Graded]]]
 
 
 class World(NamedTuple):
@@ -286,18 +287,27 @@ def _side(
     return side, deltas
 
 
-def transfer(
-    stock_path: Path, inflight_path: Path, packets: dict[str, list[Path]]
-) -> Record:
-    stock, inflight = load_pair(stock_path, inflight_path)
+def read_claims(
+    stock: Record, inflight: Record, packets: dict[str, list[Path]]
+) -> Claimed:
     regs = {STOCK_WORLD.name: stock, INFLIGHT_WORLD.name: inflight}
+    return {
+        world.name: _claims(world, regs[world.name], packets[world.name])
+        for world in WORLDS
+    }
+
+
+def assemble(stock: Record, inflight: Record, claimed: Claimed) -> Record:
+    regs = {STOCK_WORLD.name: stock, INFLIGHT_WORLD.name: inflight}
+    assert set(claimed) == set(regs)
     label = team_label(stock)
     assert label == team_label(inflight)
     worlds: Record = {}
     deltas: dict[str, dict[str, Interval]] = {}
     for world in WORLDS:
         reg = regs[world.name]
-        digests, claims = _claims(world, reg, packets[world.name])
+        digests, claims = claimed[world.name]
+        assert digests == sorted(digests)
         side, deltas[world.name] = _side(world, bindings(reg), claims)
         worlds[world.name] = {
             "schema": world.schema,
@@ -330,6 +340,13 @@ def transfer(
         "transfer": comparison,
         "notes": NOTES,
     }
+
+
+def transfer(
+    stock_path: Path, inflight_path: Path, packets: dict[str, list[Path]]
+) -> Record:
+    stock, inflight = load_pair(stock_path, inflight_path)
+    return assemble(stock, inflight, read_claims(stock, inflight, packets))
 
 
 def _tsv(rows: list[Record]) -> str:
