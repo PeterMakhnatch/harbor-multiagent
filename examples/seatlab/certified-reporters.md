@@ -30,6 +30,12 @@ Both truthful typed controls scored 1. In the third control the first report was
 
 The total and both skipped sessions are already known. This is an exploratory accounting check, not a second registered experiment. Pair each requested reporter by calendar and physical seat. Separate tokens measured for calls absent in `stop` from changes among calls both teams made. Require the two terms to reproduce the observed total exactly. Count how often the total changes sign when one calendar is omitted. Do not infer a market price, provider bill or causal change in model reasoning from these receipts.
 
+**Result.** The 2 omitted calls account for 4,185 client tokens in the `all` arm. The 22 reporters requested in both arms used 9,697 more tokens in `stop`. The exact difference is 9,697 − 4,185 = **5,512**. All 22 matched reporters received the same visible prompt and returned the same visible answer across arms.
+
+The original owner records separate input, output and cache reads. Across the 22 pairs, `stop` reported 9,697 more input tokens, the same 1,029 output tokens, and 9,706 fewer cache-read tokens. For all 46 sessions this client reported `total_tokens = input_tokens + output_tokens`. It did **not** add its separate `cache_read_tokens` field to that total. This explains the accounting difference without showing that early stopping caused the cache state or changed a bill. Omitting either world 1237 or 1239 reverses the sign. Omitting any one of the other 6 does not.
+
+Reproduce the [paired calculation](results/certified-reporters/token-partition.json) with `python3.12 -BS -m examples.seatlab.workbench verify reporter-tokens`. The [counter supplement](results/certified-reporters/owner-counters.json) contains counters and the already published session digests. The checker matches every supplied record to a distinct issued reporter and its released total. It cannot independently authenticate a remote client's counters.
+
 ## Reproduce or collect new evidence
 
 Rebuild the report with the standard library. Run this from the checkout root. No Docker, account or model call is necessary.

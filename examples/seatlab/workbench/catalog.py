@@ -9,6 +9,7 @@ Kind = Literal[
     "partial-native-operator-cohort",
     "stock-business-counterfactual",
     "native-replay-team",
+    "secondary-native-receipt-analysis",
 ]
 
 _RESULTS = "examples/seatlab/results"
@@ -41,6 +42,21 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/certified-reporters/panel.json",
         exit_code=0,
         sha256="93488d7c23bc53b66a8242f1873b0be363a96e1ac9ea540d98b5394bc22de770",
+    ),
+    Study(
+        id="reporter-tokens",
+        question="Which matched reporting sessions account for the difference in client token totals?",
+        kind="secondary-native-receipt-analysis",
+        guide="examples/seatlab/certified-reporters.md",
+        module="examples.seatlab.fanin.reporter_tokens",
+        argv=(
+            f"{_RESULTS}/certified-reporters/rows.json",
+            "--owner-counters",
+            f"{_RESULTS}/certified-reporters/owner-counters.json",
+        ),
+        report=f"{_RESULTS}/certified-reporters/token-partition.json",
+        exit_code=0,
+        sha256="ed6a6e4a9221cc8e788baae5dbc45c7c36fcdff41c7bedafc417a5c208d452aa",
     ),
     Study(
         id="peer-fanin",
