@@ -30,8 +30,8 @@ from harbor.models.job.lock import (
     build_trial_lock,
 )
 from harbor.models.job.result import JobResult, JobStats
+from harbor.models.task.task import Task
 from harbor.models.trial.config import (
-    AgentConfig,
     EnvironmentConfig,
     Participant,
     TaskConfig,
@@ -40,6 +40,7 @@ from harbor.models.trial.config import (
 from harbor.models.trial.result import AgentInfo, ModelInfo, SeatResult, TrialResult
 from harbor.models.verifier.result import VerifierResult
 from harbor.trial.hooks import TrialEvent, TrialHookEvent
+from harbor.trial.seats import check_launch
 from tests.unit.examples.test_seatlab_input_keeper import Job, linkat
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ TRIALS = {
     RIGHT: UUID("9e8d7c6b-5a49-4837-a625-14f3e2d1c0b9"),
 }
 ABANDONED = UUID("7b3c9d1e-2f4a-4b6c-8d0e-3a5c7e9f1b2d")
-AGENT_TIMEOUT = {LEFT: 600.0, RIGHT: 900.0}
+AGENT_TIMEOUT_MULTIPLIER = {LEFT: 1.0, RIGHT: 1.5}
 REWARD = {LEFT: 0, RIGHT: 1}
 MODELS = {"booker": "openai/gpt-5", "reporter": "anthropic/claude-sonnet-4-5"}
 SECRET = "PRIVATE-WORLD-BRIEF-4e91"
@@ -76,9 +77,8 @@ class Team(NamedTuple):
 
 def layout(root: Path) -> tuple[Path, Path, Path]:
     task = root / "tasks" / "relay"
-    task.mkdir(parents=True)
-    (task / "task.toml").write_text('[task]\nname = "seatlab/relay"\n')
-    (task / "instruction.md").write_text(f"{SECRET}\n")
+    source = Path(__file__).resolve().parents[3] / "examples/tasks/revised-dispatch"
+    shutil.copytree(source, task, ignore=shutil.ignore_patterns("__pycache__"))
     job = root / "jobs" / "relay-pair"
     job.mkdir(parents=True)
     archive = root / "archive"
@@ -93,7 +93,7 @@ def trial_config(task: Path, job: Path, slot: str) -> TrialConfig:
         trial_name=slot,
         trials_dir=job,
         job_id=JOB,
-        agent=AgentConfig(override_timeout_sec=AGENT_TIMEOUT[slot]),
+        agent_timeout_multiplier=AGENT_TIMEOUT_MULTIPLIER[slot],
         participants=[
             Participant(seat=seat, name="terminus-2", model_name=model)
             for seat, model in MODELS.items()
@@ -109,13 +109,16 @@ def trial_lock(task: Path, config: TrialConfig) -> TrialLock:
 
 def start(config: TrialConfig, lock: TrialLock, trial: UUID) -> TrialHookEvent:
     task_id = config.task.get_task_id()
+    assert config.task.path is not None
+    native_task = Task(config.task.path)
+    check_launch(config, native_task)
     result = TrialResult(
         id=trial,
-        task_name=task_id.get_name(),
+        task_name=native_task.name,
         trial_name=config.trial_name,
         trial_uri=(config.trials_dir / config.trial_name).as_uri(),
         task_id=task_id,
-        task_checksum=lock.task.digest.removeprefix("sha256:"),
+        task_checksum=native_task.checksum,
         config=config,
         agent_info=AgentInfo(name="terminus-2", version="1"),
         started_at=STARTED,
@@ -264,7 +267,7 @@ async def test_two_full_locks_share_one_declared_view_and_native_identity(
     assert cells[0].key != cells[1].key and cells[0].view == cells[1].view
     runtimes = (inspect_record(left), inspect_record(right))
     assert {g for g in GROUPS if runtimes[0].groups[g] != runtimes[1].groups[g]} == {
-        "agent"
+        "timeouts"
     }
     assert (runtimes[0].order, runtimes[0].participants, runtimes[0].env) == (
         runtimes[1].order,
@@ -285,8 +288,9 @@ async def test_two_full_locks_share_one_declared_view_and_native_identity(
             built.job, slot
         )
         assert document["config"] == event.config.model_dump(mode="json")
-        digest = saved(built.job, slot)["task"]["digest"].removeprefix("sha256:")
-        assert document["task_checksum"] == event.result.task_checksum == digest
+        native_task = Task(built.task)
+        assert document["task_name"] == native_task.name
+        assert document["task_checksum"] == native_task.checksum
         row = project_result(document, job_id=str(JOB), slot_name=slot)
         assert (row["trial"], row["slot"], row["grade_state"], row["reward"]) == (
             str(event.trial_id),
@@ -371,12 +375,12 @@ def scatter(document: Json, root: Path) -> None:
 
 
 def borrow(document: Json, root: Path) -> None:
-    document["config"]["agent"]["override_timeout_sec"] = AGENT_TIMEOUT[RIGHT]
+    document["config"]["agent_timeout_multiplier"] = AGENT_TIMEOUT_MULTIPLIER[RIGHT]
 
 
 @linkat
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change", [scatter, borrow], ids=["trials_dir", "agent"])
+@pytest.mark.parametrize("change", [scatter, borrow], ids=["trials_dir", "timeouts"])
 async def test_config_change_outside_the_view_conflicts(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
