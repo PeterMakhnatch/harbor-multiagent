@@ -1,0 +1,14 @@
+{
+  "schema": "seatlab.grouped-attempts-firsts/v1",
+  "baseline": "fb29c4d9b56da0ba2d55f30e1ac3a4876aeaecbf",
+  "question": "Can an operator assign four otherwise indistinguishable seat execution journals to two logical slots after both slots retry, without exposing task names or giving a discarded attempt a grade?",
+  "fixed": "One native hello-seats job, n_attempts=2, n_concurrent_trials=1, same p1 delayed Oracle and p2 native fault after Oracle, max_retries=1 on LifecycleControlError. One first job.",
+  "pass": [
+    "Root result keeps exactly two logical slots and records two retries. Four complete journals have distinct execution UUIDs.",
+    "Native host witness observes both UUIDs at each reused trial path. Private receipt names list two distinct opaque slot keys, exactly the same pair of UUIDs per slot as the host witness.",
+    "The two final UUIDs match their native trial ends. No verifier grade is assigned to the two previous executions.",
+    "With one archived journal withheld, the public reader keeps 2 logical slots and 4 expected executions, reports one missing execution, and does not guess its outcome."
+  ],
+  "nonclaim": "Job ID and slot attribution come from a trusted private collector filename, not the journal header. This local comparison has no retries across machines and no models.",
+  "price_usd": 0
+}
