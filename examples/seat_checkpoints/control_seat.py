@@ -41,6 +41,7 @@ ROLE_STAGES: dict[str, tuple[str, ...]] = {
 }
 FINAL_STAGE = {"planner": "after_publish", "dispatcher": "after_decide"}
 TERMINAL = {"publish": "publish", "preferred": "publish", "leave": "leave"}
+SEALED_ROLES = frozenset({"dispatcher"})
 FRAMEWORK_KWARGS = frozenset(
     {"logger", "mcp_servers", "skills_dir", "override_setup_timeout_sec"}
 )
@@ -234,7 +235,9 @@ class ControlSeat(BaseAgent):
         summary = await play(dict(brief), request, decide, wait_for)
         receipt["summary"] = _checked_summary(summary, self.role)
         self._record(context, receipt)
-        if receipt["summary"]["terminal"] != TERMINAL[self.policy]:
+        terminal = receipt["summary"]["terminal"]
+        sealed = terminal == "sealed" and self.role in SEALED_ROLES
+        if terminal != TERMINAL[self.policy] and not sealed:
             raise SeatFailure("control_terminal_mismatch")
         await self._stage(FINAL_STAGE[self.role], context, receipt)
         assert [entry["stage"] for entry in receipt["stages"]] == list(

@@ -16,6 +16,7 @@ import re
 import stat
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..native_study import check_identity, require, task_files_digest
@@ -46,9 +47,9 @@ STOCK_FILES = (
     "tests/test.sh",
     "tests/verify.py",
 )
-ADDED = (
-    ("environment/board_world.py", "board_world.py"),
-    ("environment/mark.py", "mark.py"),
+ADDED: tuple[tuple[str, Path], ...] = (
+    ("environment/board_world.py", PACKAGE_DIR / "board_world.py"),
+    ("environment/mark.py", PACKAGE_DIR / "mark.py"),
 )
 REVISIONS: tuple[tuple[str, str, str], ...] = (
     (
@@ -79,7 +80,34 @@ READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 CREATE_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
 
 assert tuple(sorted(STOCK_FILES)) == STOCK_FILES
-assert all(path in STOCK_FILES for path, _, _ in REVISIONS)
+
+
+@dataclass(frozen=True)
+class Layout:
+    schema: str
+    task: str
+    stage_prefix: str
+    added: tuple[tuple[str, Path], ...]
+    revisions: tuple[tuple[str, str, str], ...]
+
+    def __post_init__(self) -> None:
+        names = [relative for relative, _ in self.added]
+        assert len(set(names)) == len(names)
+        assert all(name.startswith("environment/") for name in names)
+        assert all(name.count("/") == 1 for name in names)
+        assert not set(names) & set(STOCK_FILES)
+        assert all(source.is_absolute() for _, source in self.added)
+        assert all(path in STOCK_FILES for path, _, _ in self.revisions)
+        assert re.fullmatch(r"\.[a-z]+(-[a-z]+)*-", self.stage_prefix) is not None
+
+
+CHECKPOINT = Layout(
+    schema=SCHEMA,
+    task=TASK_NAME,
+    stage_prefix=".seat-cut-stage-",
+    added=ADDED,
+    revisions=REVISIONS,
+)
 
 
 def read_plain(path: Path) -> tuple[bytes, int]:
@@ -118,8 +146,9 @@ def target(text: str) -> Path:
 
 
 class Stage:
-    def __init__(self, parent: Path) -> None:
-        self.root = Path(tempfile.mkdtemp(prefix=".seat-cut-stage-", dir=parent))
+    def __init__(self, parent: Path, layout: Layout) -> None:
+        self.root = Path(tempfile.mkdtemp(prefix=layout.stage_prefix, dir=parent))
+        self._allowed = frozenset((*STOCK_FILES, *dict(layout.added)))
         self._dirs: list[Path] = [self.root]
         self._files: list[Path] = []
         self._modes: list[tuple[Path, int]] = []
@@ -131,7 +160,7 @@ class Stage:
         self._modes.append((path, mode))
 
     def write(self, relative: str, data: bytes, mode: int) -> None:
-        assert relative in STOCK_FILES or relative in dict(ADDED)
+        assert relative in self._allowed
         path = self.root / relative
         fd = os.open(path, CREATE_FLAGS, 0o600)
         self._files.append(path)
@@ -181,25 +210,25 @@ def copy_stock(stage: Stage) -> None:
         stage.write(relative, data, mode)
 
 
-def revise(stage: Stage) -> None:
-    for relative in dict.fromkeys(path for path, _, _ in REVISIONS):
+def revise(stage: Stage, revisions: tuple[tuple[str, str, str], ...]) -> None:
+    for relative in dict.fromkeys(path for path, _, _ in revisions):
         data, _ = read_plain(stage.root / relative)
         text = data.decode("utf-8")
-        for path, old, new in REVISIONS:
+        for path, old, new in revisions:
             if path == relative:
                 require(text.count(old) == 1, f"{relative} lacks one {old.strip()!r}")
                 text = text.replace(old, new)
         stage.rewrite(relative, text.encode("utf-8"))
 
 
-def add(stage: Stage) -> None:
+def add(stage: Stage, added: tuple[tuple[str, Path], ...]) -> None:
     mode = stat.S_IMODE(os.lstat(stage.root / "environment" / "world.py").st_mode)
-    for relative, name in ADDED:
-        data, _ = read_plain(PACKAGE_DIR / name)
+    for relative, source in added:
+        data, _ = read_plain(source)
         stage.write(relative, data, mode)
 
 
-def check_tree(root: Path) -> None:
+def check_tree(root: Path, added: tuple[tuple[str, Path], ...]) -> None:
     pending = [("", 0)]
     dirs: list[str] = []
     files: list[str] = []
@@ -223,7 +252,7 @@ def check_tree(root: Path) -> None:
                     files.append(relative)
     require(not pending, f"staged tree exceeds {MAX_TREE_ENTRIES} directories")
     require(sorted(dirs) == sorted(STOCK_DIRS), "staged directories differ")
-    expected = sorted((*STOCK_FILES, *dict(ADDED)))
+    expected = sorted((*STOCK_FILES, *dict(added)))
     require(sorted(files) == expected, "staged files differ")
 
 
@@ -251,13 +280,17 @@ def release_claim(out: Path, claim: os.stat_result) -> None:
 
 
 def materialize(out: Path) -> dict[str, object]:
+    return materialize_layout(out, CHECKPOINT)
+
+
+def materialize_layout(out: Path, layout: Layout) -> dict[str, object]:
     require(out.is_absolute() and not os.path.lexists(out), f"{out} is not new")
     base = check_identity(dict(BASE))
     require(
         task_files_digest(SOURCE_DIR, base) == BASE_FILES,
         "published harbor/shift-board differs from the frozen base",
     )
-    stage = Stage(out.parent)
+    stage = Stage(out.parent, layout)
     published = False
     try:
         copy_stock(stage)
@@ -265,9 +298,9 @@ def materialize(out: Path) -> dict[str, object]:
             task_files_digest(stage.root, base) == BASE_FILES,
             "staged stock copy differs from the frozen base",
         )
-        revise(stage)
-        add(stage)
-        check_tree(stage.root)
+        revise(stage, layout.revisions)
+        add(stage, layout.added)
+        check_tree(stage.root, layout.added)
         stage.seal(dir_mode(SOURCE_DIR))
         publish(stage, out)
         published = True
@@ -276,8 +309,8 @@ def materialize(out: Path) -> dict[str, object]:
             stage.discard()
     sync_directory(out.parent)
     return {
-        "schema": SCHEMA,
-        "task": TASK_NAME,
+        "schema": layout.schema,
+        "task": layout.task,
         "path": str(out),
         "base": base,
         "base_files": BASE_FILES,
@@ -285,9 +318,13 @@ def materialize(out: Path) -> dict[str, object]:
 
 
 def main(argv: list[str]) -> int:
+    return run(argv, CHECKPOINT)
+
+
+def run(argv: list[str], layout: Layout) -> int:
     try:
         require(len(argv) == 1, "usage: materialize OUT")
-        record = materialize(target(argv[0]))
+        record = materialize_layout(target(argv[0]), layout)
     except (ValueError, OSError) as error:
         sys.stderr.write(f"materialize: {error}\n")
         return 1

@@ -6,7 +6,7 @@ import math
 import os
 import re
 import secrets
-from collections.abc import Coroutine, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -34,8 +34,11 @@ MAX_WATCH_SEC = 24 * 60 * 60
 MAX_DOCUMENT_BYTES = 64 * 1024
 TEMP_NAME_ATTEMPTS = 4
 MARK_ID = re.compile(r"[0-9a-f]{32}")
+HOST_COMMAND = re.compile(r"python3 /app/[a-z_]{1,32}\.py")
 SEAT_STATES = frozenset({"not_started", "running", "clean", "error"})
 TERMINAL_STATES = frozenset({"clean", "error"})
+
+Select = Callable[[dict[str, str]], Awaitable[str | None]]
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +63,10 @@ def role_states(
     states = {"target": seat_state(by_seat[target]), "peer": seat_state(by_seat[peer])}
     assert set(states.values()) <= SEAT_STATES
     return states
+
+
+async def _classic(before: dict[str, str]) -> str:
+    return MARK_COMMAND
 
 
 def _spawn(coroutine: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
@@ -152,6 +159,7 @@ class _Observer:
         interval_seconds: float,
         timeout_seconds: float,
         max_samples: int,
+        select: Select = _classic,
     ) -> None:
         self._trial = trial
         self._journal = journal
@@ -165,6 +173,7 @@ class _Observer:
         self._exec_guard = timeout_seconds + EXEC_TERMINATE_GRACE_SEC
         self._settle_bound = self._exec_guard + SETTLE_GRACE_SEC
         self._max_samples = max_samples
+        self._select = select
         self._stop = asyncio.Event()
         self._sampler: asyncio.Task[None] | None = None
         self._started = False
@@ -211,12 +220,13 @@ class _Observer:
             and len(self._samples) < limit
         )
 
-    async def _mark(self, mark_id: str) -> bool:
+    async def _mark(self, mark_id: str, command: str) -> bool:
         assert MARK_ID.fullmatch(mark_id)
+        assert HOST_COMMAND.fullmatch(command)
         try:
             result = await asyncio.wait_for(
                 self._trial.agent_environment.exec(
-                    f"{MARK_COMMAND} {mark_id}",
+                    f"{command} {mark_id}",
                     cwd=MARK_CWD,
                     timeout_sec=self._exec_timeout,
                     user=MARK_USER,
@@ -244,7 +254,8 @@ class _Observer:
             return
         self._inflight = True
         try:
-            acknowledged = await self._mark(mark_id)
+            command = await self._select(dict(before))
+            acknowledged = command is not None and await self._mark(mark_id, command)
         except BaseException:
             self._marking = False
             raise
@@ -370,6 +381,7 @@ def attach(
     interval_seconds: float = 0.25,
     max_samples: int = 16,
     timeout_seconds: float = DEFAULT_TIMEOUT_SEC,
+    select: Select = _classic,
 ) -> None:
     if not isinstance(trial, SeatsTrial):
         raise TypeError("seat-cut observation requires a native SeatsTrial")
@@ -430,6 +442,7 @@ def attach(
         interval_seconds=interval,
         timeout_seconds=timeout,
         max_samples=max_samples,
+        select=select,
     )
     trial.add_hook(TrialEvent.AGENT_START, observer.on_agent_start)
     trial.add_hook(TrialEvent.AGENT_END, observer.on_agent_end)

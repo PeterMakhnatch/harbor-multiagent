@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 from typing import Literal, cast
 
 Role = Literal["planner", "dispatcher"]
-Terminal = Literal["publish", "leave", "stop"]
+Terminal = Literal["publish", "leave", "stop", "sealed"]
+Outcome = Literal["accepted", "conflict", "sealed"]
 Action = tuple[str, str | None, str | None]
 Request = Callable[
     [str, dict[str, object] | None], Awaitable[tuple[int, dict[str, object]]]
@@ -35,6 +36,7 @@ POST_PATHS = frozenset({"/prepare", "/publish", "/leave"})
 WAIT_FLAGS = frozenset({"prepared", "incumbent"})
 OK: dict[str, object] = {"ok": True}
 CONFLICT: dict[str, object] = {"error": "conflict"}
+SEALED: dict[str, object] = {"error": "sealed"}
 CONFLICT_STATUS = 409
 MAX_REVISION = 64
 PLANNER_TURNS = 1
@@ -137,6 +139,10 @@ def accepted(status: int, payload: dict[str, object]) -> bool:
     return status == 200 and set(payload) == set(OK) and payload["ok"] is True
 
 
+def sealed(status: int, payload: dict[str, object]) -> bool:
+    return status == CONFLICT_STATUS and payload == SEALED
+
+
 async def read_board(request: Request) -> tuple[str, str | None, str | None]:
     status, payload = await call(request, "/board", None)
     if status != 200 or set(payload) != BOARD_KEYS:
@@ -171,27 +177,32 @@ async def read_current(request: Request, seat: Seat) -> None:
     seat.bases["current"] = revision
 
 
-async def publish(request: Request, seat: Seat, slot: str, label: str) -> bool:
+async def publish(request: Request, seat: Seat, slot: str, label: str) -> Outcome:
     assert slot in seat.available and label in BASE_LABELS
     base = seat.bases.pop(label)
     status, payload = await call(request, "/publish", {"slot": slot, "base": base})
     if accepted(status, payload):
         seat.last = None
-        return True
+        return "accepted"
+    if seat.role == "dispatcher" and sealed(status, payload):
+        return "sealed"
     eligible = seat.role == "dispatcher" and label == "draft" and seat.conflicts == 0
     if eligible and status == CONFLICT_STATUS and payload == CONFLICT:
         seat.conflicts += 1
         seat.last = "conflict"
-        return False
+        return "conflict"
     raise OwnerGameError(f"/publish: world refused with HTTP {status}")
 
 
-async def leave(request: Request, seat: Seat) -> None:
+async def leave(request: Request, seat: Seat) -> Terminal:
     assert seat.role == "dispatcher"
     status, payload = await call(request, "/leave", {})
+    if sealed(status, payload):
+        return "sealed"
     if not accepted(status, payload):
         raise OwnerGameError(f"/leave: world refused with HTTP {status}")
     seat.last = None
+    return "leave"
 
 
 def publish_choices(seat: Seat) -> dict[str, Action]:
@@ -221,7 +232,7 @@ async def plan(
     seat.bases["draft"] = seat.initial
     kind, slot, label = await take_turn(decide, seat, "plan", publish_choices(seat))
     assert kind == "publish" and slot is not None and label is not None
-    if not await publish(request, seat, slot, label):
+    if await publish(request, seat, slot, label) != "accepted":
         raise OwnerGameError("/publish: the planner publish was not accepted")
     return "publish"
 
@@ -254,19 +265,21 @@ async def dispatch(
         if kind == "stop":
             return "stop"
         if kind == "leave":
-            await leave(request, seat)
-            return "leave"
+            return await leave(request, seat)
         if kind == "read":
             await read_current(request, seat)
             continue
         assert kind == "publish" and slot is not None and label is not None
-        if await publish(request, seat, slot, label):
+        outcome = await publish(request, seat, slot, label)
+        if outcome == "accepted":
             return "publish"
+        if outcome == "sealed":
+            return "sealed"
     raise OwnerGameError("dispatcher exhausted its turn bound without ending play")
 
 
 def summary(seat: Seat, terminal: Terminal) -> dict[str, object]:
-    assert terminal in ("publish", "leave", "stop")
+    assert terminal in ("publish", "leave", "stop", "sealed")
     assert 0 <= seat.reads <= 1 and 0 <= seat.conflicts <= 1
     if seat.role == "planner":
         assert seat.turns == PLANNER_TURNS and terminal == "publish"

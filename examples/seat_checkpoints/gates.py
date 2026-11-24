@@ -27,8 +27,10 @@ async def until(ready: Callable[[], bool]) -> None:
 
 
 class Qualification:
+    SCHEDULES: frozenset[str] = HELD
+
     def __init__(self, trial: SeatsTrial, schedule: str) -> None:
-        if schedule not in HELD:
+        if schedule not in self.SCHEDULES:
             raise ValueError("unknown scripted gate schedule")
         self.trial = trial
         self.root = trial.paths.trial_dir
