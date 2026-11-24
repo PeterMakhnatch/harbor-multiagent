@@ -46,7 +46,7 @@ _MAX_MODEL_CHARS = 128
 _VIEW_ATTEMPTS = 300
 _VIEW_TIMEOUT_SEC = 330
 _RETRY_SEC = 1
-_WORLD_ERRORS = (RuntimeError, OSError, ValueError, RecursionError)
+_WORLD_ERRORS = (RuntimeError, OSError, TypeError, ValueError, RecursionError)
 _INPUT_ERRORS = (ValueError, TypeError, LookupError, RecursionError)
 
 
@@ -67,8 +67,19 @@ def _control_ack(token: str) -> str:
 def _object(body: str) -> dict[str, Any]:
     value = decisions.decode(body)
     if not isinstance(value, dict):
-        raise ValueError("expected a JSON object")
+        raise TypeError("expected a JSON object")
     return value
+
+
+def _record(value: object, why: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise TypeError(why)
+    record: dict[str, Any] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            raise TypeError(why)
+        record[key] = item
+    return record
 
 
 def _checked_view(
@@ -97,8 +108,9 @@ def _checked_receipt(receipt: dict[str, Any]) -> tuple[dict[str, Any] | None, st
     return report, token
 
 
-def _checked_report(report: object) -> dict[str, Any]:
-    if not isinstance(report, dict) or report.keys() != _REPORT_KEYS:
+def _checked_report(raw: object) -> dict[str, Any]:
+    report = _record(raw, "malformed sales report")
+    if report.keys() != _REPORT_KEYS:
         raise ValueError("malformed sales report")
     pick, reason = report["pick"], report["reason"]
     if type(pick) is not int or pick not in decisions.PICKS:
@@ -134,9 +146,10 @@ def _model_name(value: object, optional: bool) -> bool:
 
 
 def _checked_meta(
-    meta: object, prompt: str, answer: str, sessions: set[str]
+    raw: object, prompt: str, answer: str, sessions: set[str]
 ) -> dict[str, Any]:
-    if not isinstance(meta, dict) or meta.keys() != META_KEYS:
+    meta = _record(raw, "unexpected provenance fields")
+    if meta.keys() != META_KEYS:
         raise ValueError("unexpected provenance fields")
     digests = (meta["session_sha256"], meta["prompt_sha256"], meta["answer_sha256"])
     if not all(isinstance(d, str) and decisions.HEX64.fullmatch(d) for d in digests):
@@ -154,7 +167,7 @@ def _checked_meta(
         or meta["credit_fallback"] is not False
     ):
         raise ValueError("provenance does not bind this fresh tool-free turn")
-    return dict(meta)
+    return meta
 
 
 def _private_root(owner: Path) -> None:

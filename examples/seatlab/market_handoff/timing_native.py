@@ -46,28 +46,42 @@ def _private_root(out: Path) -> None:
     )
 
 
+def _record(value: object) -> dict[str, object] | None:
+    if not isinstance(value, dict):
+        return None
+    record: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            return None
+        record[key] = item
+    return record
+
+
 def _participant(raw: object) -> tuple[str, Path, Path, bool]:
-    _require(isinstance(raw, dict), "participant must be an object")
-    assert isinstance(raw, dict)
+    record = _record(raw)
+    if record is None:
+        raise TypeError("participant must be an object")
     _require(
-        PARTICIPANT_KEYS <= raw.keys()
-        and not any(raw[key] for key in raw.keys() - PARTICIPANT_KEYS),
+        PARTICIPANT_KEYS <= record.keys()
+        and not any(record[key] for key in record.keys() - PARTICIPANT_KEYS),
         "participant may not set env, endpoints, tools or other overrides",
     )
-    kwargs = raw["kwargs"]
-    _require(
-        raw["seat"] in SEATS
-        and raw["import_path"] == ACTOR_IMPORT
-        and raw["name"] is None
-        and raw["model_name"] is None
-        and isinstance(kwargs, dict)
-        and kwargs.keys() == KWARG_KEYS
-        and type(kwargs["control"]) is bool,
-        "participant is not a registered price timing seat",
-    )
+    seat, kwargs = record["seat"], _record(record["kwargs"])
+    control = None if kwargs is None else kwargs.get("control")
+    if (
+        not isinstance(seat, str)
+        or seat not in SEATS
+        or record["import_path"] != ACTOR_IMPORT
+        or record["name"] is not None
+        or record["model_name"] is not None
+        or kwargs is None
+        or kwargs.keys() != KWARG_KEYS
+        or not isinstance(control, bool)
+    ):
+        raise ValueError("participant is not a registered price timing seat")
     client = _host_path(kwargs["client"], "client must be an absolute host path")
     owner = _host_path(kwargs["owner"], "owner must be an absolute host path")
-    return raw["seat"], client, owner, kwargs["control"]
+    return seat, client, owner, control
 
 
 def checked_config(config_path: Path) -> bool:

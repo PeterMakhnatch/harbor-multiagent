@@ -5,7 +5,7 @@ import math
 import re
 import sys
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 SALES = "sales"
 FINANCE = ("finance_a", "finance_b")
@@ -86,6 +86,10 @@ def load(path: Path, keys: set[str]) -> dict[str, Any]:
     return value
 
 
+def json_object(value: object) -> dict[str, Any] | None:
+    return cast(dict[str, Any], value) if isinstance(value, dict) else None
+
+
 def is_pick(value: object) -> bool:
     return type(value) is int and value in PICKS
 
@@ -106,8 +110,9 @@ def scenario(path: Path) -> dict[str, Any]:
     return record
 
 
-def report_ok(report: object) -> bool:
-    if not isinstance(report, dict) or report.keys() != {"pick", "reason"}:
+def report_ok(value: object) -> bool:
+    report = json_object(value)
+    if report is None or report.keys() != {"pick", "reason"}:
         return False
     reason = report["reason"]
     return (
@@ -176,19 +181,27 @@ def replay(scene: dict[str, Any], record: dict[str, Any]) -> dict[tuple[str, str
     if not isinstance(events, list) or len(events) > COMPLETE_EVENTS:
         fail("events must be a bounded list")
     seen: dict[tuple[str, str], str] = {}
-    for index, row in enumerate(events):
-        if not isinstance(row, dict) or row.keys() != EVENT_KEYS:
+    for index, item in enumerate(events):
+        row = json_object(item)
+        if row is None or row.keys() != EVENT_KEYS:
             fail(f"event {index}: invalid keys")
-        if not isinstance(row["seat"], str) or not isinstance(row["event"], str):
+        seat, event, number, view_sha256 = (
+            row["seat"],
+            row["event"],
+            row["n"],
+            row["view_sha256"],
+        )
+        if not isinstance(seat, str) or not isinstance(event, str):
             fail(f"event {index}: invalid seat or event name")
-        key = (row["seat"], row["event"])
-        if type(row["n"]) is not int or row["n"] != index + 1 or key not in NEEDS:
+        key = (seat, event)
+        if type(number) is not int or number != index + 1 or key not in NEEDS:
             fail(f"event {index}: invalid sequence number or seat event")
         if key == (SALES, "commit") and not report_ok(record["report"]):
             fail("sales commit without a valid report")
-        if row["view_sha256"] != expected_digest(scene, record, *key, seen):
+        expected = expected_digest(scene, record, *key, seen)
+        if not isinstance(view_sha256, str) or view_sha256 != expected:
             fail(f"event {index}: digest does not match the materialized payload")
-        seen[key] = row["view_sha256"]
+        seen[key] = view_sha256
     return seen
 
 

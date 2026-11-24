@@ -245,16 +245,16 @@ def _token(token: Any) -> str:
     return token
 
 
-def sales_prompt(sales: dict) -> str:
+def sales_prompt(sales: dict[str, Any]) -> str:
     return _bounded(_SALES + "SALES_VIEW: " + _sales_view(sales) + "\n")
 
 
-def read_sales(text: str) -> dict:
+def read_sales(text: str) -> dict[str, Any]:
     record = _record(text, {"pick", "reason"})
     return {"pick": _pick(record["pick"]), "reason": _reason(record["reason"])}
 
 
-def price_prompt(finance: dict, report: dict | None) -> str:
+def price_prompt(finance: dict[str, Any], report: dict[str, Any] | None) -> str:
     body = FINANCE_LINE + _finance_view(finance) + "\n" + REPORT_LINE + _slot(report)
     return _bounded(_FINANCE + body + "\n" + _PRICE_ASK)
 
@@ -284,7 +284,7 @@ def _prior_report(prior: Any) -> dict[str, Any] | None:
 
 
 def receipt_prompt(
-    price_prompt: str, price_reply: str, report: dict | None, token: str
+    price_prompt: str, price_reply: str, report: dict[str, Any] | None, token: str
 ) -> str:
     early = _prior_report(price_prompt)
     read_price(price_reply)

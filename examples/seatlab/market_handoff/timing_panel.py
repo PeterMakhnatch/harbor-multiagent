@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import uuid
+from collections.abc import Sequence
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from fractions import Fraction
 from math import comb
@@ -21,6 +22,10 @@ from .timing_world import (
     SHAPES,
 )
 
+Record = dict[str, Any]
+Slot = tuple[int, int]
+Trials = dict[Slot, Record]
+Usage = list[tuple[str, int | None]]
 SCHEMA = "seatlab.price-timing-summary/v1"
 REPEATS = 2
 SLOTS = tuple((w, r) for w in range(ANALYSIS_WORLDS) for r in range(REPEATS))
@@ -163,7 +168,7 @@ def _report(value: Any, label: str) -> int:
 
 def _settlement(
     item: Any, label: str, pick: int | None, checkpoint: str | None
-) -> dict:
+) -> Record:
     if type(item) is not dict or not SETTLE_KEYS <= item.keys():
         raise ValueError(f"{label} lacks settlement keys {sorted(SETTLE_KEYS)}")
     if (
@@ -236,7 +241,7 @@ def _turn(
 
 def _turns(
     items: Any, label: str, early: str, complete: bool
-) -> tuple[list[str], list]:
+) -> tuple[list[str], Usage]:
     if type(items) is not list or len(items) > len(TURNS):
         raise ValueError(f"{label} turns must be a list of at most {len(TURNS)}")
     parsed = [_turn(item, label, early) for item in items]
@@ -263,7 +268,7 @@ def _slot(row: Any) -> tuple[int, int]:
     return slot
 
 
-def _complete(row: dict, label: str) -> dict:
+def _complete(row: Record, label: str) -> Record:
     if not COMPLETE_KEYS <= row.keys():
         raise ValueError(
             f"{label} complete row lacks {sorted(COMPLETE_KEYS - row.keys())}"
@@ -298,7 +303,7 @@ def _complete(row: dict, label: str) -> dict:
     }
 
 
-def _partial(row: dict, label: str) -> dict:
+def _partial(row: Record, label: str) -> Record:
     early = row["early"]
     picks = row.get("picks") or {}
     settlements = row.get("settlements") or {}
@@ -373,13 +378,13 @@ def _owner(
     return parsed
 
 
-def _parse(rows: Any) -> tuple[dict, dict]:
+def _parse(rows: Any) -> tuple[Trials, Trials]:
     if type(rows) is not list or len(rows) != len(SLOTS):
         raise ValueError(f"panel must list exactly {len(SLOTS)} registered slots")
-    complete: dict[tuple[int, int], dict] = {}
-    partial: dict[tuple[int, int], dict] = {}
+    complete: Trials = {}
+    partial: Trials = {}
+    sessions: dict[str, Slot] = {}
     natives: set[str] = set()
-    sessions: dict[str, tuple[int, int]] = {}
     checkpoints: dict[str, int] = {}
     for row in rows:
         slot = _slot(row)
@@ -429,7 +434,7 @@ def _sign(value: Fraction | int) -> str:
     return "positive" if value > 0 else "negative" if value < 0 else "zero"
 
 
-def _wlt(values: list) -> dict:
+def _wlt(values: Sequence[Fraction | int]) -> dict[str, int]:
     return {
         "early_wins": sum(v > 0 for v in values),
         "late_wins": sum(v < 0 for v in values),
@@ -437,7 +442,7 @@ def _wlt(values: list) -> dict:
     }
 
 
-def _arm(settled: list[dict], picks: list[int], report_picks: list[int]) -> dict:
+def _arm(settled: list[Record], picks: list[int], report_picks: list[int]) -> Record:
     n = len(settled)
     if n == 0:
         return {"pairs": 0}
@@ -470,13 +475,15 @@ def _sign_test(company_deltas: list[Fraction]) -> Fraction:
     )
 
 
-def _compare(complete: dict) -> dict:
+def _compare(complete: Trials) -> Record:
     pairs = [complete[slot] for slot in SLOTS if slot in complete]
-    companies = {}
+    companies: dict[int, Fraction] = {}
     for world in range(ANALYSIS_WORLDS):
-        both = [complete.get((world, r)) for r in range(REPEATS)]
-        if all(both):
-            companies[world] = Fraction(sum(t["delta"] for t in both), REPEATS)
+        slots = [(world, r) for r in range(REPEATS)]
+        if all(slot in complete for slot in slots):
+            companies[world] = Fraction(
+                sum(complete[slot]["delta"] for slot in slots), REPEATS
+            )
     return {
         "complete_pairs": len(pairs),
         "pair_level": _wlt([t["delta"] for t in pairs]),
@@ -507,7 +514,7 @@ def _compare(complete: dict) -> dict:
     }
 
 
-def _registered(compared: dict, complete: bool) -> dict:
+def _registered(compared: Record, complete: bool) -> Record:
     deltas = compared.pop("_company_deltas")
     if not complete:
         return {
@@ -530,8 +537,8 @@ def _registered(compared: dict, complete: bool) -> dict:
     }
 
 
-def _usage(trials: list[dict]) -> dict:
-    roles: dict[str, dict] = {}
+def _usage(trials: list[Record]) -> Record:
+    roles: dict[str, Record] = {}
     for role, tokens in (u for trial in trials for u in trial["usage"]):
         entry = roles.setdefault(
             role, {"turns": 0, "unknown_turns": 0, "known_tokens": 0}
@@ -556,8 +563,8 @@ def _usage(trials: list[dict]) -> dict:
     }
 
 
-def _owner_usage(partial: dict) -> dict:
-    roles: dict[str, dict] = {}
+def _owner_usage(partial: Trials) -> Record:
+    roles: dict[str, Record] = {}
     for role, recorded, verified, tokens, _ in (
         e for trial in partial.values() for e in trial["owner"]
     ):
@@ -590,7 +597,7 @@ def _owner_usage(partial: dict) -> dict:
     }
 
 
-def _observed(partial: dict) -> list[dict]:
+def _observed(partial: Trials) -> list[Record]:
     rows = []
     for (world, repeat), trial in sorted(partial.items()):
         arms = trial["arms"]
@@ -616,7 +623,7 @@ def _observed(partial: dict) -> list[dict]:
     return rows
 
 
-def summarize(rows: list[dict]) -> dict:
+def summarize(rows: list[Record]) -> Record:
     complete, partial = _parse(rows)
     compared = _compare(complete)
     registered = _registered(compared, not partial)
@@ -638,7 +645,7 @@ def summarize(rows: list[dict]) -> dict:
     }
 
 
-def _strict(pairs: list[tuple[str, Any]]) -> dict:
+def _strict(pairs: list[tuple[str, Any]]) -> Record:
     keys = [key for key, _ in pairs]
     if len(set(keys)) != len(keys):
         raise ValueError("duplicate JSON key")

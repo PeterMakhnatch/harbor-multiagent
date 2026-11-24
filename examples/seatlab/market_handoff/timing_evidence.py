@@ -7,7 +7,7 @@ import stat
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from examples.seatlab.capsule import view_hash
@@ -81,12 +81,15 @@ CONTROL_NOTE = (
     "excluded from every behavioral count."
 )
 LIVE_NOTES = (
-    "Each turn is one fresh signed-in agy subscription session with tools denied and "
-    "AI-credit fallback disabled; the owner request, reply and receipt files were "
-    "re-verified against the rebuilt prompt.",
-    "served_model is null because the client reports no server model; requested_model "
-    "is the client's echo of the request.",
-    "client_tokens are client-reported totals; no cost is inferred.",
+    (
+        "Each turn is one fresh signed-in agy subscription session with tools denied "
+        "and AI-credit fallback disabled; the owner request, reply and receipt files "
+        "were re-verified against the rebuilt prompt."
+    ),
+    (
+        "served_model is null because the client reports no server model; "
+        "requested_model is the client's echo of the request."
+    ),
 )
 Row = dict[str, Any]
 
@@ -100,6 +103,11 @@ class Refused(ValueError):
 def need(test: object, category: str) -> None:
     if not test:
         raise Refused(category)
+
+
+def mapping(value: object, category: str) -> Row:
+    need(isinstance(value, dict), category)
+    return cast("Row", value)
 
 
 def canonical(value: object) -> bytes:
@@ -175,19 +183,18 @@ def receipt_token(
 
 
 def check_binding(binding: object) -> int:
-    need(isinstance(binding, dict), "binding_keys")
-    assert isinstance(binding, dict)
-    need(binding.keys() == timing_world.BINDING_KEYS, "binding_keys")
-    world = binding["world"]
+    fields = mapping(binding, "binding_keys")
+    need(fields.keys() == timing_world.BINDING_KEYS, "binding_keys")
+    world = fields["world"]
     need(
         type(world) is int and 0 <= world <= timing_world.CONTROL_WORLD, "binding_world"
     )
     need(
-        binding["stock_commit"] == timing_world.PIN
-        and binding["world_seed"] == timing_world.world_seed(world)
-        and binding["truth_seed"] == timing_world.truth_seed(world)
-        and binding["shape"] == timing_world.SHAPES[world]
-        and hex64(binding["checkpoint_sha256"]),
+        fields["stock_commit"] == timing_world.PIN
+        and fields["world_seed"] == timing_world.world_seed(world)
+        and fields["truth_seed"] == timing_world.truth_seed(world)
+        and fields["shape"] == timing_world.SHAPES[world]
+        and hex64(fields["checkpoint_sha256"]),
         "binding_provenance",
     )
     return world
@@ -214,14 +221,14 @@ def participants(root: Path, value: object, control: bool) -> dict[str, Path]:
     need(isinstance(value, list) and len(value) == len(SEATS), "participants")
     assert isinstance(value, list)
     owners: dict[str, Path] = {}
-    for row in value:
-        need(isinstance(row, dict), "participant_shape")
-        seat, kwargs = row.get("seat"), row.get("kwargs")
-        need(seat in SEATS and seat not in owners, "participant_seat")
+    for item in value:
+        row = mapping(item, "participant_shape")
+        seat = row.get("seat")
+        if not isinstance(seat, str) or seat not in SEATS or seat in owners:
+            raise Refused("participant_seat")
+        kwargs = mapping(row.get("kwargs"), "participant_shape")
         need(
-            row.get("import_path") == SEAT_IMPORT
-            and isinstance(kwargs, dict)
-            and kwargs.keys() == KWARG_KEYS,
+            row.get("import_path") == SEAT_IMPORT and kwargs.keys() == KWARG_KEYS,
             "participant_shape",
         )
         need(kwargs["control"] is control, "participant_control")
@@ -474,29 +481,28 @@ def finance_plan(
 
 def check_events(events: object, digests: dict[str, Row]) -> list[Row]:
     need(isinstance(events, list) and len(events) == EVENT_COUNT, "event_count")
-    assert isinstance(events, list)
-    for index, event in enumerate(events):
+    rows = [mapping(event, "event_shape") for event in cast("list[object]", events)]
+    for index, event in enumerate(rows):
         need(
-            isinstance(event, dict)
-            and event.keys() == EVENT_KEYS
+            event.keys() == EVENT_KEYS
             and type(event["n"]) is int
             and event["n"] == index + 1
             and event["seat"] in SEATS,
             "event_shape",
         )
-    order = {seat: [e["event"] for e in events if e["seat"] == seat] for seat in SEATS}
+    order = {seat: [e["event"] for e in rows if e["seat"] == seat] for seat in SEATS}
     need(order == SEAT_EVENTS, "event_order")
     need(
-        [(e["seat"], e["event"]) for e in events[:2]]
+        [(e["seat"], e["event"]) for e in rows[:2]]
         == [(SALES, "view"), (SALES, "commit")],
         "sales_commit_first",
     )
-    for event in events:
+    for event in rows:
         need(
             event["view_sha256"] == digests[event["seat"]][event["event"]],
             f"event_digest:{event['seat']}:{event['event']}",
         )
-    return [dict(event) for event in events]
+    return [dict(event) for event in rows]
 
 
 def check_timing(
@@ -634,7 +640,7 @@ def attest(
     return rows
 
 
-def evidence(out: Path, binding: dict, early: str, *, control: bool = False) -> dict:
+def evidence(out: Path, binding: Row, early: str, *, control: bool = False) -> Row:
     need(type(control) is bool and early in FINANCE, "arguments")
     world = check_binding(binding)
     root = out.expanduser().resolve(strict=True)
