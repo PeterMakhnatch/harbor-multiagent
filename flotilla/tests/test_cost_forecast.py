@@ -357,3 +357,36 @@ def test_smoke_prices_the_oracle_and_free_models_at_zero_without_a_catalog(where
     assert row(lines, ONE).endswith("cost UNKNOWN [unknown (smoke: not free)]")
     assert not any(item.startswith("  catalog:") for item in lines)
     assert line(lines, "maximum:") == "  maximum: $0.0000 = model cap $0.0000 + Modal $0.0000"
+
+
+def test_zdr_list_is_cached_offline_safe_and_warns_per_openrouter_model_without_an_endpoint(where):
+    repo, _jobs = where
+    cache_dir = repo / ".flotilla-local" / "cache"
+    cache = cache_dir / PRICING.ZDR_CACHE
+    payload = {"data": [{"model_id": "a/one", "provider_name": "P"}, {"model_id": "e/free:free", "provider_name": "Q"},
+                        {"name": "no model id"}]}
+
+    def warn(model: str) -> str:
+        return f"  ZDR warning: {model}: no zero-data-retention endpoint: an account with ZDR on gets 404"
+
+    fetched = Fetch(payload)
+    lines = PRICING.zdr_lines([ONE, NEW, DIRECT, None, "openrouter/e/free:free", NEW, "openrouter/c/new:free"],
+                              cache_dir, fetched, NOW)
+    assert fetched.calls == 1
+    assert lines == [f"  zero-data-retention list: fetched 2026-11-24 10:00 ET, cached at {cache}", warn(NEW),
+                     warn("openrouter/c/new:free")]
+    assert PRICING.parse_zdr_endpoints(payload) == {"a/one": ["P"], "e/free:free": ["Q"]}
+    assert not (cache_dir / PRICING.CATALOG_CACHE).exists()
+
+    offline = Fetch(error=RuntimeError("offline"))
+    fresh = PRICING.zdr_lines([NEW], cache_dir, offline, NOW + timedelta(hours=23))
+    assert offline.calls == 0 and fresh == [f"  zero-data-retention list: cache fetched 2026-11-24 10:00 ET ({cache})",
+                                            warn(NEW)]
+    stale = PRICING.zdr_lines([NEW], cache_dir, offline, NOW + timedelta(days=2))
+    assert offline.calls == 1 and stale[1:] == [warn(NEW)]
+    assert stale[0].startswith("  zero-data-retention list: stale cache fetched 2026-11-24 10:00 ET")
+    missing = repo / "elsewhere" / PRICING.ZDR_CACHE
+    assert PRICING.zdr_lines([NEW], repo / "elsewhere", offline, NOW) == [
+        f"  zero-data-retention list: unavailable (RuntimeError); no cache at {missing}; not checked"]
+    tripwire = Fetch(error=SystemExit("no OpenRouter model: no read"))
+    assert PRICING.zdr_lines([DIRECT, None], cache_dir, tripwire, NOW) == [] and tripwire.calls == 0

@@ -162,12 +162,14 @@ def write_executable(path: Path, text: str) -> None:
 
 
 class Sources:
-    def __init__(self, prices: dict, balance, payload: dict | None = None):
+    def __init__(self, prices: dict, balance, payload: dict | None = None, zdr: dict | None = None):
         self._prices = prices
         self._balance = balance
         self._payload = payload
+        self._zdr = zdr
         self.price_calls = 0
         self.catalog_calls = 0
+        self.zdr_calls = 0
         self.balance_calls = []
 
     def prices(self, models):
@@ -183,6 +185,12 @@ class Sources:
         if self._payload is None:
             raise RuntimeError("offline")
         return self._payload
+
+    def zdr(self):
+        self.zdr_calls += 1
+        if self._zdr is None:
+            raise RuntimeError("offline")
+        return self._zdr
 
 
 def catalog() -> dict:
@@ -1576,7 +1584,8 @@ def test_dry_run_prints_the_key_name_then_the_forecast_block_then_the_cells(tmp_
         return ["cost forecast (fake)", "  row"]
 
     monkeypatch.setattr(RUN.PRICING, "forecast_lines", forecast, raising=False)
-    sources = Sources({}, lambda *_args: 10.0, payload={"data": []})
+    sources = Sources({}, lambda *_args: 10.0, payload={"data": []},
+                      zdr={"data": [{"model_id": "qwen/qwen3.8-27b", "provider_name": "Paid"}]})
     assert RUN.run(path, dry_run=True, smoke=1, sources=sources, base_env={"PATH": "/bin", **BOTH_KEYS},
                    history_jobs=tmp_path / "history") == []
     out = capsys.readouterr().out
@@ -1585,14 +1594,17 @@ def test_dry_run_prints_the_key_name_then_the_forecast_block_then_the_cells(tmp_
     assert lines[1].startswith("smoke: first 1 instances of each task set, local docker, concurrency 2")
     assert lines[3].endswith("provider floors none")
     assert lines[4] == "OpenRouter key: FLOTILLA_OPENROUTER_API_KEY (Harbor gets it as OPENROUTER_API_KEY)"
-    assert lines[5:7] == ["cost forecast (fake)", "  row"] == forecast_block(out)
-    assert len(lines) == 9 and all("instance 0 " in line and line.endswith(FREE) for line in lines[7:])
+    block = forecast_block(out)
+    assert block[:2] == ["cost forecast (fake)", "  row"] and lines[5:9] == block
+    assert block[2].startswith("  zero-data-retention list: fetched ")
+    assert block[3] == f"  ZDR warning: {FREE}: no zero-data-retention endpoint: an account with ZDR on gets 404"
+    assert len(lines) == 11 and all("instance 0 " in line and line.endswith(FREE) for line in lines[9:])
     wave = seen["wave"]
     assert (wave["smoke"], wave["budget"]["cap_usd"], wave["make_jobs"]["env"]) == (1, 0.0, "docker")
     assert len(seen["order"]) == 2 and seen["history"] == tmp_path / "history"
     assert Path(seen["repo"]).resolve() == repo.resolve()
     assert "a smoke reads no price catalog" in refusal(seen["fetch"])
-    assert (sources.catalog_calls, sources.price_calls, sources.balance_calls) == (0, 0, [])
+    assert (sources.catalog_calls, sources.price_calls, sources.balance_calls, sources.zdr_calls) == (0, 0, [], 1)
     assert_no_secret(text=out)
     assert RUN.run(path, dry_run=True, sources=sources, base_env={}, history_jobs=None) == []
     out = capsys.readouterr().out
@@ -1609,3 +1621,379 @@ def test_main_reads_smoke_and_history_jobs(monkeypatch):
     assert RUN.main(["plan.json", "--history-jobs", "/tmp/history"]) == 0
     assert [(item["smoke"], item["history_jobs"]) for item in seen] == [
         (3, None), (1, None), (None, Path("/tmp/history"))]
+
+
+# --- staged waves -------------------------------------------------------------------------------------------------
+
+PROBE_ARMS = ["talk-quiet", "talk-false"]
+M1, M2, M3 = "openrouter/a/one", "openrouter/b/two", "openrouter/c/three"
+PROBE_HARBOR = r"""#!/usr/bin/env python3
+import json, sys
+from pathlib import Path
+args = sys.argv[1:]
+config = json.loads(Path(args[args.index("-c") + 1]).read_text())
+task = config["tasks"][0]["path"]
+model = next(item["model_name"] for item in config["participants"] if item.get("model_name"))
+spec = json.loads(Path(__CONTROL__).read_text())[task + "|" + model]
+tries = Path(__TRIES__) / (Path(task).name + "--" + model.replace("/", "_"))
+with tries.open("a") as handle:
+    handle.write("x")
+attempt = tries.stat().st_size
+with Path(__LOG__).open("a") as handle:
+    handle.write(json.dumps({"task": task, "model": model, "instance": spec["instance"], "arm": spec["arm"],
+                             "attempt": attempt, "job": config["job_name"]}) + "\n")
+trial = Path(config["jobs_dir"]) / config["job_name"] / (Path(task).name + "__t")
+trial.mkdir(parents=True)
+invalid = attempt <= spec["invalid"]
+seats = [{"seat": row["seat"], "agent_info": {"name": row["name"], "model_info": None},
+          "exception_info": {"exception_type": "AgentTimeoutError"} if invalid and row.get("model_name") else None,
+          "agent_result": {"n_input_tokens": 100, "n_cache_tokens": 0, "n_output_tokens": 10, "cost_usd": 0.001}
+          if row.get("model_name") else {}} for row in config["participants"]]
+participants = [{key: row[key] for key in ("seat", "name", "model_name") if key in row}
+                for row in config["participants"]]
+result = {"config": {"task": {"path": task}, "participants": participants}, "exception_info": None,
+          "started_at": f"2026-11-21T16:{attempt:02d}:00+00:00", "seat_results": seats}
+(trial / "result.json").write_text(json.dumps(result))
+if not invalid:
+    (trial / "verifier").mkdir()
+    (trial / "verifier" / "score.json").write_text(json.dumps({
+        "error": None, "instance": spec["instance"], "condition": spec["arm"], "probe_kind": "verify",
+        "seats": ["p1", "p2"], "correct": spec["correct"]}))
+    (trial / "verifier" / "world-state.json").write_text("{}")
+"""
+LOOK_LINE = re.compile(r"look \d+/\d+ after stage \d+/\d+: test \d+ set \d+ talk-quiet vs talk-false: openrouter/\S+ "
+                       r"(continue|stop-efficacy|stop-futility|final)( \(recomputed on resume\))?")
+
+
+def probe_tree(repo: Path, sets) -> None:
+    """Probe tasks (kind verify) with p1 under test and p2 scripted; one build folder per (folder, instances)."""
+    for folder_name, instances in sets:
+        root, tasks = repo / folder_name, {}
+        for instance in instances:
+            for arm in PROBE_ARMS:
+                name = f"t-{folder_name}-{instance:06x}-{arm}"
+                folder = root / "probe.verify" / name
+                (folder / "environment").mkdir(parents=True)
+                (folder / "task.toml").write_text("[agents]\np1 = {}\np2 = { under_test = false }\n")
+                (folder / "environment" / "task.json").write_text(json.dumps(
+                    {"family": "probe", "probe": {"kind": "verify", "confederates": ["p2"]}}))
+                tasks[f"flotilla/{name}"] = {"family": "probe", "instance": instance, "condition": arm,
+                                             "path": f"probe.verify/{name}", "label": "probe.verify",
+                                             "seats": ["p1", "p2"]}
+        (root / "manifest.json").write_text(json.dumps({"format": "flotilla-manifest", "version": 1, "tasks": tasks}))
+
+
+def staged_plan(instances, models, *, family="holm", fractions=(0.25, 0.5, 1.0), futility=None,
+                extra_set=None) -> dict:
+    plan = plan_for(list(instances), list(PROBE_ARMS), list(models), concurrency=8, env="modal", cap=20.0, reserve=0.01)
+    plan["scripted_seats"] = ["p2"]
+    if extra_set is not None:
+        plan["task_sets"].append({"tasks_dir": "more", "manifest": "more/manifest.json", "instances": list(extra_set),
+                                  "arms": list(PROBE_ARMS)})
+    plan["stages"] = {"fractions": list(fractions), "alpha": 0.05, "family": family,
+                      "tests": [{"task_set": 0, "arms": list(PROBE_ARMS), "outcome": "correct"}]}
+    if futility is not None:
+        plan["stages"]["futility"] = {"delta": futility[0], "beta_f": futility[1]}
+    return plan
+
+
+class Wave:
+    """A committed plan on probe tasks and a fake Harbor that writes probe trial folders with scripted outcomes:
+    outcome(cell) -> (correct, number of first attempts that end invalid)."""
+
+    def __init__(self, tmp: Path, plan: dict, outcome):
+        self.tmp, self.plan = tmp, plan
+        self.repo = init_repo(tmp)
+        probe_tree(self.repo, [(Path(item["tasks_dir"]).name, item["instances"]) for item in plan["task_sets"]])
+        self.path = commit_plan(self.repo, plan)
+        self.order = RUN.order_of(plan, RUN.resolve_paths(plan, self.repo), [["p2"]] * len(plan["task_sets"]))
+        control = {}
+        for cell in self.order:
+            correct, invalid = outcome(cell)
+            control[cell["task"] + "|" + cell["model"]] = {"instance": cell["instance"], "arm": cell["arm"],
+                                                           "correct": correct, "invalid": invalid}
+        (tmp / "control.json").write_text(json.dumps(control))
+        (tmp / "tries").mkdir()
+        self.harbor = tmp / "harbor"
+        write_executable(self.harbor, PROBE_HARBOR.replace("__CONTROL__", json.dumps(str(tmp / "control.json")))
+                         .replace("__TRIES__", json.dumps(str(tmp / "tries")))
+                         .replace("__LOG__", json.dumps(str(tmp / "harbor.jsonl"))))
+
+    def run(self, namer=None):
+        prices = {model: {"prompt": "0.0000001", "completion": "0.000002"} for model in self.plan["models"]}
+        return RUN.run(self.path, run_dir=self.tmp / "run", jobs_dir=self.tmp / "jobs", harbor=self.harbor,
+                       wrapper=self.tmp / "wrapper", sources=Sources(prices, lambda *_args: 100.0),
+                       base_env={"PATH": os.environ["PATH"], "HOME": str(self.tmp), "OPENROUTER_API_KEY": "or"},
+                       namer=namer or (lambda _n: f"{namer_box(self.tmp):06x}"))
+
+    def summary(self) -> dict:
+        return json.loads((self.tmp / "run" / RUN.STAGES_FILE).read_text())
+
+    def state(self) -> dict:
+        return json.loads((self.tmp / "run" / "state.json").read_text())
+
+    def entry(self, model: str) -> dict:
+        return self.summary()["tests"][0]["models"][model]
+
+    def starts(self) -> list[dict]:
+        log = self.tmp / "harbor.jsonl"
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.is_file() else []
+
+
+def wins(cell: dict) -> tuple[bool, int]:
+    """talk-quiet correct and talk-false wrong: every pair discordant for the first arm."""
+    return cell["arm"] == "talk-quiet", 0
+
+
+def assert_blind(out: str, log: str) -> None:
+    """The operator sees each look's status only: every look line has the fixed form, and no count or p leaks."""
+    shown = [line for line in out.splitlines() if line]
+    assert shown and all(LOOK_LINE.fullmatch(line) for line in shown), shown
+    logged = [line.split(" ET ", 1)[1] for line in log.splitlines()]
+    assert all(LOOK_LINE.fullmatch(line) for line in logged if line.startswith("look"))
+    assert [line for line in logged if line.startswith("look")] == shown
+    for text in (out, log):
+        assert not re.search(r"\b[bcpn] ?[=:]|p-value|\"b\"|discord", text)
+
+
+def test_a_32_0_model_stops_at_16_pairs_with_holm_over_3_models_and_at_8_as_its_own_family(tmp_path, capsys):
+    holm = Wave(tmp_path / "holm", staged_plan(range(32), [M1, M2, M3], family="holm"), wins)
+    assert holm.run()[-1]["reason"] == "done"
+    out = capsys.readouterr().out
+    assert out.splitlines() == [f"look {look}/3 after stage {look}/3: test 1 set 0 talk-quiet vs talk-false: {model} "
+                                f"{status}" for look, status in ((1, "continue"), (2, "stop-efficacy"))
+                                for model in (M1, M2, M3)]
+    assert_blind(out, (holm.tmp / "run" / "progress.log").read_text())
+    summary = holm.summary()
+    assert (summary["family_size"], summary["stages_done"], summary["tests"][0]["looks"]) == (3, 3, [8, 16, 32])
+    for model in (M1, M2, M3):
+        entry = holm.entry(model)
+        assert entry["history"] == [[8, 0, 8], [16, 0, 16]]
+        assert entry["disposition"] == {"status": "efficacy", "p": 3 * RUN.STAGES.mcnemar_p(16, 0), "direction": 1,
+                                        "look": 2, "n": 16}
+        assert len(entry["looks"][1]["counted"]) == 32
+    assert summary["families"] == [{"family": "test 1", "members": [{"test": 1, "model": m} for m in (M1, M2, M3)],
+                                    "closed": True, "p_holm": RUN.STAGES.holm([3 * RUN.STAGES.mcnemar_p(16, 0)] * 3),
+                                    "rejected": [True, True, True]}]
+    assert len(holm.starts()) == 3 * 16 * 2
+    assert holm.state()["stages"]["looks"][-1] == {"stage": 2, "test": 1, "model": M3, "look": 2,
+                                                   "status": "stop-efficacy"}
+
+    alone = Wave(tmp_path / "model", staged_plan(range(32), [M1, M2, M3], family="model"), wins)
+    assert alone.run()[-1]["reason"] == "done"
+    assert_blind(capsys.readouterr().out, (alone.tmp / "run" / "progress.log").read_text())
+    for model in (M1, M2, M3):
+        assert alone.entry(model)["history"] == [[8, 0, 8]]
+        assert (alone.entry(model)["disposition"]["status"], alone.entry(model)["disposition"]["look"]) == ("efficacy", 1)
+    assert alone.summary()["family_size"] == 1 and len(alone.starts()) == 3 * 8 * 2
+    assert [family["family"] for family in alone.summary()["families"]] == [f"model {m}" for m in (M1, M2, M3)]
+
+
+def test_an_all_tie_model_stops_at_the_futility_look_only_with_futility_on(tmp_path, capsys):
+    ties = Wave(tmp_path / "on", staged_plan(range(32), [M1], family="model", futility=(0.25, 0.05)),
+                lambda _cell: (True, 0))
+    assert ties.run()[-1]["reason"] == "done"
+    out = capsys.readouterr().out
+    assert out.splitlines() == [f"look 1/3 after stage 1/3: test 1 set 0 talk-quiet vs talk-false: {M1} continue",
+                                f"look 2/3 after stage 2/3: test 1 set 0 talk-quiet vs talk-false: {M1} stop-futility"]
+    assert ties.entry(M1)["history"] == [[0, 0, 8], [0, 0, 16]]
+    assert ties.entry(M1)["disposition"] == {"status": "nonbinding_futility", "p": 1.0, "direction": 0, "look": 2,
+                                              "n": 16}
+    assert len(ties.starts()) == 16 * 2
+    off = Wave(tmp_path / "off", staged_plan(range(32), [M1], family="model"), lambda _cell: (True, 0))
+    assert off.run()[-1]["reason"] == "done"
+    assert off.entry(M1)["disposition"]["status"] == "final" and len(off.starts()) == 32 * 2
+    capsys.readouterr()
+
+
+def test_an_invalid_pair_lowers_n_keeps_the_test_and_retries_finish_before_the_look(tmp_path, capsys):
+    plan = staged_plan(range(8), [M1], family="model", fractions=(0.5, 1.0))
+    first = sorted({cell["instance"] for cell in RUN.STAGES.stage_cells(plan, [0.5, 1.0])[0]})
+    lost, healed = first[0], first[1]
+
+    def outcome(cell: dict) -> tuple[bool, int]:
+        spot = (cell["instance"], cell["arm"])
+        return cell["arm"] == "talk-quiet", 2 if spot == (lost, "talk-false") else 1 if spot == (healed, PROBE_ARMS[0]) else 0
+
+    wave = Wave(tmp_path, plan, outcome)
+    assert wave.run()[-1]["reason"] == "done"
+    entry = wave.entry(M1)
+    assert entry["history"] == [[3, 0, 3], [7, 0, 7]]
+    assert entry["disposition"] == {"status": "final", "p": 2 * RUN.STAGES.mcnemar_p(7, 0), "direction": 1, "look": 2,
+                                    "n": 7}
+    starts = wave.starts()
+    assert len(starts) == 16 + 2
+    retries = [index for index, row in enumerate(starts) if row["attempt"] == 2]
+    later = [index for index, row in enumerate(starts) if row["instance"] not in first]
+    assert len(retries) == 2 and max(retries) < min(later)
+    lost_key = RUN.cell_key(0, lost, "talk-false", M1)
+    assert [item["valid"] for item in wave.state()["finished"][lost_key]["attempts"]] == [False, False]
+    capsys.readouterr()
+
+
+def test_a_resume_after_a_crash_mid_stage_gives_the_same_cells_and_decisions(tmp_path, capsys):
+    plan = staged_plan(range(8), [M1, M2], family="holm", fractions=(0.5, 1.0))
+
+    def outcome(cell: dict) -> tuple[bool, int]:
+        return cell["model"] == M2 or cell["arm"] == "talk-quiet", 0
+
+    whole = Wave(tmp_path / "whole", json.loads(json.dumps(plan)), outcome)
+    assert whole.run()[-1]["reason"] == "done"
+    crashed = Wave(tmp_path / "crash", json.loads(json.dumps(plan)), outcome)
+    calls = []
+
+    def namer(_n):
+        calls.append(1)
+        if len(calls) == 6:
+            raise RuntimeError("crash")
+        return f"{namer_box(crashed.tmp):06x}"
+
+    with pytest.raises(RuntimeError, match="crash"):
+        crashed.run(namer=namer)
+    assert len(crashed.state()["finished"]) == 5 and crashed.state()["stages"] == {"stage": 0, "looks": []}
+    assert crashed.run()[-1]["reason"] == "done"
+
+    def decided(wave: Wave) -> tuple:
+        summary = wave.summary()
+        tests = [{model: {**entry, "looks": [{k: v for k, v in look.items() if k != "counted"} for look in entry["looks"]]}
+                  for model, entry in test["models"].items()} for test in summary["tests"]]
+        attempts = {key: len(row["attempts"]) for key, row in wave.state()["finished"].items()}
+        return tests, summary["families"], wave.state()["stages"], attempts
+
+    assert decided(crashed) == decided(whole)
+    assert len(decided(whole)[3]) == 8 * 2 + 4 * 2
+    assert whole.entry(M2)["disposition"]["status"] == "futility" and whole.entry(M1)["disposition"]["look"] == 2
+    capsys.readouterr()
+
+    held, count = (crashed.tmp / "run" / RUN.STAGES_FILE).read_text(), len(crashed.starts())
+    assert crashed.run()[-1]["reason"] == "done"
+    assert len(crashed.starts()) == count and (crashed.tmp / "run" / RUN.STAGES_FILE).read_text() == held
+    replayed = capsys.readouterr().out.splitlines()
+    assert len(replayed) == 3 and all(line.endswith(" (recomputed on resume)") for line in replayed)
+
+    state = crashed.state()
+    state["stages"]["looks"][0]["status"] = "stop-efficacy"
+    (crashed.tmp / "run" / "state.json").write_text(json.dumps(state))
+    assert "differ from state.json" in refusal(crashed.run)
+    changed = json.loads(crashed.path.read_text())
+    changed["stages"]["alpha"] = 0.01
+    crashed.path.write_text(json.dumps(changed))
+    git(crashed.repo, "commit", "-qam", "change the stages block")
+    assert "plan file changed since this run dir was started" in refusal(crashed.run)
+    capsys.readouterr()
+
+
+def test_a_plan_without_stages_runs_the_same_configs_as_before_and_as_one_stage(tmp_path, capsys):
+    plain = staged_plan(range(3), [M1, M2])
+    del plain["stages"]
+    one = staged_plan(range(3), [M1, M2], fractions=(1.0,))
+    for plan in (plain, one):
+        plan["make_jobs"]["concurrency"] = 1
+    seen = {}
+    for name, plan in (("plain", plain), ("one", one)):
+        wave = Wave(tmp_path / name, plan, wins)
+        assert wave.run()[-1]["reason"] == "done"
+        starts = wave.starts()
+        assert [(row["task"], row["model"]) for row in starts] == [(cell["task"], cell["model"]) for cell in wave.order]
+        configs = []
+        for row, cell in zip(starts, wave.order, strict=True):
+            config = json.loads((wave.tmp / "run" / "configs" / f"{row['job']}.json").read_text())
+            assert config == RUN.job_config(row["job"], wave.tmp / "jobs", cell["task"], "terminus-2", cell["model"], 4,
+                                            "modal")
+            configs.append(json.dumps({**config, "job_name": "", "jobs_dir": "", "tasks": [
+                {"path": str(Path(cell["task"]).relative_to(wave.tmp.resolve()))}]}, sort_keys=True))
+        seen[name] = configs
+        stage_file = wave.tmp / "run" / RUN.STAGES_FILE
+        log = (wave.tmp / "run" / "progress.log").read_text()
+        if name == "plain":
+            assert "stages" not in wave.state() and not stage_file.exists() and " look " not in log
+            assert set(wave.state()) == {"plan", "plan_sha256", "mode", "smoke", "order", "prices", "spent_usd",
+                                         "finished"}
+        else:
+            assert stage_file.is_file() and wave.entry(M1)["disposition"]["status"] == "final"
+    assert seen["plain"] == seen["one"]
+    capsys.readouterr()
+
+
+def test_a_free_smoke_warns_for_a_model_without_a_zero_data_retention_endpoint(tmp_path, capsys):
+    plan = smoke_plan_for([0], ["silent"], models=[FREE, OTHER_FREE], agent="terminus-2", concurrency=2, env="docker")
+
+    def tree(repo: Path) -> None:
+        task_tree(repo, [0], ["silent"])
+        cache = repo / ".flotilla-local" / "cache" / PRICING.ZDR_CACHE
+        cache.parent.mkdir(parents=True)
+        cache.write_text(json.dumps({"fetched_at": datetime.now(UTC).isoformat(), "payload": {
+            "data": [{"model_id": OTHER_FREE.removeprefix("openrouter/"), "provider_name": "Zdr"}]}}))
+
+    sources = Sources({}, lambda *_args: RUN.Balance(0.0))
+    events, _order, _path, _env = launch(tmp_path / "free", plan, Every(spec_for("ok", cost_usd=0.0)), sources,
+                                         tree=tree, env_extra=BOTH_KEYS, smoke=1)
+    assert events[-1]["reason"] == "done" and sources.zdr_calls == 0
+    warning = f"ZDR warning: {FREE}: no zero-data-retention endpoint: an account with ZDR on gets 404"
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("zero-data-retention list: cache fetched ") and out[1:] == [warning]
+    assert warning in (tmp_path / "free" / "run-smoke" / "progress.log").read_text()
+
+
+def test_stages_are_checked_and_a_smoke_ignores_them(tmp_path, capsys):
+    base = staged_plan(range(8), [M1], family="model")
+
+    def refused(change) -> str:
+        plan = json.loads(json.dumps(base))
+        change(plan)
+        blob = tmp_path / f"plan-{len(list(tmp_path.iterdir()))}.json"
+        blob.write_text(json.dumps(plan))
+        return refusal(lambda: RUN.load_plan(blob))
+
+    assert "unknown stages field looks" in refused(lambda p: p["stages"].update(looks=[8]))
+    assert "family must be one of model, holm" in refused(lambda p: p["stages"].update(family="all"))
+    assert "needs both delta and beta_f" in refused(lambda p: p["stages"].update(futility={"delta": 0.25}))
+    assert "2 different arms of task set 0" in refused(lambda p: p["stages"]["tests"][0].update(arms=[PROBE_ARMS[0], "x"]))
+    assert "outcome must be one of correct" in refused(lambda p: p["stages"]["tests"][0].update(outcome="exposed"))
+    assert "repeats a test" in refused(lambda p: p["stages"]["tests"].append(
+        {"task_set": 0, "arms": PROBE_ARMS[::-1], "outcome": "correct"}))
+    assert "last fraction must be 1" in refused(lambda p: p["stages"].update(fractions=[0.5, 0.9]))
+    assert "alpha must be in (0, 1)" in refused(lambda p: p["stages"].update(alpha=1.5))
+    assert "stages missing tests" in refused(lambda p: p["stages"].pop("tests"))
+    assert "do not support seat_assignments" in refused(lambda p: p.update(seat_assignments=[[M1]]))
+
+    smoke = json.loads(json.dumps(base))
+    smoke["agent"] = "oracle"
+    del smoke["models"]
+    repo = init_repo(tmp_path / "smoke")
+    probe_tree(repo, [("tasks", range(8))])
+    path = commit_plan(repo, smoke)
+    assert RUN.run(path, dry_run=True, smoke=2, sources=Sources({}, lambda *_args: 10.0), base_env={}) == []
+    out = capsys.readouterr().out
+    assert "stages:" not in out and len([line for line in out.splitlines() if line[:1].isdigit()]) == 2 * 2
+    with pytest.raises(SystemExit):
+        RUN.main(["--help"])
+    assert "ignores the plan's stages" in " ".join(capsys.readouterr().out.split())
+
+
+def test_a_staged_dry_run_prints_the_looks_and_the_most_and_fewest_trials(tmp_path, capsys):
+    plan = staged_plan(range(8), [M1], family="model", futility=(0.25, 0.05), extra_set=range(4))
+    repo = init_repo(tmp_path)
+    probe_tree(repo, [("tasks", range(8)), ("more", range(4))])
+    path = commit_plan(repo, plan)
+    sources = Sources({}, lambda *_args: 10.0, zdr={"data": [{"model_id": "a/one", "provider_name": "Zdr"}]})
+    assert RUN.run(path, dry_run=True, sources=sources, base_env={}, history_jobs=tmp_path / "history") == []
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("wave: 24 cells, reserve $0.01 per trial, cap $20.00")
+    assert lines[4].startswith("stages: fractions 0.25, 0.5, 1.0; alpha 0.05; family model (Holm family size 1); "
+                               "non-binding futility delta 0.25, beta_f 0.05; ")
+    assert lines[5:10] == [
+        "  set 0: instances by the end of stage 1 2, stage 2 4, stage 3 8",
+        "  set 1: instances by the end of stage 1 1, stage 2 2, stage 3 4 (no test: every stage runs in full)",
+        ("  test 1: set 0 talk-quiet vs talk-false (correct); looks after stage 1, 2, 3 at 2, 4, 8 pairs; futility if "
+         "max(b, c) <= -1, -1 at the interim looks (all pairs valid)"),
+        "  trials: most 24 (every test runs to its last look), fewest 12 (every test stops at its first look)",
+        "forecast, most (24 trials):"]
+    fewest = lines.index("forecast, fewest (12 trials):")
+    assert any(line.startswith("  Modal: 24 trials") for line in lines[10:fewest])
+    assert any(line.startswith("  zero-data-retention list: fetched ") for line in lines[10:fewest])
+    assert any(line.startswith("  Modal: 12 trials") for line in lines[fewest:])
+    assert not any("ZDR warning" in line for line in lines)
+    cells = [line for line in lines if line[:1].isdigit()]
+    stages = [int(line.split()[2]) for line in cells]
+    assert len(cells) == 24 and stages == sorted(stages) and cells[0].startswith("1. stage 1 set ")
