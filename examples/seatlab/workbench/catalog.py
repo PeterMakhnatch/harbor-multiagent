@@ -507,6 +507,17 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="995fb1fe44fa1e0d4ce29f998efb76878c4c57ae40cacfae66a7ebf4283ec78b",
     ),
+    Study(
+        id="stock-mailbox-flow",
+        question="Which handoffs did the world return before each four-seat team booked or stopped?",
+        kind="secondary-native-receipt-analysis",
+        guide="examples/seatlab/gather-time.md",
+        module="examples.seatlab.fanin.mailbox",
+        argv=("report", "--json"),
+        report=f"{_RESULTS}/gather-time/mailbox-panel.json",
+        exit_code=0,
+        sha256="30b1564f8c53eac77c0ab9b6bc2be0829c41e8be68f6ef599c944677ecf097f4",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

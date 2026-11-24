@@ -47,6 +47,63 @@ python3.12 -BS -m examples.seatlab.fanin.fanout_panel "$d/rows.json" | cmp - "$d
 
 The [redacted rows](results/gather-time/rows.json) include every first attempt and typed control. The [panel](results/gather-time/panel.json) separates the registered statistics from `measured_intervals`. Missing events and wall-clock endpoints stay null. The command needs no Docker, model access or Harbor installation.
 
+### Find where a team stopped
+
+Use the saved [mailbox timelines](results/gather-time/mailbox-cuts.json) to separate a late report from a failed booking. This is a secondary analysis of the same first attempts. It does not change the original verdict.
+
+```sh
+wb=examples.seatlab.workbench
+python3.12 -BS -m "$wb" mailbox report
+python3.12 -BS -m "$wb" mailbox inspect 1213 serial
+python3.12 -BS -m "$wb" verify stock-mailbox-flow
+```
+
+The world returned all 48 reporter replies in responses to the bookers' inbox requests across the 16 model teams. In world 1213, the serial journal shows all 3 replies in responses to booker `p2`. The journal has no booking. The separate native seat record says `p2:turn_failed`. This rules out a missing reply in the world's inbox. It does not establish what the booker read or why its turn failed.
+
+`inspect` shows the first request, the first reporter inbox response containing it, the accepted reply, and the first booker inbox response containing that reply. An event number identifies the exact snapshot when several replies arrive together. Times start at the first accepted request. For a team that booked, the tool splits that interval along the last reply the world accepted. It does not add the times of reporters that worked in parallel.
+
+### Check a workflow deadline without running a team
+
+```sh
+python3.12 -BS -m "$wb" mailbox deadline replies-returned --by-ms 20000
+```
+
+At this illustrative 20 s deadline, all 3 replies had reached the booker inbox in 8/8 parallel teams and 0/8 serial teams. This cutoff was not part of the registered test. The result is descriptive. It is not a model speed claim or a reason to cancel a future job.
+
+Use `requests-returned`, `replies-returned`, or `booked`. Supply a deadline in milliseconds. A target at the deadline counts. To say it was missed, the journal must extend beyond the deadline without the target. If coverage ends at the same millisecond, another event could share that time. The monitor returns `coverage_ended`, not a failure. A missing first request or missing worker file also remains unknown. The monitor does not act on any seat.
+
+For the 1213 serial team, the journal ends 30,977 ms after the first request. It proves the booker had not booked by 30,000 ms. It cannot establish what the world would show at 31,000 ms. The separate native grade remains 0.
+
+### Return evidence from independent workers
+
+Keep the native `artifacts/logs/world/events.jsonl` private. On the worker, export a compact cut. The default uses the published gather registry to verify the source digest and expected role order. `--rows` also accepts one verified gather row.
+
+```sh
+python3.12 -BS -m "$wb" mailbox export "$events" --rows "$row" > "$cut"
+python3.12 -BS -m "$wb" mailbox audit "$events" --rows "$row" --cut "$cut"
+```
+
+For a new stock four-seat calendar outside these 8 worlds, supply the independently retained event digest and intended roles instead. The monitor supports the same one-request, one-reply gather protocol. It does not infer a roster, world, grade or model from a filename.
+
+```sh
+python3.12 -BS -m "$wb" mailbox export "$events" --sha256 "$pin" \
+  --booker p1 --reporters p2 p3 p4 > "$cut"
+python3.12 -BS -m "$wb" mailbox deadline booked --by-ms 30000 --cut "$cut"
+```
+
+A cut contains role labels, event numbers, elapsed milliseconds and the source digest. It contains no answer, message text, absolute time, path or model identifier. The digest can link the cut to another copy of the same file. `audit` reads the original once; it verifies every point, including the last observed event. A coordinator with only a cut can check its structure and consistency, but not its origin.
+
+For the registered study, a coordinator can combine multiple returns in any order. It needs neither Harbor nor the private journals:
+
+```sh
+python3.12 -BS -m "$wb" mailbox report --rows "$release" \
+  --cuts "$worker_a_cut" --cuts "$worker_b_cut"
+```
+
+`--rows` without cuts starts with no workers. The [full panel](results/gather-time/mailbox-panel.json) keeps all 16 planned model teams and 3 controls. It separates a missing row, a missing cut and an observed non-booking. Controls never count as model teams.
+
+For `report` and `inspect`, exit `0` means all requested timelines were recorded; `3` means coverage is missing. For `deadline`, `1` means a known miss, `3` means unknown coverage with no known miss, and `0` means all measured targets were reached with no unknowns. Cohort deadline exits use only planned model teams. `audit` returns `1` for a different cut and `3` for an absent cut. All commands use `2` for invalid input.
+
 To collect a new private control, follow the [native setup](peer-fanin.md). Use a directory that does not exist. Do not reuse a study cell.
 
 ```sh
