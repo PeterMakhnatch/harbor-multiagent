@@ -1,0 +1,589 @@
+{
+  "companies": [
+    {
+      "best_minus_keep_usd": "1269.5000",
+      "best_picks": [
+        "raise"
+      ],
+      "best_usd": "2019005.4500",
+      "checkpoint_sha256": "dd142a1ab793e511d17a783ee118fe0eab3bb77dc3067d644664d27243cceb1a",
+      "keep_is_best_or_tied": false,
+      "keep_usd": "2017735.9500",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": 1442122.17,
+          "end_day": 1095,
+          "minus_keep_usd": "-575613.7800",
+          "net_worth_usd": 5432542.54,
+          "pick": 3,
+          "profit_usd": 1226216.63,
+          "stock_score": 0.288326
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": 2017735.95,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 6438151.67,
+          "pick": 1,
+          "profit_usd": 1801830.41,
+          "stock_score": 0.337329
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": 2019005.45,
+          "end_day": 1095,
+          "minus_keep_usd": "1269.5000",
+          "net_worth_usd": 6456789.98,
+          "pick": 2,
+          "profit_usd": 1803099.91,
+          "stock_score": 0.338163
+        }
+      },
+      "shape": "mnl",
+      "status": "settled",
+      "world": 0
+    },
+    {
+      "best_minus_keep_usd": "61802.3100",
+      "best_picks": [
+        "discount"
+      ],
+      "best_usd": "-662251.0200",
+      "checkpoint_sha256": "7d2b37bdbd806941090c8c9e8b41c3cac26666f0a5ee5900871e781c6daf0576",
+      "keep_is_best_or_tied": false,
+      "keep_usd": "-724053.3300",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": -662251.02,
+          "end_day": 1095,
+          "minus_keep_usd": "61802.3100",
+          "net_worth_usd": 918976.82,
+          "pick": 3,
+          "profit_usd": -897632.63,
+          "stock_score": 0.0
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": -724053.33,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 936413.94,
+          "pick": 1,
+          "profit_usd": -959434.94,
+          "stock_score": 0.0
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": -1227475.24,
+          "end_day": 1095,
+          "minus_keep_usd": "-503421.9100",
+          "net_worth_usd": 509253.85,
+          "pick": 2,
+          "profit_usd": -1462856.85,
+          "stock_score": 0.0
+        }
+      },
+      "shape": "nested",
+      "status": "settled",
+      "world": 1
+    },
+    {
+      "best_minus_keep_usd": "0.0000",
+      "best_picks": [
+        "keep"
+      ],
+      "best_usd": "464276.3800",
+      "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+      "keep_is_best_or_tied": true,
+      "keep_usd": "464276.3800",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": 152846.46,
+          "end_day": 1095,
+          "minus_keep_usd": "-311429.9200",
+          "net_worth_usd": 2227822.72,
+          "pick": 3,
+          "profit_usd": -76373.19,
+          "stock_score": 0.031127
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": 464276.38,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 2848189.9,
+          "pick": 1,
+          "profit_usd": 235056.73,
+          "stock_score": 0.102009
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": 422463.13,
+          "end_day": 1095,
+          "minus_keep_usd": "-41813.2500",
+          "net_worth_usd": 2811767.57,
+          "pick": 2,
+          "profit_usd": 193243.48,
+          "stock_score": 0.098295
+        }
+      },
+      "shape": "wom",
+      "status": "settled",
+      "world": 2
+    },
+    {
+      "best_minus_keep_usd": "0.0000",
+      "best_picks": [
+        "keep"
+      ],
+      "best_usd": "800313.1100",
+      "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+      "keep_is_best_or_tied": true,
+      "keep_usd": "800313.1100",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": 135029.73,
+          "end_day": 1095,
+          "minus_keep_usd": "-665283.3800",
+          "net_worth_usd": 2661188.66,
+          "pick": 3,
+          "profit_usd": -99657.34,
+          "stock_score": 0.082414
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": 800313.11,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 4419923.26,
+          "pick": 1,
+          "profit_usd": 565626.04,
+          "stock_score": 0.228804
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": 495327.59,
+          "end_day": 1095,
+          "minus_keep_usd": "-304985.5200",
+          "net_worth_usd": 3853416.03,
+          "pick": 2,
+          "profit_usd": 260640.52,
+          "stock_score": 0.189228
+        }
+      },
+      "shape": "delayed_ads",
+      "status": "settled",
+      "world": 3
+    },
+    {
+      "best_minus_keep_usd": "0.0000",
+      "best_picks": [
+        "keep"
+      ],
+      "best_usd": "-330764.1400",
+      "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+      "keep_is_best_or_tied": true,
+      "keep_usd": "-330764.1400",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": -877910.9,
+          "end_day": 1095,
+          "minus_keep_usd": "-547146.7600",
+          "net_worth_usd": 534585.41,
+          "pick": 3,
+          "profit_usd": -1110376.12,
+          "stock_score": 0.0
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": -330764.14,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 1571190.93,
+          "pick": 1,
+          "profit_usd": -563229.36,
+          "stock_score": 0.0
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": -498636.58,
+          "end_day": 1095,
+          "minus_keep_usd": "-167872.4400",
+          "net_worth_usd": 1275205.02,
+          "pick": 2,
+          "profit_usd": -731101.8,
+          "stock_score": 0.0
+        }
+      },
+      "shape": "deal_seekers",
+      "status": "settled",
+      "world": 4
+    },
+    {
+      "best_minus_keep_usd": "61035.4700",
+      "best_picks": [
+        "raise"
+      ],
+      "best_usd": "933052.8900",
+      "checkpoint_sha256": "3f6ff560138bfe094042b1d242f3132b35e85e3ac68afaadf19ae2f81de20fe3",
+      "keep_is_best_or_tied": false,
+      "keep_usd": "872017.4200",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": 249357.96,
+          "end_day": 1095,
+          "minus_keep_usd": "-622659.4600",
+          "net_worth_usd": 2413303.94,
+          "pick": 3,
+          "profit_usd": 18885.15,
+          "stock_score": 0.054202
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": 872017.42,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 3578166.7,
+          "pick": 1,
+          "profit_usd": 641544.61,
+          "stock_score": 0.167844
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": 933052.89,
+          "end_day": 1095,
+          "minus_keep_usd": "61035.4700",
+          "net_worth_usd": 3862960.54,
+          "pick": 2,
+          "profit_usd": 702580.08,
+          "stock_score": 0.189941
+        }
+      },
+      "shape": "mnl",
+      "status": "settled",
+      "world": 5
+    },
+    {
+      "best_minus_keep_usd": "204612.9000",
+      "best_picks": [
+        "discount"
+      ],
+      "best_usd": "-783486.2500",
+      "checkpoint_sha256": "c1f6694287d2bcb8e8f4b9b84ca3a8ea2d1d90bbe400d1bb6bbdf68dc811b9a4",
+      "keep_is_best_or_tied": false,
+      "keep_usd": "-988099.1500",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": -783486.25,
+          "end_day": 1095,
+          "minus_keep_usd": "204612.9000",
+          "net_worth_usd": 862299.82,
+          "pick": 3,
+          "profit_usd": -1019536.37,
+          "stock_score": 0.0
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": -988099.15,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 716206.25,
+          "pick": 1,
+          "profit_usd": -1224149.27,
+          "stock_score": 0.0
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": -1438659.2,
+          "end_day": 1095,
+          "minus_keep_usd": "-450560.0500",
+          "net_worth_usd": 283446.88,
+          "pick": 2,
+          "profit_usd": -1674709.32,
+          "stock_score": 0.0
+        }
+      },
+      "shape": "nested",
+      "status": "settled",
+      "world": 6
+    },
+    {
+      "best_minus_keep_usd": "0.0000",
+      "best_picks": [
+        "keep"
+      ],
+      "best_usd": "543852.1400",
+      "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+      "keep_is_best_or_tied": true,
+      "keep_usd": "543852.1400",
+      "prices": {
+        "discount": {
+          "bankrupt": false,
+          "continuation_profit_usd": 202250.64,
+          "end_day": 1095,
+          "minus_keep_usd": "-341601.5000",
+          "net_worth_usd": 2216613.73,
+          "pick": 3,
+          "profit_usd": -29398.82,
+          "stock_score": 0.029671
+        },
+        "keep": {
+          "bankrupt": false,
+          "continuation_profit_usd": 543852.14,
+          "end_day": 1095,
+          "minus_keep_usd": "0.0000",
+          "net_worth_usd": 3214444.11,
+          "pick": 1,
+          "profit_usd": 312202.68,
+          "stock_score": 0.136914
+        },
+        "raise": {
+          "bankrupt": false,
+          "continuation_profit_usd": 333207.17,
+          "end_day": 1095,
+          "minus_keep_usd": "-210644.9700",
+          "net_worth_usd": 2414825.38,
+          "pick": 2,
+          "profit_usd": 101557.71,
+          "stock_score": 0.054384
+        }
+      },
+      "shape": "wom",
+      "status": "settled",
+      "world": 7
+    }
+  ],
+  "fresh_settlements": 24,
+  "metric": "continuation_profit_usd: stock monthly operating profit after the first 3 complete 30-day months, day 90 to terminal day; exact cents",
+  "new_model_calls": 0,
+  "numpy_version": "2.1.3",
+  "pairs": [
+    {
+      "minus_keep_usd": {
+        "early": "1269.5000",
+        "late": "0.0000",
+        "sales": "1269.5000"
+      },
+      "picks": {
+        "early": "raise",
+        "late": "keep",
+        "sales": "raise"
+      },
+      "regret_usd": {
+        "early": "0.0000",
+        "late": "1269.5000",
+        "sales": "0.0000"
+      },
+      "repeat": 0,
+      "world": 0
+    },
+    {
+      "minus_keep_usd": {
+        "early": "61802.3100",
+        "late": "61802.3100",
+        "sales": "61802.3100"
+      },
+      "picks": {
+        "early": "discount",
+        "late": "discount",
+        "sales": "discount"
+      },
+      "regret_usd": {
+        "early": "0.0000",
+        "late": "0.0000",
+        "sales": "0.0000"
+      },
+      "repeat": 0,
+      "world": 1
+    },
+    {
+      "minus_keep_usd": {
+        "early": "-41813.2500",
+        "late": "0.0000",
+        "sales": "-41813.2500"
+      },
+      "picks": {
+        "early": "raise",
+        "late": "keep",
+        "sales": "raise"
+      },
+      "regret_usd": {
+        "early": "41813.2500",
+        "late": "0.0000",
+        "sales": "41813.2500"
+      },
+      "repeat": 0,
+      "world": 2
+    },
+    {
+      "minus_keep_usd": {
+        "early": "-41813.2500",
+        "late": "-311429.9200",
+        "sales": "-41813.2500"
+      },
+      "picks": {
+        "early": "raise",
+        "late": "discount",
+        "sales": "raise"
+      },
+      "regret_usd": {
+        "early": "41813.2500",
+        "late": "311429.9200",
+        "sales": "41813.2500"
+      },
+      "repeat": 1,
+      "world": 2
+    },
+    {
+      "minus_keep_usd": {
+        "early": "-665283.3800",
+        "late": "-665283.3800",
+        "sales": "-665283.3800"
+      },
+      "picks": {
+        "early": "discount",
+        "late": "discount",
+        "sales": "discount"
+      },
+      "regret_usd": {
+        "early": "665283.3800",
+        "late": "665283.3800",
+        "sales": "665283.3800"
+      },
+      "repeat": 0,
+      "world": 3
+    },
+    {
+      "minus_keep_usd": {
+        "early": "-665283.3800",
+        "late": "0.0000",
+        "sales": "-665283.3800"
+      },
+      "picks": {
+        "early": "discount",
+        "late": "keep",
+        "sales": "discount"
+      },
+      "regret_usd": {
+        "early": "665283.3800",
+        "late": "0.0000",
+        "sales": "665283.3800"
+      },
+      "repeat": 1,
+      "world": 3
+    },
+    {
+      "minus_keep_usd": {
+        "early": "-547146.7600",
+        "late": "-547146.7600",
+        "sales": "0.0000"
+      },
+      "picks": {
+        "early": "discount",
+        "late": "discount",
+        "sales": "keep"
+      },
+      "regret_usd": {
+        "early": "547146.7600",
+        "late": "547146.7600",
+        "sales": "0.0000"
+      },
+      "repeat": 0,
+      "world": 4
+    },
+    {
+      "minus_keep_usd": {
+        "early": "-547146.7600",
+        "late": "-547146.7600",
+        "sales": "-547146.7600"
+      },
+      "picks": {
+        "early": "discount",
+        "late": "discount",
+        "sales": "discount"
+      },
+      "regret_usd": {
+        "early": "547146.7600",
+        "late": "547146.7600",
+        "sales": "547146.7600"
+      },
+      "repeat": 1,
+      "world": 4
+    },
+    {
+      "minus_keep_usd": {
+        "early": "0.0000",
+        "late": "0.0000",
+        "sales": "0.0000"
+      },
+      "picks": {
+        "early": "keep",
+        "late": "keep",
+        "sales": "keep"
+      },
+      "regret_usd": {
+        "early": "0.0000",
+        "late": "0.0000",
+        "sales": "0.0000"
+      },
+      "repeat": 1,
+      "world": 7
+    }
+  ],
+  "registered_complete_pairs": 9,
+  "schema": "seatlab.price-timing-keep-diagnostic/v1",
+  "scope": "secondary descriptive diagnostic specified after trials started; cannot change the registered verdict; hindsight best is room to improve, not an available agent or what sales knew",
+  "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+  "summary": {
+    "best_minus_keep_mean_usd": "41090.0225",
+    "best_minus_keep_total_usd": "328720.1800",
+    "companies_ended_before_decision": [],
+    "companies_settled": 8,
+    "complete_pairs": 9,
+    "keep_best_or_tied": 4,
+    "vs_keep": {
+      "early": {
+        "beats_keep": 2,
+        "loses_to_keep": 6,
+        "mean_minus_keep_usd": "-271712.7744",
+        "mean_regret_usd": "278720.7533",
+        "pairs": 9,
+        "same_pick_as_keep": 1,
+        "ties_keep": 1,
+        "total_minus_keep_usd": "-2445414.9700",
+        "zero_regret": 3
+      },
+      "late": {
+        "beats_keep": 1,
+        "loses_to_keep": 4,
+        "mean_minus_keep_usd": "-223244.9456",
+        "mean_regret_usd": "230252.9244",
+        "pairs": 9,
+        "same_pick_as_keep": 4,
+        "ties_keep": 4,
+        "total_minus_keep_usd": "-2009204.5100",
+        "zero_regret": 4
+      },
+      "sales": {
+        "beats_keep": 2,
+        "loses_to_keep": 5,
+        "mean_minus_keep_usd": "-210918.6900",
+        "mean_regret_usd": "217926.6689",
+        "pairs": 9,
+        "same_pick_as_keep": 2,
+        "ties_keep": 2,
+        "total_minus_keep_usd": "-1898268.2100",
+        "zero_regret": 4
+      }
+    }
+  },
+  "verified_released_settlements": 18
+}

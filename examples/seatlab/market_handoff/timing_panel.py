@@ -182,10 +182,9 @@ def _settlement(
         checkpoint is not None and seal != checkpoint
     ):
         raise ValueError(f"{label} settles a different pick or checkpoint")
-    if (
-        "price_multiplier" in item
-        and item["price_multiplier"] != PRICE_MULTIPLIERS[chosen]
-    ):
+    if "price_multiplier" in item and _number(
+        item["price_multiplier"], f"{label} multiplier"
+    ) != Decimal(str(PRICE_MULTIPLIERS[chosen])):
         raise ValueError(f"{label} multiplier disagrees with its pick")
     bankrupt, end = item["bankrupt"], item["end_day"]
     if (
@@ -345,7 +344,7 @@ def _partial(row: Record, label: str) -> Record:
         "report_pick": None if report is None else _report(report, label),
         "picks": {arm: chosen.get(arm, arms.get(arm, {}).get("pick")) for arm in ARMS},
         "arms": arms,
-        "grade": reward,
+        "grade": None if reward is None else int(reward),
     }
 
 
@@ -677,7 +676,7 @@ def main(argv: list[str] | None = None) -> int:
         parse_float=Decimal,
         parse_constant=_constant,
     )
-    print(json.dumps(summarize(rows), indent=2, sort_keys=True, default=str))
+    print(json.dumps(summarize(rows), indent=2, sort_keys=True))
     return 0
 
 

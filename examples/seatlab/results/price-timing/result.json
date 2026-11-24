@@ -1,0 +1,312 @@
+{
+  "checkpoints_match_across_repeats": 3,
+  "complete": 9,
+  "complete_pairs_descriptive": {
+    "arms": {
+      "early": {
+        "agrees_with_sales": 8,
+        "bankruptcies": 0,
+        "mean_continuation_profit_usd": "139974.4989",
+        "mean_net_worth_usd": "2511699.3544",
+        "mean_operating_profit_usd": "-90656.6667",
+        "mean_stock_score": "0.09294389",
+        "pairs": 9,
+        "picks": {
+          "discount": 5,
+          "keep": 1,
+          "raise": 3
+        }
+      },
+      "late": {
+        "agrees_with_sales": 4,
+        "bankruptcies": 0,
+        "mean_continuation_profit_usd": "188442.3278",
+        "mean_net_worth_usd": "2644207.5511",
+        "mean_operating_profit_usd": "-42188.8378",
+        "mean_stock_score": "0.10206633",
+        "pairs": 9,
+        "picks": {
+          "discount": 5,
+          "keep": 4,
+          "raise": 0
+        }
+      }
+    },
+    "companies": [
+      {
+        "mean_delta_usd": "113901.7100",
+        "pair_deltas_usd": [
+          "-41813.2500",
+          "269616.6700"
+        ],
+        "shape": "wom",
+        "world": 2
+      },
+      {
+        "mean_delta_usd": "-332641.6900",
+        "pair_deltas_usd": [
+          "0.0000",
+          "-665283.3800"
+        ],
+        "shape": "delayed_ads",
+        "world": 3
+      },
+      {
+        "mean_delta_usd": "0.0000",
+        "pair_deltas_usd": [
+          "0.0000",
+          "0.0000"
+        ],
+        "shape": "deal_seekers",
+        "world": 4
+      }
+    ],
+    "company_level": {
+      "early_wins": 1,
+      "late_wins": 1,
+      "ties": 1
+    },
+    "complete_pairs": 9,
+    "pair_level": {
+      "early_wins": 2,
+      "late_wins": 2,
+      "ties": 5
+    },
+    "price_choices_differ": 4
+  },
+  "incomplete": [
+    {
+      "repeat": 1,
+      "world": 0
+    },
+    {
+      "repeat": 1,
+      "world": 1
+    },
+    {
+      "repeat": 0,
+      "world": 5
+    },
+    {
+      "repeat": 1,
+      "world": 5
+    },
+    {
+      "repeat": 0,
+      "world": 6
+    },
+    {
+      "repeat": 1,
+      "world": 6
+    },
+    {
+      "repeat": 0,
+      "world": 7
+    }
+  ],
+  "incomplete_pairs_observed": [
+    {
+      "grade": 0,
+      "observed_delta_usd": null,
+      "owner_turns_observed": 1,
+      "owner_turns_verified": 1,
+      "picks": {
+        "early": null,
+        "late": null
+      },
+      "repeat": 1,
+      "report_pick": null,
+      "settled_arms": [],
+      "verified_turns": 0,
+      "world": 0
+    },
+    {
+      "grade": 0,
+      "observed_delta_usd": null,
+      "owner_turns_observed": 1,
+      "owner_turns_verified": 0,
+      "picks": {
+        "early": null,
+        "late": null
+      },
+      "repeat": 1,
+      "report_pick": null,
+      "settled_arms": [],
+      "verified_turns": 0,
+      "world": 1
+    },
+    {
+      "grade": 0,
+      "observed_delta_usd": null,
+      "owner_turns_observed": 1,
+      "owner_turns_verified": 1,
+      "picks": {
+        "early": null,
+        "late": null
+      },
+      "repeat": 0,
+      "report_pick": null,
+      "settled_arms": [],
+      "verified_turns": 0,
+      "world": 5
+    },
+    {
+      "grade": 0,
+      "observed_delta_usd": null,
+      "owner_turns_observed": 1,
+      "owner_turns_verified": 1,
+      "picks": {
+        "early": null,
+        "late": null
+      },
+      "repeat": 1,
+      "report_pick": null,
+      "settled_arms": [],
+      "verified_turns": 0,
+      "world": 5
+    },
+    {
+      "grade": 0,
+      "observed_delta_usd": "0.0000",
+      "owner_turns_observed": 5,
+      "owner_turns_verified": 4,
+      "picks": {
+        "early": 3,
+        "late": 3
+      },
+      "repeat": 0,
+      "report_pick": 3,
+      "settled_arms": [
+        "early",
+        "late"
+      ],
+      "verified_turns": 0,
+      "world": 6
+    },
+    {
+      "grade": 0,
+      "observed_delta_usd": null,
+      "owner_turns_observed": 1,
+      "owner_turns_verified": 1,
+      "picks": {
+        "early": null,
+        "late": null
+      },
+      "repeat": 1,
+      "report_pick": null,
+      "settled_arms": [],
+      "verified_turns": 0,
+      "world": 6
+    },
+    {
+      "grade": 0,
+      "observed_delta_usd": "341601.5000",
+      "owner_turns_observed": 5,
+      "owner_turns_verified": 4,
+      "picks": {
+        "early": 1,
+        "late": 3
+      },
+      "repeat": 0,
+      "report_pick": 1,
+      "settled_arms": [
+        "early",
+        "late"
+      ],
+      "verified_turns": 0,
+      "world": 7
+    }
+  ],
+  "owner_usage_incomplete": {
+    "by_role": {
+      "early:finance-price": {
+        "observed": 2,
+        "requests_recorded": 2,
+        "verified": 2,
+        "verified_tokens": 24975,
+        "verified_unknown_tokens": 0
+      },
+      "early:finance-receipt": {
+        "observed": 2,
+        "requests_recorded": 2,
+        "verified": 0,
+        "verified_tokens": 0,
+        "verified_unknown_tokens": 0
+      },
+      "late:finance-price": {
+        "observed": 2,
+        "requests_recorded": 2,
+        "verified": 2,
+        "verified_tokens": 24822,
+        "verified_unknown_tokens": 0
+      },
+      "late:finance-receipt": {
+        "observed": 2,
+        "requests_recorded": 2,
+        "verified": 2,
+        "verified_tokens": 14985,
+        "verified_unknown_tokens": 0
+      },
+      "sales:sales": {
+        "observed": 7,
+        "requests_recorded": 7,
+        "verified": 6,
+        "verified_tokens": 34336,
+        "verified_unknown_tokens": 0
+      }
+    },
+    "observed": 15,
+    "source": "owner-directory sessions of incomplete trials; separate from registered turns, not a price or behavioral success; tokens counted only when verified",
+    "unverified_tokens": "not counted",
+    "verified": 12,
+    "verified_known_tokens": 99118,
+    "verified_tokens": 99118,
+    "verified_unknown_tokens": 0
+  },
+  "registered": {
+    "reason": "at least one registered pair is incomplete",
+    "verdict": "inconclusive"
+  },
+  "schema": "seatlab.price-timing-summary/v1",
+  "slots": 16,
+  "usage": {
+    "by_role": {
+      "early:finance-price": {
+        "known_tokens": 71173,
+        "tokens": 71173,
+        "turns": 9,
+        "unknown_turns": 0
+      },
+      "early:finance-receipt": {
+        "known_tokens": 63900,
+        "tokens": 63900,
+        "turns": 9,
+        "unknown_turns": 0
+      },
+      "late:finance-price": {
+        "known_tokens": 81105,
+        "tokens": 81105,
+        "turns": 9,
+        "unknown_turns": 0
+      },
+      "late:finance-receipt": {
+        "known_tokens": 33474,
+        "tokens": 33474,
+        "turns": 9,
+        "unknown_turns": 0
+      },
+      "sales:sales": {
+        "known_tokens": 81306,
+        "tokens": 81306,
+        "turns": 9,
+        "unknown_turns": 0
+      }
+    },
+    "known_tokens": 330958,
+    "observed_turns": 45,
+    "source": "client-reported usage.total_tokens; not a server or provider attestation",
+    "total_tokens": 330958,
+    "unknown_turns": 0,
+    "unrecorded_failed_turns": "unknown"
+  }
+}

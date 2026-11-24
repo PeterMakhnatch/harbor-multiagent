@@ -1,0 +1,3101 @@
+[
+  {
+    "ack_tokens": {
+      "finance_a": "38eaa17c1d5f",
+      "finance_b": "86384d0154cb"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "dd142a1ab793e511d17a783ee118fe0eab3bb77dc3067d644664d27243cceb1a",
+    "client_tokens": 43084,
+    "control": false,
+    "early": "finance_b",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "f8a8c109a6c11dc33abe4f20a549222a488b7519a1c58d1b04186cdc0770baa9"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "f8a8c109a6c11dc33abe4f20a549222a488b7519a1c58d1b04186cdc0770baa9"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_b",
+        "view_sha256": "e8b7ec8001364bfafc9ce30b255f8fcc60eaa7d508f090db51c2b67173889e62"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_a",
+        "view_sha256": "a2be60a563f982c8129c28304381d5adf3d562179b9cc18d191689e177c94dfd"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_a",
+        "view_sha256": "a2be60a563f982c8129c28304381d5adf3d562179b9cc18d191689e177c94dfd"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_a",
+        "view_sha256": "c82b2466487fe689b7d73bc1fc05007d931e791967d3e21a75044ffcd434aa87"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_b",
+        "view_sha256": "e8b7ec8001364bfafc9ce30b255f8fcc60eaa7d508f090db51c2b67173889e62"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_b",
+        "view_sha256": "6716b1260bf082f78dbaa790e606b8592fee356862142988c03f958aaea71e8d"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_a",
+        "view_sha256": "c82b2466487fe689b7d73bc1fc05007d931e791967d3e21a75044ffcd434aa87"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_b",
+        "view_sha256": "6716b1260bf082f78dbaa790e606b8592fee356862142988c03f958aaea71e8d"
+      }
+    ],
+    "journal_sha256": "8444e2fab4ce3283ef637e0cc1b0b51f7d03c51a9f2f872bd9eab07c9616da41",
+    "kind": "live",
+    "late": "finance_a",
+    "native_id": "6d106b8a-aecf-4d6c-a9a4-ecd3898b6b3a",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 1,
+      "finance_b": 2
+    },
+    "protocol_reward": 1.0,
+    "repeat": 0,
+    "report": {
+      "pick": 2,
+      "reason": "Prices are 0.88x rival median. Demand surged (1,179 units/30d at 56% in-stock), causing stockouts. +15% raise hits rival parity (1.01x) and captures margin."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "dd142a1ab793e511d17a783ee118fe0eab3bb77dc3067d644664d27243cceb1a",
+        "continuation_profit_usd": 2017735.95,
+        "end_day": 1095,
+        "net_worth_usd": 6438151.67,
+        "pick": 1,
+        "price_multiplier": 1.0,
+        "profit_usd": 1801830.41,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.337329
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "dd142a1ab793e511d17a783ee118fe0eab3bb77dc3067d644664d27243cceb1a",
+        "continuation_profit_usd": 2019005.45,
+        "end_day": 1095,
+        "net_worth_usd": 6456789.98,
+        "pick": 2,
+        "price_multiplier": 1.15,
+        "profit_usd": 1803099.91,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.338163
+      }
+    },
+    "sha256": {
+      "config": "3f0d10e7b1b4cdd2648253eb7dc4595347e354239b39f3d7b572f71468673415",
+      "journal": "8444e2fab4ce3283ef637e0cc1b0b51f7d03c51a9f2f872bd9eab07c9616da41",
+      "result": "722e67655eda17ecc959ab2aaefa737181c61c15a20ee22fa44bcb84b5ea9bdc",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "26089238120df267599dd9ae8fa75555d773f1b1cfcc406402245332f65f1c81",
+      "timing": "b511fb7d742afae2a3a223d50a41a8eed2d349c326d01f866773f4cec9285b16"
+    },
+    "shape": "mnl",
+    "status": "complete",
+    "trial_name": "price-w00-r0",
+    "turns": [
+      {
+        "answer_sha256": "359eb4deb8e51c558099fa5a66c4ce05ee655fd452211a2337cffa28b8e4e94d",
+        "client_tokens": 12400,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12330,
+          "output_tokens": 70,
+          "thinking_tokens": 0,
+          "total_tokens": 12400
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "544250e4d7ef3c911bd744842fb37e4314b9b00dba2280c7f314e84a85981a9b",
+          "reply": "acd6b8dcf94acd22c9e5e94cb7a3586d8cc6bcc4460d497f77c098cf4ea70347",
+          "request": "c155aef9e1a8615e49c53dbd219493af47f321dcde2f6ec8cf75227dd9355917"
+        },
+        "prompt_sha256": "66d55d263cd050c9cefeb61b1a8918f24e7780102f4a2bb343de454177c23df7",
+        "purpose": "sales",
+        "reply": "{\"pick\": 2, \"reason\": \"Prices are 0.88x rival median. Demand surged (1,179 units/30d at 56% in-stock), causing stockouts. +15% raise hits rival parity (1.01x) and captures margin.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "58417122e3a3c01aaeb8d0b6cfeeb0bbdfe8e189f9181065a4e0212b1e31a266",
+        "tool_steps": 0,
+        "view_sha256": "f8a8c109a6c11dc33abe4f20a549222a488b7519a1c58d1b04186cdc0770baa9"
+      },
+      {
+        "answer_sha256": "08939b89c0e794f62fce01e17252889afc939956d1c4ed71d96693d3ce6e9796",
+        "client_tokens": 12412,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12402,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12412
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "2b51736174fe3771a87ee17fc4e4f084569fae9dc1838b45feb798c9761a7979",
+          "reply": "39d254082d7d44b8b4a2ac5cba5d6a017aa107b5b73b188239af0c12b02cb589",
+          "request": "1e61c1b20d1e58e639dae29088832a054d1e8f9fcef9f9e37637163db543c487"
+        },
+        "prompt_sha256": "37c09944f0a3d388fa5a0e9b2877e0c07121124863caff6edaa116d8f0fb8ffa",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 1}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "493da8cbfc800a9e9155df2fb34c5492c9d7d0124b29b7e120ba47a24f3ff24f",
+        "tool_steps": 0,
+        "view_sha256": "a2be60a563f982c8129c28304381d5adf3d562179b9cc18d191689e177c94dfd"
+      },
+      {
+        "answer_sha256": "99d8d83246bd00e9debbdd2de7a6c9316cfcc26ec29eceee58b9294c22c0a2a0",
+        "client_tokens": 3112,
+        "client_usage": {
+          "cache_read_tokens": 9798,
+          "input_tokens": 3094,
+          "output_tokens": 18,
+          "thinking_tokens": 0,
+          "total_tokens": 3112
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "f0741080978f360a333c6c5dc1b5dff56f825a679369c183e8e3829d927910da",
+          "reply": "4cab674c0d064137c317a525d4fc4e14f2d5147a5e7ac48d6b53a6774582a5a2",
+          "request": "7d037884742288098a55e89bc08f3c9c773f2a29e46a5f6c81fbca0fbcc5b96f"
+        },
+        "prompt_sha256": "3c4b750ca5fc224a3c1438c835a313dbee39ac2a862b1f8ec979a590cadeaf27",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"38eaa17c1d5f\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "bbcdffaf42b00515e740ee4a7d2f3a143b413c79f7e5316fc795a449aec833b8",
+        "tool_steps": 0,
+        "view_sha256": "c82b2466487fe689b7d73bc1fc05007d931e791967d3e21a75044ffcd434aa87"
+      },
+      {
+        "answer_sha256": "6a2be26b04f6d48a138b125ff1b5cccfd7be5c6bb0a245f1219a053d60c9d748",
+        "client_tokens": 12479,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12469,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12479
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "490cc56f937f63c87ba710d27de66a96d821d88d1670ba8fab6261b187724985",
+          "reply": "0a511cc9c1bb058162a7dce07c4e73375f064fab60fb287d55cde00673867f47",
+          "request": "949981bcfd7829a90d0bab0caf546841d67fe91ce0ba5b602d26ac9625e553e0"
+        },
+        "prompt_sha256": "d39f786b97151237498bbf39288c2915b270824b481402e4e1a67768e7f37e54",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 2}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "0d2891f2a983576703447060738d74f45f6cc2be7ace7a2cfa0e8193e516562f",
+        "tool_steps": 0,
+        "view_sha256": "e8b7ec8001364bfafc9ce30b255f8fcc60eaa7d508f090db51c2b67173889e62"
+      },
+      {
+        "answer_sha256": "4427bb6818776563eeab8ef4f24f9cbda860b9b7202981ea43c90c67dc036428",
+        "client_tokens": 2681,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2662,
+          "output_tokens": 19,
+          "thinking_tokens": 0,
+          "total_tokens": 2681
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "1294c8110fb80c6f874cd8670d1bce98f088a3868e83f857e9bbe6fe7d7a1b67",
+          "reply": "e263a741b366f7bc4eeaf5413e573c178339191ddc5f3cd74cce735671c38024",
+          "request": "100f53623ebe671ae9198791f9751ed808e17d189b5c9f50efcd1db08dcfa18d"
+        },
+        "prompt_sha256": "5f53c6434e0572dd19f64f561cd302e19f9e11577ada90ec4a1000ccc1e6c32e",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"86384d0154cb\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "e4941bd0e266de6fc7fc2ac34b8ebdc88ead13f395f6a761b12e0ba9554d7cda",
+        "tool_steps": 0,
+        "view_sha256": "6716b1260bf082f78dbaa790e606b8592fee356862142988c03f958aaea71e8d"
+      }
+    ],
+    "world": 0
+  },
+  {
+    "acknowledged": [],
+    "actor_phases": {
+      "finance_a": "view_timeout",
+      "finance_b": "view_timeout",
+      "sales": "invalid_sales_reply"
+    },
+    "checkpoint_sha256": "dd142a1ab793e511d17a783ee118fe0eab3bb77dc3067d644664d27243cceb1a",
+    "control": false,
+    "early": "finance_a",
+    "journal_sha256": "900a7271f4b61c85c32375bf9a55af2ae8bd3982dfbaca71d5212810e3297535",
+    "native_id": "ec0b1ca5-97da-4675-8c53-f76d2be1f787",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "c8d82a02c75e893918b90c046b5b3a57823dc75417d008f8d486a842ac0f883f",
+        "client_tokens": 2401,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "66d55d263cd050c9cefeb61b1a8918f24e7780102f4a2bb343de454177c23df7",
+        "purpose": "sales",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "6dde0afd4936492e510f1dcc864e9810fdc4f4f3e06ea4318d061381047931e2",
+        "tool_steps": 0,
+        "verified": true
+      }
+    ],
+    "picks": {},
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 1,
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {},
+    "shape": "mnl",
+    "status": "incomplete",
+    "turns": [],
+    "world": 0
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "517c20c178cd",
+      "finance_b": "c895c968923e"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "7d2b37bdbd806941090c8c9e8b41c3cac26666f0a5ee5900871e781c6daf0576",
+    "client_tokens": 42425,
+    "control": false,
+    "early": "finance_a",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "5d35b7be557e7a3a9ce93e1bb94dfb6c3f93c7c74137428e1637fffcac05fa08"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "5d35b7be557e7a3a9ce93e1bb94dfb6c3f93c7c74137428e1637fffcac05fa08"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_b",
+        "view_sha256": "d9951e19ec7d88a9d13591150386b753102372f3e7c29dfbb3a0971504ead829"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_a",
+        "view_sha256": "2baeadddd2ee3549226d98513c4ceb974565e71bb174907ad6d37e89813bd537"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_b",
+        "view_sha256": "d9951e19ec7d88a9d13591150386b753102372f3e7c29dfbb3a0971504ead829"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_b",
+        "view_sha256": "d09c9b26223a1424765e07cb9e96f84b0847326124ef8c9cc2363f485fc9b9aa"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_a",
+        "view_sha256": "2baeadddd2ee3549226d98513c4ceb974565e71bb174907ad6d37e89813bd537"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_a",
+        "view_sha256": "2883a23214404ada15c9596f3c8b1d44ad27b0afec88b952d530e4b6431cda19"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_b",
+        "view_sha256": "d09c9b26223a1424765e07cb9e96f84b0847326124ef8c9cc2363f485fc9b9aa"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_a",
+        "view_sha256": "2883a23214404ada15c9596f3c8b1d44ad27b0afec88b952d530e4b6431cda19"
+      }
+    ],
+    "journal_sha256": "595001e51aa498fd6d06c4741a6f8bedc79117aff888c5d99b743749452dcda2",
+    "kind": "live",
+    "late": "finance_b",
+    "native_id": "cd62d928-65ac-4b3f-ade4-129354bea314",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 3,
+      "finance_b": 3
+    },
+    "protocol_reward": 1.0,
+    "repeat": 0,
+    "report": {
+      "pick": 3,
+      "reason": "At 1.0x rival median price and 4.33 vs 4.21 rating, conversion is tiny (105 orders/15k sessions); late jump was days 60-89. x0.85 needed to drive volume."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "7d2b37bdbd806941090c8c9e8b41c3cac26666f0a5ee5900871e781c6daf0576",
+        "continuation_profit_usd": -662251.02,
+        "end_day": 1095,
+        "net_worth_usd": 918976.82,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -897632.63,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "7d2b37bdbd806941090c8c9e8b41c3cac26666f0a5ee5900871e781c6daf0576",
+        "continuation_profit_usd": -662251.02,
+        "end_day": 1095,
+        "net_worth_usd": 918976.82,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -897632.63,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      }
+    },
+    "sha256": {
+      "config": "ba9de8de1bb8b15a3a8ff6e6104650efe372a732d59c1a2d1855fb6fb0d2fafa",
+      "journal": "595001e51aa498fd6d06c4741a6f8bedc79117aff888c5d99b743749452dcda2",
+      "result": "c664cd880c3119584842be28d7bcfa77a785aea8eabc4fd1a75ded483b42abc7",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "935c13f7debed332b9003a05aebf79b9e2c69ca9cdb1f282aba67e926f2b0488",
+      "timing": "5bc4e4112fd0a525213556303d7ecace4b5731540f03bd57bedca7627998ca9d"
+    },
+    "shape": "nested",
+    "status": "complete",
+    "trial_name": "price-w01-r0",
+    "turns": [
+      {
+        "answer_sha256": "89ded162f9951bf9dc1714ae5702832117e50e96ff5f2c29b501c99f9c461600",
+        "client_tokens": 12383,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12311,
+          "output_tokens": 72,
+          "thinking_tokens": 0,
+          "total_tokens": 12383
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "30aa2d530159a18f94708bd8dd8cb9ef2646c6808498b6b1f5b6a4ab27c0cedb",
+          "reply": "d2da6169cb165f1233133480f774b43e7de711d952966169a81a29e8bd666f16",
+          "request": "97e2e6b11e98ea7dd0eca98290f7201a38278f0cbd0fd18d3a4adf3b23481ea1"
+        },
+        "prompt_sha256": "0e18a47cfe7a4aad657d4f24bd7b286979bdc9495540ba4e1c7c566748c63f7d",
+        "purpose": "sales",
+        "reply": "{\"pick\": 3, \"reason\": \"At 1.0x rival median price and 4.33 vs 4.21 rating, conversion is tiny (105 orders/15k sessions); late jump was days 60-89. x0.85 needed to drive volume.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "7a2f3f33f84064294ceab13e7f9dc8272bd9504201fcc2938e77d2528326ebd8",
+        "tool_steps": 0,
+        "view_sha256": "5d35b7be557e7a3a9ce93e1bb94dfb6c3f93c7c74137428e1637fffcac05fa08"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 2201,
+        "client_usage": {
+          "cache_read_tokens": 10276,
+          "input_tokens": 2191,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2201
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "4d7e70d4d452367ed7906574d4d96fae3ea02e22d46710390765a22e752753d3",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "91ecabb0d9a0a191724fbdebe95ef2c97d09f3b583a12672053da0fd37c7f124"
+        },
+        "prompt_sha256": "065d416c3aeada64a39c90ee4f337c4d87c479a563ae14b9ecf2bc5351a20d05",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "c35f4151b90b7515b5bb95032b03a470e0e1f12b90029ef16e8191494ca9160b",
+        "tool_steps": 0,
+        "view_sha256": "2baeadddd2ee3549226d98513c4ceb974565e71bb174907ad6d37e89813bd537"
+      },
+      {
+        "answer_sha256": "ed39c990280fb0095a76af4458b7b452456f3f0f3b18781438e0f97de43db12c",
+        "client_tokens": 12924,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12905,
+          "output_tokens": 19,
+          "thinking_tokens": 0,
+          "total_tokens": 12924
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "c7fb8c699cf689d462be0a0860ffe5009bb85c50453a8f9c18a55ff990897a81",
+          "reply": "800661e7373e5b36affe127491d55632149fe5a247e2bbcea4c30893cc1b1feb",
+          "request": "ff8c3773fcc57a6b9c118d6efba6106888b87bcd347c8a30f81dcdc197a26dea"
+        },
+        "prompt_sha256": "c7d069ea381310281d8afc3a98a364631546729867619e3da7b18da2e50389fd",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"517c20c178cd\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "b43daf99f25912f615d3b7805e7aebf0f815b741597254ba1251e38e8d8da3f1",
+        "tool_steps": 0,
+        "view_sha256": "2883a23214404ada15c9596f3c8b1d44ad27b0afec88b952d530e4b6431cda19"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12408,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12398,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12408
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "8f2659e3f2c7cc56c56e9dd9e7bb86cdaa5384c4c50833f9d5455114fbd051e5",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "2b2d2b6793157b61effaf30f3eaac345c99ff97413ed7f5277979e3e0ece7ca0"
+        },
+        "prompt_sha256": "b5e9d9876dd37a01297b6b8516f9b2831dca2161660be7ef921cd64c88d3f54d",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "7ab8287cc3cacd20fa096e22ce3a7c64cf5ba3f8eddf987fe098919afc8a4b3d",
+        "tool_steps": 0,
+        "view_sha256": "d9951e19ec7d88a9d13591150386b753102372f3e7c29dfbb3a0971504ead829"
+      },
+      {
+        "answer_sha256": "2ea759428067e29abf147c19a328f6189b22ae3796d6a75e1b72c27af47d0403",
+        "client_tokens": 2509,
+        "client_usage": {
+          "cache_read_tokens": 10415,
+          "input_tokens": 2489,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 2509
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "0f56b7320125c040c70c0a7a8fe29f084e6425f3f6b9fe8dd33ac79aa0d9f962",
+          "reply": "8c2f44ece48683b681522fce1c348b25d3c34153800b524c13006507c4a7dd08",
+          "request": "f217338aedb5a25549fdf8ede2bf06850c4a477c4665b386a8bb896230d4d7b2"
+        },
+        "prompt_sha256": "e7f8f73051cd6c8c5c3dc201bddeff6cb9080838216f7dc15fae35d964bb8153",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"c895c968923e\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "98c624d43b06548f6803f23cb444c631aa4e4189883ae2fda3c68d66f6c9b85a",
+        "tool_steps": 0,
+        "view_sha256": "d09c9b26223a1424765e07cb9e96f84b0847326124ef8c9cc2363f485fc9b9aa"
+      }
+    ],
+    "world": 1
+  },
+  {
+    "acknowledged": [],
+    "actor_phases": {
+      "finance_a": "view_timeout",
+      "finance_b": "view_timeout",
+      "sales": "sales_turn_unanswered"
+    },
+    "checkpoint_sha256": "7d2b37bdbd806941090c8c9e8b41c3cac26666f0a5ee5900871e781c6daf0576",
+    "control": false,
+    "early": "finance_b",
+    "journal_sha256": "7e422e34123a235033f46d12c2d39da79f18a36264b0cf0937bdb515d4b8064f",
+    "native_id": "ccd54093-f412-48ff-b951-09853d4359e7",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": null,
+        "client_tokens": null,
+        "credit_fallback": null,
+        "diagnostic": "unanswered",
+        "prompt_sha256": null,
+        "purpose": "sales",
+        "reply_recorded": false,
+        "request_recorded": true,
+        "requested_model": null,
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": null,
+        "tool_steps": null,
+        "verified": false
+      }
+    ],
+    "picks": {},
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 1,
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {},
+    "shape": "nested",
+    "status": "incomplete",
+    "turns": [],
+    "world": 1
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "a5fb3cf9220c",
+      "finance_b": "abb80350ce32"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+    "client_tokens": 32807,
+    "control": false,
+    "early": "finance_a",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "57ac7c8150779730f77fb290aad2d3c82fb758cb018b28219606b2b3fae11e47"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "57ac7c8150779730f77fb290aad2d3c82fb758cb018b28219606b2b3fae11e47"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_b",
+        "view_sha256": "a06a56e37496410f8902c341530f367641eb20a174fe7ba480870e0f5879cd7a"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_a",
+        "view_sha256": "58e24c0bc5e6fd5df35ff31ca5f977365c2726147f3dcb05b5582b9e333af6a7"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_b",
+        "view_sha256": "a06a56e37496410f8902c341530f367641eb20a174fe7ba480870e0f5879cd7a"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_b",
+        "view_sha256": "5852116672fcdb70efff22509fa879ed3924b7393807e40a2c0c46aed97973d9"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_a",
+        "view_sha256": "58e24c0bc5e6fd5df35ff31ca5f977365c2726147f3dcb05b5582b9e333af6a7"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_a",
+        "view_sha256": "97339ef46b0562049785684b58b37fc667cfa679d7efeee5a8a5a7e9aabae2fa"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_b",
+        "view_sha256": "5852116672fcdb70efff22509fa879ed3924b7393807e40a2c0c46aed97973d9"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_a",
+        "view_sha256": "97339ef46b0562049785684b58b37fc667cfa679d7efeee5a8a5a7e9aabae2fa"
+      }
+    ],
+    "journal_sha256": "43acf891e8a9ae8170f119ffaa10f6b2a4b99307f6b8c37f1d32a4a0cb11a37c",
+    "kind": "live",
+    "late": "finance_b",
+    "native_id": "b4bcd285-e4bd-4bea-8371-7e9c6c046b42",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 2,
+      "finance_b": 1
+    },
+    "protocol_reward": 1.0,
+    "repeat": 0,
+    "report": {
+      "pick": 2,
+      "reason": "Prices are 0.90x rival median with slightly better ratings (4.29 vs 4.24). Orders jumped to 368 despite 49% stock availability; x1.15 raises price to ~1.035x."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+        "continuation_profit_usd": 422463.13,
+        "end_day": 1095,
+        "net_worth_usd": 2811767.57,
+        "pick": 2,
+        "price_multiplier": 1.15,
+        "profit_usd": 193243.48,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.098295
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+        "continuation_profit_usd": 464276.38,
+        "end_day": 1095,
+        "net_worth_usd": 2848189.9,
+        "pick": 1,
+        "price_multiplier": 1.0,
+        "profit_usd": 235056.73,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.102009
+      }
+    },
+    "sha256": {
+      "config": "ad3f6b73a8adbe668ee03318d45e5aeeff9d7c1eb1e8a62a6c5bb991275bada9",
+      "journal": "43acf891e8a9ae8170f119ffaa10f6b2a4b99307f6b8c37f1d32a4a0cb11a37c",
+      "result": "212c6873a127142d24ff44ceac2b39947daa1568aef9d4595eb3e6c0677c585f",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "7893346b1c712e93635ca340811306b0cb02e7bca2096eefcae20ab064549319",
+      "timing": "3c547532d3adc0f907558b29e5cc02ae3c71d9c615a96fa6ef3188017f68eea4"
+    },
+    "shape": "wom",
+    "status": "complete",
+    "trial_name": "price-w02-r0",
+    "turns": [
+      {
+        "answer_sha256": "b7cb7f42f04087ad7b8dd784ad718f0ce7dcaeec2f481198b79ec7fa2dfbe08b",
+        "client_tokens": 12383,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12312,
+          "output_tokens": 71,
+          "thinking_tokens": 0,
+          "total_tokens": 12383
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "1cef7b856fd875af6094f7fe3eb38810db3b5d5200f025741fdd6d574e9a4a7b",
+          "reply": "45a9e71045363397b16493dfb6b18099a01a8486f932fdad23d5f42f1e4f25e5",
+          "request": "79ffa203c07785fbee52d2adaf87dc14d9fd8d4762a265bb785258a58922edba"
+        },
+        "prompt_sha256": "2baaebd3fed175d5b90376e8f92289ce736f03bc774e0233c4b18b468ca1b665",
+        "purpose": "sales",
+        "reply": "{\"pick\": 2, \"reason\": \"Prices are 0.90x rival median with slightly better ratings (4.29 vs 4.24). Orders jumped to 368 despite 49% stock availability; x1.15 raises price to ~1.035x.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "d7765852c984ee48d7ce666f386202ddcdf0c040d63a91f90605ecdd88a711ea",
+        "tool_steps": 0,
+        "view_sha256": "57ac7c8150779730f77fb290aad2d3c82fb758cb018b28219606b2b3fae11e47"
+      },
+      {
+        "answer_sha256": "6a2be26b04f6d48a138b125ff1b5cccfd7be5c6bb0a245f1219a053d60c9d748",
+        "client_tokens": 12477,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12467,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12477
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "f7f7fcb58c4a2c3fb567df7e2197e3396b8c0a257120fe7175ee5ed695e6e55b",
+          "reply": "0a511cc9c1bb058162a7dce07c4e73375f064fab60fb287d55cde00673867f47",
+          "request": "71efaa36d0ab22fb292fb2cf6a53344ea095c9fc955cfdee18069f61f1f24c2a"
+        },
+        "prompt_sha256": "eac05e1c42c0100c2827d159d36ec6630a8944c7cea99f4742ecc904585c6ad5",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 2}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "66f412f4c2e643928afeeb9ce4a7b3c64d31b96865476e05a927a9b40b18096f",
+        "tool_steps": 0,
+        "view_sha256": "58e24c0bc5e6fd5df35ff31ca5f977365c2726147f3dcb05b5582b9e333af6a7"
+      },
+      {
+        "answer_sha256": "b6edc46d4f31462f87cef0704bef16769bb653f617d9f3870719fe8a799b391d",
+        "client_tokens": 2672,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2654,
+          "output_tokens": 18,
+          "thinking_tokens": 0,
+          "total_tokens": 2672
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "2a5499db1334c877798c7c16c69f0d30ba1e0450fcf7a853dcebf55b4e832560",
+          "reply": "6fb52dbecdb57a8aa4d9c6dd4cb07ad699fd27fcba361e688601da519b7a2ce3",
+          "request": "8745eb291ce1c991dd6079a6fe451e10da743f639f0df5a8ad92700cda1bd895"
+        },
+        "prompt_sha256": "276b06fc1bffc2fb212209c1dc6ee220aa7d8f1b1f388ed456951706c47d2042",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"a5fb3cf9220c\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "409c2153b04fb2c9e11b0d00367c1292170b5dbd8baec07ce3651d89d5d6e275",
+        "tool_steps": 0,
+        "view_sha256": "97339ef46b0562049785684b58b37fc667cfa679d7efeee5a8a5a7e9aabae2fa"
+      },
+      {
+        "answer_sha256": "08939b89c0e794f62fce01e17252889afc939956d1c4ed71d96693d3ce6e9796",
+        "client_tokens": 2392,
+        "client_usage": {
+          "cache_read_tokens": 10027,
+          "input_tokens": 2382,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2392
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "1e692f2b2273786fbb6132e81c6e9cfc97a2414de5312f7a2e8c55ece43e52a8",
+          "reply": "39d254082d7d44b8b4a2ac5cba5d6a017aa107b5b73b188239af0c12b02cb589",
+          "request": "d562db8e0aea29e496daca01a4c0a6125357d1ca604ffff5967133e2bfccea4b"
+        },
+        "prompt_sha256": "befacffe37e2eafd6883948ab80ef5a07e02ff8744223d68ead5c7137dcdf652",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 1}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "49f0755a46308e553b2200fe6412770f40258192f17d6d50fed1252b21c28ff2",
+        "tool_steps": 0,
+        "view_sha256": "a06a56e37496410f8902c341530f367641eb20a174fe7ba480870e0f5879cd7a"
+      },
+      {
+        "answer_sha256": "aef6df55c7c2fa52aadc9ef7fbf30c3036b2956e5434a704a156c6bb89d36aec",
+        "client_tokens": 2883,
+        "client_usage": {
+          "cache_read_tokens": 10027,
+          "input_tokens": 2866,
+          "output_tokens": 17,
+          "thinking_tokens": 0,
+          "total_tokens": 2883
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "386b8f8c4d0962c6b60f3fc069f5c1efb0b9860a7357d66cd938d4053b8e7466",
+          "reply": "3d1de956655913cab60418cfa405481fe847d594335239ce552f2dec80d6a894",
+          "request": "b80b05c13c4bfccf17232f581feca25360f4f24ecd946ec686ef8e3614247070"
+        },
+        "prompt_sha256": "b309f662a316fff07c9c0a2b595860a5b14fe5bc022d55f8f2bc0672e91574fa",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"abb80350ce32\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "6d513f717418823ac4031b9e5e7de0a8ed0ed23696fa81fa8e5f9c1343b3a034",
+        "tool_steps": 0,
+        "view_sha256": "5852116672fcdb70efff22509fa879ed3924b7393807e40a2c0c46aed97973d9"
+      }
+    ],
+    "world": 2
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "56f01714327a",
+      "finance_b": "95396c1e9ae4"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+    "client_tokens": 21566,
+    "control": false,
+    "early": "finance_b",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "57ac7c8150779730f77fb290aad2d3c82fb758cb018b28219606b2b3fae11e47"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "57ac7c8150779730f77fb290aad2d3c82fb758cb018b28219606b2b3fae11e47"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_a",
+        "view_sha256": "a06a56e37496410f8902c341530f367641eb20a174fe7ba480870e0f5879cd7a"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_b",
+        "view_sha256": "e71d376d6503c622a9d3685a5a6c0bd108735c72430cd14c98561a9384754da3"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_a",
+        "view_sha256": "a06a56e37496410f8902c341530f367641eb20a174fe7ba480870e0f5879cd7a"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_a",
+        "view_sha256": "b26511e3481ec7d17dad1ed8bb1810135226667fd24f879e0a967b346817c4cc"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_b",
+        "view_sha256": "e71d376d6503c622a9d3685a5a6c0bd108735c72430cd14c98561a9384754da3"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_b",
+        "view_sha256": "03db7e153e3ac90694e2728941480f9203394ed112eb92d9f18281b601456048"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_a",
+        "view_sha256": "b26511e3481ec7d17dad1ed8bb1810135226667fd24f879e0a967b346817c4cc"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_b",
+        "view_sha256": "03db7e153e3ac90694e2728941480f9203394ed112eb92d9f18281b601456048"
+      }
+    ],
+    "journal_sha256": "2d88641319125b07451addf7b0b3e860d32937499e85f213ae3c33789eb76836",
+    "kind": "live",
+    "late": "finance_a",
+    "native_id": "11bac2cb-3322-48cb-805f-c93942ff9a61",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 3,
+      "finance_b": 2
+    },
+    "protocol_reward": 1.0,
+    "repeat": 1,
+    "report": {
+      "pick": 2,
+      "reason": "Prices sit at 0.90x rival median with higher ratings (4.29 vs 4.24). Orders jumped 0->17->368 despite 49% stockouts; x1.15 (=1.035x rival) lifts margin safely."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+        "continuation_profit_usd": 152846.46,
+        "end_day": 1095,
+        "net_worth_usd": 2227822.72,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -76373.19,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.031127
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "13f78e14c25f60f26fbb6752c80280ece236bdf2e8b8afee32c6854daa605d47",
+        "continuation_profit_usd": 422463.13,
+        "end_day": 1095,
+        "net_worth_usd": 2811767.57,
+        "pick": 2,
+        "price_multiplier": 1.15,
+        "profit_usd": 193243.48,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.098295
+      }
+    },
+    "sha256": {
+      "config": "798b4a964c9d928302c8ed702df9c34c67ec3c9a80678d75d573138fa6d525fc",
+      "journal": "2d88641319125b07451addf7b0b3e860d32937499e85f213ae3c33789eb76836",
+      "result": "06ffe0b4ad864c7f7618e12c031384ea8ca079739105e8fb48dbc740634475a4",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "a97b0819376552d1c65b33fdc637e5a088106ff274d5bd40ce2aad2683663160",
+      "timing": "f2b0b195e28300565d01d83b437cc1293e33405c351981092a575903875755ab"
+    },
+    "shape": "wom",
+    "status": "complete",
+    "trial_name": "price-w02-r1",
+    "turns": [
+      {
+        "answer_sha256": "1770e41cb8e4f76648b5ecf265b4b802139aec7d28bd689107c8ce11127b5bde",
+        "client_tokens": 2143,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2066,
+          "output_tokens": 77,
+          "thinking_tokens": 0,
+          "total_tokens": 2143
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "0371580d1d1a922f6b665a87d859fe98adc4cc3a614d01b70a1dbbd935a5c456",
+          "reply": "215611a0f31d5f19f60e93c87c632cd1bad6ac88d83a957f681d6485a6057723",
+          "request": "79ffa203c07785fbee52d2adaf87dc14d9fd8d4762a265bb785258a58922edba"
+        },
+        "prompt_sha256": "2baaebd3fed175d5b90376e8f92289ce736f03bc774e0233c4b18b468ca1b665",
+        "purpose": "sales",
+        "reply": "{\"pick\": 2, \"reason\": \"Prices sit at 0.90x rival median with higher ratings (4.29 vs 4.24). Orders jumped 0->17->368 despite 49% stockouts; x1.15 (=1.035x rival) lifts margin safely.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "d1691879c8c51c97a66f94209ba92898161c0d3257655991c4d7f25c71b2459e",
+        "tool_steps": 0,
+        "view_sha256": "57ac7c8150779730f77fb290aad2d3c82fb758cb018b28219606b2b3fae11e47"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 2180,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2170,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2180
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "f9f5bdd0c18aef31877ce66afd27aae3840599105f328d8e5e2904fac8bc8f0f",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "d562db8e0aea29e496daca01a4c0a6125357d1ca604ffff5967133e2bfccea4b"
+        },
+        "prompt_sha256": "befacffe37e2eafd6883948ab80ef5a07e02ff8744223d68ead5c7137dcdf652",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "35633379f61e95a29f5905394f513d23422f8b8d403263d580788025381c8ca2",
+        "tool_steps": 0,
+        "view_sha256": "a06a56e37496410f8902c341530f367641eb20a174fe7ba480870e0f5879cd7a"
+      },
+      {
+        "answer_sha256": "a98a444d86faf23a2f7a750978766131b78d110acaceb4efa34e5d5ff01b990c",
+        "client_tokens": 2076,
+        "client_usage": {
+          "cache_read_tokens": 10853,
+          "input_tokens": 2056,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 2076
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "94f514c8319368e7d5924403aa999e0181654a9128cb404a4238a7c43424446f",
+          "reply": "a9f700fcbe3ce1078cf67cd0daec5591bcfd79e361fe0a753ee7e09bcfbfec59",
+          "request": "e6a4b411a80f74bb608a62372dacf625738274f4aced407b6a9b2bd65fd214e6"
+        },
+        "prompt_sha256": "28c506244a3a38a90151cf7f0427531ea6aab07c5d4aaca415c7fda363cb4c66",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"56f01714327a\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "6ff81c36a673572fa05d2386a5fe7079f4ca9b635f6b052c3ae2bfcdea257c90",
+        "tool_steps": 0,
+        "view_sha256": "b26511e3481ec7d17dad1ed8bb1810135226667fd24f879e0a967b346817c4cc"
+      },
+      {
+        "answer_sha256": "6a2be26b04f6d48a138b125ff1b5cccfd7be5c6bb0a245f1219a053d60c9d748",
+        "client_tokens": 2243,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2233,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2243
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "e2a7829aed326e0b7767bc85863f6206df00f665ec0630e759bb67872506ae6e",
+          "reply": "0a511cc9c1bb058162a7dce07c4e73375f064fab60fb287d55cde00673867f47",
+          "request": "3099543ffa37b2bed082eae10f9f7eb3c49af201538704567d5d3d9d6eb9f86a"
+        },
+        "prompt_sha256": "38430a9de3345e7c415841447bcdf7ac184aa9ca2e126320ed0290e15341076c",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 2}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "c5498606ef8157a53abf04bb18c71eca77656a8dab5fc8fda913427ae5f72094",
+        "tool_steps": 0,
+        "view_sha256": "e71d376d6503c622a9d3685a5a6c0bd108735c72430cd14c98561a9384754da3"
+      },
+      {
+        "answer_sha256": "8064c4389e9c9235884cb943d2f48658dd4038e760955daaa64c74287395cc2e",
+        "client_tokens": 12924,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12905,
+          "output_tokens": 19,
+          "thinking_tokens": 0,
+          "total_tokens": 12924
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "670b32e16308d1ba9ac059b7e3b30c29d5f51e29929aa1549583eb294c5223ce",
+          "reply": "7c80a97f944ff043ee1fc6dc6792868408ca4b0c56adc5072183fcc68ec41d62",
+          "request": "db2706f7bf4542095b82037dfef887b4c5ae7e926a78415a1cbc23082cf980d5"
+        },
+        "prompt_sha256": "68af74465efa8b1ccda28dfaf11d2b659dfeb99d21ad3d0f0de53d999e5c1798",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"95396c1e9ae4\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "c4340da2f48c8e413c2d318a9e44562d12ba48a2f9e5d1dd13d39be6dd98cff8",
+        "tool_steps": 0,
+        "view_sha256": "03db7e153e3ac90694e2728941480f9203394ed112eb92d9f18281b601456048"
+      }
+    ],
+    "world": 2
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "ecff1bdb58b4",
+      "finance_b": "99f204fbd6dd"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+    "client_tokens": 42879,
+    "control": false,
+    "early": "finance_a",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "b9a07c6cfd4d69cee0159055838bdf83551d6472a3018e421ff2fc2d74d2c65d"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "b9a07c6cfd4d69cee0159055838bdf83551d6472a3018e421ff2fc2d74d2c65d"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_a",
+        "view_sha256": "768166e55c167c070cf54cc1e168ff81daeae2f201b2dc6661c76636bcfb6590"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_b",
+        "view_sha256": "b2d8b7cf01c96f28ec96014d36c292d5450cd9d27d029881efeae097e1cf08df"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_a",
+        "view_sha256": "768166e55c167c070cf54cc1e168ff81daeae2f201b2dc6661c76636bcfb6590"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_a",
+        "view_sha256": "0f51f203bb5ad5d154cb36661d38f3c13a1a2c603e9cf30ece3cdc6c175bfe8c"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_b",
+        "view_sha256": "b2d8b7cf01c96f28ec96014d36c292d5450cd9d27d029881efeae097e1cf08df"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_b",
+        "view_sha256": "3caf56e6eb40cccd6c3c9eadadfaa4f6fe8eceb20e9b0bd7acdd170b7e288091"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_a",
+        "view_sha256": "0f51f203bb5ad5d154cb36661d38f3c13a1a2c603e9cf30ece3cdc6c175bfe8c"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_b",
+        "view_sha256": "3caf56e6eb40cccd6c3c9eadadfaa4f6fe8eceb20e9b0bd7acdd170b7e288091"
+      }
+    ],
+    "journal_sha256": "9d6af863494b226bd22f8b9379594820b98a81e90e13de353f66e53e5d5732a6",
+    "kind": "live",
+    "late": "finance_b",
+    "native_id": "db5760a7-f6a6-48df-b3ef-39a75350e7e1",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 3,
+      "finance_b": 3
+    },
+    "protocol_reward": 1.0,
+    "repeat": 0,
+    "report": {
+      "pick": 3,
+      "reason": "Priced +4.1% above equal-rated (4.33) rivals; very low 0.96% conversion (126 orders/13.1k sessions, days 60-89). x0.85 (-11.5% vs rivals) unlocks volume."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+        "continuation_profit_usd": 135029.73,
+        "end_day": 1095,
+        "net_worth_usd": 2661188.66,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -99657.34,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.082414
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+        "continuation_profit_usd": 135029.73,
+        "end_day": 1095,
+        "net_worth_usd": 2661188.66,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -99657.34,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.082414
+      }
+    },
+    "sha256": {
+      "config": "cc9010b43b814694c44147a22d06627d6cb11076bc8761ec9d56bca1d48cb162",
+      "journal": "9d6af863494b226bd22f8b9379594820b98a81e90e13de353f66e53e5d5732a6",
+      "result": "eca6d1a8e585f5a6628be9949e704d42c1158cfec2fa62f74b5dff00395c495f",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "46037d6ffaea079117069488eb342a9526cdab8152ffc7394df68cb5c4bb11b2",
+      "timing": "b5805bf3feb01e0a0328ed48180cfc5e947154512cc7eec9b62dd5032bed180d"
+    },
+    "shape": "delayed_ads",
+    "status": "complete",
+    "trial_name": "price-w03-r0",
+    "turns": [
+      {
+        "answer_sha256": "6c10fa6fa5af4586ed4b150569cadaeffb7eb15f738b74aef341eb4ca91b6b96",
+        "client_tokens": 12400,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12319,
+          "output_tokens": 81,
+          "thinking_tokens": 0,
+          "total_tokens": 12400
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "2b028b49b5d891242680dde5235200b675f45d93680138fa90751f1eef0095ef",
+          "reply": "7f8b599194deab34f3061ad77d63b77632d5b1434033264a215828e3d7d238c6",
+          "request": "de1935e676e03518addff1b8b1cb8d941e428e68244af95fab85bd1d8b8121cd"
+        },
+        "prompt_sha256": "0c840e9b31bbf4278efd428af9a7a1f01d5b28a2f34febf740cb4ada13fb93f6",
+        "purpose": "sales",
+        "reply": "{\"pick\": 3, \"reason\": \"Priced +4.1% above equal-rated (4.33) rivals; very low 0.96% conversion (126 orders/13.1k sessions, days 60-89). x0.85 (-11.5% vs rivals) unlocks volume.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "c87b762943ba81d0403eee106e8ca6dfb6a49b1d296715139d61226e877c2c77",
+        "tool_steps": 0,
+        "view_sha256": "b9a07c6cfd4d69cee0159055838bdf83551d6472a3018e421ff2fc2d74d2c65d"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12486,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12476,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12486
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "0b06562e4814fcdcf0006faaa351bad05cb492dd312008a110ddf24ca549b60e",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "d86cdedf7a67990f362ab1165d74f59b8693f9bf8acce63ff1394031ff5a2e05"
+        },
+        "prompt_sha256": "0a7806326887da448b6193c40bc338972ce41e193c3155466736a95c62c33ef2",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "fc08cf2e73899d0970fff811839e6213b69f4fe4a864e41f0a4ac85d9fb4b776",
+        "tool_steps": 0,
+        "view_sha256": "768166e55c167c070cf54cc1e168ff81daeae2f201b2dc6661c76636bcfb6590"
+      },
+      {
+        "answer_sha256": "a8c2205c551f4183e32ecab554fa2ab3229b0d9aa0e61f7fa23887dd6065caf8",
+        "client_tokens": 2686,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2670,
+          "output_tokens": 16,
+          "thinking_tokens": 0,
+          "total_tokens": 2686
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "3e4bc2690516411e360a640695e7d77b8eeaaf2d2de0a3770698b595dc554579",
+          "reply": "8bb1de7c7f0b299c40432261a7b66fc33ff479100b1a2134a9c090c8fef23bf9",
+          "request": "e4a9e4b0bff50eb0bb6dff4bb8020f4d9951167f939a650542061dccc8c29e3b"
+        },
+        "prompt_sha256": "1154a6735bf9bf9ef07e0ba353dffad283cc5586f65a3441d172f7e2ea36bd4a",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"ecff1bdb58b4\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "b5ce86747effc5dd3514de31a8732e7c2859439ff26a48b20776a45b0fa0a7e1",
+        "tool_steps": 0,
+        "view_sha256": "0f51f203bb5ad5d154cb36661d38f3c13a1a2c603e9cf30ece3cdc6c175bfe8c"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12408,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12398,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12408
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "2b0bbddf4ebb5cf9900d4a58bd213e8553fe168fc8030594c8573f6d7eaaf4f9",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "2efb0d1d8431a1656b53df289a7975454d443dd95e9ff32a0e3e20e3fa8546b8"
+        },
+        "prompt_sha256": "8bd6e68705166075e7399c23915e76d1ecb3259fbfc5955514828ac3d3399b1a",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "91ba1b6ca4e61ec18719e38bf93658dba18e9ecfdaefe8fba2a815184e4faaf7",
+        "tool_steps": 0,
+        "view_sha256": "b2d8b7cf01c96f28ec96014d36c292d5450cd9d27d029881efeae097e1cf08df"
+      },
+      {
+        "answer_sha256": "0df13ace8c728762778b2939d2fac4e29f1970d881314e2acc19df70963004d8",
+        "client_tokens": 2899,
+        "client_usage": {
+          "cache_read_tokens": 10027,
+          "input_tokens": 2882,
+          "output_tokens": 17,
+          "thinking_tokens": 0,
+          "total_tokens": 2899
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "5180ea343fbb392e540c69788327dbbd8d193d44f5846ec4ce5dd59ef2ae6209",
+          "reply": "a806bf58608d89a9fa955e0cb45ada393282232e6fbb5dcb3d49fee0563bc86c",
+          "request": "908dbc458cd57556f9f4ecf89f7d79431d5e858a1b797d49bb3b3a3e486b845b"
+        },
+        "prompt_sha256": "b4396ee3736feeafbfa40bced7bafa04098b85936c221a6bd42944344ec28113",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"99f204fbd6dd\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "530b0bc6072e053d5a95e57607029f96645e34006e6bae1537122498fbf40a9b",
+        "tool_steps": 0,
+        "view_sha256": "3caf56e6eb40cccd6c3c9eadadfaa4f6fe8eceb20e9b0bd7acdd170b7e288091"
+      }
+    ],
+    "world": 3
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "0f2635f05f52",
+      "finance_b": "be3386ddcd78"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+    "client_tokens": 31677,
+    "control": false,
+    "early": "finance_b",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "b9a07c6cfd4d69cee0159055838bdf83551d6472a3018e421ff2fc2d74d2c65d"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "b9a07c6cfd4d69cee0159055838bdf83551d6472a3018e421ff2fc2d74d2c65d"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_a",
+        "view_sha256": "b2d8b7cf01c96f28ec96014d36c292d5450cd9d27d029881efeae097e1cf08df"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_b",
+        "view_sha256": "a9c5f1f83fbda853313acc5d14c74c8057e898426d3f02c4deea56bc9d53aea8"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_a",
+        "view_sha256": "b2d8b7cf01c96f28ec96014d36c292d5450cd9d27d029881efeae097e1cf08df"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_a",
+        "view_sha256": "ea9385f0fb08cb7abdf95d877455bc618e273ca0898b16db435ec66a5e0d4732"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_b",
+        "view_sha256": "a9c5f1f83fbda853313acc5d14c74c8057e898426d3f02c4deea56bc9d53aea8"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_b",
+        "view_sha256": "db3a9fbf254458b841a9939a8664503ccf6b233a26574c64d328ea2732fffb89"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_b",
+        "view_sha256": "db3a9fbf254458b841a9939a8664503ccf6b233a26574c64d328ea2732fffb89"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_a",
+        "view_sha256": "ea9385f0fb08cb7abdf95d877455bc618e273ca0898b16db435ec66a5e0d4732"
+      }
+    ],
+    "journal_sha256": "957b13c867f0b65e65c24594263b36a2cf0b86f974e3812ff78b9d751c1b5469",
+    "kind": "live",
+    "late": "finance_a",
+    "native_id": "a7929d3b-e54a-4540-aeda-98310fd7a036",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 1,
+      "finance_b": 3
+    },
+    "protocol_reward": 1.0,
+    "repeat": 1,
+    "report": {
+      "pick": 3,
+      "reason": "Prices are 4.1% above rivals with equal 4.33 ratings; conversion is under 1% (126 orders/13k sessions in d60-89). x0.85 undercuts rivals to drive volume."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+        "continuation_profit_usd": 800313.11,
+        "end_day": 1095,
+        "net_worth_usd": 4419923.26,
+        "pick": 1,
+        "price_multiplier": 1.0,
+        "profit_usd": 565626.04,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.228804
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "b1f91a603f362c839124a47af1d1ee990de1633c15d801ab5a0cd45a6be32268",
+        "continuation_profit_usd": 135029.73,
+        "end_day": 1095,
+        "net_worth_usd": 2661188.66,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -99657.34,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.082414
+      }
+    },
+    "sha256": {
+      "config": "c4f03d95b40269d658ec33c1c51d7cb6b5e5d32749298b61eefd8efd82690a0b",
+      "journal": "957b13c867f0b65e65c24594263b36a2cf0b86f974e3812ff78b9d751c1b5469",
+      "result": "667f10ce2dedaa0fe06f01fc15a08f88bc2a375bb8994988730b14c1b6ea7c1a",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "fcc4dc9b41c37cd475bec0934e7bb42a32d51d47721546224248d8eea434ae67",
+      "timing": "089e47f18ee95ffbaa29016fab8df11085038690592c7bf85d8ff305c077ba8c"
+    },
+    "shape": "delayed_ads",
+    "status": "complete",
+    "trial_name": "price-w03-r1",
+    "turns": [
+      {
+        "answer_sha256": "45b3fc0130650fdeae961d950b8c77c13707b9aa423c02918e6d9cb84459d1b0",
+        "client_tokens": 12388,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12320,
+          "output_tokens": 68,
+          "thinking_tokens": 0,
+          "total_tokens": 12388
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "e1098450d24fe93f46ad4e7203ee1f09f0b26bd8c6bdc1935d9c30dd4dfb78dd",
+          "reply": "7a84beafa1fa9c7742824ffd2f8e86467fe190cfe5bb210d1fbc8bee1338fd44",
+          "request": "de1935e676e03518addff1b8b1cb8d941e428e68244af95fab85bd1d8b8121cd"
+        },
+        "prompt_sha256": "0c840e9b31bbf4278efd428af9a7a1f01d5b28a2f34febf740cb4ada13fb93f6",
+        "purpose": "sales",
+        "reply": "{\"pick\": 3, \"reason\": \"Prices are 4.1% above rivals with equal 4.33 ratings; conversion is under 1% (126 orders/13k sessions in d60-89). x0.85 undercuts rivals to drive volume.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "82190b5a322f1751f4d47113d6a2e86f6b8b2846dc029a78aa382a4565dec384",
+        "tool_steps": 0,
+        "view_sha256": "b9a07c6cfd4d69cee0159055838bdf83551d6472a3018e421ff2fc2d74d2c65d"
+      },
+      {
+        "answer_sha256": "08939b89c0e794f62fce01e17252889afc939956d1c4ed71d96693d3ce6e9796",
+        "client_tokens": 2061,
+        "client_usage": {
+          "cache_read_tokens": 10360,
+          "input_tokens": 2051,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2061
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "005b100dfade250bbf486565ba82086d7d4c82a5c1ef68f872c3465f6c8177e9",
+          "reply": "39d254082d7d44b8b4a2ac5cba5d6a017aa107b5b73b188239af0c12b02cb589",
+          "request": "2efb0d1d8431a1656b53df289a7975454d443dd95e9ff32a0e3e20e3fa8546b8"
+        },
+        "prompt_sha256": "8bd6e68705166075e7399c23915e76d1ecb3259fbfc5955514828ac3d3399b1a",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 1}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "1cc81f6a7646cd44151dc968341a54b5abde4014f607ac4e2ffadbd0668b888f",
+        "tool_steps": 0,
+        "view_sha256": "b2d8b7cf01c96f28ec96014d36c292d5450cd9d27d029881efeae097e1cf08df"
+      },
+      {
+        "answer_sha256": "acecde65df2234b0ca4b1225a0d929a9f305f40d5b8ee9ae7fbd9de4aa369384",
+        "client_tokens": 2074,
+        "client_usage": {
+          "cache_read_tokens": 10845,
+          "input_tokens": 2054,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 2074
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "06b1d50a1806e0ba298cb7ec136cfba1ad11f65e1ed4dc8d590f91b99f4e8c37",
+          "reply": "0aefab66a77b72e46cf058a709be1cd477cf98598b37ad3fd5d9f1ee9ba58eb5",
+          "request": "48a1b129354779c7e47043b6a10712d83679174d0076badaa95d6218cc6153f3"
+        },
+        "prompt_sha256": "6f001093704d43a728773f5737185f466ec0dea1f9a666635c8ce4dd01919cfe",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"0f2635f05f52\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "3339ffaf69eaf99a11ef7dabcd1603f73ab9c7172a6726d8ee4184786f7875a6",
+        "tool_steps": 0,
+        "view_sha256": "ea9385f0fb08cb7abdf95d877455bc618e273ca0898b16db435ec66a5e0d4732"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 2240,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2230,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2240
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "cbd40d4db2500be89c4e5bc757706cbddc54c4702bb14ad0f54a47ae300beca1",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "1f58e0b6528aaf8163b331fca59e5b25d0c70784ff049177247b6ed20064a6c9"
+        },
+        "prompt_sha256": "6e84819621cea5b86ba794c7233f6d3c94240d75fe3db507356276310116b266",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "38ea72fc01e46022c5ad4d0e96f1f2ac4610d3cfa5bcb05583ef0146d5ecdb9f",
+        "tool_steps": 0,
+        "view_sha256": "a9c5f1f83fbda853313acc5d14c74c8057e898426d3f02c4deea56bc9d53aea8"
+      },
+      {
+        "answer_sha256": "1ab35ad947b3b555f5278c6398b85d0eafee7fbe202bb696f64e7c903e0e2966",
+        "client_tokens": 12914,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12897,
+          "output_tokens": 17,
+          "thinking_tokens": 0,
+          "total_tokens": 12914
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "1acb518f9c815f9db0c9017b4e58a58dbbe9d775238ea4b9a53fe141a5c917dd",
+          "reply": "ae26bf962f01609e8cb49de9b4910384c025fe2f1266b1630c25a04c06435547",
+          "request": "378ad9f1f964dd0af6dc709a121e4ce3edb6864eac9a9da9a1d2f83f3307eaeb"
+        },
+        "prompt_sha256": "d135c84c71a206c6e577563c77232765014b279e01eb13200846b4575ebd94e2",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"be3386ddcd78\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "fd314e1f5ad961d9f448a91ed22f30d95ee6ec866da56aa36668ca59b8531dd1",
+        "tool_steps": 0,
+        "view_sha256": "db3a9fbf254458b841a9939a8664503ccf6b233a26574c64d328ea2732fffb89"
+      }
+    ],
+    "world": 3
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "535f36571339",
+      "finance_b": "230719e29068"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+    "client_tokens": 32541,
+    "control": false,
+    "early": "finance_a",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "0aee49495c81b05d81d8d1cacfb535c123ad257c57ee8069358875ecda4d6b5d"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "0aee49495c81b05d81d8d1cacfb535c123ad257c57ee8069358875ecda4d6b5d"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_b",
+        "view_sha256": "a44aeaab4adf266fb960c923d4bad2b8205787e0a6de5f854faebaab0127c3c0"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_a",
+        "view_sha256": "1d74d3dc6f80f055765991b03c8f277d308bf45736fe1b74a52ab473f5823d1d"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_b",
+        "view_sha256": "a44aeaab4adf266fb960c923d4bad2b8205787e0a6de5f854faebaab0127c3c0"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_b",
+        "view_sha256": "f791eb3caecf190cdd84b879d19296bfb825a76701732a4b19244552ae91b932"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_a",
+        "view_sha256": "1d74d3dc6f80f055765991b03c8f277d308bf45736fe1b74a52ab473f5823d1d"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_a",
+        "view_sha256": "de3b276e89f3e99f2d02457c2a60c4594f97d5811ace327fd95be2922ece5e61"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_a",
+        "view_sha256": "de3b276e89f3e99f2d02457c2a60c4594f97d5811ace327fd95be2922ece5e61"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_b",
+        "view_sha256": "f791eb3caecf190cdd84b879d19296bfb825a76701732a4b19244552ae91b932"
+      }
+    ],
+    "journal_sha256": "f2da69cbee21c94a18ce4bf3a9702630f08cff1f6f91d09b6c320ddbe75ee70c",
+    "kind": "live",
+    "late": "finance_b",
+    "native_id": "e4f9cb47-b339-4a88-bae1-ebb0a454a06d",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 3,
+      "finance_b": 3
+    },
+    "protocol_reward": 1.0,
+    "repeat": 0,
+    "report": {
+      "pick": 1,
+      "reason": "Days 0-59 at 1.004-1.006x rival price yielded 0 orders across 28.5k sessions. Days 60-89 at 1.00x got 258 units. Demand is highly elastic above rival price."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+        "continuation_profit_usd": -877910.9,
+        "end_day": 1095,
+        "net_worth_usd": 534585.41,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -1110376.12,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+        "continuation_profit_usd": -877910.9,
+        "end_day": 1095,
+        "net_worth_usd": 534585.41,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -1110376.12,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      }
+    },
+    "sha256": {
+      "config": "a800526b5cef166446913e1860153d5a67a60c7e013dd2f0414e9d2768e67333",
+      "journal": "f2da69cbee21c94a18ce4bf3a9702630f08cff1f6f91d09b6c320ddbe75ee70c",
+      "result": "2927f1eccd953a80aa4a45b7effbd8bb5f080010f650a2ec306abf6b691c9912",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "de27e90ba06f6c8c847540d8e952530fd35f54d24abd60c7c2a7fc9352e941d0",
+      "timing": "d0de945b180223aaab9a7835e0aedce8fd34107d534ad67617fd9db22d44afe7"
+    },
+    "shape": "deal_seekers",
+    "status": "complete",
+    "trial_name": "price-w04-r0",
+    "turns": [
+      {
+        "answer_sha256": "8f88c7b8fea042c434f35d8e10543908c8a7be295fe219249ce39f2271720826",
+        "client_tokens": 2643,
+        "client_usage": {
+          "cache_read_tokens": 9746,
+          "input_tokens": 2565,
+          "output_tokens": 78,
+          "thinking_tokens": 0,
+          "total_tokens": 2643
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "0e20d357ea76ecbcc8a3c5f2b4f36ccf925888b557ce0a992882515d912a0f38",
+          "reply": "d6b3c4804b9095ed3e1f858c824d3257e704ce0030e669fa53d7c900cd61dd8e",
+          "request": "59cbd146ac38d0bc0d8eeae832d0e768a68fed766e58e1fba0829e79c1f73106"
+        },
+        "prompt_sha256": "7f55fc3bf225f58a0e83de3575a3d55ad34103603404e39cd93857a9af0d0a92",
+        "purpose": "sales",
+        "reply": "{\"pick\": 1, \"reason\": \"Days 0-59 at 1.004-1.006x rival price yielded 0 orders across 28.5k sessions. Days 60-89 at 1.00x got 258 units. Demand is highly elastic above rival price.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "2bb87b2a008ad55f41ffc416fb10a77c28466f504da3f629d7ea0fc18e4bd185",
+        "tool_steps": 0,
+        "view_sha256": "0aee49495c81b05d81d8d1cacfb535c123ad257c57ee8069358875ecda4d6b5d"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12487,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12477,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12487
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "075364bb21ae316c83c2a2cd3c4acb0a869bb572a1f50c6a27232d2d31ac8778",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "11a2aba6d503b8068bcaba8eb79e4b25a6c2c9fb1751fff4ee3547ecbce00cec"
+        },
+        "prompt_sha256": "5e7722136e97e184cdef2f4e938b7ab166703b14db90987548d23185220a408a",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "cf47cb9b960014aeef1e5b6ddfca0cc126a367ac260260dba692ee5bab0bf0ae",
+        "tool_steps": 0,
+        "view_sha256": "1d74d3dc6f80f055765991b03c8f277d308bf45736fe1b74a52ab473f5823d1d"
+      },
+      {
+        "answer_sha256": "e8c12783c3d8ca25bcfca4680958fa73a1bc1ee4f031f5ed6fb10443bd5515e0",
+        "client_tokens": 2082,
+        "client_usage": {
+          "cache_read_tokens": 10843,
+          "input_tokens": 2062,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 2082
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "384850a32bd0ffe8d20539c68c993842c88dd725a100c99951811d3cbc04d789",
+          "reply": "c2d1df7728c1369f11fe18542f360eb46327509025410d5d39577b5878f1112a",
+          "request": "cf134bc961e8621638e4bd2dd0ff3a6d58e517bcc0281766b84b686921cd0ff5"
+        },
+        "prompt_sha256": "3e127e7e65d1c3b1d31ec17017f97885fe54f9a4e97f15466e539f328b2281f4",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"535f36571339\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "4fe40a61b71d68bb5b98f5eab879457404e7882b559fafd5c6ffde7296557ad2",
+        "tool_steps": 0,
+        "view_sha256": "de3b276e89f3e99f2d02457c2a60c4594f97d5811ace327fd95be2922ece5e61"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12411,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12401,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12411
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "5f2a91a4b580353086e1af01205cb33b6ee77b4e2d62fee7ddee28e4883b413c",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "46b613f63acc5cef0641c238558d2e918664f02bfbc4003f8a5a555d6106c5f9"
+        },
+        "prompt_sha256": "3837df0634a52ec8ee88ba1e312264ede4f2de681cd4017596dd6a640ac668f1",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "395a2db574a08466fb8e1971a4d95b07fb5daab72d8615985cb18209c9832136",
+        "tool_steps": 0,
+        "view_sha256": "a44aeaab4adf266fb960c923d4bad2b8205787e0a6de5f854faebaab0127c3c0"
+      },
+      {
+        "answer_sha256": "c8699ab9c8d30b8436323f00363c17d76689fadf6186dce758e9de69a37b4ce7",
+        "client_tokens": 2918,
+        "client_usage": {
+          "cache_read_tokens": 10003,
+          "input_tokens": 2898,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 2918
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "8a4a5f2d1c5be877d52e997fb56ef5deb24e84b8b32f0867ede77357b008253d",
+          "reply": "daff14065f2fbe777488035aa3494c584427f50ade20974168a482057d1590c4",
+          "request": "2cb8a21db751dbdff405261beb402e7b0e776d1f5ff9ea2ce9fb489584b47083"
+        },
+        "prompt_sha256": "b653c84ce01753609ad913d28bb4d6ed294c35f04654f47299d49116bd3a8d3d",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"230719e29068\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "c630967a1f1474438f795bc88827997393e0dd68a6ca54534faa5c4ff59cd50a",
+        "tool_steps": 0,
+        "view_sha256": "f791eb3caecf190cdd84b879d19296bfb825a76701732a4b19244552ae91b932"
+      }
+    ],
+    "world": 4
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "5540951ff512",
+      "finance_b": "54458577a5b8"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+    "client_tokens": 52911,
+    "control": false,
+    "early": "finance_b",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "0aee49495c81b05d81d8d1cacfb535c123ad257c57ee8069358875ecda4d6b5d"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "0aee49495c81b05d81d8d1cacfb535c123ad257c57ee8069358875ecda4d6b5d"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_b",
+        "view_sha256": "b693fa6eea7d977654c9e7d80e942e229b186787113a5ddd04ee40f268ce7c3f"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_a",
+        "view_sha256": "a44aeaab4adf266fb960c923d4bad2b8205787e0a6de5f854faebaab0127c3c0"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_a",
+        "view_sha256": "a44aeaab4adf266fb960c923d4bad2b8205787e0a6de5f854faebaab0127c3c0"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_a",
+        "view_sha256": "6b959ea35fee6851c2859014591ffc4c56011d4e952e6aed2af4bb9175878032"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_b",
+        "view_sha256": "b693fa6eea7d977654c9e7d80e942e229b186787113a5ddd04ee40f268ce7c3f"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_b",
+        "view_sha256": "842ce732ea60b692bf5e0f5557e57a952dae123fec168c03df08290a8e0f146f"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_b",
+        "view_sha256": "842ce732ea60b692bf5e0f5557e57a952dae123fec168c03df08290a8e0f146f"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_a",
+        "view_sha256": "6b959ea35fee6851c2859014591ffc4c56011d4e952e6aed2af4bb9175878032"
+      }
+    ],
+    "journal_sha256": "f1cd0a116e83a603111a3c977b7b55095d13f452fcf0d9fe953a77136caedf0d",
+    "kind": "live",
+    "late": "finance_a",
+    "native_id": "c9790a9c-874d-4bb5-a282-8b66d971437c",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 3,
+      "finance_b": 3
+    },
+    "protocol_reward": 1.0,
+    "repeat": 1,
+    "report": {
+      "pick": 3,
+      "reason": "0 sales at 1.005x rival median (d0-59); 258 units at 1.00x (d60-89). Rating trails (4.19 vs 4.28). Demand is ultra price-elastic: +15% kills volume; -15% scales"
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+        "continuation_profit_usd": -877910.9,
+        "end_day": 1095,
+        "net_worth_usd": 534585.41,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -1110376.12,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "cfb154bff239fa7f47691c17f589f0807b3d7827752a02fe9d3ab2038af6c404",
+        "continuation_profit_usd": -877910.9,
+        "end_day": 1095,
+        "net_worth_usd": 534585.41,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -1110376.12,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      }
+    },
+    "sha256": {
+      "config": "914a0d0238d8baf99ed57880e88639a9aa77a156057de40493ad7dc5e9d11de9",
+      "journal": "f1cd0a116e83a603111a3c977b7b55095d13f452fcf0d9fe953a77136caedf0d",
+      "result": "7b30ac77a115e658cd113b541790c1aa6331c138790c2dd03d0f4da416725b26",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "72c055529fe1f4a1f2c5387f7f5cad615ee28ec6d690c9617f161bc9c1372d44",
+      "timing": "aace269d0d354035d7b120d68dbc5da1ab9d627d6fc8794cc8422242b6215359"
+    },
+    "shape": "deal_seekers",
+    "status": "complete",
+    "trial_name": "price-w04-r1",
+    "turns": [
+      {
+        "answer_sha256": "58ecb738cfff4f90620ca76646545a3e9b8c12dc6757ddaec11d8591ea83e9ca",
+        "client_tokens": 2157,
+        "client_usage": {
+          "cache_read_tokens": 10240,
+          "input_tokens": 2070,
+          "output_tokens": 87,
+          "thinking_tokens": 0,
+          "total_tokens": 2157
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "f8ff62b5494641d5b9c459aafa3ad9812b2d6ba0bad103e744e5021ce4f539ae",
+          "reply": "3abd3ba4ec999e3f42d21dde150c9e9ff72ddcb8af301a9afe06cee142c64a8d",
+          "request": "59cbd146ac38d0bc0d8eeae832d0e768a68fed766e58e1fba0829e79c1f73106"
+        },
+        "prompt_sha256": "7f55fc3bf225f58a0e83de3575a3d55ad34103603404e39cd93857a9af0d0a92",
+        "purpose": "sales",
+        "reply": "{\"pick\": 3, \"reason\": \"0 sales at 1.005x rival median (d0-59); 258 units at 1.00x (d60-89). Rating trails (4.19 vs 4.28). Demand is ultra price-elastic: +15% kills volume; -15% scales\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "da1da4e10a5ffd28458ca6b3aa3b1c0fe659f7407d0075ffaf8df55fc3c7961e",
+        "tool_steps": 0,
+        "view_sha256": "0aee49495c81b05d81d8d1cacfb535c123ad257c57ee8069358875ecda4d6b5d"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12413,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12403,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12413
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "fc9629fb2ee5c4e0bf4b2bcdffef5cc5731ae21cdac1f216a957157c46dd01dc",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "46b613f63acc5cef0641c238558d2e918664f02bfbc4003f8a5a555d6106c5f9"
+        },
+        "prompt_sha256": "3837df0634a52ec8ee88ba1e312264ede4f2de681cd4017596dd6a640ac668f1",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "35a22c6402ae2e21375a8a6d71a98bf1144658503a86dea409258ab316c8ae77",
+        "tool_steps": 0,
+        "view_sha256": "a44aeaab4adf266fb960c923d4bad2b8205787e0a6de5f854faebaab0127c3c0"
+      },
+      {
+        "answer_sha256": "58615da6f34554e7dc96077148c1caca90379e4b5f7cffaa673b6b367d977485",
+        "client_tokens": 12923,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12904,
+          "output_tokens": 19,
+          "thinking_tokens": 0,
+          "total_tokens": 12923
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "617d3cc8acda6c15965359885a3f617343b09484d2df8d0b2c185757c8b85fa4",
+          "reply": "ce0618b17086a0c52d2b6e48820b7e71450135be74eecc5dbb8ad0ceea854722",
+          "request": "1fbc128784a6a85883c65b6a9546d24f760ce8f34626de71358f379f88c0da45"
+        },
+        "prompt_sha256": "725dde7d8167b97dd0875d75625afe8dacdb3427a8e5b78b61c76ee4df3b509d",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"5540951ff512\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "47b762e854a5180ad979b02316d8b2cf340c37ab70a63c1b72631165160b26ed",
+        "tool_steps": 0,
+        "view_sha256": "6b959ea35fee6851c2859014591ffc4c56011d4e952e6aed2af4bb9175878032"
+      },
+      {
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12484,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12474,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12484
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "7b5a08c9d1ad19d9ce5c9f7178b3dbcb298bc4f626d3b3bbd539ecee1a58c10d",
+          "reply": "e5859227246f033d57170ef0a7c4f004e208f15ee228b6710005ddcebd4c727b",
+          "request": "da3ce0e8ea696b009acab63abf5bd8d9f9f7daf91037212dcc224ba8d4cc723c"
+        },
+        "prompt_sha256": "c983ce72b57f6a12a06e7d136c70850b6a1356e7aec435ae9401e0ba881dcff8",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 3}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "30e861f8ddb8862c77b24f882aedcee193526f0e94205461f1e3e77fac89608b",
+        "tool_steps": 0,
+        "view_sha256": "b693fa6eea7d977654c9e7d80e942e229b186787113a5ddd04ee40f268ce7c3f"
+      },
+      {
+        "answer_sha256": "5b08f71fcd384153bfdc4d4cf4a342372ce3f416f86f3c74c6b784d8cbb72d8d",
+        "client_tokens": 12934,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12914,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 12934
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "3f8be6f2dd890287b9ae3be46d0950a650de2b6657f725a79c936f326f680d81",
+          "reply": "0e687ac4a696177b2013b0ff6134c74eea3e683acd5d60225c9fbd69887e4edd",
+          "request": "539b981ea5091b435a8fbd7d663247cc0c8ba31c8a7dd4961c35ffe6e8e5b8fb"
+        },
+        "prompt_sha256": "7a536b4cfed25bf7c3ba2bbdf35cdc2cfb936da9a07c2644be6521f672ac8f75",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"54458577a5b8\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "28e894bcb41084343cfd9f0876716d098de20c8742b66180bcfe658f3b0abccc",
+        "tool_steps": 0,
+        "view_sha256": "842ce732ea60b692bf5e0f5557e57a952dae123fec168c03df08290a8e0f146f"
+      }
+    ],
+    "world": 4
+  },
+  {
+    "acknowledged": [],
+    "actor_phases": {
+      "finance_a": "view_timeout",
+      "finance_b": "view_timeout",
+      "sales": "invalid_sales_reply"
+    },
+    "checkpoint_sha256": "3f6ff560138bfe094042b1d242f3132b35e85e3ac68afaadf19ae2f81de20fe3",
+    "control": false,
+    "early": "finance_b",
+    "journal_sha256": "800e4a0a008dc5e68bfd7fb7a8fdf36c8a86c9738933fe0695cd37aa786f8474",
+    "native_id": "bef669cc-2153-4625-8bd1-e489e736a075",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "acd9661a1cf88c1e417251b55bcc4b9aaab736d613adf3d79b748f0c05f6341a",
+        "client_tokens": 12400,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "5c3d8d3d601f4c6d9cd20fcb1eac8abf4d74025a15b69a0e11b0a0476df3d763",
+        "purpose": "sales",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "c03b78db2e74469a505153f0a0848796e08bee4bb61d240f9bec7315a98e9cf7",
+        "tool_steps": 0,
+        "verified": true
+      }
+    ],
+    "picks": {},
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 0,
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {},
+    "shape": "mnl",
+    "status": "incomplete",
+    "turns": [],
+    "world": 5
+  },
+  {
+    "acknowledged": [],
+    "actor_phases": {
+      "finance_a": "view_timeout",
+      "finance_b": "view_timeout",
+      "sales": "invalid_sales_reply"
+    },
+    "checkpoint_sha256": "3f6ff560138bfe094042b1d242f3132b35e85e3ac68afaadf19ae2f81de20fe3",
+    "control": false,
+    "early": "finance_a",
+    "journal_sha256": "0a21f5dac9f3e4b900f9abe8b9e0d232acbace6be81410711e72f3b6c8448b20",
+    "native_id": "c613880f-c69b-4b1d-a9f3-b91f7da6ceeb",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "6f848021bc97a79eb78ec40d9a38c7554ec9e47c3266a253a79de3c2b4278b29",
+        "client_tokens": 2165,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "5c3d8d3d601f4c6d9cd20fcb1eac8abf4d74025a15b69a0e11b0a0476df3d763",
+        "purpose": "sales",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "856a27d8fd5924c8850c55b5aba9b11dbee81ed6700924417a147ada5a46065a",
+        "tool_steps": 0,
+        "verified": true
+      }
+    ],
+    "picks": {},
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 1,
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {},
+    "shape": "mnl",
+    "status": "incomplete",
+    "turns": [],
+    "world": 5
+  },
+  {
+    "acknowledged": [
+      "finance_a"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "finance_receipt_turn_unanswered",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "c1f6694287d2bcb8e8f4b9b84ca3a8ea2d1d90bbe400d1bb6bbdf68dc811b9a4",
+    "control": false,
+    "early": "finance_b",
+    "journal_sha256": "bde6688135a01afa7e6219462ce189cd381e1967a521e0e49292b2d3cf35991d",
+    "native_id": "ce8e346d-16d5-4184-b856-e2548e29ae50",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "56ef0893f349a1e34081fad50253e41f345d969f8230567f26bdd591bf8e3a25",
+        "client_tokens": 2361,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "a5c4e0ab7216caf204ef49beb9aa9d4cd0fd8b7923b9b70f52d9a95da2fd184c",
+        "purpose": "sales",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "9920455a4bc8f7ad446997d11e6e2236b74dc322418819516561095efb452606",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12403,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "a3dffedfd4ab3d12aadc7922786202eedbb8f72791c021c91ff2ad1f26fd2121",
+        "purpose": "finance-price",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "85b9410be38ce06fa7547a12a8d032dfdd158b7b67f08956a255d8b28d769bd4",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "517cb77b11db8fe20c364461f6b3be8b5bd1039fd931a5323c0396676504e5c9",
+        "client_tokens": 12906,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "79c824700215a66d3ae507a0a8e20464a9941b7685eadd41be8406ff55bd97b3",
+        "purpose": "finance-receipt",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "14274ebdbc0cfe8ad2b983c44f0c32a705241839fc8a6b2e5ad3b8ba891e1a00",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12483,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "8b9e99a70a0c42e08e9526ac3cd0775c34bae43b0e9d0aa7ebb2295f90d7506c",
+        "purpose": "finance-price",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "e9c2ba2c1f94eb975877c0ba73b33a9653fdb3ecc23c6fe5b1c2102c85b82e33",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": null,
+        "client_tokens": null,
+        "credit_fallback": null,
+        "diagnostic": "unanswered",
+        "prompt_sha256": null,
+        "purpose": "finance-receipt",
+        "reply_recorded": false,
+        "request_recorded": true,
+        "requested_model": null,
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": null,
+        "tool_steps": null,
+        "verified": false
+      }
+    ],
+    "picks": {
+      "finance_a": 3,
+      "finance_b": 3
+    },
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 0,
+    "report": {
+      "pick": 3,
+      "reason": "0 orders days 0-59; only 63 orders/68 units on 13.1k sessions days 60-89 at 0.986x rival price (0.48% conv). Demand is severely weak; x0.85 needed for volume."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "c1f6694287d2bcb8e8f4b9b84ca3a8ea2d1d90bbe400d1bb6bbdf68dc811b9a4",
+        "continuation_profit_usd": -783486.25,
+        "end_day": 1095,
+        "net_worth_usd": 862299.82,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -1019536.37,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "c1f6694287d2bcb8e8f4b9b84ca3a8ea2d1d90bbe400d1bb6bbdf68dc811b9a4",
+        "continuation_profit_usd": -783486.25,
+        "end_day": 1095,
+        "net_worth_usd": 862299.82,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -1019536.37,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.0
+      }
+    },
+    "shape": "nested",
+    "status": "incomplete",
+    "turns": [],
+    "world": 6
+  },
+  {
+    "acknowledged": [],
+    "actor_phases": {
+      "finance_a": "view_unavailable",
+      "finance_b": "view_unavailable",
+      "sales": "invalid_sales_reply"
+    },
+    "checkpoint_sha256": "c1f6694287d2bcb8e8f4b9b84ca3a8ea2d1d90bbe400d1bb6bbdf68dc811b9a4",
+    "control": false,
+    "early": "finance_a",
+    "journal_sha256": "ef327ea0629db5ac66074c0764f2761d657e5c25909d28f31917faf8257e99ad",
+    "native_id": "7cbeadff-5cf7-4412-a9e7-5bc34c252a3c",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "10c36e640fbf7799b554fa499a536d397afb39e31469fe44e4853a8435b9b270",
+        "client_tokens": 12401,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "a5c4e0ab7216caf204ef49beb9aa9d4cd0fd8b7923b9b70f52d9a95da2fd184c",
+        "purpose": "sales",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "2d1ecf9161b2e7992948cf51924738929a86d091133ad3d0561433832829f53b",
+        "tool_steps": 0,
+        "verified": true
+      }
+    ],
+    "picks": {},
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 1,
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {},
+    "shape": "nested",
+    "status": "incomplete",
+    "turns": [],
+    "world": 6
+  },
+  {
+    "acknowledged": [
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "finance_receipt_turn_unanswered",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+    "control": false,
+    "early": "finance_a",
+    "journal_sha256": "117cde6b389ac40a89bf01a006b7a4610d633406cbe73c777ebf0abd02786890",
+    "native_id": "76817142-607d-4348-952b-b234425a081b",
+    "owner_turns_observed": [
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "d0f11867a07b814c1fcc463dc39c5a3c6ad30b988bcbf6bd8de31827ed00a40e",
+        "client_tokens": 2608,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "534a26d8053fa71db62aa9d63bba1848d6df9271489f81c5f15e58d1acc5f084",
+        "purpose": "sales",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "489cf4e97dbe64413ace2f572c7d227fe6f6da3cf74c21b5a8e0fd336593ee74",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "08939b89c0e794f62fce01e17252889afc939956d1c4ed71d96693d3ce6e9796",
+        "client_tokens": 12492,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "f1edb755b0f93dfa405dd22765cba206a492b18a2535af5dcb8158758c04af08",
+        "purpose": "finance-price",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "b0ab64719eee94a434ea7b374f1c9dd8ae05d83b122f8689eca2042e9cb14879",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": null,
+        "client_tokens": null,
+        "credit_fallback": null,
+        "diagnostic": "unanswered",
+        "prompt_sha256": null,
+        "purpose": "finance-receipt",
+        "reply_recorded": false,
+        "request_recorded": true,
+        "requested_model": null,
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": null,
+        "tool_steps": null,
+        "verified": false
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "5c478c6d88ef9f24b0d289db21476e7650e289bedc6788c3700c71ccf8f21705",
+        "client_tokens": 12419,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "ad4a0338bf324d77f6c2679488d4c60c19f4fbac808218c276d9d3d0ae5d0a17",
+        "purpose": "finance-price",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "6ebac84c465915623e4be5c2da58fa63a824d4a361c2da038006fed4833fcc43",
+        "tool_steps": 0,
+        "verified": true
+      },
+      {
+        "admission": {
+          "cause": "none",
+          "outcome": "passed",
+          "stage": "complete"
+        },
+        "admitted": true,
+        "answer_sha256": "963d50e4d7eeb8bfc92a2233a2132d89d7133287d321d35f2777e0899622a0b7",
+        "client_tokens": 2079,
+        "credit_fallback": false,
+        "diagnostic": null,
+        "prompt_sha256": "539a2a818fb653d43f3fa33daed6604ca2b1b9cc9d33cc199c7d51031a5187f3",
+        "purpose": "finance-receipt",
+        "reply_recorded": true,
+        "request_recorded": true,
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "c33583930f2ee3eac9b8513860ab1fe9dd1ca0fa1b29619d516069739f059ea3",
+        "tool_steps": 0,
+        "verified": true
+      }
+    ],
+    "picks": {
+      "finance_a": 1,
+      "finance_b": 3
+    },
+    "protocol_reward": 0.0,
+    "reason": "no_complete_verified_pair",
+    "refusal": "native_exception",
+    "repeat": 0,
+    "report": {
+      "pick": 1,
+      "reason": "Prices sit 4.8% below rivals (0.952x) with 4.18 vs 4.22 ratings. Days 60-89 orders surged 17->286 as stock improved; x1.15 loses price edge, x0.85 cuts margin."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+        "continuation_profit_usd": 543852.14,
+        "end_day": 1095,
+        "net_worth_usd": 3214444.11,
+        "pick": 1,
+        "price_multiplier": 1.0,
+        "profit_usd": 312202.68,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.136914
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+        "continuation_profit_usd": 202250.64,
+        "end_day": 1095,
+        "net_worth_usd": 2216613.73,
+        "pick": 3,
+        "price_multiplier": 0.85,
+        "profit_usd": -29398.82,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.029671
+      }
+    },
+    "shape": "wom",
+    "status": "incomplete",
+    "turns": [],
+    "world": 7
+  },
+  {
+    "ack_tokens": {
+      "finance_a": "4b0ab3c2e0b7",
+      "finance_b": "5d6a8395a820"
+    },
+    "acknowledged": [
+      "finance_a",
+      "finance_b"
+    ],
+    "actor_phases": {
+      "finance_a": "complete",
+      "finance_b": "complete",
+      "sales": "complete"
+    },
+    "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+    "client_tokens": 31068,
+    "control": false,
+    "early": "finance_b",
+    "events": [
+      {
+        "event": "view",
+        "n": 1,
+        "seat": "sales",
+        "view_sha256": "b7e2ddf24f1102d1d592eff2b8f2261979db716bcdb3bb452594ca44121fa74e"
+      },
+      {
+        "event": "commit",
+        "n": 2,
+        "seat": "sales",
+        "view_sha256": "b7e2ddf24f1102d1d592eff2b8f2261979db716bcdb3bb452594ca44121fa74e"
+      },
+      {
+        "event": "view",
+        "n": 3,
+        "seat": "finance_a",
+        "view_sha256": "94fedac05c44b76315e012161fc6e00c23bf4e00d67695a5128271591123510d"
+      },
+      {
+        "event": "view",
+        "n": 4,
+        "seat": "finance_b",
+        "view_sha256": "5e6ef0cd37a860fa56c53ed02f030aa6a767b737d0e36a1eaedd87c3a6b994f6"
+      },
+      {
+        "event": "commit",
+        "n": 5,
+        "seat": "finance_b",
+        "view_sha256": "5e6ef0cd37a860fa56c53ed02f030aa6a767b737d0e36a1eaedd87c3a6b994f6"
+      },
+      {
+        "event": "receipt",
+        "n": 6,
+        "seat": "finance_b",
+        "view_sha256": "68148fa1945765d700ff93db81cf637ce5716285a0ebe2e4edb78aaed521d2f3"
+      },
+      {
+        "event": "commit",
+        "n": 7,
+        "seat": "finance_a",
+        "view_sha256": "94fedac05c44b76315e012161fc6e00c23bf4e00d67695a5128271591123510d"
+      },
+      {
+        "event": "receipt",
+        "n": 8,
+        "seat": "finance_a",
+        "view_sha256": "06f07b78c2879bc77cefe82e7e893a3ea05069bab400b403a8c962de27788633"
+      },
+      {
+        "event": "ack",
+        "n": 9,
+        "seat": "finance_b",
+        "view_sha256": "68148fa1945765d700ff93db81cf637ce5716285a0ebe2e4edb78aaed521d2f3"
+      },
+      {
+        "event": "ack",
+        "n": 10,
+        "seat": "finance_a",
+        "view_sha256": "06f07b78c2879bc77cefe82e7e893a3ea05069bab400b403a8c962de27788633"
+      }
+    ],
+    "journal_sha256": "b9f2d1ae3b486386557d884b63d843bd94f04c6c5ce5e366ecb5c31aa755c3fd",
+    "kind": "live",
+    "late": "finance_a",
+    "native_id": "ae0e5899-d0b3-4088-b15a-76bb28f29b71",
+    "notes": [
+      "Each turn is one fresh signed-in agy subscription session with tools denied and AI-credit fallback disabled; the owner request, reply and receipt files were re-verified against the rebuilt prompt.",
+      "served_model is null because the client reports no server model; requested_model is the client's echo of the request."
+    ],
+    "picks": {
+      "finance_a": 1,
+      "finance_b": 1
+    },
+    "protocol_reward": 1.0,
+    "repeat": 1,
+    "report": {
+      "pick": 1,
+      "reason": "Price is 0.952x rivals; x1.15->1.095x risks high price sensitivity (0.981x had 19u vs 314u at 0.952x) w/ lower rating (4.18 vs 4.22). Strong momentum at x1.00."
+    },
+    "schema": "seatlab.price-timing/v1",
+    "settlements": {
+      "finance_a": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+        "continuation_profit_usd": 543852.14,
+        "end_day": 1095,
+        "net_worth_usd": 3214444.11,
+        "pick": 1,
+        "price_multiplier": 1.0,
+        "profit_usd": 312202.68,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.136914
+      },
+      "finance_b": {
+        "bankrupt": false,
+        "bankrupt_day": null,
+        "checkpoint_sha256": "273eb7e420f337cc911fba7941a2d27ee2cdef58cf6bf11fec187591a3126157",
+        "continuation_profit_usd": 543852.14,
+        "end_day": 1095,
+        "net_worth_usd": 3214444.11,
+        "pick": 1,
+        "price_multiplier": 1.0,
+        "profit_usd": 312202.68,
+        "schema": "seatlab.price-timing-settle/v1",
+        "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+        "stock_score": 0.136914
+      }
+    },
+    "sha256": {
+      "config": "a08543f8dc195e252a544ab82f08d7e0f8245478b51ba71cfba8db24b5631624",
+      "journal": "b9f2d1ae3b486386557d884b63d843bd94f04c6c5ce5e366ecb5c31aa755c3fd",
+      "result": "35cc7eb11ac629617f93c67ba3bc323b81557485d1377414e8ccaf7725df6dfe",
+      "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+      "scenario": "a5bb0c98f57da4be73da604ca7df7ef9992a1e4730a5229ff9dbd80afee608b1",
+      "timing": "fdf6590d7bf324687bab8ddc156519ea5f1ac653815f3b1a97e7e00ebe751bb3"
+    },
+    "shape": "wom",
+    "status": "complete",
+    "trial_name": "price-w07-r1",
+    "turns": [
+      {
+        "answer_sha256": "82802ce716f6c4dc3fd4652aa3b70f74a59768e18fb3fa7e834ef7971c6b5a7e",
+        "client_tokens": 12409,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12316,
+          "output_tokens": 93,
+          "thinking_tokens": 0,
+          "total_tokens": 12409
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "4721219d203c0374df288b84fa5c5c04581e6c0845cfefb737e3ae12eb9c28ff",
+          "reply": "ad4de2acc942699ab4dfb32657294daecb5088e059662da866db9a0597976644",
+          "request": "240d8d1fced98b4e6886fd0a0cc300fdba8a30c817dd52e17459ccdbaf9c1232"
+        },
+        "prompt_sha256": "534a26d8053fa71db62aa9d63bba1848d6df9271489f81c5f15e58d1acc5f084",
+        "purpose": "sales",
+        "reply": "{\"pick\": 1, \"reason\": \"Price is 0.952x rivals; x1.15->1.095x risks high price sensitivity (0.981x had 19u vs 314u at 0.952x) w/ lower rating (4.18 vs 4.22). Strong momentum at x1.00.\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "sales",
+        "served_model": null,
+        "session_sha256": "da981af977537838ab1570bb81d0f2ed691e6d6bde8a40c0be86eb692882beb0",
+        "tool_steps": 0,
+        "view_sha256": "b7e2ddf24f1102d1d592eff2b8f2261979db716bcdb3bb452594ca44121fa74e"
+      },
+      {
+        "answer_sha256": "08939b89c0e794f62fce01e17252889afc939956d1c4ed71d96693d3ce6e9796",
+        "client_tokens": 12420,
+        "client_usage": {
+          "cache_read_tokens": 0,
+          "input_tokens": 12410,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 12420
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "cf49f3545133192f749f3cba977cb3095bd0db3088583f3d5c38ff33c8804a91",
+          "reply": "39d254082d7d44b8b4a2ac5cba5d6a017aa107b5b73b188239af0c12b02cb589",
+          "request": "f3be180ad6de2efc323deda2a0121aa8db15c41237ed1618b6d50800516dfd49"
+        },
+        "prompt_sha256": "ad4a0338bf324d77f6c2679488d4c60c19f4fbac808218c276d9d3d0ae5d0a17",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 1}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "770c4886a7a82e862052417b388699badabd26841ccef29d920fe2194db9df58",
+        "tool_steps": 0,
+        "view_sha256": "94fedac05c44b76315e012161fc6e00c23bf4e00d67695a5128271591123510d"
+      },
+      {
+        "answer_sha256": "7af983e184bd9e952dbe220bcf6799089009a12af359ec6d083f4c5abee75b52",
+        "client_tokens": 2080,
+        "client_usage": {
+          "cache_read_tokens": 10861,
+          "input_tokens": 2061,
+          "output_tokens": 19,
+          "thinking_tokens": 0,
+          "total_tokens": 2080
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "73ff6916292ac0ff5f5c8d5e4209a289a0835c40777e96e25e85cb168c671e0d",
+          "reply": "859e8bcd5f5c945b6a511507678874112b1916132b7526afbae5db2a36d8e505",
+          "request": "747d9dba18e785141de644c41ec2c02b712f5e61d4242eeb67662187783ee542"
+        },
+        "prompt_sha256": "b03cc488974dae67d055c50e0aac32c5d799d29923cf044bcb0c1bd8a2fc78c6",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"4b0ab3c2e0b7\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_a",
+        "served_model": null,
+        "session_sha256": "d4caeada8995a42c5de1937c2b7c77061038f6e90944a480c8449f40ae7bc650",
+        "tool_steps": 0,
+        "view_sha256": "06f07b78c2879bc77cefe82e7e893a3ea05069bab400b403a8c962de27788633"
+      },
+      {
+        "answer_sha256": "08939b89c0e794f62fce01e17252889afc939956d1c4ed71d96693d3ce6e9796",
+        "client_tokens": 2076,
+        "client_usage": {
+          "cache_read_tokens": 10424,
+          "input_tokens": 2066,
+          "output_tokens": 10,
+          "thinking_tokens": 0,
+          "total_tokens": 2076
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "1d676f40ea3d208b8d00ab06def521d09ab2e23e34536abee604a0d1a4dcfd03",
+          "reply": "39d254082d7d44b8b4a2ac5cba5d6a017aa107b5b73b188239af0c12b02cb589",
+          "request": "4a607d57ffe3d622a5e901410b58a57829872cd3b209fdc37b6a47c2f4f53290"
+        },
+        "prompt_sha256": "1bf4a096ee5fd50a073b8b55665940fa40255af7cc3f02cadcff5fdef3cc0f61",
+        "purpose": "finance-price",
+        "reply": "{\"pick\": 1}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "cdbc271ecf320aab60fb73c0226fcbb0058043ee3a3f4be0cc734c857c2f09f3",
+        "tool_steps": 0,
+        "view_sha256": "5e6ef0cd37a860fa56c53ed02f030aa6a767b737d0e36a1eaedd87c3a6b994f6"
+      },
+      {
+        "answer_sha256": "27a5a448a7ba8a2f4e31af8adc938c97db13273b8e08d7166e924b5111017be4",
+        "client_tokens": 2083,
+        "client_usage": {
+          "cache_read_tokens": 10863,
+          "input_tokens": 2063,
+          "output_tokens": 20,
+          "thinking_tokens": 0,
+          "total_tokens": 2083
+        },
+        "credit_fallback": false,
+        "owner_sha256": {
+          "admission": "0d3be9ba7dfab62930313fc31dd4725553b5cbcd187ce1d2ad8a769afe7381f8",
+          "receipt": "4478f827365abbd820f76a7573f41d82f2c45e1cac9e8adc6cf9cd7d322fdc77",
+          "reply": "a70955a5096db7e2a35168c192585acc917711a26ae6ed6c73d5807a81676658",
+          "request": "f8a96116b7fefccb4b63c175b168ebc9a97ddb32717c1ab7ea2f6da5bd9ee3d7"
+        },
+        "prompt_sha256": "64bca8ffc45b7812ebcc71c5518f7fd3d4301b71316e11701c93fb3ccc9e8e17",
+        "purpose": "finance-receipt",
+        "reply": "{\"ack\":\"5d6a8395a820\"}\n",
+        "requested_model": "gemini-4-carbon-low",
+        "seat": "finance_b",
+        "served_model": null,
+        "session_sha256": "5ef511f7cdbe5bcb4b936b6def47da4fcee650065e7ac57092289c2d2b476e6b",
+        "tool_steps": 0,
+        "view_sha256": "68148fa1945765d700ff93db81cf637ce5716285a0ebe2e4edb78aaed521d2f3"
+      }
+    ],
+    "world": 7
+  }
+]
