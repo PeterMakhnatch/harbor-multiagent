@@ -1,6 +1,6 @@
 # Did the receiver get the report before it committed?
 
-Use this reader after a Harbor team trial. It reports one row per declared message and receiver, not one row per chat message. Compare the handoff to an irreversible decision without guessing from the final score. Run from the repository root with Python 3.12 or later. The reader needs no Harbor installation, credentials, or model calls.
+Use this reader after a Harbor team trial. For a handoff, it reports one row per declared message and receiver. For a [shared schedule](#which-teammate-changed-the-standing-answer), it reports changes between accepted writes. Both workflows distinguish evidence from the final score. Run from the repository root with Python 3.12 or later. No Harbor installation, credentials or model calls are needed.
 
 ```bash
 python3 -m examples.seat_handoffs events "$trial_dir" --boundary acknowledged
@@ -67,6 +67,49 @@ python3 -m examples.seat_handoffs calendar "$scratch/booking.json"
 ```
 
 The adapters check the exact release bytes before trusting the study's prior audit. They do not rerun teams or reconstruct model requests. In pricing, 46 of 48 teams passed; 10 of those 46 had no report in the finance decision request. In booking, all 24 teams received a report before booking and all 24 passed. The booking data has no undelivered live comparison. In JSON, use `summary.success_without_on_time_by_message` for the message of interest. A team that receives an initial report can still miss its revision.
+
+## Which teammate changed the standing answer?
+
+Flotilla's stock schedule world grades the **last accepted write**, not the best answer the team produced. A teammate can fix a wrong answer, replace a correct answer, or change its spelling without changing its grade. Use this operator when you have saved trials but do not have their original task folders. It does not open a task, read a trajectory or run a grader.
+
+```bash
+python3 -m examples.seat_handoffs schedule-jobs "$job_a" "$job_b"
+python3 -m examples.seat_handoffs schedule-jobs "$job_a" "$job_b" --include-timeouts --json
+```
+
+Supply whole native jobs when possible. Their locks distinguish scheduled slots, matched trials and missing directories. A finished verifier grade can survive a seat timeout. The default shows these grades but excludes the affected teams and their answers from the comparison. `--include-timeouts` includes only coherent, explicitly recorded agent timeouts with a valid frozen grade. Other errors are not scored as misses.
+
+For individual trials, use `schedule` instead of `schedule-jobs`. This mode has **no job denominator**. Here is a public example using 4 original scripted teams from the fork. It needs no Docker:
+
+```bash
+git fetch --no-tags origin flotilla/lab
+scratch=$(mktemp -d)
+rev=71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3
+fixture=flotilla/analysis/tests/data/oracle-check-2seat
+git archive "$rev" "$fixture" | tar -x -C "$scratch"
+python3 -m examples.seat_handoffs schedule "$scratch/$fixture"/schedule-*/
+```
+
+The example has 4 cross-seat transitions. No transition could have repaired a wrong answer. Between 0 and 2 could have replaced a correct answer. All 4 final grades are known. **Knowing the final grade is not the same as knowing the previous grade.**
+
+`before_correct` and `after_correct` are `null` when there is not enough evidence. A pass identifies the unique correct slot for this exact native task checksum. A zero rules out only the final submitted slot. The command shares these witnesses across independent trials with identical task checksums, never across similar task names or seeds. Duplicate trial IDs and conflicting witnesses do not count. An answer spelling that the two published schedule rubrics can grade differently puts that trial outside scope.
+
+`summary.bounds` gives the lowest and highest possible count for each metric. Each candidate truth must satisfy **all** the observed grades for that task. Different bounds need not hold simultaneously. Only a write by a different seat counts as a team repair or replacement.
+
+`peer_return` describes a different observation. `new_return` means the world first included a message from the previous writer in a reply to the new writer between the two writes. An earlier return is `previous_return`; reading the same message again does not make it new. `sent_not_returned`, `not_sent` and `unknown` are distinct. A missing journal does not erase a frozen write. The stock log has no world UUID: matching ordered records is a consistency check, not authentication. No label proves that a model read a message, acted on it or caused the grade.
+
+### What this recovered from model teams
+
+We inspected 8 existing Flotilla jobs. Their locks listed 192 slots. We found 180 trial directories and 171 usable frozen grades. Both seats finished in 117 trials. In 54 others, at least one seat timed out despite a valid grade. The other 9 directories lacked enough verifier evidence.
+
+| Teams included | Cross-seat writes | Known repairs | Known replacements of a correct answer | Still unknown | Possible final replacements of a correct answer |
+|---|---:|---:|---:|---:|---:|
+| Both seats finished (117) | 138 | 9 | 15 | 40 | 9–28 |
+| Also include 54 graded timeouts (171) | 360 | 18 | 24 | 124 | 11–29 |
+
+In the first row, inspecting each trial alone left 77 writes unknown. Sharing evidence from the **same task checksum** resolved 37: 5 repairs, 13 replacements and 19 unchanged. An independent check used the original scheduling rules and exact task contents for 116 of the 117 teams. Every known cross-seat change agreed (98/98). One team had no matching task copy. Its only cross-seat change stayed unknown. An independent reader also matched all 299 adjacent server-return labels in the 117 teams. Neither check establishes what a model saw or why it chose an answer.
+
+The [aggregate evidence](samples/schedule-changes-cohort.json) includes the registration, enrollment losses, uncertain counts, keyed checks and sensitivity to timeouts. The original trials are not distributed here. Use the [Flotilla analysis](https://github.com/PeterMakhnatch/harbor-multiagent/blob/71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3/flotilla/analysis/README.md) when the task folders **are** available.
 
 ## Add an instrumented world
 

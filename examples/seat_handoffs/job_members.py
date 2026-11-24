@@ -1,16 +1,13 @@
-import hashlib
-import json
 import os
-import stat
 from collections import Counter
 from pathlib import Path
 from typing import Any, cast
 
-from .core import MAX_LOG_BYTES, canonical_uuid, reject_constant, unique_object
+from .core import canonical_uuid
+from .native_records import read_record, record_digest
 
 MAX_SLOTS = 4096
 MAX_ENTRIES = 2 * MAX_SLOTS + 64
-MAX_RECORD_BYTES = MAX_LOG_BYTES
 
 JOB_RESULT_SCHEMA = 1
 JOB_LOCK_SCHEMA = 3
@@ -32,51 +29,13 @@ LOCK_SCHEMA = "native trial lock is not schema version 2"
 LOCK_UNPLANNED = "native trial lock matches no planned trial"
 
 
-def _load(path: Path, limit: int) -> dict[str, Any] | None:
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except FileNotFoundError:
-        return None
-    with open(fd, "rb") as handle:
-        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-            raise ValueError("not a regular file")
-        data = handle.read(limit + 1)
-    if len(data) > limit:
-        raise ValueError("record exceeds its size bound")
-    try:
-        record = json.loads(
-            data.decode("utf-8"),
-            object_pairs_hook=unique_object,
-            parse_constant=reject_constant,
-        )
-    except (ValueError, RecursionError) as error:
-        raise ValueError("record is not valid JSON") from error
-    if not isinstance(record, dict):
-        raise ValueError("record is not a JSON object")
-    return cast(dict[str, Any], record)
-
-
 def _schema(record: dict[str, Any], version: int) -> bool:
     found = record.get("schema_version")
     return type(found) is int and found == version
 
 
-def _digest(lock: dict[str, Any]) -> str:
-    try:
-        text = json.dumps(
-            lock,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-            allow_nan=False,
-        )
-    except RecursionError as error:
-        raise ValueError("trial lock is too deeply nested") from error
-    return hashlib.sha256(text.encode("ascii")).hexdigest()
-
-
 def _root(path: Path) -> tuple[str, dict[str, int]]:
-    result = _load(path / "result.json", MAX_RECORD_BYTES)
+    result = read_record(path / "result.json")
     if result is None:
         raise FileNotFoundError("job result.json is missing")
     if not _schema(result, JOB_RESULT_SCHEMA):
@@ -86,7 +45,7 @@ def _root(path: Path) -> tuple[str, dict[str, int]]:
         raise ValueError("job result.json has no canonical job id")
     if type(total) is not int or not 0 <= total <= MAX_SLOTS:
         raise ValueError(f"job n_total_trials is not an integer in 0..{MAX_SLOTS}")
-    lock = _load(path / "lock.json", MAX_RECORD_BYTES)
+    lock = read_record(path / "lock.json")
     if lock is None:
         raise FileNotFoundError("job lock.json is missing")
     if not _schema(lock, JOB_LOCK_SCHEMA):
@@ -99,7 +58,7 @@ def _root(path: Path) -> tuple[str, dict[str, int]]:
         for trial in trials
     ):
         raise ValueError("job lock has a trial lock that is not schema version 2")
-    planned = Counter(_digest(trial) for trial in trials)
+    planned = Counter(record_digest(trial) for trial in trials)
     assert sum(planned.values()) == total
     return cast(str, job_id), dict(planned)
 
@@ -140,8 +99,8 @@ def _claims(
 
 def _membership(child: Path, job_id: str) -> str | None:
     try:
-        config = _load(child / "config.json", MAX_RECORD_BYTES)
-        result = _load(child / "result.json", MAX_RECORD_BYTES)
+        config = read_record(child / "config.json")
+        result = read_record(child / "result.json")
     except (OSError, ValueError):
         return UNREADABLE
     if config is None and result is None:
@@ -164,12 +123,12 @@ def _membership(child: Path, job_id: str) -> str | None:
 
 def _planned(child: Path, planned: dict[str, int]) -> tuple[str | None, str | None]:
     try:
-        lock = _load(child / "lock.json", MAX_RECORD_BYTES)
+        lock = read_record(child / "lock.json")
         if lock is None:
             return None, LOCK_MISSING
         if not _schema(lock, TRIAL_LOCK_SCHEMA):
             return None, LOCK_SCHEMA
-        digest = _digest(lock)
+        digest = record_digest(lock)
     except (OSError, ValueError):
         return None, LOCK_UNREADABLE
     if digest not in planned:
