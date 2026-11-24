@@ -656,6 +656,11 @@ async def test_a_failed_log_download_warns_and_continues(
         caplog.text
     )
     assert _verified(trial)
+    # The failure is recorded on the seat, not only in the log: a reader of
+    # result.json must see that this seat's evidence never arrived.
+    assert result.seat_results is not None
+    downloaded = {seat.seat: seat.logs_downloaded for seat in result.seat_results}
+    assert downloaded == {"maya": True, "raj": False, "lee": True}
 
 
 async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):

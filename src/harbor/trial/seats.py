@@ -388,7 +388,9 @@ class SeatsTrial(SingleStepTrial):
                 await seat.environment.download_dir(
                     source_dir=source_dir, target_dir=seat.paths.agent_dir
                 )
+            seat.result.logs_downloaded = True
         except Exception as e:
+            seat.result.logs_downloaded = False
             seat.logger.error(
                 f"Failed to download logs to {seat.paths.agent_dir}: {e}",
                 exc_info=True,
