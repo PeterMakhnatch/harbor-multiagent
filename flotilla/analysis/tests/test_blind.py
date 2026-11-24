@@ -33,7 +33,7 @@ def keys(value) -> set[str]:
 
 
 def leaked(leak: str, text: str) -> bool:
-    """A sentinel as its own value, not digits inside a longer number such as a timestamp (1795536290.618509)."""
+    """A sentinel as its own value, not digits inside a longer number such as 1795536290.618509."""
     return re.search(r"(?<![0-9])" + re.escape(leak), text) is not None
 
 
