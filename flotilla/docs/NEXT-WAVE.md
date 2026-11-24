@@ -36,6 +36,14 @@ through OpenRouter, from the observed cost per trial; Modal adds about $0.01 per
 Use `flotilla/run_wave.py`. It runs one Harbor job per cell. A cell is one task set, one instance, one arm,
 and one model. Copy `flotilla/plans/example.json`.
 
+For a new staged wave, use the [staged method](PROBE.md#staged-runs-method-for-future-pre-registrations).
+Record the planned pair counts, arm contrasts, stopping rules, and Holm family before any trial.
+At each look, record the actual valid pair count under the `pc1` rule. Keep the planned looks.
+If you enable optional non-binding futility, record `delta`, `beta_f`, and the bounds for the planned counts.
+Calculate each interim bound from the actual valid pair count.
+`flotilla/stages.py` plans and scores stages; `run_wave.py` does not use it yet.
+Do not add interim looks to an existing fixed-size pre-registration.
+
 1. Commit the plan. The runner refuses a plan that is not at HEAD.
 2. Set `prereg.commit` to the commit that records the question. That commit must be an ancestor of HEAD.
 3. Preview the order. This command does not call Harbor:
