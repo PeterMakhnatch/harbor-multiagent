@@ -427,11 +427,7 @@ class _NovitaDinD(DinDComposeOps, _NovitaStrategy):
 
     @property
     def _compose_project_name(self) -> str:
-        slug = re.sub(r"[^a-z0-9_-]+", "-", self._env.session_id.lower())
-        slug = re.sub(r"-+", "-", slug).strip("-_")
-        if not slug or not slug[0].isalnum():
-            slug = "p-" + slug
-        return slug
+        return self._env.compose_project_name
 
     def _compose_infra_env_vars(self) -> dict[str, str]:
         env = self._env

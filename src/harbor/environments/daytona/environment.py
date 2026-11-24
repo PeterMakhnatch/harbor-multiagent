@@ -641,7 +641,7 @@ class _DaytonaDinD(DinDComposeOps, _DaytonaStrategy):
 
     @property
     def _project_name(self) -> str:
-        return self._env.session_id.lower().replace(".", "-")
+        return self._env.compose_project_name
 
     def _compose_cmd(self, subcommand: list[str]) -> str:
         """Build a fully shell-escaped docker compose command string."""

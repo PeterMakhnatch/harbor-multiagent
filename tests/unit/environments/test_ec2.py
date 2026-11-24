@@ -312,15 +312,15 @@ def test_compose_command_includes_ec2_staged_files_and_extra_compose(
     compose_files = _compose_files_from_command(command)
 
     assert "docker compose" in command
-    assert "/harbor/test-task__abc123/compose" in command
-    assert "/harbor/test-task__abc123/environment" in command
+    assert "/harbor/hb-d65c19a1d1b6/compose" in command
+    assert "/harbor/hb-d65c19a1d1b6/environment" in command
     assert compose_files == [
-        "/harbor/test-task__abc123/compose/docker-compose-resources.json",
-        "/harbor/test-task__abc123/compose/docker-compose-prebuilt.yaml",
-        "/harbor/test-task__abc123/environment/docker-compose.yaml",
-        "/harbor/test-task__abc123/compose/docker-compose-extra-0.yaml",
-        "/harbor/test-task__abc123/compose/docker-compose-mounts.json",
-        "/harbor/test-task__abc123/compose/docker-compose-no-network.yaml",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-resources.json",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-prebuilt.yaml",
+        "/harbor/hb-d65c19a1d1b6/environment/docker-compose.yaml",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-extra-0.yaml",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-mounts.json",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-no-network.yaml",
     ]
     assert "up -d" in command
 
@@ -353,11 +353,11 @@ async def test_start_compose_prepares_root_staging_dir_with_sudo(
 
     command = env._ssh_exec.await_args_list[0].args[0]
     assert "sudo mkdir -p /harbor" in command
-    assert "sudo rm -rf /harbor/test-task__abc123" in command
+    assert "sudo rm -rf /harbor/hb-d65c19a1d1b6" in command
     assert "sudo mkdir -p" in command
-    assert "/harbor/test-task__abc123/compose" in command
-    assert "/harbor/test-task__abc123/environment" in command
-    assert "sudo chown -R ubuntu:ubuntu /harbor/test-task__abc123" in command
+    assert "/harbor/hb-d65c19a1d1b6/compose" in command
+    assert "/harbor/hb-d65c19a1d1b6/environment" in command
+    assert "sudo chown -R ubuntu:ubuntu /harbor/hb-d65c19a1d1b6" in command
 
     bind_command = env._ssh_exec.await_args_list[1].args[0]
     assert "sudo mkdir -p" in bind_command
@@ -635,7 +635,7 @@ async def test_stop_delete_false_keeps_instance_but_stops_compose(
         timeout_sec=60,
     )
     cleanup_command = env._ssh_exec.await_args.args[0]
-    assert cleanup_command == "sudo rm -rf /harbor/test-task__abc123"
+    assert cleanup_command == "sudo rm -rf /harbor/hb-d65c19a1d1b6"
 
 
 async def test_stop_delete_true_terminates_owned_instance(

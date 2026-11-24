@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import shlex
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -143,13 +142,12 @@ class _KernelDocker(DinDComposeOps):
         return [part for path in files for part in ("-f", path)]
 
     def _compose_cmd(self, subcommand: list[str]) -> str:
-        project_name = re.sub(r"[^a-z0-9_-]", "-", self._env.session_id.lower())
         return shlex.join(
             [
                 "docker",
                 "compose",
                 "-p",
-                project_name,
+                self._env.compose_project_name,
                 "--project-directory",
                 _ENVIRONMENT_DIR,
                 *self._compose_file_flags(),

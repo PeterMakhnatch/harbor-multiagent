@@ -2724,10 +2724,12 @@ class TestComposeMode:
         files = env._dind._compose_file_flags()[1::2]
         assert files[1].endswith("docker-compose-prebuilt.yaml")
 
-    def test_project_name_sanitized(self, temp_dir):
+    def test_project_name_is_a_hash_of_the_session_id(self, temp_dir):
         env = _make_env(temp_dir, compose=_COMPOSE_YAML)
         assert env._dind is not None
-        assert env._dind._project_name == "test-session-1"
+        # Session "Test.Session.1"; the name must not carry it.
+        assert env._dind._project_name == env.compose_project_name
+        assert env._dind._project_name == "hb-7fbcdfd7da09"
 
     async def test_exec_dispatches_to_compose_main_service(self, temp_dir):
         env = _make_env(temp_dir, compose=_COMPOSE_YAML)

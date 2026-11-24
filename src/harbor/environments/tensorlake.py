@@ -537,9 +537,7 @@ class _TensorLakeDinD(DinDComposeOps):
 
     @property
     def _project_name(self) -> str:
-        # Compose project names allow only [a-z0-9_-]; session ids can carry
-        # dots and uppercase (e.g. "task__A1b2.agent"), so sanitize fully.
-        return re.sub(r"[^a-z0-9_-]+", "-", self._env.session_id.lower()).strip("-")
+        return self._env.compose_project_name
 
     def _compose_cmd(self, subcommand: list[str]) -> str:
         """Build a fully shell-escaped docker compose command string."""

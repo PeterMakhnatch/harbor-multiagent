@@ -1460,14 +1460,14 @@ def test_compose_command_includes_staged_files(tmp_path: Path) -> None:
     command = env._compose_cmd(["up", "-d"])
 
     assert _compose_files_from_command(command) == [
-        "/harbor/test-task__abc123/compose/docker-compose-resources.json",
-        "/harbor/test-task__abc123/compose/docker-compose-build.yaml",
-        "/harbor/test-task__abc123/environment/docker-compose.yaml",
-        "/harbor/test-task__abc123/compose/docker-compose-mounts.json",
-        "/harbor/test-task__abc123/compose/docker-compose-environment.json",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-resources.json",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-build.yaml",
+        "/harbor/hb-d65c19a1d1b6/environment/docker-compose.yaml",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-mounts.json",
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-environment.json",
     ]
     assert "up -d" in command
-    assert "--project-directory /harbor/test-task__abc123/environment" in command
+    assert "--project-directory /harbor/hb-d65c19a1d1b6/environment" in command
 
 
 def test_startup_env_override_is_layered_after_the_task_compose_file(
@@ -1484,11 +1484,11 @@ def test_startup_env_override_is_layered_after_the_task_compose_file(
     env = _make_boxd_env(tmp_path, compose="services: {}\n")
 
     files = _compose_files_from_command(env._compose_cmd(["up", "-d"]))
-    env_override = "/harbor/test-task__abc123/compose/docker-compose-environment.json"
+    env_override = "/harbor/hb-d65c19a1d1b6/compose/docker-compose-environment.json"
 
     assert env_override in files
     assert files.index(env_override) > files.index(
-        "/harbor/test-task__abc123/environment/docker-compose.yaml"
+        "/harbor/hb-d65c19a1d1b6/environment/docker-compose.yaml"
     )
 
 
@@ -1522,7 +1522,7 @@ def test_no_network_policy_layers_the_no_network_override(tmp_path: Path) -> Non
     files = _compose_files_from_command(env._compose_cmd(["up", "-d"]))
 
     assert files[-1] == (
-        "/harbor/test-task__abc123/compose/docker-compose-no-network.yaml"
+        "/harbor/hb-d65c19a1d1b6/compose/docker-compose-no-network.yaml"
     )
 
 
@@ -1547,8 +1547,8 @@ async def test_start_compose_stages_directories_as_root_then_hands_them_back(
     command = call.args[0]
     assert call.kwargs["sudo"] is True
     assert "mkdir -p /harbor" in command
-    assert "rm -rf /harbor/test-task__abc123" in command
-    assert "chown -R boxd:boxd /harbor/test-task__abc123" in command
+    assert "rm -rf /harbor/hb-d65c19a1d1b6" in command
+    assert "chown -R boxd:boxd /harbor/hb-d65c19a1d1b6" in command
 
 
 # ── Transfers ────────────────────────────────────────────────────────────

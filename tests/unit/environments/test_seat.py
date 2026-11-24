@@ -296,3 +296,11 @@ async def test_base_environment_refuses_service_uploads(temp_dir):
     with pytest.raises(ServiceOperationsUnsupportedError):
         await env.service_upload_dir("a", "/a", service="maya")
     await env.service_upload_file("a", "/a", service="main")
+
+
+def test_seat_reports_the_trial_projects_compose_name(project, seat):
+    """A seat is a service of the trial's project; its own session id names
+    no Compose project."""
+    assert seat.compose_project_name == project.compose_project_name
+    assert seat.compose_project_name.startswith("hb-")
+    assert "hello" not in seat.compose_project_name

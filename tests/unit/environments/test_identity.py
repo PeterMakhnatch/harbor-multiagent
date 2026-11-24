@@ -9,6 +9,7 @@ import pytest
 
 from harbor.environments.base import BaseEnvironment
 from harbor.environments.capabilities import EnvironmentCapabilities
+from harbor.environments.docker.compose_env import compose_project_name
 from harbor.environments.factory import EnvironmentFactory
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import EnvironmentConfig
@@ -133,6 +134,34 @@ def test_different_content_has_different_environment_id(tmp_path: Path) -> None:
     )
 
     assert a.environment_id != b.environment_id
+
+
+def test_compose_project_name_is_a_hash_of_the_session_id(tmp_path: Path) -> None:
+    env = _construct(tmp_path, session_id="schedule-004-silent__cdeu7ht__env")
+
+    assert env.compose_project_name == compose_project_name(env.session_id)
+    assert env.compose_project_name == "hb-15a2f00b60a6"
+    assert "schedule" not in env.compose_project_name
+    assert "silent" not in env.compose_project_name
+
+
+def test_compose_project_name_logs_the_mapping_once(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    env = _construct(tmp_path, session_id="hello-world__bZZeEkw__env")
+
+    with caplog.at_level(logging.DEBUG, logger=env.logger.name):
+        first = env.compose_project_name
+        second = env.compose_project_name
+
+    assert first == second
+    mapping = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.DEBUG and first in record.getMessage()
+    ]
+    assert len(mapping) == 1
+    assert "hello-world__bZZeEkw__env" in mapping[0].getMessage()
 
 
 def test_environment_factory_preserves_legacy_arguments(tmp_path: Path) -> None:

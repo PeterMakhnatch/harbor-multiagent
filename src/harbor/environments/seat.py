@@ -74,6 +74,13 @@ class SeatEnvironment(BaseEnvironment):
 
     @property
     @override
+    def compose_project_name(self) -> str:
+        """The trial project's name: a seat is a service of that project, and
+        its own session id names no project."""
+        return self.project.compose_project_name
+
+    @property
+    @override
     def stream_enabled(self) -> bool:
         return (
             self.project.stream_enabled

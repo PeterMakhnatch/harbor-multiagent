@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from harbor.environments.base import ExecResult
+from harbor.environments.docker.compose_env import compose_project_name
 from harbor.environments.vercel.compose import VercelCompose
 from harbor.environments.vercel.snapshots import (
     builder_sandbox_name,
@@ -33,6 +34,7 @@ def test_compose_file_ordering(tmp_path) -> None:
         extra_docker_compose_paths=[extra],
         task_env_config=SimpleNamespace(env={}),
         session_id="task__abc",
+        compose_project_name=compose_project_name("task__abc"),
         _network_disabled=True,
     )
     compose = VercelCompose(env, host_bootstrap="inline")
@@ -56,6 +58,7 @@ async def test_staging_uses_resolved_sandbox_user(tmp_path) -> None:
             env={}, docker_image=None, build_timeout_sec=60
         ),
         session_id="task__abc",
+        compose_project_name=compose_project_name("task__abc"),
         environment_id="env-1",
         _network_disabled=False,
         _mounts=[],

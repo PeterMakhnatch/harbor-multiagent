@@ -1908,7 +1908,7 @@ class _GKEDinDCompose(DinDComposeOps):
 
     @property
     def _project_name(self) -> str:
-        return self._env.session_id.lower().replace(".", "-").replace("_", "-")
+        return self._env.compose_project_name
 
     def _compose_env_vars(self) -> dict[str, str]:
         """Process env for the ``docker compose`` invocation on the pod."""

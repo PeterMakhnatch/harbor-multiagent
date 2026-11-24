@@ -1331,8 +1331,10 @@ class TestDinDComposeCmd:
         assert isinstance(strategy, _DaytonaDinD)
         return strategy
 
-    def test_project_name_lowercased_and_dashes(self, dind):
-        assert dind._project_name == "test-session-123"
+    def test_project_name_is_a_hash_of_the_session_id(self, dind):
+        # Session "Test.Session.123"; the name must not carry it.
+        assert dind._project_name == dind._env.compose_project_name
+        assert dind._project_name == "hb-f7c63cefb27e"
 
     def test_compose_cmd_is_shlex_safe(self, dind):
         cmd = dind._compose_cmd(["up", "-d"])
