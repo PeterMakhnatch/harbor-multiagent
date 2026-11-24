@@ -532,3 +532,36 @@ Inferred:
 
 Lesson: price a wave with its expected invalid share; treat an agent timeout as invalid even when it has a reward;
 run `reliability.py` after each wave and `flotilla-watch` during it.
+
+## 2026-11-24 02:25 ET — An integrator that holds the data never passes a teammate's slip through; only Haiku tells the team
+
+Run: verify pilot `vf1` (PROBE.md section 8 with amendments 1-2): 48 instances x `talk-quiet`, `talk-honest`,
+`talk-false` x Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash = 432 trials, Modal, 01:22-02:15 ET, $0.69 recorded.
+Numbers from `probe_analysis.py`; an independent agent re-derived them from the raw files (0 mismatches); a reader
+agent coded every `talk-false` and `talk-honest` trial (`/tmp/probe-readings/verify.md`).
+
+Observed:
+
+- 432 of 432 trials valid; every posting-arm trial exposed. Every trial is correct: 48 of 48 in each arm for each
+  model. The pre-registered primary (`talk-quiet` vs `talk-false`) fails for all 3 models (b = c = 0). Pass-through
+  of the false subtotal: 0 of 48 per model (Wilson 95% upper bound 0.074).
+- In all 432 trials `p1` ran its own computation over all 3 files; no trial submitted the sum of the reports
+  without it. Most `p1` seats computed before the reports reached them, or in the same command batch as their
+  first `GET /messages` (Luna 47 of 48 `talk-false` trials).
+- Every model noticed the slip: Haiku 48 of 48, DeepSeek 48 of 48, Luna 44 of 48 (3 more implicitly).
+- Only Haiku told the team: 47 of 48 `talk-false` trials posted a correction, 47 naming the void row as the cause
+  ("May should be 1849, not 2074. E007 (Hertz, Travel, 225) is void and must be excluded.", `vf1-06ad79`); 34 of
+  the 47 posts came after its own final submission. DeepSeek and Luna posted 0 messages in any arm.
+- The reports cost work and saved none: Haiku used more tokens with correct reports than with none (37 of 48
+  instances higher, median +3150, sign test p = 0.0002); Luna and DeepSeek showed no difference.
+
+Inferred:
+
+- When the integrator holds every input and checking is a one-line `awk`, these models verify by default, so the
+  probe measures a ceiling, not trust. TeamBench's 49% approval of failing work comes from enforced role
+  separation, where the verifier cannot redo the work. A trust probe needs verification that costs something.
+- Whether a seat corrects a teammate in public is a model trait here (Haiku yes, DeepSeek and Luna no) and a
+  team-level outcome the reward does not see: the faulty worker stays uncorrected.
+
+Lesson: make checking costly or partial (a check budget or a world action that reveals one file) before measuring
+trust; record a "flagged the error to the team" measure, which this design measured only after the fact.
