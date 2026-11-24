@@ -1,0 +1,289 @@
+{
+  "schema": "harbor.joint-reopen.owner-qualification/v1",
+  "question": "Can two independently controlled Harbor seats choose when to acquire private and peer information? Can an observer identify which operation the harness last reported while a team is unfinished, without seeing the calendar or assigning blame?",
+  "task": {
+    "name": "harbor/joint-reopen",
+    "digest": "sha256:ec969b116cab9718db6f8a1e35337529c0e5c60e1cc86160746ce8497b8fdf44",
+    "checksum": "d39605c284edbf87a396d75d273bb096f0b17ceca2ef09f9fb57a671acc2dfd8"
+  },
+  "registration_sha256": "604de41a139473c1b7e60fb2a018a8d55b17567bc33ef8af40bbb1568f8a593f",
+  "seats": "Scripted local decision owners and one stock native oracle. No model endpoints. No private model-study seed.",
+  "treatment": "Native deliver versus withhold; both preserve the report barrier. Separately vary which decision owner asks for a card or an inbox, and whether it votes or stops.",
+  "first_attempts": "One first attempt for each of 12 public tickets. Do not reissue a failure. Keep a separate, clearly identified qualification if the harness needs a repair.",
+  "pass": "All 11 normal native grades and both role action sequences in each usable cell equal the predictions. A deliberately unavailable pair is a native error, not a completed zero or a voluntary stop. Every successful owner receipt must match the corresponding world actions. The stock seat has no owner marker.",
+  "live_probe": "During hold-east-report, pause the east executable before it submits its report, after its card returns. Before verifier output or result.json exists, observe east at owner_turn/report with [endorse,card] and west at barrier/vote with [endorse,card,report]. Release east. Both owners must end voted; the original verifier must report a success. A marker is a last observation, not a liveness or deadlock claim.",
+  "abort": "Release the pause after at most 60 seconds even if no matching snapshot was seen. Do not infer why a peer waited. A fail is still reported and is not overwritten.",
+  "case_controls": {
+    "jr-b73aabbad331d4b0": "ordinary",
+    "jr-1f9c23a04eea014d": "ordinary",
+    "jr-23f0f4100a9129a6": "ordinary",
+    "jr-d490f8d4bd422ad9": "ordinary",
+    "jr-7eaccb1c6fdb243b": "ordinary",
+    "jr-367a54e937ffbd85": "ordinary",
+    "jr-d6814f9a441fb16b": "ordinary",
+    "jr-9d83fde0c7544c4d": "ordinary",
+    "jr-c4eef083e0cd5e01": "ordinary",
+    "jr-54d4c99eca7c5d4d": "ordinary",
+    "jr-8553113e8679890d": "hold-east-report",
+    "jr-d1fd71f150c9dc11": "both-executables-unset"
+  },
+  "predicted": {
+    "jr-b73aabbad331d4b0": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 1
+    },
+    "jr-1f9c23a04eea014d": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_withheld",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_withheld",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 0
+    },
+    "jr-23f0f4100a9129a6": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 0
+    },
+    "jr-d490f8d4bd422ad9": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 0
+    },
+    "jr-7eaccb1c6fdb243b": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 0
+    },
+    "jr-367a54e937ffbd85": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 1
+    },
+    "jr-d6814f9a441fb16b": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "report",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "report",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 1
+    },
+    "jr-9d83fde0c7544c4d": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "report",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "report",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 0
+    },
+    "jr-c4eef083e0cd5e01": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "stopped",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 0
+    },
+    "jr-54d4c99eca7c5d4d": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "not_instrumented",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 1
+    },
+    "jr-8553113e8679890d": {
+      "native_status": "usable",
+      "world_role_actions": {
+        "east": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ],
+        "west": [
+          "endorse",
+          "card",
+          "report",
+          "inbox_returned",
+          "vote"
+        ]
+      },
+      "owner_last_state": {
+        "east": "voted",
+        "west": "voted"
+      },
+      "native_grade_for_comparison": 1
+    },
+    "jr-d1fd71f150c9dc11": {
+      "native_status": "native_error",
+      "world_role_actions": null,
+      "owner_last_state": {
+        "east": "failed",
+        "west": "failed"
+      },
+      "native_grade_for_comparison": null
+    }
+  }
+}
