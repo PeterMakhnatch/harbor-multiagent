@@ -49,15 +49,18 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import functools
 import hashlib
+import importlib.util
 import json
 import math
 import os
 import re
 import subprocess
 import sys
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -69,6 +72,10 @@ ABANDONED_SECONDS = 3 * 3600  # no write for this long: longer than any agent ti
 NOTIFY_PER_PASS = 5
 SHOWN_ERRORS = 10
 BLIND_UNSCORED = "reason hidden (blind)"
+RUN_WAVE = Path(__file__).resolve().parents[2] / "run_wave.py"
+BALANCE_EVERY_S = 60.0
+BALANCE_WAIT_S = 8.0
+WARN_FLOOR_FACTOR = 2.0
 PROGRESS = re.compile(r"^(?P<at>\S+ \S+) ET (?P<kind>start|end) (?P<job>[A-Za-z0-9._-]+) set ")
 STOP = re.compile(r"^\S+ \S+ ET stop (?P<reason>[A-Za-z-]+): spent ")
 RESUME = re.compile(r"^\S+ \S+ ET (resume|order|start spacing)\b")
@@ -170,22 +177,150 @@ def read_trajectory(path: Path) -> dict[str, Any] | None:
 
 def find_plan(run_dir: Path, state: dict[str, Any]) -> dict[str, Any] | None:
     """The plan of a run folder at ``<repo>/.flotilla-local/runs/<plan>``, that is
-    ``<repo>/flotilla/plans/<plan>.json``, used only when its sha256 is the one ``state.json`` recorded."""
+    ``<repo>/flotilla/plans/<plan>.json`` (or ``plans/<folder>/<plan>.json``, e.g. ``plans/cards``), used only
+    when its sha256 is the one ``state.json`` recorded."""
     name, digest = state.get("plan"), state.get("plan_sha256")
     if not isinstance(name, str) or not isinstance(digest, str) or len(run_dir.parents) < 3:
         return None
-    path = run_dir.parents[2] / "flotilla" / "plans" / f"{name}.json"
+    plans = run_dir.parents[2] / "flotilla" / "plans"
     try:
-        raw = path.read_bytes()
+        candidates = [plans / f"{name}.json", *sorted(plans.glob(f"*/{name}.json"))]
     except OSError:
         return None
-    if hashlib.sha256(raw).hexdigest() != digest:
-        return None
-    try:
-        plan = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    return plan if isinstance(plan, dict) else None
+    for path in candidates:
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            continue
+        if hashlib.sha256(raw).hexdigest() != digest:
+            continue
+        try:
+            plan = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return plan if isinstance(plan, dict) else None
+    return None
+
+
+@functools.cache
+def run_wave_module() -> Any:
+    """``flotilla/run_wave.py`` of this checkout, loaded as ``trust_card.py`` loads it, for its provider
+    rules and balance reads (``HttpSources``, ``KEYS``, ``provider_of``, ``used_models``)."""
+    if not RUN_WAVE.is_file():
+        raise FileNotFoundError(f"{RUN_WAVE} not found (run from a Flotilla checkout)")
+    spec = importlib.util.spec_from_file_location("flotilla_watch_run_wave", RUN_WAVE)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def plan_providers(plan: dict[str, Any] | None, state: dict[str, Any], rw: Any) -> dict[str, float | None]:
+    """Provider -> its floor in the plan's budget (None without a plan) for every model the wave uses: the
+    plan's models or seat assignments, else the models of the cells ``state.json`` recorded."""
+    if plan is not None and (plan.get("models") or plan.get("seat_assignments")):
+        models = rw.used_models(plan)
+    else:
+        models = [
+            model
+            for cell in state.get("order") or []
+            if isinstance(cell, dict)
+            for model in (cell.get("assignment") or [cell.get("model")])
+        ]
+    budget = (plan or {}).get("budget") or {}
+    floors = budget.get("provider_floors") if isinstance(budget.get("provider_floors"), dict) else {}
+    found: dict[str, float | None] = {}
+    for model in models:
+        if not isinstance(model, str):
+            continue
+        try:
+            provider = rw.provider_of(model)
+        except SystemExit:
+            continue
+        found[provider] = _money(floors.get(provider))
+    return dict(sorted(found.items()))
+
+
+def _read_error(exc: BaseException) -> str:
+    text = (
+        str(exc).removeprefix("refused: ") if isinstance(exc, SystemExit) else f"{type(exc).__name__}: {exc}"
+    )
+    return text[:160]
+
+
+class Balances:
+    """Provider balances as ``run_wave.py`` computes them (its ``HttpSources.balance``: for OpenRouter the
+    lower of the account balance and the key's limit left), read at most once per ``every_s`` per provider.
+    A read runs in a thread; one that takes longer than ``wait_s`` shows as unknown and a later pass uses
+    its result. Keys come from ``env`` (the watch's environment; ``keys run --`` in practice)."""
+
+    def __init__(
+        self,
+        env: Mapping[str, str] | None = None,
+        sources: Any = None,
+        *,
+        every_s: float = BALANCE_EVERY_S,
+        wait_s: float = BALANCE_WAIT_S,
+    ) -> None:
+        self.env = os.environ if env is None else env
+        self.sources = sources
+        self.every_s = every_s
+        self.wait_s = wait_s
+        self._reads: dict[str, dict[str, Any]] = {}
+
+    def row(self, provider: str, floor: float | None, now: float) -> dict[str, Any]:
+        row: dict[str, Any] = {"provider": provider, "floor_usd": floor, "amount_usd": None, "detail": None}
+        row |= {"error": None, "level": None, "read_at": None}
+        try:
+            rw = run_wave_module()
+            key = rw.KEYS[provider]
+        except (Exception, SystemExit) as exc:
+            return row | {"error": f"balance unknown ({_read_error(exc)})"}
+        if not self.env.get(key):
+            return row | {"error": "no key in environment"}
+        read = self._read(provider, rw, now)
+        row["read_at"] = read["at"]
+        if "error" in read:
+            return row | {"error": f"balance unknown ({read['error']})"}
+        amount = read["amount"]
+        row |= {"amount_usd": amount, "detail": read["detail"]}
+        if floor is not None:
+            row["level"] = (
+                "STOP" if amount < floor else "WARN" if amount < WARN_FLOOR_FACTOR * floor else "ok"
+            )
+        return row
+
+    def _read(self, provider: str, rw: Any, now: float) -> dict[str, Any]:
+        slot = self._reads.get(provider)
+        if slot is None or (not slot["thread"].is_alive() and now - slot["at"] >= self.every_s):
+            sources = self.sources if self.sources is not None else rw.HttpSources(dict(self.env))
+            slot = {"at": now, "result": None}
+
+            def work(slot: dict[str, Any] = slot) -> None:
+                try:
+                    value = sources.balance(provider)
+                    amount = value.amount if hasattr(value, "amount") else float(value)
+                    slot["result"] = {"amount": float(amount), "detail": getattr(value, "detail", "") or ""}
+                except (Exception, SystemExit) as exc:
+                    slot["result"] = {"error": _read_error(exc)}
+
+            slot["thread"] = threading.Thread(target=work, name=f"flotilla-watch-{provider}", daemon=True)
+            slot["thread"].start()
+            self._reads[provider] = slot
+        slot["thread"].join(self.wait_s)
+        if slot["result"] is None:
+            return {"at": slot["at"], "error": f"no answer within {self.wait_s:g} s; still reading"}
+        return {"at": slot["at"], **slot["result"]}
+
+
+def provider_text(row: dict[str, Any]) -> str:
+    """``openrouter $0.00 = key limit (account $6.91, key limit left $0.00); floor $2.00 STOP``."""
+    floor = "floor n/a" if row["floor_usd"] is None else f"floor ${row['floor_usd']:.2f}"
+    if row["error"]:
+        return f"{row['provider']} {row['error']}; {floor}"
+    level = f" {row['level']}" if row["level"] else ""
+    detail = f" = {row['detail']}" if row["detail"] else ""
+    return f"{row['provider']} ${row['amount_usd']:.2f}{detail}; {floor}{level}"
 
 
 def read_progress(path: Path) -> dict[str, Any]:
@@ -251,12 +386,14 @@ class Watcher:
         cap_usd: float | None = None,
         notifier: Notifier | None = None,
         blind: bool = False,
+        balances: Balances | None = None,
     ) -> None:
         self.target = target.resolve()
         self.stall_seconds = stall_seconds
         self.cap_usd = cap_usd
         self.notifier = notifier
         self.blind = blind
+        self.balances = balances if balances is not None else Balances()
         self.names = Names()
         self.seen: dict[str, float] = {}
         self.passes = 0
@@ -365,8 +502,21 @@ class Watcher:
             "spent_usd": _money(state.get("spent_usd")),
             "cap_usd": self.cap_usd if self.cap_usd is not None else _money(budget.get("cap_usd")),
             "concurrency": ((plan or {}).get("make_jobs") or {}).get("concurrency"),
+            "providers": self._providers(plan, state, now),
         }
         return self._assemble(now, "run", trials, running, wave=wave)
+
+    def _providers(
+        self, plan: dict[str, Any] | None, state: dict[str, Any], now: float
+    ) -> list[dict[str, Any]]:
+        """One balance row per provider of the wave; a wave whose providers cannot be known gets one row
+        that says why."""
+        try:
+            floors = plan_providers(plan, state, run_wave_module())
+        except (Exception, SystemExit) as exc:
+            row = {"provider": "providers", "floor_usd": None, "amount_usd": None, "detail": None}
+            return [row | {"error": f"unknown ({_read_error(exc)})", "level": None, "read_at": None}]
+        return [self.balances.row(provider, floor, now) for provider, floor in floors.items()]
 
     def _jobs_dir_of_run(self) -> Path:
         try:
@@ -400,6 +550,7 @@ class Watcher:
         return {
             "kind": "jobs",
             "plan": None,
+            "providers": [],
             "state": "running" if any(r["state"] == "running" for r in running) or pending else "idle",
             "units": "trials",
             "total": len(trials) + sum(1 for r in running if r["state"] == "running") + pending,
@@ -727,6 +878,17 @@ def alerts_of(status: dict[str, Any]) -> list[dict[str, Any]]:
                     "message": f"{error['path']}: {', '.join(error['exceptions'])}",
                 }
             )
+    for row in status["wave"].get("providers") or []:
+        if row["level"] in ("WARN", "STOP"):
+            alerts.append(
+                {
+                    "key": f"balance:{row['provider']}:{row['level']}",
+                    "kind": "balance",
+                    "live": True,
+                    "title": f"Flotilla {row['provider']} balance {row['level']}",
+                    "message": provider_text(row),
+                }
+            )
     return alerts
 
 
@@ -763,11 +925,15 @@ def render(status: dict[str, Any]) -> str:
         f"in flight ~{_usd(wave['in_flight_usd'])}; mean trial {duration(wave['mean_trial_s'])}, "
         f"ETA {duration(wave['eta_s'])}"
     )
+    lines.extend(f"provider {provider_text(row)}" for row in wave.get("providers") or [])
     lines.extend(_render_running(status))
     alerts = status.get("alerts") or []
     stalls = sum(1 for a in alerts if a["kind"] == "stall")
+    balances = sum(1 for a in alerts if a["kind"] == "balance")
+    shown = f"{balances} balance, " if balances else ""
     lines.append(
-        f"alerts: {stalls} stall, {len(alerts) - stalls} error ({len(status.get('new_alerts') or [])} new)"
+        f"alerts: {stalls} stall, {shown}{len(alerts) - stalls - balances} error "
+        f"({len(status.get('new_alerts') or [])} new)"
     )
     errors = status["errors"]
     if errors:

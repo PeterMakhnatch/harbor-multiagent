@@ -301,6 +301,14 @@ stall or error (at most 5 per pass, then a count) and never repeats one. Errors 
 finished before the first pass are shown but not notified. It reads its inputs and writes only `--json`
 and `--html`.
 
+For a run folder, one `provider` line per provider of the wave's models (the plan's, else the cells in
+`state.json`) gives the balance as `run_wave.py` reads it (its `HttpSources.balance`, loaded from
+`flotilla/run_wave.py`; for OpenRouter the lower of the account balance and the key's limit left, or "no key
+limit"), the plan's `provider_floors` value, and `STOP` under the floor or `WARN` under twice it (each a
+notified alert, once). It reads each provider at most once per 60 s and waits 8 s for an answer. A failed or
+slow read shows "balance unknown (<error>)" and the watch goes on. The key comes from the environment (run
+the watch under `keys run --`); without one the line says "no key in environment". `--blind` keeps it.
+
 `--html DIR` replaces `DIR/index.html` atomically each pass with a self-contained dashboard (inline CSS, no
 other files; it reloads itself every `--interval` seconds, and with `--once` it does not reload): the same
 status as the text (progress and spend bars, ETA, running trials with one row per seat, its last activity

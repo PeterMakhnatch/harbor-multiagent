@@ -4,6 +4,7 @@ import io
 import json
 import os
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -377,6 +378,148 @@ class Alerts(Base):
         watch.Watcher(jobs, notifier=lambda title, message: sent.append((title, message))).poll(now=T0 + 400)
         self.assertEqual(len(sent), watch.NOTIFY_PER_PASS + 1)
         self.assertIn("3 more new alerts", sent[-1][1])
+
+
+class FakeSources:
+    """run_wave's sources interface: ``balance(provider)`` -> ``Balance``, by pricing's own rule."""
+
+    def __init__(self, account: float, key_left: float | None, *, fail: BaseException | None = None):
+        self.account, self.key_left, self.fail = account, key_left, fail
+        self.calls = 0
+        self.gate: threading.Event | None = None
+
+    def balance(self, provider: str):
+        self.calls += 1
+        if self.gate is not None:
+            self.gate.wait(5)
+        if self.fail is not None:
+            raise self.fail
+        rw = watch.run_wave_module()
+        return rw.Balance(*rw.PRICING.openrouter_balance(self.account, self.key_left))
+
+
+KEYED = {"OPENROUTER_API_KEY": "sk-test-not-a-key"}
+
+
+class Providers(Base):
+    def make_run(self, *, plan: bool = True) -> Path:
+        repo = self.root / "repo"
+        run = repo / ".flotilla-local" / "runs" / "w2"
+        path = repo / "flotilla" / "plans" / "cards" / "w2.json"
+        fx.write_json(
+            path,
+            {
+                "name": "w2",
+                "models": [MODEL],
+                "budget": {"cap_usd": 4.0, "provider_floors": {"openrouter": 2.0}},
+            },
+        )
+        digest = hashlib.sha256(path.read_bytes()).hexdigest() if plan else "0" * 64
+        order = [
+            {"key": "k0", "model": MODEL},
+            {"key": "k1", "assignment": [MODEL, "deepseek/deepseek-chat"]},
+        ]
+        fx.write_json(
+            run / "state.json", {"plan": "w2", "plan_sha256": digest, "order": order, "finished": {}}
+        )
+        return run
+
+    def watcher(self, sources, *, env=KEYED, wait_s: float = 2.0, **options) -> watch.Watcher:
+        balances = watch.Balances(env, sources, wait_s=wait_s)
+        return watch.Watcher(self.make_run(), balances=balances, **options)
+
+    def test_key_limit_below_floor_stops_and_alerts_once(self):
+        sources = FakeSources(6.91, 0.0)
+        sent: list[tuple[str, str]] = []
+        watcher = self.watcher(sources, notifier=lambda title, message: sent.append((title, message)))
+        status = watcher.poll(now=T0)
+        [row] = status["wave"]["providers"]
+        self.assertEqual(
+            (row["provider"], row["amount_usd"], row["floor_usd"], row["level"]),
+            ("openrouter", 0.0, 2.0, "STOP"),
+        )
+        line = "provider openrouter $0.00 = key limit (account $6.91, key limit left $0.00); floor $2.00 STOP"
+        self.assertIn(line, watch.render(status))
+        self.assertIn("alerts: 0 stall, 1 balance, 0 error (1 new)", watch.render(status))
+        watcher.poll(now=T0 + 120)
+        self.assertEqual(len(sent), 1)
+        self.assertIn("balance STOP", sent[0][0])
+
+    def test_levels_against_the_floor(self):
+        for account, key_left, level in (
+            (3.5, None, "WARN"),
+            (10.0, None, "ok"),
+            (10.0, 3.0, "WARN"),
+            (1.9, 50, "STOP"),
+        ):
+            [row] = self.watcher(FakeSources(account, key_left)).poll(now=T0)["wave"]["providers"]
+            self.assertEqual(row["level"], level, (account, key_left))
+        [row] = self.watcher(FakeSources(10.0, None)).poll(now=T0)["wave"]["providers"]
+        self.assertEqual(
+            watch.provider_text(row),
+            "openrouter $10.00 = account balance (account $10.00, no key limit); floor $2.00 ok",
+        )
+
+    def test_read_at_most_once_per_minute(self):
+        sources = FakeSources(10.0, None)
+        watcher = self.watcher(sources)
+        for offset in (0, 30, 59):
+            watcher.poll(now=T0 + offset)
+        self.assertEqual(sources.calls, 1)
+        watcher.poll(now=T0 + 61)
+        self.assertEqual(sources.calls, 2)
+
+    def test_failed_read_keeps_monitoring(self):
+        fail = SystemExit("refused: could not read https://openrouter.ai/api/v1/credits (URLError)")
+        status = self.watcher(FakeSources(0, None, fail=fail)).poll(now=T0)
+        [row] = status["wave"]["providers"]
+        self.assertEqual(
+            row["error"], "balance unknown (could not read https://openrouter.ai/api/v1/credits (URLError))"
+        )
+        self.assertIsNone(row["level"])
+        self.assertEqual(status["wave"]["total"], 2)
+        self.assertNotIn("balance", [a["kind"] for a in status["alerts"]])
+        status = self.watcher(FakeSources(0, None, fail=ValueError("no data.limit"))).poll(now=T0)
+        self.assertIn("balance unknown (ValueError: no data.limit)", watch.render(status))
+
+    def test_slow_read_is_unknown_then_used(self):
+        sources = FakeSources(10.0, None)
+        sources.gate = threading.Event()
+        watcher = self.watcher(sources, wait_s=0.05)
+        [row] = watcher.poll(now=T0)["wave"]["providers"]
+        self.assertEqual(row["error"], "balance unknown (no answer within 0.05 s; still reading)")
+        sources.gate.set()
+        watcher.balances.wait_s = 2.0
+        [row] = watcher.poll(now=T0 + 5)["wave"]["providers"]
+        self.assertEqual((row["amount_usd"], row["level"], sources.calls), (10.0, "ok", 1))
+
+    def test_no_key_in_environment(self):
+        sources = FakeSources(10.0, None)
+        status = self.watcher(sources, env={}).poll(now=T0)
+        self.assertIn("provider openrouter no key in environment; floor $2.00", watch.render(status))
+        self.assertEqual(sources.calls, 0)
+
+    def test_state_models_without_plan_and_blind(self):
+        balances = watch.Balances(KEYED, FakeSources(10.0, None))
+        status = watch.Watcher(self.make_run(plan=False), balances=balances, blind=True).poll(now=T0)
+        rows = {row["provider"]: row for row in status["wave"]["providers"]}
+        self.assertEqual(sorted(rows), ["deepseek", "openrouter"])
+        self.assertEqual(rows["deepseek"]["error"], "no key in environment")
+        self.assertEqual((rows["openrouter"]["floor_usd"], rows["openrouter"]["level"]), (None, None))
+        text = watch.render(status)
+        self.assertIn("provider openrouter $10.00", text)
+        self.assertIn("floor n/a", text)
+        self.assertIn("BLIND", text)
+
+    def test_html_dashboard_shows_the_line(self):
+        from flotilla_analysis.dashboard import Dashboard
+
+        watcher = self.watcher(FakeSources(6.91, 0.0))
+        out = self.root / "html"
+        Dashboard(out, names=watcher.names, refresh_s=None).update(watcher.poll(now=T0))
+        page = (out / "index.html").read_text()
+        self.assertIn("provider openrouter", page)
+        self.assertIn("key limit left $0.00); floor $2.00 STOP", page)
 
 
 class Command(Base):
