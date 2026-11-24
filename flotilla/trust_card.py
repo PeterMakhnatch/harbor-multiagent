@@ -133,13 +133,14 @@ def placeholder_audit(task: Path, spec: dict[str, Any]) -> bool:
     return text.is_file() and AUDIT_EXAMPLE in text.read_text()
 
 
-def taken_name(name: str, plans_root: Path, jobs: Path) -> str | None:
-    """Why a card name is taken: an existing plan (file name or `name`) under plans_root, or job folders NAME-* in
-    jobs, so a card can never count an older wave's trials; None when it is free."""
-    for path in sorted(plans_root.rglob("*.json")) if plans_root.is_dir() else []:
+def taken_name(name: str, plans_roots: list[Path], jobs: Path) -> str | None:
+    """Why a card name is taken: an existing plan (file name or `name`) under any of plans_roots, or job folders
+    NAME-* in jobs, so a card can never count an older wave's trials; None when it is free."""
+    paths = {path.resolve() for root in plans_roots if root.is_dir() for path in root.rglob("*.json")}
+    for path in sorted(paths):
         try:
             named = json.loads(path.read_text()).get("name")
-        except (ValueError, AttributeError):
+        except (OSError, ValueError, AttributeError):
             named = None
         if name in (path.stem, named):
             return f"the plan {path} is named {name!r}"
@@ -172,7 +173,8 @@ def write_plan(name: str, models: list[str], prereg_commit: str, cap_usd: float 
         RUN.load_plan(draft)
     out.parent.mkdir(parents=True, exist_ok=True)
     repo = RUN.repo_of(out)
-    taken = taken_name(name, plans_dir.parent, jobs if jobs is not None else repo / ".flotilla-local" / "jobs")
+    taken = taken_name(name, [repo / "flotilla" / "plans", plans_dir],
+                       jobs if jobs is not None else repo / ".flotilla-local" / "jobs")
     if taken:
         raise SystemExit(f"refused: card name {name!r} is taken ({taken}); choose a new --name")
     RUN.assert_prereg(plan, repo)
@@ -185,8 +187,9 @@ def write_plan(name: str, models: list[str], prereg_commit: str, cap_usd: float 
     print("Next (this script commits and runs nothing):")
     print(f"  git add {rel} && git commit -m 'flotilla: trust card plan {name}' -- {rel}")
     print(f"  python3 flotilla/run_wave.py --dry-run {rel}")
-    print(f"  keys run -- python3 flotilla/run_wave.py {rel} --run-dir .flotilla-local/runs/{name}")
-    print(f"  keys run -- python3 flotilla/run_wave.py {rel} --run-dir .flotilla-local/runs/{name} --retry-invalid")
+    print(f"  keys run -- python3 flotilla/run_wave.py {rel} --run-dir .flotilla-local/runs/{name} && \\")
+    print(f"    keys run -- python3 flotilla/run_wave.py {rel} --run-dir .flotilla-local/runs/{name} --retry-invalid"
+          "  # exit 3 (invalid trials in a row): find the cause first")
     print(f"  python3 flotilla/trust_card.py report --plan {rel} --jobs .flotilla-local/jobs "
           f"--pattern '{name}-??????' --out .flotilla-local/cards/{name}")
     return out
