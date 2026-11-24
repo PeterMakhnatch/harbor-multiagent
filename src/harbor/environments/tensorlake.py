@@ -70,7 +70,7 @@ from harbor.environments.definition import (
     effective_exec_cwd,
     should_use_prebuilt_docker_image,
 )
-from harbor.environments.dind_compose import DinDComposeOps
+from harbor.environments.dind_compose import DinDComposeOps, shell_env_exports
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_PREBUILT_PATH,
@@ -561,6 +561,8 @@ class _TensorLakeDinD(DinDComposeOps):
         subcommand: list[str],
         timeout_sec: int | None = None,
         discard_stdout: bool = False,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a docker compose subcommand on the sandbox VM.
 
@@ -571,7 +573,7 @@ class _TensorLakeDinD(DinDComposeOps):
         discard = discard_stdout or any("| tee " in part for part in subcommand)
         return await self._env._vm_exec(
             self._compose_cmd(subcommand),
-            env=self._compose_env_vars(),
+            env={**self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
             discard_stdout=discard,
         )
@@ -599,8 +601,8 @@ class _TensorLakeDinD(DinDComposeOps):
         if cwd:
             parts.extend(["-w", cwd])
         if env:
-            for k, v in env.items():
-                parts.extend(["-e", f"{k}={v}"])
+            for key in env:
+                parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         parts.append(service)
@@ -611,7 +613,7 @@ class _TensorLakeDinD(DinDComposeOps):
         else:
             parts.extend(["sh", "-c", command])
         return await self._compose_exec(
-            parts, timeout_sec=timeout_sec, discard_stdout=discard_stdout
+            parts, timeout_sec=timeout_sec, discard_stdout=discard_stdout, env=env
         )
 
     # ── Lifecycle ────────────────────────────────────────────────────────
@@ -2554,22 +2556,17 @@ class TensorLakeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
                 r"\b([a-z0-9][a-z0-9.+~-]*)=[a-zA-Z0-9.+~:_-]+", r"\1", command
             )
 
-        # 'export' keeps variables alive through compound commands (&&, ;).
-        env_prefix = ""
-        if env:
-            exports = [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
-            env_prefix = "; ".join(exports) + "; "
-
         if user is not None:
             if isinstance(user, int):
                 user_arg = f"$(getent passwd {user} | cut -d: -f1)"
             else:
                 user_arg = shlex.quote(str(user))
-            command = (
-                f"{env_prefix}su {user_arg} -s /bin/bash -c {shlex.quote(command)}"
-            )
-        elif env:
-            command = f"{env_prefix}{command}"
+            command = f"su {user_arg} -s /bin/bash -c {shlex.quote(command)}"
+
+        stdin = None
+        if env:
+            stdin = (shell_env_exports(env) + "\n").encode()
+            command = f". /dev/stdin && {command}"
 
         target_cwd = effective_exec_cwd(
             cwd, self.task_env_config.workdir, self._workdir
@@ -2587,7 +2584,7 @@ class TensorLakeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
 
         try:
             result = await self._run_command_async(
-                command, discard_stdout=discard_stdout
+                command, discard_stdout=discard_stdout, stdin=stdin
             )
         except SandboxError as e:
             if _is_retryable_sandbox_error(e):
@@ -2627,18 +2624,20 @@ class TensorLakeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         shell = "sh" if self._compose_mode else "bash"
         # The sandbox process may start with a stripped-down PATH (see
         # start()); export the standard one.
-        parts = [
-            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        ]
-        if env:
-            parts.extend(f"export {k}={shlex.quote(v)}" for k, v in env.items())
-        command = "; ".join([*parts, command])
+        if not env or "PATH" not in env:
+            command = (
+                "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; "
+                + command
+            )
         if timeout_sec:
             command = f"timeout {timeout_sec} {shell} -c {shlex.quote(command)}"
         if cwd:
             command = f"cd {shlex.quote(cwd)} && {shell} -c {shlex.quote(command)}"
         result = await self._run_command_async(
-            command, discard_stdout=discard_stdout, shell=shell
+            command,
+            discard_stdout=discard_stdout,
+            shell=shell,
+            **({"env": env} if env else {}),
         )
         return ExecResult(
             stdout=result.stdout,
@@ -2651,6 +2650,8 @@ class TensorLakeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         command: str,
         discard_stdout: bool = False,
         shell: str = "bash",
+        env: dict[str, str] | None = None,
+        stdin: bytes | None = None,
     ) -> CommandResult:
         """Run a shell command asynchronously, polling until completion.
 
@@ -2664,6 +2665,8 @@ class TensorLakeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             # bash gets a login shell (-l) so /etc/profile PATH setup runs;
             # POSIX sh gets plain -c.
             args=["-lc", command] if shell == "bash" else ["-c", command],
+            **({"env": env} if env else {}),
+            stdin_mode=StdinMode.PIPE if stdin is not None else StdinMode.CLOSED,
             stdout_mode=OutputMode.DISCARD if discard_stdout else OutputMode.CAPTURE,
             # tensorlake>=0.5.x defaults user to 'tl-user', absent in custom
             # OCI images; Harbor does its own user switching via `su`, so the
@@ -2673,6 +2676,10 @@ class TensorLakeEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         # Safety deadline: 25 hours — well beyond any legitimate task duration.
         deadline = time.monotonic() + 25 * 3600
         try:
+            if stdin is not None:
+                sandbox = self._active_sandbox
+                await sandbox.write_stdin(proc.pid, stdin)
+                await sandbox.close_stdin(proc.pid)
             while True:
                 info = await self._active_sandbox.get_process(proc.pid)
                 if info.status != ProcessStatus.RUNNING:
