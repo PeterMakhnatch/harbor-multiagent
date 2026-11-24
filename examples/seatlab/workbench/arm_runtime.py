@@ -84,6 +84,7 @@ class Runtime:
     participants: dict[str, str]
     env: dict[str, str]
     groups: dict[str, str]
+    record_key: str
 
 
 def _fail(reason: str) -> NoReturn:
@@ -129,31 +130,50 @@ def _load(path: Path) -> tuple[bytes, dict[str, Any]]:
     return data, document
 
 
-def _native(data: bytes) -> Any:
-    from harbor.models.job.lock import TrialLock
-
+def _validated(model: Any, data: bytes) -> Any:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
-            lock = TrialLock.model_validate_json(data)
+            return model.model_validate_json(data)
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, Warning):
-        lock = None
+        return None
+
+
+def _native(data: bytes) -> Any:
+    from harbor.models.job.lock import TrialLock
+
+    lock = _validated(TrialLock, data)
     _require(lock is not None, NATIVE)
     return lock
 
 
-def _digest(label: str, value: Any) -> str:
+def _encode(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("ascii")
+
+
+def _canonical(document: Any) -> bytes | None:
+    try:
+        data = _encode(document)
+        plain = json.loads(data) == document
+    except (TypeError, ValueError, RecursionError):
+        return None
+    return data if plain else None
+
+
+def _hash(label: str, data: bytes) -> str:
     hasher = hashlib.sha256(f"{SCHEMA}\0{label}\0".encode("ascii"))
-    hasher.update(
-        json.dumps(
-            value,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-            allow_nan=False,
-        ).encode("ascii")
-    )
+    hasher.update(data)
     return f"sha256:{hasher.hexdigest()}"
+
+
+def _digest(label: str, value: Any) -> str:
+    return _hash(label, _encode(value))
 
 
 def _participants(raw: Any) -> tuple[tuple[str, ...], dict[str, str]]:
@@ -200,8 +220,12 @@ def _groups(document: dict[str, Any], order: tuple[str, ...]) -> dict[str, str]:
     return {group: _digest(f"group:{group}", members[group]) for group in GROUPS}
 
 
-def inspect_lock(path: Path) -> Runtime:
-    data, document = _load(path)
+def inspect_record(document: dict[str, Any]) -> Runtime:
+    _require(type(document) is dict, NOT_OBJECT)
+    data = _canonical(document)
+    if data is None:
+        _fail(NOT_JSON)
+    _require(len(data) <= MAX_BYTES, TOO_LARGE)
     _require(JOB_FIELDS.isdisjoint(document), JOB_LOCK)
     version = document.get("schema_version")
     _require(type(version) is int and version == SCHEMA_VERSION, VERSION)
@@ -223,4 +247,10 @@ def inspect_lock(path: Path) -> Runtime:
         participants=participants,
         env=_environment(document.get("environment")),
         groups=_groups(document, order),
+        record_key=_hash("record", data),
     )
+
+
+def inspect_lock(path: Path) -> Runtime:
+    _, document = _load(path)
+    return inspect_record(document)

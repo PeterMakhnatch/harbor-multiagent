@@ -165,6 +165,7 @@ def compare(
             "right": dst.unpackaged_files,
         },
         "inputs": pins,
+        "trial_lock_records": {"left": lrt.record_key, "right": rrt.record_key},
         "comparison": pair,
         "matches_expected": None if expected is None else pin_matches,
         "reasons": reasons,

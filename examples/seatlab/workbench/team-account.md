@@ -20,6 +20,8 @@ python3.12 -BS -m "$wb" account native "$job" --trial "$trial_uuid" --json
 
 The report counts registered slots, surviving results and valid, invalid or unknown grades. A valid zero is an observation. A missing file is not a grade. `--trial` adds one execution; header totals cover the whole input. A native job is closed only when it records a finish and completes all registered slots. A snapshot of an open job can still change. The reported harness, provider, model and served label are separate. An OpenRouter route does not establish which model served a request.
 
+To check which registered team inputs the retained final grades support, use the [input census](input-isolation.md#check-which-inputs-reached-the-retained-final-results). Slot names alone cannot identify an experimental condition.
+
 | Amount | Source | What it means |
 | --- | --- | --- |
 | Harness USD | Each native seat's `agent_result.cost_usd` | A reported subtotal with known and unknown seats. Other seats do not disappear when one has no price. |
