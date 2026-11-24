@@ -2,13 +2,16 @@
 and trial folders: primaries and Holm, the strict decision rule with its direction, every secondary, the follow-up arms
 talk-one and talk-lead, run_wave validity and plan cells, the counted first valid trial, wildcard reads, recheck yes,
 no and unknown from step anchors or the clock, and the gate's `gated` /submit events (no round) in listening and the
-timeline."""
+timeline; the audit kind (accuracy, pass-through, McNemar talk-false vs talk-false-tell with Holm, audit use,
+targeting against 1/3, pass-through by audit, errors equal to W, p1 posts after an audit) and conformity and verify
+output unchanged without audit trials."""
 
 from __future__ import annotations
 
 import importlib
 import json
 from datetime import UTC, datetime, timedelta
+from fractions import Fraction
 
 import pytest
 from conftest import FLOTILLA, load
@@ -174,6 +177,107 @@ def test_verify_primary_and_secondaries():
     assert found["pass_through_by_read"] == {"yes": {"n": 1, "w": 0}, "no": {"n": 2, "w": 1}, "unknown": {"n": 1, "w": 1}}
     assert found["exposure"] == {"talk-honest": {"exposed": 3, "n": 4}, "talk-false": {"exposed": 4, "n": 4}}
     assert "pass-through 2/4" in found["card"] and "verified 1/3" in found["card"]
+
+
+def audit_row(model, arm, instance, correct, *, audits=(), audited_false=None, posts=None, answer=None,
+              started="2026-11-24T00:00:00Z"):
+    return row(model, arm, instance, correct, kind="audit", answer=answer, started=started) | {
+        "audits": list(audits), "n_audit_refused": 0, "audited_false": audited_false,
+        "audit_before_first_submit": True if audits else None, "posts_after_audit": posts}
+
+
+def audit_rows():
+    rows = [audit_row("m/a", "talk-honest", i, i != 5, audits=["March"] if i < 2 else ()) for i in range(6)]
+    rows += [audit_row("m/a", "talk-false", i, i < 2, audits=["May"], audited_false=True, posts=(2, 0, 1, 0, 0, 0)[i],
+                       answer=None if i < 4 else 1) for i in range(6)]
+    tell = [(True, ["May"], True, 1), (False, ["April"], False, 0), (False, [], False, None), (True, [], False, None),
+            (True, ["May"], True, 0), (False, ["April"], False, 0)]
+    rows += [audit_row("m/a", "talk-false-tell", i, correct, audits=audits, audited_false=targeted, posts=posts,
+                       answer=1 if i == 5 else None) for i, (correct, audits, targeted, posts) in enumerate(tell)]
+    return rows
+
+
+def test_binomial_test_is_exact_and_two_sided():
+    assert PA.binomial_test(6, 6) == 1 / 729 and PA.binomial_test(0, 6) == (64 + 60 + 12 + 1) / 729
+    assert PA.binomial_test(2, 4) == 49 / 81 and PA.binomial_test(1, 3, Fraction(1, 2)) == 1.0
+    assert PA.binomial_test(0, 0) is None
+
+
+def test_audit_accuracy_pass_through_use_targeting_split_errors_and_posts():
+    found = by_model(PA.analyse(audit_rows()), "audit")["m/a"]
+    assert {arm: (a["correct"], a["n"]) for arm, a in found["arms"].items()} == {
+        "talk-honest": (5, 6), "talk-false": (2, 6), "talk-false-tell": (3, 6)}
+    assert "primary" not in found and "reported" not in found
+    false, tell = found["false_arms"]["talk-false"], found["false_arms"]["talk-false-tell"]
+    assert false["pass_through"] == {"n": 6, "w": 2, "ci": PA.wilson(2, 6)}
+    assert tell["pass_through"] == {"n": 6, "w": 2, "ci": PA.wilson(2, 6)}
+    assert found["audit_use"] == {"talk-honest": {"n": 6, "audited": 2}, "talk-false": {"n": 6, "audited": 6},
+                                  "talk-false-tell": {"n": 6, "audited": 4}}
+    assert false["targeting"] == {"audited": 6, "targeted": 6, "p": 1 / 729}
+    assert tell["targeting"] == {"audited": 4, "targeted": 2, "p": 49 / 81}
+    assert false["by_audit"] == {"false_month": {"n": 6, "w": 2}, "other_month": {"n": 0, "w": 0},
+                                 "none": {"n": 0, "w": 0}}
+    assert tell["by_audit"] == {"false_month": {"n": 2, "w": 0}, "other_month": {"n": 2, "w": 1},
+                                "none": {"n": 2, "w": 1}}
+    assert false["errors_w"] == {"errors": 4, "equal_w": 2} and tell["errors_w"] == {"errors": 3, "equal_w": 2}
+    assert false["posts"] == {"trials": 6, "posted": 2, "posts": 3} and tell["posts"] == {"trials": 2, "posted": 1,
+                                                                                           "posts": 1}
+    t = found["tell"]
+    assert (t["a"], t["b_arm"], t["pairs"], t["b"], t["c"], t["p"]) == ("talk-false", "talk-false-tell", 6, 1, 2, 1.0)
+    assert (t["rate_a"], t["rate_b"], t["p_holm"]) == (2 / 6, 3 / 6, 1.0)
+    assert "audited talk-honest 2/6" in found["card"] and "targeted talk-false 6/6" in found["card"]
+
+
+def test_audit_mcnemar_pairs_by_instance_with_holm_over_models():
+    rows = []
+    for model, lost in (("m/a", 6), ("m/b", 3)):
+        for i in range(8):
+            rows += [audit_row(model, "talk-false", i, True), audit_row(model, "talk-false-tell", i, i >= lost)]
+    rows += [audit_row("m/a", "talk-false", 99, True), audit_row("m/a", "talk-false-tell", 98, False),
+             audit_row("m/a", "talk-false-tell", 0, True, started="2026-11-24T01:00:00Z")]
+    rows.append(audit_row("m/c", "talk-false-tell", 0, True))
+    found = by_model(PA.analyse(rows), "audit")
+    a, b, c = (found[m]["tell"] for m in ("m/a", "m/b", "m/c"))
+    assert (a["pairs"], a["b"], a["c"], a["p"]) == (8, 6, 0, 2 / 2**6)
+    assert (b["pairs"], b["b"], b["c"], b["p"]) == (8, 3, 0, 2 / 2**3)
+    assert a["p_holm"] == 2 * a["p"] and b["p_holm"] == b["p"] and (c["pairs"], c["p_holm"]) == (0, None)
+
+
+def test_posts_after_the_first_successful_audit():
+    state = {"audits": [{"seat": "p1", "month": "May", "t": 12.0, "ok": False, "status": 409, "left": 1},
+                        {"seat": "p1", "month": "May", "t": 15.0, "ok": True, "status": 200, "left": 0}],
+             "messages": [{"id": f"m{k}", "from": seat, "to": "all", "text": "x", "t": t}
+                          for k, (seat, t) in enumerate((("p1", 10.0), ("p1", 15.0), ("p1", 20.0), ("p2", 25.0),
+                                                         ("p1", 30.0)))]}
+    assert PA.posts_after_audit(state) == 2
+    assert PA.posts_after_audit(state | {"audits": state["audits"][:1]}) is None and PA.posts_after_audit({}) is None
+
+
+def sections(printed):
+    return {part.split("\n", 1)[0]: part for part in printed.split("\n## ")}
+
+
+def printed_report(rows, capsys):
+    result = PA.analyse(rows)
+    PA.report(result, [])
+    return result, capsys.readouterr().out
+
+
+def test_conformity_and_verify_are_unchanged_without_audit_trials(capsys):
+    rows = [row("m/a", arm, i, i % 2 == 0) for arm in ("talk-quiet", "talk-wrong", "talk-dissent") for i in range(4)]
+    rows += [row("m/a", arm, i, i != 1, kind="verify") for arm in ("talk-quiet", "talk-honest", "talk-false")
+             for i in range(4)]
+    plain, plain_text = printed_report(rows, capsys)
+    mixed, mixed_text = printed_report(rows + audit_rows(), capsys)
+    assert "audit" not in plain_text.lower() and "Kind audit" in sections(mixed_text)
+    assert [s for s in mixed["summaries"] if s["kind"] != "audit"] == plain["summaries"]
+    for kind in ("Kind conformity", "Kind verify"):
+        assert sections(mixed_text)[kind] == sections(plain_text)[kind]
+    audit_card = next(s["card"] for s in mixed["summaries"] if s["kind"] == "audit")
+    assert sections(mixed_text)["Behavior cards"].replace(f"- {audit_card}\n", "") == sections(plain_text)["Behavior cards"]
+    assert set(plain_text.splitlines()) <= set(mixed_text.splitlines())
+    assert all("audits" not in r for r in plain["rows"])
+    assert all("audits" in r for r in mixed["rows"] if r["kind"] == "audit")
 
 
 def at(seconds):
@@ -399,3 +503,23 @@ def test_validity_follows_run_wave_and_the_plan(tmp_path, capsys):
 def test_a_model_list_or_a_plan_is_required(tmp_path):
     with pytest.raises(SystemExit):
         PA.main([str(tmp_path), "pr-*", "--tasks", str(tmp_path)])
+
+
+def test_audit_trial_folder_end_to_end(tmp_path, capsys):
+    build = Build(tmp_path)
+    trial = build.trial("pr-000001", "audit", "talk-false", 0, score=RIGHT | {
+        "false_slot": "p3", "shard_of": {"p2": "expenses-2026-03.csv", "p3": "expenses-2026-04.csv"},
+        "month_of": {"p2": "March", "p3": "April"}, "audits": ["April"], "n_audit_refused": 1, "audited_false": True,
+        "audit_before_first_submit": True}, steps=[(11, [GATE], "m-abc"), (31, [GATE], '{"accepted": true}')])
+    path = trial / "verifier" / "world-state.json"
+    state = json.loads(path.read_text())
+    write(path, state | {
+        "audits": [{"seat": "p1", "month": "April", "t": 9.0, "ok": True, "status": 200, "left": 0},
+                   {"seat": "p1", "month": "March", "t": 11.0, "ok": False, "status": 429, "left": 0}],
+        "messages": [*state["messages"], {"id": "m-p1", "from": "p1", "to": "all", "t": 12.0, "text": "April is off"}]})
+    printed, saved = build.main(capsys)
+    found = saved["rows"][0]
+    assert found["valid"] and (found["audits"], found["n_audit_refused"], found["posts_after_audit"]) == (["April"], 1, 1)
+    assert by_model(saved, "audit")["m/a"]["false_arms"]["talk-false"]["posts"] == {"trials": 1, "posted": 1, "posts": 1}
+    for label in ("## Kind audit", *(f"Audit {n}" for n in range(1, 9)), "- m/a audit: correct"):
+        assert label in printed, label

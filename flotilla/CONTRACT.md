@@ -437,7 +437,8 @@ exactly when task.json has `read_first: true`.
 `build_tasks.py --read-first` (probe family only) puts `READ_FIRST`, one fixed paragraph telling the subject to
 read `GET /messages` before it opens any file or starts on the question, after the opening paragraph of the
 subject's text in every arm, and records `read_first: true` in task.json, task.toml [metadata] and the manifest's
-`build`; without the flag nothing changes (docs/PROBE.md 4).
+`build`; without the flag nothing changes (docs/PROBE.md 4). It applies to every probe kind; in `audit` the
+paragraph comes after the opening one, before the list of the workers' months.
 
 ## 13. World version 13: scheduled posts
 
@@ -469,3 +470,31 @@ section 13's world clock, so those builds still run and verify with this world. 
 dates its confederates' posts 3 to 12 s before the subject's first request, at least 0.8 s apart: in v13 the
 posts carried `t` = 0.2-1.5 s while a subject's own messages, 15 s or more later, carried the time of sending,
 so a subject could see that its peers answered before it started.
+
+## 15. World version 15: audits; the probe kind `audit`
+
+If task.json has `audit: {"budget": whole number >= 0, "files": {month: csv text}}`, the world adds `POST
+/audit`. Body `{"month": "<month>"}` (matched to a key of `files` after trimming, case-insensitively). Replies:
+200 `{"month", "csv", "audits_left"}` for a seat not listed in `scripted_seats` with fewer than `budget`
+successful audits; 403 `{"error": "audit budget used"}` after that; 403 `{"error": "this seat cannot audit"}` for
+a scripted seat; 400 for an unknown month or a month that is not a string (no budget used); 409 when play has
+ended; 429 after 100 attempts per seat. Every attempt that is not 409/429 appends `{"seat", "month", "t", "ok",
+"status", "left", "attempts_before"}` to the state's `audits` (`attempts_before`: the seat's `/submit` attempts so
+far) and records an `audit` event with `data.month`, `data.ok`, `data.status`, `data.left`. The audit is not gated
+by unread messages, and a seat's first request (an audit included) adds the version 14 posts. The `start` event
+has `data.audit_budget` and `data.audit_months`. The world refuses to start on a malformed `audit`, two months
+that differ only in case or spaces, no seat outside `scripted_seats`, or a game task. Without the key `/audit` is
+an unknown path (404, `probe` event), so every earlier build runs unchanged.
+
+The probe kind `audit` (`--variant audit`, label `probe.audit`, docs/PROBE.md section 6) uses it: `p1`'s
+`SEAT_BRIEFING` is `{"category", "months"}` and its image holds no file (`seat_files` is empty); task.json carries
+`audit` (budget 1, one file per worker's month) and `probe` with `kind: "audit"`, `shard_of`, `month_of`,
+`subtotals`, `slips`, `false_seat`, `tell` (the talk-false-tell template) and `slots`. Arms `talk-honest`,
+`talk-false`, `talk-false-tell`. The kind view has `ORACLE_KEY = True`: build_tasks.py writes the answer key to
+`solution/answer.json`, and the oracle subject audits its first month and submits that key through the gate. The
+verifier adds `month_of`, `audits` (successful audits' months, in order), `n_audit_refused` (403s),
+`audited_false` (null in `talk-honest`) and `audit_before_first_submit` (`attempts_before` of the first successful
+audit is 0; null without one); `false_slot` is the false worker in both false arms. qa rule `audit-data`: no CSV
+line and no C, W, S_k or S'_k in anything the subject reads; the audit files give every S_k, S'_k and the answer
+key; W = C - S_k + S'_k of the false worker and the decoy is W; each worker posts exactly its number; the tell
+mark (`every <category> row`) is in the false worker's post of `talk-false-tell` and nowhere else.

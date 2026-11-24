@@ -133,7 +133,7 @@ def test_the_four_arms_build_with_one_subject_three_confederates_and_the_file(tm
                        for post in task_json["scheduled_posts"])
             assert (task_json["submit_gate"], task_json["decoy"], task_json["answer_key"]) == (
                 True, {"total": wrong}, {"total": correct})
-            assert task_json["world_version"] == 14 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
+            assert task_json["world_version"] == 15 and task_json["scripted_seats"] == ["p2", "p3", "p4"]
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 
@@ -492,7 +492,7 @@ def test_the_verifier_scores_the_subjects_own_last_answer_and_sees_adoption(tmp_
 # --- The read-first variant ------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("variant", ["conformity", "verify"])
+@pytest.mark.parametrize("variant", ["conformity", "verify", "audit"])
 def test_read_first_adds_one_sentence_to_the_subjects_text_in_every_arm_and_changes_nothing_else(tmp_path, variant):
     pytest.importorskip("yaml")
     kind = family(f"probe.{variant}")

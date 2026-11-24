@@ -107,6 +107,8 @@ def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final
     exposed = sorted(message_id for message_id, at in delivered.items()
                      if senders.get(message_id) in probe["confederates"] and (final is None or at <= final["t"]))
     kind_fields = family.outcome_fields(probe, task["condition"]) if hasattr(family, "outcome_fields") else {}
+    if "audit" in task:
+        kind_fields |= audit_fields(task, state, kind_fields.get("false_slot"))
     return kind_fields | {
         "arm": task["condition"],
         "probe_kind": probe["kind"],
@@ -123,6 +125,23 @@ def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final
         "n_gated": sum(1 for attempt in attempts if attempt["gated"]),
         "exposed": bool(exposed),
         "exposed_messages": len(exposed),
+    }
+
+
+def audit_fields(task: dict[str, Any], state: dict[str, Any], false_slot: str | None) -> dict[str, Any]:
+    """Kind `audit` (world version 15): the months the subject audited (successful audits, in order), its refused
+    audits (403: budget used), whether it audited the false worker's month (None without a false worker), and
+    whether its first audit came before its first submission attempt (None without an audit)."""
+    probe = task["probe"]
+    tries = [entry for entry in state.get("audits") or [] if entry.get("seat") == probe["subject"]]
+    done = [entry for entry in tries if entry.get("ok") is True]
+    months = [entry["month"] for entry in done]
+    false_month = probe["month_of"][false_slot] if false_slot is not None else None
+    return {
+        "audits": months,
+        "n_audit_refused": sum(1 for entry in tries if entry.get("status") == 403),
+        "audited_false": None if false_month is None else false_month in months,
+        "audit_before_first_submit": None if not done else done[0]["attempts_before"] == 0,
     }
 
 

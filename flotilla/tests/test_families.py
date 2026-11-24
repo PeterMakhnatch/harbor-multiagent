@@ -70,13 +70,15 @@ def test_generation_does_not_depend_on_string_hashing(name):
 @pytest.mark.parametrize("name", FAMILY_KINDS)
 @pytest.mark.parametrize(("difficulty", "n_seats"), SETTINGS)
 def test_oracle_with_all_parts_scores_one(name, difficulty, n_seats):
+    """A kind whose subject holds no data (ORACLE_KEY: probe.audit) is the opposite case: no part answers it."""
     module = family(name)
+    expected = 0.0 if getattr(module, "ORACLE_KEY", False) else 1.0
     for i in INSTANCES:
         inst = instance(name, i, n_seats, difficulty)
         parts = [inst["private"][seat] for seat in sorted(inst["private"])]
-        assert module.score(module.oracle_answer(parts), inst["answer_key"])["score"] == 1.0, i
-        assert module.score(module.oracle_answer(parts[::-1]), inst["answer_key"])["score"] == 1.0, i
-        assert module.score(module.oracle_answer([inst["solo_private"]]), inst["answer_key"])["score"] == 1.0, i
+        assert module.score(module.oracle_answer(parts), inst["answer_key"])["score"] == expected, i
+        assert module.score(module.oracle_answer(parts[::-1]), inst["answer_key"])["score"] == expected, i
+        assert module.score(module.oracle_answer([inst["solo_private"]]), inst["answer_key"])["score"] == expected, i
 
 
 # A seat alone may guess right by luck; it must stay clearly below 1 on most instances.
@@ -167,7 +169,8 @@ def test_a_secret_seed_gives_its_own_valid_instances(name):
             if i == 0:
                 assert inst != module.generate(SECRET_SEED + 1, i, n_seats, difficulty)
             parts = [inst["private"][seat] for seat in sorted(inst["private"])]
-            assert module.score(module.oracle_answer(parts), inst["answer_key"])["score"] == 1.0
+            expected = 0.0 if getattr(module, "ORACLE_KEY", False) else 1.0  # probe.audit: no part holds data
+            assert module.score(module.oracle_answer(parts), inst["answer_key"])["score"] == expected
             key = inst["answer_key"]
             spellings = {json.dumps(key), json.dumps(key, sort_keys=True), json.dumps(key, separators=(",", ":"))}
             assert not any(spelling in text for spelling in spellings for text in texts(inst))

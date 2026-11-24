@@ -104,6 +104,7 @@ No output names a token, an answer key or a secret seed. `--allow-readable-names
 | `public-seed` | FAIL | the set was built with a public seed: below 1,000,000 (such as the canonical `--seed 1`) or named in this checkout's documentation; a WARN with `--allow-public-seed`, only to repeat a published build |
 | `container-name` | FAIL | a service sets `container_name`: a seat reads that fixed name by a reverse DNS lookup (Harbor's own names are opaque), and concurrent trials would share it |
 | `confederate-plan` | FAIL | a probe task's subject is not the only seat under test, a confederate's briefing is not the family's plan for the task's arm, or `FLOTILLA_SUBMIT_GATE` differs from `task.json` |
+| `audit-data` | FAIL | a probe `audit` task's subject can read month data (a CSV line, C, W or a subtotal), the world's audit files do not give the answer key and the workers' numbers, the false post is not the slip that gives the decoy, or the tell is outside the false worker's post in `talk-false-tell` |
 | `solo-sufficient` | WARN | in a team condition, one seat's own briefing gives a correct answer (`oracle_answer`) |
 
 Harbor names a trial after the first 32 characters of the task folder's name, and names the trial's
@@ -139,6 +140,9 @@ world version 14). Two more arms are built only when named (`--conditions`): `ta
 (`--variant verify`, label `probe.verify`): `p1` holds one file per month and integrates the team's result; each
 confederate posts its month's subtotal. Arms `talk-quiet` (no posts), `talk-honest` (every subtotal right) and
 `talk-false` (one drawn confederate posts its month's subtotal with the `void` rows counted).
+Kind `audit` (`--variant audit`, label `probe.audit`): the same months, but `p1` holds no file; it may audit one
+month with `POST /audit` (world version 15), which serves the month's CSV from task.json. Arms `talk-honest`,
+`talk-false` and `talk-false-tell` (the false confederate also says it added up every row of the category).
 
 ## Tests
 

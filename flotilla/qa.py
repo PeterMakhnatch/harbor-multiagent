@@ -18,9 +18,11 @@ folder matches, otherwise 0. See README.md ("Check a task set before a wave") an
 from __future__ import annotations
 
 import argparse
+import csv
 import functools
 import glob
 import hashlib
+import io
 import json
 import os
 import re
@@ -88,6 +90,10 @@ RULES: dict[str, tuple[str, str]] = {
                                   "confederate's briefing are not the family's plan for the task's arm, the world's "
                                   "submit gate differs from task.json, or the subject's read-first sentence does not "
                                   "match task.json read_first")),
+    "audit-data": ("FAIL", ("a probe audit task's seat under test can read month data (a CSV line or a total), the "
+                            "world's audit files do not give the answer key and each worker's subtotal, the false "
+                            "report is not the slip that gives the decoy, or the tell is outside the false worker's "
+                            "message in talk-false-tell")),
     "solo-sufficient": ("WARN", "in a team condition, a seat's own briefing alone gives a correct answer"),
 }
 ALLOW_READABLE_NAMES = "--allow-readable-names"  # the flag that makes runtime-names a WARN
@@ -964,6 +970,71 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
                       "task.json read_first says otherwise")
 
 
+def _numbers(text: str) -> set[int]:
+    """Every run of digits that is a word of its own ("540." too; not the digits inside a hex token)."""
+    return {int(found) for found in re.findall(r"(?<!\w)\d+(?!\w)", text, flags=re.ASCII)}
+
+
+def _month_total(text: str, category: str, count_void: bool) -> int:
+    return sum(int(row["amount"]) for row in csv.DictReader(io.StringIO(text))
+               if row["category"] == category and (count_void or row["status"] != "void"))
+
+
+def check_audit_data(task: Task) -> Iterator[Finding]:
+    """A probe `audit` task (CONTRACT.md 14): its seat under test reads no month data (no CSV line of an audit file,
+    and none of C, W, the subtotals or the slips as a number) in anything it can read; the world's audit files
+    (task.json `audit`) give each worker's subtotal and slip and the answer key; the false worker's report is its
+    slip, which gives the decoy W; and the tell is in the false worker's message of talk-false-tell and nowhere else."""
+    probe, audit = task.task_json.get("probe"), task.task_json.get("audit")
+    if not isinstance(probe, dict) or probe.get("kind") != "audit" or task.family is None:
+        if audit is not None:
+            yield Finding("audit-data", task.name, "main", "task.json has audit files, but its probe is not an audit")
+        return
+    files = audit.get("files") if isinstance(audit, dict) else None
+    if not isinstance(files, dict) or sorted(files) != sorted(probe["month_of"].values()):
+        yield Finding("audit-data", task.name, "main", "task.json audit files are not one file per worker's month")
+        return
+    category, correct, wrong = probe["category"], probe["correct_value"], probe["peer_wrong"]
+    for seat, month in sorted(probe["month_of"].items()):
+        if (_month_total(files[month], category, False), _month_total(files[month], category, True)) != (
+                probe["subtotals"][seat], probe["slips"][seat]):
+            yield Finding("audit-data", task.name, "main", f"the audit file of {month} does not give {seat}'s numbers")
+    if sum(_month_total(text, category, False) for text in files.values()) != (task.answer_key or {}).get("total"):
+        yield Finding("audit-data", task.name, "main", "the audit files do not add up to the answer key")
+    false_seat = probe["false_seat"]
+    if wrong != correct - probe["subtotals"][false_seat] + probe["slips"][false_seat] or \
+            task.task_json.get("decoy") != {"total": wrong}:
+        yield Finding("audit-data", task.name, "main", "the false worker's slip does not give the decoy W")
+    yield from _audit_posts(task, probe)
+    hidden = {correct, wrong, *probe["subtotals"].values(), *probe["slips"].values()}
+    lines = {line for text in files.values() for line in text.splitlines() if line.strip()}
+    for seat in task.under_test:
+        for name, text in task.view(seat).items():
+            found = sorted(_numbers(text) & hidden)
+            if found or any(line in text for line in lines):
+                what = f"the number {found[0]}" if found else "a line of an audit file"
+                yield Finding("audit-data", task.name, seat, f"{name} holds {what}")
+
+
+def _audit_posts(task: Task, probe: dict[str, Any]) -> Iterator[Finding]:
+    """The scheduled posts of an audit task: each worker posts one number, its slip if it is the false worker in a
+    false arm and its subtotal otherwise, and only the false worker's post in talk-false-tell holds the tell."""
+    posts = task.task_json.get("scheduled_posts") or []
+    mark = task.family.TELL_MARK.format(category=probe["category"])
+    for post in posts:
+        seat = post.get("from")
+        slipped = task.condition != "talk-honest" and seat == probe["false_seat"]
+        number = (probe["slips"] if slipped else probe["subtotals"]).get(seat)
+        if _numbers(post.get("text", "")) != {number}:
+            yield Finding("audit-data", task.name, seat, f"its post in {task.condition} is not its "
+                          f"{'slip' if slipped else 'subtotal'} alone")
+        if (mark in post.get("text", "")) != (slipped and task.condition == "talk-false-tell"):
+            yield Finding("audit-data", task.name, seat, f"the tell is {'missing from' if slipped else 'in'} its "
+                          f"post in {task.condition}")
+    if sorted(post.get("from") for post in posts) != sorted(probe["confederates"]):
+        yield Finding("audit-data", task.name, "main", "not every worker posts exactly once")
+
+
 def check_container_name(task: Task) -> Iterator[Finding]:
     """Harbor names a trial's containers after the trial, an opaque name. A container_name replaces it with a fixed
     name, which a seat reads by a reverse DNS lookup of main's address (or of its own), as a silent seat read
@@ -975,7 +1046,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan)
+              check_game_secret, check_confederate_plan, check_audit_data)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------

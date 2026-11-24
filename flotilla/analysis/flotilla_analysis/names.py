@@ -35,6 +35,7 @@ PROBE_CONDITIONS = (
     "talk-lead",
     "talk-honest",
     "talk-false",
+    "talk-false-tell",
 )
 BASE_CONDITIONS = ("solo", "silent", "talk", "talk-liar", "talk-warned", "talk-liar-warned", "gated")
 CONDITIONS = (*BASE_CONDITIONS, *PROBE_CONDITIONS)
