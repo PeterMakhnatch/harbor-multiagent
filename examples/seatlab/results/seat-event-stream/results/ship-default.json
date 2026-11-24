@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "bb59200e-6bff-4a5d-a536-19529d32202f",
+  "seat_results": [
+    {
+      "seat": "outgoing",
+      "under_test": true,
+      "execution_disposition": "returned"
+    },
+    {
+      "seat": "relief",
+      "under_test": true,
+      "execution_disposition": "returned"
+    }
+  ]
+}

@@ -638,6 +638,18 @@ def start(
             show_default=False,
         ),
     ] = None,
+    seat_events: Annotated[
+        bool,
+        Option(
+            "--seat-events",
+            help=(
+                "Seat tasks only: append native seat lifecycle events to "
+                "TRIAL_DIR/seat-events.jsonl while the trial runs."
+            ),
+            rich_help_panel="Trial Settings",
+            show_default=False,
+        ),
+    ] = False,
     init: Annotated[
         bool,
         Option(
@@ -867,6 +879,12 @@ def start(
         config_error("; ".join(messages))
 
     if init:
+        if seat_events:
+            console.print(
+                "[red]Error:[/red] --seat-events is not a config field; "
+                "pass it to harbor trial start."
+            )
+            raise SystemExit(1)
         return config  # `harbor trial init` serializes this instead of running
 
     if config.source_trial is None:
@@ -896,6 +914,12 @@ def start(
     # loop closes.
     async def _create_and_run() -> TrialResult:
         trial = await Trial.create(config)
+        if seat_events and not isinstance(trial, SeatsTrial):
+            console.print(
+                "[red]Error:[/red] --seat-events needs a seat task "
+                "([agents.<seat>] seats)."
+            )
+            raise SystemExit(1)
 
         console.print(f"Starting trial: {config.trial_name}")
         console.print(f"Task: {config.task.get_task_id().get_name()}")
@@ -915,6 +939,23 @@ def start(
         )
         console.print(f"Environment: {environment_display}")
         console.print(f"Trials directory: {config.trials_dir}")
+
+        if seat_events and isinstance(trial, SeatsTrial):
+            from harbor.cli.seat_events import (
+                SeatEventsJournalError,
+                run_with_seat_events,
+            )
+
+            try:
+                return await run_with_seat_events(
+                    trial, warnings=Console(stderr=True)
+                )
+            except SeatEventsJournalError as exc:
+                console.print(
+                    "[red]Error:[/red] Cannot create seat-events.jsonl in the "
+                    f"trial directory ({exc})."
+                )
+                raise SystemExit(1) from None
 
         return await trial.run()
 
