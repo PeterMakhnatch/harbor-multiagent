@@ -521,12 +521,16 @@ class _DinD(DinDComposeOps, _Strategy):
 
     @override
     async def _compose_exec(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         return await self._env._vm_exec(
             shlex.join(self._compose_argv(subcommand)),
             # The Docker CLI keeps its config under root's HOME.
-            env={"HOME": "/root", **self._compose_env_vars()},
+            env={"HOME": "/root", **self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
         )
 

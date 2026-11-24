@@ -7,7 +7,6 @@ import ipaddress
 import logging
 import math
 import os
-import re
 import shlex
 import tempfile
 from abc import abstractmethod
@@ -45,7 +44,7 @@ from harbor.environments.definition import (
     require_agent_environment_definition,
     should_use_prebuilt_docker_image,
 )
-from harbor.environments.dind_compose import DinDComposeOps
+from harbor.environments.dind_compose import DinDComposeOps, shell_env_stdin
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_NO_NETWORK_PATH,
@@ -122,8 +121,6 @@ if TYPE_CHECKING:
 _SandboxParams: TypeAlias = (
     "CreateSandboxFromImageParams | CreateSandboxFromSnapshotParams"
 )
-_WINDOWS_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_WINDOWS_ENV_VALUE_FORBIDDEN_CHARS = frozenset('"%!^&<>|\r\n')
 
 
 # Maps harbor's user-facing GPU type names (task.toml `gpu_types`) to Daytona's
@@ -665,11 +662,13 @@ class _DaytonaDinD(DinDComposeOps, _DaytonaStrategy):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a docker compose subcommand on the sandbox."""
         return await self._vm_exec(
             self._compose_cmd(subcommand),
-            env=self._compose_env_vars(),
+            env={**self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
         )
 
@@ -2000,51 +1999,6 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         )
 
     @staticmethod
-    def _compose_windows_command(
-        command: str, cwd: str | None, env: dict[str, str] | None
-    ) -> str:
-        """Compose a cmd.exe command chain for Daytona Windows process.exec.
-
-        Environment variables are injected as bare ``set K=V&&`` chain
-        elements. Daytona Windows ``process.exec`` treats the usually-safer
-        ``set "K=V"`` form as a quoted value in nested batch commands, so this
-        path relies on validation instead: keys must match
-        ``[A-Za-z_][A-Za-z0-9_]*`` and values must not contain double quote,
-        ``%``, ``!``, ``^``, ``&``, ``<``, ``>``, ``|``, CR, or LF.
-        """
-        parts: list[str] = []
-        for k, v in (env or {}).items():
-            if not isinstance(k, str) or not _WINDOWS_ENV_KEY_RE.fullmatch(k):
-                raise ValueError(
-                    f"Windows environment variable key {k!r} is invalid; "
-                    "keys must match [A-Za-z_][A-Za-z0-9_]*"
-                )
-            if not isinstance(v, str):
-                raise ValueError(
-                    f"Windows environment variable {k!r} has non-string value; "
-                    'cmd cannot safely preserve it in set "K=V"'
-                )
-            offending = next(
-                (char for char in v if char in _WINDOWS_ENV_VALUE_FORBIDDEN_CHARS),
-                None,
-            )
-            if offending is not None:
-                label = {
-                    "\r": "CR",
-                    "\n": "LF",
-                    '"': "double quote",
-                }.get(offending, repr(offending))
-                raise ValueError(
-                    f"Windows environment variable {k!r} contains {label}; "
-                    "cmd cannot safely preserve it in a bare set K=V&& chain"
-                )
-            parts.append(f"set {k}={v}")
-        if cwd:
-            parts.append(f"cd /d {quote_shell_arg(cwd, TaskOS.WINDOWS)}")
-        parts.append(command)
-        return "&& ".join(parts)
-
-    @staticmethod
     def _windows_remote_join(root: str, *parts: str) -> str:
         base = root.replace("\\", "/").rstrip("/")
         suffix = "/".join(part.replace("\\", "/").strip("/") for part in parts if part)
@@ -2084,8 +2038,11 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             )
 
         if self._is_windows:
-            command = self._compose_windows_command(command, cwd, env)
-            response = await self._sandbox.process.exec(command, timeout=timeout_sec)
+            if cwd:
+                command = f"cd /d {quote_shell_arg(cwd, TaskOS.WINDOWS)}&& {command}"
+            response = await self._sandbox.process.exec(
+                command, timeout=timeout_sec, **({"env": env} if env else {})
+            )
             return ExecResult(
                 stdout=response.result or "",
                 stderr="",
@@ -2093,20 +2050,27 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             )
 
         session_id = str(uuid4())
+        command = f"{shell} {shlex.quote(command)}"
+        input_dir = None
+        script = b""
+        if env:
+            script = shell_env_stdin(f"exec {command}", env).encode()
+            input_dir = f"/tmp/harbor_{session_id}"
+            await self._sandbox.fs.create_folder(input_dir, "700")
+
         try:
+            if input_dir is not None:
+                input_path = f"{input_dir}/env.sh"
+                await self._sandbox.fs.upload_file(script, input_path)
+                await self._sandbox.fs.set_file_permissions(input_path, mode="600")
+                command = f"{shell.removesuffix(' -c')} -s"
             await self._create_process_session_with_retry(session_id)
-
-            command = f"{shell} {shlex.quote(command)}"
-
-            if env:
-                env_args = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
-                command = f"env {env_args} {command}"
 
             if timeout_sec:
                 command = f"timeout {timeout_sec} {command}"
 
             if cwd:
-                command = f"cd {cwd} && {command}"
+                command = f"cd {shlex.quote(cwd)} && {command}"
 
             if user is not None:
                 # su requires a username; resolve numeric UIDs via getent
@@ -2117,6 +2081,9 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
                 # Use su (not su -) to preserve the working directory;
                 # su - would reset to the user's home, ignoring WORKDIR/cwd.
                 command = f"su {user_arg} -s /bin/bash -c {shlex.quote(command)}"
+
+            if input_dir is not None:
+                command = f"{command} < {input_dir}/env.sh"
 
             response = await self._sandbox.process.execute_session_command(
                 session_id,
@@ -2130,17 +2097,14 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             if response.cmd_id is None:
                 raise RuntimeError("Cannot find command ID.")
 
-            result = await self._poll_response(session_id, response.cmd_id)
+            return await self._poll_response(session_id, response.cmd_id)
 
         finally:
-            try:
-                # Don't delete the session bc Daytona will delete any child
-                # processes, even if they were started in the background.
-                pass
-            except Exception as e:
-                self.logger.warning(f"Could not delete session: {e}")
-
-        return result
+            if input_dir is not None:
+                try:
+                    await self._sandbox.fs.delete_file(input_dir, recursive=True)
+                except Exception as e:
+                    self.logger.warning(f"Could not delete {input_dir}: {e}")
 
     @retry(
         stop=stop_after_attempt(2),
@@ -2239,7 +2203,7 @@ class DaytonaEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
 
         try:
             result = await self._sandbox_exec(
-                remote_unpack_command(remote_archive, target_dir),
+                remote_unpack_command(remote_archive, target_dir, no_same_owner=True),
                 shell="sh -c",
                 timeout_sec=600,
             )

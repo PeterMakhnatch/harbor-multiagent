@@ -3,6 +3,7 @@ import asyncio
 import contextlib
 import hashlib
 import logging
+import math
 import traceback
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
@@ -190,7 +191,7 @@ class Trial(ABC):
         self._effective_skills_dir = self._resolve_effective_skills_dir()
 
         self._hooks: dict[TrialEvent, list[TrialHookCallback]] = {
-            event: [] for event in TrialEvent
+            event: [self._journal_event] for event in TrialEvent
         }
 
         self._are_agent_logs_downloaded = False
@@ -523,6 +524,7 @@ class Trial(ABC):
                 config,
                 _task=task,
                 _task_download_result=task_download_result,
+                _trial_id=trial_id,
             )
         elif task.has_steps:
             from harbor.trial.multi_step import MultiStepTrial
@@ -570,6 +572,11 @@ class Trial(ABC):
             ),
             download_result,
         )
+
+    async def _journal_event(self, hook_event: TrialHookEvent) -> None:
+        with (self.paths.trial_dir / "trial-events.jsonl").open("a") as events:
+            events.write(hook_event.model_dump_json(include={"event", "timestamp"}))
+            events.write("\n")
 
     def add_hook(self, event: TrialEvent, hook: TrialHookCallback) -> None:
         self._hooks[event].append(hook)
@@ -629,9 +636,13 @@ class Trial(ABC):
             if not self.config.install_only:
                 # Setup/install ran in _prepare(); skip the agent run + verification.
                 await self._run()
-        except asyncio.CancelledError as exc:
+        except (asyncio.CancelledError, KeyboardInterrupt) as exc:
             self.logger.debug(f"Trial {self.config.trial_name} cancelled")
-            self._record_exception(exc)
+            # SIGTERM raises KeyboardInterrupt in whichever trial is running, and the
+            # rest are cancelled. Record it as a cancellation so resume re-runs it.
+            self._record_exception(
+                asyncio.CancelledError() if isinstance(exc, KeyboardInterrupt) else exc
+            )
             await self._emit(TrialEvent.CANCEL)
             await self._close_bridge()
             await self._recover_outputs()
@@ -929,10 +940,9 @@ class Trial(ABC):
                     step_cfg=step,
                 )
         except Exception as exc:
-            if step_result.exception_info is None:
-                step_result.exception_info = ExceptionInfo.from_exception(
-                    exc, override_error_policy=self.config.override_error_policy
-                )
+            step_result.exception_info = ExceptionInfo.from_exception(
+                exc, override_error_policy=self.config.override_error_policy
+            )
         finally:
             step_result.verifier.finished_at = self._now()
 
@@ -981,7 +991,7 @@ class Trial(ABC):
             [self.agent_env_paths.tests_dir], chmod=False
         )
 
-    def _step_verifier_timeout_sec(self, step: StepConfig) -> float | None:
+    def _step_verifier_timeout_sec(self, step: StepConfig) -> float:
         default_timeout_sec = (
             step.verifier.timeout_sec
             if step.verifier.timeout_sec is not None
@@ -1285,7 +1295,7 @@ class Trial(ABC):
         secrets: set[str] = set()
         # An agent may resolve its model key from the host environment or a
         # native config, neither of which appears in its extra_env.
-        for agent in (self.agent, self.user_agent):
+        for agent in (primary_agent, self.user_agent):
             if not isinstance(agent, BaseInstalledAgent):
                 continue
             try:
@@ -1641,9 +1651,27 @@ class Trial(ABC):
     async def _run_collect_hooks(
         self,
         hooks: Sequence[VerifierCollectConfig],
+        deadline: float,
     ) -> None:
-        """Run collect hooks best-effort; failures never abort the trial."""
+        """Run collect hooks best-effort; failures never abort the trial.
+
+        Hooks share one budget ending at *deadline* (event-loop time); a hook's
+        own `timeout_sec` can only shorten its share.
+        """
+        loop = asyncio.get_running_loop()
         for hook in hooks:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                self.logger.warning(
+                    f"Collect hook in service '{hook.service}' not run: the "
+                    f"collection budget is spent ({hook.command!r})"
+                )
+                continue
+            timeout_sec = (
+                remaining
+                if hook.timeout_sec is None
+                else min(hook.timeout_sec, remaining)
+            )
             self.logger.debug(
                 f"Running collect hook in service '{hook.service}': {hook.command!r}"
             )
@@ -1651,7 +1679,7 @@ class Trial(ABC):
                 result = await self.agent_environment.service_exec(
                     hook.command,
                     service=hook.service,
-                    timeout_sec=int(hook.timeout_sec),
+                    timeout_sec=math.ceil(timeout_sec),
                     user=hook.user,
                 )
                 if result.return_code != 0:
@@ -1687,6 +1715,11 @@ class Trial(ABC):
         processes cannot interfere with collection.
         """
         hooks = self._collect_hooks_for(step_cfg)
+        deadline = asyncio.get_running_loop().time() + (
+            self._verifier_timeout_sec
+            if step_cfg is None
+            else self._step_verifier_timeout_sec(step_cfg)
+        )
         main_hooks = [hook for hook in hooks if hook.service == MAIN_SERVICE_NAME]
         sidecar_hooks = [hook for hook in hooks if hook.service != MAIN_SERVICE_NAME]
 
@@ -1695,7 +1728,7 @@ class Trial(ABC):
         self._artifact_handler.begin_collection()
 
         self.logger.debug("Collecting main service artifacts")
-        await self._run_collect_hooks(main_hooks)
+        await self._run_collect_hooks(main_hooks, deadline)
         await self._artifact_handler.download_artifacts(
             self.agent_environment,
             artifacts_dir,
@@ -1724,7 +1757,7 @@ class Trial(ABC):
         self.logger.debug(
             f"Collecting sidecar artifacts from services: {sorted(sidecars)}"
         )
-        await self._run_collect_hooks(sidecar_hooks)
+        await self._run_collect_hooks(sidecar_hooks, deadline)
         await self._artifact_handler.download_artifacts(
             self.agent_environment,
             artifacts_dir,

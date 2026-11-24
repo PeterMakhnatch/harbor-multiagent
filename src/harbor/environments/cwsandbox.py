@@ -47,7 +47,7 @@ from harbor.environments.capabilities import (
 )
 from harbor.environments.compose_service_ops import ComposeServiceOpsMixin
 from harbor.environments.definition import should_use_prebuilt_docker_image
-from harbor.environments.dind_compose import DinDComposeOps
+from harbor.environments.dind_compose import DinDComposeOps, shell_env_stdin
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_NO_NETWORK_PATH,
@@ -909,8 +909,13 @@ class CWSandboxEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         # resolved env values (which may include sensitive keys from the
         # task's environment.env section).
         original_command = command
+        stdin = None
         if merged_env:
-            command = f"export {self._env_exports(merged_env)} && {command}"
+            stdin = (
+                f"export {self._env_exports(merged_env)}\n"
+                f"{{\n:\n{command}\n}} </dev/null\n"
+            ).encode()
+            command = "bash -s"
         if effective_user is not None and str(effective_user) not in {"root", "0"}:
             # su requires a username; resolve numeric UIDs via getent.
             if isinstance(effective_user, int):
@@ -923,11 +928,23 @@ class CWSandboxEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             # reset to the user's home, ignoring WORKDIR/cwd.
             command = f"su {user_arg} -s /bin/bash -c {shlex.quote(command)}"
 
-        result = await sandbox.exec(
-            ["bash", "-lc", command],
+        argv = (
+            ["bash", "-ls"]
+            if stdin is not None and command == "bash -s"
+            else ["bash", "-lc", command]
+        )
+        process = sandbox.exec(
+            argv,
             cwd=effective_cwd,
             timeout_seconds=effective_timeout_sec,
+            **({"stdin": True} if stdin is not None else {}),
         )
+        if stdin is not None:
+            if process.stdin is None:
+                raise RuntimeError("Sandbox exec did not open stdin")
+            await process.stdin.write(stdin)
+            await process.stdin.close()
+        result = await process
 
         if result.returncode != 0:
             self.logger.debug(
@@ -1305,17 +1322,30 @@ class _CWSandboxDinD(DinDComposeOps):
         return self._sandbox
 
     async def _vm_exec(
-        self, command: str, timeout_sec: int | None = None
+        self,
+        command: str,
+        timeout_sec: int | None = None,
+        *,
+        stdin: str | None = None,
     ) -> ExecResult:
         """Run ``sh -c command`` on the DinD sandbox VM (Alpine, no bash)."""
         sandbox = self._require_sandbox()
         effective_timeout = (
             timeout_sec if timeout_sec is not None else self._env._max_timeout_seconds
         )
-        result = await sandbox.exec(
-            ["sh", "-c", command],
-            timeout_seconds=effective_timeout,
-        )
+        if stdin is not None:
+            process = sandbox.exec(
+                ["sh", "-s"], timeout_seconds=effective_timeout, stdin=True
+            )
+            if process.stdin is None:
+                raise RuntimeError("Sandbox exec did not open stdin")
+            await process.stdin.write(stdin.encode())
+            await process.stdin.close()
+            result = await process
+        else:
+            result = await sandbox.exec(
+                ["sh", "-c", command], timeout_seconds=effective_timeout
+            )
         return ExecResult(
             stdout=result.stdout,
             stderr=result.stderr,
@@ -1557,14 +1587,22 @@ class _CWSandboxDinD(DinDComposeOps):
 
     @override
     async def _compose_exec(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a ``docker compose`` subcommand inside the DinD sandbox VM."""
-        env_vars = self._compose_env_vars()
-        prefix = self._env._env_exports(env_vars)
+        env_vars = {**self._compose_env_vars(), **(env or {})}
         command = self._compose_cmd(subcommand)
-        full = f"{prefix} {command}" if prefix else command
-        return await self._vm_exec(full, timeout_sec=timeout_sec)
+        if env_vars:
+            return await self._vm_exec(
+                command,
+                timeout_sec=timeout_sec,
+                stdin=shell_env_stdin(command, env_vars),
+            )
+        return await self._vm_exec(command, timeout_sec=timeout_sec)
 
     async def _stage_resources_compose_file(self) -> None:
         """Write the resources override locally and upload it to the VM."""

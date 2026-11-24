@@ -190,7 +190,9 @@ class TestExec:
         await apple_env.exec("echo $KEY", env={"KEY": "val"})
 
         cmd = mock_exec.call_args[0][0]
-        assert "KEY=val" in cmd
+        assert "KEY" in cmd
+        assert "KEY=val" not in cmd
+        assert mock_exec.call_args.kwargs["env"] == {"KEY": "val"}
 
     async def test_exec_includes_persistent_env(self, temp_dir):
         env = _make_env(temp_dir, persistent_env={"FOO": "bar", "BAZ": "qux"})
@@ -201,8 +203,12 @@ class TestExec:
         await env.exec("echo hello")
 
         cmd = env._run_container_command.call_args[0][0]
-        assert "FOO=bar" in cmd
-        assert "BAZ=qux" in cmd
+        assert "FOO" in cmd
+        assert "BAZ" in cmd
+        assert env._run_container_command.call_args.kwargs["env"] == {
+            "FOO": "bar",
+            "BAZ": "qux",
+        }
 
     async def test_exec_per_exec_env_overrides_persistent(self, temp_dir):
         env = _make_env(temp_dir, persistent_env={"FOO": "bar", "BAZ": "qux"})
@@ -213,9 +219,13 @@ class TestExec:
         await env.exec("echo hello", env={"FOO": "override"})
 
         cmd = env._run_container_command.call_args[0][0]
-        assert "FOO=override" in cmd
+        assert "FOO" in cmd
         assert "FOO=bar" not in cmd
-        assert "BAZ=qux" in cmd
+        assert "BAZ" in cmd
+        assert env._run_container_command.call_args.kwargs["env"] == {
+            "FOO": "override",
+            "BAZ": "qux",
+        }
 
     async def test_exec_passes_timeout(self, apple_env, mock_exec):
         await apple_env.exec("sleep 10", timeout_sec=30)
@@ -267,6 +277,26 @@ class TestExec:
 
 
 class TestContainerCommand:
+    async def test_exec_values_are_not_subprocess_arguments(
+        self, apple_env, monkeypatch
+    ):
+        secret = "sentinel-'\"$=\nsecret"
+        monkeypatch.setenv("OPENAI_API_KEY", "ambient")
+        process = AsyncMock()
+        process.communicate.return_value = (b"", b"")
+        process.returncode = 0
+        with patch(
+            "harbor.environments.apple_container.asyncio.create_subprocess_exec",
+            return_value=process,
+        ) as spawn:
+            await apple_env.exec("true", env={"OPENAI_API_KEY": secret, "EMPTY": ""})
+
+        assert "OPENAI_API_KEY" in spawn.call_args.args
+        assert secret not in " ".join(spawn.call_args.args)
+        assert spawn.call_args.kwargs["env"]["OPENAI_API_KEY"] == secret
+        assert spawn.call_args.kwargs["env"]["EMPTY"] == ""
+        assert "PATH" in spawn.call_args.kwargs["env"]
+
     async def test_cancellation_terminates_process(self, apple_env):
         process = _FakeCommandProcess()
 
@@ -360,8 +390,17 @@ class TestStart:
         await env.start(force_build=False)
 
         run_cmd = next(call for call in calls if call[0] == "run")
-        assert "TASK_KEY=task-value" in run_cmd
-        assert "RUN_KEY=run-value" in run_cmd
+        assert "TASK_KEY" in run_cmd
+        assert "RUN_KEY" in run_cmd
+        run_call = next(
+            call
+            for call in env._run_container_command.await_args_list
+            if call.args[0][0] == "run"
+        )
+        assert run_call.kwargs["env"] == {
+            "TASK_KEY": "task-value",
+            "RUN_KEY": "run-value",
+        }
 
     async def test_start_with_build(self, apple_env, start_calls):
         await apple_env.start(force_build=True)

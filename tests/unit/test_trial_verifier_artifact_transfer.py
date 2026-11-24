@@ -1,5 +1,6 @@
 """Trial-level tests for artifact upload into verifier envs."""
 
+import asyncio
 import contextlib
 import os
 import stat
@@ -396,7 +397,7 @@ class TestSidecarArtifacts:
             agent_env.service_exec.assert_any_await(
                 "pg_dump app > /data/dump.sql",
                 service="db",
-                timeout_sec=60,
+                timeout_sec=10,
                 user=None,
             )
             # Main was stopped before the sidecar evidence was pulled.
@@ -411,6 +412,50 @@ class TestSidecarArtifacts:
             # ...and re-materialized at its original path in the verifier.
             assert uploads["/data/dump.sql"] == "/data/dump.sql"
             verifier_env.ensure_dirs.assert_any_await(["/data"], chmod=True)
+
+    async def test_collect_hooks_share_the_verifier_timeout(self):
+        """Hooks draw on one budget equal to the verifier timeout; an explicit
+        hook timeout only shortens its share and a spent budget skips the rest."""
+        with tempfile.TemporaryDirectory() as tmp:
+            task_dir = _task_with_configured_artifacts(
+                Path(tmp),
+                artifacts=(
+                    "['/logs/agent/trajectory.json', "
+                    '{ source = "/data/out", service = "db" }]'
+                ),
+                extra_toml=(
+                    '[[verifier.collect]]\nservice = "db"\ncommand = "first"\n'
+                    '[[verifier.collect]]\nservice = "db"\ncommand = "second"\n'
+                    "timeout_sec = 30\n"
+                    '[[verifier.collect]]\nservice = "db"\ncommand = "third"\n'
+                ),
+                with_compose=True,
+            )
+            manifest = task_dir / "task.toml"
+            manifest.write_text(
+                manifest.read_text().replace(
+                    "[verifier]\ntimeout_sec = 10.0", "[verifier]\ntimeout_sec = 2.0"
+                )
+            )
+            trials_dir = Path(tmp) / "trials"
+            trials_dir.mkdir()
+            agent_env = _make_env(mounted=True)
+            verifier_env = _make_env(mounted=True)
+            durations = {"first": 0.6, "second": 1.6}
+            calls: list[tuple[str, int]] = []
+
+            async def service_exec(
+                command, *, service=None, timeout_sec=None, **kwargs
+            ):
+                calls.append((command, timeout_sec))
+                await asyncio.sleep(durations.get(command, 0))
+                return ExecResult(stdout="", stderr="", return_code=0)
+
+            agent_env.service_exec = AsyncMock(side_effect=service_exec)
+
+            await _run(task_dir, trials_dir, agent_env, verifier_env)
+
+            assert calls == [("first", 2), ("second", 2)]
 
     async def test_sidecar_artifacts_rejected_without_compose_support(self):
         """Trials referencing sidecar services fail fast on non-compose providers."""

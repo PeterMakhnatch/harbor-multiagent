@@ -736,11 +736,15 @@ class DockerEnvironment(BaseEnvironment):
         timeout_sec: int | None = None,
         stdin_data: bytes | None = None,
         on_output: OutputCallback | None = None,
+        exec_env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a docker compose command and return the result."""
         runtime = type(self).runtime()
+        compose = list(runtime.compose)
+        if runtime == DOCKER_RUNTIME and exec_env and "DOCKER_CONFIG" in exec_env:
+            compose[1:1] = ["--config", self._compose_infra_env_vars()["DOCKER_CONFIG"]]
         full_command = [
-            *runtime.compose,
+            *compose,
             "--project-name",
             self.compose_project_name,
         ]
@@ -756,6 +760,7 @@ class DockerEnvironment(BaseEnvironment):
         full_command.extend(command)
 
         env = self._compose_env_vars(include_os_env=True)
+        env.update(exec_env or {})
 
         process = await asyncio.create_subprocess_exec(
             *full_command,
@@ -1396,6 +1401,20 @@ class DockerEnvironment(BaseEnvironment):
         """Stop one compose service while keeping the rest of the project up."""
         await self._run_docker_compose_command(["stop", service])
 
+    @override
+    async def wait_for_services(self, services: list[str]) -> None:
+        await self._run_docker_compose_command(
+            [
+                "up",
+                "--detach",
+                "--wait",
+                "--no-deps",
+                "--no-recreate",
+                "--no-build",
+                *services,
+            ]
+        )
+
     def _sidecar_platform(self, service: str) -> "UnixOps":
         """Platform ops for sidecar transfers; Linux containers only."""
         from harbor.environments.docker.docker_unix import UnixOps
@@ -1472,8 +1491,8 @@ class DockerEnvironment(BaseEnvironment):
             exec_command.extend(["-w", cwd])
 
         if env:
-            for key, value in env.items():
-                exec_command.extend(["-e", f"{key}={value}"])
+            for key in env:
+                exec_command.extend(["-e", key])
 
         if user is not None:
             exec_command.extend(["-u", str(user)])
@@ -1498,6 +1517,7 @@ class DockerEnvironment(BaseEnvironment):
             check=False,
             timeout_sec=timeout_sec,
             on_output=self._output_callback(),
+            exec_env=env,
         )
 
     @override
@@ -1535,11 +1555,6 @@ class DockerEnvironment(BaseEnvironment):
                 "Interactive attach is not yet supported for Windows containers."
             )
 
-        variables = " ".join(
-            f"export {k}={shlex.quote(str(v))}"
-            for k, v in self._compose_env_vars(include_os_env=False).items()
-        )
-
         # Build the -f flags for docker compose
         compose_file_args = []
         for path in self._docker_compose_paths:
@@ -1558,15 +1573,15 @@ class DockerEnvironment(BaseEnvironment):
             else ""
         )
 
-        os.execvp(
+        os.execvpe(
             "bash",
             [
                 "bash",
                 "-c",
-                f"{variables}; "
-                + " ".join(compose_base + ["exec", "-it", "main", "bash"])
+                " ".join(compose_base + ["exec", "-it", "main", "bash"])
                 + "; "
                 + " ".join(compose_base + ["down"])
                 + cleanup_mounts_compose,
             ],
+            self._compose_env_vars(include_os_env=True),
         )

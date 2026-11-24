@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import re
 import shlex
 from pathlib import Path
@@ -1338,28 +1339,25 @@ async def test_a_failed_region_lookup_defers_to_create(tmp_path: Path) -> None:
 # ── Command wrapping ─────────────────────────────────────────────────────
 
 
-def test_shell_command_expresses_cwd_env_and_sudo_in_the_command_line(
+def test_shell_command_expresses_cwd_and_sudo_in_the_command_line(
     tmp_path: Path,
 ) -> None:
-    """boxd's exec has no cwd/user/env parameters -- everything is in argv."""
+    """The cwd and privilege escalation are expressed in the shell command."""
     env = _make_boxd_env(tmp_path)
 
     command = env._shell_command(
         "echo hi",
         cwd="/harbor/project",
-        env={"FOO": "bar baz"},
         sudo=True,
     )
     parts = shlex.split(command)
 
     assert parts[0] == "sudo"
-    assert parts[1] == "env"
-    assert "FOO=bar baz" in parts
     assert parts[-3:-1] == ["sh", "-c"]
     assert parts[-1] == "printf . >&2; cd /harbor/project && echo hi"
 
 
-def test_shell_command_without_sudo_or_env_is_a_plain_shell(tmp_path: Path) -> None:
+def test_shell_command_without_sudo_is_a_plain_shell(tmp_path: Path) -> None:
     env = _make_boxd_env(tmp_path)
 
     assert shlex.split(env._shell_command("true")) == [
@@ -1367,6 +1365,52 @@ def test_shell_command_without_sudo_or_env_is_a_plain_shell(tmp_path: Path) -> N
         "-c",
         "printf . >&2; true",
     ]
+
+
+async def test_compose_exec_loads_values_from_private_file(tmp_path: Path) -> None:
+    env = _make_boxd_env(tmp_path)
+    env._docker_cmd = "sudo docker"
+    staged = {}
+
+    async def capture_file(source, destination):
+        staged[destination] = shlex.split(source.read_text(encoding="utf-8"))
+        if os.name == "posix":
+            assert source.stat().st_mode & 0o777 == 0o600
+
+    env._upload_file_to_host = AsyncMock(side_effect=capture_file)
+    env._vm_exec = AsyncMock(return_value=ExecResult(return_code=0))
+    literal = "synthetic 'quote'\n$literal"
+
+    await env._compose_ops.exec("true", env={"VALUE": literal, "EMPTY": ""})
+
+    ((destination, contents),) = staged.items()
+    directory = destination.rsplit("/", 1)[0]
+    assert f"VALUE={literal}" in contents
+    assert "EMPTY=" in contents
+    mkdir, command, cleanup = [call.args[0] for call in env._vm_exec.await_args_list]
+    assert mkdir == f"mkdir -m 700 {directory}"
+    assert env._vm_exec.await_args_list[1].kwargs["sudo"] is True
+    assert command.startswith(f"chmod 600 {destination} && . {destination} && ")
+    assert f"rm -f {destination} && exec docker compose " in command
+    assert " -e VALUE -e EMPTY " in command
+    assert "synthetic" not in command
+    assert cleanup == f"rm -rf {directory}"
+
+
+async def test_compose_exec_uses_boxd_native_env_without_sudo(tmp_path: Path) -> None:
+    env = _make_boxd_env(tmp_path)
+    client = _attach_fake_client(env)
+    env._machine_id = "machine-1"
+    client.machines.exec = AsyncMock(return_value=_FakeExecResult())
+    literal = "synthetic 'quote'\n$literal"
+
+    await env._compose_ops.exec("true", env={"VALUE": literal, "EMPTY": ""})
+
+    call = client.machines.exec.await_args
+    assert " -e VALUE -e EMPTY " in call.args[1]
+    assert "synthetic" not in call.args[1]
+    assert call.kwargs["env"]["VALUE"] == literal
+    assert call.kwargs["env"]["EMPTY"] == ""
 
 
 async def test_ensure_docker_ready_falls_back_to_sudo(tmp_path: Path) -> None:

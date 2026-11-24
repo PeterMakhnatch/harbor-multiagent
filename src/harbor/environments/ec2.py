@@ -25,7 +25,7 @@ from harbor.environments.definition import (
     require_agent_environment_definition,
     should_use_prebuilt_docker_image,
 )
-from harbor.environments.dind_compose import DinDComposeOps
+from harbor.environments.dind_compose import DinDComposeOps, shell_env_stdin
 from harbor.environments.docker import (
     COMPOSE_BUILD_PATH,
     COMPOSE_NO_NETWORK_PATH,
@@ -136,8 +136,12 @@ class _EC2ComposeOps(DinDComposeOps):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
-        return await self._env._compose_exec(subcommand, timeout_sec=timeout_sec)
+        return await self._env._compose_exec(
+            subcommand, timeout_sec=timeout_sec, env=env
+        )
 
     @override
     async def _host_exec(
@@ -206,13 +210,13 @@ class _EC2ComposeOps(DinDComposeOps):
         if cwd:
             parts.extend(["-w", cwd])
         if env:
-            for key, value in env.items():
-                parts.extend(["-e", f"{key}={value}"])
+            for key in env:
+                parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         parts.extend([MAIN_SERVICE_NAME, "bash", "-lc", wrapper])
 
-        start_result = await self._compose_exec(parts, timeout_sec=30)
+        start_result = await self._compose_exec(parts, timeout_sec=30, env=env)
         if start_result.return_code != 0:
             return start_result
 
@@ -779,16 +783,12 @@ class EC2Environment(ComposeServiceOpsMixin, BaseEnvironment):
         self,
         command: str,
         cwd: str | None = None,
-        env: dict[str, str] | None = None,
         timeout_sec: int | None = None,
         user: str | int | None = None,
+        *,
+        stdin: bytes | None = None,
     ) -> ExecResult:
         script = command
-        if env:
-            assignments = " ".join(
-                f"{key}={shlex.quote(value)}" for key, value in env.items()
-            )
-            script = f"{assignments} {script}"
         if cwd:
             script = f"cd {shlex.quote(cwd)} && {script}"
         if user is not None:
@@ -800,6 +800,7 @@ class EC2Environment(ComposeServiceOpsMixin, BaseEnvironment):
         stdout, stderr, return_code = await self._ssh_raw(
             remote_command,
             timeout_sec=timeout_sec,
+            stdin=stdin,
         )
         stdout_text = stdout.decode(errors="replace") if stdout else None
         stderr_text = stderr.decode(errors="replace") if stderr else None
@@ -899,15 +900,6 @@ docker compose version >/dev/null 2>&1 || sudo docker compose version >/dev/null
             f"Last output: {last_output}"
         )
 
-    def _docker_parts(self, env_vars: dict[str, str] | None = None) -> list[str]:
-        if self._docker_cmd == "sudo docker":
-            parts = ["sudo", "env"]
-            if env_vars:
-                parts.extend(f"{key}={value}" for key, value in env_vars.items())
-            parts.append("docker")
-            return parts
-        return ["docker"]
-
     def _resolve_volumes(self) -> list[ServiceVolumeConfig]:
         return [
             self_bind_mount(mount) if mount.get("type") == "bind" else mount
@@ -986,14 +978,9 @@ docker compose version >/dev/null 2>&1 || sudo docker compose version >/dev/null
     def _environment_dir_vm(self) -> str:
         return f"{self._session_dir_vm}/{_ENVIRONMENT_DIR_NAME}"
 
-    def _compose_cmd(
-        self,
-        subcommand: list[str],
-        *,
-        env_vars_for_sudo: dict[str, str] | None = None,
-    ) -> str:
+    def _compose_cmd(self, subcommand: list[str]) -> str:
         parts = [
-            *self._docker_parts(env_vars_for_sudo),
+            "docker",
             "compose",
             "-p",
             self._compose_project_name,
@@ -1008,18 +995,14 @@ docker compose version >/dev/null 2>&1 || sudo docker compose version >/dev/null
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
-        env_vars = self._compose_env_vars()
-        if self._docker_cmd == "sudo docker":
-            return await self._ssh_exec(
-                self._compose_cmd(subcommand, env_vars_for_sudo=env_vars),
-                cwd="/",
-                timeout_sec=timeout_sec,
-            )
+        env_vars = {**self._compose_env_vars(), **(env or {})}
         return await self._ssh_exec(
-            self._compose_cmd(subcommand),
+            "sudo sh -s" if self._docker_cmd == "sudo docker" else "sh -s",
             cwd="/",
-            env=env_vars,
+            stdin=shell_env_stdin(self._compose_cmd(subcommand), env_vars).encode(),
             timeout_sec=timeout_sec,
         )
 

@@ -790,9 +790,10 @@ class VerifierCollectConfig(BaseModel):
         default=MAIN_SERVICE_NAME,
         description="Compose service to run the command in. Defaults to main.",
     )
-    timeout_sec: float = Field(
-        default=60.0,
-        description="Timeout in seconds for the collect command.",
+    timeout_sec: float | None = Field(
+        default=None,
+        description="Timeout in seconds for the collect command. Unset, the "
+        "hooks of one collection share the verifier timeout as one budget.",
     )
     user: str | int | None = Field(
         default=None,
@@ -913,6 +914,11 @@ class TaskConfig(BaseModel):
         for service in self.agents:
             if _validate_compose_service_name(service) != service:
                 raise ValueError(f"Invalid seat name: {service!r}")
+        if "main" in self.agents:
+            raise ValueError(
+                "main is the task's own service and cannot be a seat; name each "
+                "seat after its own Compose service."
+            )
         if self.steps:
             raise ValueError("A task with [agents.<service>] seats cannot have steps.")
         if not any(seat.under_test for seat in self.agents.values()):
