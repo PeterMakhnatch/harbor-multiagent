@@ -20,7 +20,7 @@ python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-ret
 
 The first profile withholds one worker. The second includes all workers and adds verified timeouts to the archived population. Both keep **archived model teams** separate from **scripted native controls**. See [the team-return operator](examples/seatlab/workbench/team-return.md) to read the findings, change the inputs, or run your own team.
 
-`list` shows all studies. `verify` with no names checks the entire catalog. After the clone, the workbench works offline. It needs no Harbor install, Docker, model key, or model call.
+`list` shows all studies. `verify` with no names checks the entire catalog. After the clone, these two commands work offline. They need no Harbor install, Docker, model key, or model call.
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
 
@@ -35,6 +35,8 @@ When several workers leave jobs overnight, [check which finished jobs need atten
 To tell whether a teammate received a report before a decision, [retain the message journal for each execution](examples/seat_handoffs/README.md#keep-message-evidence-when-harbor-retries-a-slot). You can [check message coverage against a saved host witness](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md#did-the-message-evidence-survive-too) without running a team.
 
 Before spending on a communication benchmark, [check what the world actually measures](examples/seat_handoffs/author.md). The same offline check distinguishes a returned report from a receiver acknowledgement. A reusable writer lets two authors instrument a new task without changing Harbor.
+
+To check a planned comparison before assigning teams, [compare two prepared native inputs](examples/seatlab/workbench/input-isolation.md). The command distinguishes one changed role instruction, one changed participant configuration, or one changed world setting. It needs the fork's Python environment but starts no seat.
 
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
