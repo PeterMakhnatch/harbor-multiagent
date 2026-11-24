@@ -11,6 +11,7 @@ is <plan>-<6 hex> with n_concurrent_trials 1. Docker runs at most 2 jobs, each t
 
 The plan file must be committed and unmodified at HEAD. The prereg commit must exist and be an ancestor
 of HEAD. A rerun skips finished cells. --retry-invalid reruns a cell whose trial was not valid.
+Consecutive starts are at least make_jobs.start_spacing_s apart (default 10 s, 0 disables), also on a resume.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ KEEP = frozenset({
 })
 KEEP_PREFIXES = ("LC_", "XDG_", "MODAL_", "DOCKER_")
 BALANCE_BACKOFF = (2, 5, 10)
+START_SPACING_S = 10.0
 LEAKY = ("silent", "talk", "open", "propose", "gated", "solo", "deepseek", "qwen", "gpt", "claude", "haiku", "luna",
           "oracle")
 _SPEC = importlib.util.spec_from_file_location("flotilla_pricing", ROOT / "pricing.py")
@@ -57,7 +59,7 @@ PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
-JOB_KEYS = frozenset({"max_turns", "env", "concurrency"})
+JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
 BUDGET_KEYS = frozenset({"cap_usd", "reserve_per_trial_usd", "provider_floors"})
 SET_KEYS = frozenset({"tasks_dir", "manifest", "instances", "arms", "conditions"})
 
@@ -120,6 +122,9 @@ def load_plan(path: Path) -> dict:
         raise SystemExit("refused: concurrency must be an integer >= 1")
     if options["env"] == "docker" and options["concurrency"] > 2:
         raise SystemExit("refused: docker concurrency must be <= 2")
+    spacing = options.get("start_spacing_s", START_SPACING_S)
+    if isinstance(spacing, bool) or not isinstance(spacing, (int, float)) or not 0 <= spacing <= 600:
+        raise SystemExit("refused: start_spacing_s must be a number from 0 to 600")
     if not plan["task_sets"] or not used_models(plan):
         raise SystemExit("refused: plan has no models or no task sets")
     if any(word in plan["name"] for word in LEAKY):
@@ -149,6 +154,10 @@ def load_plan(path: Path) -> dict:
         if not (task_set.get("arms") or task_set.get("conditions")):
             raise SystemExit(f"refused: task set {index} has no arms")
     return plan
+
+
+def spacing_of(plan: dict) -> float:
+    return float(plan["make_jobs"].get("start_spacing_s", START_SPACING_S))
 
 
 def repo_of(path: Path) -> Path:
@@ -372,7 +381,7 @@ def print_dry_run(plan: dict, order: list[dict]) -> None:
     reserve = float(plan["budget"]["reserve_per_trial_usd"])
     cap = float(plan["budget"]["cap_usd"])
     print(f"{plan['name']}: {len(order)} cells, reserve ${reserve:.2f} per trial, cap ${cap:.2f}, "
-          f"reserve if every cell starts ${reserve * len(order):.2f}")
+          f"reserve if every cell starts ${reserve * len(order):.2f}, start spacing {spacing_of(plan):.1f} s")
     for index, cell in enumerate(order, 1):
         print(f"{index}. set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
 
@@ -632,6 +641,18 @@ def wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap
         drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
     return None
 
+
+def pause_before_start(spacing: float, last_start: float | None, clock, sleep) -> bool:
+    """Sleep until spacing seconds have passed since the previous start. True when it slept."""
+    if last_start is None:
+        return False
+    remaining = spacing - (clock() - last_start)
+    if remaining <= 0:
+        return False
+    sleep(remaining)
+    return True
+
+
 def cell_gate(cell: dict, floors: dict, sources, sleep):
     seen = {}
     for model in cell.get("assignment") or [cell["model"]]:
@@ -648,13 +669,13 @@ def cell_gate(cell: dict, floors: dict, sources, sleep):
 
 
 def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, wrapper, env, repo, sources, namer,
-             sleep):
+             sleep, clock):
     options = plan["make_jobs"]
     reserve, cap = float(plan["budget"]["reserve_per_trial_usd"]), float(plan["budget"]["cap_usd"])
     floors, concurrency = plan["budget"]["provider_floors"], options["concurrency"]
     futures: dict = {}
     lock = threading.Lock()
-    index, spins, stop = 0, 0, None
+    index, spins, stop, last_start = 0, 0, None, None
     bound = len(pending) * 16 + 32
     try:
         while index < len(pending):
@@ -683,6 +704,10 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
                 stop = "floor"
                 log(run_dir, f"stop: {provider} balance ${money:.2f} is below floor ${float(floors[provider]):.2f}")
                 break
+            if pause_before_start(spacing_of(plan), last_start, clock, sleep):
+                drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+                if over_cap(state["spent_usd"], len(futures), reserve, cap):
+                    continue
             job = new_job(plan["name"], jobs_dir, namer)
             config_path = run_dir / "configs" / f"{job}.json"
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -693,6 +718,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             log(run_dir, f"start {job} set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
             submit(pool, futures, events, cell, job, command, run_dir / f"{job}.log", env, repo,
                    state["spent_usd"], reserve, cap, concurrency)
+            last_start = clock()
             index += 1
     finally:
         while futures:
@@ -702,7 +728,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
 
 def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, retry_invalid: bool = False,
         harbor: Path = HARBOR, jobs_dir: Path | None = None, wrapper: Path = WRAPPER,
-        sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None) -> list[dict]:
+        sources=None, base_env: dict[str, str] | None = None, namer=None, sleep=None, clock=None) -> list[dict]:
     plan_path = plan_path.resolve()
     plan = load_plan(plan_path)
     repo = repo_of(plan_path)
@@ -729,6 +755,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     else:
         check_resume(state, plan, order, digest)
         log(run_dir, f"resume {len(state['finished'])} finished")
+    log(run_dir, f"start spacing {spacing_of(plan):.1f} s")
     sources = sources or HttpSources(base_env or dict(os.environ))
     freeze_prices(sources, used_models(plan), state)
     save_state(state_path, state)
@@ -738,7 +765,7 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     with ThreadPoolExecutor(max_workers=plan["make_jobs"]["concurrency"]) as pool:
         reason = schedule(plan, pending, state, events, pool=pool, jobs_dir=jobs_dir, run_dir=run_dir,
                           harbor=harbor, wrapper=wrapper, env=env, repo=repo, sources=sources,
-                          namer=namer or secrets.token_hex, sleep=sleep or time.sleep)
+                          namer=namer or secrets.token_hex, sleep=sleep or time.sleep, clock=clock or time.monotonic)
     events.append({"kind": "stop", "reason": reason, "spent": state["spent_usd"]})
     log(run_dir, f"stop {reason}: spent ${state['spent_usd']:.4f}")
     save_state(state_path, state)

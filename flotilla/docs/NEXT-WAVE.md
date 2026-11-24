@@ -55,6 +55,14 @@ The runner stops before a new job when spend plus the reserve for the in-flight 
 pass the cap. It also stops when a provider balance is below its floor. Run the same command again to skip
 finished cells. Add `--retry-invalid` to rerun a cell that has no valid trial.
 
+Two starts are at least `make_jobs.start_spacing_s` seconds apart (default 10, `0` turns it off), in a fresh
+run and on a resume; the budget and balance checks and the wait for in-flight jobs are not delayed. The dry run
+and `progress.log` show the value. On 2026-11-23 a resume started about 31 trials in 10 s and 25 seats stalled
+for 612-747 s (FINDINGS.md). To find such stalls, run `python3 flotilla/docs/results/scripts/stall_scan.py
+.flotilla-local/jobs 'xm1-??????' 'pv10-??????' --threshold 500`: it lists each seat's first gap between agent
+turns above the threshold, groups gaps that start within 120 s into events, and gives per model the seats
+stalled out of the seats in flight (`--json OUT` saves the same data).
+
 OpenRouter cost is Harbor's recorded `cost_usd`. The runner also logs the token price from the catalog it
 froze at the start. DeepSeek direct cost is the published token price.
 
