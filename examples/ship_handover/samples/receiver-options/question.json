@@ -1,0 +1,23 @@
+{
+  "schema": "harbor.shipping.receiver-options-question/v1",
+  "question": "After receiving one opaque handover, does the relief seat have an irrevocable choice that guarantees exactly one parcel in both supplier states? Is that answer a property of the reference itself, or of what the team has agreed it means?",
+  "time_of_decision": "One relief decision now, after one accepted sender handoff in the public role handler. Record relief GET /brief, /status and /inbox with ready true before the one POST /resolve. Stop without resolving is distinct. No waiting, guessing, timing, extra communication, sender-private view or privileged identifiers.",
+  "controlled_conditions": [
+    "Two pinned native tasks: stock (committed, dropped) and in-flight (settles, fails). Never combine their role instructions.",
+    "When delivered, the same 32-hex token X denotes the original in one condition and an unused draft in another, by permuting the private identities. When no token arrives, compare explicit null and withheld original/draft with ready true. World owner sees the permutation, relief does not. Control cells are enumerations, not sampled or equiprobable trajectories.",
+    "For each identical complete relief-role view within a task, replay close, fresh, stop, and only if X was actually delivered, resume(X) and replace(X) where supported by that task. Freeze twice; score final parcels with the pinned native verifier. A rule is robust only if every compatible hidden case earns 1. Grades span a range, never an average over invented priors."
+  ],
+  "registered_predictions": [
+    "With a delivered opaque X and no sender convention, no one-step relief rule guarantees one parcel in either task. The same delivered bytes can denote different private objects.",
+    "When the sender is guaranteed to hand over the original, resume(X) guarantees one parcel in stock and replace(X) guarantees it in-flight. This knowledge is a team convention, not a signal observable in X.",
+    "With no received reference and no supplied fate, neither one-step team has a guaranteed rule, even under the original-only convention. At least one action earns 1 in some states."
+  ],
+  "retained_data": "Separately classify the 16 previously published in-flight native cuts: did the final decision follow a served reference, did the sender meet this convention, and is the chosen action grade within the verified range? Missing rows, missing prior receipts, post-decision receipts, native failures, and no decision stay separate. Do not count a late/absent reference as a receipt or successful verification as intent. This is retrospective, not an independent replication.",
+  "pass": "All predicted guarantee sets match exact scores across indistinguishable views; each analyzed native decision falls within its appropriate grade set and no unavailable reference is treated as delivered. Publish deviations.",
+  "cost_usd": "0.00",
+  "limits": [
+    "role handler and native ledger grading, not a new seat or transport trial",
+    "one irreversible move, not a bound on all multi-turn team protocols",
+    "public cuts are retained producer claims, not proof that a model perceived a message"
+  ]
+}
