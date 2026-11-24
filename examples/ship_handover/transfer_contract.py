@@ -6,10 +6,12 @@ from typing import Any
 from ..native_study import DIGEST, as_choice, as_list, as_record, as_text, require
 from ..seat_handoffs.native_records import read_record, record_digest
 from ..ship_inflight.materialize import BASE as STOCK_TASK
+from .arm_inputs import ROLE_PACKAGE_DIGEST
 from .collect import INFLIGHT_STATUSES
 from .study import (
     CHANNELS,
     INFLIGHT,
+    INFLIGHT_ROLE_DIGEST,
     MAX_CELLS,
     ROLES,
     SPECS,
@@ -48,6 +50,12 @@ assert all(
     for spec in SPECS.values()
 )
 assert STOCK_TASK["name"] == STOCK.task_name
+STOCK_ROLE_TASK = {**STOCK_TASK, "digest": ROLE_PACKAGE_DIGEST}
+STOCK_TASKS = (STOCK_TASK, STOCK_ROLE_TASK)
+assert all(set(task) == {"name", "digest", "checksum"} for task in STOCK_TASKS)
+assert STOCK_ROLE_TASK["name"] == STOCK_TASK["name"]
+assert STOCK_ROLE_TASK["checksum"] == STOCK_TASK["checksum"]
+assert STOCK_ROLE_TASK["digest"] != STOCK_TASK["digest"]
 
 
 def _guarded(
@@ -88,7 +96,7 @@ def _world(reg: dict[str, Any]) -> Spec:
     spec = spec_for(validate_registration(reg))
     if spec.world == STOCK.world:
         require(
-            reg["task"] == STOCK_TASK,
+            reg["task"] in STOCK_TASKS,
             f"stock registration does not bind the pinned {STOCK.task_name} fixture",
         )
     team_label(reg)
@@ -140,6 +148,12 @@ def check_pair(stock: dict[str, Any], inflight: dict[str, Any]) -> None:
     require(
         _world(inflight) is INFLIGHT,
         f"inflight registration must be {INFLIGHT.schema}",
+    )
+    stock_role = stock["task"]["digest"] == ROLE_PACKAGE_DIGEST
+    inflight_role = inflight["task"]["digest"] == INFLIGHT_ROLE_DIGEST
+    require(
+        stock_role == inflight_role,
+        "stock and inflight registrations bind different task package generations",
     )
     require(
         team_label(stock) == team_label(inflight),

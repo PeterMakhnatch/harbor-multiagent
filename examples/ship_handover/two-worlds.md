@@ -43,6 +43,8 @@ uv run python -B -m examples.ship_handover.design --world inflight --team crew \
   --participants "$roster" --blocks 1 --task "$work/ship-inflight" --out "$work/inflight.json"
 ```
 
+The integrated fork includes both seat instructions in new native packages. The new stock package has 12 files; the new in-flight package has 14. The released registrations use the earlier 10-file and 12-file packages. The source files did not change. Use both registrations from the same generation. Do not replace an old digest or mix a new registration with a released one. You can still read the released packets with Python alone.
+
 For a larger model study, increase `--blocks` equally. A block fixes 2 states × 2 channels for each task. The two tasks must have the same label and native participant configs by seat. Equal labels alone do not establish the same roster. The workbench accepted and emitted 4 configs for a named `opencode` pair without credentials. None started. That dry run does not qualify a provider or its price.
 
 Give each worker the immutable registrations. Stage only its assigned shard on a trusted host. Example for worker 0 of 2:

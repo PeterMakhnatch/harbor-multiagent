@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import re
 import sys
 from contextlib import suppress
@@ -78,6 +79,11 @@ INFLIGHT_PIN = (
 )
 INFLIGHT_PIN_SCHEMA = "harbor.ship-inflight.source/v1"
 INFLIGHT_PIN_FIELDS = frozenset({"schema", "question", "task", "task_files", "files"})
+INFLIGHT_ROLE_FILES = ("instructions/outgoing.md", "instructions/relief.md")
+INFLIGHT_ROLE_DIGEST = (
+    "sha256:0950daefa93ba321d4936cbc2d600b8eb8b3980805f1ba73efd88fa11b921218"
+)
+INFLIGHT_GENERATIONS = ("legacy", "role-aware")
 INFLIGHT_POLICIES = {
     "outgoing": POLICIES["outgoing"],
     "relief": ("replace", *POLICIES["relief"]),
@@ -152,7 +158,19 @@ def spec_for(registration: object) -> Spec:
     return found[0]
 
 
-def pinned_task(spec: Spec) -> tuple[dict[str, Any], str] | None:
+def _listing(outer: Any, files: dict[str, str], names: list[str]) -> str:
+    assert 0 < len(names) <= len(files)
+    for name in sorted(names):
+        outer.update(f"{name}\0{files[name].removeprefix('sha256:')}\n".encode("ascii"))
+    return "sha256:" + outer.hexdigest()
+
+
+def _tree(task: dict[str, Any], files: dict[str, str]) -> str:
+    header = f"{task['name']}\0{task['digest']}\0{task['checksum']}\n"
+    return _listing(hashlib.sha256(header.encode("ascii")), files, list(files))
+
+
+def known_tasks(spec: Spec) -> dict[str, tuple[dict[str, Any], str]] | None:
     if spec.pin is None:
         return None
     record = read_record(spec.pin, MAX_PIN_BYTES)
@@ -162,8 +180,61 @@ def pinned_task(spec: Spec) -> tuple[dict[str, Any], str] | None:
         pin["schema"] == INFLIGHT_PIN_SCHEMA,
         f"task pin schema must be {INFLIGHT_PIN_SCHEMA}",
     )
-    task = check_task(pin["task"], spec.task_name)
-    return task, as_text(pin["task_files"], "task pin files digest", DIGEST)
+    legacy = check_task(pin["task"], spec.task_name)
+    files = as_record(pin["files"], "task pin files")
+    for name, digest in files.items():
+        as_text(digest, f"task pin file {name}", DIGEST)
+    require(
+        set(INFLIGHT_ROLE_FILES) < set(files),
+        f"task pin lacks the role files {', '.join(INFLIGHT_ROLE_FILES)}",
+    )
+    shared = [name for name in files if name not in INFLIGHT_ROLE_FILES]
+    require(
+        _listing(hashlib.sha256(), files, shared) == legacy["digest"],
+        "task pin digest is not the legacy listing of its files without role files",
+    )
+    require(
+        _listing(hashlib.sha256(), files, list(files)) == INFLIGHT_ROLE_DIGEST,
+        f"task pin files do not give the role-aware digest {INFLIGHT_ROLE_DIGEST}",
+    )
+    require(
+        _tree(legacy, files) == as_text(pin["task_files"], "task pin tree", DIGEST),
+        "task pin tree digest is not the legacy listing of its files",
+    )
+    role = {**legacy, "digest": INFLIGHT_ROLE_DIGEST}
+    known = {
+        "legacy": (legacy, pin["task_files"]),
+        "role-aware": (role, _tree(role, files)),
+    }
+    assert tuple(known) == INFLIGHT_GENERATIONS and legacy != role
+    return known
+
+
+def _generation(spec: Spec, task: dict[str, Any]) -> str | None:
+    known = known_tasks(spec)
+    if known is None:
+        return None
+    found = [label for label, (identity, _) in known.items() if identity == task]
+    assert len(found) <= 1
+    return found[0] if found else None
+
+
+def accepted_task(spec: Spec, task: dict[str, Any], files: str | None = None) -> bool:
+    """Stock accepts any package; inflight accepts only a pinned legacy or
+    role-aware identity, and with files only that identity's own tree digest."""
+    known = known_tasks(spec)
+    if known is None:
+        return True
+    return any(
+        identity == task and files in (None, tree) for identity, tree in known.values()
+    )
+
+
+def refused_task(spec: Spec, where: str) -> str:
+    return (
+        f"{where} is neither the legacy nor the role-aware {spec.task_name} "
+        f"package (identity and tree) pinned in {spec.pin}"
+    )
 
 
 def task_dir_for(spec: Spec, task: str | None) -> Path:
@@ -176,14 +247,6 @@ def task_dir_for(spec: Spec, task: str | None) -> Path:
     )
     assert spec.task_dir is not None
     return spec.task_dir
-
-
-def require_pinned_files(spec: Spec, task_dir: Path, files_digest: str) -> None:
-    pin = pinned_task(spec)
-    require(
-        pin is None or pin[1] == files_digest,
-        f"task {task_dir} is not the pinned {spec.task_name} package",
-    )
 
 
 def _check_env(value: object, where: str, role: str, oracle: bool, spec: Spec) -> None:
@@ -262,11 +325,7 @@ def validate_registration(value: object) -> dict[str, Any]:
     registration = as_record(value, "registration", REGISTRATION_FIELDS)
     spec = spec_for(registration)
     task = check_task(registration["task"], spec.task_name)
-    pin = pinned_task(spec)
-    require(
-        pin is None or task == pin[0],
-        f"registration does not bind the pinned {spec.task_name} package",
-    )
+    require(accepted_task(spec, task), refused_task(spec, "registration task"))
     teams = _check_teams(registration["teams"], spec)
     _check_cells(registration["cells"], teams, spec)
     return registration
@@ -305,6 +364,19 @@ INFLIGHT_WORLD = _world(INFLIGHT)
 assert len(WORLD) == len(INFLIGHT_WORLD) == 8
 
 
+def _unregistered(
+    spec: Spec, task_dir: Path, registered: dict[str, Any], found: dict[str, str]
+) -> str:
+    bound, read = _generation(spec, registered), _generation(spec, found)
+    if bound is None or read is None:
+        return f"task {task_dir} is unregistered: {found}"
+    return (
+        f"registration binds the {bound} {spec.task_name} package but the installed "
+        f"packager reads {task_dir} as the {read} package; emit never relabels a "
+        "registration, so register again with the installed packager"
+    )
+
+
 def _requests(
     args: argparse.Namespace, trials: Path
 ) -> tuple[Path, str, list[tuple[str, dict[str, Any]]]]:
@@ -318,12 +390,16 @@ def _requests(
     identity = registration["task"]
     files_digest = task_files_digest(task_dir, identity)
     found = task_identity(harbor, task_dir, spec.task_name)
-    require(found == identity, f"task {task_dir} is unregistered: {found}")
+    if found != identity:
+        raise ValueError(_unregistered(spec, task_dir, identity, found))
     require(
         task_files_digest(task_dir, identity) == files_digest,
         "task changed while it was checked",
     )
-    require_pinned_files(spec, task_dir, files_digest)
+    require(
+        accepted_task(spec, identity, files_digest),
+        refused_task(spec, f"task {task_dir}"),
+    )
     teams = registration["teams"]
     require_normalized(harbor, teams)
     requests = [
