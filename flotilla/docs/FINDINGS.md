@@ -470,6 +470,12 @@ Inferred:
 Lesson: a communication arm needs a delivery path that does not depend on the seat polling. Report the share of
 actions taken with an unread message next to every talk effect.
 
+Addendum 21:25 ET (DeepSeek control `lwc`, 32 trials, after SPLIT.md section 19 Amendment 2): talk 12 of 16, gated 15
+of 16 (b = 3, c = 0, p = 0.25). DeepSeek took 12 of 66 exposed talk claims with an unread message, and the gate
+fired in only 7 of its 16 gated trials (Haiku and Luna: 63 of 64). A delivered message decided 1 of the 3 b pairs;
+the other 2 came from message order and a 409 that only paused a seat. For a model that reads first, the gate
+rarely fires.
+
 ## 2026-11-23 20:48 ET — A burst start after a pause stalled 25 seats for 10 to 12 minutes
 
 Run: the resume of waves xm1, pv10 and xp1 and the smoke lws at 7:07 PM ET (about 31 trials started within 10 s,
@@ -484,8 +490,8 @@ Observed:
   next step came at 7:19:36 PM ET with an uncached prompt. The trial log has no timeout or retry line.
 - All 17 trials are harness-valid. Effects: DeepSeek commons pairs 9 and 11 (silent lakes lost; the
   pre-registered sensitivity check removes them), pv10 Haiku instance 1 (a silent-only deal), and the DeepSeek lw
-  smoke failure (`lws-772c44` p1, 747 s), which SPLIT.md section 19 Amendment 2 re-runs. No pooled decision
-  changes.
+  smoke failure (`lws-772c44` p1, 747 s), which SPLIT.md section 19 Amendment 2 re-ran (the re-smoke `lws2` missed 0
+  of 4 seat-rounds, so the control lwc ran). No pooled decision changes.
 
 Inferred:
 
