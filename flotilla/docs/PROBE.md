@@ -733,7 +733,7 @@ wave. An independent agent re-derives the numbers before any report.
 (the expected cost is $0.55-0.62 from `vf1` and `rf1` per-trial costs; run_wave keeps a reserve of $0.02 per trial
 in flight), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the spend.
 
-**Amendment, 2026-11-24 11:45 ET (before any `io1` trial; after the trace mining and the `rr1` pre-registration).**
+**Amendment, 2026-11-24 11:00 ET (before any `io1` trial; after the trace mining and the `rr1` pre-registration).**
 `io1` runs after `rr1` (section 16), on GPT-6 Luna and on every new model that PASSes `rr1`. Haiku and DeepSeek
 are dropped: outside `au1` and Luna's `rf1v` `talk-false` cell, no false number reached a final answer in 2,224
 valid trials of all 3 models (FINDINGS.md, 2026-11-24 10:49 ET), so their cells were predicted at 0 to 2 of 32 and
@@ -1017,7 +1017,7 @@ direction only; power counts a PASS):
    file before the first submit, and the share that posted a correction to the team.
 3. Luna only: on instances 0-31 that ran, agreement with `rf1v` instance by instance (descriptive).
 
-**What the result decides.** In every case `io1` (section 14, amendment of 2026-11-24 11:45 ET) runs next on Luna
+**What the result decides.** In every case `io1` (section 14, amendment of 2026-11-24 11:00 ET) runs next on Luna
 and on every new model that PASSes.
 - Luna PASS and at least 2 new models PASS: the reliance failure is common among low-cost models; the reliance
   probe stays in the trust card and leads the write-up.

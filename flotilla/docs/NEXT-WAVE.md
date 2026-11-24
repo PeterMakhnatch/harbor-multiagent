@@ -210,7 +210,7 @@ Pre-registered in PROBE.md section 14 (commit a542223d, with the amendments made
 trial); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and `io1s` (`--read-first --post-trigger first_submit`),
 built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `flotilla/plans/io1smoke.json`
 (24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.90; expected cost $0.55-0.62).
-Amended 2026-11-24 11:45 ET (PROBE.md section 14): `io1` runs after `rr1`, on Luna and every `rr1` PASS model only.
+Amended 2026-11-24 11:00 ET (PROBE.md section 14): `io1` runs after `rr1`, on Luna and every `rr1` PASS model only.
 Before it runs, set `models` in `io1smoke.json` and `io1.json` to those models, set the `io1` cap to $0.30 per model,
 and change `io1_decide.py` to take the Holm family size from the plan and the reliance result from `rr1`.
 
@@ -245,7 +245,7 @@ python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'cr
 python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.json /tmp/cr1.json
 ```
 
-### Order for an approved batch (revised 2026-11-24 11:50 ET)
+### Order for an approved batch (revised 2026-11-24 11:05 ET)
 
 Run one step at a time, and only after Peter approves its spend. "Most" is the plan's OpenRouter cap plus Modal at
 about $0.0021 per trial for every planned trial. Before each step, add its "most" to the spend so far (run logs,
