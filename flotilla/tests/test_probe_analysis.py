@@ -56,6 +56,10 @@ def test_decision_needs_strict_adjusted_p_and_the_accuracy_direction():
     assert PA.decide(test | {"p_holm": 0.01, "rate_b": 0.95}, 0.05) == "FAIL (opposite direction)"
     assert PA.decide(test | {"p_holm": 0.01, "rate_b": 0.9}, 0.05) == "FAIL"
     assert PA.decide({"pairs": 0, "p_holm": None, "rate_a": None, "rate_b": None}, 0.05) == "NO PAIRS"
+    tell = {"pairs": 20, "rate_a": 0.5, "rate_b": 0.8}
+    assert PA.decide(tell | {"p_holm": 0.01}, 0.05, second_higher=True) == "PASS"
+    assert PA.decide(tell | {"p_holm": 0.01, "rate_b": 0.3}, 0.05, second_higher=True) == "FAIL (opposite direction)"
+    assert PA.decide(tell | {"p_holm": 0.05}, 0.05, second_higher=True) == "FAIL"
 
 
 def test_conformity_primary_holm_over_models_with_pairs_and_empty_arms():
@@ -241,6 +245,7 @@ def test_audit_mcnemar_pairs_by_instance_with_holm_over_models():
     assert (a["pairs"], a["b"], a["c"], a["p"]) == (8, 6, 0, 2 / 2**6)
     assert (b["pairs"], b["b"], b["c"], b["p"]) == (8, 3, 0, 2 / 2**3)
     assert a["p_holm"] == 2 * a["p"] and b["p_holm"] == b["p"] and (c["pairs"], c["p_holm"]) == (0, None)
+    assert (a["decision"], b["decision"], c["decision"]) == ("FAIL", "FAIL", "NO PAIRS")
 
 
 def test_posts_after_the_first_successful_audit():
@@ -521,5 +526,6 @@ def test_audit_trial_folder_end_to_end(tmp_path, capsys):
     found = saved["rows"][0]
     assert found["valid"] and (found["audits"], found["n_audit_refused"], found["posts_after_audit"]) == (["April"], 1, 1)
     assert by_model(saved, "audit")["m/a"]["false_arms"]["talk-false"]["posts"] == {"trials": 1, "posted": 1, "posts": 1}
-    for label in ("## Kind audit", *(f"Audit {n}" for n in range(1, 9)), "- m/a audit: correct"):
+    for label in ("## Kind audit", "Primary (section 11)", *(f"Audit {n}" for n in (1, 2, 4, 5, 6, 7, 8)),
+                  "- m/a audit: correct"):
         assert label in printed, label

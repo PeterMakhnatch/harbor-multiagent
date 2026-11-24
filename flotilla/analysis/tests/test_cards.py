@@ -162,8 +162,7 @@ class Cards(unittest.TestCase):
         self.assertIn("verified (read the false file) 5/45 = 0.111 (unknown 3, n/a 0)", verify_text)
         audit_text = text(render_card(Card("au9", "au9.json", audit())))
         for expected in (
-            "talk-false vs talk-false-tell (not pre-registered) talk-false vs talk-false-tell "
-            "10 2 1 1.0000 1.0000 -",
+            "primary talk-false vs talk-false-tell 10 2 1 1.0000 1.0000 -",
             "talk-false pass-through, Wilson 95% 3/10 [0.100, 0.500]",
             "talk-false-tell targeting (false month / audited), binomial vs 1/3 5/6, p = 0.3196",
             "talk-false pass-through by audit (false month, other month, none) 0/4, 1/2, 2/4",

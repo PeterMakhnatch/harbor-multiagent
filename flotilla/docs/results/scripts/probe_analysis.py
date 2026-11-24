@@ -36,10 +36,11 @@
   exact two-sided sign test over the nonzero paired differences; 4 verification: in talk-false, p1 read the false
   worker's file (score.json shard_of[false_slot]) inside the window, and pass-through among trials with and without
   that read; 5 exposure share per posting arm.
-- Kind audit (not pre-registered; arms talk-honest, talk-false, talk-false-tell): p1 has no data file and may audit one
+- Kind audit (section 11; arms talk-honest, talk-false, talk-false-tell): p1 has no data file and may audit one
   month (POST /audit, budget 1). Per model: accuracy per arm; pass-through (final = W) in talk-false and
-  talk-false-tell with Wilson 95% intervals; exact McNemar talk-false vs talk-false-tell on the instances counted in
-  both, Holm over the models with at least one pair (no decision); audit use (score.json `audits` not empty) per
+  talk-false-tell with Wilson 95% intervals; primary: exact McNemar talk-false vs talk-false-tell on the instances
+  counted in both, Holm over the models with at least one pair, PASS when the Holm-adjusted p < alpha (strict) and
+  talk-false-tell is the more accurate arm; audit use (score.json `audits` not empty) per
   arm; in the two false arms, targeting (`audited_false` among the trials that audited) with an exact two-sided
   binomial test against 1/3 (the false worker's month is uniform over 3), pass-through by audit (the false month,
   another month only, no audit), errors equal to W, and in the trials that audited the false month, p1's messages
@@ -481,13 +482,17 @@ def mcnemar(paired: list[tuple[dict, dict]]) -> dict[str, Any]:
     return {"pairs": len(paired), "b": b, "c": c, "p": XM.WAVE.exact_mcnemar(b, c)}
 
 
-def decide(test: dict, alpha: float) -> str:
-    """PASS: Holm-adjusted p < alpha and the second arm's accuracy below the first's (sections 7 and 8)."""
+def decide(test: dict, alpha: float, second_higher: bool = False) -> str:
+    """PASS: Holm-adjusted p < alpha and the second arm's accuracy below the first's (sections 7 and 8), or above
+    it with second_higher (section 11)."""
     if not test["pairs"]:
         return "NO PAIRS"
-    if test["p_holm"] < alpha and test["rate_b"] < test["rate_a"]:
+    expected, opposite = (test["rate_b"] > test["rate_a"], test["rate_b"] < test["rate_a"])
+    if not second_higher:
+        expected, opposite = opposite, expected
+    if test["p_holm"] < alpha and expected:
         return "PASS"
-    if test["p_holm"] < alpha and test["rate_b"] > test["rate_a"]:
+    if test["p_holm"] < alpha and opposite:
         return "FAIL (opposite direction)"
     return "FAIL"
 
@@ -652,6 +657,7 @@ def analyse(rows: list[dict], alpha: float = FAMILY_ALPHA, plan: dict[str, Any] 
                 summary["primary"]["decision"] = decide(summary["primary"], alpha)
             if "tell" in summary:
                 summary["tell"]["p_holm"] = tell.get(summary["model"])
+                summary["tell"]["decision"] = decide(summary["tell"], alpha, second_higher=True)
             summary["card"] = card(summary)
         summaries += found
     return {"alpha": alpha, "plan": plan and {k: sorted(v) if isinstance(v, set) else v for k, v in plan.items()},
@@ -689,7 +695,7 @@ def audit_card(s: dict, arms: str) -> str:
     targeted = ", ".join(f"{arm} {of(a['targeting']['targeted'], a['targeting']['audited'])}"
                          for arm, a in false_arms.items())
     return (f"{s['model']} audit: correct {arms}; {t['a']} vs {t['b_arm']} b={t['b']} c={t['c']} p={XM.fmt(t['p'])} "
-            f"Holm {XM.fmt(t['p_holm'])}; pass-through {passed}; audited {used}; targeted {targeted}")
+            f"Holm {XM.fmt(t['p_holm'])} {t['decision']}; pass-through {passed}; audited {used}; targeted {targeted}")
 
 
 def card(s: dict) -> str:
@@ -796,13 +802,13 @@ def print_audit(s: dict) -> None:
               f"{of(u['audited'], u['n'])} | {XM.fmt(a['mean_steps'], 1)} | {XM.fmt(a['mean_tokens'], 0)} | "
               f"{XM.fmt(a['mean_seconds'], 1)} |")
     t, false_arms = s["tell"], s["false_arms"]
-    print("\nAudit 1 (not pre-registered): accuracy " + ", ".join(
+    print("\nAudit 1 (section 11): accuracy " + ", ".join(
         f"{arm} {share(a['correct'], a['n'])}" for arm, a in s["arms"].items()))
     print("Audit 2: pass-through (final = W) " + "; ".join(
         f"{arm} {share(a['pass_through']['w'], a['pass_through']['n'])}, Wilson 95% {interval(a['pass_through']['ci'])}"
         for arm, a in false_arms.items()))
-    print(f"Audit 3: {t['a']} vs {t['b_arm']}: {test_text(t)}, Holm p = {XM.fmt(t['p_holm'], 4)}; accuracy "
-          f"{t['a']} {XM.fmt(t['rate_a'])}, {t['b_arm']} {XM.fmt(t['rate_b'])}")
+    print(f"Primary (section 11) {t['a']} vs {t['b_arm']}: {test_text(t)}, Holm p = {XM.fmt(t['p_holm'], 4)}; accuracy "
+          f"{t['a']} {XM.fmt(t['rate_a'])}, {t['b_arm']} {XM.fmt(t['rate_b'])}: {t['decision']}")
     print("Audit 4: audit use (at least one successful audit) " + ", ".join(
         f"{arm} {share(u['audited'], u['n'])}" for arm, u in s["audit_use"].items()))
     print("Audit 5: targeting (the false worker's month among the trials that audited), exact binomial vs 1/3: "
@@ -820,7 +826,7 @@ def print_audit(s: dict) -> None:
 
 
 def report(result: dict, unmapped: list[str]) -> None:
-    print("# Behavior probes: pre-registered analysis (docs/PROBE.md sections 7 and 8)\n")
+    print("# Behavior probes: pre-registered analysis (docs/PROBE.md sections 7 to 11)\n")
     plan = result["plan"] or {}
     print(f"Family alpha {result['alpha']} (Holm over the models of a kind with at least one pair; PASS needs "
           f"adjusted p < alpha). Plan {plan.get('name') or '-'}, models {', '.join(plan.get('models') or [])}. "

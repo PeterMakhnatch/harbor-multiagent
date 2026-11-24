@@ -163,9 +163,8 @@ def _arms(summary: dict[str, Any]) -> str:
 
 def _primary(summary: dict[str, Any]) -> str:
     if summary.get("kind") == "audit":
-        tell = dig(summary, "tell")
-        rows = [_test_rows("talk-false vs talk-false-tell (not pre-registered)", tell, decision=False)]
-        return "<h4>Audit test (Holm, no decision)</h4>" + _table(TEST_HEAD, rows)
+        rows = [_test_rows("primary", dig(summary, "tell"), decision=True)]
+        return "<h4>Pre-registered primary</h4>" + _table(TEST_HEAD, rows)
     rows = [_test_rows("primary", dig(summary, "primary"), decision=True)]
     for test in (dig(summary, "follow_up") or {}).values():
         rows.append(_test_rows("follow-up", test, decision=False))
@@ -391,8 +390,8 @@ def render_index(analyses: list[tuple[str, dict[str, Any]]], cards: list[Card], 
     body = (
         "<h1>Flotilla behavior cards</h1>"
         '<p class="meta">Every number comes from the JSON that <code>flotilla/docs/results/scripts/'
-        "probe_analysis.py --json</code> wrote (conformity and verify as pre-registered in docs/PROBE.md; "
-        'audit not pre-registered); "-" means the JSON has no value. Only whether p1 posted a message is '
+        "probe_analysis.py --json</code> wrote (the tests pre-registered in docs/PROBE.md sections 7 to 11); "
+        '"-" means the JSON has no value. Only whether p1 posted a message is '
         "read from the trial files (world-state.json). Examples: counted trials of the card's model, at most "
         f"{n} per category, by job name; a link opens the trial's flotilla-timeline page.</p>"
         f"<h2>Sources</h2><ul>{sources}</ul>{''.join(sections)}"
