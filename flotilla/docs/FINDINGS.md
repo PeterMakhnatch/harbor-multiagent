@@ -779,3 +779,50 @@ Inferred:
 
 Lesson: with tool-using agents, "before the work" means before the agent plans its first data read; measure where
 the messages land against that step, not against wall time.
+
+## 2026-11-24 10:49 ET — A quarter of the model money went to confirming a finished task; only Luna ever summed a report unread
+
+Exploratory analysis of finished waves (no new trials; not pre-registered). An agent (TraceMining) wrote
+`flotilla/docs/results/scripts/trace_features.py`, which derives 100 features per trial from the raw trial files,
+and ran it over all 2,619 trial folders of `vf1`, `pc2`, `pc3`, `pa1`, `rf1` and `au1` (2,616 valid). Its `--check`
+mode agrees with the 7 analysis JSONs on arm, model, validity, `correct`, adopted W, answer, attempts, gate, steps,
+cost and first attempt for every row. Six reader agents then read about 300 trials. Report:
+`.flotilla-local/cards/2026-11-24/readings/trace-mining.md`; table: `analysis/trace-features.csv`. I recomputed the
+cost and post counts below from the table.
+
+Observed:
+
+- Of $3.709 of `p1` model cost (Harbor `cost_usd`, valid trials; Modal not included), $0.892 (24.1%) came after
+  the world had accepted `p1`'s final submission: Haiku 26.4%, DeepSeek 23.1%, Luna 19.6%. Most of it is the
+  Terminus 2 completion check ("Are you sure you want to mark the task as complete?"), which needs a second
+  `task_complete` and one more model call over the full context (`terminus_2.py`, `_pending_completion`).
+- 29 Haiku trials (none of the other models) started with a first prompt above 30k tokens (normal about 2k): a
+  malformed first reply that the harness fed back. They cost $0.284, 7.7% of all model cost, and ran 200-430 s.
+- Outside `au1`, the false number reached the final answer only in Luna's 32 `rf1v` `talk-false` trials (2,224
+  other valid trials: 0; the only other wrong finals are 2 Haiku hand-sum slips). In those 32, step 2 was only
+  `GET /messages`, no data file was opened, and the sum was submitted at step 3. The stated reasons are about
+  availability ("No file inspection is needed because each teammate supplied their subtotal.", rf1-1cdbdf); none
+  says why the reports are right.
+- With the same read-first sentence and a full wrong total from 3 peers (`rf1c` `talk-wrong`), Luna said it would
+  verify in 47 of 48 trials and recomputed in 48 of 48.
+- After a wrong number was shown (non-`au1` sets, 400 trials per model), `p1` posted to the team in 181 Haiku
+  trials, 3 DeepSeek trials and 0 Luna trials. DeepSeek considered a post in 33 of 57 read trials and declined
+  because only its own answer is scored. No post was answered (scripted teammates); Haiku then polled for replies
+  (about 9.4 turns against 5.2 without a post).
+- In `au1` the world returned the audit as JSON with a `csv` field while the prompt said CSV text: DeepSeek's first
+  parse failed in 22 of 56 audits, and 2 trials lost their one audit. (World version 18 adds `?format=csv`, and the
+  current prompt names the `csv` field; `au2` uses both.)
+
+Inferred:
+
+- One harness setting could cut model cost by about a fifth at no loss of signal for these probes, because the
+  verifier scores `p1`'s last accepted answer, not the final turn. It changes the agent loop, so it belongs in a
+  Terminus 2 option (Harbor core) and every arm of a wave must use the same setting.
+- For Luna, the report shape matters: per-month parts of the sum it integrates, visible before any file is open,
+  were summed unread; a full total was checked. The existing data cannot separate order from the sentence, because
+  no `rf1v` arm has one without the other (`io1`, PROBE.md section 14, is designed for that).
+- More Haiku or DeepSeek trials on the verify and conformity sets add cost and no information: neither passed a
+  false number through in any of them.
+
+Lesson: read the cost of the turns after the outcome is fixed. In a harness built for one-shot grading, the
+closing ritual can be a quarter of the bill.
