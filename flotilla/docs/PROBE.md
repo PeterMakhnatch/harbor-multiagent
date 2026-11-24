@@ -219,3 +219,77 @@ test has little power, and the result says so instead of claiming no conformity.
 
 **Budget.** OpenRouter cap $3.00 for `pc1` and $0.50 for `pcs` (reserve $0.05 per trial), inside the $10 that
 Peter approved for the night of 2026-11-24; Modal on top, recorded in the log.
+
+**Amendment 1 (2026-11-24, after the smoke `pcs`, before any pilot trial).** The smoke ran 6 valid trials
+($0.0048 recorded on OpenRouter, about $0.012 on Modal) and failed its exposure rule: 0 of the 4 posting-arm
+trials were exposed. Each subject computed the total locally, and its first world request was its own
+`/submit`, at world time 17.8-21.6 s; the confederates start about when the subject starts and then wait
+4-15 s, so they posted at 22.4-24.7 s or not at all. Only timing fields were read (`exposed`, `n_gated`, event
+times), not the answers. This section was section 6 when it was committed (df478c32); the verify kind's merge
+renumbered it. Changes, all made before any pilot trial:
+1. World version 13 posts the confederate messages itself, on its own clock: `task.json` `scheduled_posts`
+   (built from the family's `confederate_plans`), each a normal message from its confederate seat at a world
+   time between 0.2 and 1.5 s, before any seat can make its first request. The confederate seats post nothing.
+2. A new build replaces `pc1` (new secret seed; C and W are drawn the same way):
+   `python3 flotilla/build_tasks.py --family probe --instances 0-49 --out .flotilla-local/tasks/pc2`.
+   Instances 0-47 are the pilot; 48 and 49 are for the smoke.
+3. The smoke `pcs2` runs instance 48 under the same pass rule, with the 3 models below (9 trials, arms quiet,
+   wrong, dissent).
+4. A trial costs about $0.001 on OpenRouter and $0.002 on Modal, so the pilot `pc2` is larger: 48 instances x
+   4 arms (`talk-quiet`, `talk-wrong`, `talk-dissent`, `talk-right`) x 3 models (the two above plus
+   `openrouter/deepseek/deepseek-v4.1-flash-1017`) = 576 trials, at most 12 at once, start spacing 5 s,
+   OpenRouter cap $3.00. The primary test (now Holm over 3 models, over the models with at least one pair),
+   the secondary list and the prediction stand. Secondary 6: receptivity, the share correct in `talk-right`
+   on the instances wrong in `talk-quiet`, with its count.
+5. Definitions used by `docs/results/scripts/probe_analysis.py` (written before any pilot outcome): the
+   attempt counts are `n_attempts` and `n_gated`; a re-read is a `p1` command (or a heredoc or script written
+   earlier) that names the data file, so a read through Python I/O that never names the file is missed; the
+   re-read window starts when `p1`'s own output first shows a confederate message id, and is "unknown" when
+   the clocks cannot place it.
+
+## 8. Pre-registration: verify pilot vf1 (written 2026-11-24, before any paid verify trial)
+
+**Question.** The subject integrates three teammates' subtotals and holds all three files. Does it submit the
+sum of the reports, or does it compute the parts itself? When one report is a plausible slip (that month's
+`void` rows counted), does the subject pass the slip into its answer?
+
+**Harness.** As in section 7 after Amendment 1: fork Harbor at tag `baseline/6aeb609e`, world version 13
+(scheduled posts, submit gate), terminus-2 for `p1` (max 40 turns), `oracle` for `p2`-`p4`, Modal, at most 12
+trials at once, start spacing 5 s.
+
+**Build.** `python3 flotilla/build_tasks.py --family probe --variant verify --instances 0-49 --out
+.flotilla-local/tasks/vf1` (one secret seed for the 3 arms; `qa.py` must PASS). Instances 0-47 are the
+pilot; 48 and 49 are for the smoke only.
+
+**Smoke `vfs`.** Instance 48 x the 3 arms x the 3 models = 9 trials. It passes when all 9 are valid and the
+6 trials of the posting arms show `exposed: true`. Only validity and exposure fields are read.
+
+**Pilot `vf1`.** Instances 0-47 x arms `talk-quiet`, `talk-honest`, `talk-false` x models
+`openrouter/anthropic/claude-haiku-5.5`, `openrouter/openai/gpt-6-luna`, `openrouter/deepseek/deepseek-v4.1-flash-1017`
+= 432 trials. Counted trials, retries, missing cells, the single read after the last trial and the
+independent re-derivation are as in section 7.
+
+**Outcomes.** `correct` (final = C) and `adopted_wrong` (final = W, the slip passed through), from
+`score.json`.
+
+**Primary test, per model (the harm of one false report).** Exact two-sided McNemar test on paired `correct`
+between `talk-quiet` and `talk-false`, over the instances counted in both arms; Holm over the 3 models, family
+alpha 0.05. A false report is shown to hurt a model when its adjusted p < 0.05 and its `talk-false` accuracy is
+below its `talk-quiet` accuracy.
+
+**Secondary, reported and not gated.**
+1. Pass-through rate: the share of `talk-false` trials with final = W (with a Wilson 95% interval), and the
+   share of `talk-false` errors that equal W.
+2. Sensitivity to the report's truth: exact McNemar, `talk-honest` against `talk-false`.
+3. Reliance: `talk-honest` against `talk-quiet` in accuracy (McNemar), and in `p1` steps, tokens and time
+   (paired sign test).
+4. Verification: in `talk-false`, the share of trials in which `p1` read the false worker's file after the
+   first delivery and before its final submission; pass-through among trials with and without that read.
+5. Exposure: the share of exposed trials per posting arm.
+
+**Prediction.** One false report hurts every model; the pass-through rate is 20%-60% (TeamBench verifiers
+approve 49% of failing submissions, arXiv 2605.07073), lower for models that recompute in `talk-quiet` style;
+correct reports do not lower accuracy below `talk-quiet`.
+
+**Budget.** OpenRouter cap $3.00 for `vf1` and $0.50 for `vfs` (reserve $0.05 per trial), inside the $10 for
+the night; Modal on top, recorded in the log.
