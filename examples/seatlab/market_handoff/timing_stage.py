@@ -92,7 +92,11 @@ def _checked_binding(binding: dict[str, Any], world: int) -> None:
             native_stage.fail(f"binding {role} view must be a non-empty object")
 
 
-def _checked_client(client: Path, control: bool) -> str:
+def _checked_client(client: Path | None, control: bool) -> str | None:
+    if control:
+        if client is not None:
+            native_stage.fail("control stages no client")
+        return None
     text = str(client)
     if (
         not isinstance(client, Path)
@@ -100,7 +104,7 @@ def _checked_client(client: Path, control: bool) -> str:
         or os.path.normpath(text) != text
     ):
         native_stage.fail("client must be an absolute normalized host path")
-    if not control and not (client.is_file() and os.access(client, os.X_OK)):
+    if not (client.is_file() and os.access(client, os.X_OK)):
         native_stage.fail("client must be an executable host file")
     return text
 
@@ -126,24 +130,32 @@ def task_files(scenario_bytes: bytes) -> dict[str, bytes]:
     return files
 
 
-def participants(out: Path, client: str, control: bool) -> list[dict[str, Any]]:
+def _seat_kwargs(
+    out: Path, seat: str, client: str | None, control: bool
+) -> dict[str, Any]:
+    assert type(control) is bool and (client is None) == control
+    owner = str(owner_root(out, seat))
+    if client is None:
+        return {"owner": owner, "control": control}
+    return {"client": client, "owner": owner, "control": control}
+
+
+def participants(out: Path, client: str | None, control: bool) -> list[dict[str, Any]]:
     return [
         {
             "seat": seat,
             "name": None,
             "import_path": SEAT_IMPORT,
             "model_name": None,
-            "kwargs": {
-                "client": client,
-                "owner": str(owner_root(out, seat)),
-                "control": control,
-            },
+            "kwargs": _seat_kwargs(out, seat, client, control),
         }
         for seat in SEATS
     ]
 
 
-def trial_config(out: Path, name: str, client: str, control: bool) -> dict[str, Any]:
+def trial_config(
+    out: Path, name: str, client: str | None, control: bool
+) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "task": {"path": str(out / "task"), "git_url": None, "name": None},
@@ -167,7 +179,7 @@ def stage(
     repeat: int,
     binding: dict[str, Any],
     early: str,
-    client: Path,
+    client: Path | None,
     control: bool = False,
 ) -> Path:
     if type(control) is not bool:

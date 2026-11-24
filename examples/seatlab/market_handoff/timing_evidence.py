@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import stat
 import tomllib
@@ -59,6 +60,7 @@ EVENT_KEYS = frozenset({"n", "seat", "event", "view_sha256"})
 METADATA_KEYS = frozenset({"role", "phase", "turns"})
 TURN_KEYS = frozenset({"purpose", "meta", "view_sha256", "reply"})
 KWARG_KEYS = frozenset({"client", "owner", "control"})
+CONTROL_KWARG_KEYS = frozenset({"owner", "control"})
 META_KEYS = frozenset(
     {
         "session_sha256",
@@ -221,6 +223,7 @@ def participants(root: Path, value: object, control: bool) -> dict[str, Path]:
     need(isinstance(value, list) and len(value) == len(SEATS), "participants")
     assert isinstance(value, list)
     owners: dict[str, Path] = {}
+    clients: list[object] = []
     for item in value:
         row = mapping(item, "participant_shape")
         seat = row.get("seat")
@@ -228,15 +231,30 @@ def participants(root: Path, value: object, control: bool) -> dict[str, Path]:
             raise Refused("participant_seat")
         kwargs = mapping(row.get("kwargs"), "participant_shape")
         need(
-            row.get("import_path") == SEAT_IMPORT and kwargs.keys() == KWARG_KEYS,
+            row.get("import_path") == SEAT_IMPORT
+            and (
+                kwargs.keys() == KWARG_KEYS
+                or (control and kwargs.keys() == CONTROL_KWARG_KEYS)
+            ),
             "participant_shape",
         )
         need(kwargs["control"] is control, "participant_control")
-        client = kwargs["client"]
-        need(
-            isinstance(client, str) and Path(client).is_absolute(), "participant_client"
-        )
+        if "client" in kwargs:
+            client = kwargs["client"]
+            need(
+                isinstance(client, str) and Path(client).is_absolute(),
+                "participant_client",
+            )
+        clients.append(kwargs.get("client"))
         owners[seat] = owner_path(root, kwargs["owner"])
+    if control:
+        legacy = clients[0]
+        need(len(set(clients)) == 1, "participant_client")
+        need(
+            legacy is None
+            or (isinstance(legacy, str) and os.path.normpath(legacy) == legacy),
+            "participant_client",
+        )
     paths = list(owners.values())
     need(
         all(a == b or a not in b.parents for a in paths for b in paths)

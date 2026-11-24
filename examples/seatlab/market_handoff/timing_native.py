@@ -17,7 +17,8 @@ TRIAL = re.compile(r"price-w([0-9]{2})-r([0-9]+)")
 CONTROL_WORLD = 8
 HOST_NAMES = ("HOME", "PATH", "LANG", "TMPDIR")
 PARTICIPANT_KEYS = frozenset({"seat", "name", "import_path", "model_name", "kwargs"})
-KWARG_KEYS = frozenset({"client", "owner", "control"})
+LIVE_KWARG_KEYS = frozenset({"client", "owner", "control"})
+CONTROL_KWARG_KEYS = frozenset({"owner", "control"})
 
 
 def _require(test: bool, why: str) -> None:
@@ -57,7 +58,7 @@ def _record(value: object) -> dict[str, object] | None:
     return record
 
 
-def _participant(raw: object) -> tuple[str, Path, Path, bool]:
+def _participant(raw: object) -> tuple[str, Path | None, Path, bool]:
     record = _record(raw)
     if record is None:
         raise TypeError("participant must be an object")
@@ -75,11 +76,15 @@ def _participant(raw: object) -> tuple[str, Path, Path, bool]:
         or record["name"] is not None
         or record["model_name"] is not None
         or kwargs is None
-        or kwargs.keys() != KWARG_KEYS
         or not isinstance(control, bool)
+        or kwargs.keys() != (CONTROL_KWARG_KEYS if control else LIVE_KWARG_KEYS)
     ):
         raise ValueError("participant is not a registered price timing seat")
-    client = _host_path(kwargs["client"], "client must be an absolute host path")
+    client = (
+        None
+        if control
+        else _host_path(kwargs["client"], "client must be an absolute host path")
+    )
     owner = _host_path(kwargs["owner"], "owner must be an absolute host path")
     return seat, client, owner, control
 
@@ -143,6 +148,7 @@ def checked_config(config_path: Path) -> bool:
         )
     if not control:
         client = clients.pop()
+        assert client is not None
         _require(
             client.is_file() and os.access(client, os.X_OK),
             "missing trusted model client",

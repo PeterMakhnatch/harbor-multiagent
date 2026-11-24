@@ -1,0 +1,223 @@
+{
+  "ack_tokens": {
+    "finance_a": "95634103b0f1",
+    "finance_b": "cbd589563b2c"
+  },
+  "acknowledged": [
+    "finance_a",
+    "finance_b"
+  ],
+  "actor_phases": {
+    "finance_a": "complete",
+    "finance_b": "complete",
+    "sales": "complete"
+  },
+  "checkpoint_sha256": "fe89afb90985acffd9557904866cb6c8edf01af3b06cad4437b294a937fef890",
+  "client_tokens": null,
+  "control": true,
+  "early": "finance_b",
+  "events": [
+    {
+      "event": "view",
+      "n": 1,
+      "seat": "sales",
+      "view_sha256": "feba96a22dc4227a3fb4e12222a484f103a4479186e12d1cf5763a00cbfb6d42"
+    },
+    {
+      "event": "commit",
+      "n": 2,
+      "seat": "sales",
+      "view_sha256": "feba96a22dc4227a3fb4e12222a484f103a4479186e12d1cf5763a00cbfb6d42"
+    },
+    {
+      "event": "view",
+      "n": 3,
+      "seat": "finance_a",
+      "view_sha256": "96eed7de6771d31010e4a679dcccd45dcd4f280d1927e586f28265fcabc308d7"
+    },
+    {
+      "event": "view",
+      "n": 4,
+      "seat": "finance_b",
+      "view_sha256": "eab44fb44bc01bfdd145940914ad2ebe14356f407023247fad40c1f397e1fd9c"
+    },
+    {
+      "event": "commit",
+      "n": 5,
+      "seat": "finance_a",
+      "view_sha256": "96eed7de6771d31010e4a679dcccd45dcd4f280d1927e586f28265fcabc308d7"
+    },
+    {
+      "event": "commit",
+      "n": 6,
+      "seat": "finance_b",
+      "view_sha256": "eab44fb44bc01bfdd145940914ad2ebe14356f407023247fad40c1f397e1fd9c"
+    },
+    {
+      "event": "receipt",
+      "n": 7,
+      "seat": "finance_a",
+      "view_sha256": "531e2b3e5fa70b1733510ecb0a0dba3848307a82e7e0cc2f7cba3b02c94f7fb4"
+    },
+    {
+      "event": "receipt",
+      "n": 8,
+      "seat": "finance_b",
+      "view_sha256": "8da17f74bb5b2f748aee70cb4f8b55f4ddd7756d9d3cd7c28575d8d7c535d55c"
+    },
+    {
+      "event": "ack",
+      "n": 9,
+      "seat": "finance_a",
+      "view_sha256": "531e2b3e5fa70b1733510ecb0a0dba3848307a82e7e0cc2f7cba3b02c94f7fb4"
+    },
+    {
+      "event": "ack",
+      "n": 10,
+      "seat": "finance_b",
+      "view_sha256": "8da17f74bb5b2f748aee70cb4f8b55f4ddd7756d9d3cd7c28575d8d7c535d55c"
+    }
+  ],
+  "journal_sha256": "697a4a309b98a1ef80e8f10f4773b3c3a55e5c0f7c0ab98de471819fbcbcef5a",
+  "kind": "control",
+  "late": "finance_a",
+  "native_id": "6b307b72-2f37-4a2a-8247-0bfdb6b46ca1",
+  "notes": [
+    "Native plumbing control on company 8: fixed host replies, no model sessions; excluded from every behavioral count."
+  ],
+  "picks": {
+    "finance_a": 2,
+    "finance_b": 3
+  },
+  "protocol_reward": 1.0,
+  "repeat": 0,
+  "report": {
+    "pick": 1,
+    "reason": "control"
+  },
+  "schema": "seatlab.price-timing/v1",
+  "settlements": {
+    "finance_a": {
+      "bankrupt": false,
+      "bankrupt_day": null,
+      "checkpoint_sha256": "fe89afb90985acffd9557904866cb6c8edf01af3b06cad4437b294a937fef890",
+      "continuation_profit_usd": 274775.27,
+      "end_day": 1095,
+      "net_worth_usd": 2904020.17,
+      "pick": 2,
+      "price_multiplier": 1.15,
+      "profit_usd": 43143.35,
+      "schema": "seatlab.price-timing-settle/v1",
+      "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+      "stock_score": 0.10761
+    },
+    "finance_b": {
+      "bankrupt": false,
+      "bankrupt_day": null,
+      "checkpoint_sha256": "fe89afb90985acffd9557904866cb6c8edf01af3b06cad4437b294a937fef890",
+      "continuation_profit_usd": -327660.86,
+      "end_day": 1095,
+      "net_worth_usd": 941872.45,
+      "pick": 3,
+      "price_multiplier": 0.85,
+      "profit_usd": -559292.78,
+      "schema": "seatlab.price-timing-settle/v1",
+      "source": "dbec43ff757c86c17077e61b37c7f584c880bdee",
+      "stock_score": 0.0
+    }
+  },
+  "sha256": {
+    "config": "3bf4e2edbc51e046c9eff1622f598924ffd1aeef2adf8d2bc888483789040d8f",
+    "journal": "697a4a309b98a1ef80e8f10f4773b3c3a55e5c0f7c0ab98de471819fbcbcef5a",
+    "result": "c1d6f5be508ccac849f4ef1d4736d2518e957971f725e1061c26356953dc0dfe",
+    "reward": "a95aa6fcff5c739e655920fc89913445a4d168b4a907cd4f860757bb7c900344",
+    "scenario": "c53794681ed13577e869b2aa5ac8ba7516252235850e85765ce916c87a38c01f",
+    "timing": "31444523d47914997f2b03dec382ee49652e4439c18b9bff2f5aef02f2de83a5"
+  },
+  "shape": "mnl",
+  "status": "complete",
+  "trial_name": "price-w08-r0",
+  "turns": [
+    {
+      "answer_sha256": "06c69db6471f4679a9969b767e6b58dbb35bae2ca63b091d3f2b4fc3450a5733",
+      "client_tokens": null,
+      "client_usage": null,
+      "credit_fallback": null,
+      "owner_sha256": null,
+      "prompt_sha256": "ea0e6214ce447e7f059470156efcc37537cbc9a681c4aaba8e680537909b33c7",
+      "purpose": "sales",
+      "reply": "{\"pick\":1,\"reason\":\"control\"}",
+      "requested_model": null,
+      "seat": "sales",
+      "served_model": null,
+      "session_sha256": null,
+      "tool_steps": null,
+      "view_sha256": "feba96a22dc4227a3fb4e12222a484f103a4479186e12d1cf5763a00cbfb6d42"
+    },
+    {
+      "answer_sha256": "852e34bbe7f44fd6af0ce750ec15eb16bf4eb028aab5ed39f882d0175e549c49",
+      "client_tokens": null,
+      "client_usage": null,
+      "credit_fallback": null,
+      "owner_sha256": null,
+      "prompt_sha256": "6f949f85e86fb4c3a7e17e589ace533497b17850dd076fe241173bdacb321a60",
+      "purpose": "finance-price",
+      "reply": "{\"pick\":2}",
+      "requested_model": null,
+      "seat": "finance_a",
+      "served_model": null,
+      "session_sha256": null,
+      "tool_steps": null,
+      "view_sha256": "96eed7de6771d31010e4a679dcccd45dcd4f280d1927e586f28265fcabc308d7"
+    },
+    {
+      "answer_sha256": "b853360507585a6583011e6b34b9f58c28290926d006de0626440fd8b6b8b4eb",
+      "client_tokens": null,
+      "client_usage": null,
+      "credit_fallback": null,
+      "owner_sha256": null,
+      "prompt_sha256": "77ed66be4dd18fbe88fb9997db8813418f61714bfb8c4dd25f766c61db5233c1",
+      "purpose": "finance-receipt",
+      "reply": "{\"ack\":\"95634103b0f1\"}",
+      "requested_model": null,
+      "seat": "finance_a",
+      "served_model": null,
+      "session_sha256": null,
+      "tool_steps": null,
+      "view_sha256": "531e2b3e5fa70b1733510ecb0a0dba3848307a82e7e0cc2f7cba3b02c94f7fb4"
+    },
+    {
+      "answer_sha256": "8770293f0fb040d8ab95a7a1614f7f923ac47526cc8f54dfde759394f29329b6",
+      "client_tokens": null,
+      "client_usage": null,
+      "credit_fallback": null,
+      "owner_sha256": null,
+      "prompt_sha256": "da87a9bde37851b53440b87974dab5cfa39dbf7381a5b5ae78ed81f4b1d81f8f",
+      "purpose": "finance-price",
+      "reply": "{\"pick\":3}",
+      "requested_model": null,
+      "seat": "finance_b",
+      "served_model": null,
+      "session_sha256": null,
+      "tool_steps": null,
+      "view_sha256": "eab44fb44bc01bfdd145940914ad2ebe14356f407023247fad40c1f397e1fd9c"
+    },
+    {
+      "answer_sha256": "2334b2facdf947398513e2030cc0293b9837f87e95b305a8a294cc89305bdc14",
+      "client_tokens": null,
+      "client_usage": null,
+      "credit_fallback": null,
+      "owner_sha256": null,
+      "prompt_sha256": "797809f2d012ead982f7549973cbd5ac89c2f1c5ca4506c4b847a090cb7477d9",
+      "purpose": "finance-receipt",
+      "reply": "{\"ack\":\"cbd589563b2c\"}",
+      "requested_model": null,
+      "seat": "finance_b",
+      "served_model": null,
+      "session_sha256": null,
+      "tool_steps": null,
+      "view_sha256": "8da17f74bb5b2f748aee70cb4f8b55f4ddd7756d9d3cd7c28575d8d7c535d55c"
+    }
+  ],
+  "world": 8
+}

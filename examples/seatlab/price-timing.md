@@ -26,20 +26,23 @@ git clone --branch experiments/seatlab-live-price-timing --single-branch \
 cd harbor-multiagent
 ```
 
-Use Python 3.12 with NumPy 2.1.3 for `STOCK_PYTHON`. Point `BESPOKE_STOCK` at the [released benchmark checkout](https://github.com/bespokelabsai/multi-agent-coordination-bench/tree/dbec43ff757c86c17077e61b37c7f584c880bdee) at the registered revision. Use the [fork's isolated native setup](../../README.md#seatlab-workbench) for `HARBOR_PYTHON`. Do not replace a global Harbor installation. Docker must run locally. `SLOT_WRAPPER` must be the shared launcher that limits concurrent Docker trials. On the study host it is `/tmp/crucible-docker-slot.sh`.
+Use Python 3.12 with NumPy 2.1.3 for `STOCK_PYTHON`. Point `BESPOKE_STOCK` at the [released benchmark checkout](https://github.com/bespokelabsai/multi-agent-coordination-bench/tree/dbec43ff757c86c17077e61b37c7f584c880bdee) at the registered revision. Use the [fork's isolated native setup](../../README.md#seatlab-workbench) for `HARBOR_PYTHON`. Do not replace a global Harbor installation. Start Docker locally.
 
-The live adapter supports personal `agy` 1.5.15 with `gemini-4-carbon-low`. Each live turn checks the route, client version, zero spendable AI credits, and the remaining quota. It denies tools and paid fallback. The client runs in an empty workspace. Never put credentials in the task, trial config, or Docker environment. The control does not call the model.
+Set `SLOT_WRAPPER` to `/tmp/crucible-docker-slot.sh` on Peter's study host. On a different host, all workers must use the same limiter. If that host has none, use the [limiter included in this fork](workbench/local-slot): `export SLOT_WRAPPER="$PWD/examples/seatlab/workbench/local-slot"`. It shares 2 slots across checkouts for one account. Do not mix the two limiters on one host.
+
+The native control needs **no model client, subscription, or API key**. Only the live seats require personal `agy` 1.5.15 with `gemini-4-carbon-low`. Each live turn checks the route, client version, zero spendable AI credits, and remaining quota. It denies tools and paid fallback. The client runs in an empty workspace. Never put credentials in the task, trial config, or Docker environment.
 
 ```sh
 m=examples.seatlab.market_handoff
 root=$(cd "$(mktemp -d)" && pwd -P)
-client=$(command -v agy)
 "$STOCK_PYTHON" -B -m "$m.timing_study" run --root "$root" \
   --stock "$BESPOKE_STOCK" --world 8 --repeat 0 --control \
-  --native-python "$HARBOR_PYTHON" --client "$client" --slot "$SLOT_WRAPPER"
+  --native-python "$HARBOR_PYTHON" --slot "$SLOT_WRAPPER"
 ```
 
-For a **new live team**, use `--world 0 --repeat 0` instead of `--world 8 --repeat 0 --control`. For the full design, issue worlds 0–7 with repetitions 0 and 1. Two operators can share `root` and issue distinct cells. A cell refuses a second launch. Keep the private root; it contains the native trial and original client receipts.
+The [original control](results/price-timing/control.json) and a [fresh control with no client configured](results/price-timing/control-no-client.json) each scored 1 for completing the handoff. The fixed raise earned $274,775.27 in simulated operating profit after day 90. The fixed discount lost $327,660.86. Both attempts used company 8, outside the analysis. Neither made a model call.
+
+For a **new live team**, replace `--world 8 --repeat 0 --control` with `--world 0 --repeat 0 --client "$(command -v agy)"`. For the full design, issue worlds 0–7 with repetitions 0 and 1. Two operators can share `root` and issue distinct cells. A cell refuses a second launch. Keep the private root; it contains the native trial and original client receipts.
 
 To inspect an existing cell without starting seats or Docker, run:
 
@@ -70,3 +73,7 @@ The public rows contain synthetic reports, choices and hashes. They do not authe
 ## Can the sales recommendation beat simply keeping prices?
 
 This **secondary diagnostic** was specified after the trials started, before inspecting their prices or profits. It cannot change the registered verdict. Rebuild each of the 8 companies and simulate all 3 prices from its day-90 checkpoint. Compare the reported prices with (1) always keeping prices and (2) the most profitable of the 3 prices in hindsight. Report ties as ties. For each complete pair, show what following sales exactly would have earned relative to keeping prices. A hindsight choice measures room to improve; it is not an available agent or a description of what sales knew. No new model sessions may answer this question. Never substitute a lookup from this diagnostic for a registered branch settlement.
+
+```sh
+"$STOCK_PYTHON" -B -m "$m.timing_value" "$root/rows.json" --stock "$BESPOKE_STOCK"
+```

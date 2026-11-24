@@ -170,6 +170,14 @@ def _checked_meta(
     return meta
 
 
+def _host_path(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and Path(value).is_absolute()
+        and os.path.normpath(value) == value
+    )
+
+
 def _private_root(owner: Path) -> None:
     owner.mkdir(mode=0o700, exist_ok=True)
     info = owner.lstat()
@@ -221,18 +229,15 @@ class TimingSeat(BaseAgent):
             raise ValueError("Price timing seat accepts only client, owner and control")
         if type(control) is not bool:
             raise ValueError("Price timing seat requires a boolean control flag")
-        for value in (client, owner):
-            if (
-                not isinstance(value, str)
-                or not Path(value).is_absolute()
-                or os.path.normpath(value) != value
-            ):
-                raise ValueError(
-                    "Price timing seat requires absolute host client and owner paths"
-                )
-        assert isinstance(client, str) and isinstance(owner, str)
+        if control and client is not None:
+            raise ValueError("Price timing control seat accepts no client")
+        if not _host_path(owner) or not (control or _host_path(client)):
+            raise ValueError(
+                "Price timing seat requires absolute host client and owner paths"
+            )
+        assert isinstance(owner, str) and (control or isinstance(client, str))
         super().__init__(logs_dir=logs_dir, model_name=None, logger=logger)
-        self._client = Path(client)
+        self._client = None if client is None else Path(client)
         self._owner = Path(owner)
         self._control = control
         self._sessions: set[str] = set()
@@ -300,6 +305,7 @@ class TimingSeat(BaseAgent):
         if self._control:
             answer, meta = control_reply, dict(CONTROL_META)
         else:
+            assert self._client is not None
             try:
                 answer, raw = await asyncio.to_thread(
                     timing_seat.call,

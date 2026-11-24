@@ -319,17 +319,18 @@ def native_env() -> dict[str, str]:
 def issue(stock: Any, target: Path, args: argparse.Namespace, early: str) -> None:
     from .timing_stage import stage
 
-    native_python, client, slot = (
-        Path(x).expanduser().absolute()
-        for x in (args.native_python, args.client, args.slot)
+    native_python, slot = (
+        Path(x).expanduser().absolute() for x in (args.native_python, args.slot)
     )
-    if any(
-        not p.is_file() or not os.access(p, os.X_OK)
-        for p in (native_python, client, slot)
-    ):
-        raise ValueError(
-            "native Python, trusted agy and the Docker slot must be executable files"
-        )
+    if any(not p.is_file() or not os.access(p, os.X_OK) for p in (native_python, slot)):
+        raise ValueError("native Python and the Docker slot must be executable files")
+    client = None
+    if not args.control:
+        if args.client is None:
+            raise ValueError("a live run requires --client")
+        client = Path(args.client).expanduser().absolute()
+        if not client.is_file() or not os.access(client, os.X_OK):
+            raise ValueError("trusted agy must be an executable file")
     target.mkdir(mode=0o700)
     store(
         target / "issued.json",
@@ -423,8 +424,9 @@ def main() -> int:
         sub.add_argument("--repeat", type=int, choices=(0, 1), required=True)
         sub.add_argument("--control", action="store_true")
         if name == "run":
-            for param in ("native-python", "client", "slot"):
+            for param in ("native-python", "slot"):
                 sub.add_argument("--" + param, type=Path, required=True)
+            sub.add_argument("--client", type=Path)
     args = parser.parse_args()
     os.umask(0o077)
     stock = simulator.load_stock(args.stock.resolve(strict=True))
@@ -437,6 +439,8 @@ def main() -> int:
         args.control and args.repeat != 0
     ):
         parser.error("--control is mandatory only for company 8, repetition 0")
+    if args.command == "run" and not args.control and args.client is None:
+        parser.error("a live run requires --client")
     if args.command == "run":
         issue(
             stock,
