@@ -23,16 +23,19 @@ from ..native_evidence import (
 from ..seat_checkpoints.bracket import (
     ACKS,
     HOST_KEYS,
-    HOST_SCHEMA,
+    HOST_SCHEMAS,
+    HOST_STATES,
+    LEGACY_HOST_SCHEMA,
     MARK_ID_PATTERN,
     MARK_KEYS,
     MAX_EVENTS,
     SAMPLE_KEYS,
     SNAPSHOT_KEYS,
-    STATES,
     WORLD_KEYS,
     WORLD_SCHEMA,
 )
+from ..seat_checkpoints.collect import DISPOSITION
+from ..seat_checkpoints.lifecycle import terminal_state
 from ..shift_board.collect import (
     CONFIG,
     CUT,
@@ -245,13 +248,13 @@ def read_native(trial: Path, cell: Record, task: Record) -> Record:
         assert isinstance(row, dict)
         require(row.get("seat") in SEATS and row["seat"] not in seats, "native seat")
         seats[row["seat"]] = row
-    clean = result["exception_info"] is None and all(
+    error_free = result["exception_info"] is None and all(
         row["exception_info"] is None for row in seats.values()
     )
     reward = native_reward(result) if result.get("reward_valid") is True else None
     return {
         "id": result["id"],
-        "clean": clean,
+        "error_free": error_free,
         "reward": reward,
         "checksum": result["task_checksum"],
         "seats": seats,
@@ -440,17 +443,21 @@ def read_schedule(trial: Path, cell: Record, native_id: str) -> Record:
     }
 
 
-def snapshot(value: object) -> bool:
+def snapshot(value: object, states: tuple[str, ...]) -> bool:
     return (
         isinstance(value, dict)
         and set(value) == SNAPSHOT_KEYS
-        and all(isinstance(state, str) and state in STATES for state in value.values())
+        and all(isinstance(state, str) and state in states for state in value.values())
     )
 
 
-def read_host(trial: Path, cell: Record, native_id: str) -> list[Record]:
+def read_host(trial: Path, cell: Record, native_id: str) -> Record:
     host = read_record(trial, HOST_JOURNAL, MAX_JOURNAL_BYTES)
-    require(set(host) == HOST_KEYS and host["schema"] == HOST_SCHEMA, "host fields")
+    schema = host.get("schema")
+    require(
+        set(host) == HOST_KEYS and type(schema) is str and schema in HOST_SCHEMAS,
+        "host fields",
+    )
     require(
         host["trial_id"] == native_id
         and host["ticket"] == cell["ticket"]
@@ -459,6 +466,7 @@ def read_host(trial: Path, cell: Record, native_id: str) -> list[Record]:
         and host["closed"] is True,
         "host binding",
     )
+    states = HOST_STATES[schema]
     samples = host["samples"]
     require(type(samples) is list and len(samples) <= MAX_SAMPLES, "host samples")
     for sample in samples:
@@ -466,14 +474,29 @@ def read_host(trial: Path, cell: Record, native_id: str) -> list[Record]:
             type(sample) is dict
             and set(sample) == SAMPLE_KEYS
             and is_mark_id(sample["id"])
-            and snapshot(sample["before"])
-            and (sample["after"] is None or snapshot(sample["after"]))
+            and snapshot(sample["before"], states)
+            and (sample["after"] is None or snapshot(sample["after"], states))
             and sample["ack"] in ACKS
             and sample["ack"] != "pending",
             "host sample",
         )
     require(len({sample["id"] for sample in samples}) == len(samples), "host ids")
-    return samples
+    return {"legacy": schema == LEGACY_HOST_SCHEMA, "samples": samples}
+
+
+def returned(native: Record | None, host: Record | None) -> bool:
+    if native is None or not native["error_free"]:
+        return False
+    legacy_host = host is not None and host["legacy"] is True
+    for row in native["seats"].values():
+        legacy = legacy_host and DISPOSITION not in row
+        try:
+            state = terminal_state(row.get(DISPOSITION), False, legacy=legacy)
+        except ValueError:
+            return False
+        if state != "clean":
+            return False
+    return True
 
 
 def read_marks(trial: Path, cell: Record, run: str) -> dict[str, Record]:
@@ -541,7 +564,7 @@ def first_request(samples: list[Record]) -> int | None:
     assert len(samples) <= MAX_SAMPLES
     for index, sample in enumerate(samples):
         target = sample["before"]["target"]
-        if target == "error":
+        if target in ("error", "not_returned"):
             return None
         if target == "clean":
             return index
@@ -582,7 +605,8 @@ def judge(found: Evidence, facts: Record) -> Record:
     }
     if verdict["case"] is not None:
         return verdict
-    samples, marks, seal, board = (facts[k] for k in ("host", "marks", "seal", "board"))
+    host, marks, seal, board = (facts[k] for k in ("host", "marks", "seal", "board"))
+    samples = host["samples"]
     decision = seal["decision"]
     index = first_request(samples)
     if index is None:
@@ -725,7 +749,7 @@ def collect_mismatch(row: Record | None, facts: Record, mode: str) -> list[str]:
     theirs: dict[str, object] = {}
     if board is not None:
         mine.update(native_grade=board["reward"], final_action=board["final_action"])
-    if board is not None and native is not None and native["clean"]:
+    if board is not None and native is not None and native["error_free"]:
         if native["reward"] == board["reward"]:
             mine["status"] = "graded"
     valid = decision["case"] in SUPPORTED and (
@@ -770,7 +794,7 @@ def arm_checks(
     checks = {
         "first_attempt": presence == "found",
         "native_complete": bool(
-            native and native["clean"] and native["reward"] is not None
+            returned(native, facts["host"]) and native["reward"] is not None
         ),
         "attempt_bound": found.ok("attempt"),
         "mode_bound": found.ok("binding"),

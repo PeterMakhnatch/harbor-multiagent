@@ -22,6 +22,7 @@ from ..native_study import (
     write_exclusive,
 )
 from ..seat_checkpoints.observe import MAX_INTERVAL_SEC, MIN_INTERVAL_SEC
+from ..seat_checkpoints.run import native_report
 from .contract import (
     LOCK_TASK_NAME,
     NATURAL,
@@ -171,21 +172,18 @@ async def run(args: argparse.Namespace, *, summary_to_stderr: bool = False) -> b
         result = await trial.run()
     finally:
         schedule_ok = await gates.finish() if gates is not None else True
-    clean = result.exception_info is None and all(
-        r.exception_info is None for r in result.seat_results or []
-    )
+    error_free, native_fields = native_report(result)
     print(
         json.dumps(
             {
                 "ticket": args.ticket,
-                "native_clean": clean,
-                "reward_valid": result.reward_valid,
+                **native_fields,
                 "schedule_complete": schedule_ok,
             }
         ),
         file=sys.stderr if summary_to_stderr else sys.stdout,
     )
-    return clean and result.reward_valid and schedule_ok
+    return error_free and result.reward_valid and schedule_ok
 
 
 def main() -> None:

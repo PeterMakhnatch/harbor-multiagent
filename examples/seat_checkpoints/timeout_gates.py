@@ -1,7 +1,6 @@
 from typing import override
 
 from .gates import Qualification, until
-from .observe import role_states
 from .timeout_contract import TIMEOUTS
 
 
@@ -14,9 +13,7 @@ class Deadline(Qualification):
         wanted = {role: "clean", other: "running"}
 
         def reached() -> bool:
-            states = role_states(
-                self.trial.result.seat_results or [], "planner", "dispatcher"
-            )
+            states = self.native()
             return {"planner": states["target"], "dispatcher": states["peer"]} == wanted
 
         await until(reached)

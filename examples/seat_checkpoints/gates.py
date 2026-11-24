@@ -8,7 +8,7 @@ from harbor.trial.hooks import TrialEvent, TrialHookEvent
 from harbor.trial.seats import SeatsTrial
 
 from ..native_study import write_exclusive
-from .observe import HOST_DOCUMENT, role_states
+from .observe import HOST_DOCUMENT, role_halted, role_states
 
 STAGES = {
     "planner": ("after_publish",),
@@ -64,12 +64,19 @@ class Qualification:
     def samples(self) -> list[dict[str, Any]]:
         return json.loads((self.root / HOST_DOCUMENT).read_bytes())["samples"]
 
+    def native(self) -> dict[str, str]:
+        results = self.trial.result.seat_results or []
+        if role_halted(results, "planner", "dispatcher"):
+            raise RuntimeError("a native seat will never return; gate aborted")
+        return role_states(results, "planner", "dispatcher")
+
     async def witness(self, state: str) -> None:
         assert state in {"running", "clean"}
         old = {r["id"] for r in self.samples()} if state == "running" else set()
         snapshot = {"target": state, "peer": "running"}
 
         def witnessed() -> bool:
+            self.native()
             rows = self.samples()
             if any(r["ack"] == "failed" for r in rows):
                 raise RuntimeError(
@@ -100,14 +107,7 @@ class Qualification:
         if self.schedule == "racing":
             self.release("dispatcher", before)
         if self.schedule == "off":
-            await until(
-                lambda: (
-                    role_states(
-                        self.trial.result.seat_results or [], "planner", "dispatcher"
-                    )["target"]
-                    == "clean"
-                )
-            )
+            await until(lambda: self.native()["target"] == "clean")
             self.trace.append("native:planner:clean")
         else:
             await self.witness("clean")

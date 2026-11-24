@@ -20,6 +20,7 @@ from ..native_study import (
 from ..shift_board.collect import _environment
 from .collect import load_registration
 from .gates import HELD, Qualification
+from .lifecycle import terminal_state
 from .observe import MAX_INTERVAL_SEC, MIN_INTERVAL_SEC, attach
 from .register import (
     CONTROL,
@@ -129,18 +130,39 @@ def classify(result: Any) -> tuple[list[str], list[str]]:
     actual: list[str] = []
     unexpected: list[str] = [f"{role}:missing" for role in ROLES if role not in seats]
     unexpected += [f"{seat}:unknown" for seat in seats if seat not in ROLES]
-    for role in ROLES:
-        info = seats[role].exception_info if role in seats else None
-        if info is None:
-            continue
-        if info.exception_type == NATIVE_DEADLINE:
-            actual.append(role)
-        else:
+    for role in (role for role in ROLES if role in seats):
+        info = seats[role].exception_info
+        if info is not None and info.exception_type != NATIVE_DEADLINE:
             unexpected.append(f"{role}:{info.exception_type}")
+            continue
+        if info is not None:
+            actual.append(role)
+        disposition = seats[role].execution_disposition
+        if disposition != ("returned" if info is None else "stop_requested"):
+            unexpected.append(f"{role}:disposition:{disposition}")
     trial = result.exception_info
     if trial is None or trial.exception_type != NATIVE_DEADLINE:
         unexpected.append(f"trial:{trial.exception_type if trial else None}")
     return actual, unexpected
+
+
+def native_report(result: Any) -> tuple[bool, dict[str, Any]]:
+    seats = result.seat_results or []
+    error_free = result.exception_info is None and all(
+        r.exception_info is None for r in seats
+    )
+    terminals = {
+        r.seat: terminal_state(
+            r.execution_disposition, r.exception_info is not None, legacy=False
+        )
+        for r in seats
+    }
+    return error_free, {
+        "native_error_free": error_free,
+        "seat_dispositions": {r.seat: r.execution_disposition for r in seats},
+        "seat_terminals": terminals,
+        "reward_valid": result.reward_valid,
+    }
 
 
 def attempt(
@@ -181,20 +203,17 @@ def attempt(
 def outcome(
     ticket: str, result: Any, schedule_ok: bool, timeouts: tuple[str, ...] | None
 ) -> bool:
-    clean = result.exception_info is None and all(
-        r.exception_info is None for r in result.seat_results or []
-    )
+    error_free, native_fields = native_report(result)
     report: dict[str, Any] = {
         "ticket": ticket,
-        "native_clean": clean,
-        "reward_valid": result.reward_valid,
+        **native_fields,
         "schedule_complete": schedule_ok,
     }
     if timeouts is None:
         print(json.dumps(report))
-        return clean and result.reward_valid and schedule_ok
+        return error_free and result.reward_valid and schedule_ok
     actual, unexpected = classify(result)
-    expected = not clean and actual == list(timeouts) and not unexpected
+    expected = not error_free and actual == list(timeouts) and not unexpected
     report |= {
         "expected_timeouts": list(timeouts),
         "actual_timeouts": actual,

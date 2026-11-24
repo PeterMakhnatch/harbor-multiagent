@@ -21,6 +21,7 @@ from ..native_evidence import (
     strict_object,
 )
 from ..seat_checkpoints.bracket import (
+    LEGACY_HOST_SCHEMA,
     MARK_ID_PATTERN,
     MAX_EVENTS,
     MAX_REVISION,
@@ -31,11 +32,14 @@ from ..seat_checkpoints.collect import (
     HOST_JOURNAL as HOST_JOURNAL,
     MAX_JOURNAL_BYTES,
     WORLD_LOG as WORLD_LOG,
+    Exit,
+    _exits,
     _host,
     _marker_log,
     _message_file,
     _prefixes,
     _roster,
+    _terminal,
 )
 from ..seat_checkpoints.native_timeout import Disposition, deadline_seconds
 from ..seat_checkpoints.native_timeout import classify as native_disposition
@@ -132,7 +136,6 @@ COMPARISONS = ("intervention", "finals", "incomplete")
 MAX_REFUSALS = 128
 MAX_TRACE = 64
 MAX_RECEIPT_BYTES = 16 << 10
-LIFECYCLE = ("not_started", "running", "clean", "error")
 
 
 class Native(NamedTuple):
@@ -140,7 +143,7 @@ class Native(NamedTuple):
     run: str | None
     grade: int | None
     error: str | None
-    states: dict[str, str] | None
+    exits: dict[str, Exit] | None
     events: list[Record] | None
     scores: list[int] | None
     revisions: list[int] | None
@@ -248,28 +251,6 @@ def _attempt(trial: Path, cell: Record, native_id: str, files: str) -> None:
     )
 
 
-def _seat_states(result: Record, cell: Record) -> dict[str, str] | None:
-    rows = result.get("seat_results")
-    if type(rows) is not list or len(rows) != 2:
-        return None
-    states: dict[str, str] = {}
-    for row in rows:
-        require(type(row) is dict and row.get("seat") in SEATS, "native seat row")
-        execution = row.get("agent_execution")
-        if row.get("exception_info") is not None:
-            state = "error"
-        elif type(execution) is dict and execution.get("finished_at") is not None:
-            state = "clean"
-        elif type(execution) is dict and execution.get("started_at") is not None:
-            state = "running"
-        else:
-            state = "not_started"
-        states[row["seat"]] = state
-    require(set(states) == set(SEATS), "native seat rows are not both seats")
-    assert set(states.values()) <= set(LIFECYCLE)
-    return {"target": states[cell["target"]], "peer": states[cell["peer"]]}
-
-
 def _graded(
     trial: Path,
     cell: Record,
@@ -298,7 +279,7 @@ def _graded(
         run,
         expected["reward"],
         error,
-        _seat_states(result, cell),
+        _exits(result),
         list(cut["events"]),
         scores,
         revisions,
@@ -364,7 +345,7 @@ def _request(host: Record) -> Record | None:
 def _journal(trial: Path, cell: Record, native: Native) -> Journal:
     if native.run is None or native.scores is None or native.revisions is None:
         return Journal("unavailable", "no validated native cut", None, None, None)
-    if native.states is None:
+    if native.exits is None:
         return Journal("unavailable", "native seat lifecycle absent", None, None, None)
     try:
         world = _marker_log(trial, cell, native.run)
@@ -375,16 +356,21 @@ def _journal(trial: Path, cell: Record, native: Native) -> Journal:
         return Journal("invalid", str(problem), None, None, None)
     if host is None:
         return Journal("absent", "host journal is missing", None, None, None)
+    legacy_host = host["schema"] == LEGACY_HOST_SCHEMA
     try:
+        target, peer = (
+            _terminal(native.exits[cell[role]], legacy_host)
+            for role in ("target", "peer")
+        )
         bound = analyze(
             host,
             world,
-            native_target=native.states["target"],
-            native_peer=native.states["peer"],
+            native_target=target,
+            native_peer=peer,
             scores=native.scores,
             revisions=native.revisions,
         )
-    except SeatCutInvalid as problem:
+    except (Invalid, SeatCutInvalid) as problem:
         return Journal("invalid", str(problem), None, None, None)
     assert bound["status"] in JOURNALS[:2]
     return Journal(bound["status"], None, bound, _request(host), world["marks"])

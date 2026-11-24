@@ -2,17 +2,24 @@ import re
 import uuid
 from typing import Any, NamedTuple
 
-HOST_SCHEMA = "harbor.seat-cut.host/v1"
+from .lifecycle import (
+    LEGACY_STATES,
+    OPEN_STATES,
+    STATE_RANK,
+    STATES,
+    TERMINAL_STATES,
+)
+
+LEGACY_HOST_SCHEMA = "harbor.seat-cut.host/v1"
+HOST_SCHEMA = "harbor.seat-cut.host/v2"
+HOST_SCHEMAS = (LEGACY_HOST_SCHEMA, HOST_SCHEMA)
+HOST_STATES = {LEGACY_HOST_SCHEMA: LEGACY_STATES, HOST_SCHEMA: STATES}
 WORLD_SCHEMA = "harbor.seat-cut.world/v1"
 BOUND_SCHEMA = "harbor.seat-cut.bound/v1"
 MAX_SAMPLES = 32
 MAX_EVENTS = 24
 MAX_REVISION = 2
-STATES = ("not_started", "running", "clean", "error")
 ACKS = ("pending", "ok", "failed")
-OPEN_STATES = frozenset({"not_started", "running"})
-TERMINAL_STATES = frozenset({"clean", "error"})
-STATE_RANK = {"not_started": 0, "running": 1, "clean": 2, "error": 2}
 HOST_KEYS = frozenset(
     {"schema", "trial_id", "ticket", "target", "peer", "closed", "samples"}
 )
@@ -23,6 +30,15 @@ MARK_KEYS = frozenset({"id", "after_seq", "revision"})
 MARK_ID_PATTERN = re.compile(r"[0-9a-f]{32}")
 TICKET_PATTERN = re.compile(r"sb-[0-9a-f]{16}")
 ROLE_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+TARGET_FLAGS = {
+    "not_started": "target_incomplete",
+    "running": "target_incomplete",
+    "error": "target_error",
+    "not_returned": "target_not_returned",
+}
+
+assert set(TARGET_FLAGS) == set(STATES) - {"clean"}
+assert set(HOST_STATES) == set(HOST_SCHEMAS)
 
 
 class SeatCutInvalid(ValueError):
@@ -119,21 +135,21 @@ def _validate_series(scores: Any, revisions: Any) -> int:
     return len(scores) - 1
 
 
-def _validate_snapshot(value: Any, where: str) -> Snapshot:
+def _validate_snapshot(value: Any, states: tuple[str, ...], where: str) -> Snapshot:
     snapshot = _require_dict(value, SNAPSHOT_KEYS, where)
     return Snapshot(
-        target=_require_choice(snapshot["target"], STATES, f"{where}.target"),
-        peer=_require_choice(snapshot["peer"], STATES, f"{where}.peer"),
+        target=_require_choice(snapshot["target"], states, f"{where}.target"),
+        peer=_require_choice(snapshot["peer"], states, f"{where}.peer"),
     )
 
 
-def _validate_sample(value: Any, where: str) -> Sample:
+def _validate_sample(value: Any, states: tuple[str, ...], where: str) -> Sample:
     sample = _require_dict(value, SAMPLE_KEYS, where)
     mark_id = _require_match(sample["id"], MARK_ID_PATTERN, f"{where}.id")
-    before = _validate_snapshot(sample["before"], f"{where}.before")
+    before = _validate_snapshot(sample["before"], states, f"{where}.before")
     after = None
     if sample["after"] is not None:
-        after = _validate_snapshot(sample["after"], f"{where}.after")
+        after = _validate_snapshot(sample["after"], states, f"{where}.after")
     ack = _require_choice(sample["ack"], ACKS, f"{where}.ack")
     if ack == "ok" and after is None:
         raise SeatCutInvalid(f"{where} acknowledged without an after snapshot")
@@ -144,8 +160,10 @@ def _validate_sample(value: Any, where: str) -> Sample:
 
 def _validate_host(host: Any) -> tuple[str, bool, list[Sample]]:
     document = _require_dict(host, HOST_KEYS, "host")
-    if document["schema"] != HOST_SCHEMA:
+    schema = document["schema"]
+    if type(schema) is not str or schema not in HOST_SCHEMAS:
         raise SeatCutInvalid("host schema mismatch")
+    states = HOST_STATES[schema]
     _require_uuid(document["trial_id"], "host.trial_id", version4=False)
     ticket = _require_match(document["ticket"], TICKET_PATTERN, "host.ticket")
     target = _require_match(document["target"], ROLE_PATTERN, "host.target")
@@ -157,7 +175,7 @@ def _validate_host(host: Any) -> tuple[str, bool, list[Sample]]:
         raise SeatCutInvalid("host.closed must be a bool")
     raw_samples = _require_list(document["samples"], MAX_SAMPLES, "host.samples")
     samples = [
-        _validate_sample(value, f"host.samples[{index}]")
+        _validate_sample(value, states, f"host.samples[{index}]")
         for index, value in enumerate(raw_samples)
     ]
     if len({sample.mark_id for sample in samples}) != len(samples):
@@ -358,9 +376,7 @@ def analyze(
     }
     flags = _context_flags(samples, closed, peer_state, ends)
     if target_state != "clean":
-        flags.insert(
-            0, "target_error" if target_state == "error" else "target_incomplete"
-        )
+        flags.insert(0, TARGET_FLAGS[target_state])
         result["flags"] = flags
         return result
     return _bounded(result, flags, ends, scores, cut_length)

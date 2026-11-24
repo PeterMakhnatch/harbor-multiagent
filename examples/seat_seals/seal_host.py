@@ -1,17 +1,14 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import override
 
 from harbor.trial.seats import SeatsTrial
 
 from ..seat_checkpoints.control_seat import ControlSeat
 from ..seat_checkpoints.gates import Qualification, until
-from ..seat_checkpoints.observe import (
-    MARK_COMMAND,
-    TERMINAL_STATES,
-    attach,
-    role_states,
-)
+from ..seat_checkpoints.lifecycle import TERMINAL_STATES
+from ..seat_checkpoints.observe import MARK_COMMAND, attach, role_halted
 
 SEAL_COMMAND = "python3 /app/seal_mark.py"
 SEAL_SCHEDULES = frozenset({"held-early", "held-late", "held-window", "held-leave"})
@@ -41,14 +38,20 @@ def _scripted(trial: SeatsTrial) -> bool:
 
 
 class _Decision:
-    def __init__(self, permit: asyncio.Event | None) -> None:
+    def __init__(
+        self, permit: asyncio.Event | None, halted: Callable[[], bool]
+    ) -> None:
         self._permit = permit
+        self._halted = halted
         self._requested = False
 
     async def select(self, before: dict[str, str]) -> str | None:
         if self._requested or before["target"] != "clean":
             return MARK_COMMAND
         self._requested = True
+        if self._halted():
+            logger.warning("seat-seal decision after a native stop; not transported")
+            return None
         if self._permit is None:
             return SEAL_COMMAND
         try:
@@ -56,6 +59,9 @@ class _Decision:
                 await self._permit.wait()
         except TimeoutError:
             logger.warning("seat-seal decision permit never arrived; not transported")
+            return None
+        if self._halted():
+            logger.warning("seat-seal decision after a native stop; not transported")
             return None
         return SEAL_COMMAND
 
@@ -82,7 +88,10 @@ def attach_seal(
         interval_seconds=interval_seconds,
         max_samples=max_samples,
         timeout_seconds=timeout_seconds,
-        select=_Decision(permit).select,
+        select=_Decision(
+            permit,
+            lambda: role_halted(trial.result.seat_results or [], target, peer),
+        ).select,
     )
 
 
@@ -118,6 +127,7 @@ class SealQualification(Qualification):
         await self.returned()
         self.release("dispatcher", before)
         await self.arrival("dispatcher", after)
+        self.native()
         self.permit.set()
         self.trace.append("permit:decision")
         await self.witness("clean")
@@ -125,9 +135,7 @@ class SealQualification(Qualification):
 
     async def returned(self) -> None:
         def native() -> bool:
-            states = role_states(
-                self.trial.result.seat_results or [], "planner", "dispatcher"
-            )
+            states = self.native()
             if states["target"] == "error" or states["peer"] in TERMINAL_STATES:
                 raise RuntimeError("held-window lost its native return order")
             return states["target"] == "clean"
@@ -136,6 +144,7 @@ class SealQualification(Qualification):
         self.trace.append("native:planner:clean")
 
         def held() -> bool:
+            self.native()
             rows = self.samples()
             if any(r["ack"] == "failed" for r in rows):
                 raise RuntimeError("no receipt from the world; cannot hold a decision")

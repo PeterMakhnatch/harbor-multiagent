@@ -15,7 +15,9 @@ from harbor.models.trial.result import SeatResult
 from harbor.trial.hooks import TrialEvent, TrialHookEvent
 from harbor.trial.seats import SeatsTrial
 
-HOST_SCHEMA = "harbor.seat-cut.host/v1"
+from .bracket import HOST_SCHEMA
+from .lifecycle import NOT_RETURNED, STATES, TERMINAL_STATES, halting, terminal_state
+
 HOST_DOCUMENT = "seat-cut-host.json"
 MARK_COMMAND = "python3 /app/mark.py"
 MARK_USER = "root"
@@ -35,8 +37,6 @@ MAX_DOCUMENT_BYTES = 64 * 1024
 TEMP_NAME_ATTEMPTS = 4
 MARK_ID = re.compile(r"[0-9a-f]{32}")
 HOST_COMMAND = re.compile(r"python3 /app/[a-z_]{1,32}\.py")
-SEAT_STATES = frozenset({"not_started", "running", "clean", "error"})
-TERMINAL_STATES = frozenset({"clean", "error"})
 
 Select = Callable[[dict[str, str]], Awaitable[str | None]]
 
@@ -49,20 +49,37 @@ def seat_state(result: SeatResult) -> str:
         return "not_started"
     if execution.finished_at is None:
         return "running"
-    if result.exception_info is not None:
-        return "error"
-    return "clean"
+    return terminal_state(
+        result.execution_disposition, result.exception_info is not None, legacy=False
+    )
+
+
+def seat_halted(result: SeatResult) -> bool:
+    return halting(result.execution_disposition) or seat_state(result) == NOT_RETURNED
+
+
+def _role_results(
+    seat_results: Sequence[SeatResult], target: str, peer: str
+) -> tuple[SeatResult, SeatResult]:
+    assert target != peer
+    by_seat = {result.seat: result for result in seat_results}
+    assert len(by_seat) == len(seat_results)
+    return by_seat[target], by_seat[peer]
 
 
 def role_states(
     seat_results: Sequence[SeatResult], target: str, peer: str
 ) -> dict[str, str]:
-    assert target != peer
-    by_seat = {result.seat: result for result in seat_results}
-    assert len(by_seat) == len(seat_results)
-    states = {"target": seat_state(by_seat[target]), "peer": seat_state(by_seat[peer])}
-    assert set(states.values()) <= SEAT_STATES
+    target_result, peer_result = _role_results(seat_results, target, peer)
+    states = {"target": seat_state(target_result), "peer": seat_state(peer_result)}
+    assert set(states.values()) <= set(STATES)
     return states
+
+
+def role_halted(seat_results: Sequence[SeatResult], target: str, peer: str) -> bool:
+    return any(
+        seat_halted(result) for result in _role_results(seat_results, target, peer)
+    )
 
 
 async def _classic(before: dict[str, str]) -> str:

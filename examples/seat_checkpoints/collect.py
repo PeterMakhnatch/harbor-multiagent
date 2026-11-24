@@ -66,12 +66,14 @@ from ..shift_board.plan import (
 )
 from .bracket import (
     HOST_KEYS,
-    HOST_SCHEMA,
+    HOST_SCHEMAS,
+    LEGACY_HOST_SCHEMA,
     WORLD_KEYS,
     WORLD_SCHEMA,
     SeatCutInvalid,
     analyze,
 )
+from .lifecycle import terminal_state
 from .native_timeout import (
     DISPOSITIONS,
     MAX_MESSAGE_BYTES,
@@ -165,6 +167,15 @@ MAX_REGISTRATION_BYTES = 1 << 20
 MAX_JOURNAL_BYTES = 64 << 10
 WORLD_LOG = ("artifacts", "logs", "world", "seat-cut.json")
 HOST_JOURNAL = ("seat-cut-host.json",)
+DISPOSITION = "execution_disposition"
+SCOPES = ("not_started", "running", "finished")
+
+
+class Exit(NamedTuple):
+    present: bool
+    value: object
+    error: bool
+    scope: str
 
 
 class Native(NamedTuple):
@@ -174,6 +185,7 @@ class Native(NamedTuple):
     disposition: Disposition
     scores: list[int] | None
     revisions: list[int] | None
+    exits: dict[str, Exit] | None
 
 
 class Outcome(NamedTuple):
@@ -372,6 +384,47 @@ def _message_file(trial: Path) -> bytes | None:
         return None
 
 
+def _scope(execution: object) -> str:
+    if type(execution) is not dict:
+        return "not_started"
+    if execution.get("finished_at") is not None:
+        return "finished"
+    return "running" if execution.get("started_at") is not None else "not_started"
+
+
+def _exits(result: Record) -> dict[str, Exit] | None:
+    rows = result.get("seat_results")
+    if type(rows) is not list or len(rows) != len(SEATS):
+        return None
+    exits: dict[str, Exit] = {}
+    for row in rows:
+        require(type(row) is dict and row.get("seat") in SEATS, "native seat row")
+        exits[row["seat"]] = Exit(
+            DISPOSITION in row,
+            row.get(DISPOSITION),
+            row.get("exception_info") is not None,
+            _scope(row.get("agent_execution")),
+        )
+    require(set(exits) == set(SEATS), "native seat rows are not both seats")
+    return exits
+
+
+def _terminal(seat: Exit, legacy_host: bool) -> str:
+    assert seat.scope in SCOPES and type(legacy_host) is bool
+    legacy = legacy_host and not seat.present
+    try:
+        state = terminal_state(seat.value, seat.error, legacy=legacy)
+    except ValueError as error:
+        raise Invalid(f"native seat {DISPOSITION} is malformed: {error}") from None
+    if seat.error or seat.scope == "finished":
+        return state
+    require(
+        seat.value is None,
+        f"native seat {DISPOSITION} names an execution that never finished",
+    )
+    return seat.scope
+
+
 def _prefixes(
     verifier: types.ModuleType, cut: Record, cell: Record
 ) -> tuple[list[int], list[int]]:
@@ -485,7 +538,9 @@ def _native(
             "other_error", None, f"{disposition.reason}; no valid native reward"
         )
     if disposition.kind == "other_error" and not valid:
-        return Native(native_id, None, None, disposition, None, None)
+        return Native(native_id, None, None, disposition, None, None, None)
+    exits = _exits(result) if disposition.kind != "other_error" else None
+    assert disposition.kind == "other_error" or exits is not None
     identity = read_bytes(trial, IDENTITY, MAX_SMALL_BYTES)
     run = _check_identity(strict_object(identity, "world identity"), cell["ticket"])
     require(native_id != run, "native id repeats the world run")
@@ -501,7 +556,8 @@ def _native(
     require(expected["reward"] == reward, "native reward differs from the replay")
     scores, revisions = _prefixes(verifier, cut, cell)
     require(scores[-1] == expected["reward"], "full prefix differs from the replay")
-    return Native(native_id, run, expected["reward"], disposition, scores, revisions)
+    grade = expected["reward"]
+    return Native(native_id, run, grade, disposition, scores, revisions, exits)
 
 
 def _marker_log(trial: Path, cell: Record, run: str) -> Record:
@@ -526,7 +582,7 @@ def _host(trial: Path, cell: Record, native_id: str) -> Record | None:
         return None
     host = strict_object(data, "host journal")
     require(
-        set(host) == HOST_KEYS and host["schema"] == HOST_SCHEMA,
+        set(host) == HOST_KEYS and host["schema"] in HOST_SCHEMAS,
         "host journal fields do not match the contract",
     )
     require(host["trial_id"] == native_id, "host journal trial_id is not the native id")
@@ -551,7 +607,11 @@ def _journal(trial: Path, cell: Record, native: Native) -> tuple[str, Record | N
     if host is None:
         raise Incomplete("host journal is missing")
     assert native.scores is not None and native.revisions is not None
-    states = {seat: "error" if seat in timed_out else "clean" for seat in SEATS}
+    exits = native.exits
+    assert exits is not None
+    assert {seat for seat in SEATS if exits[seat].error} == set(timed_out)
+    legacy_host = host["schema"] == LEGACY_HOST_SCHEMA
+    states = {seat: _terminal(exits[seat], legacy_host) for seat in SEATS}
     bound = analyze(
         host,
         world,

@@ -16,7 +16,9 @@ from ..native_evidence import (
     same,
     strict_object,
 )
-from .collect import collect, load_registration
+from .bracket import LEGACY_HOST_SCHEMA
+from .collect import DISPOSITION, collect, load_registration
+from .lifecycle import terminal_state
 
 SCHEMA = "harbor.seat-cut.timeout-qualification/v1"
 SAMPLES = Path(__file__).with_name("samples")
@@ -378,8 +380,18 @@ def seat_rows(result: Record) -> dict[str, Record]:
     return seats
 
 
-def deadline_checks(result: Record, arm: Arm, out: Checks) -> None:
+def returned(seat: Record, legacy_host: bool) -> bool:
+    legacy = legacy_host and DISPOSITION not in seat
+    error = seat.get("exception_info") is not None
+    try:
+        return terminal_state(seat.get(DISPOSITION), error, legacy=legacy) == "clean"
+    except ValueError:
+        return False
+
+
+def deadline_checks(result: Record, arm: Arm, host: Record | None, out: Checks) -> None:
     seats = seat_rows(result)
+    legacy_host = host is None or host.get("schema") == LEGACY_HOST_SCHEMA
     start, end = timing(result.get("agent_execution"))
     deadline = start + timedelta(seconds=DEADLINE_SECONDS)
     held = timeouts(arm)
@@ -401,7 +413,12 @@ def deadline_checks(result: Record, arm: Arm, out: Checks) -> None:
         seat_start, seat_end = timing(seats[role].get("agent_execution"))
         add(out, f"native:{role}:within_play", start <= seat_start <= seat_end <= end)
         if role not in arm.held:
-            add(out, f"native:{role}:clean", info is None and seat_end < deadline)
+            clean = info is None and seat_end < deadline
+            add(
+                out,
+                f"native:{role}:clean",
+                clean and returned(seats[role], legacy_host),
+            )
             continue
         add(out, f"native:{role}:timeout", native_timeout(info, NATIVE_MESSAGE))
         occurred = stamp(info.get("occurred_at") if type(info) is dict else None)
@@ -549,8 +566,22 @@ def marker_checks(trial: Path, arm: Arm, out: Checks) -> None:
             )
 
 
+def host_record(trial: Path) -> Record | None:
+    try:
+        data = read_bytes(trial, ("seat-cut-host.json",), MAX_HOST_BYTES)
+    except Incomplete:
+        return None
+    return strict_object(data, "host")
+
+
 def run_checks(
-    trial: Path, row: Record, arm: Arm, frozen: Record, trial_id: object, out: Checks
+    trial: Path,
+    row: Record,
+    arm: Arm,
+    frozen: Record,
+    trial_id: object,
+    host: Record | None,
+    out: Checks,
 ) -> None:
     schedule = strict_object(
         read_bytes(trial, ("seat-cut-schedule.json",), MAX_SMALL_BYTES), "schedule"
@@ -586,11 +617,7 @@ def run_checks(
         and is_float(attempt["agent_timeout_multiplier"], MULTIPLIER)
         and is_float(attempt["agent_timeout_seconds"], DEADLINE_SECONDS),
     )
-    try:
-        host = strict_object(
-            read_bytes(trial, ("seat-cut-host.json",), MAX_HOST_BYTES), "host"
-        )
-    except Incomplete:
+    if host is None:
         add(out, "host:presence", not observed)
         return
     add(out, "host:presence", observed)
@@ -639,13 +666,14 @@ def independent(
     stage = "native"
     try:
         result = result_checks(trial, row, frozen, out)
-        deadline_checks(result, arm, out)
+        host = host_record(trial)
+        deadline_checks(result, arm, host, out)
         stage = "receipt"
         receipt_checks(trial, result, arm, out)
         stage = "markers"
         marker_checks(trial, arm, out)
         stage = "schedule"
-        run_checks(trial, row, arm, frozen, result.get("id"), out)
+        run_checks(trial, row, arm, frozen, result.get("id"), host, out)
     except (
         Incomplete,
         Invalid,
