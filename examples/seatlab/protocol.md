@@ -75,6 +75,12 @@ After a team returns, use the [retained-choice diagnostic](native-model-results.
 
 For a packaged example, run `python3.12 -BS -m examples.seatlab.workbench order prepare --example --draws 2`. The [public registration](results/dispatch-order/registration.json) produces the [prepared panel](results/dispatch-order/prepared.json). This uses neither a private job folder nor a model. The 8 worker inputs total 19,192 canonical UTF-8 bytes. There are no receiver observations in that file.
 
+**How much work is actually different?** Run `python3.12 -BS -m examples.seatlab.workbench order-coverage --example --draws 2`. It accepts the same source flags as `order`. Pass `--panel-sha256` to check an existing design. This read-only analysis does not change any worker IDs.
+
+The [released census](results/dispatch-order/input-coverage.json) finds **4 distinct complete prompts across 8 requests**, with 24 distinct per-shipment evidence patterns. The 2 archived native worlds also contain 24 shipment positions, but only **22 distinct patterns**. A pattern preserves utilities, bay identities, both reported sets, and their revision labels. It ignores the shipment ID, position, and order of the bay names within a set. The full-prompt count uses the exact messages.
+
+An ambiguous pattern has the same per-shipment evidence but different correct bays in the retained stock. `best_case_only_correct` sums the most frequent correct bay for each pattern. It measures how well a fixed rule could fit those cases after seeing their answers. It is not an observed score, a guaranteed future score, or a limit on a receiver using other shipments for context.
+
 Start with the `$packet` and `$pin` from [the registration above](#review-a-dispatch-panel-without-running-it). These commands generate inputs only. They do not start a receiver.
 
 ```sh

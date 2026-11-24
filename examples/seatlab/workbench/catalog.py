@@ -546,6 +546,23 @@ STUDIES: tuple[Study, ...] = (
         exit_code=0,
         sha256="db8a26aad3f9e2aa4797ebc4f3ed0537bd0ff6bb75f9d2b08b2f0dbad64a2557",
     ),
+    Study(
+        id="dispatch-order-coverage",
+        question="How many distinct prompts and shipment problems does the held Dispatch roster actually contain?",
+        kind="native-plan-preflight",
+        guide="examples/seatlab/protocol.md",
+        module="examples.seatlab.dispatch_order_coverage",
+        argv=(
+            "--example",
+            "--draws",
+            "2",
+            "--panel-sha256",
+            "196d63336ccac2371b7d6194ccdec938486ea6d34cb6765ad09abe788df680d1",
+        ),
+        report=f"{_RESULTS}/dispatch-order/input-coverage.json",
+        exit_code=0,
+        sha256="12908808309014ce388d61963920fff387f6ce86af1bba2b36f91a4fdd3ad790",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)

@@ -14,7 +14,7 @@ from .catalog import STUDIES, Study
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = "seatlab.workbench/v1"
-USAGE = "python -m examples.seatlab.workbench list | verify [STUDY ...] | account --help | instrument --help | attention --help | timing --help | mailbox --help | handoffs --help | isolate --help | cohort --help | cohort-jobs --help | worker-plan --help | worker-result --help | decision --help | dispatch --help | order --help"
+USAGE = "python -m examples.seatlab.workbench list | verify [STUDY ...] | account --help | instrument --help | attention --help | timing --help | mailbox --help | handoffs --help | isolate --help | cohort --help | cohort-jobs --help | worker-plan --help | worker-result --help | decision --help | dispatch --help | order --help | order-coverage --help"
 STUDY_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 MODULE = re.compile(
     r"examples\.(?:seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}|ship_inflight\.replay|"
@@ -297,6 +297,10 @@ def main(argv: list[str] | None = None) -> int:
         from ..dispatch_opportunity import main as dispatch
 
         return dispatch(args[1:])
+    if args[:1] == ["order-coverage"]:
+        from ..dispatch_order_coverage import main as order_coverage
+
+        return order_coverage(args[1:])
     if args[:1] == ["order"]:
         from ..dispatch_order import main as order
 
