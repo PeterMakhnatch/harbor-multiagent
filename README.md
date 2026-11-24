@@ -28,7 +28,7 @@ To act on a participant's return instead of the final team reward, [watch a nati
 
 For a batch, [record each seat in a native `harbor run` job](examples/seatlab/results/seat-event-stream/native-jobs/results.md). If Harbor retries a slot, [keep each execution separately](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md). The retry report keeps a missing execution in the count and does not assign it a grade.
 
-To see which seats and retries account for the money, [inspect a saved team job or quote a locked plan](examples/seatlab/workbench/team-account.md). The operator separates harness estimates, token-priced usage and settled provider charges. It never starts a team.
+To inspect recorded usage by seat and retry, [read a saved team job or quote a locked plan](examples/seatlab/workbench/team-account.md). The operator separates harness estimates, token-priced usage and settled provider charges. Charges without a matching record stay unattributed.
 
 Before a future team job, [prepare the host observers and morning manifest together](examples/seatlab/workbench/team-account.md#prepare-observation-before-a-future-job). Nothing starts. Afterward, [check which finished jobs need attention](examples/seatlab/workbench/team-account.md#check-finished-jobs-from-several-workers). A missing job, seat journal, or END receipt is not a failed team.
 
@@ -39,6 +39,8 @@ To tell whether a teammate received a report before a decision, [retain the mess
 Before spending on a communication benchmark, [check what the world actually measures](examples/seat_handoffs/author.md). The same offline check distinguishes a returned report from a receiver acknowledgement. A reusable writer lets two authors instrument a new task without changing Harbor.
 
 Before assigning teams, [compare two unrun local trial configs](examples/seatlab/workbench/input-isolation.md#check-trial-configs-before-any-worker-starts) or two saved native locks. Check that only the named role instruction, participant configuration or world setting changes. The command starts no seat.
+
+Harbor applies one roster and one world configuration to a whole job. For a roster or channel comparison, [check two independent worker jobs](examples/seatlab/workbench/input-isolation.md#check-a-participant-or-channel-comparison-across-two-worker-jobs) against the planned inputs and repeat count. A copied worker result cannot fill both arms.
 
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 

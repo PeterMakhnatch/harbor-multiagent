@@ -68,7 +68,9 @@ After a run, give `cohort` a stationary native job directory, not a trial direct
 "$py" -B -m "$wb" cohort "$job" --expected-job-lock "$job_lock_pin"
 ```
 
-To check a particular two-input job, take `trial_lock_records.left` and `.right` from the successful preflight JSON. These keys include the literal source locator. They differ from the portable `comparison` pin. Pass the original keys rather than choosing two successful groups after the fact:
+Use `cohort --pair` only if **one job** can register both inputs. Harbor uses one participant roster and one environment for every trial in a job. One job can compare different task directories, for example two versions of a receiver instruction. It cannot compare two rosters or two values of `SH_CHANNEL`. For those comparisons, use [two worker jobs](#check-a-participant-or-channel-comparison-across-two-worker-jobs).
+
+For a two-input job, take `trial_lock_records.left` and `.right` from the successful preflight. These keys include the literal task locator. They differ from the portable `comparison` pin. Pass the planned keys rather than choosing two successful groups after the fact:
 
 ```sh
 "$py" -B -m "$wb" cohort "$job" --expected-job-lock "$job_lock_pin" --pair "$left_key" "$right_key" --json
@@ -109,3 +111,32 @@ At the native START event, the plugin checks the job, slot, execution ID, saved 
 With `--starts`, every retained final needs its own matching receipt. Two full locks that have the same result view can now be separated. If the final lacks its receipt, its grade stays unattributed. A conflicting receipt withholds all grades for that lock. An extra START without a final counts separately. It is not a grade, failure or proof of a retry.
 
 This check trusts the host and its private archive. The saved evidence is not a signature. START proves neither the eventual deployment nor the content of a seat's context. On the retained 20-final job above, requiring START receipts withheld all 20 grades: no such archive was available. Do not create receipts from final results.
+
+## Check a participant or channel comparison across two worker jobs
+
+Before either worker starts, keep the ordered `trial_lock_records` from `isolate` and choose the number of attempts **per arm**. The jobs must use the same task locators that the preflight used. If work moves to different absolute paths, recheck the inputs at their final locations. A portable comparison digest is not a substitute for a native registration key.
+
+Give each worker its own native job config. Set `tasks` to its one local task, `participants` to its roster, and `environment` to its world. Set `n_attempts` to the chosen number in both configs. Leave `agents` at its native default. Do not combine the two configs or use a dataset that adds a different source locator. These are ordinary `harbor run` jobs, not standalone `harbor trial start` trials. The shipping benchmark's four calibration controls remain standalone.
+
+Check these exact job config files **before assigning a worker**:
+
+```sh
+"$py" -B -m "$wb" cohort-jobs "$left_config" "$right_config" \
+  --plans --pair "$left_key" "$right_key" --copies "$copies" --json
+```
+
+`matches_plan` (exit `0`) means Harbor expands each config to the expected input and number of copies. The requested concurrency and retry limits must match. `different_plan` (exit `1`) explains what differs. Unsupported inputs return exit `2`. This check supports 1–64 copies per job, one local task and an explicit team. It registers no job, reads no provider prices, and predicts no reward.
+
+At registration, keep the digest of each worker's actual `lock.json` separately. A job lock includes its creation time. You cannot derive these two file digests from `isolate`. After both jobs stop changing, use the held digests and the originally chosen count:
+
+```sh
+"$py" -B -m "$wb" cohort-jobs "$left_job" "$right_job" \
+  --pair "$left_key" "$right_key" --copies "$copies" \
+  --job-locks "$left_job_pin" "$right_job_pin" --json
+```
+
+`covered` (exit `0`) means two different jobs registered the assigned inputs and all expected final results support attribution. It does not require a positive grade. `inconsistent` (exit `1`) withholds both grade tallies. Examples include swapped arms, the wrong repeat count, or a duplicated execution across the jobs. `incomplete` (exit `3`) means some evidence is missing. A missing final is never a zero. A wrong file digest or unreadable job returns exit `2` and no partial result.
+
+Use `--starts "$left_starts" "$right_starts"` to require private host START receipts for both jobs. Separate job directories do not resolve two inputs that have the same visible result fields. Use the [morning report](team-account.md#check-finished-jobs-from-several-workers) if a worker has not produced a readable job. The two-job report checks registered inputs and retained final results. It does not measure what a seat saw or establish a treatment effect.
+
+**Check on saved jobs:** In one earlier sweep, 8 native jobs each used the same three-seat task. We chose two by roster, before reading their grades. Only the reviewer changed, from a scripted no-op to a scripted oracle. Both jobs supplied one distinct final with a valid zero. Swapping the expected inputs, asking for two copies, or supplying one job twice withheld both tallies. We calculated the file digests from the saved locks, not at original enrollment. This checks the reader on real job directories; it is not a preregistered comparison or a model result.

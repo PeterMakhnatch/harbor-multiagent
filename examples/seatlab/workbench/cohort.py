@@ -147,6 +147,7 @@ def summarize(
     pair: tuple[str, str] | None = None,
     *,
     starts: dict[str, Witness] | None = None,
+    shared_views: frozenset[str] = frozenset(),
 ) -> Record:
     if pair is not None and (
         pair[0] == pair[1] or not all(PIN.fullmatch(k) for k in pair)
@@ -167,7 +168,13 @@ def summarize(
     marks, archive = _start_counts(evidence, starts)
     view_keys = Counter(all_cells.values())
     groups = [
-        _group(k, counts[k], finals[k], view_keys[all_cells[k]] > 1, marks)
+        _group(
+            k,
+            counts[k],
+            finals[k],
+            view_keys[all_cells[k]] > 1 or all_cells[k] in shared_views,
+            marks,
+        )
         for k in sorted(all_cells)
     ]
     requested = _pair(pair, registered, groups)

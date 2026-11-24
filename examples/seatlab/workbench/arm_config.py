@@ -317,6 +317,22 @@ def _lock(harbor: SimpleNamespace, config: Any, task_dir: Path) -> dict[str, Any
     return record
 
 
+def _settled(
+    config_path: Path,
+    stamp: Stamp,
+    text: str,
+    task_dir: Path,
+    tree: dict[str, Stamp],
+) -> None:
+    arm_sources.require_unchanged(task_dir, tree)
+    try:
+        still = _stamp(config_path)
+    except (OSError, ValueError):
+        _fail(MOVED)
+    _require(still == stamp, MOVED)
+    _require(_canonical_dir(text) == task_dir, MOVED)
+
+
 def inspect_config(task: Path, config_path: Path) -> Runtime:
     harbor = _native()
     stamp, document = _load(config_path)
@@ -327,11 +343,5 @@ def inspect_config(task: Path, config_path: Path) -> Runtime:
     config = _native_config(harbor, document)
     _faithful(config, document)
     record = _lock(harbor, config, task_dir)
-    arm_sources.require_unchanged(task_dir, tree)
-    try:
-        still = _stamp(config_path)
-    except (OSError, ValueError):
-        _fail(MOVED)
-    _require(still == stamp, MOVED)
-    _require(_canonical_dir(text) == task_dir, MOVED)
+    _settled(config_path, stamp, text, task_dir, tree)
     return arm_runtime.inspect_record(record)
