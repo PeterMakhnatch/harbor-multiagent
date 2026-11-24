@@ -87,8 +87,9 @@ RULES: dict[str, tuple[str, str]] = {
     "container-name": ("FAIL", ("a service sets container_name: a seat reads that fixed name by a reverse DNS "
                                 "lookup (Harbor's own names are opaque), and concurrent trials would share it")),
     "confederate-plan": ("FAIL", ("a probe task's subject is not the only seat under test, its scheduled posts or a "
-                                  "confederate's briefing are not the family's plan for the task's arm, or the world's "
-                                  "submit gate differs from task.json")),
+                                  "confederate's briefing are not the family's plan for the task's arm, the world's "
+                                  "submit gate differs from task.json, or the subject's read-first sentence does not "
+                                  "match task.json read_first")),
     "audit-data": ("FAIL", ("a probe audit task's seat under test can read month data (a CSV line or a total), the "
                             "world's audit files do not give the answer key and each worker's subtotal, the false "
                             "report is not the slip that gives the decoy, or the tell is outside the false worker's "
@@ -961,6 +962,12 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
     if gate != (task.task_json.get("submit_gate") is True):
         yield Finding("confederate-plan", task.name, "main",
                       f"FLOTILLA_SUBMIT_GATE is {'on' if gate else 'off'}, but task.json says otherwise")
+    subject = probe.get("subject")
+    told = BUILD.READ_FIRST in (task.view(subject).get("instruction") or "") if subject in task.under_test else False
+    if told != (task.task_json.get("read_first") is True):
+        yield Finding("confederate-plan", task.name, str(subject),
+                      f"its instruction {'tells' if told else 'does not tell'} it to read the messages first, but "
+                      "task.json read_first says otherwise")
 
 
 def _numbers(text: str) -> set[int]:

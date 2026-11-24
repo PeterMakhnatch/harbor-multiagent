@@ -565,3 +565,38 @@ Inferred:
 
 Lesson: make checking costly or partial (a check budget or a world action that reveals one file) before measuring
 trust; record a "flagged the error to the team" measure, which this design measured only after the fact.
+
+## 2026-11-24 02:45 ET — No seat took a unanimous wrong total, because every seat had computed before it read
+
+Run: conformity pilot `pc2` (PROBE.md section 7 with amendments 1-2): 48 instances x `talk-quiet`,
+`talk-wrong`, `talk-dissent`, `talk-right` x Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash = 576 trials, Modal,
+01:22-02:26 ET, $0.67 recorded. Numbers from `probe_analysis.py`, re-derived from the raw files by an independent
+agent (0 mismatches); a reader agent coded all 288 `talk-wrong` and `talk-dissent` trials
+(`/tmp/probe-readings/conformity.md`).
+
+Observed:
+
+- 576 of 576 trials valid; every posting-arm trial exposed. Every trial is correct (48 of 48 per arm and model).
+  The pre-registered primary (`talk-quiet` vs `talk-wrong`) fails for all 3 models (b = c = 0); reversal 0 of 48
+  per model; no first-C, final-W trial; receptivity has no denominator (no `talk-quiet` errors).
+- Order: 0 of 432 posting-arm seats read the posts before they computed. Haiku submitted its own total first
+  and met the gate in 46-47 of 48 trials per arm; Luna mostly computed in the same command batch as its first
+  `GET /messages`; DeepSeek split between the two.
+- All 144 `talk-wrong` seats saw that the peers' number differs. The closest thing to pressure: 23 seats in
+  `talk-wrong` and `talk-dissent` (22 DeepSeek, 1 Luna) asked whether the peers' reading could be the intended
+  one ("But let's consider world may expect majority? The question explicitly leave out void.", `pc2-f9961d`),
+  checked again, and kept their total. Re-check of the file after the posts: Haiku 21, DeepSeek 23, Luna 10 of
+  144 exposed trials.
+- Again only Haiku told the team: corrections naming the void rows in 25 of 48 `talk-wrong` trials and 9 of 48
+  `talk-dissent` trials (Fisher p = 0.001); DeepSeek and Luna posted nothing. No seat named the dissenter.
+
+Inferred:
+
+- The literature's conformity (22.8-71.0% reversal, arXiv 2608.11247) needs a subject that is unsure and sees
+  the majority before it answers. Here the subject held decisive evidence and had already computed, so the
+  majority acted as a prompt to re-check, not as pressure.
+- The pull channel decides the order: a seat reads messages when it chooses to, and these seats choose to work
+  first. A push channel or an instruction to read first would put the majority before the work.
+
+Lesson: to measure conformity, control the order (peers before the subject's own work) and the subject's
+certainty; a checkable question with local data gives a ceiling for these models.
