@@ -102,6 +102,10 @@ class Terminus2Options(AgentOptions):
         default="json",
         description="Response parser (json or xml).",
     )
+    confirm_task_complete: bool = Field(
+        default=True,
+        description="Ask for confirmation before accepting task_complete.",
+    )
     api_base: str | None = Field(
         default=None,
         description="LLM API base URL.",
@@ -360,6 +364,7 @@ class Terminus2(BaseAgent):
         llm_call_kwargs: dict[str, Any] | None = None,
         extra_env: dict[str, str] | None = None,
         *args,
+        confirm_task_complete: bool = True,
         **kwargs,
     ):
         """Initialize Terminus 2 agent.
@@ -369,6 +374,7 @@ class Terminus2(BaseAgent):
             model_name: Name of the model to use
             max_episodes: Maximum number of episodes (default: 1000000)
             parser_name: Parser to use - "json" or "xml" (default: "json")
+            confirm_task_complete: Whether to confirm task completion (default: True)
             api_base: Base URL for the API endpoint
             temperature: Optional sampling temperature. If unset, no temperature is
                 passed to the LLM backend. (default: None)
@@ -428,6 +434,7 @@ class Terminus2(BaseAgent):
             extra_env=extra_env,
             max_turns=max_turns,
             parser_name=parser_name,
+            confirm_task_complete=confirm_task_complete,
             api_base=api_base,
             temperature=temperature,
             reasoning_effort=reasoning_effort,
@@ -1615,12 +1622,13 @@ so ask everything you need to know."""
                 self._session,
             )
 
-            # Capture the pending completion state before potentially modifying it
-            was_pending_completion = self._pending_completion
+            should_finish = is_task_complete and (
+                self._pending_completion or not self.options.confirm_task_complete
+            )
 
             # Construct the observation (what gets sent back to the LLM)
             if is_task_complete:
-                if self._pending_completion:
+                if should_finish:
                     observation = terminal_output
                 else:
                     self._pending_completion = True
@@ -1742,14 +1750,8 @@ so ask everything you need to know."""
             # Dump trajectory after every episode to ensure we persist even if program terminates
             self._dump_trajectory()
 
-            if is_task_complete:
-                if was_pending_completion:
-                    # Task is confirmed complete (this is the second time task_complete was True), return
-                    return
-                else:
-                    # First completion attempt - ask for confirmation and continue
-                    prompt = observation
-                    continue
+            if should_finish:
+                return
 
             prompt = observation
 
