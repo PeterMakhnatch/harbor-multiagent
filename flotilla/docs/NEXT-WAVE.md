@@ -330,7 +330,12 @@ python3 flotilla/docs/results/scripts/rr1_decide.py --plan flotilla/plans/rr1.js
   --stages .flotilla-local/runs/rr1/stages.json --analysis /tmp/rr1-analysis.json
 python3 flotilla/docs/results/scripts/rr1_decide.py --plan flotilla/plans/rr1.json \
   --stages .flotilla-local/runs/rr1/stages.json --analysis /tmp/rr1-analysis.json --json > /tmp/rr1-decisions.json
+python3 flotilla/docs/results/scripts/trace_features.py --jobs .flotilla-local/jobs --pattern 'rr1-??????' \
+  --tasks .flotilla-local/tasks/rf1v --plan flotilla/plans/rr1.json --summary --out /tmp/rr1-traces.csv
 ```
+
+For section 16, secondary 2, report the `talk-false` rows of the trace summary. The summary uses the first
+valid trial per cell. The read share excludes trials with no observable first submit and lists them separately.
 
 After separate approval for the deferred trust cards, run and report `tc1` as follows:
 

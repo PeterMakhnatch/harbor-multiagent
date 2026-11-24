@@ -1,14 +1,21 @@
-"""Trace features (exploratory, no test): one row per finished probe trial, derived from the raw trial files.
+"""Trace features from raw probe trials.
 
     python3 flotilla/docs/results/scripts/trace_features.py --jobs .flotilla-local/jobs \
         --analysis .flotilla-local/cards/2026-11-24/analysis --out trace-features.csv [--summary] [--check]
     python3 flotilla/docs/results/scripts/trace_features.py --jobs ... --analysis ... --sample 8 --seed 1
     python3 flotilla/docs/results/scripts/trace_features.py --jobs ... --show <job>/<trial> [--chars 700]
 
-Trials: every `<wave>-<6 hex>` job of the waves vf1, pc2, pc3, pa1, rf1 (task sets rf1c and rf1v) and au1; smoke jobs
+    python3 flotilla/docs/results/scripts/trace_features.py --jobs .flotilla-local/jobs \
+        --pattern 'rr1-??????' --tasks .flotilla-local/tasks/rf1v --plan flotilla/plans/rr1.json --summary
+
+By default, every `<wave>-<6 hex>` job of vf1, pc2, pc3, pa1, rf1 (task sets rf1c and rf1v) and au1 is read; smoke jobs
 are not matched. Arm, model, validity and the outcome come from the trial's own files (world-state.json,
 score.json, result.json, task.json of the built task); `--analysis` joins the per-wave probe_analysis JSON only to
 cross-check arm, validity, correctness, attempts and usage (`--check` lists every disagreement).
+With --pattern, use the task set manifest and plan to keep only the first valid trial per cell by start time.
+This mode adds read_before_first_submit: a data file read in a step strictly before the first /submit command,
+including a refused attempt. Reads in the same step do not count. A missing submit command or trace is unknown,
+except for the probe oracle, which submits from its briefing without reading data files.
 
 Columns (see COLUMNS). Steps are p1's agent steps (terminus-2 records a step after its commands ran); `*_step` is the
 step id in trajectory.json and `*_s` seconds since the first step of the trajectory. Reads of data files use
@@ -284,8 +291,8 @@ def final_world_time(state: dict[str, Any]) -> float | None:
     return max(times) if times else None
 
 
-def reading_features(trial: Path, commands: list[list[dict[str, str]]], trajectory: Any, files: set[str],
-                     final_k: int | None, msg_seen: int | None) -> dict[str, Any]:
+def reading_features(commands: list[list[dict[str, str]]], trajectory: Any, files: set[str],
+                     final_k: int | None, msg_seen: int | None, submit_k: int | None) -> dict[str, Any]:
     upto = len(commands) if final_k is None else final_k + 1
     readers = reader_commands(commands)[:upto]
     per_file = {name: PA.reads(readers, {name}) for name in sorted(files)}
@@ -298,11 +305,13 @@ def reading_features(trial: Path, commands: list[list[dict[str, str]]], trajecto
             "read_all": int(bool(files) and len(read_names) == len(files)),
             "first_read_step": None if first is None else trajectory.steps[first].step_id,
             "first_read_s": None if first is None else clock(trajectory, first),
+            "read_before_first_submit": None if submit_k is None else int(bool(hits and hits[0][0] < submit_k)),
             "read_before_msgs": None if first is None or msg_seen is None else int(first < msg_seen),
             "read_after_msgs": None if first is None or msg_seen is None else int(first >= msg_seen)}
 
 
-def command_features(commands: list[list[dict[str, str]]], trajectory: Any, state: dict[str, Any]) -> dict[str, Any]:
+def command_features(commands: list[list[dict[str, str]]], trajectory: Any
+                     ) -> tuple[dict[str, Any], int | None, int | None]:
     get_k = next((k for k, cs in enumerate(commands) if any(is_get_messages(c) for c in cs)), None)
     submit_k = next((k for k, cs in enumerate(commands) if any(is_post_submit(c) for c in cs)), None)
     audit_k = next((k for k, cs in enumerate(commands) if any(is_audit(c) for c in cs)), None)
@@ -315,7 +324,7 @@ def command_features(commands: list[list[dict[str, str]]], trajectory: Any, stat
             "submit_cmds": sum(1 for cs in commands for c in cs if is_post_submit(c)),
             "cmds_before_submit": len(before) if submit_k is not None else None,
             "noncurl_before_submit": sum(1 for c in before if c["word"] != "curl") if submit_k is not None else None,
-            "audit_step": None if audit_k is None else trajectory.steps[audit_k].step_id}, get_k, audit_k
+            "audit_step": None if audit_k is None else trajectory.steps[audit_k].step_id}, submit_k, audit_k
 
 
 def seen_step(trajectory: Any, ids: set[str], false_re: re.Pattern | None) -> tuple[int | None, int | None]:
@@ -363,11 +372,16 @@ def wrong_response(false_posted: int, sees_false: int, final_w: int, conv: dict[
     return "silent_named" if txt_false else "silent_unnamed"
 
 
-def trial_row(job_dir: Path, trial: Path) -> dict[str, Any] | None:
+def trial_row(trial: Path) -> dict[str, Any] | None:
     result = read_json(trial / "result.json")
     if not isinstance(result, dict) or "trial_name" not in result:
         return None
     task_dir = Path((result.get("task_id") or {}).get("path") or "")
+    return trace_row(trial, result, task_dir)
+
+
+def trace_row(trial: Path, result: dict, task_dir: Path, selected: dict | None = None) -> dict[str, Any]:
+    job = trial.parent.name
     task_json = read_json(task_dir / "environment" / "task.json") or {}
     state = read_json(trial / "verifier" / "world-state.json") or {}
     score = read_json(trial / "verifier" / "score.json") or {}
@@ -391,15 +405,22 @@ def trial_row(job_dir: Path, trial: Path) -> dict[str, Any] | None:
     if trajectory is None:
         reasons.append("no p1 trajectory")
     set_name = task_dir.parent.parent.name
-    row |= {"wave": job_dir.name.split("-")[0], "set": set_name, "job": job_dir.name, "trial": trial.name,
+    row |= {"wave": job.split("-")[0], "set": set_name, "job": job, "trial": trial.name,
             "instance": task_json.get("instance"), "arm": arm, "model": model_of(result), "kind": kind,
             "valid": int(not reasons), "invalid_reason": "; ".join(reasons), "false_number": fnum,
             "correct_value": correct, "wrong_value": wrong, **timing(result), **usage(result)}
-    if trajectory is None or not state:
+    if selected is not None:
+        row |= {"wave": job.rsplit("-", 1)[0], "set": selected["set"], "instance": selected["instance"],
+                "arm": selected["arm"], "model": selected["model"], "valid": 1, "invalid_reason": "", "counted": 1}
+    if not raw or not state:
+        if selected is not None:
+            row |= conversation_features(state, events, final_world_time(state))
+            if selected["model"] == "oracle":
+                row["read_before_first_submit"] = 0
         return row
     files = PA.data_files(task_dir) - {PA.POLICY_FILE}
     commands = [PA.step_commands(s) for s in trajectory.steps]
-    cmd, _, audit_k = command_features(commands, trajectory, state)
+    cmd, submit_k, audit_k = command_features(commands, trajectory)
     final_k, method = accepted_final(commands, trajectory)
     confed = {m["id"] for m in state.get("messages") or [] if m.get("from") != SUBJECT and m.get("id")}
     msg_k, false_k = seen_step(trajectory, confed, false_re)
@@ -408,7 +429,7 @@ def trial_row(job_dir: Path, trial: Path) -> dict[str, Any] | None:
     audits_ok = [a for a in state.get("audits") or [] if a.get("seat") == SUBJECT and a.get("ok")]
     audit_files = {a.get("month") for a in audits_ok}
     conv = conversation_features(state, events, final_world_time(state))
-    reading = reading_features(trial, commands, trajectory, files, final_k, msg_k)
+    reading = reading_features(commands, trajectory, files, final_k, msg_k, submit_k)
     if kind == "audit":
         reading |= {"files_total": len((task_json.get("audit") or {}).get("files") or {}), "files_read": len(audit_files),
                     "dyn_read": 0, "read_all": int(len(audit_files) == len((task_json.get("audit") or {}).get("files") or {}))}
@@ -419,7 +440,7 @@ def trial_row(job_dir: Path, trial: Path) -> dict[str, Any] | None:
                                                     if m.get("from") != SUBJECT))
     final_w = int(final_answer is not None and final_answer == wrong and fnum is not None)
     first = first_attempt(events)
-    row |= {"counted": None, "false_posted": false_posted, "sees_false": int(false_k is not None),
+    row |= {"false_posted": false_posted, "sees_false": int(false_k is not None),
             "turns": n, "steps_after_final": None if final_k is None else n - final_k - 1,
             "final_step": None if final_k is None else trajectory.steps[final_k].step_id, "final_step_method": method,
             "prompt_tokens_first": int(metric(raw[0], "prompt_tokens")), "preamble_chars": len(trajectory.preamble),
@@ -440,11 +461,30 @@ def trial_row(job_dir: Path, trial: Path) -> dict[str, Any] | None:
     return row
 
 
-def enumerate_trials(jobs_dir: Path) -> list[tuple[Path, Path]]:
+def enumerate_trials(jobs_dir: Path) -> list[Path]:
     found = []
     for job in sorted(p for p in jobs_dir.iterdir() if p.is_dir() and JOB_NAME.match(p.name)):
-        found += [(job, t) for t in sorted(job.iterdir()) if t.is_dir() and (t / "result.json").is_file()]
+        found += [t for t in sorted(job.iterdir()) if t.is_dir() and (t / "result.json").is_file()]
     return found
+
+
+def counted_rows(jobs: Path, pattern: str, root: Path, plan_path: Path) -> list[dict[str, Any]]:
+    tasks = PA.XM.load_manifests([root])
+    plan = PA.read_plan(plan_path)
+    if plan["models"] == [None]:
+        plan["models"] = ["oracle"]
+    rows, _ = PA.XM.read_trials(jobs, pattern, tasks,
+                                reader=lambda trial, found: PA.trial_row(trial, found, [root], plan))
+    rows, _ = PA.split_builds(rows)
+    counted, _ = PA.XM.choose(rows)
+    out = []
+    for selected in counted.values():
+        trial = jobs / selected["job"] / selected["trial"]
+        _, result, task = PA.XM.locate(trial, tasks)
+        if result is None or task is None:
+            raise ValueError(f"{trial}: counted trial lost its result or manifest entry")
+        out.append(trace_row(trial, result, Path(task["task_dir"]), selected | {"set": root.name}))
+    return out
 
 
 def load_analysis(folder: Path) -> dict[tuple[str, str], dict[str, Any]]:
@@ -513,6 +553,20 @@ def summary(rows: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
+def counted_summary(rows: list[dict[str, Any]]) -> str:
+    cells: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for row in rows:
+        cells[(row["model"], row["arm"])].append(row)
+    out = ["model\tarm\tn\tread_before_first_submit\tread_unknown\tposted_correction"]
+    for (model, arm), group in sorted(cells.items()):
+        reads = [row.get("read_before_first_submit") for row in group]
+        known = [read for read in reads if read is not None]
+        corrections = sum(row["post_correction"] > 0 for row in group)
+        out.append("\t".join(map(str, (model, arm, len(group), PA.share(sum(known), len(known)),
+                                       len(group) - len(known), PA.share(corrections, len(group))))))
+    return "\n".join(out)
+
+
 def sample(rows: list[dict[str, Any]], per_cell: int, seed: int) -> list[dict[str, Any]]:
     """Deterministic stratified sample: per (set, arm, model) the valid trials with the smallest salted hash."""
     cells: dict[tuple, list[dict]] = defaultdict(list)
@@ -546,6 +600,9 @@ def show(jobs_dir: Path, ref: str, chars: int) -> str:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--jobs", type=Path, default=Path(".flotilla-local/jobs"))
+    p.add_argument("--pattern", help="job glob for one wave; requires --tasks and --plan")
+    p.add_argument("--tasks", type=Path, help="task set root with manifest.json")
+    p.add_argument("--plan", type=Path, help="wave plan JSON")
     p.add_argument("--analysis", type=Path, default=None)
     p.add_argument("--out", type=Path)
     p.add_argument("--summary", action="store_true")
@@ -558,13 +615,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.show:
         print(show(args.jobs, args.show, args.chars))
         return 0
-    rows = [r for r in (trial_row(j, t) for j, t in enumerate_trials(args.jobs)) if r is not None]
+    if args.pattern is not None:
+        if args.tasks is None or args.plan is None:
+            p.error("--pattern requires --tasks and --plan")
+        if args.analysis or args.check:
+            p.error("--analysis and --check are for the default waves")
+        rows = counted_rows(args.jobs, args.pattern, args.tasks, args.plan)
+    else:
+        if args.tasks is not None or args.plan is not None:
+            p.error("--tasks and --plan require --pattern")
+        rows = [row for trial in enumerate_trials(args.jobs) if (row := trial_row(trial)) is not None]
     rows.sort(key=lambda r: (SETS.index(r["set"]) if r["set"] in SETS else 99, r["arm"], r["model"], r["instance"] or 0,
                              r["job"], r["trial"]))
     problems = cross_check(rows, load_analysis(args.analysis)) if args.analysis else []
     if args.out:
         with args.out.open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=COLUMNS, lineterminator="\n")
+            columns = (*COLUMNS, "read_before_first_submit") if args.pattern is not None else COLUMNS
+            writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
     if args.sample:
@@ -572,7 +639,7 @@ def main(argv: list[str] | None = None) -> int:
             print("\t".join(str(r[k]) for k in ("set", "arm", "model", "instance", "job", "trial", "final_answer",
                                                  "check_class", "wrong_response")))
     if args.summary:
-        print(summary(rows))
+        print(counted_summary(rows) if args.pattern is not None else summary(rows))
     if args.check:
         print(f"{len(rows)} trial folders, {len(problems)} disagreements with the analysis JSON")
         print("\n".join(problems[:200]))
