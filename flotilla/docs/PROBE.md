@@ -981,14 +981,15 @@ endpoint in OpenRouter's public list (read 2026-11-24 10:50 ET); the account ref
 smoke trials count (section 7). Luna enters `rr1` in any case, because all 64 of its `rf1v` trials on this set
 counted; its smoke trials still run and are reported. Only validity and exposure fields are read.
 
-**Pilot `rr1`.** The models that pass the smoke, in stages by the staged method above (`flotilla/stages.py` at
-commit b42623b9): order seed 20261125 shuffles instances 0-47 once; stage fractions 0.25, 0.5, 1.0, so each
-model's looks come after 12, 24 and 48 planned pairs. Sandboxes: Modal, as in `rf1v`, unless the plan names local
-Docker through the slot wrapper before the first trial; every `rr1` trial then uses that one. Terminus 2, 40
-turns, confederates p2-p4 on the `oracle` agent, as in `rf1v`. The plan `flotilla/plans/rr1.json` is committed
-after this section and before any trial and fixes the same values; run_wave records its digest. `rr1` does not
-start until that plan holds this `stages` block: fractions [0.25, 0.5, 1.0], alpha 0.05, family "model", futility
-{delta 0.25, beta_f 0.05}, tests [{task_set 0, arms ["talk-quiet", "talk-false"], outcome "correct"}].
+**Pilot `rr1`.** Luna and the new models that pass the smoke, in stages by the staged method above
+(`flotilla/stages.py` at commit b42623b9): order seed 20261125 shuffles instances 0-47 once; stage fractions 0.25,
+0.5, 1.0, so each model's looks come after 12, 24 and 48 planned pairs. Sandboxes: Modal, as in `rf1v`, unless the
+plan names local Docker through the slot wrapper before the first trial; every `rr1` trial then uses that one.
+Terminus 2, 40 turns, confederates p2-p4 on the `oracle` agent, as in `rf1v`. The plan `flotilla/plans/rr1.json`
+is committed after this section and before any trial and fixes the same values; run_wave records its digest.
+`rr1` does not start until that plan holds this `stages` block: fractions [0.25, 0.5, 1.0], alpha 0.05, family
+"model", futility {delta 0.25, beta_f 0.05}, tests [{task_set 0, arms ["talk-quiet", "talk-false"], outcome
+"correct"}].
 
 **Primary test, per model.** Each model is its own family (as section 13, test 1; Holm family size 1, alpha
 0.05). Exact two-sided McNemar on paired `correct`, `talk-quiet` vs `talk-false`, with equal spending over the 3
