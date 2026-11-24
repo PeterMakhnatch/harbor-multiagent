@@ -26,6 +26,13 @@ python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-ret
 
 This also checks the complete profile with its own declared inputs, including the timeout-inclusive book. `verify` checks saved output bytes and exit codes. Use `team_return --json` for the actual counts, digests, assumptions and missing evidence. Equal scores do not imply equal team behavior. Token bounds do not estimate provider charges or savings.
 
+### Did the first seat actually return?
+
+An end timestamp and no error do not prove that a seat returned normally. A cancelled seat can have both.
+The [native exit calibration](../results/seat-exit-contract/results.md) tests this distinction without using the team reward as a proxy.
+Run `python3.12 -BS -m examples.seatlab.workbench verify seat-exit-contract` to reproduce the published result.
+The study itself exits 1: 7 of 8 attempts matched. The workbench succeeds when it reproduces that nonpass.
+
 ## Bring your own work
 
 | If you have… | Start here |

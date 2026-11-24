@@ -11,6 +11,7 @@ Kind = Literal[
     "native-replay-team",
     "secondary-native-receipt-analysis",
     "separate-archive-and-scripted-cohorts",
+    "native-scripted-calibration",
 ]
 
 _RESULTS = "examples/seatlab/results"
@@ -211,6 +212,21 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/seat-return-operator/complete.json",
         exit_code=0,
         sha256="944b4a0302b6441c80ee1e1775aabd3bb23a7345e9f1a78586ecae822eaff33f",
+    ),
+    Study(
+        id="seat-exit-contract",
+        question="Do native seat dispositions match independently observed returns, cancellations, failures and stop requests?",
+        kind="native-scripted-calibration",
+        guide=f"{_RESULTS}/seat-exit-contract/results.md",
+        module="examples.seatlab.workbench.seat_exit",
+        argv=(
+            f"{_RESULTS}/seat-exit-contract/registration.json",
+            f"{_RESULTS}/seat-exit-contract/outcomes.json",
+            "--json",
+        ),
+        report=f"{_RESULTS}/seat-exit-contract/panel.json",
+        exit_code=1,
+        sha256="6e4c048eb9cab9b5eadd2ae299ff179e2619ddb635afc542a20a110949a9673b",
     ),
 )
 
