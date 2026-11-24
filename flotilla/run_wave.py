@@ -12,6 +12,10 @@ is <plan>-<6 hex> with n_concurrent_trials 1. Docker runs at most 2 jobs, each t
 The plan file must be committed and unmodified at HEAD. The prereg commit must exist and be an ancestor
 of HEAD. A rerun skips finished cells. --retry-invalid reruns a cell whose trial was not valid.
 Consecutive starts are at least make_jobs.start_spacing_s apart (default 10 s, 0 disables), also on a resume.
+
+A scripted seat (`[agents.<seat>] under_test = false` in task.toml) runs Harbor's oracle agent with no model and
+costs nothing. All tasks of a task set must have the same scripted seats; the optional plan key scripted_seats
+must equal them. seat_assignments rows then list models for the seats under test only.
 """
 
 from __future__ import annotations
@@ -57,6 +61,7 @@ assert _JOBS and _JOBS.loader
 _JOBS.loader.exec_module(JOBS)
 PLAN_KEYS = frozenset({
     "name", "prereg", "task_sets", "models", "agent", "make_jobs", "budget", "order_seed", "seat_assignments",
+    "scripted_seats",
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
@@ -127,6 +132,10 @@ def load_plan(path: Path) -> dict:
         raise SystemExit("refused: start_spacing_s must be a number from 0 to 600")
     if not plan["task_sets"] or not used_models(plan):
         raise SystemExit("refused: plan has no models or no task sets")
+    declared = plan.get("scripted_seats")
+    if declared is not None and (not isinstance(declared, list) or len(set(declared)) != len(declared)
+                                 or any(not isinstance(seat, str) or not seat for seat in declared)):
+        raise SystemExit("refused: scripted_seats must be a list of distinct seat names")
     if any(word in plan["name"] for word in LEAKY):
         raise SystemExit(f"refused: plan name {plan['name']} contains a condition or model word")
     rows = plan.get("seat_assignments")
@@ -204,14 +213,22 @@ def choices_of(plan: dict) -> list:
     return list(plan["models"])
 
 
+def seat_models(cell: dict) -> dict[str, str]:
+    """Model per seat under test of an assignment cell. Seats are p1..pN; scripted seats take no model."""
+    scripted = set(cell.get("scripted") or ())
+    total = len(cell["assignment"]) + len(scripted)
+    seats = [f"p{index}" for index in range(1, total + 1) if f"p{index}" not in scripted]
+    return dict(zip(seats, cell["assignment"], strict=True))
+
+
 def label_of(cell: dict) -> str:
-    assignment = cell.get("assignment")
-    if assignment:
-        return "models " + ",".join(f"p{index}={model}" for index, model in enumerate(assignment, 1))
+    if cell.get("assignment"):
+        return "models " + ",".join(f"{seat}={model}" for seat, model in seat_models(cell).items())
     return cell["model"]
 
 
-def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None) -> list[list[list[dict]]]:
+def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None,
+              scripted: list[list[str]] | None = None) -> list[list[list[dict]]]:
     """Blocks grouped by task set. A block is one (task set, instance). paths is None for a dry run."""
     grouped = []
     for index, task_set in enumerate(plan["task_sets"]):
@@ -227,6 +244,8 @@ def blocks_of(plan: dict, paths: dict[tuple[int, int, str], str] | None) -> list
                             "task": task, "key": cell_key(index, instance, arm, choice)}
                     if assignment is not None:
                         cell["assignment"] = list(assignment)
+                    if scripted and scripted[index]:
+                        cell["scripted"] = list(scripted[index])
                     block.append(cell)
             blocks.append(block)
         grouped.append(blocks)
@@ -255,10 +274,11 @@ def interleave(grouped: list[list[list[dict]]], rng: random.Random) -> list[list
     return chosen
 
 
-def order_of(plan: dict, paths: dict[tuple[int, int, str], str] | None = None) -> list[dict]:
+def order_of(plan: dict, paths: dict[tuple[int, int, str], str] | None = None,
+             scripted: list[list[str]] | None = None) -> list[dict]:
     """Shuffle each set's blocks, shuffle cells inside a block, then alternate the sets."""
     rng = random.Random(plan["order_seed"])
-    grouped = blocks_of(plan, paths)
+    grouped = blocks_of(plan, paths, scripted)
     for blocks in grouped:
         rng.shuffle(blocks)
         for block in blocks:
@@ -286,15 +306,48 @@ def resolve_paths(plan: dict, repo: Path) -> dict[tuple[int, int, str], str]:
     return found
 
 
-def seats_of(task: str) -> tuple[str, ...]:
+def roster_of(task: str | Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(all seats, scripted seats) from task.toml, both sorted. A scripted seat has under_test = false."""
     config = tomllib.loads((Path(task) / "task.toml").read_text())
-    seats = tuple(sorted(config.get("agents", {})))
+    agents = config.get("agents", {})
+    seats = tuple(sorted(agents))
     if not seats:
         raise SystemExit(f"refused: {task} has no seats")
-    return seats
+    scripted = tuple(seat for seat in seats if agents[seat].get("under_test", True) is False)
+    if len(scripted) == len(seats):
+        raise SystemExit(f"refused: {task} has no seat under test")
+    return seats, scripted
 
 
-def assert_assignment_seats(plan: dict, repo: Path) -> None:
+def scripted_of(plan: dict, repo: Path, *, need_tasks: bool) -> list[list[str] | None]:
+    """Scripted seats per task set, read from every planned task's task.toml. None for a set whose manifest is
+    missing, which only a dry run allows."""
+    declared = plan.get("scripted_seats")
+    found: list[list[str] | None] = []
+    for index, task_set in enumerate(plan["task_sets"]):
+        manifest_path = repo / task_set["manifest"]
+        if not manifest_path.is_file():
+            if need_tasks:
+                raise SystemExit(f"refused: manifest {task_set['manifest']} is missing")
+            found.append(None)
+            continue
+        wanted = {(instance, arm) for instance in task_set["instances"] for arm in arms_of(task_set)}
+        seen: tuple[str, ...] | None = None
+        for entry in json.loads(manifest_path.read_text())["tasks"].values():
+            if (entry.get("instance"), entry.get("condition")) not in wanted:
+                continue
+            _seats, scripted = roster_of(repo / task_set["tasks_dir"] / entry["path"])
+            if seen is not None and scripted != seen:
+                raise SystemExit(f"refused: task set {index} mixes scripted seats {list(seen)} and {list(scripted)}")
+            seen = scripted
+        if declared is not None and seen is not None and list(seen) != sorted(declared):
+            raise SystemExit(f"refused: plan scripted_seats {sorted(declared)} but task set {index} tasks have "
+                             f"{list(seen)} (under_test = false in task.toml)")
+        found.append(list(seen or ()))
+    return found
+
+
+def assert_assignment_seats(plan: dict, repo: Path, scripted: list[list[str] | None]) -> None:
     rows = plan.get("seat_assignments")
     if not rows:
         return
@@ -311,20 +364,23 @@ def assert_assignment_seats(plan: dict, repo: Path) -> None:
             counts.add(len(seats))
         if len(counts) != 1:
             raise SystemExit(f"refused: task set {index} has no uniform seat count")
-        count = counts.pop()
+        count = counts.pop() - len(scripted[index] or ())
         for row in rows:
             if len(row) != count:
-                raise SystemExit(f"refused: assignment has {len(row)} models, task set {index} has {count} seats")
+                raise SystemExit(f"refused: assignment has {len(row)} models, task set {index} has {count} seats "
+                                 "under test")
 
 
 def job_config(job: str, jobs_dir: Path, task: str, agent: str, model: str, max_turns: int, env: str,
                assignment: list[str] | None = None) -> dict:
-    seats = seats_of(task)
-    specs = []
+    seats, scripted = roster_of(task)
+    tested = [seat for seat in seats if seat not in scripted]
+    specs = [f"{seat}=oracle" for seat in scripted]
     if assignment:
-        if len(assignment) != len(seats):
-            raise SystemExit(f"refused: assignment has {len(assignment)} models, {task} has {len(seats)} seats")
-        specs = [f"{seat}={agent}:{item}" for seat, item in zip(seats, assignment)]
+        if len(assignment) != len(tested):
+            raise SystemExit(f"refused: assignment has {len(assignment)} models, {task} has {len(tested)} seats "
+                             "under test")
+        specs += [f"{seat}={agent}:{item}" for seat, item in zip(tested, assignment)]
         model = assignment[0]
     environment = {"type": env, "force_build": False, "delete": True}
     if env == "modal":
@@ -377,11 +433,24 @@ def save_state(path: Path, state: dict) -> None:
     os.replace(temporary, path)
 
 
-def print_dry_run(plan: dict, order: list[dict]) -> None:
+def scripted_line(plan: dict, scripted: list[list[str] | None]) -> str:
+    parts = []
+    for index, seats in enumerate(scripted):
+        if seats is not None:
+            parts.append(f"set {index} {','.join(seats) or 'none'}")
+        elif plan.get("scripted_seats") is not None:
+            parts.append(f"set {index} {','.join(sorted(plan['scripted_seats'])) or 'none'} (declared; no manifest)")
+        else:
+            parts.append(f"set {index} unknown (no manifest)")
+    return "scripted seats (oracle agent, no model, cost 0): " + "; ".join(parts)
+
+
+def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None]) -> None:
     reserve = float(plan["budget"]["reserve_per_trial_usd"])
     cap = float(plan["budget"]["cap_usd"])
     print(f"{plan['name']}: {len(order)} cells, reserve ${reserve:.2f} per trial, cap ${cap:.2f}, "
           f"reserve if every cell starts ${reserve * len(order):.2f}, start spacing {spacing_of(plan):.1f} s")
+    print(scripted_line(plan, scripted))
     for index, cell in enumerate(order, 1):
         print(f"{index}. set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
 
@@ -460,12 +529,18 @@ def trial_valid(trial: Path | None, result: dict | None, cell: dict) -> bool:
     participants = trial_config(trial, result).get("participants") or []
     if not participants:
         return False
-    assignment = cell.get("assignment")
-    if assignment:
-        expected = {f"p{index}": model for index, model in enumerate(assignment, 1)}
-        actual = {seat.get("seat"): seat.get("model_name") for seat in participants}
-        return len(participants) == len(assignment) and all(actual.get(seat) == model for seat, model in expected.items())
-    return all(seat.get("model_name") == cell["model"] for seat in participants)
+    scripted = set(cell.get("scripted") or ())
+    ran = {row.get("seat"): (row.get("agent_info") or {}).get("name") for row in result.get("seat_results") or []}
+    oracles = {row.get("seat") for row in participants if row.get("seat") in scripted
+               and row.get("name") == "oracle" and ran.get(row.get("seat"), "oracle") == "oracle"}
+    if oracles != scripted:
+        return False
+    tested = [row for row in participants if row.get("seat") not in scripted]
+    if cell.get("assignment"):
+        expected = seat_models(cell)
+        actual = {row.get("seat"): row.get("model_name") for row in tested}
+        return len(tested) == len(expected) and actual == expected
+    return bool(tested) and all(row.get("model_name") == cell["model"] for row in tested)
 
 
 def attempts_of(row: dict | None) -> list[dict]:
@@ -485,8 +560,17 @@ def when_of(result: dict) -> datetime:
     return datetime.fromisoformat(started).astimezone(UTC) if started else datetime.now(UTC)
 
 
+def tested_result(cell: dict, result: dict) -> dict:
+    """The result without scripted seats: an oracle seat has no model, no tokens and no cost."""
+    scripted = set(cell.get("scripted") or ())
+    if not scripted:
+        return result
+    return {**result, "seat_results": [row for row in result.get("seat_results") or []
+                                       if row.get("seat") not in scripted]}
+
+
 def assigned_charge(cell: dict, result: dict, prices: dict, reserve: float) -> dict:
-    mapping = {f"p{index}": model for index, model in enumerate(cell["assignment"], 1)}
+    mapping = seat_models(cell)
     try:
         estimate = PRICING.estimate_seats(result, mapping, when_of(result), prices)
     except KeyError:
@@ -502,6 +586,7 @@ def assigned_charge(cell: dict, result: dict, prices: dict, reserve: float) -> d
 def charge(cell: dict, result: dict | None, prices: dict, reserve: float) -> dict:
     if result is None:
         return {"cost": reserve, "estimate": None, "source": "reserve", "flag": "no-result"}
+    result = tested_result(cell, result)
     if cell.get("assignment"):
         return assigned_charge(cell, result, prices, reserve)
     if PRICING.is_deepseek_direct(cell["model"]):
@@ -733,15 +818,18 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
     plan = load_plan(plan_path)
     repo = repo_of(plan_path)
     assert_prereg(plan, repo)
-    assert_assignment_seats(plan, repo)
+    scripted = scripted_of(plan, repo, need_tasks=not dry_run)
+    assert_assignment_seats(plan, repo, scripted)
     if dry_run:
-        print_dry_run(plan, order_of(plan))
+        declared = sorted(plan.get("scripted_seats") or [])
+        print_dry_run(plan, order_of(plan, None, [declared if seats is None else seats for seats in scripted]),
+                      scripted)
         return []
     assert_committed(plan_path, repo)
     if plan["make_jobs"]["env"] == "docker" and not wrapper.is_file():
         raise SystemExit(f"refused: docker wrapper {wrapper} is missing")
     paths = resolve_paths(plan, repo)
-    order = order_of(plan, paths)
+    order = order_of(plan, paths, scripted)
     run_dir = run_dir or Path("/tmp/flotilla") / plan["name"]
     run_dir.mkdir(parents=True, exist_ok=True)
     jobs_dir = jobs_dir or (repo / ".flotilla-local" / "jobs")
@@ -756,6 +844,8 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         check_resume(state, plan, order, digest)
         log(run_dir, f"resume {len(state['finished'])} finished")
     log(run_dir, f"start spacing {spacing_of(plan):.1f} s")
+    if any(scripted):
+        log(run_dir, scripted_line(plan, scripted))
     sources = sources or HttpSources(base_env or dict(os.environ))
     freeze_prices(sources, used_models(plan), state)
     save_state(state_path, state)

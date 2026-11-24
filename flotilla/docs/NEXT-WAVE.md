@@ -88,6 +88,22 @@ froze at the start. DeepSeek direct cost is the published token price.
   next to the effect. It reports the share of exposed actions taken while a message to the seat was unread. In
   xm1 split and xp1 this share was 0.76 to 0.96 for Haiku and Luna: their talk arm was mostly send-only.
 
+### Scripted seats in a wave
+
+A task seat with `[agents.<seat>] under_test = false` in `task.toml` is a scripted seat (`build_tasks.py
+--scripted`; schedule puts p3 there). The runner gives it Harbor's `oracle` agent with no model, which runs the
+seat's `solution/solve.sh`. The seats under test keep the plan's `agent` and model. A `seat_assignments` row then
+lists models for the seats under test only (schedule.liar: 2 models for p1 and p2).
+
+- The runner reads the scripted seats from every planned task. All tasks of a task set must have the same
+  scripted seats. The optional plan key `scripted_seats` (for example `["p3"]`) must equal them in every task
+  set; otherwise the runner refuses the plan.
+- The dry run prints them (`scripted seats (oracle agent, no model, cost 0): set 0 p3`). A set whose manifest
+  is not built yet shows `unknown (no manifest)`; the real run refuses it.
+- A trial is valid only if each scripted seat ran the oracle agent and each seat under test ran the cell's
+  model. The cost is the cost of the seats under test; a scripted seat costs 0 and is never an unknown cost.
+  The reserve per trial does not change.
+
 ### Queue after the credit stop of 2026-11-23
 
 Run these in order from the `lab` checkout once the OpenRouter account has credit (about $6 for the first 3,

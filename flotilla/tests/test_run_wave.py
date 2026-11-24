@@ -26,10 +26,11 @@ from pathlib import Path
 args = sys.argv[1:]
 config = json.loads(Path(args[args.index("-c") + 1]).read_text())
 task = config["tasks"][0]["path"]
-model = config["participants"][0]["model_name"]
-names = [item["model_name"] for item in config["participants"]]
+names = [item["model_name"] for item in config["participants"] if item.get("model_name")]
+model = names[0]
+oracles = [item["seat"] for item in config["participants"] if item["name"] == "oracle"]
 control = json.loads(Path(__CONTROL__).read_text())
-spec = control[task + "|" + "|".join(names)]
+spec = control.get(task + "|" + "|".join(names)) or control[task + "|" + model]
 log = Path(__LOG__)
 gate = Path(__GATE__)
 keys = sorted(name for name in os.environ if name.endswith("_API_KEY"))
@@ -55,7 +56,11 @@ tokens = spec["tokens"]
 result = {"started_at": spec["started_at"], "exception_info": spec.get("exception"),
           "seat_results": [{"seat": "p1", "exception_info": spec.get("exception"),
                             "agent_result": {"n_input_tokens": tokens["miss"], "n_cache_tokens": tokens["hit"],
-                                             "n_output_tokens": tokens["out"], "cost_usd": spec.get("cost_usd")}}]}
+                                             "n_output_tokens": tokens["out"], "cost_usd": spec.get("cost_usd")}}]
+                         + [{"seat": seat, "under_test": False, "exception_info": None,
+                             "agent_info": {"name": "oracle", "model_info": None},
+                             "agent_result": {"n_input_tokens": None, "n_cache_tokens": None,
+                                              "n_output_tokens": None, "cost_usd": None}} for seat in oracles]}
 (job / "result.json").write_text(json.dumps(result))
 if spec["behavior"] != "invalid":
     (job / "verifier").mkdir()
@@ -72,7 +77,9 @@ if spec["behavior"] != "invalid":
             used_models[0] = "other/model"
         rows = [{"seat": f"p{index}", "model_name": item} for index, item in enumerate(used_models, 1)]
     else:
-        rows = [{"seat": "p1", "model_name": used}]
+        rows = [{"seat": item["seat"], "model_name": used} for item in config["participants"]
+                if item["name"] != "oracle"]
+    rows += [{"seat": seat, "name": "oracle", "model_name": None} for seat in oracles]
     (job / "config.json").write_text(json.dumps({"participants": rows}))
     (job / "verifier" / "score.json").write_text(json.dumps(score))
     (job / "verifier" / "world-state.json").write_text("{}")
@@ -180,9 +187,12 @@ def namer_box(tmp: Path) -> int:
 
 
 def launch(tmp: Path, plan: dict, behaviors: dict[str, dict], sources: Sources, seats: tuple[str, ...] = ("p1",),
-            **extra):
+            tree=None, **extra):
     repo = init_repo(tmp)
-    task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"], seats=seats)
+    if tree is None:
+        task_tree(repo, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"], seats=seats)
+    else:
+        tree(repo)
     path = commit_plan(repo, plan)
     harbor, wrapper = tmp / "harbor", tmp / "wrapper"
     script = (HARBOR_SCRIPT.replace("__CONTROL__", json.dumps(str(tmp / "control.json")))
@@ -766,3 +776,172 @@ def test_seat_agent_override_keeps_max_turns(tmp_path):
     assert by_seat["p1"]["kwargs"]["max_turns"] == 40
     assert by_seat["p2"]["kwargs"]["max_turns"] == 40
 
+
+def scripted_build(repo: Path) -> None:
+    """The schedule.liar build: p1 and p2 under test, p3 scripted (`under_test = false`)."""
+    subprocess.run([sys.executable, str(FLOTILLA / "build_tasks.py"), "--family", "schedule", "--scripted",
+                    "--instances", "0", "--out", str(repo / "tasks")], check=True, capture_output=True, text=True)
+
+
+def scripted_plan(models: list[str]) -> dict:
+    return plan_for([0], ["talk", "talk-liar"], models, concurrency=1, cap=1.0, reserve=0.05)
+
+
+def refusal(call) -> str:
+    try:
+        call()
+    except SystemExit as exc:
+        return str(exc)
+    raise AssertionError("the call must be refused")
+
+
+def scripted_order(tmp: Path, plan: dict) -> list[dict]:
+    preview = init_repo(tmp)
+    scripted_build(preview)
+    return RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+
+
+def test_scripted_seat_runs_the_oracle_and_costs_nothing(tmp_path):
+    plan = scripted_plan([OPENROUTER])
+    plan["scripted_seats"] = ["p3"]
+    order = scripted_order(tmp_path / "preview", plan)
+    behaviors = {cell["key"]: spec_for("ok", cost_usd=0.01) for cell in order}
+    events, order, _path, _env = launch(tmp_path / "wave", plan, behaviors, Sources(catalog(), lambda *_args: 10.0),
+                                        tree=scripted_build)
+    assert events[-1]["reason"] == "done"
+    ends = [event for event in events if event["kind"] == "end"]
+    assert len(ends) == 2 and all(event["valid"] for event in ends)
+    assert all(event["source"] == "recorded" and event["flag"] is None and event["cost"] == 0.01 for event in ends)
+    saved = json.loads((tmp_path / "wave" / "run" / "state.json").read_text())
+    assert abs(saved["spent_usd"] - 0.02) < 1e-12
+    assert all(cell["scripted"] == ["p3"] for cell in saved["order"])
+    for config_path in (tmp_path / "wave" / "run" / "configs").glob("*.json"):
+        by_seat = {row["seat"]: row for row in json.loads(config_path.read_text())["participants"]}
+        assert sorted(by_seat) == ["p1", "p2", "p3"]
+        assert by_seat["p3"]["name"] == "oracle" and "model_name" not in by_seat["p3"]
+        assert all(by_seat[seat]["name"] == "terminus-2" and by_seat[seat]["model_name"] == OPENROUTER
+                   for seat in ("p1", "p2"))
+    log = (tmp_path / "wave" / "run" / "progress.log").read_text()
+    assert "scripted seats (oracle agent, no model, cost 0): set 0 p3" in log
+
+
+def test_dry_run_derives_and_prints_the_scripted_seats(tmp_path):
+    repo = init_repo(tmp_path)
+    scripted_build(repo)
+    path = commit_plan(repo, scripted_plan([DEEPSEEK]))
+    dry = subprocess.run([sys.executable, str(FLOTILLA / "run_wave.py"), "--dry-run", str(path)],
+                         capture_output=True, text=True)
+    assert dry.returncode == 0, dry.stderr
+    lines = dry.stdout.splitlines()
+    assert lines[1] == "scripted seats (oracle agent, no model, cost 0): set 0 p3"
+    assert sorted(line.split(" ", 1)[1] for line in lines[2:]) == [
+        f"set 0 instance 0 talk {DEEPSEEK}", f"set 0 instance 0 talk-liar {DEEPSEEK}"]
+    unbuilt = scripted_plan([DEEPSEEK])
+    unbuilt["task_sets"][0]["manifest"] = "missing/manifest.json"
+    assert RUN.scripted_line(unbuilt, RUN.scripted_of(unbuilt, repo, need_tasks=False)).endswith(
+        "set 0 unknown (no manifest)")
+    assert "is missing" in refusal(lambda: RUN.scripted_of(unbuilt, repo, need_tasks=True))
+
+
+def test_scripted_seats_must_match_every_task(tmp_path):
+    repo = init_repo(tmp_path)
+    scripted_build(repo)
+    plan = scripted_plan([DEEPSEEK])
+    for wrong in (["p2"], []):
+        plan["scripted_seats"] = wrong
+        assert f"plan scripted_seats {wrong} but task set 0 tasks have ['p3']" in refusal(
+            lambda: RUN.scripted_of(plan, repo, need_tasks=True))
+    plan["scripted_seats"] = ["p3"]
+    assert RUN.scripted_of(plan, repo, need_tasks=True) == [["p3"]]
+    path = commit_plan(repo, {**plan, "scripted_seats": ["p2"]})
+    assert "plan scripted_seats ['p2']" in refusal(lambda: RUN.run(path, dry_run=True))
+    blob = tmp_path / "bad.json"
+    blob.write_text(json.dumps({**plan, "scripted_seats": "p3"}))
+    assert "must be a list" in refusal(lambda: RUN.load_plan(blob))
+    first, second = sorted((repo / "tasks").glob("*/*/task.toml"))
+    second.write_text(second.read_text().replace("under_test = false\n", ""))
+    assert "task set 0 mixes scripted seats" in refusal(lambda: RUN.scripted_of(plan, repo, need_tasks=True))
+    second.write_text(first.read_text().replace("[agents.p1]\n", "[agents.p1]\nunder_test = false\n")
+                      .replace("[agents.p2]\n", "[agents.p2]\nunder_test = false\n"))
+    assert "no seat under test" in refusal(lambda: RUN.roster_of(second.parent))
+
+
+def write_trial(root: Path, participants: list[dict], seat_results: list[dict] | None = None):
+    trial = root / "trial"
+    (trial / "verifier").mkdir(parents=True)
+    (trial / "verifier" / "score.json").write_text(json.dumps({"error": None, "instance": 0, "condition": "talk"}))
+    (trial / "verifier" / "world-state.json").write_text("{}")
+    (trial / "config.json").write_text(json.dumps({"participants": participants}))
+    return trial, {"seat_results": seat_results or []}
+
+
+def test_an_oracle_seat_is_valid_only_when_it_ran_the_oracle(tmp_path):
+    def row(seat, name="terminus-2", model=DEEPSEEK):
+        return {"seat": seat, "name": name, "model_name": model}
+
+    oracle = row("p3", "oracle", None)
+    cell = {"instance": 0, "arm": "talk", "model": DEEPSEEK, "scripted": ["p3"]}
+    ran_other = [{"seat": "p3", "agent_info": {"name": "terminus-2"}}]
+    cases = [
+        ("good", [row("p1"), row("p2"), oracle], None, cell, True),
+        ("ran-oracle", [row("p1"), row("p2"), oracle], [{"seat": "p3", "agent_info": {"name": "oracle"}}], cell, True),
+        ("llm-in-scripted-seat", [row("p1"), row("p2"), row("p3")], None, cell, False),
+        ("scripted-seat-missing", [row("p1"), row("p2")], None, cell, False),
+        ("ran-something-else", [row("p1"), row("p2"), oracle], ran_other, cell, False),
+        ("wrong-model", [row("p1"), row("p2", model=OPENROUTER), oracle], None, cell, False),
+        ("plan-without-scripted", [row("p1"), row("p2"), oracle], None,
+         {key: value for key, value in cell.items() if key != "scripted"}, False),
+        ("assignment", [row("p1"), row("p2", model=OPENROUTER), oracle], None,
+         {**cell, "assignment": [DEEPSEEK, OPENROUTER]}, True),
+        ("assignment-swapped", [row("p1", model=OPENROUTER), row("p2"), oracle], None,
+         {**cell, "assignment": [DEEPSEEK, OPENROUTER]}, False),
+    ]
+    for name, participants, seat_results, case_cell, expected in cases:
+        trial, result = write_trial(tmp_path / name, participants, seat_results)
+        assert RUN.trial_valid(trial, result, case_cell) is expected, name
+
+
+def test_the_charge_skips_scripted_seats():
+    haiku, luna = "openrouter/anthropic/claude-haiku-5.5", "openrouter/openai/gpt-6-luna"
+    prices = {haiku: {"prompt": "0.000001", "completion": "0.000001"},
+              luna: {"prompt": "0.000002", "completion": "0.000002"}}
+    empty = {"n_input_tokens": None, "n_cache_tokens": None, "n_output_tokens": None, "cost_usd": None}
+    result = {"started_at": OFF_PEAK, "seat_results": [
+        {"seat": "p1", "agent_result": {"n_input_tokens": 1_000, "n_cache_tokens": 0, "n_output_tokens": 0,
+                                        "cost_usd": 0.02}},
+        {"seat": "p2", "agent_result": {"n_input_tokens": 2_000, "n_cache_tokens": 0, "n_output_tokens": 0,
+                                        "cost_usd": 0.03}},
+        {"seat": "p3", "under_test": False, "agent_info": {"name": "oracle"}, "agent_result": empty},
+    ]}
+    bill = RUN.charge({"model": haiku, "scripted": ["p3"]}, result, prices, 0.10)
+    assert (bill["cost"], bill["source"], bill["flag"]) == (0.05, "recorded", None)
+    assert bill["estimate"] == 3_000 * 0.000001
+    unscripted = RUN.charge({"model": haiku}, result, prices, 0.10)
+    assert unscripted["flag"] == "missing-recorded"
+    assigned = RUN.charge({"model": haiku, "assignment": [haiku, luna], "scripted": ["p3"]}, result, prices, 0.10)
+    assert (assigned["cost"], assigned["source"], assigned["flag"]) == (0.05, "recorded", None)
+    assert assigned["estimate"] == 1_000 * 0.000001 + 2_000 * 0.000002
+    direct = RUN.charge({"model": DEEPSEEK, "scripted": ["p3"]}, result, {}, 0.10)
+    assert direct["cost"] == PRICING.deepseek_cost({"hit": 0, "miss": 3_000, "out": 0}, datetime.fromisoformat(OFF_PEAK))
+    assert RUN.charge({"model": DEEPSEEK, "scripted": ["p3"]}, None, {}, 0.10)["cost"] == 0.10
+
+
+def test_seat_assignments_list_models_for_the_seats_under_test(tmp_path):
+    plan = scripted_plan([DEEPSEEK])
+    plan["budget"]["provider_floors"]["openrouter"] = 1.0
+    plan["seat_assignments"] = [[DEEPSEEK, OPENROUTER]]
+    order = scripted_order(tmp_path / "preview", plan)
+    behaviors = {cell["key"]: spec_for("ok") for cell in order}
+    events, order, _path, _env = launch(tmp_path / "cross", plan, behaviors, Sources(catalog(), lambda *_args: 10.0),
+                                        tree=scripted_build)
+    assert all(event["valid"] for event in events if event["kind"] == "end")
+    config = json.loads(next((tmp_path / "cross" / "run" / "configs").glob("*.json")).read_text())
+    by_seat = {row["seat"]: (row["name"], row.get("model_name")) for row in config["participants"]}
+    assert by_seat == {"p1": ("terminus-2", DEEPSEEK), "p2": ("terminus-2", OPENROUTER), "p3": ("oracle", None)}
+    assert f"models p1={DEEPSEEK},p2={OPENROUTER}" in (tmp_path / "cross" / "run" / "progress.log").read_text()
+    assert RUN.seat_models({"assignment": ["a", "b"], "scripted": ["p1"]}) == {"p2": "a", "p3": "b"}
+    wide = init_repo(tmp_path / "wide")
+    scripted_build(wide)
+    plan["seat_assignments"] = [[DEEPSEEK, OPENROUTER, DEEPSEEK]]
+    path = commit_plan(wide, plan)
+    assert "has 2 seats under test" in refusal(lambda: RUN.run(path, dry_run=True))
