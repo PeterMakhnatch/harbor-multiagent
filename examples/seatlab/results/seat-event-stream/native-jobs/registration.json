@@ -1,0 +1,40 @@
+{
+  "schema": "seatlab.batch-seat-events-firsts/v1",
+  "native_source": "fb281ab3ce4ece98c4de54cdc850d2e1c487fc9e",
+  "question": "Can a passive local job plugin preserve each attempt identity and discriminate normal return from native stop before a job completes, without changing default job grades or fabricating evidence on resume?",
+  "world": "hello-seats",
+  "participants": {
+    "p1": "native delayed Oracle under test",
+    "p2": "native Oracle, return or hold"
+  },
+  "allocation": {
+    "job-default": {
+      "attempts": 1,
+      "observer": false,
+      "p2": "return"
+    },
+    "job-return": {
+      "attempts": 2,
+      "observer": true,
+      "p2": "return"
+    },
+    "job-stopped": {
+      "attempts": 1,
+      "observer": true,
+      "p2": "hold"
+    }
+  },
+  "n_concurrent_trials_per_job": 1,
+  "max_retries": 0,
+  "docker_slots_global": 2,
+  "firsts_only": true,
+  "pass": [
+    "All four native enrolled firsts retain valid world reward 1, with two distinct UUIDs in job-return.",
+    "Default has no seat journal; each observed journal is mode 0600, closed, and binds both seat outcomes to its own final native UUID and named roster.",
+    "All observed p1 seats return. Both p2 return controls report returned; the held p2 reports stop_requested.",
+    "At least one normal-return prefix is seen from another process before that native trial has a final result, and the held seat is never reported as returned.",
+    "A completed unobserved job resumed with the plugin gets no retroactive journal; a completed observed job resumed without the plugin preserves all journal bytes and performs no new world play."
+  ],
+  "refusal": "A missing result or unfinished attempt remains in the denominator as unknown. No replacements. Native retries are disabled here; no conclusion about preserving retry history.",
+  "cost": "Scripted native Oracle seats only. No model, billable infrastructure or Eval Lab runs."
+}
