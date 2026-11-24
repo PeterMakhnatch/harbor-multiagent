@@ -974,3 +974,15 @@ tasks, smoke rule, test and predictions. The resumed waves keep their own plans 
 DeepSeek's 3 missed seat-rounds are 1 seat (p1 of `lws-772c44`, instance 33) that took no action in rounds 1 to 3;
 that trial had no gate refusal. By the rule, DeepSeek is dropped and lwc does not run. H1 is unchanged (Haiku and
 Luna). lw1 started at 7:25 PM ET.
+
+**Amendment 2 (2026-11-23, 8:58 PM ET, before any lwc trial; the lw1 result had been read).** A scan of all seat
+trajectories after lw1 found one shared stall. 25 seats in 17 trials of 4 plans (xm1, pv10, xp1, lws) went 612 to
+747 s between 2 turns, and every stall started between 7:07:52 and 7:09:01 PM ET, just after the resume burst
+(about 31 trials started within 10 s). Of the seats in flight at 7:08:30 PM ET, 17 of 22 DeepSeek seats stalled, 4
+of 24 Haiku seats and 0 of 17 Luna seats; no seat of a trial started after 7:10 PM ET has such a gap (lw1: 0 of 128
+trials). The DeepSeek smoke failure is 1 of these stalls: `lws-772c44` p1 stopped for 747 s from 7:07:52 PM ET and
+so missed rounds 1 to 3. The smoke rule screens models whose seats do not act; a provider stall that hit 17 seats at
+once does not measure that. Change: DeepSeek gets 1 new smoke under the same rule (plan `lws2`: the same 2 gated
+trials on instances 12 and 33, the same task set and turns). If it passes, `lwc` runs as registered (plan
+unchanged), then `--retry-invalid`; if it fails, DeepSeek stays dropped. Nothing else changes. H1 does not use
+DeepSeek, so lwc enters only prediction 3 and the control description.
