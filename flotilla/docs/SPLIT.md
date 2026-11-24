@@ -986,3 +986,170 @@ once does not measure that. Change: DeepSeek gets 1 new smoke under the same rul
 trials on instances 12 and 33, the same task set and turns). If it passes, `lwc` runs as registered (plan
 unchanged), then `--retry-invalid`; if it fails, DeepSeek stays dropped. Nothing else changes. H1 does not use
 DeepSeek, so lwc enters only prediction 3 and the control description.
+
+## 20. Final results: xm1 split, pv10 and the read-gate wave lw1
+
+Peter added credit at 7:06 PM ET. The paused waves resumed at 7:07 PM ET, and lw1 ran from 7:25 to 8:35 PM ET
+(Amendment 1 of section 19). Final counts: xm1 192 trials, pv10 96, lw1 128, lwc 32 (xp1: section 21); every trial
+is harness-valid, none is truncated, and every model-arm misses at most 10% of its seat-rounds. A separate agent
+re-derived every count, pair, p value and decision in this section from the raw files with code that shares nothing
+with the analysis scripts (`/tmp/flotilla/rederive/derive.py`, extended for v11): 0 mismatches. Its own unread count
+also matches the `unread` that v11 logs on every lw1 and lwc action (0 mismatches).
+
+### xm1, split part (section 15 as amended): FAIL
+
+| Model | Silent deals | Talk deals | b | c | Exact p |
+|---|---|---|---|---|---|
+| Claude Haiku 5.5 | 9 of 16 | 8 of 16 | 1 | 2 | 1 |
+| gpt-6-luna | 12 of 16 | 9 of 16 | 2 | 5 | 0.453 |
+| DeepSeek V4.1 Flash (replication) | 5 of 16 | 10 of 16 | 5 | 0 | 0.0625 |
+
+Pooled over Haiku and Luna: 32 pairs, b = 3, c = 7, p = 0.344: FAIL. Silent did not give significantly more deals
+either. The talk effect of sp3 (DeepSeek, 6 of 6 against 0 of 6) does not hold for Haiku and Luna. Every
+prediction failed: silent deals were above 20% (Haiku 56%, Luna 75%), talk deals below 65% (Haiku 50%, Luna 56%),
+and the DeepSeek stratum had talk 62.5% (predicted at least 80%) and silent 31% (predicted at most 20%).
+
+How the seats played (an independent reading of all 96 split trials, with quotes):
+
+1. **Silent play has a 2-step focal rule.** The strong seat opens at its outside option in round 1, and the weak
+   seat claims exactly the rest in round 2 (on the 9 instances added after the interim: strong seat 8 of 9 for each
+   model; weak seat 7 of 7 Haiku, 6 of 7 Luna). This rule makes a deal wherever round 2 is feasible, which is why
+   silent deals were far above the prediction.
+2. **Haiku and Luna claim with unread messages in talk.** Final `listening.py` (all 48 talk trials): share of
+   exposed actions taken with an unread message, Haiku 84 of 88 (0.95), Luna 80 of 93 (0.86), DeepSeek 39 of 88
+   (0.44). Their talk deals repeat the silent claims.
+3. **The reversed pairs are noise on the same rule, not a working message channel.** Haiku silent-only on 0 and
+   15 (on 0 the talk weak seat proposed its own split; on 15 the talk strong seat opened below its outside option);
+   Luna silent-only on 0, 1, 6, 7 and 13 (on 0 and 1 the talk weak seat proposed half; on 6, 7 and 13 the silent
+   "deal" pays one seat below its outside option). 3 of Luna's 12 silent deals are such mistaken deals.
+4. **DeepSeek reads first only in part:** talk deals 10 (5 new: 3 in round 1, 2 in round 2), no silent-only pair.
+5. **Flags.** Deals below an outside option, xm1 split: Luna 4, Haiku 1, DeepSeek 0 (all count as deals). A
+   stall hit 3 trials on instance 14 that started at the burst of the resume (7:07:55 PM ET): about 610 to 633 s
+   with no world event, then rounds 1 and 2 closed with both seats missed (`xm1-ac6597`, `xm1-f9c924` DeepSeek;
+   `xm1-987e67` Haiku, which still made a deal in round 3). The 2 DeepSeek trials form a pair with no deal in either
+   arm, so no b or c changes. DeepSeek seats searched their machine in 13 seat trajectories; no output shows another
+   seat's data.
+
+### pv10, propose (world v10) against silent (section 16): PASS
+
+| Model | Silent deals | Propose deals | b | c | Exact p |
+|---|---|---|---|---|---|
+| Claude Haiku 5.5 | 11 of 16 | 12 of 16 | 2 | 1 | 1 |
+| gpt-6-luna | 10 of 16 | 13 of 16 | 4 | 1 | 0.375 |
+| DeepSeek V4.1 Flash | 1 of 16 | 6 of 16 | 5 | 0 | 0.0625 |
+
+Pooled over the 3 models: 48 pairs, b = 11, c = 2, p = 0.0225 (alpha 0.05): PASS, consistent (b > c in 3 of 3).
+Predictions: propose at least 8 of 16 per model held for Haiku and Luna, not DeepSeek (6); silent at most 3 of 16
+held only for DeepSeek (1; Haiku 11, Luna 10); b - c at least 12 failed (9); fewer than 10% of posted proposals
+lapsed or expired unseen held (Haiku 3 of 34, Luna 1 of 30, DeepSeek 2 of 84); the strong seat's surplus share is
+higher in propose deals than in xm1 talk deals for all 3 models (Haiku 0.077 against -0.042, Luna 0.000
+against -0.156, DeepSeek 0.277 against 0.127). Silent test-retest (pv10 silent against xm1 silent on the same 16
+instances, the same instructions): the deal outcome agrees on 14 of 16 instances for Haiku, 12 for Luna and 10 for
+DeepSeek.
+
+How the seats played (an independent reading of all 96 trials, with quotes):
+
+1. **Haiku: the strong seat proposes at its outside option.** It posted all 9 accepted Haiku proposals, at its
+   outside option exactly (7) or 8 points above (2).
+2. **The v10 hold saved 9 deals** (Haiku 2, Luna 7, DeepSeek 0): the round stayed open while an addressee had not
+   answered.
+3. **DeepSeek proposals lapse.** 8 of its 20 feasible proposals lapsed at the timer (Haiku 0 of 10, Luna 0 of 10);
+   11 of 16 first offers gave the other seat less than its outside option; rival proposals were open together in 11
+   of 16 trials. Its b = 5 comes from the silent arm, where the strong seat claimed above its outside option or
+   raised its claim (`pv10-3a266f`: "I will try 63").
+4. **Most b pairs are on 1-window instances** (Haiku 4 and 16, Luna 11 and 13): the strong seat offers its
+   outside option in round 1; in silent the round-2 remainder is below the weak seat's outside option.
+5. **Neither c pair is an arm effect.** Haiku instance 1 (`pv10-38fa2c`): one seat had no turn for 635 s (the resume
+   stall, FINDINGS.md entry of 20:48 ET) and missed rounds 1 and 2. Luna instance 10 (`pv10-fa4b14`): the silent
+   deal pays the strong seat 19 against an outside option of 43.
+6. **Flags.** 4 deals below an outside option (3 silent, 1 propose claim deal). 4 trials stalled 10 to 11 minutes at
+   the burst of the resume (00:08 to 00:20 UTC); all end with no deal; the 3 DeepSeek trials fall in 2 pairs with no
+   deal in either arm. Luna's first proposal came in round 1 in 9 of 16 trials (the interim reading "only after
+   failed claims" does not hold). 16 proposals arrived after the round had closed (the decline-then-close race); 2
+   feasible splits were lost this way.
+
+### lw1, gated against talk (section 19): PASS
+
+| Model | Talk deals | Gated deals | b | c | Exact p | Mean deal round, talk / gated | Exposed claims with an unread message, talk |
+|---|---|---|---|---|---|---|---|
+| Claude Haiku 5.5 | 26 of 32 | 28 of 32 | 3 | 1 | 0.625 | 1.81 / 1.64 | 103 of 109 |
+| gpt-6-luna | 22 of 32 | 29 of 32 | 8 | 1 | 0.039 | 2.09 / 1.52 | 117 of 145 |
+| DeepSeek V4.1 Flash (control, 16 instances) | 12 of 16 | 15 of 16 | 3 | 0 | 0.25 | 1.58 / 1.27 | 12 of 66 |
+
+Pooled over the 2 models, every harness-valid pair (`--missed-cutoff 1.0`): 64 pairs, b = 11, c = 2, p = 0.0225
+(< 0.025): PASS, consistent (b > c in both models). The 10% sensitivity check gives the same numbers, because no
+model-arm missed more than 0.9% of its seat-rounds. The p value is close to the threshold (b = 10 or c = 3 would
+not pass), and most of the effect comes from Luna (8 against 1).
+
+Predictions: 1 (H1 PASS) held; 2 (`gated` at least 0.75) held (Haiku 0.875, Luna 0.906); 3 failed by 1
+(DeepSeek b = 3, c = 0; at most 2 predicted); 4 held (talk: Haiku 0.945, Luna 0.807 of exposed claims with an
+unread message); 5 held (mean deal round lower in `gated` for both); 6 held (0 missed seat-rounds in `gated`).
+
+Cost of the gate: 81 refusals (Haiku 42 on 38 of 64 seats, at most 3 per seat; Luna 39 on 39 seats, 1 each). After
+every refusal the same seat acted again in the same round; no retry landed in a later round, and no message caused
+2 refusals. Missed seat-rounds: Haiku 0 in both arms; Luna 2 of 212 in talk, 0 of 124 in gated.
+
+Deals by feasibility window: on the 6 instances with 1 feasible round, Haiku 2 gated against 1 talk and Luna 3
+against 1; on the 26 with 2 or more, Haiku 26 against 25 and Luna 26 against 21. Deal quality: deals below an
+outside option, Haiku talk 6 and gated 4, Luna talk 1 and gated 4; deals that give both seats at least their
+outside options, Haiku 20 against 24 and Luna 21 against 25 (descriptive).
+
+DeepSeek control (`lwc`, 32 trials, 8:53 to 9:20 PM ET, $0.86, run after Amendment 2): talk 12 of 16, gated 15 of
+16, b = 3, c = 0, p = 0.25; 0 missed seat-rounds. DeepSeek took 12 of 66 exposed talk claims with an unread message,
+and the gate fired in only 7 of its 16 gated trials (Haiku and Luna: 63 of 64). The reading: all 3 b pairs are on
+1-window instances, and only 1 of them (instance 16) runs through the Haiku and Luna mechanism (the 409 delivered
+"Agreed. I will claim 33" and p2 went back from 108 to the agreed 100); on instance 7 the gate never fired (both
+gated seats read first, and in the talk twin p1 claimed with p2's "Please claim exactly 80" unread); on instance 10
+the 409 only paused a seat that sent the same claim again, and the talk twin failed on message order. Prediction 3
+(|b - c| at most 2) failed by 1, but the gate changed the outcome through a delivered message in 1 of the 3 pairs:
+for a model that reads before it acts, the gate rarely fires and adds little.
+
+Test-retest of the talk arm (lw1 v11 against xm1 v9, same 16 instances, same instructions, 60 against 40 turns):
+the deal outcome agrees on 13 of 16 instances for Haiku (deals 11 against 8) and 9 of 16 for Luna (10 against 9).
+
+How the seats played (an independent reading of all 128 lw1 trials and the 6 smoke trials, with quotes;
+`/tmp/flotilla/lw1/readings/gate.md`):
+
+1. **The gate turns a message on the wire into a counter-offer.** In 9 of the 11 gated-only deals, the 409 gave a
+   seat the other seat's offer in round 1, and the seat changed its claim to fit it in the same round
+   (`lw1-20d942` p2: "Reading them shows p1 claimed 77 and proposed that I claim 35 ... My 56 would have made the
+   total 133, causing no deal"). The other 2 are round-2 deals that the gate only confirmed.
+2. **Why the talk twins failed:** seats that never read (`lw1-049112` p1 claimed 80 in all 6 rounds with up to 5
+   unread messages), a read-then-claim race (`lw1-adbed2` p2 found "no messages yet", the offer arrived at t = 22.5
+   s, and p2 claimed at t = 23.3 s), and message order: in 4 pairs the deciding talk claim came before the other
+   seat sent anything, so a gate could not have fired there. A seat cannot tell the arms apart before its first
+   409, so these 4 pairs are chance under the design, but they make b larger than a pure inbox effect.
+3. **The gate did not cost the 2 talk-only deals.** Both are on instance 13 and pay p2 below its outside option of
+   63 (`lw1-c76af5` p2: "My outside option is 63 ... Plan: Claim 51, an even split of 102"). Counting only deals
+   that give both seats at least their outside options, the discordant pairs are 9 gated-only and 0 talk-only (a
+   tally, not a test).
+4. **Reactions to the 409.** All 89 refusals (81 in lw1, 8 in the smoke) led to reasoning that names the delivered
+   message; no seat retried blindly or treated the 409 as an error. Haiku changed its claim toward the offer after
+   9 of 42 refusals and Luna after 15 of 39; the others re-sent the same action because the offer already fitted
+   (27), was below the seat's outside option (22), or no longer fitted the smaller pot (7); 1 claim became a pass.
+5. **Costs.** No refused action landed in a later round. Haiku batches its claim with a blocking `/wait`, so 28 of
+   its 42 retries came more than 55 s after the 409 (longest 97 s of a 240 s round). In 2 Luna trials the gate moved
+   a seat from its outside option to a lower offer (`lw1-2a18c1` p1: 59 to 43; `lw1-4403e9` p2: 78 to 65).
+6. **The 1-window instances drive the result:** 7 of the 13 discordant pairs and all 5 pairs with no deal in either
+   arm. In 4 of those 5, the weak seat claims an even split before any message, so no gate can help.
+7. **Honesty.** 95 messages state an outside option; every stated number is true, so the gate delivered no lie.
+8. **Flags.** The gate fired in 63 of 64 gated trials. In 14 Haiku trials round 1 opened 127 to 393 s after the
+   start because 31 Haiku seats sent a malformed first reply to the harness (no round lost: the round clock starts
+   at open). One Luna talk seat called the world without a token (2 refusals); no seat read another seat's data.
+
+### Reading across the waves (inferred)
+
+1. **The data fit one account: talk helps where messages are read, or where writing them helps the writer.** In
+   split, Haiku and Luna act before they read, and silent seats already coordinate on the 2-step rule wherever round
+   2 is feasible; talk adds nothing (xm1 FAIL). The read gate makes the same seats use the same messages (lw1 PASS),
+   and does little for DeepSeek, which reads first (lwc).
+2. **In commons, talk helps all 3 families even with low reading** (Haiku and Luna saw 35% and 42% of the messages
+   sent to them). One account is that writing a pledge makes the writer compute and keep the fair share; the
+   evidence here cannot separate the writer's effect from the reader's. An arm whose messages reach no one would.
+3. **Institutions that act at the point of action raise deals for seats that do not read:** binding proposals
+   that hold the round until the addressee answers (pv10 PASS) and the read gate (lw1 PASS).
+4. **Most discordant pairs sit on instances with 1 feasible round,** where the first claim decides the game. The
+   instance mix sets the size of every split effect; future waves should balance window counts or test per window.
+5. **Single trials are noisy.** The same instance and arm in 2 waves agree on the deal outcome in 9 to 14 of 16
+   instances. In lw1, lwc and pv10 only 1 of 6 per-model contrasts reaches p < 0.05 (Luna in lw1, p = 0.039), and
+   both pooled tests pass with p = 0.0225, close to their cutoffs.
