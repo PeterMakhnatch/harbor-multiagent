@@ -26,6 +26,8 @@ A verified release means the bundled analyzer reproduces the published report by
 
 To act on a participant's return instead of the final team reward, [watch a native seat](examples/seatlab/results/seat-event-stream/results.md) or [wait for a named return from another process](examples/seatlab/results/seat-event-stream/return-gate/results.md). The host records seat state, not prompts or messages. A harness stop does not count as a return.
 
+For a batch, [record each seat in a native `harbor run` job](examples/seatlab/results/seat-event-stream/native-jobs/results.md). If Harbor retries a slot, [keep each execution separately](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md). The retry report keeps a missing execution in the count and does not assign it a grade.
+
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
 ```sh

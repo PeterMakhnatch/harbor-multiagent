@@ -39,6 +39,8 @@ Both observers still closed it after both genuine returns. The average reward di
 
 You can now [watch a named seat in your own native trial](../results/seat-event-stream/results.md) without changing its task or its participants. The [external wait](../results/seat-event-stream/return-gate/results.md) accepted a genuine return and refused a harness stop before either native result existed. Both teams later earned 1. Run `python3.12 -BS -m examples.seatlab.workbench verify seat-event-stream seat-event-early seat-return-gate` to reproduce the saved evidence, including the correct refusal.
 
+For native jobs, [record the batch](../results/seat-event-stream/native-jobs/results.md) and [retain its retries](../results/seat-event-stream/native-jobs/retry/results.md). Completing a slot does not prove that the operator observed all of its executions.
+
 ## Bring your own work
 
 | If you have… | Start here |

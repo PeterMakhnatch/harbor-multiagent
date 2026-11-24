@@ -29,6 +29,7 @@ _OPTIONS = f"{_SHIPPING}/samples/receiver-options"
 _JOURNAL = f"{_RESULTS}/seat-event-stream"
 _GATE = f"{_JOURNAL}/return-gate"
 _JOBS = f"{_JOURNAL}/native-jobs"
+_HISTORY = f"{_JOBS}/retry/indexed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,6 +395,40 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_JOBS}/job-default.panel.json",
         exit_code=1,
         sha256="9f0fa04ea6a51658cd52a9692e7fce4355a57226c3d80f602cf1110249723aaa",
+    ),
+    Study(
+        id="seat-retry-history",
+        question="Can a separate observer assign four real execution UUIDs to the correct two native job slots?",
+        kind="native-scripted-calibration",
+        guide=f"{_JOBS}/retry/results.md",
+        module="examples.seatlab.workbench.attempt_history",
+        argv=(
+            f"{_HISTORY}/job-result.json",
+            f"{_HISTORY}/archive",
+            "--witness",
+            f"{_HISTORY}/host-witness.json",
+            "--json",
+        ),
+        report=f"{_HISTORY}/witnessed.json",
+        exit_code=0,
+        sha256="f4a187731e348068f2a661402c1d478b3bab4f4ae38962fd748d121d25645811",
+    ),
+    Study(
+        id="seat-retry-misattributed",
+        question="Can the reader refuse one wrong slot assignment when all four execution files are present?",
+        kind="native-scripted-calibration",
+        guide=f"{_JOBS}/retry/results.md",
+        module="examples.seatlab.workbench.attempt_history",
+        argv=(
+            f"{_HISTORY}/job-result.json",
+            f"{_HISTORY}/archive",
+            "--witness",
+            f"{_HISTORY}/challenge-witness.json",
+            "--json",
+        ),
+        report=f"{_HISTORY}/misattributed.json",
+        exit_code=1,
+        sha256="93e86f1e9ab88e6c9068e7d23fab82ea98b7c274663f06d6fb8ae6c951754dfa",
     ),
 )
 
