@@ -1,7 +1,7 @@
 {
  "name": "rr1",
  "prereg": {
-  "commit": "5a65477eb98e69a4068fd296ab6b58bf02580180",
+  "commit": "b71c04ba690827292730f5962353c9fced23419d",
   "doc": "flotilla/docs/PROBE.md",
   "section": "## 16. Pre-registration: reliance across models, pilot rr1 (written 2026-11-24, before any `rr1` or `rrs` trial)"
  },
