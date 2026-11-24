@@ -243,6 +243,48 @@ requests by event kind (send, deliver, submit, whoami, denied, probe) and except
   example a newer world) changed; the world version then follows the folder unless the trial's own
   events record it. A `world_version` field in the world's `start` event would make it exact.
 
+## Live monitor: `flotilla-watch`
+
+```bash
+cd flotilla/analysis
+python3 -m flotilla_analysis.watch ../../.flotilla-local/runs/<plan>    # a run_wave.py run folder
+python3 -m flotilla_analysis.watch ../../.flotilla-local/jobs --once    # any Harbor jobs (or job) folder
+flotilla-watch TARGET [--interval 30] [--once] [--json PATH] [--notify] [--stall-seconds 300] [--cap-usd X]
+```
+
+Each pass (every `--interval` seconds) prints the wave's progress (cells or trials done, valid, invalid,
+running, pending and abandoned), the spend against the cap (`spent_usd` in `state.json`, the cap from the
+run's plan file when its sha256 matches `plan_sha256`, or `--cap-usd`), the spend of the running trials so
+far, an ETA (pending and running work at the mean trial time, over the plan's concurrency), each running
+trial with its elapsed time and each seat's steps and age of last activity, stalls, errors, and the mean
+reward of finished trials per label, condition and team. Abandoned trials (no `result.json`, and no write
+for 3 h or their job or wave already ended) do not count as running and never stall. `--json PATH`
+replaces `PATH` atomically with the same status each pass. `--notify` sends one macOS notification per new
+stall or error (at most 5 per pass, then a count) and never repeats one. Errors of trials that had
+finished before the first pass are shown but not notified. It reads its inputs and writes only `--json`.
+
+What the host can see during a trial (fork Harbor, read 2026-11-24, Docker and Modal):
+
+| file | written | used for |
+|---|---|---|
+| `seats/<seat>/agent/trajectory.json` | on the host by terminus-2 after every episode (one model call and its commands), in place; a last time when the seat's run ends, the only write with `final_metrics.total_prompt_tokens` | seat activity (modification time), steps, spend so far (step `metrics.cost_usd`), seat ended |
+| `trial.log` | live, the trial's logger; seat loggers are its children; no time stamps | provider errors: `Unknown Error in LLM interaction: litellm.<Error>` once per failed retry round |
+| trial `config.json` | at trial start | participants, task path, trial start |
+| trial `result.json` | once, after verification | finished trial: reward, exceptions, timings, cost |
+| job `result.json` | when a trial starts or ends; `finished_at` at job end | trials still to start |
+| `progress.log`, `state.json` | by `run_wave.py` at each start and end | wave progress, spend, stop reason |
+| `recording.cast`, `terminus_2.pane` | in the seat container; downloaded when play ends | not live |
+| world `/logs/world/*.jsonl` | in the world container only; reach the host with the artifacts after play | not live |
+
+Seat activity is the modification time of the seat's trajectory, the only per-seat signal that changes
+during play. A seat under test stalls when its trial has no `result.json`, the seat has not ended, and its
+trajectory (before its first episode: the trial start) is older than `--stall-seconds`. The age includes
+the time its commands take (a command may wait up to 180 s, a world `/wait` 60 s). Scripted seats (Harbor's
+`oracle` agent, or `under_test = false` in `task.toml`) never stall. A model call that hangs, or a seat
+stuck behind provider retries, shows as a stall; the retries also show in `trial.log` as `rate-limit`,
+`timeout`, `server` (5xx, connection) or the LiteLLM error class. A finished trial with an
+`exception_info` (trial or seat) is an error.
+
 ## Tests
 
 ```bash
