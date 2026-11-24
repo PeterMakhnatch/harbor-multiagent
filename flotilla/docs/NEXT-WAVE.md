@@ -163,6 +163,28 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
 from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
 
+### io1: order or instruction (row 2, ready to run)
+
+Pre-registered in PROBE.md section 14 (commit 8b8d9818); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and
+`io1s` (`--read-first --post-trigger first_submit`), built from `rf1v`'s seed with the commands in section 14
+(qa: 0 FAIL); plans `flotilla/plans/io1smoke.json` (24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.60).
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
+# check the smoke's validity only (flotilla-watch --blind), then:
+keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1
+keys run -- python3 flotilla/run_wave.py flotilla/plans/io1.json --run-dir .flotilla-local/runs/io1 --retry-invalid
+for s in io1v io1s; do
+  python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'io1-??????' \
+    --tasks .flotilla-local/tasks/$s --plan flotilla/plans/io1.json --json /tmp/$s.json
+done
+python3 flotilla/docs/results/scripts/io1_decide.py --plan flotilla/plans/io1.json --rf1v <rf1v analysis JSON> \
+  /tmp/io1v.json /tmp/io1s.json
+```
+
+The `rf1v` analysis JSON comes from `probe_analysis.py ... 'rf1-*' --tasks .flotilla-local/tasks/rf1v --plan
+flotilla/plans/rf1.json`; a copy is in `.flotilla-local/cards/2026-11-24/analysis/`.
+
 ### Trust card
 
 One command per stage gives any model a card under the standing protocol of PROBE.md section 13: reliance
