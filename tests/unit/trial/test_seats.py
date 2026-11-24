@@ -921,6 +921,48 @@ def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
     ]
 
 
+async def test_secrets_that_the_task_issued_are_scrubbed_and_their_file_is_deleted(
+    tmp_path: Path,
+):
+    """Fork PR #2 review, P2: a world-issued seat token in a seat's trajectory or log is saved as is,
+    because Harbor's scrubber knows host-side secrets only. A file-issued canary must be removed."""
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+    canary = "canary-token-3f9a2c7d41e8b6"
+    issued = trial.paths.trial_dir / "artifacts" / ".harbor-secrets"
+    issued.parent.mkdir(parents=True, exist_ok=True)
+    issued.write_text(f"{canary}\nshort\n")
+    seats = {seat.name: seat for seat in trial.seats}
+    trajectory = seats["maya"].paths.agent_dir / "trajectory.json"
+    trajectory.write_text(
+        json.dumps({"steps": [{"observation": f"token is {canary}"}]})
+    )
+    log = seats["raj"].paths.agent_dir / "command.log"
+    log.write_text(f"cat /run/seat/token\n{canary}\n")
+    planted = seats["lee"].paths.agent_dir / ".harbor-secrets"
+    planted.write_text("the evidence that lee wants erased\n")
+    evidence = seats["lee"].paths.agent_dir / "notes.txt"
+    evidence.write_text("the evidence that lee wants erased\n")
+
+    trial._scrub_jobs_dir()
+
+    assert (
+        canary not in trajectory.read_text() and "[REDACTED]" in trajectory.read_text()
+    )
+    assert log.read_text() == "cat /run/seat/token\n[REDACTED]\n"
+    assert not issued.exists()  # the issued secrets do not stay in the trial folder
+    assert (
+        evidence.read_text() == "the evidence that lee wants erased\n"
+    )  # a seat's own file is not read
+
+
 def test_trial_start_preflights_every_participant(tmp_path: Path, monkeypatch):
     from typer.testing import CliRunner
 

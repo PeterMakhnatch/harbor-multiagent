@@ -150,6 +150,10 @@ def _harbor_log_bind_mount(
     return mount
 
 
+# A file in which a task lists the secrets that it issued at run time (Trial._issued_secrets).
+ISSUED_SECRETS_FILE = ".harbor-secrets"
+
+
 class Trial(ABC):
     """Base trial lifecycle.
 
@@ -1341,8 +1345,36 @@ class Trial(ABC):
         # secret value, and replacing every "1" would corrupt the output.
         return {secret for secret in secrets if not is_bool_env_value(secret)}
 
+    def _issued_secrets(self) -> set[str]:
+        """Secrets that the task issued at run time, such as a world's seat tokens.
+
+        A task lists them, one per line, in a file named ``.harbor-secrets``
+        under the trial's ``artifacts/`` or ``verifier/`` folder. Only ``main``
+        writes there; a seat's own folder is not read, so a seat cannot make
+        Harbor erase other text. Each file is deleted after it is read, and
+        values shorter than 8 characters are ignored so that common text stays.
+        """
+        found: set[str] = set()
+        for folder in (
+            self.paths.trial_dir / "artifacts",
+            self.paths.trial_dir / "verifier",
+        ):
+            if not folder.is_dir() or folder.is_symlink():
+                continue
+            for path in folder.rglob(ISSUED_SECRETS_FILE):
+                if path.is_symlink() or not path.is_file():
+                    continue
+                try:
+                    lines = path.read_text(errors="replace").splitlines()
+                except OSError as exc:
+                    self.logger.debug("Cannot read issued secrets %s: %s", path, exc)
+                    continue
+                found.update(line.strip() for line in lines if len(line.strip()) >= 8)
+                path.unlink(missing_ok=True)
+        return found
+
     def _scrub_jobs_dir(self) -> None:
-        secrets = self._secrets_to_scrub()
+        secrets = self._secrets_to_scrub() | self._issued_secrets()
         if not secrets:
             return
         ordered_secrets = sorted(secrets, key=len, reverse=True)
