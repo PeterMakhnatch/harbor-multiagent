@@ -1,0 +1,61 @@
+{
+  "schema": "harbor.ship-handover.study/v1",
+  "task": {
+    "name": "harbor/ship-handover",
+    "digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607",
+    "checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+  },
+  "teams": {
+    "sender-only": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "nop",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "sh-d4d4898bd68bd519",
+      "team": "sender-only",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-233aa62f32d605bf",
+      "team": "sender-only",
+      "prior": "committed",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-d488f1247f3e9bcf",
+      "team": "sender-only",
+      "prior": "dropped",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-62f04f04da77681f",
+      "team": "sender-only",
+      "prior": "dropped",
+      "channel": "deliver"
+    }
+  ]
+}
