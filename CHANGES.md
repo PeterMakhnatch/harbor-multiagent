@@ -133,6 +133,36 @@ names the agent's error in `exception_info`; the agent's timing stays in
 | `src/harbor/trial/trial.py` | `_run_step_verifier` records the verifier's exception on the step whether or not the step's agent raised. |
 | `tests/unit/test_single_step_trial.py`, `tests/unit/test_multi_step_run_step.py` | Cover a verifier timeout after an agent timeout, in both verifier modes. |
 
+## Seat liveness and the idle limit
+
+A seat whose model call never returns sits until the agent timeout and then
+records `AgentTimeoutError`, as a slow agent does. Nothing in `result.json`
+says the seat was idle for most of that time, and the trial keeps its reward.
+
+Here every seat that played gets `liveness` in `seat_results`, read from its
+collected trajectory after play: the number of steps, the first and last step
+times, the idle time from the last step to the end of its run, and `stalled`.
+A seat is stalled when the agent timeout ends it after at least half the agent
+timeout without a step, or when its idle limit stops it. A participant can set
+`idle_timeout_sec` to stop its seat as soon as its trajectory gains no step for
+that long; the seat then records `SeatIdleTimeoutError`, which has the policy
+of `ApiResponseStalledError` (retry, grade, reward not valid). Both are
+additive: `liveness` and `idle_timeout_sec` are absent from dumps until set,
+and the limit is off by default.
+
+Tradeoff: the idle limit judges an agent by its trajectory in the seat's log
+folder, so it is only for agents that write one while they run; an agent that
+writes none is idle from its start. `stalled` alone does not change the reward.
+
+| Files | Change |
+|---|---|
+| `src/harbor/trial/errors.py` | `SeatIdleTimeoutError`. |
+| `src/harbor/models/trial/error_policy.py` | `SeatIdleTimeoutError` joins the retry, grade, no-valid-reward group. |
+| `src/harbor/models/trial/config.py` | `Participant.idle_timeout_sec`. |
+| `src/harbor/models/trial/result.py` | `SeatLiveness` and `SeatResult.liveness`. |
+| `src/harbor/trial/seats.py`, `docs-mintlify/tasks/multi-agent.mdx` | The idle watcher, the liveness record, and their description. |
+| `tests/unit/trial/test_seats.py`, `tests/unit/models/test_trial_participants.py` | A seat that hangs after 1 step, a seat that ends, a slow seat that still steps at the timeout, a seat with no trajectory, and the idle limit. |
+
 ## New files
 
 | File | What |

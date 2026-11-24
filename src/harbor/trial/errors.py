@@ -9,6 +9,10 @@ class AgentTimeoutError(asyncio.TimeoutError):
     pass
 
 
+class SeatIdleTimeoutError(asyncio.TimeoutError):
+    pass
+
+
 class VerifierTimeoutError(asyncio.TimeoutError):
     pass
 

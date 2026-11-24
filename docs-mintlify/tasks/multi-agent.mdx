@@ -197,6 +197,22 @@ participants:
 
 Every service in `task.toml` needs exactly one participant. Participants are matched to services by name, in any order. The task, not the config, says which agents are under test. A config with `participants` leaves out `agent`.
 
+### Idle limit
+
+A participant can set `idle_timeout_sec`. Harbor then stops that agent when its trajectory gains no step for that many seconds, and records `SeatIdleTimeoutError` on its seat. The other agents keep going. Use it for an agent whose model call can hang, so a stalled agent does not hold the trial until the agent timeout.
+
+```yaml
+participants:
+  - seat: p1
+    name: terminus-2
+    model_name: openrouter/deepseek/deepseek-v4.1-flash
+    idle_timeout_sec: 180
+```
+
+The limit is off by default. Harbor reads the steps from the agent's `trajectory.json` (and its `trajectory.cont-<n>.json` continuations) in `seats/<service>/agent/` while the agent runs. Set it only for an agent whose trajectory grows during the run: `terminus-2` writes a step after each model call, and an installed agent's trajectory is copied there every 2 seconds when the trial streams (`--stream`). An agent with no trajectory there counts as idle from its start, so the limit would stop it. The idle clock starts when the agent starts, and restarts each time the number of steps changes.
+
+`SeatIdleTimeoutError` has the error policy of `ApiResponseStalledError`: the trial is retried and graded, and its reward is not valid. Change it with `override_error_policy`.
+
 ### Jobs
 
 A job config takes the same `participants` list and uses it for every trial in the job, in place of `agents`. Every task in the job is then a multi-agent task with those services. `n_attempts`, `n_concurrent_trials`, datasets and the other job settings work as usual, and the job's lock file records the participants.
@@ -223,6 +239,7 @@ harbor run -c examples/configs/features/seats-job.yaml
 
 - An error from an agent's run, whether it exits non-zero, its model client fails, or its harness has a bug, ends that agent. Harbor records the error on its seat, with `override_error_policy` applied, and the other agents keep going.
 - When the agent timeout runs out, every agent under test still running records `AgentTimeoutError`. Supporting agents still running are cancelled without an error.
+- When an agent's idle limit runs out, it records `SeatIdleTimeoutError` and is stopped as at the agent timeout, while the others keep going.
 - An error a cancelled agent raises while it stops is logged, not recorded.
 - After the run, the trial is verified unless an agent's error has an error policy that skips grading, as for a single-agent trial.
 
@@ -257,7 +274,8 @@ The job summary reports each key.
   - `agent_info` is the first agent under test.
   - `agent_setup` and `agent_execution` span all agents.
   - Token totals sum every agent. The cost total sums every agent, and is unknown (`null`) when an agent that ran a model reported no cost. An agent without a model, such as `oracle` or `nop`, costs nothing.
-  - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
+  - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution`, `exception_info` and `liveness`.
+  - `liveness` says how long each agent went without a trajectory step before its run ended: `n_steps`, `first_step_at`, `last_step_at`, `idle_sec` (from the last step, or from the start when there is none, to the end of the run), `stall_threshold_sec` and `stalled`. An agent is `stalled` when its idle limit stopped it, or when the agent timeout ended it after at least `stall_threshold_sec` without a step. The threshold is the participant's `idle_timeout_sec`, else half the agent timeout. Harbor logs a warning for each stalled agent. `stalled` does not change the reward; only `SeatIdleTimeoutError` does, through its error policy.
 
 ## Limitations
 

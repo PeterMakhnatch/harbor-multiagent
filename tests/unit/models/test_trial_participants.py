@@ -20,6 +20,7 @@ from harbor.models.trial.result import (
     AgentInfo,
     ExceptionInfo,
     ModelInfo,
+    SeatLiveness,
     SeatResult,
     TimingInfo,
     TrialResult,
@@ -81,6 +82,20 @@ def test_empty_participants_leave_dumps_unchanged():
     assert "participants" not in config.model_dump_json()
 
 
+def test_idle_timeout_is_off_by_default_and_leaves_dumps_unchanged():
+    participant = Participant(seat="maya", name="nop")
+
+    assert participant.idle_timeout_sec is None
+    assert "idle_timeout_sec" not in participant.model_dump()
+    assert "idle_timeout_sec" not in participant.model_dump_json()
+
+
+@pytest.mark.parametrize("value", [0, -1])
+def test_idle_timeout_must_be_positive(value):
+    with pytest.raises(ValidationError, match="idle_timeout_sec"):
+        Participant(seat="maya", name="nop", idle_timeout_sec=value)
+
+
 def test_trial_config_round_trips_participants():
     config = _trial_config(participants=ROSTER)
 
@@ -119,6 +134,8 @@ def test_trial_lock_tells_rosters_apart():
     assert _lock(roster) == _lock([p.model_copy() for p in roster])
     assert _lock(roster) == _lock(list(reversed(roster)))
     assert _lock(roster) != _lock(swapped + roster[1:])
+    limited = [roster[0].model_copy(update={"idle_timeout_sec": 120.0})]
+    assert _lock(roster) != _lock(limited + roster[1:])
     assert "participants" not in _lock([]).model_dump_json()
 
 
@@ -162,6 +179,24 @@ def test_seat_results_round_trip_through_result_json():
 
 def test_result_without_seats_has_no_seat_results_key():
     assert "seat_results" not in _result().model_dump_json()
+
+
+def test_seat_liveness_round_trips_and_is_absent_until_recorded():
+    liveness = SeatLiveness(
+        n_steps=3,
+        first_step_at=datetime(2026, 11, 24, 0, 8, 39, tzinfo=timezone.utc),
+        last_step_at=datetime(2026, 11, 24, 0, 8, 59, tzinfo=timezone.utc),
+        idle_sec=578.0,
+        stall_threshold_sec=300.0,
+        stalled=True,
+    )
+    result = _result(seat_results=[_seat("maya", True, 0.5, liveness=liveness)])
+
+    again = TrialResult.model_validate_json(result.model_dump_json())
+
+    assert again.seat_results is not None
+    assert again.seat_results[0].liveness == liveness
+    assert "liveness" not in _seat("raj", False, 0.25).model_dump_json()
 
 
 def test_token_and_cost_totals_sum_every_seat():

@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 import json
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -111,6 +112,53 @@ class ScriptedAgent(BaseAgent):
 AGENT = f"{__name__}:ScriptedAgent"
 
 
+class SteppingAgent(ScriptedAgent):
+    """Adds ``steps`` ATIF steps to its trajectory, ``step_sec`` apart, as
+    terminus-2 dumps one per model call, then ends; with ``hang`` it then
+    waits forever, as on a model call that never returns."""
+
+    def __init__(
+        self,
+        *args,
+        steps: int = 1,
+        step_sec: float = 0.0,
+        hang: bool = False,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.steps = steps
+        self.step_sec = step_sec
+        self.hang = hang
+
+    async def run(
+        self, instruction: str, environment: BaseEnvironment, context: AgentContext
+    ) -> None:
+        assert isinstance(environment, SeatEnvironment)
+        seat = environment.service
+        note("run", seat, instruction)
+        written: list[dict[str, Any]] = []
+        try:
+            for step_id in range(1, self.steps + 1):
+                if step_id > 1:
+                    await asyncio.sleep(self.step_sec)
+                stamp = datetime.now(UTC).isoformat()
+                written.append(
+                    {"step_id": step_id, "timestamp": stamp, "source": "agent"}
+                )
+                (self.logs_dir / "trajectory.json").write_text(
+                    json.dumps({"schema_version": "ATIF-v1.6", "steps": written})
+                )
+            if self.hang:
+                await asyncio.Event().wait()
+            note("ended", seat)
+        except asyncio.CancelledError:
+            note("stopped", seat)
+            raise
+
+
+STEPPING = f"{__name__}:SteppingAgent"
+
+
 def _task_dir(root: Path, timeout_sec: float = 30, extra: str = "") -> Path:
     task_dir = root / "hello"
     (task_dir / "environment").mkdir(parents=True)
@@ -131,6 +179,13 @@ def _task_dir(root: Path, timeout_sec: float = 30, extra: str = "") -> Path:
 
 def _participant(seat: str, **kwargs: Any) -> dict[str, Any]:
     return {"seat": seat, "import_path": AGENT, "kwargs": kwargs}
+
+
+def _stepping(seat: str, idle_timeout_sec: float | None = None, **kwargs: Any):
+    participant = {"seat": seat, "import_path": STEPPING, "kwargs": kwargs}
+    if idle_timeout_sec is not None:
+        participant["idle_timeout_sec"] = idle_timeout_sec
+    return participant
 
 
 def _config(task_dir: Path, *participants: dict[str, Any], **kwargs) -> TrialConfig:
@@ -860,6 +915,101 @@ async def test_result_json_records_every_seat(tmp_path: Path):
     assert "agent" not in config
     reloaded = TrialResult.model_validate_json(trial.paths.result_path.read_text())
     assert [p.seat for p in reloaded.config.participants] == ["maya", "raj", "lee"]
+
+
+async def test_liveness_tells_a_hung_seat_from_a_slow_one_at_the_agent_timeout(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=1.0),
+            _stepping("maya", steps=1, hang=True),
+            _stepping("raj", steps=1000, step_sec=0.05),
+            _stepping("lee", steps=2),
+        )
+    )
+
+    result = await trial.run()
+
+    seats = _seat_results(result)
+    for name in ("maya", "raj"):
+        info = seats[name].exception_info
+        assert info is not None and info.exception_type == "AgentTimeoutError"
+    hung, slow, done = (seats[name].liveness for name in ("maya", "raj", "lee"))
+    assert hung is not None and slow is not None and done is not None
+    assert hung.stall_threshold_sec == slow.stall_threshold_sec == 0.5
+    assert hung.n_steps == 1 and hung.first_step_at == hung.last_step_at
+    assert hung.idle_sec >= 0.5 and hung.stalled
+    assert slow.n_steps > 5 and slow.idle_sec < 0.5 and not slow.stalled
+    assert slow.first_step_at is not None and slow.last_step_at is not None
+    assert slow.first_step_at < slow.last_step_at
+    assert done.n_steps == 2 and not done.stalled
+    assert seats["lee"].exception_info is None
+    assert result.reward_valid
+    data = json.loads(trial.paths.result_path.read_text())
+    recorded = {s["seat"]: s["liveness"] for s in data["seat_results"]}
+    assert recorded["maya"]["stalled"] is True
+    assert recorded["raj"]["stalled"] is False
+
+
+async def test_a_seat_without_a_trajectory_counts_as_idle_from_its_start(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.4),
+            _participant("maya", hold=True),
+            _participant("raj"),
+            _participant("lee", hold=True),
+        )
+    )
+
+    result = await trial.run()
+
+    seats = _seat_results(result)
+    hung = seats["maya"].liveness
+    assert hung is not None and hung.n_steps == 0 and hung.last_step_at is None
+    assert hung.idle_sec >= 0.4 and hung.stalled
+    stopped = seats["lee"].liveness
+    assert stopped is not None and stopped.idle_sec >= 0.4
+    assert not stopped.stalled
+
+
+async def test_an_idle_limit_stops_a_hung_seat_early_and_leaves_live_seats(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=30),
+            _stepping("maya", idle_timeout_sec=0.3, steps=1, hang=True),
+            _stepping("raj", idle_timeout_sec=0.3, steps=12, step_sec=0.1),
+            _participant("lee", hold=True),
+        )
+    )
+
+    started = asyncio.get_running_loop().time()
+    result = await trial.run()
+    elapsed = asyncio.get_running_loop().time() - started
+
+    assert elapsed < 10
+    seats = _seat_results(result)
+    info = seats["maya"].exception_info
+    assert info is not None and info.exception_type == "SeatIdleTimeoutError"
+    assert seats["raj"].exception_info is None
+    assert ("stopped", "maya") in EVENTS and ("ended", "raj") in EVENTS
+    assert index("stopped", "maya") < index("ended", "raj")
+    hung, live = seats["maya"].liveness, seats["raj"].liveness
+    assert hung is not None and hung.stalled and hung.n_steps == 1
+    assert hung.stall_threshold_sec == 0.3
+    assert live is not None and not live.stalled and live.n_steps == 12
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "SeatIdleTimeoutError"
+    assert result.exception_info.exception_message.startswith("Seat 'maya': ")
+    assert _verified(trial) and result.verifier_result is not None
+    assert not result.reward_valid
+    kills = [e for e in EVENTS if e[:2] == ("compose", "exec") and "/proc/" in e[-1]]
+    killed = [_service_and_user(list(e[1:]))[0] for e in kills]
+    assert sorted(killed) == ["lee", "maya"]
 
 
 async def test_each_seat_logs_under_its_own_name(tmp_path: Path):
