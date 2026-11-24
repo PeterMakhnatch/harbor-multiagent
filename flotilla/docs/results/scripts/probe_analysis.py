@@ -443,8 +443,10 @@ def manifest_label(manifest: str | None) -> str | None:
 
 
 def manifest_kind(manifest: str | None) -> str | None:
-    """The probe kind of a task set's manifest (one `probe.<kind>` label), or None when it cannot be read."""
-    family, _dot, kind = str(manifest_label(manifest)).partition(".")
+    """The probe kind of a task set's manifest (one `probe.<kind>` or `probe.<kind>-<variant>` label), or None when
+    it cannot be read."""
+    family, _dot, variant = str(manifest_label(manifest)).partition(".")
+    kind = variant.split("-")[0]
     return kind if family == "probe" and kind in ARMS else None
 
 

@@ -222,6 +222,21 @@ def test_missing_cells_and_the_primary_come_from_each_task_set_of_a_two_kind_pla
     assert PA.missing_cells(PA.models_plan("m/a"), {}, set()) == []
 
 
+def test_a_variant_label_gives_its_kind_even_when_the_arms_fit_another_kind(tmp_path):
+    path = tmp_path / "cr" / "manifest.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps({"tasks": {"t0": {"label": "probe.audit-replies"}}}))
+    arms = ["talk-false", "talk-false-insist", "talk-false-admit"]
+    plan_path = tmp_path / "cr.json"
+    plan_path.write_text(json.dumps({"name": "cr", "models": ["m/a"], "task_sets": [
+        {"manifest": str(path), "instances": [0], "arms": arms}]}))
+    plan = PA.read_plan(plan_path)
+    assert PA.manifest_kind(str(path)) == "audit" and plan["sets"][0]["kind"] == "audit"
+    counted = {("probe.audit", 0, arm, "m/a"): {} for arm in arms}
+    assert PA.missing_cells(plan, counted, set()) == []
+    assert PA.missing_cells(plan, {}, set()) == [f"probe.audit instance 0 {arm} m/a" for arm in arms]
+
+
 def test_several_builds_of_one_kind_get_their_own_cells_summaries_holm_and_names(tmp_path, capsys):
     def built(label, *args, **kwargs):
         return row(*args, **kwargs) | {"build": label}
