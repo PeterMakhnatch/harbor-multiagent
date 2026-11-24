@@ -139,6 +139,14 @@ def _seats(result: Record, roles: tuple[str, ...]) -> list[Seat]:
     return seats
 
 
+def _native_policy(value: object) -> bool:
+    return (
+        type(value) is dict
+        and value == TIMEOUT_POLICY
+        and all(type(v) is bool for v in value.values())
+    )
+
+
 def _timeout_error(error: Record, message: str, role: str) -> datetime:
     require(set(error) == ERROR_KEYS, f"{role} error fields are not the native set")
     require(error["exception_type"] == TIMEOUT_TYPE, f"{role} error is not a timeout")
@@ -150,7 +158,7 @@ def _timeout_error(error: Record, message: str, role: str) -> datetime:
         error["exception_traceback"] == f"{TIMEOUT_CLASS}: {message}\n",
         f"{role} timeout was not recorded by the native play deadline",
     )
-    require(error["policy"] == TIMEOUT_POLICY, f"{role} timeout policy is not native")
+    require(_native_policy(error["policy"]), f"{role} timeout policy is not native")
     return native_time(error["occurred_at"], f"{role} timeout")
 
 
@@ -160,7 +168,8 @@ def _trial_copy(result: Record, first: Seat, message_file: bytes | None) -> str:
     require(type(trial) is dict, "native trial holds no seat timeout copy")
     message = f"Seat {first.role!r}: {first.error['exception_message']}"
     require(
-        trial == {**first.error, "exception_message": message},
+        trial == {**first.error, "exception_message": message}
+        and _native_policy(trial.get("policy")),
         "native trial error is not the first timed-out seat's copy",
     )
     expected = f"{message}\n{first.error['exception_traceback']}".encode()
@@ -201,18 +210,20 @@ def _ordering(result: Record, seats: list[Seat], deadline: float) -> None:
     require(play_end <= started, "native verifier precedes the end of play")
 
 
-def _clean(result: Record, seats: list[Seat], deadline: float) -> Disposition:
-    play_start, _ = timing(result.get("agent_execution"), "play")
-    latest = play_start + timedelta(seconds=deadline) + DEADLINE_SLACK
+def _clean(result: Record, seats: list[Seat]) -> Disposition:
+    play_start, play_end = timing(result.get("agent_execution"), "play")
     for seat in seats:
         if type(seat.execution) is not dict:
             raise Invalid(
                 f"native {seat.role} seat has no finished execution and no error"
             )
-        _, finished = timing(seat.execution, f"{seat.role} execution")
+        started, finished = timing(seat.execution, f"{seat.role} execution")
         require(
-            finished <= latest, f"native {seat.role} returned clean after the deadline"
+            play_start <= started <= finished <= play_end,
+            f"native {seat.role} execution lies outside play",
         )
+    verifier_start, _ = timing(result.get("verifier"), "verifier")
+    require(play_end <= verifier_start, "native verifier precedes the end of play")
     return Disposition("clean", (), None)
 
 
@@ -238,7 +249,7 @@ def classify(
     )
     failed = [seat for seat in seats if seat.error is not None]
     if trial_error is None and not failed:
-        return _clean(result, seats, deadline)
+        return _clean(result, seats)
     named = ["trial"] if trial_error is not None else []
     reason = "native error recorded for " + " and ".join(
         named + [seat.role for seat in failed]

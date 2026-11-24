@@ -679,7 +679,7 @@ def _row(
 
 def _unknowns(rows: list[Record]) -> Record:
     observed = [row for row in rows if row["observe"]]
-    bounded = [row for row in observed if row["status"] in BOUND_STATUSES]
+    bounded = [row for row in observed if row["observation_status"] == "bounded"]
     identified = sum(row["bound"]["grade_identified"] is True for row in bounded)
     return {
         "observed_cells": len(observed),
