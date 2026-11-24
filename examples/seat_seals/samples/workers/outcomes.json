@@ -1,0 +1,1367 @@
+{
+  "schema": "harbor.seat-seal.worker-outcomes/v1",
+  "source": "The same 18 first-attempt native scripted trials as the board-seal study, placed in disjoint retrospective worker directories. These 2 layouts are not 36 independent trials and did not select the trial outcomes.",
+  "native_arms": 18,
+  "paired_blocks": 9,
+  "model_calls": 0,
+  "cost_usd": 0,
+  "layouts": {
+    "paired": {
+      "plan_digest": "sha256:33fe0bf2e74b4616b4d32c59ebfa6840e80c0f6f915bdb483a4c7fd941b7067c",
+      "packet_digests": [
+        "sha256:8c9f046348c35a3dec09114e94a0d995ac0525dec17a584f13e3f23e70663cdb",
+        "sha256:b0f3801dac878d0b552049288687f01d1dc712a49100cc2b90bcc57918a2c1c7",
+        "sha256:6829ddcd16b49f1fab73524f91efa6bf5a47cd9438d0c373dd949394557c2c6b"
+      ],
+      "receipt_subsets": [
+        {
+          "workers_received": [],
+          "known_grades": 0,
+          "paired_interventions": 0,
+          "paired_schedules": 0,
+          "paired_finals": 0,
+          "net_sum": [
+            -9,
+            9
+          ],
+          "positive": [
+            0,
+            9
+          ],
+          "negative": [
+            0,
+            9
+          ],
+          "joint": [
+            [
+              0,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9
+              ]
+            ],
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            ],
+            [
+              3,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            ],
+            [
+              4,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              5,
+              [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              6,
+              [
+                0,
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              7,
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            [
+              8,
+              [
+                0,
+                1
+              ]
+            ],
+            [
+              9,
+              [
+                0
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0
+          ],
+          "known_grades": 6,
+          "paired_interventions": 3,
+          "paired_schedules": 3,
+          "paired_finals": 3,
+          "net_sum": [
+            -5,
+            7
+          ],
+          "positive": [
+            1,
+            7
+          ],
+          "negative": [
+            0,
+            6
+          ],
+          "joint": [
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              3,
+              [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              4,
+              [
+                0,
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              5,
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            [
+              6,
+              [
+                0,
+                1
+              ]
+            ],
+            [
+              7,
+              [
+                0
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            1
+          ],
+          "known_grades": 6,
+          "paired_interventions": 3,
+          "paired_schedules": 3,
+          "paired_finals": 3,
+          "net_sum": [
+            -6,
+            6
+          ],
+          "positive": [
+            1,
+            7
+          ],
+          "negative": [
+            1,
+            7
+          ],
+          "joint": [
+            [
+              1,
+              [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            ],
+            [
+              2,
+              [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            ],
+            [
+              3,
+              [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              4,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              5,
+              [
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              6,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              7,
+              [
+                1
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0,
+            1
+          ],
+          "known_grades": 12,
+          "paired_interventions": 6,
+          "paired_schedules": 6,
+          "paired_finals": 6,
+          "net_sum": [
+            -2,
+            4
+          ],
+          "positive": [
+            2,
+            5
+          ],
+          "negative": [
+            1,
+            4
+          ],
+          "joint": [
+            [
+              2,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              3,
+              [
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              4,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              5,
+              [
+                1
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            2
+          ],
+          "known_grades": 6,
+          "paired_interventions": 3,
+          "paired_schedules": 3,
+          "paired_finals": 3,
+          "net_sum": [
+            -7,
+            5
+          ],
+          "positive": [
+            0,
+            6
+          ],
+          "negative": [
+            1,
+            7
+          ],
+          "joint": [
+            [
+              0,
+              [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            ],
+            [
+              1,
+              [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            ],
+            [
+              2,
+              [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              3,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              4,
+              [
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              5,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              6,
+              [
+                1
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0,
+            2
+          ],
+          "known_grades": 12,
+          "paired_interventions": 6,
+          "paired_schedules": 6,
+          "paired_finals": 6,
+          "net_sum": [
+            -3,
+            3
+          ],
+          "positive": [
+            1,
+            4
+          ],
+          "negative": [
+            1,
+            4
+          ],
+          "joint": [
+            [
+              1,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              2,
+              [
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              3,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              4,
+              [
+                1
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            1,
+            2
+          ],
+          "known_grades": 12,
+          "paired_interventions": 6,
+          "paired_schedules": 6,
+          "paired_finals": 6,
+          "net_sum": [
+            -4,
+            2
+          ],
+          "positive": [
+            1,
+            4
+          ],
+          "negative": [
+            2,
+            5
+          ],
+          "joint": [
+            [
+              1,
+              [
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              2,
+              [
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              3,
+              [
+                2,
+                3
+              ]
+            ],
+            [
+              4,
+              [
+                2
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0,
+            1,
+            2
+          ],
+          "known_grades": 18,
+          "paired_interventions": 9,
+          "paired_schedules": 9,
+          "paired_finals": 9,
+          "net_sum": [
+            0,
+            0
+          ],
+          "positive": [
+            2,
+            2
+          ],
+          "negative": [
+            2,
+            2
+          ],
+          "joint": [
+            [
+              2,
+              [
+                2
+              ]
+            ]
+          ]
+        }
+      ]
+    },
+    "crossed": {
+      "plan_digest": "sha256:ce2a3b9c1656367f474fea68929438e32afa8f4dfb8b2eb8374e5c2fe240c98a",
+      "packet_digests": [
+        "sha256:3cac2b2c82084df25bdb7ac561cbcbf68114675aea0fcae5be6e794817ed41fa",
+        "sha256:39fc5e9c538e98e3780b06c381801edf198f22918236642818e932bdf6ecc5a9",
+        "sha256:b46975018ae1783b6723df9cf689292340d390f5a09a76c25fcb7cc716493fbe"
+      ],
+      "receipt_subsets": [
+        {
+          "workers_received": [],
+          "known_grades": 0,
+          "paired_interventions": 0,
+          "paired_schedules": 0,
+          "paired_finals": 0,
+          "net_sum": [
+            -9,
+            9
+          ],
+          "positive": [
+            0,
+            9
+          ],
+          "negative": [
+            0,
+            9
+          ],
+          "joint": [
+            [
+              0,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9
+              ]
+            ],
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            ],
+            [
+              3,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            ],
+            [
+              4,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              5,
+              [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              6,
+              [
+                0,
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              7,
+              [
+                0,
+                1,
+                2
+              ]
+            ],
+            [
+              8,
+              [
+                0,
+                1
+              ]
+            ],
+            [
+              9,
+              [
+                0
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0
+          ],
+          "known_grades": 6,
+          "paired_interventions": 0,
+          "paired_schedules": 0,
+          "paired_finals": 0,
+          "net_sum": [
+            -8,
+            4
+          ],
+          "positive": [
+            0,
+            4
+          ],
+          "negative": [
+            0,
+            8
+          ],
+          "joint": [
+            [
+              0,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+              ]
+            ],
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ]
+            ],
+            [
+              3,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            ],
+            [
+              4,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            1
+          ],
+          "known_grades": 6,
+          "paired_interventions": 0,
+          "paired_schedules": 0,
+          "paired_finals": 0,
+          "net_sum": [
+            -5,
+            7
+          ],
+          "positive": [
+            0,
+            7
+          ],
+          "negative": [
+            0,
+            5
+          ],
+          "joint": [
+            [
+              0,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              3,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              4,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              5,
+              [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              6,
+              [
+                0,
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              7,
+              [
+                0,
+                1,
+                2
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0,
+            1
+          ],
+          "known_grades": 12,
+          "paired_interventions": 3,
+          "paired_schedules": 3,
+          "paired_finals": 3,
+          "net_sum": [
+            -4,
+            2
+          ],
+          "positive": [
+            1,
+            2
+          ],
+          "negative": [
+            0,
+            5
+          ],
+          "joint": [
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            2
+          ],
+          "known_grades": 6,
+          "paired_interventions": 0,
+          "paired_schedules": 0,
+          "paired_finals": 0,
+          "net_sum": [
+            -5,
+            7
+          ],
+          "positive": [
+            0,
+            7
+          ],
+          "negative": [
+            0,
+            5
+          ],
+          "joint": [
+            [
+              0,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              1,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              2,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              3,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              4,
+              [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            ],
+            [
+              5,
+              [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              6,
+              [
+                0,
+                1,
+                2,
+                3
+              ]
+            ],
+            [
+              7,
+              [
+                0,
+                1,
+                2
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0,
+            2
+          ],
+          "known_grades": 12,
+          "paired_interventions": 3,
+          "paired_schedules": 3,
+          "paired_finals": 3,
+          "net_sum": [
+            -4,
+            2
+          ],
+          "positive": [
+            0,
+            3
+          ],
+          "negative": [
+            1,
+            4
+          ],
+          "joint": [
+            [
+              0,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              1,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              2,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            [
+              3,
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            1,
+            2
+          ],
+          "known_grades": 12,
+          "paired_interventions": 3,
+          "paired_schedules": 3,
+          "paired_finals": 3,
+          "net_sum": [
+            -1,
+            5
+          ],
+          "positive": [
+            1,
+            6
+          ],
+          "negative": [
+            1,
+            2
+          ],
+          "joint": [
+            [
+              1,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              2,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              3,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              4,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              5,
+              [
+                1,
+                2
+              ]
+            ],
+            [
+              6,
+              [
+                1,
+                2
+              ]
+            ]
+          ]
+        },
+        {
+          "workers_received": [
+            0,
+            1,
+            2
+          ],
+          "known_grades": 18,
+          "paired_interventions": 9,
+          "paired_schedules": 9,
+          "paired_finals": 9,
+          "net_sum": [
+            0,
+            0
+          ],
+          "positive": [
+            2,
+            2
+          ],
+          "negative": [
+            2,
+            2
+          ],
+          "joint": [
+            [
+              2,
+              [
+                2
+              ]
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  "damaged_trial_copies": {
+    "lost-host": {
+      "known": 18,
+      "paired_finals": 9,
+      "paired_interventions": 8,
+      "paired_schedules": 8,
+      "net_sum": [
+        0,
+        0
+      ],
+      "duplicate_identity": 0,
+      "unreceived": 0,
+      "missing": 0,
+      "ambiguous": 0
+    },
+    "incomplete-gate": {
+      "known": 18,
+      "paired_finals": 9,
+      "paired_interventions": 9,
+      "paired_schedules": 8,
+      "net_sum": [
+        0,
+        0
+      ],
+      "duplicate_identity": 0,
+      "unreceived": 0,
+      "missing": 0,
+      "ambiguous": 0
+    },
+    "omitted-at-owner": {
+      "known": 17,
+      "paired_finals": 8,
+      "paired_interventions": 8,
+      "paired_schedules": 8,
+      "net_sum": [
+        -1,
+        0
+      ],
+      "duplicate_identity": 0,
+      "unreceived": 0,
+      "missing": 1,
+      "ambiguous": 0
+    },
+    "cross-owner-id-on-partial": {
+      "known": 16,
+      "paired_finals": 7,
+      "paired_interventions": 7,
+      "paired_schedules": 7,
+      "net_sum": [
+        -1,
+        1
+      ],
+      "duplicate_identity": 2,
+      "unreceived": 0,
+      "missing": 0,
+      "ambiguous": 0
+    },
+    "cross-owner-world-on-partial": {
+      "known": 16,
+      "paired_finals": 7,
+      "paired_interventions": 7,
+      "paired_schedules": 7,
+      "net_sum": [
+        -1,
+        1
+      ],
+      "duplicate_identity": 2,
+      "unreceived": 0,
+      "missing": 0,
+      "ambiguous": 0
+    },
+    "separate-claim": {
+      "known": 17,
+      "paired_finals": 8,
+      "paired_interventions": 8,
+      "paired_schedules": 8,
+      "net_sum": [
+        -1,
+        0
+      ],
+      "duplicate_identity": 0,
+      "unreceived": 0,
+      "missing": 0,
+      "ambiguous": 1
+    }
+  },
+  "separate_native_worker_smoke": {
+    "question": "Operator integration only. Does two cooperating processes on one worker/root claim exactly one first attempt per assigned ticket without replacing partial work? Two fresh scripted native slots/one pair, no new trial on the original cohort.",
+    "new_first_attempts": 4,
+    "planned_in_integration_registration": 18,
+    "undispatched": 14,
+    "measured_policy_sample": false,
+    "same_worker_two_processes": {
+      "started": 2,
+      "valid_grades": 2,
+      "complete_schedules": 2,
+      "next_exit": 3,
+      "marker": "pre-release plan-only; these tickets were never reissued"
+    },
+    "different_workers_one_root": {
+      "eligible_workers": [
+        1,
+        2
+      ],
+      "winning_worker": 2,
+      "initial_exit_codes": [
+        2,
+        0
+      ],
+      "first_attempts_on_winning_root": 2,
+      "valid_final_grades": 2,
+      "paired_interventions": 1,
+      "other_worker_starts": 0,
+      "packet_received_workers": 1,
+      "packet_unreceived_slots": 16,
+      "final_marker_version": 2
+    }
+  },
+  "cli_controls": {
+    "exhausted winner": 3,
+    "other owner cannot start": 2,
+    "changed layout cannot start": 2,
+    "plan-only pre-release root cannot resume": 2,
+    "other owner cannot export": 2,
+    "different layout cannot export": 2,
+    "out-of-band plan mismatch": 2,
+    "out-of-band packet mismatch": 2,
+    "two worker claims": 2,
+    "packet from crossed layout": 2,
+    "registered symlink is not missing": 2,
+    "mixed root custody": 2,
+    "same root supplied twice": 2
+  },
+  "interpretation": "These are exact finite bounds conditional on the received evidence. Missing workers are not a random sample. No model effect or distributed lock outside a persistent shared trials directory is assumed."
+}
