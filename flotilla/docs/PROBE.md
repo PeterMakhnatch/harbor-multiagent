@@ -1017,6 +1017,8 @@ direction only; power counts a PASS):
 **Prediction.** Luna repeats (PASS at the first look). 1 to 3 of the 6 new models PASS; the reasoning-heavy
 models (Qwen3.6-35B-A3B, MiMo V2.6 Pro) are the least likely to.
 
-**Budget.** The OpenRouter caps of `rrs` and `rr1` are in their plans: the `--dry-run` forecast at the plan's
-commit, doubled for reasoning tokens (FINDINGS.md, 2026-11-23 16:30 ET). Modal about $0.0021 per trial. Not run
-before Peter approves the spend.
+**Budget.** OpenRouter caps: `rrs` $0.10 and `rr1` $1.80, at least twice the `--dry-run` forecast at full size
+($0.018 and $0.876; catalog prices miss reasoning tokens, FINDINGS.md, 2026-11-23 16:30 ET); reserve $0.02 per
+trial in flight. Modal about $0.0021 per trial: $0.03 for `rrs`, at most $1.41 for `rr1` (672 trials). If 6 models
+stop at the first look and 1 runs about 37 pairs, `rr1` is about 220 trials and about $0.75 to $1.05 in all. Not
+run before Peter approves the spend.
