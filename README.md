@@ -30,6 +30,8 @@ For a batch, [record each seat in a native `harbor run` job](examples/seatlab/re
 
 To see which seats and retries account for the money, [inspect a saved team job or quote a locked plan](examples/seatlab/workbench/team-account.md). The operator separates harness estimates, token-priced usage and settled provider charges. It never starts a team.
 
+To tell whether a teammate received a report before a decision, [retain the message journal for each execution](examples/seat_handoffs/README.md#keep-message-evidence-when-harbor-retries-a-slot). You can [check message coverage against a saved host witness](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md#did-the-message-evidence-survive-too) without running a team.
+
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
 ```sh

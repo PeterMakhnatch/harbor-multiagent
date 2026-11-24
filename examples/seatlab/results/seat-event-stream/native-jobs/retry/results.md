@@ -54,3 +54,17 @@ The first command finds 4 of 4 executions across 2 slots. The subset command exi
 ## Check an independent observer
 
 Add `--witness "$p/host-witness.json"` to the history command. This compares execution UUIDs and slot assignments, not grades. The [real witness report](indexed/witnessed.json) finds 4 matches and no moved execution. For a control, use `--witness "$p/challenge-witness.json"`. This file deliberately assigns one of the same four UUIDs to the wrong slot. The [control report](indexed/misattributed.json) keeps `coverage_complete: true` but reports 3 matches, 1 moved, and exit 1. A witness from another job gives exit 2. Neither a file digest nor this comparison proves that two files came from independent observers.
+
+## Did the message evidence survive too?
+
+The host witness can identify an execution without observing a single message. Check the two archives separately:
+
+```sh
+p=examples/seatlab/results/seat-event-stream/native-jobs/retry/indexed
+empty=$(mktemp -d)
+python3.12 -BS -m examples.seatlab.workbench.attempt_history \
+  "$p/job-result.json" "$p/archive" --witness "$p/host-witness.json" --handoffs "$empty"
+rmdir "$empty"
+```
+
+The reader finds all 4 seat journals and matches all 4 executions to the independent witness. It finds no message receipts in the empty directory. The reader exits `1` because the requested message coverage is missing. It does not conclude that no messages passed. Supply a real [handoff keeper archive](../../../../../seat_handoffs/README.md#keep-message-evidence-when-harbor-retries-a-slot) to check that the job, slot, execution and seat names all match.

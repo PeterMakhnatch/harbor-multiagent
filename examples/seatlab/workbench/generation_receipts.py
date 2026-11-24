@@ -100,8 +100,8 @@ KINDS = ("matched", "foreign_trial", "off_roster_seat", "unidentified")
 CAVEAT = (
     "Known USD is the OpenRouter generation total_cost returned for calls settled in this local ledger, "
     "each generation counted once. It is not an account invoice for all time. Failed, billing-unavailable "
-    "and unfinished calls carry no known charge here. Team assignment covers only the canonical final "
-    "executions in the supplied packets; retried predecessors and other executions are outside it. "
+    "and unfinished calls carry no known charge here. Team assignment covers only the executions in "
+    "the supplied packets. For an open job they are surviving executions, not confirmed finals. "
     "Generations without an owner record inside the supplied packets stay unassigned and are never "
     "attributed to a team."
 )

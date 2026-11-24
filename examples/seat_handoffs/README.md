@@ -52,6 +52,28 @@ The reader checks the job UUID, directory name and native trial lock. It groups 
 
 Use a stable copy to compare workers. In a live job, Harbor can still write files. A retry can replace a trial directory. The reader cannot recover the earlier attempt from a later copy. If the job has no native lock, the reader cannot establish a denominator.
 
+## Keep message evidence when Harbor retries a slot
+
+Two teams can earn the same grade through different handoffs. A retry can remove the only journal that distinguishes them. For a future authorized native job, add `--plugin examples.seat_handoffs.attempt_keeper:HandoffAttemptKeeper --plugin-kwarg archive_dir=/absolute/private/handoffs`. First create a dedicated owner-only directory outside the job. Do not share it with the seat lifecycle or accounting keeper. The plugin observes `END`. It does not run a verifier, change the reward or intercept messages.
+
+Read a stationary job and its handoff archive:
+
+```sh
+wb=examples.seatlab.workbench
+python3.12 -BS -m "$wb" handoffs "$job" "$handoff_archive" --require-sealed
+# A worker can send a packet instead of the native directory.
+python3.12 -BS -m "$wb" account native "$job" --packet > job-packet.json
+python3.12 -BS -m "$wb" handoffs job-packet.json "$handoff_archive" --packet --json
+```
+
+The command compares other executions with the **final execution in the same slot**, and only after the job closes. It reports changes to recorded returns, acknowledgements and their order around the receiver's commit. It does not infer which message a model read. Only two valid grades can establish score agreement. A different roster or message set is not a comparable team.
+
+Exit `0` means the archive covers the expected executions. It does **not** mean a message was observed. Use `--require-sealed` to require a completed verifier journal for each execution. Exit `1` means the requested coverage is incomplete; `2` means the input was rejected. An open world log can establish a recorded event, but it cannot establish absence. A missing `END` remains a gap. The archive contains identifiers and observations, not message bodies. Trust the collector, not just the filenames.
+
+**Evidence limit:** The two public `confirm` journals above are separate controls, not two retries of one slot. The [published native retry job](../seatlab/results/seat-event-stream/native-jobs/retry/results.md) records seat lifecycles, not messages. Neither supports a historical claim that a retry changed a team's handoff.
+
+To check message coverage separately from seat execution, [join the seat and message archives](../seatlab/results/seat-event-stream/native-jobs/retry/results.md#did-the-message-evidence-survive-too). A match needs the same job, slot, execution and seat names. The public two-slot job has 4 witnessed executions but no message receipts to supply.
+
 ## Try the two frozen archives
 
 These are two specific published studies, not general parsers for arbitrary agent traces. From a checkout with Peter's fork as `origin`:

@@ -26,6 +26,7 @@ SCHEMA = "harbor.handoffs/v1"
 MAX_LOG_BYTES = 16 * 1024 * 1024
 MAX_LINE_BYTES = 128 * 1024
 MAX_EDGES = 64
+MAX_FRAMES = 2 + MAX_EDGES * 4
 IDENTIFIER = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]{0,126}[A-Za-z0-9])?")
 
 RECEIPTS = ("confirmed", "absent", "unknown")
@@ -127,9 +128,15 @@ def read_frames(path: Path) -> tuple[list[bytes], bool]:
         raise FileNotFoundError("handoff log is missing or not a regular file")
     with path.open("rb") as handle:
         data = handle.read(MAX_LOG_BYTES + 1)
+    return frames_from_bytes(data)
+
+
+def frames_from_bytes(data: bytes) -> tuple[list[bytes], bool]:
     if len(data) > MAX_LOG_BYTES:
         raise ValueError(f"handoff log exceeds {MAX_LOG_BYTES} bytes")
-    frames = data.split(b"\n")
+    frames = data.split(b"\n", MAX_FRAMES + 1)
+    if len(frames) > MAX_FRAMES + 1:
+        raise ValueError("journal exceeds the maximum event count for its schema")
     torn = frames.pop()
     return frames, torn != b""
 

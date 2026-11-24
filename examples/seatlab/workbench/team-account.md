@@ -67,7 +67,7 @@ python3.12 -BS -m "$wb" account native "$job" --ledger "$events" --owners "$owne
 
 `--ledger` accepts the host's saved OpenRouter settlement JSONL, not a dashboard CSV or arbitrary JSON. It verifies `openrouter_generation.total_cost` against the ledger's nanodollar rounding policy. Omit `--owners` to see how much is unassigned. A failed or unsettled call is not proof that it was free.
 
-A trusted host that has the native attempt UUID, seat and returned generation ID can produce an ownership row with `examples.seatlab.workbench.generation_receipts.owner(trial, seat, generation_id)`. Store one JSON object per line in a private file. The row contains a domain-separated hash, not the raw generation ID. Duplicate delivery is safe. Conflicting owners are an error. Never match using the model name, time, cost, or seat label alone. The provider subtotal covers supplied final executions; historical retries and detached candidates are outside it.
+A trusted host that has the native attempt UUID, seat and returned generation ID can produce an ownership row with `examples.seatlab.workbench.generation_receipts.owner(trial, seat, generation_id)`. Store one JSON object per line in a private file. The row contains a domain-separated hash, not the raw generation ID. Duplicate delivery is safe. Conflicting owners are an error. Never match using the model name, time, cost, or seat label alone. The provider subtotal covers executions in the supplied packets. Executions from an open job can later be replaced. Retries absent from the packets and detached candidates are outside the subtotal.
 
 ## Decide whether a proposed run fits a budget
 

@@ -7,6 +7,7 @@ import stat
 import sys
 from typing import Any, NoReturn, override
 
+from ...seat_handoffs import lifecycle_join
 from . import seat_stream
 from .seat_stream import UUID, Malformed, Record, _read, _require, _strict_json
 
@@ -119,9 +120,12 @@ def _classify(report: Record) -> str:
     return "closed_full_roster" if full else "closed_partial_roster"
 
 
-def _scan(job: str, archive: str) -> tuple[dict[str, list[str]], dict[str, int]]:
+def _scan(
+    job: str, archive: str, *, keep_rosters: bool
+) -> tuple[dict[str, list[str]], dict[str, int], dict[str, list[str] | None]]:
     fd, names = _names(archive)
     slots: dict[str, list[str]] = {}
+    rosters: dict[str, list[str] | None] = {}
     counts = dict.fromkeys(CLASSES, 0)
     seen: set[str] = set()
     size = 0
@@ -147,6 +151,11 @@ def _scan(job: str, archive: str) -> tuple[dict[str, list[str]], dict[str, int]]
             )
             counts[_classify(report)] += 1
             slots.setdefault(match["slot"], []).append(attempt)
+            if keep_rosters:
+                header = report["trial"] == attempt
+                rosters[attempt] = (
+                    sorted(seat["name"] for seat in report["seats"]) if header else None
+                )
         after = os.lstat(archive)
         _require(
             (after.st_dev, after.st_ino) == (pin.st_dev, pin.st_ino),
@@ -156,7 +165,8 @@ def _scan(job: str, archive: str) -> tuple[dict[str, list[str]], dict[str, int]]
         raise Malformed("archive is unreadable") from error
     finally:
         os.close(fd)
-    return slots, counts
+    assert not keep_rosters or rosters.keys() == seen
+    return slots, counts, rosters
 
 
 def _witness(path: str, job: str) -> dict[str, str]:
@@ -198,10 +208,14 @@ def _agreement(slots: dict[str, list[str]], owners: dict[str, str]) -> Record:
     return {**counts, "agrees": matched == len(archive) == len(owners)}
 
 
-def build(job_path: str, archive: str, witness: str | None = None) -> Record:
+def build(
+    job_path: str, archive: str, witness: str | None = None, handoffs: str | None = None
+) -> Record:
     job = _job(job_path)
     owners = None if witness is None else _witness(witness, job["id"])
-    slots, counts = _scan(job["id"], archive)
+    slots, counts, rosters = _scan(
+        job["id"], archive, keep_rosters=handoffs is not None
+    )
     observed = sum(counts.values())
     _require(
         len(slots) <= job["total"], "archive holds more slots than registered trials"
@@ -239,11 +253,24 @@ def build(job_path: str, archive: str, witness: str | None = None) -> Record:
         report["coverage_complete"] = complete
         report["witness"] = agreement
         report["complete"] = complete and agreement["agrees"]
+    if handoffs is not None:
+        executions = {
+            execution: key for key, group in slots.items() for execution in group
+        }
+        coverage = lifecycle_join.join(
+            job=job["id"],
+            executions=executions,
+            rosters=rosters,
+            expected=expected,
+            handoffs=handoffs,
+        )
+        report["handoff_coverage"] = coverage
+        report["complete"] = report["complete"] and coverage["complete"]
     return report
 
 
 def text(report: Record) -> str:
-    skip = ("schema", "slots", "classifications", "caveat")
+    skip = ("schema", "slots", "classifications", "caveat", "handoff_coverage")
     lines = [
         f"{key}: {json.dumps(value)}"
         for key, value in report.items()
@@ -254,6 +281,8 @@ def text(report: Record) -> str:
         f"slot {slot['slot_key']}: {' '.join(slot['attempts'])}"
         for slot in report["slots"]
     ]
+    if "handoff_coverage" in report:
+        lines += lifecycle_join.text(report["handoff_coverage"])
     return "\n".join([*lines, report["caveat"]])
 
 
@@ -261,7 +290,7 @@ class _Cli(argparse.ArgumentParser):
     @override
     def error(self, message: str) -> NoReturn:
         sys.stderr.write(
-            "attempt_history: usage error; expected JOB_RESULT_PATH ARCHIVE_DIR [--witness PATH] [--json]\n"
+            "attempt_history: expected JOB_RESULT_PATH ARCHIVE_DIR [--witness PATH] [--handoffs DIR] [--json]\n"
         )
         raise SystemExit(2)
 
@@ -274,10 +303,11 @@ def main(argv: list[str] | None = None) -> int:
     cli.add_argument("job_result")
     cli.add_argument("archive")
     cli.add_argument("--witness")
+    cli.add_argument("--handoffs")
     cli.add_argument("--json", action="store_true")
     args = cli.parse_args(argv)
     try:
-        report = build(args.job_result, args.archive, args.witness)
+        report = build(args.job_result, args.archive, args.witness, args.handoffs)
     except Malformed as error:
         print(f"attempt_history: {error}", file=sys.stderr)
         return 2
