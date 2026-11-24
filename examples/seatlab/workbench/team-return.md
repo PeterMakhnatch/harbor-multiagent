@@ -44,7 +44,10 @@ Both observers still closed it after both genuine returns. The average reward di
 | Trusted, stationary native job directories from the supported scheduling producer | [Export a work book](../../seat_handoffs/post-return-work.md). Keep the original job locks. A single trial directory is not an enrolled cohort. |
 | A new team to run | [Register the native board study](../../seat_seals/README.md). Fix both policies and all expected arms before play. Use site admission and spending controls. |
 | Independent workers collecting that study | [Assign a plan, start one ticket, and export each worker's packet](../../seat_seals/workers.md). Use one persistent directory per worker; do not reissue a lost worker's tickets. |
+| Independent workers that cannot share ticket files | [Use one durable admission authority](../../seat_seals/admission.md). The authority never reissues an accepted ticket after a disconnect. |
 | A returned plan but no packets yet | Run `team_return BOOK PLAN` without packet paths. The enrolled pairs remain in the result with unknown grades. |
 | A different native world | [Ship Handover](../../ship_handover/README.md) measures omissions and duplicate dispatches across two shifts. Its supplier ledger is not a scheduling work book. |
+| A shipment that can settle after both seats leave | [Ship Inflight](../../ship_inflight/README.md) separates the relief decision from the final parcel count. Try `python3.12 -BS -m examples.seatlab.workbench verify ship-inflight`. |
+| A private task checkout and an Oracle seat that cannot start | [Check the native private-upload comparison](../results/private-oracle-upload/results.md). A valid world grade does not prove a seat ran. |
 
 You can run either source separately: `examples.seat_handoffs.work_report show` for the book, or `examples.seat_seals.workers show` for a plan and its packets. Share their digests over a trusted channel. These reports check internal consistency. They do not authenticate who produced the evidence or establish what a new model team will do.

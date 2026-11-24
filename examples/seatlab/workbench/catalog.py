@@ -228,6 +228,21 @@ STUDIES: tuple[Study, ...] = (
         exit_code=1,
         sha256="6e4c048eb9cab9b5eadd2ae299ff179e2619ddb635afc542a20a110949a9673b",
     ),
+    Study(
+        id="ship-inflight",
+        question="Can two seats hand over one pending shipment without an omission or duplicate after the supplier finishes?",
+        kind="native-scripted-calibration",
+        guide="examples/ship_inflight/README.md",
+        module="examples.ship_inflight.replay",
+        argv=(
+            "examples/ship_inflight/samples/question.json",
+            "examples/ship_inflight/samples/public-cuts.json",
+            "--totals",
+        ),
+        report="examples/ship_inflight/samples/replay-totals.json",
+        exit_code=0,
+        sha256="565a4118189f422e944b4e2ee68cec1ac10acd4bd676bbad61984c72697f9bbf",
+    ),
 )
 
 assert len({study.id for study in STUDIES}) == len(STUDIES)
