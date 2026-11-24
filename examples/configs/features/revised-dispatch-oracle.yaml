@@ -1,0 +1,11 @@
+task:
+  path: examples/tasks/revised-dispatch
+trials_dir: trials
+environment:
+  type: docker
+  delete: true
+participants:
+  - seat: booker
+    name: oracle
+  - seat: reporter
+    name: oracle
