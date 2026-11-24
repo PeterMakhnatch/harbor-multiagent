@@ -12,6 +12,7 @@ Kind = Literal[
     "secondary-native-receipt-analysis",
     "separate-archive-and-scripted-cohorts",
     "native-scripted-calibration",
+    "native-handler-enumeration",
 ]
 
 _RESULTS = "examples/seatlab/results"
@@ -22,6 +23,9 @@ _WORK_BOOKS = "examples/seat_handoffs/samples"
 _WORKER = "examples/seat_seals/samples/workers/paired"
 _RETURN_GUIDE = "examples/seatlab/workbench/team-return.md"
 _RETURN_MODULE = "examples.seatlab.workbench.team_return"
+_SHIPPING = "examples/ship_handover"
+_CAMPAIGN = f"{_SHIPPING}/samples/disconnected-workers"
+_OPTIONS = f"{_SHIPPING}/samples/receiver-options"
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,6 +269,59 @@ STUDIES: tuple[Study, ...] = (
         report="examples/ship_handover/samples/two-worlds/transfer-recovery.json",
         exit_code=0,
         sha256="48d2eb547752c8e79abb061370a7601b4feb522298573120cc59e39297a99d62",
+    ),
+    Study(
+        id="ship-campaign",
+        question="Can a recipient distinguish a lost start permission from a zero reward across two workers and two worlds?",
+        kind="native-scripted-calibration",
+        guide=f"{_SHIPPING}/disconnected-workers.md",
+        module="examples.ship_handover.campaign_report",
+        argv=(
+            f"{_CAMPAIGN}/stock.json",
+            f"{_CAMPAIGN}/inflight.json",
+            f"{_CAMPAIGN}/plan.json",
+            f"{_CAMPAIGN}/status.json",
+            "--expected-plan",
+            "sha256:334a29d45edb19bf10f6088cf8df90e4b5464b8e87ffe794de847613c8697787",
+            "--stock-packet",
+            f"{_CAMPAIGN}/stock-w0.json",
+            "--inflight-packet",
+            f"{_CAMPAIGN}/inflight-w0.json",
+            "--stock-packet",
+            f"{_CAMPAIGN}/stock-w1.json",
+            "--inflight-packet",
+            f"{_CAMPAIGN}/inflight-w1.json",
+            "--json",
+        ),
+        report=f"{_CAMPAIGN}/report.json",
+        exit_code=0,
+        sha256="3063cb0902c10b4de731f9dd2d6461f6a19e9f3dbf0a56d1413e3208ab2f7564",
+    ),
+    Study(
+        id="ship-receiver-options",
+        question="Can a relief seat guarantee one parcel from a reference without knowing the sender's convention?",
+        kind="native-handler-enumeration",
+        guide=f"{_SHIPPING}/receiver-options.md",
+        module="examples.ship_handover.receiver_options",
+        argv=("--json",),
+        report=f"{_OPTIONS}/frontier.json",
+        exit_code=0,
+        sha256="7380b8bc2721296cd503c2039db2820cd8771973c85ce54d00dd84502b16f8ff",
+    ),
+    Study(
+        id="ship-receiver-archive",
+        question="Which decisions in retained native teams can be compared with the relief seat's possible actions?",
+        kind="secondary-native-receipt-analysis",
+        guide=f"{_SHIPPING}/receiver-options.md",
+        module="examples.ship_handover.receiver_archive",
+        argv=(
+            "examples/ship_inflight/samples/question.json",
+            "examples/ship_inflight/samples/public-cuts.json",
+            "--json",
+        ),
+        report=f"{_OPTIONS}/retained.json",
+        exit_code=0,
+        sha256="b2f0950b01dcaecfa6aeaf8ddd232d2c19fc6e1038e0882623be48561eb94ea8",
     ),
 )
 

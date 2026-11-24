@@ -17,7 +17,8 @@ SCHEMA = "seatlab.workbench/v1"
 USAGE = "python3.12 -BS -m examples.seatlab.workbench list | verify [STUDY ...]"
 STUDY_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 MODULE = re.compile(
-    r"examples\.(?:seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}|ship_inflight\.replay|ship_handover\.transfer)"
+    r"examples\.(?:seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}|ship_inflight\.replay|"
+    r"ship_handover\.(?:transfer|campaign_report|receiver_options|receiver_archive))"
 )
 DIGEST = re.compile(r"[0-9a-f]{64}")
 MAX_ARGS = 256
