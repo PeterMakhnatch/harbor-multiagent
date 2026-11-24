@@ -1,0 +1,686 @@
+{
+  "schema": "harbor.terminus-post-return.outcomes/v1",
+  "question_commit": "61aae7a60e7e2731766665c851e44c8dbbc5938d",
+  "new_model_trials": 0,
+  "new_model_or_infra_usd": 0,
+  "public_books_sha256": {
+    "post-return-completed.json": "fcb2cbd18ae2244a160e2dfd05d6a38d098d6422ff5aaa33eb4bb22a7721ff59",
+    "post-return-with-timeouts.json": "51ae8c0d980335ba114b369c772f29ce96bf92d52f0c4641b6d4aaac5aca2a23"
+  },
+  "owner_native_comparison": {
+    "physical_population_rows": 288,
+    "parameter_views": 12,
+    "aggregate_group_checks": 180,
+    "case_guard_board_decisions": 1728
+  },
+  "fresh_native_exports_matched_population_rows": 288,
+  "includes_overlapping_populations": true,
+  "finite_event_order": {
+    "accepted_controls": [
+      9,
+      9
+    ],
+    "cases": 664,
+    "crossing_cases": 1592,
+    "equality_cases": 368,
+    "failures": 0,
+    "guard_widened": 440,
+    "guards_ms": [
+      0,
+      1000,
+      5000
+    ],
+    "known_witnesses": {
+      "equal_stamps_cross": true,
+      "guard_widens": true,
+      "split_step": true,
+      "stamp_after_work": true,
+      "unplaced_tail": true
+    },
+    "measured": 1992,
+    "ok": true,
+    "refusal_controls": 26,
+    "schema": "harbor.post-return-work-meter-qualify/v1",
+    "sharp_checked": 332,
+    "split_step_witnesses": 1448,
+    "stamp_after_work_witnesses": 300,
+    "unplaced_tail_witnesses": 996,
+    "unrefused": []
+  },
+  "input_and_book_controls": {
+    "book_checks": [
+      23,
+      23
+    ],
+    "failed": [],
+    "measured_zero": 2,
+    "meter_statuses": {
+      "binding_invalid": 1,
+      "binding_mismatch": 7,
+      "binding_missing": 2,
+      "clock_unusable": 6,
+      "invalid_trajectory": 8,
+      "measured": 13,
+      "missing_trajectory": 3,
+      "seat_binding_mismatch": 7,
+      "trigger_absent": 1,
+      "trigger_unknown": 1,
+      "unsupported_producer": 8,
+      "unsupported_trajectory": 9,
+      "usage_inconsistent": 6,
+      "usage_missing": 8
+    },
+    "ok": true,
+    "public_alternates": [
+      4,
+      4
+    ],
+    "public_rejections": [
+      36,
+      36
+    ],
+    "public_sample": true,
+    "schema": "harbor.post-return-work-inputs-qualify/v1",
+    "trace_controls": [
+      80,
+      80
+    ]
+  },
+  "native_first_attempt_receipt_probes": {
+    "original": {
+      "native_successes": 1,
+      "measured": 1,
+      "meter_statuses": {
+        "measured": 1
+      },
+      "work_available": true,
+      "absent_slots": 23
+    },
+    "missing": {
+      "native_successes": 1,
+      "measured": 0,
+      "meter_statuses": {
+        "missing_trajectory": 1
+      },
+      "work_available": false,
+      "absent_slots": 23
+    },
+    "wrong_session": {
+      "native_successes": 1,
+      "measured": 0,
+      "meter_statuses": {
+        "seat_binding_mismatch": 1
+      },
+      "work_available": false,
+      "absent_slots": 23
+    },
+    "unknown_source": {
+      "native_successes": 1,
+      "measured": 0,
+      "meter_statuses": {
+        "unsupported_producer": 1
+      },
+      "work_available": false,
+      "absent_slots": 23
+    },
+    "step_total_off": {
+      "native_successes": 1,
+      "measured": 0,
+      "meter_statuses": {
+        "usage_inconsistent": 1
+      },
+      "work_available": false,
+      "absent_slots": 23
+    }
+  },
+  "reported_views": [
+    {
+      "include_timeouts": false,
+      "host_guard_ms": 0,
+      "board_clock_ms": null,
+      "all_registered_slots": 192,
+      "missing_slots": 12,
+      "ambiguous_slots": 0,
+      "stock_statuses": {
+        "missing_evidence": 9,
+        "seat_timeout": 54,
+        "usable": 117
+      },
+      "groups": {
+        "all": {
+          "teams": 117,
+          "native_successes": 54,
+          "meter_statuses": {
+            "measured": 117
+          },
+          "positive_certain_prompt_and_completion": 100,
+          "measured_teams": 117,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 840,
+              "crossing": 117,
+              "after": 537
+            },
+            "prompt": {
+              "before": 6071393,
+              "crossing": 741964,
+              "after": 6339907,
+              "native": 13153264,
+              "unplaced": 0,
+              "bounds": [
+                6339907,
+                7081871
+              ]
+            },
+            "completion": {
+              "before": 740382,
+              "crossing": 225032,
+              "after": 480789,
+              "native": 1446203,
+              "unplaced": 0,
+              "bounds": [
+                480789,
+                705821
+              ]
+            }
+          }
+        },
+        "forced_loss": {
+          "teams": 0,
+          "native_successes": 0,
+          "meter_statuses": {},
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 0,
+          "work_on_measured_teams": null
+        },
+        "certain_later_write": {
+          "teams": 0,
+          "native_successes": 0,
+          "meter_statuses": {},
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 0,
+          "work_on_measured_teams": null
+        },
+        "no_later_write": {
+          "teams": 2,
+          "native_successes": 0,
+          "meter_statuses": {
+            "measured": 2
+          },
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 2,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 2,
+              "crossing": 2,
+              "after": 0
+            },
+            "prompt": {
+              "before": 2452,
+              "crossing": 3476,
+              "after": 0,
+              "native": 5928,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                3476
+              ]
+            },
+            "completion": {
+              "before": 5379,
+              "crossing": 904,
+              "after": 0,
+              "native": 6283,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                904
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "include_timeouts": false,
+      "host_guard_ms": 5000,
+      "board_clock_ms": 1000,
+      "all_registered_slots": 192,
+      "missing_slots": 12,
+      "ambiguous_slots": 0,
+      "stock_statuses": {
+        "missing_evidence": 9,
+        "seat_timeout": 54,
+        "usable": 117
+      },
+      "groups": {
+        "all": {
+          "teams": 117,
+          "native_successes": 54,
+          "meter_statuses": {
+            "measured": 117
+          },
+          "positive_certain_prompt_and_completion": 86,
+          "measured_teams": 117,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 795,
+              "crossing": 207,
+              "after": 492
+            },
+            "prompt": {
+              "before": 5732640,
+              "crossing": 1356666,
+              "after": 6063958,
+              "native": 13153264,
+              "unplaced": 0,
+              "bounds": [
+                6063958,
+                7420624
+              ]
+            },
+            "completion": {
+              "before": 687395,
+              "crossing": 311350,
+              "after": 447458,
+              "native": 1446203,
+              "unplaced": 0,
+              "bounds": [
+                447458,
+                758808
+              ]
+            }
+          }
+        },
+        "forced_loss": {
+          "teams": 2,
+          "native_successes": 2,
+          "meter_statuses": {
+            "measured": 2
+          },
+          "positive_certain_prompt_and_completion": 2,
+          "measured_teams": 2,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 8,
+              "crossing": 3,
+              "after": 7
+            },
+            "prompt": {
+              "before": 26180,
+              "crossing": 13230,
+              "after": 59951,
+              "native": 99361,
+              "unplaced": 0,
+              "bounds": [
+                59951,
+                73181
+              ]
+            },
+            "completion": {
+              "before": 9535,
+              "crossing": 3420,
+              "after": 13254,
+              "native": 26209,
+              "unplaced": 0,
+              "bounds": [
+                13254,
+                16674
+              ]
+            }
+          }
+        },
+        "certain_later_write": {
+          "teams": 34,
+          "native_successes": 14,
+          "meter_statuses": {
+            "measured": 34
+          },
+          "positive_certain_prompt_and_completion": 33,
+          "measured_teams": 34,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 201,
+              "crossing": 53,
+              "after": 205
+            },
+            "prompt": {
+              "before": 1222911,
+              "crossing": 313602,
+              "after": 2346639,
+              "native": 3883152,
+              "unplaced": 0,
+              "bounds": [
+                2346639,
+                2660241
+              ]
+            },
+            "completion": {
+              "before": 193353,
+              "crossing": 111463,
+              "after": 223952,
+              "native": 528768,
+              "unplaced": 0,
+              "bounds": [
+                223952,
+                335415
+              ]
+            }
+          }
+        },
+        "no_later_write": {
+          "teams": 2,
+          "native_successes": 0,
+          "meter_statuses": {
+            "measured": 2
+          },
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 2,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 0,
+              "crossing": 4,
+              "after": 0
+            },
+            "prompt": {
+              "before": 0,
+              "crossing": 5928,
+              "after": 0,
+              "native": 5928,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                5928
+              ]
+            },
+            "completion": {
+              "before": 0,
+              "crossing": 6283,
+              "after": 0,
+              "native": 6283,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                6283
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "include_timeouts": true,
+      "host_guard_ms": 0,
+      "board_clock_ms": null,
+      "all_registered_slots": 192,
+      "missing_slots": 12,
+      "ambiguous_slots": 0,
+      "stock_statuses": {
+        "missing_evidence": 9,
+        "usable": 171
+      },
+      "groups": {
+        "all": {
+          "teams": 171,
+          "native_successes": 65,
+          "meter_statuses": {
+            "measured": 152,
+            "trigger_absent": 19
+          },
+          "positive_certain_prompt_and_completion": 134,
+          "measured_teams": 152,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 1345,
+              "crossing": 151,
+              "after": 1055
+            },
+            "prompt": {
+              "before": 10058022,
+              "crossing": 1094095,
+              "after": 15825221,
+              "native": 27170640,
+              "unplaced": 193302,
+              "bounds": [
+                15825221,
+                17112618
+              ]
+            },
+            "completion": {
+              "before": 1197894,
+              "crossing": 280670,
+              "after": 966951,
+              "native": 2450778,
+              "unplaced": 5263,
+              "bounds": [
+                966951,
+                1252884
+              ]
+            }
+          }
+        },
+        "forced_loss": {
+          "teams": 0,
+          "native_successes": 0,
+          "meter_statuses": {},
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 0,
+          "work_on_measured_teams": null
+        },
+        "certain_later_write": {
+          "teams": 0,
+          "native_successes": 0,
+          "meter_statuses": {},
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 0,
+          "work_on_measured_teams": null
+        },
+        "no_later_write": {
+          "teams": 2,
+          "native_successes": 0,
+          "meter_statuses": {
+            "measured": 2
+          },
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 2,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 2,
+              "crossing": 2,
+              "after": 0
+            },
+            "prompt": {
+              "before": 2452,
+              "crossing": 3476,
+              "after": 0,
+              "native": 5928,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                3476
+              ]
+            },
+            "completion": {
+              "before": 5379,
+              "crossing": 904,
+              "after": 0,
+              "native": 6283,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                904
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "include_timeouts": true,
+      "host_guard_ms": 5000,
+      "board_clock_ms": 1000,
+      "all_registered_slots": 192,
+      "missing_slots": 12,
+      "ambiguous_slots": 0,
+      "stock_statuses": {
+        "missing_evidence": 9,
+        "usable": 171
+      },
+      "groups": {
+        "all": {
+          "teams": 171,
+          "native_successes": 65,
+          "meter_statuses": {
+            "measured": 152,
+            "trigger_absent": 19
+          },
+          "positive_certain_prompt_and_completion": 120,
+          "measured_teams": 152,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 1292,
+              "crossing": 253,
+              "after": 1006
+            },
+            "prompt": {
+              "before": 9632790,
+              "crossing": 1866265,
+              "after": 15478283,
+              "native": 27170640,
+              "unplaced": 193302,
+              "bounds": [
+                15478283,
+                17537850
+              ]
+            },
+            "completion": {
+              "before": 1135997,
+              "crossing": 378830,
+              "after": 930688,
+              "native": 2450778,
+              "unplaced": 5263,
+              "bounds": [
+                930688,
+                1314781
+              ]
+            }
+          }
+        },
+        "forced_loss": {
+          "teams": 3,
+          "native_successes": 3,
+          "meter_statuses": {
+            "measured": 3
+          },
+          "positive_certain_prompt_and_completion": 3,
+          "measured_teams": 3,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 11,
+              "crossing": 4,
+              "after": 26
+            },
+            "prompt": {
+              "before": 31456,
+              "crossing": 16846,
+              "after": 323613,
+              "native": 371915,
+              "unplaced": 0,
+              "bounds": [
+                323613,
+                340459
+              ]
+            },
+            "completion": {
+              "before": 15021,
+              "crossing": 6296,
+              "after": 52989,
+              "native": 74306,
+              "unplaced": 0,
+              "bounds": [
+                52989,
+                59285
+              ]
+            }
+          }
+        },
+        "certain_later_write": {
+          "teams": 44,
+          "native_successes": 15,
+          "meter_statuses": {
+            "measured": 44
+          },
+          "positive_certain_prompt_and_completion": 43,
+          "measured_teams": 44,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 327,
+              "crossing": 65,
+              "after": 353
+            },
+            "prompt": {
+              "before": 2330207,
+              "crossing": 471963,
+              "after": 4784605,
+              "native": 7651686,
+              "unplaced": 64911,
+              "bounds": [
+                4784605,
+                5321479
+              ]
+            },
+            "completion": {
+              "before": 353595,
+              "crossing": 138683,
+              "after": 387861,
+              "native": 882889,
+              "unplaced": 2750,
+              "bounds": [
+                387861,
+                529294
+              ]
+            }
+          }
+        },
+        "no_later_write": {
+          "teams": 2,
+          "native_successes": 0,
+          "meter_statuses": {
+            "measured": 2
+          },
+          "positive_certain_prompt_and_completion": 0,
+          "measured_teams": 2,
+          "work_on_measured_teams": {
+            "steps": {
+              "before": 0,
+              "crossing": 4,
+              "after": 0
+            },
+            "prompt": {
+              "before": 0,
+              "crossing": 5928,
+              "after": 0,
+              "native": 5928,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                5928
+              ]
+            },
+            "completion": {
+              "before": 0,
+              "crossing": 6283,
+              "after": 0,
+              "native": 6283,
+              "unplaced": 0,
+              "bounds": [
+                0,
+                6283
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
