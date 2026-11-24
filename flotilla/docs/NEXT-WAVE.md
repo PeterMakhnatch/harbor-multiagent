@@ -58,6 +58,15 @@ The runner stops before a new job when spend plus the reserve for the in-flight 
 pass the cap. It also stops when a provider balance is below its floor. Run the same command again to skip
 finished cells. Add `--retry-invalid` to rerun a cell that has no valid trial.
 
+The OpenRouter balance is the lower of the account balance (`/api/v1/credits`) and what the key itself may still
+spend (`/api/v1/key`, `limit_remaining`; no limit when `limit` is null): on 2026-11-24 the shared key had less than
+$1 of its $100 limit left while the account had about $7, so the account alone would have passed the floor. The
+floor-stop line says which of the two set the balance. After `budget.max_invalid_streak` trials in a row end invalid
+(default 6; in accounting order), the runner starts no new cell, lets the in-flight trials finish, logs
+`stop: N invalid trials in a row (last: <failure kinds>)`, saves the state and exits with code 3. Fix the cause,
+then run the same command (and `--retry-invalid`). Each attempt in `state.json` records its `problem`. The dry run
+prints both guards.
+
 Two starts are at least `make_jobs.start_spacing_s` seconds apart (default 10, `0` turns it off), in a fresh
 run and on a resume; the budget and balance checks and the wait for in-flight jobs are not delayed. The dry run
 and `progress.log` show the value. On 2026-11-23 a resume started about 31 trials in 10 s and 25 seats stalled

@@ -163,6 +163,37 @@ def parse_deepseek_balance(payload: dict) -> float:
     return float(infos[0]["total_balance"])
 
 
+def _number(value) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
 def parse_openrouter_credits(payload: dict) -> float:
-    data = payload["data"] if isinstance(payload.get("data"), dict) else payload
-    return float(data["total_credits"]) - float(data["total_usage"])
+    """The account balance from GET /api/v1/credits: total_credits - total_usage."""
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    credits, usage = _number(data.get("total_credits")), _number(data.get("total_usage"))
+    if credits is None or usage is None:
+        raise ValueError("OpenRouter credits response has no numeric data.total_credits and data.total_usage")
+    return credits - usage
+
+
+def parse_openrouter_key(payload: dict) -> float | None:
+    """What the API key may still spend, from GET /api/v1/key: data.limit_remaining; None when data.limit is null
+    (the key has no limit of its own)."""
+    data = payload.get("data")
+    if not isinstance(data, dict) or "limit" not in data:
+        raise ValueError("OpenRouter key response has no data.limit")
+    if data["limit"] is None:
+        return None
+    left = _number(data.get("limit_remaining"))
+    if left is None:
+        raise ValueError("OpenRouter key response has a data.limit but no numeric data.limit_remaining")
+    return left
+
+
+def openrouter_balance(account: float, key_left: float | None) -> tuple[float, str]:
+    """What a wave can spend through the key: the lower of the account balance and the key's limit left, and
+    which of the two set it."""
+    key_text = "no key limit" if key_left is None else f"key limit left ${key_left:.2f}"
+    if key_left is not None and key_left < account:
+        return key_left, f"key limit (account ${account:.2f}, {key_text})"
+    return account, f"account balance (account ${account:.2f}, {key_text})"

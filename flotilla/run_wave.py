@@ -16,6 +16,11 @@ Consecutive starts are at least make_jobs.start_spacing_s apart (default 10 s, 0
 A scripted seat (`[agents.<seat>] under_test = false` in task.toml) runs Harbor's oracle agent with no model and
 costs nothing. All tasks of a task set must have the same scripted seats; the optional plan key scripted_seats
 must equal them. seat_assignments rows then list models for the seats under test only.
+
+Guards: before each start, each provider's balance must be at or above its floor; the OpenRouter balance is the
+lower of the account balance (/api/v1/credits) and the key's own limit left (/api/v1/key). After
+budget.max_invalid_streak (default 6) trials in a row end invalid, in accounting order, no new cell starts; the
+in-flight trials finish and are accounted, and the command exits 3. A rerun resumes as usual.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ import urllib.request
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent
@@ -65,7 +71,10 @@ PLAN_KEYS = frozenset({
 })
 PREREG_KEYS = frozenset({"commit", "doc", "section"})
 JOB_KEYS = frozenset({"max_turns", "env", "concurrency", "start_spacing_s"})
-BUDGET_KEYS = frozenset({"cap_usd", "reserve_per_trial_usd", "provider_floors"})
+BUDGET_KEYS = frozenset({"cap_usd", "reserve_per_trial_usd", "provider_floors", "max_invalid_streak"})
+MAX_INVALID_STREAK = 6
+EXIT_INVALID_STREAK = 3
+STREAK_KINDS_SHOWN = 3
 SET_KEYS = frozenset({"tasks_dir", "manifest", "instances", "arms", "conditions"})
 
 
@@ -148,6 +157,9 @@ def load_plan(path: Path) -> dict:
                 raise SystemExit(f"refused: seat_assignments[{index}] is not a model list")
             if any(not PRICING.known_model(model) for model in row):
                 raise SystemExit(f"refused: seat_assignments[{index}] has a model pricing.py cannot price")
+    streak = plan["budget"].get("max_invalid_streak", MAX_INVALID_STREAK)
+    if isinstance(streak, bool) or not isinstance(streak, int) or streak < 1:
+        raise SystemExit("refused: max_invalid_streak must be an integer >= 1")
     floors = plan["budget"]["provider_floors"]
     for model in used_models(plan):
         if not PRICING.known_model(model):
@@ -167,6 +179,10 @@ def load_plan(path: Path) -> dict:
 
 def spacing_of(plan: dict) -> float:
     return float(plan["make_jobs"].get("start_spacing_s", START_SPACING_S))
+
+
+def streak_of(plan: dict) -> int:
+    return int(plan["budget"].get("max_invalid_streak", MAX_INVALID_STREAK))
 
 
 def repo_of(path: Path) -> Path:
@@ -445,14 +461,29 @@ def scripted_line(plan: dict, scripted: list[list[str] | None]) -> str:
     return "scripted seats (oracle agent, no model, cost 0): " + "; ".join(parts)
 
 
+def guard_line(plan: dict) -> str:
+    floors = plan["budget"]["provider_floors"]
+    sources = {"openrouter": "lower of account balance and key limit left", "deepseek": "account balance"}
+    shown = ", ".join(f"{provider} ${float(amount):.2f} ({sources.get(provider, 'balance')})"
+                      for provider, amount in sorted(floors.items()))
+    return f"guards: stop after {streak_of(plan)} invalid trials in a row; provider floors {shown}"
+
+
 def print_dry_run(plan: dict, order: list[dict], scripted: list[list[str] | None]) -> None:
     reserve = float(plan["budget"]["reserve_per_trial_usd"])
     cap = float(plan["budget"]["cap_usd"])
     print(f"{plan['name']}: {len(order)} cells, reserve ${reserve:.2f} per trial, cap ${cap:.2f}, "
           f"reserve if every cell starts ${reserve * len(order):.2f}, start spacing {spacing_of(plan):.1f} s")
     print(scripted_line(plan, scripted))
+    print(guard_line(plan))
     for index, cell in enumerate(order, 1):
         print(f"{index}. set {cell['task_set']} instance {cell['instance']} {cell['arm']} {label_of(cell)}")
+
+
+class Balance(NamedTuple):
+    """A provider balance and what set it (for OpenRouter: the account or the key's own limit)."""
+    amount: float
+    detail: str = ""
 
 
 class HttpSources:
@@ -474,7 +505,7 @@ class HttpSources:
             frozen[model] = row
         return frozen
 
-    def balance(self, provider: str) -> float:
+    def balance(self, provider: str) -> Balance:
         key = KEYS[provider]
         token = self.env.get(key)
         if not token:
@@ -482,9 +513,11 @@ class HttpSources:
         header = {"Authorization": "Bearer " + token}
         if provider == "deepseek":
             payload = _fetch_json("https://api.deepseek.com/user/balance", header)
-            return PRICING.parse_deepseek_balance(payload)
-        payload = _fetch_json("https://openrouter.ai/api/v1/credits", header)
-        return PRICING.parse_openrouter_credits(payload)
+            return Balance(PRICING.parse_deepseek_balance(payload), "account balance")
+        account = PRICING.parse_openrouter_credits(_fetch_json("https://openrouter.ai/api/v1/credits", header))
+        key_left = PRICING.parse_openrouter_key(_fetch_json("https://openrouter.ai/api/v1/key", header))
+        amount, detail = PRICING.openrouter_balance(account, key_left)
+        return Balance(amount, detail)
 
 
 def _fetch_json(url: str, headers: dict[str, str]) -> dict:
@@ -513,34 +546,50 @@ def trial_config(trial: Path, result: dict) -> dict:
     return result.get("config") or config
 
 
-def trial_valid(trial: Path | None, result: dict | None, cell: dict) -> bool:
-    if trial is None or result is None or result.get("exception_info"):
-        return False
-    if any(seat.get("exception_info") for seat in result.get("seat_results") or []):
-        return False
+def exception_kind(info) -> str:
+    if isinstance(info, dict):
+        return str(info.get("exception_type") or "exception")
+    return str(info)[:80]
+
+
+def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | None:
+    """Why a trial is not valid, or None when it is."""
+    if trial is None or result is None:
+        return "no trial result"
+    if result.get("exception_info"):
+        return exception_kind(result["exception_info"])
+    for seat in result.get("seat_results") or []:
+        if seat.get("exception_info"):
+            return f"{seat.get('seat')} {exception_kind(seat['exception_info'])}"
     score_path, state_path = trial / "verifier" / "score.json", trial / "verifier" / "world-state.json"
     if not score_path.is_file() or not state_path.is_file():
-        return False
+        return "no verifier output"
     verdict = json.loads(score_path.read_text())
     if verdict.get("error") is not None:
-        return False
+        return f"score error {verdict['error']}"
     if (verdict.get("instance"), verdict.get("condition")) != (cell["instance"], cell["arm"]):
-        return False
+        return "score for another cell"
     participants = trial_config(trial, result).get("participants") or []
     if not participants:
-        return False
+        return "no participants"
     scripted = set(cell.get("scripted") or ())
     ran = {row.get("seat"): (row.get("agent_info") or {}).get("name") for row in result.get("seat_results") or []}
     oracles = {row.get("seat") for row in participants if row.get("seat") in scripted
                and row.get("name") == "oracle" and ran.get(row.get("seat"), "oracle") == "oracle"}
     if oracles != scripted:
-        return False
+        return "scripted seat not on oracle"
     tested = [row for row in participants if row.get("seat") not in scripted]
     if cell.get("assignment"):
         expected = seat_models(cell)
         actual = {row.get("seat"): row.get("model_name") for row in tested}
-        return len(tested) == len(expected) and actual == expected
-    return bool(tested) and all(row.get("model_name") == cell["model"] for row in tested)
+        ok = len(tested) == len(expected) and actual == expected
+    else:
+        ok = bool(tested) and all(row.get("model_name") == cell["model"] for row in tested)
+    return None if ok else "seat model mismatch"
+
+
+def trial_valid(trial: Path | None, result: dict | None, cell: dict) -> bool:
+    return trial_problem(trial, result, cell) is None
 
 
 def attempts_of(row: dict | None) -> list[dict]:
@@ -667,11 +716,13 @@ def account(future, futures, state, events, jobs_dir, reserve, run_dir, lock: th
     exit_code = future.result()
     trial, result = read_trial(jobs_dir, job)
     bill = charge(cell, result, state["prices"], reserve)
-    valid = trial_valid(trial, result, cell)
+    problem = trial_problem(trial, result, cell)
+    valid = problem is None
     attempt = {
         "job": job, "valid": valid, "cost_usd": bill["cost"], "estimate_usd": bill["estimate"],
         "cost_source": bill["source"], "flag": bill["flag"], "exit_code": exit_code,
         "started_at": (result or {}).get("started_at"), "finished_at": datetime.now(UTC).isoformat(),
+        "problem": problem,
     }
     with lock:
         state["spent_usd"] += bill["cost"]
@@ -691,7 +742,7 @@ def account(future, futures, state, events, jobs_dir, reserve, run_dir, lock: th
                  f"source {bill['source']}{flag} spent ${spent:.4f}")
     events.append({"kind": "end", "key": cell["key"], "job": job, "valid": valid, "cost": bill["cost"],
                    "estimate": estimate, "source": bill["source"], "flag": bill["flag"], "exit_code": exit_code,
-                   "spent": spent})
+                   "spent": spent, "problem": problem})
 
 
 def drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock) -> None:
@@ -704,17 +755,39 @@ def wait_one(futures):
     return done.pop()
 
 
-def read_balance(sources, provider: str, sleep):
+def read_balance(sources, provider: str, sleep) -> tuple[Balance | None, BaseException | None]:
     last = None
     for attempt in range(1 + len(BALANCE_BACKOFF)):
         try:
-            return sources.balance(provider), None
+            value = sources.balance(provider)
+            return (value if isinstance(value, Balance) else Balance(float(value))), None
         except (Exception, SystemExit) as exc:
             last = exc
             if attempt == len(BALANCE_BACKOFF):
                 return None, exc
             sleep(BALANCE_BACKOFF[attempt])
     return None, last
+
+
+def invalid_streak(events: list[dict]) -> list[dict]:
+    """The end events of the invalid trials that ended last, in a row (accounting order)."""
+    streak = []
+    for event in reversed(events):
+        if event["kind"] != "end":
+            continue
+        if event["valid"]:
+            break
+        streak.append(event)
+    return streak[::-1]
+
+
+def streak_stop(events: list[dict], limit: int, run_dir: Path) -> bool:
+    streak = invalid_streak(events)
+    if len(streak) < limit:
+        return False
+    kinds = "; ".join(event.get("problem") or "unknown" for event in streak[-STREAK_KINDS_SHOWN:])
+    log(run_dir, f"stop: {len(streak)} invalid trials in a row (last: {kinds}); draining in-flight jobs")
+    return True
 
 
 def wait_under_cap(futures, state, events, jobs_dir, reserve, run_dir, lock, cap) -> str | None:
@@ -746,8 +819,8 @@ def cell_gate(cell: dict, floors: dict, sources, sleep):
             continue
         money, error = read_balance(sources, provider, sleep)
         if error is not None:
-            return "balance", provider, money
-        if money < float(floors[provider]):
+            return "balance", provider, error
+        if money.amount < float(floors[provider]):
             return "floor", provider, money
         seen[provider] = money
     return None, None, None
@@ -758,6 +831,7 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
     options = plan["make_jobs"]
     reserve, cap = float(plan["budget"]["reserve_per_trial_usd"]), float(plan["budget"]["cap_usd"])
     floors, concurrency = plan["budget"]["provider_floors"], options["concurrency"]
+    limit = streak_of(plan)
     futures: dict = {}
     lock = threading.Lock()
     index, spins, stop, last_start = 0, 0, None, None
@@ -768,6 +842,9 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             if spins > bound:
                 raise SystemExit("refused: scheduler did not advance")
             drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
+            if streak_stop(events, limit, run_dir):
+                stop = "invalid"
+                break
             if len(futures) >= concurrency:
                 account(wait_one(futures), futures, state, events, jobs_dir, reserve, run_dir, lock)
                 continue
@@ -782,17 +859,21 @@ def schedule(plan, pending, state, events, *, pool, jobs_dir, run_dir, harbor, w
             if kind == "balance":
                 if futures:
                     stop = "balance"
-                    log(run_dir, f"stop: {provider} balance read failed; draining in-flight jobs")
+                    log(run_dir, f"stop: {provider} balance read failed ({money}); draining in-flight jobs")
                     break
-                raise SystemExit(f"refused: could not read {provider} balance")
+                raise SystemExit(f"refused: could not read {provider} balance ({money})")
             if kind == "floor":
                 stop = "floor"
-                log(run_dir, f"stop: {provider} balance ${money:.2f} is below floor ${float(floors[provider]):.2f}")
+                set_by = f" (set by the {money.detail})" if money.detail else ""
+                log(run_dir, f"stop: {provider} balance ${money.amount:.2f} is below floor "
+                             f"${float(floors[provider]):.2f}{set_by}")
                 break
             if pause_before_start(spacing_of(plan), last_start, clock, sleep):
                 drain_done(futures, state, events, jobs_dir, reserve, run_dir, lock)
                 if over_cap(state["spent_usd"], len(futures), reserve, cap):
                     continue
+            if len(invalid_streak(events)) >= limit:
+                continue
             job = new_job(plan["name"], jobs_dir, namer)
             config_path = run_dir / "configs" / f"{job}.json"
             config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -872,9 +953,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--jobs-dir", type=Path, help="where Harbor writes trial results")
     parser.add_argument("--docker-wrapper", type=Path, default=WRAPPER)
     args = parser.parse_args(argv)
-    run(args.plan, run_dir=args.run_dir, dry_run=args.dry_run, retry_invalid=args.retry_invalid,
-        harbor=args.harbor, jobs_dir=args.jobs_dir, wrapper=args.docker_wrapper)
-    return 0
+    events = run(args.plan, run_dir=args.run_dir, dry_run=args.dry_run, retry_invalid=args.retry_invalid,
+                 harbor=args.harbor, jobs_dir=args.jobs_dir, wrapper=args.docker_wrapper)
+    return EXIT_INVALID_STREAK if events and events[-1].get("reason") == "invalid" else 0
 
 
 if __name__ == "__main__":

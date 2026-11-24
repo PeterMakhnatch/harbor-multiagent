@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -834,7 +835,8 @@ def test_dry_run_derives_and_prints_the_scripted_seats(tmp_path):
     assert dry.returncode == 0, dry.stderr
     lines = dry.stdout.splitlines()
     assert lines[1] == "scripted seats (oracle agent, no model, cost 0): set 0 p3"
-    assert sorted(line.split(" ", 1)[1] for line in lines[2:]) == [
+    assert lines[2] == "guards: stop after 6 invalid trials in a row; provider floors deepseek $1.00 (account balance)"
+    assert sorted(line.split(" ", 1)[1] for line in lines[3:]) == [
         f"set 0 instance 0 talk {DEEPSEEK}", f"set 0 instance 0 talk-liar {DEEPSEEK}"]
     unbuilt = scripted_plan([DEEPSEEK])
     unbuilt["task_sets"][0]["manifest"] = "missing/manifest.json"
@@ -945,3 +947,119 @@ def test_seat_assignments_list_models_for_the_seats_under_test(tmp_path):
     plan["seat_assignments"] = [[DEEPSEEK, OPENROUTER, DEEPSEEK]]
     path = commit_plan(wide, plan)
     assert "has 2 seats under test" in refusal(lambda: RUN.run(path, dry_run=True))
+
+
+def test_openrouter_balance_is_the_lower_of_account_and_key_limit(monkeypatch):
+    key = {"data": {"label": "x", "limit": 100, "usage": 99.15, "limit_remaining": 0.85}}
+    credits = {"data": {"total_credits": 130, "total_usage": 122.2}}
+    assert PRICING.parse_openrouter_key({"data": {"limit": None, "limit_remaining": None}}) is None
+    assert PRICING.parse_openrouter_key(key) == 0.85
+    for broken in ({}, {"data": {}}, {"data": {"limit": 100}}, {"data": {"limit": 100, "limit_remaining": "1"}}):
+        try:
+            PRICING.parse_openrouter_key(broken)
+        except ValueError as exc:
+            assert "OpenRouter key response" in str(exc)
+        else:
+            raise AssertionError(f"{broken} must be refused")
+    try:
+        PRICING.parse_openrouter_credits({"data": {"total_credits": 5}})
+    except ValueError as exc:
+        assert "total_usage" in str(exc)
+    else:
+        raise AssertionError("credits without total_usage must be refused")
+    assert PRICING.openrouter_balance(7.8, 0.85) == (0.85, "key limit (account $7.80, key limit left $0.85)")
+    assert PRICING.openrouter_balance(0.5, 3.0) == (0.5, "account balance (account $0.50, key limit left $3.00)")
+    assert PRICING.openrouter_balance(2.5, None) == (2.5, "account balance (account $2.50, no key limit)")
+    pages = {"https://openrouter.ai/api/v1/credits": credits, "https://openrouter.ai/api/v1/key": key}
+    seen = []
+
+    def fetch(url, headers):
+        seen.append((url, headers["Authorization"] == "Bearer or-token"))
+        return pages[url]
+
+    monkeypatch.setattr(RUN, "_fetch_json", fetch)
+    sources = RUN.HttpSources({"OPENROUTER_API_KEY": "or-token"})
+    balance = sources.balance("openrouter")
+    assert abs(balance.amount - 0.85) < 1e-12 and balance.detail.startswith("key limit (account $7.80")
+    assert sorted(seen) == [("https://openrouter.ai/api/v1/credits", True), ("https://openrouter.ai/api/v1/key", True)]
+    pages["https://openrouter.ai/api/v1/key"] = {"data": {"limit": None}}
+    assert sources.balance("openrouter").detail == "account balance (account $7.80, no key limit)"
+    pages["https://openrouter.ai/api/v1/key"] = {"error": {"code": 401}}
+    money, error = RUN.read_balance(sources, "openrouter", lambda _delay: None)
+    assert money is None and "no data.limit" in str(error)
+
+
+def plain_order(tmp: Path, plan: dict) -> list[dict]:
+    preview = init_repo(tmp)
+    task_tree(preview, plan["task_sets"][0]["instances"], plan["task_sets"][0]["arms"])
+    return RUN.order_of(plan, RUN.resolve_paths(plan, preview))
+
+
+def test_a_key_limit_below_the_floor_stops_and_says_so(tmp_path):
+    plan = plan_for([0, 1], ["silent"], [OPENROUTER], concurrency=1, env="modal", cap=1.0, reserve=0.01)
+    plan["budget"]["provider_floors"]["openrouter"] = 2.0
+    order = plain_order(tmp_path / "preview", plan)
+    behaviors = {cell["key"]: spec_for("ok", cost_usd=0.01) for cell in order}
+    detail = "key limit (account $7.80, key limit left $0.85)"
+    sources = Sources(catalog(), lambda _provider, n: RUN.Balance(7.8 if n == 1 else 0.85, detail))
+    events, _order, _path, _env = launch(tmp_path / "key", plan, behaviors, sources)
+    assert events[-1]["reason"] == "floor"
+    assert len([event for event in events if event["kind"] == "start"]) == 1
+    log = (tmp_path / "key" / "run" / "progress.log").read_text()
+    assert f"stop: openrouter balance $0.85 is below floor $2.00 (set by the {detail})" in log
+
+
+def test_invalid_streak_stops_new_starts_drains_and_resumes(tmp_path, monkeypatch):
+    plan = plan_for([0, 1, 2, 3], ["silent", "talk"], [DEEPSEEK], concurrency=2, cap=5.0, reserve=0.05)
+    plan["budget"]["max_invalid_streak"] = 3
+    order = plain_order(tmp_path / "preview", plan)
+    behaviors = {cell["key"]: spec_for("invalid") for cell in order}
+    events, order, path, env = launch(tmp_path / "streak", plan, behaviors, Sources({}, lambda *_args: 10.0))
+    assert_invariants(events, concurrency=2, cap=5.0, reserve=0.05)
+    assert events[-1]["reason"] == "invalid"
+    starts = [event["key"] for event in events if event["kind"] == "start"]
+    ends = [event for event in events if event["kind"] == "end"]
+    assert sorted(event["key"] for event in ends) == sorted(starts)
+    assert 3 <= len(starts) <= 4 < len(order)
+    assert all(not event["valid"] and event["problem"] == "boom" for event in ends)
+    run_dir = tmp_path / "streak" / "run"
+    log = (run_dir / "progress.log").read_text()
+    stops = [line for line in log.splitlines() if "invalid trials in a row" in line]
+    assert len(stops) == 1 and re.search(
+        r"stop: [34] invalid trials in a row \(last: boom; boom; boom\); draining in-flight jobs$", stops[0])
+    assert "stop invalid: spent" in log
+    saved = json.loads((run_dir / "state.json").read_text())
+    assert sorted(saved["finished"]) == sorted(starts)
+    assert all(saved["finished"][key]["attempts"][0]["problem"] == "boom" for key in starts)
+    control = tmp_path / "streak" / "control.json"
+    mapped = json.loads(control.read_text())
+    control.write_text(json.dumps({name: {**spec, "behavior": "ok", "exception": None}
+                                   for name, spec in mapped.items()}))
+    common = {"run_dir": run_dir, "jobs_dir": tmp_path / "streak" / "jobs", "harbor": tmp_path / "streak" / "harbor",
+              "wrapper": tmp_path / "streak" / "wrapper", "sources": Sources({}, lambda *_args: 10.0),
+              "base_env": env, "namer": lambda _n: f"{namer_box(tmp_path / 'streak'):06x}"}
+    resumed = RUN.run(path, **common)
+    assert resumed[-1]["reason"] == "done"
+    assert sorted(event["key"] for event in resumed if event["kind"] == "start") == sorted(
+        cell["key"] for cell in order if cell["key"] not in starts)
+    retried = RUN.run(path, retry_invalid=True, **common)
+    assert sorted(event["key"] for event in retried if event["kind"] == "start") == sorted(starts)
+    assert all(event["valid"] for event in retried if event["kind"] == "end")
+    monkeypatch.setattr(RUN, "run", lambda *_args, **_kw: [{"kind": "stop", "reason": "invalid"}])
+    assert RUN.main([str(path)]) == RUN.EXIT_INVALID_STREAK == 3
+    monkeypatch.setattr(RUN, "run", lambda *_args, **_kw: [{"kind": "stop", "reason": "floor"}])
+    assert RUN.main([str(path)]) == 0
+
+
+def test_max_invalid_streak_defaults_to_6_and_is_validated(tmp_path):
+    plan = plan_for([0], ["silent"], [DEEPSEEK])
+    blob = tmp_path / "plan.json"
+    blob.write_text(json.dumps(plan))
+    assert RUN.streak_of(RUN.load_plan(blob)) == 6
+    for bad in (0, -1, True, "6", 2.5):
+        blob.write_text(json.dumps({**plan, "budget": {**plan["budget"], "max_invalid_streak": bad}}))
+        assert "max_invalid_streak" in refusal(lambda: RUN.load_plan(blob))
+    blob.write_text(json.dumps({**plan, "budget": {**plan["budget"], "max_invalid_streak": 2}}))
+    assert RUN.streak_of(RUN.load_plan(blob)) == 2
+    assert RUN.guard_line(RUN.load_plan(blob)) == (
+        "guards: stop after 2 invalid trials in a row; provider floors deepseek $1.00 (account balance)")
