@@ -3,7 +3,8 @@
 TARGET is a ``run_wave.py`` run folder (``state.json``, ``progress.log``, ``configs/<job>.json``), a jobs
 folder, or one job folder. Every pass reads the files below, prints the wave's progress, spend, running
 trials with per-seat activity, stalls, errors and a reward summary of finished trials, and optionally
-writes the same status as JSON (``--json``) and sends one macOS notification per new alert (``--notify``).
+writes the same status as JSON (``--json``), an HTML dashboard with a timeline page per finished trial
+(``--html``, see ``dashboard.py``) and sends one macOS notification per new alert (``--notify``).
 Inputs are only read. Standard library only.
 
 What the host can see while a trial runs (fork Harbor, read 2026-11-24; Docker and Modal alike):
@@ -249,7 +250,7 @@ class Watcher:
         self.cap_usd = cap_usd
         self.notifier = notifier
         self.names = Names()
-        self.seen: set[str] = set()
+        self.seen: dict[str, float] = {}
         self.passes = 0
         self._cache: dict[tuple[str, str], tuple[tuple[int, int], Any]] = {}
         self._tasks: dict[str, tuple[str | None, str | None, dict[str, bool]]] = {}
@@ -285,7 +286,10 @@ class Watcher:
                 self.notifier(
                     "flotilla-watch", f"{len(notified) - NOTIFY_PER_PASS} more new alerts; see the monitor"
                 )
-        self.seen.update(a["key"] for a in new)
+        for alert in new:
+            self.seen[alert["key"]] = now
+        for alert in alerts:
+            alert["first_seen"] = self.seen[alert["key"]]
         self.passes += 1
         status["alerts"] = alerts
         status["new_alerts"] = [a["key"] for a in notified]
@@ -445,6 +449,7 @@ class Watcher:
         errors = self._cached("log", directory / "trial.log", read_log_errors) or {}
         return {
             "path": relative,
+            "directory": str(directory),
             "job": directory.parent.name,
             "trial": directory.name,
             "label": label,
@@ -563,6 +568,7 @@ class Watcher:
                 if t["exceptions"] or t["provider_errors"]
             ],
             "rewards": reward_summary(trials),
+            "finished": sorted(trials, key=lambda t: (t["finished_at"] or "", t["path"]), reverse=True),
         }
 
 
@@ -795,12 +801,16 @@ def _render_running(status: dict[str, Any]) -> list[str]:
     return lines
 
 
-def write_json(path: Path, status: dict[str, Any]) -> None:
-    """Replace the file atomically, so a reader never sees half a status."""
+def replace_text(path: Path, text: str) -> None:
+    """Replace the file atomically, so a reader never sees half of it."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(status, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
+    temporary.write_text(text, encoding="utf-8")
     temporary.replace(path)
+
+
+def write_json(path: Path, status: dict[str, Any]) -> None:
+    replace_text(path, json.dumps(status, indent=2, sort_keys=True, default=str) + "\n")
 
 
 def parser() -> argparse.ArgumentParser:
@@ -813,6 +823,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--interval", type=float, default=30.0, help="seconds between passes (default 30)")
     p.add_argument("--once", action="store_true", help="one pass, then exit")
     p.add_argument("--json", type=Path, metavar="PATH", help="write the status as JSON here every pass")
+    p.add_argument(
+        "--html",
+        type=Path,
+        metavar="DIR",
+        help="write DIR/index.html (a live dashboard) every pass and DIR/trials/<job>__<trial>.html once "
+        "per finished trial",
+    )
     p.add_argument("--notify", action="store_true", help="one macOS notification per new stall or error")
     p.add_argument(
         "--stall-seconds",
@@ -838,12 +855,19 @@ def main(argv: list[str] | None = None) -> int:
         cap_usd=args.cap_usd,
         notifier=notify if args.notify else None,
     )
+    dashboard = None
+    if args.html:
+        from flotilla_analysis.dashboard import Dashboard
+
+        dashboard = Dashboard(args.html, names=watcher.names, refresh_s=None if args.once else args.interval)
     clear = sys.stdout.isatty() and not args.once
     try:
         while True:
             status = watcher.poll()
             if args.json:
                 write_json(args.json, status)
+            if dashboard is not None:
+                dashboard.update(status)
             sys.stdout.write(("\033[H\033[2J" if clear else "") + render(status))
             sys.stdout.flush()
             if args.once:
