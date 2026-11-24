@@ -58,6 +58,13 @@ from harbor.environments.capabilities import (
     EnvironmentCapabilities,
     EnvironmentResourceCapabilities,
 )
+from harbor.environments.desktop_exec import (
+    posix_exec_files,
+    posix_staged_exec,
+    staged_exec_files,
+    windows_exec_files,
+    windows_staged_exec,
+)
 from harbor.environments.options import EnvironmentOptions
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import TaskOS
@@ -416,29 +423,77 @@ class CuaCloudEnvironment(BaseEnvironment):
         user: str | int | None = None,
     ) -> ExecResult:
         timeout = self._exec_timeout(timeout_sec)
-        merged_env = self._merge_env(env)
+        run = self._exec_guest if timeout <= _GUEST_EXEC_CAP_SEC else self._exec_async
+        command_env = {
+            key: value
+            for key, value in (self._merge_env(env) or {}).items()
+            if _ENV_NAME_RE.fullmatch(key)
+        }
         user = self._resolve_user(user)
 
+        async def run_guest(body: str) -> ExecResult:
+            return await self._exec_guest(body, timeout=timeout)
+
         if self._platform == "windows":
-            body = self._compose_windows_command(command, cwd=cwd, env=merged_env)
+            body = self._compose_windows_command(command, cwd=cwd)
             if user is not None:
                 self.logger.debug(
                     "cua-cloud Windows ignores exec user=%r; commands run as "
                     "the sandbox desktop user.",
                     user,
                 )
+            if command_env:
+                async with staged_exec_files(
+                    run_guest,
+                    self._upload_guest_bytes,
+                    windows_exec_files(body, command_env),
+                    windows=True,
+                ) as directory:
+                    return await run(windows_staged_exec(directory), timeout=timeout)
         elif self._task_container:
             body = self._compose_docker_exec(
-                command, container=self._task_container, cwd=cwd, env=merged_env
+                command, container=self._task_container, cwd=cwd, env=command_env
             )
+            if command_env:
+                directory = f"/tmp/harbor-env-{uuid.uuid4().hex}"
+                result = await self._exec_guest(
+                    f"mkdir -m 700 {directory}", timeout=timeout
+                )
+                if result.return_code != 0:
+                    return result
+                path = f"{directory}/env.sh"
+                exports = shlex.join(
+                    [
+                        "export",
+                        *(f"{key}={value}" for key, value in command_env.items()),
+                    ]
+                )
+                try:
+                    await self._upload_guest_bytes((exports + "\n").encode(), path)
+                    return await run(f". {path} && {body}", timeout=timeout)
+                finally:
+                    await self._exec_guest(f"rm -rf {directory}", timeout=timeout)
         else:
-            body = self._compose_posix_command(
-                command, cwd=cwd, env=merged_env, user=user
-            )
+            if cwd:
+                command = f"cd {shlex.quote(cwd)} && {command}"
+            password = self._sudo_password if user is not None else ""
+            if command_env or password:
+                async with staged_exec_files(
+                    run_guest,
+                    self._upload_guest_bytes,
+                    posix_exec_files(command, command_env, password),
+                ) as directory:
+                    body = posix_staged_exec(
+                        directory, user=user, login=True, askpass=bool(password)
+                    )
+                    return await run(body, timeout=timeout)
 
-        if timeout <= _GUEST_EXEC_CAP_SEC:
-            return await self._exec_guest(body, timeout=timeout)
-        return await self._exec_async(body, timeout=timeout)
+            body = f"bash -lc {shlex.quote(command)}"
+            if user is not None:
+                as_user = f" -u {shlex.quote(str(user))}" if str(user) != "root" else ""
+                body = f"sudo{as_user} -- {body}"
+
+        return await run(body, timeout=timeout)
 
     @override
     async def upload_file(self, source_path: Path | str, target_path: str) -> None:
@@ -1025,7 +1080,7 @@ class CuaCloudEnvironment(BaseEnvironment):
         *,
         container: str,
         cwd: str | None,
-        env: dict[str, str] | None,
+        env: dict[str, str],
     ) -> str:
         """Wrap a command to run inside the task Docker container via docker exec.
 
@@ -1044,11 +1099,10 @@ class CuaCloudEnvironment(BaseEnvironment):
             "UV_BREAK_SYSTEM_PACKAGES": "1",
             "DEBIAN_FRONTEND": "noninteractive",
         }
-        merged = {**defaults, **(env or {})}
-        docker_flags: list[str] = []
-        for k, v in merged.items():
-            if _ENV_NAME_RE.match(k):
-                docker_flags.append(f"-e {k}={shlex.quote(str(v))}")
+        docker_flags = [
+            f"-e {key}={value}" for key, value in defaults.items() if key not in env
+        ]
+        docker_flags.extend(f"-e {key}" for key in env)
         workdir = cwd or self.task_env_config.workdir or "/app"
         docker_flags.append(f"-w {shlex.quote(workdir)}")
         flags_str = " ".join(docker_flags)
@@ -1057,62 +1111,17 @@ class CuaCloudEnvironment(BaseEnvironment):
             f"bash -c {shlex.quote(command)}"
         )
 
-    def _compose_posix_command(
-        self,
-        command: str,
-        *,
-        cwd: str | None,
-        env: dict[str, str] | None,
-        user: str | int | None,
-    ) -> str:
-        parts: list[str] = []
-        if env:
-            exports = " ".join(
-                f"{name}={shlex.quote(str(value))}"
-                for name, value in env.items()
-                if _ENV_NAME_RE.match(name)
-            )
-            if exports:
-                parts.append(f"export {exports};")
-        if cwd:
-            parts.append(f"cd {shlex.quote(cwd)} &&")
-        parts.append(command)
-        body = " ".join(parts)
-        if user is None:
-            return f"bash -lc {shlex.quote(body)}"
-        sudo_parts = ["sudo"]
-        if self._sudo_password:
-            sudo_parts = ["sudo", "-S", "-p", "''"]
-        if str(user) != "root":
-            sudo_parts.extend(["-u", shlex.quote(str(user))])
-        sudo_parts.extend(["--", "bash", "-lc", shlex.quote(body)])
-        sudo_command = " ".join(sudo_parts)
-        if self._sudo_password:
-            password = shlex.quote(self._sudo_password)
-            return f"printf '%s\\n' {password} | {sudo_command}"
-        return sudo_command
-
     def _compose_windows_command(
         self,
         command: str,
         *,
         cwd: str | None,
-        env: dict[str, str] | None,
     ) -> str:
         parts: list[str] = []
         if cwd:
             parts.append(
                 f"cd /d {quote_shell_arg(self._remote_path(cwd), TaskOS.WINDOWS)}"
             )
-        if env:
-            for name, value in env.items():
-                value_str = str(value)
-                if (
-                    _ENV_NAME_RE.match(name)
-                    and "\n" not in value_str
-                    and "\r" not in value_str
-                ):
-                    parts.append(f'set "{name}={value_str}"')
         parts.append(command)
         return " && ".join(parts)
 

@@ -426,11 +426,37 @@ def test_run_script_switches_to_named_and_numeric_users():
         "whoami", job_dir="/j", cwd=None, env=None, user=1000
     )
 
-    assert (
-        'su -s "$shell" -- agent -c \'export PATH=/opt/agent/bin:/usr/bin; '
-        "export HOME=/home/agent; whoami'" in named
-    )
+    runner = next(line for line in named.splitlines() if line.startswith("exec su "))
+    assert 'su -s "$shell" -- agent -c ' in runner
+    assert "/home/agent" not in runner and "/opt/agent/bin" not in runner
     assert 'su -s "$shell" -- "$(id -nu 1000 2>/dev/null ||' in numeric
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Exec scripts require a POSIX shell")
+def test_run_script_restores_home_and_path_without_putting_values_in_su_argv(temp_dir):
+    binary = temp_dir / "su"
+    args = temp_dir / "su-argv"
+    binary.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$@\" > {shlex.quote(str(args))}\n"
+        "shell=$2; shift 4\n"
+        "export HOME=/reset-home PATH=/usr/bin:/bin\n"
+        'exec "$shell" "$@"\n'
+    )
+    binary.chmod(0o700)
+    home = "/synthetic/home with spaces"
+    path = f"{temp_dir}:/synthetic/bin:/usr/bin:/bin"
+    script = ACASandboxEnvironment._run_script(
+        """printf '%s\\n%s\\n' "$HOME" "$PATH" """,
+        job_dir=str(temp_dir),
+        cwd=None,
+        env={"HOME": home, "PATH": path},
+        user="agent",
+    )
+    subprocess.run(["sh", "-c", script], check=True, timeout=5)
+    assert (temp_dir / "exit_code").read_text().strip() == "0"
+    assert (temp_dir / "stdout").read_text() == f"{home}\n{path}\n"
+    assert home not in args.read_text() and path not in args.read_text()
 
 
 async def test_exec_returns_command_output(temp_dir, monkeypatch):

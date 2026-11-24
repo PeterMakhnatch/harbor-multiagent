@@ -1,0 +1,105 @@
+{
+  "schema": "harbor.seat-seal.worker-packet/v1",
+  "plan": "sha256:33fe0bf2e74b4616b4d32c59ebfa6840e80c0f6f915bdb483a4c7fd941b7067c",
+  "worker": 2,
+  "claims": [
+    [
+      "sb-29004322ddeded78",
+      "sha256:1925239d433178ece779e0aaddbd4d9ff8f9f5f2d8197a4e8193f77ce024fb39"
+    ],
+    [
+      "sb-29004322ddeded78",
+      "sha256:e7363de5f53ca1b2cf146866a3b3de83dc96d8bda9504d8e6fbb434922a0ddaf"
+    ],
+    [
+      "sb-41f567a5afc2ea56",
+      "sha256:49271a3bff4b3971e6c9cbc97b80cf77205c658d40232617dc4c65caecdbd8cb"
+    ],
+    [
+      "sb-41f567a5afc2ea56",
+      "sha256:7860fd6766287ef4161e078f215d48d048f547827fb5c21daf8118c3b6e921ca"
+    ],
+    [
+      "sb-4555676f89fe12e6",
+      "sha256:863fbe0c2eedecd6acea0cbd9ec945f91d4b3b663a593e3446de19e4d9bcd935"
+    ],
+    [
+      "sb-4555676f89fe12e6",
+      "sha256:e7ff0d02eaecf980707a79240238bce49991f1dbd613e78c829ae2644e796047"
+    ],
+    [
+      "sb-9c41326c14efcfa6",
+      "sha256:0b6bccccef89497dc104885b43dc4aa30ed2e31c7d718598391756cdcc4edbb4"
+    ],
+    [
+      "sb-9c41326c14efcfa6",
+      "sha256:ebe7378f03b982f1e27d5cd2d660c71e21266f6731c56a54861e45561c029ce9"
+    ],
+    [
+      "sb-be541ea39848f36d",
+      "sha256:9b75c6bd9aaa58ef1fefeebfe36ded57d4f873ab9fb809b07eeb85aa244d8e21"
+    ],
+    [
+      "sb-be541ea39848f36d",
+      "sha256:c9c3871ae820d313410f464833fd62cb0862470da4301cbd4fb044b72fe58574"
+    ],
+    [
+      "sb-da882eb65265e386",
+      "sha256:cd3b60249551331cf1e23a907a0b3427f2af3d714faf4a940d5ad37bb83ac58d"
+    ],
+    [
+      "sb-da882eb65265e386",
+      "sha256:e9dcb8635d528f23e8503c6113bdebed94964876967cebd8be6c445c8e5968c8"
+    ]
+  ],
+  "rows": [
+    {
+      "ticket": "sb-29004322ddeded78",
+      "status": "graded",
+      "grade": 0,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:e7363de5f53ca1b2cf146866a3b3de83dc96d8bda9504d8e6fbb434922a0ddaf"
+    },
+    {
+      "ticket": "sb-41f567a5afc2ea56",
+      "status": "graded",
+      "grade": 1,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:49271a3bff4b3971e6c9cbc97b80cf77205c658d40232617dc4c65caecdbd8cb"
+    },
+    {
+      "ticket": "sb-4555676f89fe12e6",
+      "status": "graded",
+      "grade": 0,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:863fbe0c2eedecd6acea0cbd9ec945f91d4b3b663a593e3446de19e4d9bcd935"
+    },
+    {
+      "ticket": "sb-9c41326c14efcfa6",
+      "status": "graded",
+      "grade": 0,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:ebe7378f03b982f1e27d5cd2d660c71e21266f6731c56a54861e45561c029ce9"
+    },
+    {
+      "ticket": "sb-be541ea39848f36d",
+      "status": "graded",
+      "grade": 0,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:c9c3871ae820d313410f464833fd62cb0862470da4301cbd4fb044b72fe58574"
+    },
+    {
+      "ticket": "sb-da882eb65265e386",
+      "status": "graded",
+      "grade": 0,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:e9dcb8635d528f23e8503c6113bdebed94964876967cebd8be6c445c8e5968c8"
+    }
+  ]
+}

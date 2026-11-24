@@ -13,13 +13,13 @@ container still up.
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from typing import Any, override
+from uuid import UUID
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.factory import AgentFactory
-from harbor.agents.installed.base import NonZeroAgentExitCodeError
 from harbor.environments.seat import SeatEnvironment
 from harbor.models.agent.context import AgentContext
 from harbor.models.agent.name import AgentName
@@ -31,12 +31,19 @@ from harbor.models.task.verifier_mode import (
 )
 from harbor.models.trial.config import AgentConfig, Participant, TrialConfig
 from harbor.models.trial.paths import TrialPaths
-from harbor.models.trial.result import ExceptionInfo, SeatResult, TimingInfo
+from harbor.models.trial.result import (
+    ExceptionInfo,
+    SeatExecutionDisposition,
+    SeatResult,
+    TimingInfo,
+)
 from harbor.tasks.client import TaskDownloadResult
 from harbor.trial.errors import AgentSetupTimeoutError, AgentTimeoutError
 from harbor.trial.hooks import TrialEvent
 from harbor.trial.network_policy import resolve_trial_network_plan
+from harbor.trial.seat_events import SeatEventRecorder, SeatEventStream
 from harbor.trial.single_step import SingleStepTrial
+from harbor.trial.sync_trajectory import sync_trajectory
 from harbor.utils.trajectory_utils import load_model_usage_from_trajectory
 
 
@@ -54,6 +61,10 @@ class Seat:
     result: SeatResult
     setup_timeout_sec: float
     environment: SeatEnvironment = field(init=False)
+
+    @property
+    def stop_requested(self) -> bool:
+        return self.result.execution_disposition == "stop_requested"
 
 
 def check_launch(config: TrialConfig, task: Task) -> None:
@@ -108,6 +119,8 @@ class SeatsTrial(SingleStepTrial):
     """SingleStepTrial with one agent per seat, all in the one environment."""
 
     seats: list[Seat]
+    _seat_events: SeatEventRecorder | None = None
+    _seat_events_opened: bool = False
 
     def __init__(
         self,
@@ -115,12 +128,40 @@ class SeatsTrial(SingleStepTrial):
         *,
         _task: Task | None = None,
         _task_download_result: TaskDownloadResult,
+        _trial_id: UUID | None = None,
     ):
         if _task is not None:
             check_launch(config, _task)
         super().__init__(
-            config, _task=_task, _task_download_result=_task_download_result
+            config,
+            _task=_task,
+            _task_download_result=_task_download_result,
+            _trial_id=_trial_id,
         )
+        self._seat_error_on_trial = False
+
+    @contextlib.contextmanager
+    def seat_events(self) -> Iterator[SeatEventStream]:
+        """Opt in, before the trial runs, to one in-memory stream of the seats'
+        native play lifecycle. The stream yields its open row at once, a
+        run_enter row as a seat's agent run starts and a play_end row with the
+        seat's execution_disposition when its play ends, then a closed row
+        once this context exits. Exiting early stops recording; it never
+        changes the trial or a seat. A trial opens at most one stream."""
+        if self._seat_events_opened:
+            raise RuntimeError("seat_events() opens at most once per trial")
+        if self._result is not None:
+            raise RuntimeError("seat_events() must open before the trial runs")
+        recorder = SeatEventRecorder(
+            self._id, [(seat.name, seat.under_test) for seat in self.seats]
+        )
+        self._seat_events_opened = True
+        self._seat_events = recorder
+        try:
+            yield SeatEventStream(recorder)
+        finally:
+            self._seat_events = None
+            recorder.close()
 
     @override
     def _init_agent(self) -> None:
@@ -206,15 +247,19 @@ class SeatsTrial(SingleStepTrial):
         for seat in self.seats:
             self._validate_agent_capabilities(seat.agent, seat.participant)
         await self._setup_agent_environment()
-        await self.agent_environment.run_healthcheck()
         setup = TimingInfo(started_at=self._now())
         self.result.agent_setup = setup
         try:
+            await self.agent_environment.run_healthcheck()
+            await self.agent_environment.wait_for_services(
+                [seat.name for seat in self.seats]
+            )
             async with _seat_tasks() as group:
                 for seat in self.seats:
                     group.create_task(self._setup_seat(seat))
         finally:
             setup.finished_at = self._now()
+            self._write_stream_handle()
         for seat in self.seats:
             seat.result.agent_info = seat.agent.to_agent_info()
         self.result.agent_info = self.agent.to_agent_info()
@@ -233,10 +278,10 @@ class SeatsTrial(SingleStepTrial):
                 f"Seat {seat.name!r}: agent setup timed out after "
                 f"{seat.setup_timeout_sec} seconds"
             )
-            seat.result.exception_info = ExceptionInfo.from_exception(timeout)
+            seat.result.exception_info = self._exception_info(timeout)
             raise timeout from exc
         except Exception as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+            seat.result.exception_info = self._exception_info(exc)
             raise
         finally:
             setup.finished_at = self._now()
@@ -296,53 +341,74 @@ class SeatsTrial(SingleStepTrial):
         """Start every seat at once. Play ends when every agent under test has
         ended or the agent timeout ([agent] timeout_sec) runs out; the runs
         still going are then cancelled, as Trial cancels a single agent at its
-        timeout. Nothing in the containers is killed, and they stay up. A seat
-        error other than its agent exiting non-zero aborts play and fails the
-        trial, as it fails a single-agent trial."""
+        timeout, and their processes in the seat are killed so nothing acts
+        during collection and verification. The containers stay up. A seat's
+        error is recorded on the seat and does not stop the others; the trial
+        then grades by its error policy, as a single-agent trial does."""
         timeout_sec = self._agent_timeout_sec
-        async with _seat_tasks() as group:
-            tasks = {
-                seat.name: group.create_task(self._play_seat(seat))
-                for seat in self.seats
-            }
+        if (recorder := self._seat_events) is not None:
+            recorder.begin_play()
+        tasks = {
+            seat.name: asyncio.create_task(self._play_seat(seat)) for seat in self.seats
+        }
+        try:
             under_test = [tasks[seat.name] for seat in self.seats if seat.under_test]
-            _, timed_out = await asyncio.wait(under_test, timeout=timeout_sec)
+            _, pending = await asyncio.wait(under_test, timeout=timeout_sec)
             for seat in self.seats:
-                if tasks[seat.name].done():
-                    continue
-                if timed_out:
-                    seat.result.exception_info = ExceptionInfo(
-                        exception_type=AgentTimeoutError.__name__,
-                        exception_message=(
+                if pending and seat.under_test and not tasks[seat.name].done():
+                    seat.result.exception_info = self._exception_info(
+                        AgentTimeoutError(
                             f"Agent execution timed out after {timeout_sec} seconds"
-                        ),
-                        exception_traceback="",
-                        occurred_at=self._now(),
+                        )
                     )
-                tasks[seat.name].cancel()
+        finally:
+            for seat in self.seats:
+                if not tasks[seat.name].done():
+                    seat.result.execution_disposition = "stop_requested"
+                    tasks[seat.name].cancel()
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+        for seat in self.seats:
+            if seat.stop_requested:
+                await seat.environment.kill_exec_processes()
 
     async def _play_seat(self, seat: Seat) -> None:
         """Mirrors Trial._run_agent_phase for one seat, without a timeout of
-        its own."""
+        its own. An error raised while the trial stops the seat is the
+        cancellation's, not the seat's."""
         context = AgentContext()
         execution = TimingInfo(started_at=self._now())
         seat.result.agent_result = context
         seat.result.agent_execution = execution
+        disposition: SeatExecutionDisposition | None = None
         try:
             with seat.environment.scoped_exec_env(seat.agent.extra_env):
                 with self._log_context("agent", seat.environment):
-                    await seat.agent.run(
-                        instruction=seat.instruction,
-                        environment=seat.environment,
-                        context=context,
-                    )
-        except NonZeroAgentExitCodeError as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
-        except Exception as exc:
-            seat.result.exception_info = ExceptionInfo.from_exception(exc)
+                    async with sync_trajectory(
+                        seat.environment, seat.agent, seat.paths.agent_dir
+                    ):
+                        if (recorder := self._seat_events) is not None:
+                            recorder.run_enter(seat.name)
+                        await seat.agent.run(
+                            instruction=seat.instruction,
+                            environment=seat.environment,
+                            context=context,
+                        )
+            disposition = "returned"
+        except asyncio.CancelledError:
+            disposition = "cancelled"
             raise
+        except Exception as exc:
+            if seat.stop_requested:
+                seat.logger.warning(f"Seat {seat.name!r} failed while stopping: {exc}")
+            else:
+                seat.result.exception_info = self._exception_info(exc)
+                disposition = "raised"
         finally:
             execution.finished_at = self._now()
+            if not seat.stop_requested:
+                seat.result.execution_disposition = disposition
+            if (recorder := self._seat_events) is not None:
+                recorder.play_end(seat.name, seat.result.execution_disposition)
 
     async def _collect_seats(self) -> None:
         """Mirrors Trial._sync_agent_output for every seat, under test or not."""
@@ -386,24 +452,46 @@ class SeatsTrial(SingleStepTrial):
             )
 
     def _record_seat_errors(self) -> None:
-        """Put the first seat's error on the trial, as SingleStepTrial._run_agent
-        records an agent's timeout or non-zero exit and still verifies. Every
-        seat keeps its own in seat_results. The message names the seat, and is
-        also written to the trial's exception.txt as Trial writes its own."""
+        """Put a seat's error on the trial, as SingleStepTrial._run_agent
+        records an agent's error and then grades by its policy: the first one
+        whose policy skips grading, else the first one. Every seat keeps its
+        own in seat_results. The message names the seat, and is also written
+        to the trial's exception.txt as Trial writes its own."""
         if self.result.exception_info is not None:
             return
-        for seat in self.seats:
-            info = seat.result.exception_info
-            if info is None:
-                continue
-            message = f"Seat {seat.name!r}: {info.exception_message}"
-            self.result.exception_info = info.model_copy(
-                update={"exception_message": message}
-            )
-            self.paths.exception_message_path.write_text(
-                f"{message}\n{info.exception_traceback}"
-            )
+        errors = [
+            (seat, seat.result.exception_info)
+            for seat in self.seats
+            if seat.result.exception_info is not None
+        ]
+        if not errors:
             return
+        seat, info = next(
+            ((seat, info) for seat, info in errors if not info.policy.should_grade),
+            errors[0],
+        )
+        message = f"Seat {seat.name!r}: {info.exception_message}"
+        self.result.exception_info = info.model_copy(
+            update={"exception_message": message}
+        )
+        self.paths.exception_message_path.write_text(
+            f"{message}\n{info.exception_traceback}"
+        )
+        self._seat_error_on_trial = True
+
+    @override
+    def _record_exception(self, exc: BaseException) -> None:
+        """A trial error that follows a seat's replaces the seat's copy on the
+        trial; the seat's own stays in seat_results."""
+        if self._seat_error_on_trial:
+            self._seat_error_on_trial = False
+            self.result.exception_info = None
+        super()._record_exception(exc)
+
+    def _exception_info(self, exc: BaseException) -> ExceptionInfo:
+        return ExceptionInfo.from_exception(
+            exc, override_error_policy=self.config.override_error_policy
+        )
 
     @override
     def _secrets_to_scrub(

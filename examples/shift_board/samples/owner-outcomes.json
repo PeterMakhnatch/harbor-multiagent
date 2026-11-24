@@ -1,0 +1,466 @@
+{
+  "schema": "harbor.shift-board.owner-qualification/v1",
+  "question_registration": {
+    "commit": "73daf766a8be6aed7bad4020aa60785e97bdfd9c",
+    "file": "owner-qualification-predictions.json",
+    "sha256": "f9d17ad6f45ea5f1df9d474d4dc18cf4a80527974516475d930639b5b271165c"
+  },
+  "unit": "first native trial per registered cell",
+  "evidence": "Genuine Harbor Docker teams with deterministic external decision owners, each driving a separate seat. Not LLM trials. Unknown or missing is never credited as a decision.",
+  "task": {
+    "name": "harbor/shift-board",
+    "digest": "sha256:c2bd100c5bfb4b69887e338947b370fa16413ea0f51cf70f34934e2d7c8fd289",
+    "checksum": "648b6de6ebf27da2404274c46a286f1ec15e49ea0f91bdb11307d79e4fe738cd"
+  },
+  "manifest_sha256": {
+    "inspect-stale-control": "2720f91e55c9e960b546ded33d9f62b4ee8b425629d432f3dd195bf7685bdf13",
+    "recheck-control": "6d33b503dabe1f859b139ff5e2738fda1fa5d6072c2335879aebedb865fde680",
+    "stop-control": "4e1519168ccd45f77bf02d958aa4d47f64f357398b4029a456bf61f20328ae8a",
+    "disconnected-control": "24822309a9fe1e571ea7708e240e0ed98689b3f375143896a47f5569a8c8403c"
+  },
+  "completed_controls": {
+    "issued": 12,
+    "usable": 12,
+    "unique_native_ids": 12,
+    "decision_calls": 46,
+    "requested_prediction_fields": 144,
+    "matched_prediction_fields": 144,
+    "model_calls": 0,
+    "self_declared_served_model_values": [
+      null
+    ],
+    "cells": [
+      {
+        "policy": "inspect-stale-control",
+        "fixture": "planner-fit",
+        "rule": "observe",
+        "ticket": "sb-096310825bd35a63",
+        "native_id": "00ec286d-9e51-43df-a504-fa79fe59d689",
+        "observation": {
+          "incumbent_correct": true,
+          "stale_attempts": 1,
+          "stale_refusals": 0,
+          "first_stale_current_returned": true,
+          "final_action": "publish",
+          "final_correct": false,
+          "reward": 0,
+          "observed_change": "damage"
+        },
+        "dispatcher": {
+          "turns": 3,
+          "reads": 1,
+          "conflicts": 0,
+          "terminal": "publish"
+        },
+        "actions": [
+          "prepare",
+          "read",
+          "publish"
+        ],
+        "world_terminal": "publish",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "inspect-stale-control",
+        "fixture": "dispatcher-fit",
+        "rule": "guard",
+        "ticket": "sb-1af1e8f9d6c5040d",
+        "native_id": "fc3d9ff5-a748-43c9-9c1a-12852695a9a4",
+        "observation": {
+          "incumbent_correct": false,
+          "stale_attempts": 1,
+          "stale_refusals": 1,
+          "first_stale_current_returned": true,
+          "final_action": "publish",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": "repair"
+        },
+        "dispatcher": {
+          "turns": 4,
+          "reads": 1,
+          "conflicts": 1,
+          "terminal": "publish"
+        },
+        "actions": [
+          "prepare",
+          "read",
+          "publish",
+          "publish"
+        ],
+        "world_terminal": "publish",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "inspect-stale-control",
+        "fixture": "planner-fit",
+        "rule": "guard",
+        "ticket": "sb-bda4fb1ea9a83cae",
+        "native_id": "491de25a-b3a6-49da-baac-d464292d8398",
+        "observation": {
+          "incumbent_correct": true,
+          "stale_attempts": 1,
+          "stale_refusals": 1,
+          "first_stale_current_returned": true,
+          "final_action": "leave",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": "unchanged"
+        },
+        "dispatcher": {
+          "turns": 4,
+          "reads": 1,
+          "conflicts": 1,
+          "terminal": "leave"
+        },
+        "actions": [
+          "prepare",
+          "read",
+          "publish",
+          "leave"
+        ],
+        "world_terminal": "leave",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "inspect-stale-control",
+        "fixture": "dispatcher-fit",
+        "rule": "observe",
+        "ticket": "sb-63b96c52a0e6a12b",
+        "native_id": "1da24279-f6b1-4e9c-a5fa-d7f33cc7f1da",
+        "observation": {
+          "incumbent_correct": false,
+          "stale_attempts": 1,
+          "stale_refusals": 0,
+          "first_stale_current_returned": true,
+          "final_action": "publish",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": "repair"
+        },
+        "dispatcher": {
+          "turns": 3,
+          "reads": 1,
+          "conflicts": 0,
+          "terminal": "publish"
+        },
+        "actions": [
+          "prepare",
+          "read",
+          "publish"
+        ],
+        "world_terminal": "publish",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "recheck-control",
+        "fixture": "planner-fit",
+        "rule": "observe",
+        "ticket": "sb-e7c6545ac64ed46f",
+        "native_id": "669b0d4e-b2f0-4acb-94d5-163f15e2fe7a",
+        "observation": {
+          "incumbent_correct": true,
+          "stale_attempts": 1,
+          "stale_refusals": 0,
+          "first_stale_current_returned": false,
+          "final_action": "publish",
+          "final_correct": false,
+          "reward": 0,
+          "observed_change": "damage"
+        },
+        "dispatcher": {
+          "turns": 2,
+          "reads": 0,
+          "conflicts": 0,
+          "terminal": "publish"
+        },
+        "actions": [
+          "prepare",
+          "publish"
+        ],
+        "world_terminal": "publish",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "recheck-control",
+        "fixture": "planner-fit",
+        "rule": "guard",
+        "ticket": "sb-18c5c89566e214b6",
+        "native_id": "0f02dc48-5d71-4e58-a340-c67a0acc58e1",
+        "observation": {
+          "incumbent_correct": true,
+          "stale_attempts": 1,
+          "stale_refusals": 1,
+          "first_stale_current_returned": false,
+          "final_action": "leave",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": "unchanged"
+        },
+        "dispatcher": {
+          "turns": 4,
+          "reads": 1,
+          "conflicts": 1,
+          "terminal": "leave"
+        },
+        "actions": [
+          "prepare",
+          "publish",
+          "read",
+          "leave"
+        ],
+        "world_terminal": "leave",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "recheck-control",
+        "fixture": "dispatcher-fit",
+        "rule": "observe",
+        "ticket": "sb-aa313b5133166cca",
+        "native_id": "42497edc-2e89-4017-9185-d30eea32907c",
+        "observation": {
+          "incumbent_correct": false,
+          "stale_attempts": 1,
+          "stale_refusals": 0,
+          "first_stale_current_returned": false,
+          "final_action": "publish",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": "repair"
+        },
+        "dispatcher": {
+          "turns": 2,
+          "reads": 0,
+          "conflicts": 0,
+          "terminal": "publish"
+        },
+        "actions": [
+          "prepare",
+          "publish"
+        ],
+        "world_terminal": "publish",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "recheck-control",
+        "fixture": "dispatcher-fit",
+        "rule": "guard",
+        "ticket": "sb-4129121f2d1a0294",
+        "native_id": "73f0a10e-d2cb-440d-9fc6-7a81eebeeb24",
+        "observation": {
+          "incumbent_correct": false,
+          "stale_attempts": 1,
+          "stale_refusals": 1,
+          "first_stale_current_returned": false,
+          "final_action": "publish",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": "repair"
+        },
+        "dispatcher": {
+          "turns": 4,
+          "reads": 1,
+          "conflicts": 1,
+          "terminal": "publish"
+        },
+        "actions": [
+          "prepare",
+          "publish",
+          "read",
+          "publish"
+        ],
+        "world_terminal": "publish",
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "stop-control",
+        "fixture": "dispatcher-fit",
+        "rule": "guard",
+        "ticket": "sb-620d1a550c9df7b9",
+        "native_id": "f74fe1a4-45e1-4b5e-8e8e-d1b3753cc055",
+        "observation": {
+          "incumbent_correct": false,
+          "stale_attempts": 0,
+          "stale_refusals": 0,
+          "first_stale_current_returned": null,
+          "final_action": "none",
+          "final_correct": false,
+          "reward": 0,
+          "observed_change": null
+        },
+        "dispatcher": {
+          "turns": 2,
+          "reads": 0,
+          "conflicts": 0,
+          "terminal": "stop"
+        },
+        "actions": [
+          "prepare",
+          "stop"
+        ],
+        "world_terminal": null,
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "stop-control",
+        "fixture": "dispatcher-fit",
+        "rule": "observe",
+        "ticket": "sb-ffe9757f949dde04",
+        "native_id": "24584166-543d-4ec3-a98f-bb3b30cef2a4",
+        "observation": {
+          "incumbent_correct": false,
+          "stale_attempts": 0,
+          "stale_refusals": 0,
+          "first_stale_current_returned": null,
+          "final_action": "none",
+          "final_correct": false,
+          "reward": 0,
+          "observed_change": null
+        },
+        "dispatcher": {
+          "turns": 2,
+          "reads": 0,
+          "conflicts": 0,
+          "terminal": "stop"
+        },
+        "actions": [
+          "prepare",
+          "stop"
+        ],
+        "world_terminal": null,
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "stop-control",
+        "fixture": "planner-fit",
+        "rule": "guard",
+        "ticket": "sb-58f1b77559da7175",
+        "native_id": "0e1917d3-6d53-4a9b-85db-d6bf27d72d43",
+        "observation": {
+          "incumbent_correct": true,
+          "stale_attempts": 0,
+          "stale_refusals": 0,
+          "first_stale_current_returned": null,
+          "final_action": "none",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": null
+        },
+        "dispatcher": {
+          "turns": 2,
+          "reads": 0,
+          "conflicts": 0,
+          "terminal": "stop"
+        },
+        "actions": [
+          "prepare",
+          "stop"
+        ],
+        "world_terminal": null,
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      },
+      {
+        "policy": "stop-control",
+        "fixture": "planner-fit",
+        "rule": "observe",
+        "ticket": "sb-cb3e9adaf4d36071",
+        "native_id": "34bffce7-1126-4ee6-8790-5dec0774cf88",
+        "observation": {
+          "incumbent_correct": true,
+          "stale_attempts": 0,
+          "stale_refusals": 0,
+          "first_stale_current_returned": null,
+          "final_action": "none",
+          "final_correct": true,
+          "reward": 1,
+          "observed_change": null
+        },
+        "dispatcher": {
+          "turns": 2,
+          "reads": 0,
+          "conflicts": 0,
+          "terminal": "stop"
+        },
+        "actions": [
+          "prepare",
+          "stop"
+        ],
+        "world_terminal": null,
+        "owner_evidence": {
+          "planner": "matched",
+          "dispatcher": "matched"
+        }
+      }
+    ]
+  },
+  "disconnected_control": {
+    "registered": 4,
+    "issued": 1,
+    "unissued": 3,
+    "ticket": "sb-1efb047ce8d751d7",
+    "native_id": "08d7ecd2-f136-44d7-b8b4-266264b01163",
+    "native_trial_error": "OwnerFailure",
+    "dispatcher_error": "OwnerFailure",
+    "dispatcher_receipt_failure": "owner_exit_nonzero",
+    "accepted_owner_kinds": [
+      "prepare"
+    ],
+    "native_verifier_standing_reward": 0,
+    "cold_usable": 0,
+    "cold_status": "invalid"
+  },
+  "evidence_qualification": {
+    "matched_native_seats": 24,
+    "typed_receipt_perturbations_rejected": 2082,
+    "self_reported_stops_without_world_event": 4,
+    "missing_stop_receipts_yield_unknown": 4,
+    "extra_native_read_mismatches": 12
+  },
+  "first_attempt_qualification": {
+    "concurrent_worker_processes": 18,
+    "eligible_after_one_started": 7,
+    "distinct_claims": 7,
+    "exhausted_workers": 11,
+    "old_partial_reissued": 0,
+    "package_mutation_refused_before_consuming_ticket": true,
+    "original_package_restored_another_ticket_claimed": true,
+    "claim_is_not_a_native_result": true
+  },
+  "exclusions": [
+    "One smoke run on a separate seed before the registered controls is excluded. No new model request; no inference about real model performance."
+  ],
+  "paid_usd": 0
+}

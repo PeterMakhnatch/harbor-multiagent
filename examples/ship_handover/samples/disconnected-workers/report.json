@@ -1,0 +1,173 @@
+{
+  "notes": {
+    "disagreeing": "unissued_eligible counts tickets whose ledger says unissued while a received row carries an eligible grade; the records disagree and the grade is kept in every transfer interval, never discarded",
+    "eligible": "eligible counts received packet rows with status positive or zero (world grade 1 or 0, grade source native_agreed); receipt of a packet row is not a witnessed seat return",
+    "issued": "issued counts tickets whose ledger row records one grant; a grant permits one attempted native start and does not prove that the native process or any seat started; a lost grant spends the ticket and never authorizes a restart; unissued is not proof that no other launcher ran",
+    "physical": "physical counts unresolved or native_error rows that still carry a world grade; they are reported by admission state and never enter an interval",
+    "scope": "aggregate counts only; no ticket, path, roster, hidden state or native identifier is reported; digests name content only and are not credentials, signatures or proof of a model response",
+    "transfer": "deltas and transfer intervals come from examples.ship_handover.transfer over every received packet regardless of admission state; admission never changes a grade, a count or a bound",
+    "unknown": "unknown counts tickets with no received row or a declared non-graded status; unknown is never zero and never a failure"
+  },
+  "schema": "harbor.shipping.campaign-report/v1",
+  "sources": {
+    "packets": {
+      "inflight": [
+        "sha256:24b59b1f8ee0ed5c4a5904d643c70d2a48ccd88b5f812fb6dd23037b91271034",
+        "sha256:d939fb21af0e6fd208438cfb5d420f69bdf0ddcaafb861340936d40a737a1882"
+      ],
+      "stock": [
+        "sha256:c7acf30e980e823173d92a04ea18dc890c20c06ea8555685a3972430f2c71128",
+        "sha256:ecbe26d94c3146921434980128bf9bf8615527059f3a76ee612b85b83f53db7e"
+      ]
+    },
+    "plan": "sha256:334a29d45edb19bf10f6088cf8df90e4b5464b8e87ffe794de847613c8697787",
+    "registration": "sha256:d84583698b34d7647314790bb694ed6192d82515518e58f8829a9bf0d3b54aeb",
+    "registrations": {
+      "inflight": "sha256:6cb2988802c925b85434018d80e0926aa2fed39dcca2094c1edae609f1182f29",
+      "stock": "sha256:135392e11bb95c571923a1cd98c6c7f437e1594990c879b54601467771c09de0"
+    },
+    "status": "sha256:2f7244d973fe030e233facd57d852b8fdb2e04eaf78671efdef5d6ae4d79cbaa",
+    "status_schema": "harbor.shipping.admission-status/v1",
+    "transfer_schema": "harbor.ship-handover.transfer/v1"
+  },
+  "total": {
+    "admission": {
+      "issued": 8,
+      "unissued": 0
+    },
+    "outcomes": {
+      "issued_eligible": 7,
+      "issued_unknown": 1,
+      "unissued_eligible": 0,
+      "unissued_unknown": 0
+    },
+    "physical": {
+      "issued": {
+        "known": 0,
+        "positive": 0
+      },
+      "unissued": {
+        "known": 0,
+        "positive": 0
+      }
+    },
+    "positive": {
+      "issued": 4,
+      "unissued": 0
+    },
+    "reported": {
+      "issued": 7,
+      "unissued": 0
+    }
+  },
+  "transfer": {
+    "original_fails": {
+      "comparison": "unresolved",
+      "interval": {
+        "high": "1/1",
+        "low": "0/1"
+      }
+    },
+    "original_succeeds": {
+      "comparison": "equal",
+      "interval": {
+        "high": "0/1",
+        "low": "0/1"
+      }
+    }
+  },
+  "workers": [
+    {
+      "issued": 4,
+      "unissued": 0,
+      "worker": 0
+    },
+    {
+      "issued": 4,
+      "unissued": 0,
+      "worker": 1
+    }
+  ],
+  "worlds": {
+    "inflight": {
+      "admission": {
+        "issued": 4,
+        "unissued": 0
+      },
+      "delta": {
+        "original_fails": {
+          "high": "1/1",
+          "low": "1/1"
+        },
+        "original_succeeds": {
+          "high": "-1/1",
+          "low": "-1/1"
+        }
+      },
+      "outcomes": {
+        "issued_eligible": 4,
+        "issued_unknown": 0,
+        "unissued_eligible": 0,
+        "unissued_unknown": 0
+      },
+      "physical": {
+        "issued": {
+          "known": 0,
+          "positive": 0
+        },
+        "unissued": {
+          "known": 0,
+          "positive": 0
+        }
+      },
+      "positive": {
+        "issued": 2,
+        "unissued": 0
+      },
+      "reported": {
+        "issued": 4,
+        "unissued": 0
+      }
+    },
+    "stock": {
+      "admission": {
+        "issued": 4,
+        "unissued": 0
+      },
+      "delta": {
+        "original_fails": {
+          "high": "1/1",
+          "low": "0/1"
+        },
+        "original_succeeds": {
+          "high": "-1/1",
+          "low": "-1/1"
+        }
+      },
+      "outcomes": {
+        "issued_eligible": 3,
+        "issued_unknown": 1,
+        "unissued_eligible": 0,
+        "unissued_unknown": 0
+      },
+      "physical": {
+        "issued": {
+          "known": 0,
+          "positive": 0
+        },
+        "unissued": {
+          "known": 0,
+          "positive": 0
+        }
+      },
+      "positive": {
+        "issued": 2,
+        "unissued": 0
+      },
+      "reported": {
+        "issued": 3,
+        "unissued": 0
+      }
+    }
+  }
+}

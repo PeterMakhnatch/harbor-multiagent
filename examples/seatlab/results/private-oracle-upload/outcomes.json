@@ -1,0 +1,190 @@
+{
+  "schema": "harbor.seatlab.private-oracle-result/v1",
+  "registration": "4008ee056b874c4a805952e39f6940ac897a984b",
+  "candidate_revision": "141ea078b2bfc742fe3e821472b2711d0b071d49",
+  "stock_verify": "replayed the cut fields preserved in the native ship-handover.json; stock does not export distinct raw cut bytes",
+  "task": {
+    "task": {
+      "name": "harbor/ship-handover",
+      "digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607",
+      "checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+    },
+    "task_files": "sha256:454f01b76a674e0285163cfcb5c4825c2c5414d0e5650286672effbecbe48235"
+  },
+  "oracle_source_sha256": {
+    "old": "d02c9870e25729d13068ada5ca3fcd0390f4d3ac76e4015a8f63b3e09291c348",
+    "new": "1a9001922a48370cc7fd9868bddb1faf315e76d08a82e03b21e43ae5343bbd55"
+  },
+  "rows": [
+    {
+      "ticket": "so-73736d64ffe666f7",
+      "runner": "new",
+      "mode": "private",
+      "prior": "dropped",
+      "channel": "withhold",
+      "seats": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "seat_exceptions": {
+        "outgoing": null,
+        "relief": null
+      },
+      "recorded_exit_codes": {
+        "outgoing": null,
+        "relief": null
+      },
+      "native_reward_valid": true,
+      "native_reward": 0,
+      "frozen_reward": 0,
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "ledger_outcome": "omission",
+      "same_files": true,
+      "match": true
+    },
+    {
+      "ticket": "so-2befd73f382a8858",
+      "runner": "old",
+      "mode": "private",
+      "prior": "dropped",
+      "channel": "deliver",
+      "seats": {
+        "outgoing": "raised",
+        "relief": "raised"
+      },
+      "seat_exceptions": {
+        "outgoing": "NonZeroAgentExitCodeError",
+        "relief": "NonZeroAgentExitCodeError"
+      },
+      "recorded_exit_codes": {
+        "outgoing": 126,
+        "relief": 126
+      },
+      "native_reward_valid": true,
+      "native_reward": 0,
+      "frozen_reward": 0,
+      "outgoing_handoff": "absent",
+      "relief_action": "absent",
+      "ledger_outcome": "omission",
+      "same_files": true,
+      "match": true
+    },
+    {
+      "ticket": "so-3267dc276a6a2e89",
+      "runner": "new",
+      "mode": "private",
+      "prior": "dropped",
+      "channel": "deliver",
+      "seats": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "seat_exceptions": {
+        "outgoing": null,
+        "relief": null
+      },
+      "recorded_exit_codes": {
+        "outgoing": null,
+        "relief": null
+      },
+      "native_reward_valid": true,
+      "native_reward": 1,
+      "frozen_reward": 1,
+      "outgoing_handoff": "original",
+      "relief_action": "original",
+      "ledger_outcome": "exactly_one",
+      "same_files": true,
+      "match": true
+    },
+    {
+      "ticket": "so-9dfdcc92d9512c67",
+      "runner": "old",
+      "mode": "private",
+      "prior": "committed",
+      "channel": "deliver",
+      "seats": {
+        "outgoing": "raised",
+        "relief": "raised"
+      },
+      "seat_exceptions": {
+        "outgoing": "NonZeroAgentExitCodeError",
+        "relief": "NonZeroAgentExitCodeError"
+      },
+      "recorded_exit_codes": {
+        "outgoing": 126,
+        "relief": 126
+      },
+      "native_reward_valid": true,
+      "native_reward": 1,
+      "frozen_reward": 1,
+      "outgoing_handoff": "absent",
+      "relief_action": "absent",
+      "ledger_outcome": "exactly_one",
+      "same_files": true,
+      "match": true
+    },
+    {
+      "ticket": "so-6956cda650484bd5",
+      "runner": "new",
+      "mode": "portable",
+      "prior": "dropped",
+      "channel": "withhold",
+      "seats": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "seat_exceptions": {
+        "outgoing": null,
+        "relief": null
+      },
+      "recorded_exit_codes": {
+        "outgoing": null,
+        "relief": null
+      },
+      "native_reward_valid": true,
+      "native_reward": 0,
+      "frozen_reward": 0,
+      "outgoing_handoff": "original",
+      "relief_action": "close",
+      "ledger_outcome": "omission",
+      "same_files": true,
+      "match": true
+    },
+    {
+      "ticket": "so-1590e86b760ed0cb",
+      "runner": "new",
+      "mode": "portable",
+      "prior": "dropped",
+      "channel": "deliver",
+      "seats": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "seat_exceptions": {
+        "outgoing": null,
+        "relief": null
+      },
+      "recorded_exit_codes": {
+        "outgoing": null,
+        "relief": null
+      },
+      "native_reward_valid": true,
+      "native_reward": 1,
+      "frozen_reward": 1,
+      "outgoing_handoff": "original",
+      "relief_action": "original",
+      "ledger_outcome": "exactly_one",
+      "same_files": true,
+      "match": true
+    }
+  ],
+  "registered": 6,
+  "matched": 6,
+  "distinct_native_attempts": 6,
+  "distinct_world_runs": 6,
+  "host_file_modes_intact": true,
+  "host_file_bytes_intact": true,
+  "verdict": "pass",
+  "scope": "One native Docker engine, known stock package, non-root Oracle controls. No provider and no model. This is separate from the historical 7/8 seat-exit study."
+}

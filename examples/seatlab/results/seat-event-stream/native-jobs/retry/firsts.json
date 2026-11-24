@@ -1,0 +1,57 @@
+{
+  "arms": {
+    "retry-default": {
+      "actual_observed_executions": 2,
+      "archive_early_seen_uuids": [],
+      "final_uuid": "6ff45a0a-1c6d-4c28-a5a7-cfe25304fc1e",
+      "first_polling_prefix_rows": 5,
+      "host_pregrade_seen_uuids": [
+        "6ff45a0a-1c6d-4c28-a5a7-cfe25304fc1e",
+        "a23f1168-7e35-444c-ae6e-a0ec6eda22fd"
+      ],
+      "other_seen_uuid": "a23f1168-7e35-444c-ae6e-a0ec6eda22fd",
+      "outcomes": {
+        "p1": "returned",
+        "p2": "raised"
+      },
+      "preserved_grade": 1.0,
+      "private_journal_count": 0,
+      "registered_slots": 1,
+      "retained_trial_dirs": 1,
+      "retry_count": 1,
+      "valid": true
+    },
+    "retry-retained": {
+      "actual_observed_executions": 2,
+      "archive_closed_rows": {
+        "80920bf7-9e91-45ac-a50b-786d20181b01": 6,
+        "a17f7704-c2f3-4e84-98f0-538c1f879b2f": 6
+      },
+      "archive_early_seen_uuids": [
+        "80920bf7-9e91-45ac-a50b-786d20181b01",
+        "a17f7704-c2f3-4e84-98f0-538c1f879b2f"
+      ],
+      "final_uuid": "a17f7704-c2f3-4e84-98f0-538c1f879b2f",
+      "first_polling_prefix_rows": 5,
+      "host_pregrade_seen_uuids": [
+        "80920bf7-9e91-45ac-a50b-786d20181b01",
+        "a17f7704-c2f3-4e84-98f0-538c1f879b2f"
+      ],
+      "other_seen_uuid": "80920bf7-9e91-45ac-a50b-786d20181b01",
+      "outcomes": {
+        "p1": "returned",
+        "p2": "raised"
+      },
+      "preserved_grade": 1.0,
+      "private_journal_count": 2,
+      "registered_slots": 1,
+      "retained_trial_dirs": 1,
+      "retry_count": 1,
+      "valid": true
+    }
+  },
+  "limit": "Final verifier grade only. The earlier execution has an independently captured native journal, not a retained final verifier result. Both seats were scripted.",
+  "registered": "e0e07c265c8ee1e159d43c3220fb5dcda560afd8",
+  "schema": "seatlab.native-retry-retention-firsts/v1",
+  "source": "6df3036978dd90a0df3ebee66c10200ced7e02f3"
+}

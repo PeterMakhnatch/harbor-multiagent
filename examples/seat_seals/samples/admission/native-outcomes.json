@@ -1,0 +1,227 @@
+{
+  "schema": "harbor.seat-seal.admitted-native-controls/v1",
+  "registration_commit": "3922a0818f22193257029d31211f12528cf38ea3",
+  "operator_commit": "d6dfae59d5dabede1dbdf17c23d85011b63a2fb1",
+  "conditions": "Separate processes and private directories, one physical host and Docker engine; no model. The coordinator is on one persistent local file. No SSH link or cross-host durability test.",
+  "local_only": {
+    "ticket": "sb-38db5d3aae608166",
+    "distinct_native_trials": 2,
+    "eligible_when_read_separately": [
+      0,
+      0
+    ],
+    "when_roots_joined": {
+      "graded": 0,
+      "native_error": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "ambiguous": 1,
+      "duplicate_id": 0,
+      "missing": 17
+    }
+  },
+  "admitted_workers": {
+    "race-A": {
+      "worker": 0,
+      "ticket": "sb-363e1a4ed1c3db27",
+      "admission": "granted",
+      "native_start": "returned",
+      "status": "completed",
+      "native_runner_ok": true
+    },
+    "race-B": {
+      "worker": 0,
+      "ticket": "sb-363e1a4ed1c3db27",
+      "admission": "already_issued",
+      "native_start": "not_attempted",
+      "status": "already_issued",
+      "native_runner_ok": null
+    },
+    "lost-A": {
+      "worker": 0,
+      "ticket": "sb-0104c3e5a36954eb",
+      "admission": null,
+      "native_start": "not_attempted",
+      "status": "admission_failed",
+      "native_runner_ok": null
+    },
+    "lost-B": {
+      "worker": 0,
+      "ticket": "sb-0104c3e5a36954eb",
+      "admission": "already_issued",
+      "native_start": "not_attempted",
+      "status": "already_issued",
+      "native_runner_ok": null
+    },
+    "other": {
+      "worker": 1,
+      "ticket": "sb-1dfa4219f7eaa814",
+      "admission": "granted",
+      "native_start": "returned",
+      "status": "completed",
+      "native_runner_ok": true
+    }
+  },
+  "replayed_native_grades": [
+    {
+      "ticket": "sb-1dfa4219f7eaa814",
+      "status": "graded",
+      "native_grade": 1,
+      "final_action": "publish"
+    },
+    {
+      "ticket": "sb-363e1a4ed1c3db27",
+      "status": "graded",
+      "native_grade": 0,
+      "final_action": "publish"
+    }
+  ],
+  "admitted_cohort": {
+    "registered": 18,
+    "statuses": {
+      "graded": 2,
+      "native_error": 0,
+      "incomplete": 0,
+      "invalid": 0,
+      "ambiguous": 0,
+      "duplicate_id": 0,
+      "missing": 16
+    },
+    "issued": {
+      "issued_with_grade": 2,
+      "issued_without_grade": 1,
+      "unissued_with_grade": 0,
+      "unissued_without_grade": 15
+    },
+    "paired_bounds": {
+      "denominator": 9,
+      "joint": [
+        [
+          0,
+          [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        ],
+        [
+          1,
+          [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        ],
+        [
+          2,
+          [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        ],
+        [
+          3,
+          [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ]
+        ],
+        [
+          4,
+          [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        ],
+        [
+          5,
+          [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        ],
+        [
+          6,
+          [
+            0,
+            1,
+            2,
+            3
+          ]
+        ],
+        [
+          7,
+          [
+            0,
+            1,
+            2
+          ]
+        ],
+        [
+          8,
+          [
+            0,
+            1
+          ]
+        ]
+      ],
+      "known_arms": 2,
+      "missing_arms": 16,
+      "negative": [
+        0,
+        8
+      ],
+      "net_sum": [
+        -8,
+        8
+      ],
+      "paired_finals": 0,
+      "positive": [
+        0,
+        8
+      ],
+      "width": 16
+    }
+  },
+  "separate_nonadmitted_packet": {
+    "outside_primary": true,
+    "disagreement_keeps_grade": {
+      "issued_with_grade": 2,
+      "issued_without_grade": 1,
+      "unissued_with_grade": 1,
+      "unissued_without_grade": 14
+    },
+    "known_grades": 3
+  },
+  "pass": true
+}

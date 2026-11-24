@@ -1,0 +1,18 @@
+task:
+  path: examples/tasks/joint-reopen
+environment:
+  type: docker
+  delete: true
+  env:
+    JR_SEED: "2339"
+    JR_FIXTURE: east
+    JR_CHANNEL: deliver
+participants:
+  - seat: east
+    name: oracle
+    env:
+      JR_POLICY: recheck
+  - seat: west
+    name: oracle
+    env:
+      JR_POLICY: recheck

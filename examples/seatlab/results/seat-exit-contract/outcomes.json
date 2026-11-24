@@ -1,0 +1,813 @@
+{
+  "schema": "seatlab.seat-exit-contract.outcomes/v1",
+  "question": "When a native seat finishes without its own exception, can an operator distinguish its return from a supervisor stop and unsolicited task cancellation?",
+  "registration": {
+    "file": "examples/seatlab/results/seat-exit-contract/registration.json",
+    "file_git_blob": "602b226de4b6ceb5f7ceca0fbe1d99e5e58d0626",
+    "commit": "8806a6319696d27840e6dff08867050b44bc7136",
+    "committed_before_first_run": true,
+    "population": "8 first attempts, not a model cohort. 7 controlled native hello-seats cases plus an unmodified two-oracle ship-handover task. 2 seats per attempt. No models or external services."
+  },
+  "pins": {
+    "runtime": {
+      "fork_commit": "1553c1d61e3b66ee8b02ec4bd5e9ad220ad7effc",
+      "src_harbor_git_tree": "9b9f4bd63ce05057dcf7e56fbda34aa567c2187c",
+      "harbor_version": "0.26.0",
+      "python": "3.13.17",
+      "source_blobs": {
+        "agents/oracle.py": "1132bfcb842ab433ceb2de4ec8926eadd758c5f3",
+        "environments/seat.py": "7842d1c2d02ff1db3b4cb21ea8b980064058b93a",
+        "models/trial/result.py": "75354b0e49299e353c91185183223dd683dad62b",
+        "trial/seats.py": "96071d26a85024719c98a8eef4b25226a562c895",
+        "trial/trial.py": "925dc5c13c6430b8b1d4316a920a110868e369d5"
+      },
+      "source_blobs_match_fork_commit": true,
+      "source_blobs_captured_for": "7 hello-seats attempts; the 2 ship-handover runs captured no source pin"
+    },
+    "tasks": {
+      "hello-seats": {
+        "git_tree": "43928b740204e7b74a0794c275d9c188add25a67",
+        "blobs": {
+          "README.md": "1c3c223fa69d389d92658acfb684fc153d4990c5",
+          "environment/Dockerfile": "09216cda9a3c944f8b1804bb4c132263164a79b0",
+          "environment/docker-compose.yaml": "a3487e58b3821ccb26f128ed6688aa51dc83032f",
+          "environment/player/Dockerfile": "fc65eb3b059271a374f755e1c7f47398ffdab97c",
+          "environment/world.py": "e37c1c4718364ecb648770953127e0d3d1e4a8f6",
+          "instructions/p1.md": "8b6b6051ae974ad430032bff949569c07f245f06",
+          "instructions/p2.md": "b648f9fe5a3fa74457839376c36ca28dcbd53443",
+          "solution/solve.sh": "6d5e685fcd35578976b6f625a4b1ac7ee456dfc9",
+          "task.toml": "62fb8bb2cf91481746bd7a1d2a38c3105ae8dc9c",
+          "tests/test.sh": "b2e9fba334731ccb8cd67e633064691d0568fb65"
+        },
+        "native_lock_digest": "sha256:b01ee18e3578d5e25fffb87b439e02df3c8c00d01a20a183bb274dc3a6537f02"
+      },
+      "ship-handover": {
+        "git_tree": "c09e2f59e06ac324e5d9f2dbdc74d4da423de08e",
+        "blobs": {
+          "README.md": "87ee09fb68835896dd4989c05be36edddeab7e3b",
+          "environment/Dockerfile": "66ef8152065b5a294355afe156361df97926484e",
+          "environment/docker-compose.yaml": "f9c61d7fea7020a1aa86b57cccee191d6cb202ea",
+          "environment/seat/Dockerfile": "c9cf413febaedfb826cd021ba35acf8a6cc0250d",
+          "environment/shipment.py": "6d9311510d93eb72742767b6b5f2648bc15c6837",
+          "environment/world.py": "1636ba34a34fb4bb3725c90d9813300b062665dc",
+          "instructions/outgoing.md": "49dd41f2d3a657ddba64a1b41c0615e22936c4e8",
+          "instructions/relief.md": "7c7e08106960d43537eccec2d8f1060c4a1bcbde",
+          "solution/solve.sh": "eee2449cb09e32198f4a8b44fd2baf0d36b483dd",
+          "task.toml": "91b60756016a0ee77818afe0b4fa4e4603934e5d",
+          "tests/test.sh": "900631ccd3c0f16705cdd53bef9c8e86382cf8a3",
+          "tests/verify.py": "7a824c18394f2579216d3798a8b0e0fdd92d2ddf"
+        },
+        "native_lock_digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607"
+      }
+    },
+    "task_trees_equal_at": [
+      "8806a6319696d27840e6dff08867050b44bc7136",
+      "00aff1ccc1d8b064fa78515d3a762f4a0d4c5491"
+    ],
+    "reader": {
+      "module": "examples.seat_outcomes",
+      "git_blob": "9be3b2ab25b408596b75f0da9d01639219e62c7d",
+      "report_version": 1
+    },
+    "host_wrapper": {
+      "sha256": "3bd9f511fb37c38dde2fc84700dfad7d535e480d396d4de3d4f7e226e237bb4f",
+      "lines": 706,
+      "retained_in_repo": false
+    }
+  },
+  "procedure": {
+    "stock_oracle": "Harbor's unmodified oracle agent (agents/oracle.py blob above) runs /solution/solve.sh in each seat container. No model, provider or key.",
+    "host_wrapper": "hello-seats only. A host driver imported the pinned fork, ran each seat's stock Oracle to completion, then applied the case plan (hold, return, spontaneous CancelledError, SupportSeatFault, swallow the stop, or whole-trial cancel) and logged control events from the seat wrappers and Harbor host hooks. Control events are written by the wrapper, not read from execution_disposition.",
+    "ship_handover": "harbor trial start with stock Oracle in both seats, SH_PRIOR=dropped, SH_CHANNEL=deliver, outgoing SH_POLICY=original, relief SH_POLICY=resume. No host wrapper."
+  },
+  "first_attempts": [
+    {
+      "case": "support-held",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": false,
+        "p1": "await_peer_holding",
+        "p2": "hold"
+      },
+      "expected": {
+        "p1": "returned",
+        "p2": "stop_requested"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 1.0
+          }
+        },
+        "trial_exception_type": null,
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "returned",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "stop_requested",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p2:oracle_returned",
+        "p2:hold_entered",
+        "p1:oracle_returned",
+        "p1:observed_peer_holding",
+        "p1:wrapper_returned",
+        "p1:seat_task_done(result)",
+        "p2:hold_cancelled",
+        "p2:seat_task_done(cancelled)",
+        "host:hook_agent-end",
+        "host:hook_end",
+        "driver:trial_run_finished(returned)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 19,
+        "qualification_checks": 19,
+        "boundary_checks": [
+          "p2_holding_before_p1_return",
+          "p2_stopped_after_p1_return"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "support-returned",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": false,
+        "p1": "await_peer_done",
+        "p2": "return"
+      },
+      "expected": {
+        "p1": "returned",
+        "p2": "returned"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 1.0
+          }
+        },
+        "trial_exception_type": null,
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "returned",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "returned",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p1:oracle_returned",
+        "p2:oracle_returned",
+        "p2:wrapper_returned",
+        "p2:seat_task_done(result)",
+        "p1:observed_peer_task_done",
+        "p1:observed_peer_finished_at",
+        "p1:wrapper_returned",
+        "p1:seat_task_done(result)",
+        "host:hook_agent-end",
+        "host:hook_end",
+        "driver:trial_run_finished(returned)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 21,
+        "qualification_checks": 21,
+        "boundary_checks": [
+          "p1_saw_native_p2_finished_at",
+          "p2_done_before_p1_return",
+          "native_p2_finished_not_after_p1",
+          "p2_task_outcome"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "support-self-cancel",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": false,
+        "p1": "await_peer_done",
+        "p2": "raise_cancelled"
+      },
+      "expected": {
+        "p1": "returned",
+        "p2": "cancelled"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 1.0
+          }
+        },
+        "trial_exception_type": null,
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "returned",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "cancelled",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p2:oracle_returned",
+        "p2:spontaneous_cancel_raised",
+        "p2:seat_task_done(cancelled)",
+        "p1:oracle_returned",
+        "p1:observed_peer_task_done",
+        "p1:observed_peer_finished_at",
+        "p1:wrapper_returned",
+        "p1:seat_task_done(result)",
+        "host:hook_agent-end",
+        "host:hook_end",
+        "driver:trial_run_finished(returned)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 21,
+        "qualification_checks": 21,
+        "boundary_checks": [
+          "p1_saw_native_p2_finished_at",
+          "p2_done_before_p1_return",
+          "native_p2_finished_not_after_p1",
+          "p2_task_outcome"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "support-raised",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": false,
+        "p1": "await_peer_done",
+        "p2": "raise_managed"
+      },
+      "expected": {
+        "p1": "returned",
+        "p2": "raised"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 1.0
+          }
+        },
+        "trial_exception_type": "SupportSeatFault",
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "returned",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "raised",
+            "exception_type": "SupportSeatFault",
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p2:oracle_returned",
+        "p2:managed_fault_raised",
+        "p2:seat_task_done(result)",
+        "p1:oracle_returned",
+        "p1:observed_peer_task_done",
+        "p1:observed_peer_finished_at",
+        "p1:wrapper_returned",
+        "p1:seat_task_done(result)",
+        "host:hook_agent-end",
+        "host:hook_end",
+        "driver:trial_run_finished(returned)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 20,
+        "qualification_checks": 20,
+        "boundary_checks": [
+          "p1_saw_native_p2_finished_at",
+          "p2_done_before_p1_return",
+          "native_p2_finished_not_after_p1",
+          "p2_task_outcome"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "team-deadline",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": false,
+        "p1": "hold",
+        "p2": "hold"
+      },
+      "expected": {
+        "p1": "stop_requested",
+        "p2": "stop_requested"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 1.0
+          }
+        },
+        "trial_exception_type": "AgentTimeoutError",
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "stop_requested",
+            "exception_type": "AgentTimeoutError",
+            "native_timeout": "play",
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "stop_requested",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p1:oracle_returned",
+        "p1:hold_entered",
+        "p2:oracle_returned",
+        "p2:hold_entered",
+        "p1:hold_cancelled",
+        "p2:hold_cancelled",
+        "p1:seat_task_done(cancelled)",
+        "p2:seat_task_done(cancelled)",
+        "host:hook_agent-end",
+        "host:hook_end",
+        "driver:trial_run_finished(returned)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 19,
+        "qualification_checks": 19,
+        "boundary_checks": [
+          "p1_cut_at_native_deadline",
+          "p1_held_before_deadline",
+          "p2_stopped"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "trial-cancel",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": true,
+        "p1": "hold",
+        "p2": "hold"
+      },
+      "expected": {
+        "p1": "stop_requested",
+        "p2": "stop_requested"
+      },
+      "reader": {
+        "grade": {
+          "validity": "invalid",
+          "rewards_status": "not_recorded",
+          "rewards": null
+        },
+        "trial_exception_type": "CancelledError",
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "stop_requested",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "stop_requested",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p2:oracle_returned",
+        "p2:hold_entered",
+        "p1:oracle_returned",
+        "p1:hold_entered",
+        "driver:driver_cancel_issued",
+        "p1:hold_cancelled",
+        "p2:hold_cancelled",
+        "p1:seat_task_done(cancelled)",
+        "p2:seat_task_done(cancelled)",
+        "host:hook_agent-end",
+        "host:hook_cancel",
+        "host:hook_end",
+        "driver:trial_run_finished(cancelled)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 21,
+        "qualification_checks": 21,
+        "boundary_checks": [
+          "p1_held_before_driver_cancel",
+          "p1_cancelled_after_driver_cancel",
+          "p2_held_before_driver_cancel",
+          "p2_cancelled_after_driver_cancel",
+          "host_cancel_hook_fired"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "support-swallows-stop",
+      "task": "hello-seats",
+      "plan": {
+        "driver_cancel": false,
+        "p1": "await_peer_holding",
+        "p2": "hold_swallow"
+      },
+      "expected": {
+        "p1": "returned",
+        "p2": "stop_requested"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 1.0
+          }
+        },
+        "trial_exception_type": null,
+        "seats": [
+          {
+            "seat": "p1",
+            "role": "tested",
+            "disposition": "returned",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "p2",
+            "role": "supporting",
+            "disposition": "stop_requested",
+            "exception_type": null,
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": [
+        "driver:trial_create_started",
+        "driver:trial_run_started",
+        "host:hook_agent-start",
+        "p1:oracle_entered",
+        "p2:oracle_entered",
+        "p2:oracle_returned",
+        "p2:hold_entered",
+        "p1:oracle_returned",
+        "p1:observed_peer_holding",
+        "p1:wrapper_returned",
+        "p1:seat_task_done(result)",
+        "p2:hold_cancel_swallowed",
+        "p2:wrapper_returned",
+        "p2:seat_task_done(result)",
+        "host:hook_agent-end",
+        "host:hook_end",
+        "driver:trial_run_finished(returned)"
+      ],
+      "witness": {
+        "qualification_checks_passed": 19,
+        "qualification_checks": 19,
+        "boundary_checks": [
+          "p2_holding_before_p1_return",
+          "p2_stopped_after_p1_return"
+        ],
+        "signals": 0,
+        "residue_clean": true
+      },
+      "disposition_match": true
+    },
+    {
+      "case": "unmodified-ship-handover",
+      "task": "ship-handover",
+      "run": "shipment-exit-first",
+      "plan": "stock Oracle in both seats; no host wrapper",
+      "expected": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "reader": {
+        "grade": {
+          "validity": "valid",
+          "rewards_status": "recorded",
+          "rewards": {
+            "reward": 0
+          }
+        },
+        "trial_exception_type": "NonZeroAgentExitCodeError",
+        "seats": [
+          {
+            "seat": "outgoing",
+            "role": "tested",
+            "disposition": "raised",
+            "exception_type": "NonZeroAgentExitCodeError",
+            "native_timeout": null,
+            "play_timing": "finished"
+          },
+          {
+            "seat": "relief",
+            "role": "tested",
+            "disposition": "raised",
+            "exception_type": "NonZeroAgentExitCodeError",
+            "native_timeout": null,
+            "play_timing": "finished"
+          }
+        ]
+      },
+      "control_events": null,
+      "witness": {
+        "seat_exit_code": {
+          "outgoing": 126,
+          "relief": 126
+        },
+        "seat_oracle_log": "bash: /solution/solve.sh: Permission denied (both seats)",
+        "verifier_observation": {
+          "outcome": "omission",
+          "events": 0,
+          "effects": 0,
+          "outgoing_handoff": "absent",
+          "relief_action": "absent"
+        }
+      },
+      "disposition_match": false
+    }
+  ],
+  "secondary_diagnosis": {
+    "run": "shipment-exit-committed-modes",
+    "task": "ship-handover",
+    "counted": false,
+    "kind": "secondary deployment diagnosis, not a retrial or replacement",
+    "registered_before_run": "file shipment-mode-diagnostic-registration.json written about 1 s before trial start (file time, not a commit)",
+    "change": "same 12 task blobs and Git tree c09e2f59; files materialized with shared POSIX modes 0644/0755 instead of the checkout's owner-only 0600/0700",
+    "predicted": {
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "team_reward": 1,
+      "dispatch_count": 1
+    },
+    "reader": {
+      "grade": {
+        "validity": "valid",
+        "rewards_status": "recorded",
+        "rewards": {
+          "reward": 1
+        }
+      },
+      "trial_exception_type": null,
+      "seats": [
+        {
+          "seat": "outgoing",
+          "role": "tested",
+          "disposition": "returned",
+          "exception_type": null,
+          "native_timeout": null,
+          "play_timing": "finished"
+        },
+        {
+          "seat": "relief",
+          "role": "tested",
+          "disposition": "returned",
+          "exception_type": null,
+          "native_timeout": null,
+          "play_timing": "finished"
+        }
+      ]
+    },
+    "witness": {
+      "seat_oracle_log": {
+        "outgoing": "finished under policy original",
+        "relief": "finished under policy resume"
+      },
+      "verifier_observation": {
+        "outcome": "exactly_one",
+        "effects": [
+          "original"
+        ],
+        "event_kinds": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ],
+        "effect_change": "first_dispatch"
+      }
+    },
+    "prediction_match": true
+  },
+  "verdict": {
+    "strict_preregistered": {
+      "result": "fail",
+      "seats_correct": 14,
+      "seats": 16,
+      "attempts_correct": 7,
+      "attempts": 8,
+      "failed_attempt": "unmodified-ship-handover",
+      "reason": "both seats raised NonZeroAgentExitCodeError (exit 126, solve.sh not executable by the non-root seat user under owner-only checkout modes); registration predicted returned"
+    },
+    "field_vs_actual_exit": "16/16 seats: execution_disposition agrees with the independent witness (control events or seat exit code and Oracle log)",
+    "controls": {
+      "passed": 7,
+      "of": 7,
+      "cases": [
+        "support-held",
+        "support-returned",
+        "support-self-cancel",
+        "support-raised",
+        "team-deadline",
+        "trial-cancel",
+        "support-swallows-stop"
+      ]
+    },
+    "deadline_tested_seat_native_timeout": "AgentTimeoutError",
+    "reward_from_helper_exit": "none attributed; support-raised grade is the verifier's own valid reward 1.0, reported apart from the seat disposition",
+    "diagnostic_counted": false
+  },
+  "dimension_counts": {
+    "attempts": 8,
+    "seats": 16,
+    "disposition": {
+      "returned": 6,
+      "stop_requested": 6,
+      "cancelled": 1,
+      "raised": 3
+    },
+    "role": {
+      "tested": 9,
+      "supporting": 7
+    },
+    "seat_exception_type": {
+      "none": 12,
+      "SupportSeatFault": 1,
+      "AgentTimeoutError": 1,
+      "NonZeroAgentExitCodeError": 2
+    },
+    "native_timeout": {
+      "none": 15,
+      "play": 1
+    },
+    "grade_validity": {
+      "valid": 7,
+      "invalid": 1
+    },
+    "team_reward": {
+      "1.0": 6,
+      "none": 1,
+      "0": 1
+    },
+    "trial_exception_type": {
+      "none": 4,
+      "SupportSeatFault": 1,
+      "AgentTimeoutError": 1,
+      "CancelledError": 1,
+      "NonZeroAgentExitCodeError": 1
+    }
+  },
+  "older_inputs": {
+    "source": "Separate cold read of original native result.json files with examples.seat_outcomes; this release includes aggregates, not the private trials.",
+    "archived_native": {
+      "locks": 8,
+      "slots": 192,
+      "trial_directories": 180,
+      "unmaterialized_slots_excluded": 12,
+      "seats": 360,
+      "seats_disposition_unknown": 360,
+      "valid_team_grades": 171,
+      "grade_one": 65,
+      "grade_zero": 106,
+      "invalid_without_rewards": 9
+    },
+    "older_scripted": {
+      "trials": 18,
+      "seats": 36,
+      "seats_disposition_unknown": 36,
+      "grade_one": 10,
+      "grade_zero": 8
+    }
+  },
+  "fork_regressions": {
+    "suite": "tests/unit/trial/test_seats.py",
+    "suite_git_blob": "f7adb879d47b07a7e4889a1eabd5fbd9793ff8ca",
+    "passed": 45,
+    "of": 45,
+    "environment": "fork environment with project SDK",
+    "earlier_environment_runs": [
+      "ad hoc runtime: 43/45; 2 failures at import of litellm->fastapi->pydantic email-validator package metadata, not in seat code",
+      "ad hoc runtime: pytest entry point missing console_main, no tests ran"
+    ]
+  },
+  "scope": "A stop is a pending-task cancellation request, not proof of delivery, termination, inactivity, or a particular reward. A native trial can fail while its verifier score remains valid. The study holds no model and does not measure behavior rates.",
+  "gaps": [
+    "The ship-handover runs predate the fork commit time and captured no source-blob pin; their runtime bytes are not proven equal to 1553c1d.",
+    "The native lock digest is the same for both ship-handover materializations; it does not cover file modes, so it cannot show the mode difference.",
+    "The host wrapper is pinned by sha256 only; it is not in the repository.",
+    "The older populations have no execution_disposition field. The public aggregates do not let a recipient re-run the private reader.",
+    "Fixed scripted Oracle seats: no model behavior, no rates, one attempt per case.",
+    "execution_disposition is a play-scope field. It is not process death, a grade, or proof of a voluntary finish: support-swallows-stop p2 returned normally after the stop and still reads stop_requested."
+  ]
+}

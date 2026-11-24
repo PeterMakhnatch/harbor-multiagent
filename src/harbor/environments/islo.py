@@ -170,8 +170,16 @@ class _IsloComposeOps(DinDComposeOps):
 
     @override
     async def _compose_exec(
-        self, subcommand: list[str], timeout_sec: int | None = None
+        self,
+        subcommand: list[str],
+        timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
+        if env:
+            return await self._env._compose_exec(
+                subcommand, timeout_sec=timeout_sec, env=env
+            )
         return await self._env._compose_exec(subcommand, timeout_sec=timeout_sec)
 
     @override
@@ -816,12 +824,14 @@ class IsloEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         self,
         subcommand: list[str],
         timeout_sec: int | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ExecResult:
         """Run a docker compose subcommand on the sandbox VM."""
         return await self._sandbox_exec(
             self._compose_cmd(subcommand),
             cwd="/",
-            env=self._compose_env_vars(),
+            env={**self._compose_env_vars(), **(env or {})},
             timeout_sec=timeout_sec,
         )
 
@@ -1043,17 +1053,25 @@ class IsloEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
             raise RuntimeError("Sandbox not found. Please start the environment first.")
 
         if self._compose_mode:
-            # Run the compose exec inside a bash -lc that first exports the
-            # compose env vars, since ``islo use ... -- <cmd>`` doesn't take
-            # an env dict.
-            compose_cmd = self._compose_cmd(["exec", "-it", MAIN_SERVICE_NAME, "bash"])
-            env_assignments = " ".join(
-                f"{k}={shlex.quote(v)}" for k, v in self._compose_env_vars().items()
-            )
-            remote_cmd = f"{env_assignments} {compose_cmd}"
+            result = await self._compose_exec(["ps", "-q", MAIN_SERVICE_NAME])
+            containers = (result.stdout or "").split()
+            if result.return_code != 0 or not containers:
+                raise RuntimeError(
+                    f"Could not find the running main container: {result.stderr}"
+                )
             os.execvp(
                 "islo",
-                ["islo", "use", self._sandbox_name, "--", "bash", "-lc", remote_cmd],
+                [
+                    "islo",
+                    "use",
+                    self._sandbox_name,
+                    "--",
+                    "docker",
+                    "exec",
+                    "-it",
+                    containers[0],
+                    "bash",
+                ],
             )
         elif self._docker_container:
             os.execvp(
@@ -1125,13 +1143,13 @@ class IsloEnvironment(ComposeServiceOpsMixin, BaseEnvironment):
         assert self._docker_container is not None
         parts: list[str] = ["docker", "exec"]
         parts.extend(["-w", cwd or self._workdir])
-        for k, v in (env or {}).items():
-            parts.extend(["-e", f"{k}={v}"])
+        for key in env or {}:
+            parts.extend(["-e", key])
         if user is not None:
             parts.extend(["-u", str(user)])
         parts.extend([self._docker_container, "bash", "-lc", command])
         return await self._sandbox_exec(
-            shlex.join(parts), cwd="/", timeout_sec=timeout_sec
+            shlex.join(parts), cwd="/", env=env, timeout_sec=timeout_sec
         )
 
     async def _compose_main_exec(

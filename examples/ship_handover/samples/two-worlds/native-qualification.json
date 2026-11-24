@@ -1,0 +1,250 @@
+{
+  "schema": "harbor.shipping.native-qualification/v1",
+  "question_commit": "40e573ae1f0c7cabff07e68fcefe43347778af86",
+  "ticket_commit": "67bbe557d9eaa030a4a44a8b799611c8b16db75e",
+  "first_attempts": 16,
+  "unique_worlds": 16,
+  "matched_predictions": 16,
+  "new_model_trials": 0,
+  "new_paid_cost_usd": "0.00",
+  "legacy_stock_first_attempts": 26,
+  "legacy_cli_sha256": {
+    "collect:json": "531b15d4cf7028ad48194f819daee1a5e64a7d4d566b564b4a049afe349ed88b",
+    "collect:text": "09c35f5ab8332e96025e1412284837b68f57e50e748260f2225b9d97c7709e7c",
+    "contrast:json": "5b5bd72b4b21dfd8d03f9a7cff35f49a294810c809e4c6138124be823a48ecfd",
+    "contrast:text": "e0cc25904e17d2d7c4e88b7704a5b57da7acbf7ec25f3a322460e3c72edfd66d"
+  },
+  "qualification": "The host checked native task lock, checksum, named seat implementations, under-test flags, explicit dispositions, native verifier rewards, independent repository verifier replay, event order and unique native IDs. Public rows are producer claims. No raw private ID is exported.",
+  "shards": {
+    "logical_workers": 2,
+    "same_local_docker": true,
+    "tickets_each": 8,
+    "missing_one_per_registration": 2
+  },
+  "rows": [
+    {
+      "ticket": "sh-233aa62f32d605bf",
+      "world": "stock",
+      "team": "sender-only",
+      "prior": "committed",
+      "channel": "withhold",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "sh-2aee895ee6268f1a",
+      "world": "stock",
+      "team": "recovery",
+      "prior": "dropped",
+      "channel": "deliver",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "original"
+    },
+    {
+      "ticket": "sh-38d4cd13d3cd3f50",
+      "world": "stock",
+      "team": "recovery",
+      "prior": "committed",
+      "channel": "withhold",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "none"
+    },
+    {
+      "ticket": "sh-62f04f04da77681f",
+      "world": "stock",
+      "team": "sender-only",
+      "prior": "dropped",
+      "channel": "deliver",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "sh-7bb5c021c6bf483e",
+      "world": "stock",
+      "team": "recovery",
+      "prior": "committed",
+      "channel": "deliver",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "original"
+    },
+    {
+      "ticket": "sh-d488f1247f3e9bcf",
+      "world": "stock",
+      "team": "sender-only",
+      "prior": "dropped",
+      "channel": "withhold",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "sh-d4d4898bd68bd519",
+      "world": "stock",
+      "team": "sender-only",
+      "prior": "committed",
+      "channel": "deliver",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "sh-f64fd52b07ae1e11",
+      "world": "stock",
+      "team": "recovery",
+      "prior": "dropped",
+      "channel": "withhold",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "none"
+    },
+    {
+      "ticket": "si-2eecaed7d328371a",
+      "world": "inflight",
+      "team": "sender-only",
+      "fate": "settles",
+      "channel": "deliver",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "si-3c52880c8d563c79",
+      "world": "inflight",
+      "team": "sender-only",
+      "fate": "fails",
+      "channel": "deliver",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "si-42111ceae155f3b8",
+      "world": "inflight",
+      "team": "sender-only",
+      "fate": "fails",
+      "channel": "withhold",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "si-50f1621f09b7ef28",
+      "world": "inflight",
+      "team": "sender-only",
+      "fate": "settles",
+      "channel": "withhold",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": null
+    },
+    {
+      "ticket": "si-6531a574e54f6e4d",
+      "world": "inflight",
+      "team": "recovery",
+      "fate": "settles",
+      "channel": "deliver",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "original"
+    },
+    {
+      "ticket": "si-8da20ab5eaf3cc5d",
+      "world": "inflight",
+      "team": "recovery",
+      "fate": "fails",
+      "channel": "withhold",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "none"
+    },
+    {
+      "ticket": "si-c6b0a6a1a18c57ad",
+      "world": "inflight",
+      "team": "recovery",
+      "fate": "settles",
+      "channel": "withhold",
+      "reward": 1,
+      "outcome": "exactly_one",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "none"
+    },
+    {
+      "ticket": "si-f022cae4e6fb1dce",
+      "world": "inflight",
+      "team": "recovery",
+      "fate": "fails",
+      "channel": "deliver",
+      "reward": 0,
+      "outcome": "omission",
+      "dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      },
+      "served_before_resolve": "original"
+    }
+  ]
+}

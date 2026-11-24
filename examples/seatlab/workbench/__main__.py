@@ -14,9 +14,12 @@ from .catalog import STUDIES, Study
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = "seatlab.workbench/v1"
-USAGE = "python3.12 -BS -m examples.seatlab.workbench list | verify [STUDY ...]"
+USAGE = "python -m examples.seatlab.workbench list | verify [STUDY ...] | account --help | instrument --help | attention --help | timing --help | handoffs --help | isolate --help | cohort --help"
 STUDY_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
-MODULE = re.compile(r"examples\.seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}")
+MODULE = re.compile(
+    r"examples\.(?:seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}|ship_inflight\.replay|"
+    r"ship_handover\.(?:transfer|campaign_report|receiver_options|receiver_archive))"
+)
 DIGEST = re.compile(r"[0-9a-f]{64}")
 MAX_ARGS = 256
 REPORT_LIMIT = 1 << 22
@@ -242,6 +245,34 @@ def _select(ids: list[str]) -> list[Study] | int:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["account"]:
+        from .team_account import main as account
+
+        return account(args[1:])
+    if args[:1] == ["instrument"]:
+        from .instrument import main as instrument
+
+        return instrument(args[1:])
+    if args[:1] == ["attention"]:
+        from .attention import main as attention
+
+        return attention(args[1:])
+    if args[:1] == ["timing"]:
+        from .team_timing import main as timing
+
+        return timing(args[1:])
+    if args[:1] == ["handoffs"]:
+        from .handoffs import main as handoffs
+
+        return handoffs(args[1:])
+    if args[:1] == ["isolate"]:
+        from .isolate import main as isolate
+
+        return isolate(args[1:])
+    if args[:1] == ["cohort"]:
+        from .cohort import main as cohort
+
+        return cohort(args[1:])
     if not args or args[0] not in ("list", "verify"):
         return _usage_error("unknown_command")
     if len(args) > 1 + MAX_ARGS:

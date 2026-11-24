@@ -1,0 +1,26 @@
+{
+  "schema": "harbor.ship-inflight.source/v1",
+  "question": "de4e8354b41b8d013983aa1b84c1743ff94bde8d",
+  "task": {
+    "name": "harbor/ship-inflight",
+    "digest": "sha256:9a712fac1b44e4b70c91cb717b9b2cb2cbc2a3a43198839cc4f75be38c1c713e",
+    "checksum": "411796f5aee862b63b0c3a9c1a6a43149813422db5d715d8634ab865f09f8bda"
+  },
+  "task_files": "sha256:cb5294288f62b79fe69c780c2e5287bfef0dbb7b05fb3e17b03f1ebbd4d0d94c",
+  "files": {
+    "README.md": "sha256:5143ce393caf95e94f30c4b7d78162f9d81ff2d410a2deb2daf140c9b2658817",
+    "environment/Dockerfile": "sha256:2be0cbf4b4fb7c1660538be68e1cdc46e40219ee28cb7af18778c318b5876e82",
+    "environment/docker-compose.yaml": "sha256:a06423db5a934d3c30825ad859b308b905587677004f92edce9511b40fb06c04",
+    "environment/inflight_world.py": "sha256:e40a4fb1ffe2927ba4cf0e6449cb124164c7d91eb77f7b23e6f888b0acfc9aa8",
+    "environment/seat/Dockerfile": "sha256:4d7fbef148e83df4671efb54f257e7d34a12064ef14e41da2a68e5e5cedb57c8",
+    "environment/shipment.py": "sha256:9826c5b59cacacb94f2f9c2f8d1fa2f256c003d30e35a4451e3ec83c1204a08a",
+    "environment/world.py": "sha256:2aa3c809e8581d75df08f5e4d86ae520d56615b6151d4cb31b82d9542e986647",
+    "instructions/outgoing.md": "sha256:d07fcb062e0b9c3142d25432e8242b60f32d30533c853c6d1be536ddd0576ee3",
+    "instructions/relief.md": "sha256:17e108d1fe6d42229de4900f2e8bdb7a4ae3190e6a0f717340926d1d57f80852",
+    "solution/solve.sh": "sha256:56e9e90a8b1c4a138b4cbd548db183aec5898dec04165f1ddde8290faaa50bd6",
+    "task.toml": "sha256:86ebfdace041a6569e354cc9ed454cbce16205f1cefbe174f83f9c718a8044af",
+    "tests/inflight_verify.py": "sha256:ff74cce919f15066a38210545a1b398b8ec784ab0bc63e464bd2d49abd3e9c8a",
+    "tests/test.sh": "sha256:f37249768c18fd76d7225e1c8cc1be102652268df1e15bf4d5dffb07082df3e3",
+    "tests/verify.py": "sha256:c609d5206e504100ab199c99f0df3fdf4ffed629799778a2d44c5bc0852c53a5"
+  }
+}

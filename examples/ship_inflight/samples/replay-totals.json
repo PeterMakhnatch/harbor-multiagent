@@ -1,0 +1,32 @@
+{
+  "cases": {
+    "registered": 16,
+    "present": 16,
+    "missing": 0,
+    "grade_unknown": 0,
+    "graded": 16,
+    "exit_unknown": 0,
+    "eligible": 16,
+    "supported": 16,
+    "failed": 0
+  },
+  "native_claims": {
+    "reward_valid": 16,
+    "reward_1": 9,
+    "reward_0": 7,
+    "both_returned": 16,
+    "seats_returned": 32,
+    "seats_raised": 0,
+    "seats_cancelled": 0,
+    "seats_stop_requested": 0,
+    "seats_unknown": 0
+  },
+  "replayed_worlds": {
+    "replayed": 16,
+    "omission": 4,
+    "exactly_one": 9,
+    "duplicate": 3,
+    "pre_drain_ne_final": 7
+  },
+  "verdict": "supported"
+}

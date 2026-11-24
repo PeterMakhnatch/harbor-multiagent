@@ -1,0 +1,23 @@
+{
+  "schema": "harbor.shipping.campaign-plan/v1",
+  "registration": "sha256:d84583698b34d7647314790bb694ed6192d82515518e58f8829a9bf0d3b54aeb",
+  "registrations": {
+    "stock": "sha256:135392e11bb95c571923a1cd98c6c7f437e1594990c879b54601467771c09de0",
+    "inflight": "sha256:6cb2988802c925b85434018d80e0926aa2fed39dcca2094c1edae609f1182f29"
+  },
+  "workers": 2,
+  "tickets": {
+    "stock": [
+      "sh-00d826f740984f7e",
+      "sh-abc9880d5d22d2ca",
+      "sh-64b2edcd04cca161",
+      "sh-a2f215b6ecaef17f"
+    ],
+    "inflight": [
+      "si-e74454a2d7d5befa",
+      "si-95380f4cceb16f77",
+      "si-a287d6ee2658a883",
+      "si-3506e3a027e59c63"
+    ]
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "question": "Separate sender accuracy, acknowledged pre-commit choice agreement and correct output without revealing slot values.",
+  "test": "Each first native trial returns the registered booleans/null, reward and ordered receipt. Keep stopped and missing slots; no replacement. Same seed; blinded two-seat oracle; no spend or models.",
+  "registered_at_utc": "2026-11-24T05:54:32.429350+00:00",
+  "cells": [
+    {
+      "slot": "ag-confirm-as-briefed-fresh",
+      "seed": 449,
+      "variant": "confirm",
+      "reporter": "as_briefed",
+      "booker": "fresh",
+      "expect": {
+        "revision_correct": true,
+        "commit_matches_acknowledged_revision": true,
+        "decision_correct": true,
+        "draft_changed": false,
+        "revision_ack": "before",
+        "reward": 1
+      }
+    },
+    {
+      "slot": "ag-confirm-as-briefed-ignore",
+      "seed": 449,
+      "variant": "confirm",
+      "reporter": "as_briefed",
+      "booker": "ignore",
+      "expect": {
+        "revision_correct": true,
+        "commit_matches_acknowledged_revision": true,
+        "decision_correct": true,
+        "draft_changed": false,
+        "revision_ack": "before",
+        "reward": 1
+      }
+    },
+    {
+      "slot": "ag-confirm-alternate-fresh",
+      "seed": 449,
+      "variant": "confirm",
+      "reporter": "alternate",
+      "booker": "fresh",
+      "expect": {
+        "revision_correct": false,
+        "commit_matches_acknowledged_revision": true,
+        "decision_correct": false,
+        "draft_changed": true,
+        "revision_ack": "before",
+        "reward": 0
+      }
+    },
+    {
+      "slot": "ag-confirm-alternate-ignore",
+      "seed": 449,
+      "variant": "confirm",
+      "reporter": "alternate",
+      "booker": "ignore",
+      "expect": {
+        "revision_correct": false,
+        "commit_matches_acknowledged_revision": false,
+        "decision_correct": true,
+        "draft_changed": false,
+        "revision_ack": "before",
+        "reward": 1
+      }
+    },
+    {
+      "slot": "ag-replace-as-briefed-fresh",
+      "seed": 449,
+      "variant": "replace",
+      "reporter": "as_briefed",
+      "booker": "fresh",
+      "expect": {
+        "revision_correct": true,
+        "commit_matches_acknowledged_revision": true,
+        "decision_correct": true,
+        "draft_changed": true,
+        "revision_ack": "before",
+        "reward": 1
+      }
+    },
+    {
+      "slot": "ag-replace-as-briefed-ignore",
+      "seed": 449,
+      "variant": "replace",
+      "reporter": "as_briefed",
+      "booker": "ignore",
+      "expect": {
+        "revision_correct": true,
+        "commit_matches_acknowledged_revision": false,
+        "decision_correct": false,
+        "draft_changed": false,
+        "revision_ack": "before",
+        "reward": 0
+      }
+    },
+    {
+      "slot": "ag-replace-alternate-fresh",
+      "seed": 449,
+      "variant": "replace",
+      "reporter": "alternate",
+      "booker": "fresh",
+      "expect": {
+        "revision_correct": false,
+        "commit_matches_acknowledged_revision": true,
+        "decision_correct": false,
+        "draft_changed": true,
+        "revision_ack": "before",
+        "reward": 0
+      }
+    },
+    {
+      "slot": "ag-replace-alternate-ignore",
+      "seed": 449,
+      "variant": "replace",
+      "reporter": "alternate",
+      "booker": "ignore",
+      "expect": {
+        "revision_correct": false,
+        "commit_matches_acknowledged_revision": false,
+        "decision_correct": false,
+        "draft_changed": false,
+        "revision_ack": "before",
+        "reward": 0
+      }
+    },
+    {
+      "slot": "ag-replace-as-briefed-late",
+      "seed": 449,
+      "variant": "replace",
+      "reporter": "as_briefed",
+      "booker": "late",
+      "expect": {
+        "revision_correct": true,
+        "commit_matches_acknowledged_revision": null,
+        "decision_correct": false,
+        "draft_changed": false,
+        "revision_ack": "after",
+        "reward": 0
+      }
+    },
+    {
+      "slot": "ag-replace-as-briefed-unconfirmed",
+      "seed": 449,
+      "variant": "replace",
+      "reporter": "as_briefed",
+      "booker": "unconfirmed",
+      "expect": {
+        "revision_correct": true,
+        "commit_matches_acknowledged_revision": null,
+        "decision_correct": true,
+        "draft_changed": true,
+        "revision_ack": "absent",
+        "reward": 1
+      }
+    }
+  ]
+}

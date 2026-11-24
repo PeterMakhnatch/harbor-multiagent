@@ -1,0 +1,35 @@
+{
+  "schema": "harbor.terminus-post-return.question/v1",
+  "question": "After the first clean native seat return strictly inside its peer execution, can an operator identify recorded peer work that necessarily followed the return, including when the calendar held an identified standing grade?",
+  "prior_knowledge": "The earlier archive identified conditional grade losses. A structural feasibility read established the pinned Terminus host step timestamp semantics and available fields. The registered population-level usage intervals and their grade overlap have not yet been measured.",
+  "population": "The same 8 real Flotilla native scheduling job locks and their 192 slots. Primary: both seats finished, with usable frozen grade. Secondary: also include verified standing grades after a seat timeout. Retain absent slots and unidentifiable usage. No new model decisions.",
+  "inputs": {
+    "producer": "6aeb609e31fd77e5f89ce3bcb018db8045520fb7",
+    "harbor_version": "0.26.0",
+    "harness": "terminus-2 2.0.0",
+    "trajectory": "ATIF-v1.8, one initial user step and ordered agent steps from the one peer session. Require the native trial/seat session, model and harness to agree. Absent corroboration is not a zero. An editable source pin is not authentication.",
+    "boundary": "A clean host return strictly inside its peer native interval. Both were managed by the same host runtime. The clock is wall time: assume it preserves event order for this execution, abstain on visibly inverted timestamps. No container or world timestamp places model work."
+  },
+  "host_guard_ms": [
+    0,
+    1000,
+    5000
+  ],
+  "board_clock_ms": [
+    null,
+    1000
+  ],
+  "semantics": [
+    "The Terminus timestamp is taken AFTER the response and, for a normal step, after its actions and terminal capture. It is not a call start. Count an entire step as certainly after only if its previous recorded step endpoint is strictly AFTER return plus margin. Count it as certainly before only if its own endpoint is strictly BEFORE return minus margin. Keep equality and the crossing step uncertain.",
+    "For a reconciled peer, separately sum prompt and completion tokens of before, crossing and after steps. Missing caches are not extra prompt tokens. Keep native counters not allocated to a step in a separate, unplaced bucket. For each token kind the conservative interval for native-recorded post-return work is [certain-after, native total minus certain-before]. Native totals are not provider bills. Do not impute a missing/inconsistent trajectory, count a step as a provider call, or present zeros for unknown work.",
+    "Join the grade at return under no world alignment and a separately labeled 1000 ms fresh-world elapsed-clock condition. Classify forced loss (final 1 standing 0), forced gain, identified unchanged, and ambiguous. No later write is a separate class when supported; work after a return is not automatically waste."
+  ],
+  "pass": [
+    "Every registered slot and both chosen populations reconcile with the public stock report. Unsupported sources, bad bindings and missing receipts do not erase otherwise valid native grades. Every measured token decomposes into before, crossing, after and unplaced; intervals widen or stay unchanged as the host guard increases.",
+    "An independent owner-side reader reproduces per-case work lower/upper bounds and aggregate counts, along with explicit unavailable outcomes. A finite event-order oracle and altered/missing receipt controls cover equality, straddling, timeouts, mismatched seats and unplaced totals.",
+    "Behavioral test: report whether at least one completed team has positive certain-after recorded prompt AND completion tokens. Separately report whether any completed team with a conditionally forced loss has both. A zero or missing intersection is an admissible result. State totals on the covered subset and its size; never silently extrapolate to all teams."
+  ],
+  "release": "No raw transcripts, messages, model text, native identifiers, absolute times or private paths in public outputs. Per-cell results may show stated bands of realized counters. No identity claim and no billing, savings, or causal policy claim.",
+  "new_model_trials": 0,
+  "new_paid_budget_usd": 0
+}

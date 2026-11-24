@@ -1,0 +1,32 @@
+{
+  "schema": "seatlab.retry-seat-retention/v1",
+  "base": "2e0f9a6ebe2424ef6f6e127d4acf79558e47cdd5",
+  "question": "Can a local operator keep each native seat journal across an ordinary retry without replaying the logical slot or changing its grade?",
+  "world": "hello-seats",
+  "seats": {
+    "p1": "delay",
+    "p2": "raise after its Oracle work"
+  },
+  "job_shape": {
+    "n_attempts": 1,
+    "n_concurrent_trials": 1,
+    "max_retries": 1,
+    "retry_only": [
+      "LifecycleControlError"
+    ]
+  },
+  "arms": [
+    "standard batch observer",
+    "same observer with separate private same-filesystem attempt directory"
+  ],
+  "pass": [
+    "One native logical slot per arm; each runs exactly one retry as the native job result reports and retains one final trial directory.",
+    "The optional receipt directory contains two closed native journals with distinct trial UUIDs for that one logical slot. The final journal matches the native final result and bytes. The first journal is not labeled as a second logical trial or given the later grade.",
+    "The no-archive arm leaves one final journal in its job; a separate host witness sees two different trial UUIDs at the reused pathname. Both arms keep the final native grade, roster and dispositions.",
+    "An external observer in the archive arm can see the first UUID while that attempt is still running. No copies of prompts, private worlds or whole native results are kept in the archive."
+  ],
+  "firsts_only": true,
+  "max_local_docker_slots": 2,
+  "no_models": true,
+  "price_usd": 0
+}

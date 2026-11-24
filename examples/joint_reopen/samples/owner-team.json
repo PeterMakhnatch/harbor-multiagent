@@ -1,0 +1,16 @@
+{
+  "participants": [
+    {
+      "seat": "east",
+      "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+      "model_name": "operator/read-peer",
+      "skip_model_parsing": true
+    },
+    {
+      "seat": "west",
+      "import_path": "examples.joint_reopen.owner_seat:JointOwnerSeat",
+      "model_name": "operator/read-peer",
+      "skip_model_parsing": true
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+x-seat: &seat
+  build: ./seat
+  user: player
+  working_dir: /home/player
+  command: ["sleep", "infinity"]
+  init: true
+  networks: [play]
+  depends_on:
+    main:
+      condition: service_healthy
+
+services:
+  main:
+    command: ["python3", "/app/world.py"]
+    init: true
+    volumes:
+      - planner-token:/run/planner
+      - dispatcher-token:/run/dispatcher
+    networks:
+      play:
+        aliases: [world]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health', timeout=1).close()"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+  planner:
+    <<: *seat
+    environment: {SEAT: planner}
+    volumes: ["planner-token:/run/role:ro"]
+  dispatcher:
+    <<: *seat
+    environment: {SEAT: dispatcher}
+    volumes: ["dispatcher-token:/run/role:ro"]
+
+networks:
+  play: {}
+
+volumes:
+  planner-token: {}
+  dispatcher-token: {}

@@ -1,0 +1,890 @@
+{
+  "schema": "harbor.ship-handover.control-outcomes/v1",
+  "registration_revision": "8633774655d044a84f532f6adea89b79ec80bc86",
+  "registration": "control-registration.json",
+  "predictions": "control-predictions.json",
+  "task": {
+    "name": "harbor/ship-handover",
+    "digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607",
+    "checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+  },
+  "seats": "Two scripted native oracle participants under test. No language model made decisions.",
+  "model_cost_usd": 0,
+  "registered": 26,
+  "scripted_policies": 10,
+  "native_first_attempts": 26,
+  "native_statuses": {
+    "no_result": 0,
+    "partial": 0,
+    "ambiguous": 0,
+    "duplicate": 0,
+    "native_error": 0,
+    "invalid": 0,
+    "zero": 12,
+    "positive": 14
+  },
+  "outcomes": {
+    "exactly_one": 14,
+    "duplicate": 3,
+    "omission": 9
+  },
+  "predicted_fields_checked": 234,
+  "predicted_fields_matched": 234,
+  "first_reservations": "The private worker acquired its first two reservations, then rejected a /var versus /private/var path spelling before submitting either trial. We checked the original claims, manifests, and unstarted native directories. The worker resumed those exact tickets. It did not allocate replacements or submit a ticket twice. Absence of a directory alone does not prove a crash preceded submission.",
+  "stratified_contrasts": [
+    {
+      "team": "draft-resume",
+      "registered": 4,
+      "delta": {
+        "committed": {
+          "low": -1,
+          "high": -1,
+          "denominator": 1
+        },
+        "dropped": {
+          "low": 1,
+          "high": 1,
+          "denominator": 1
+        }
+      },
+      "mean_delta": {
+        "low": 0,
+        "high": 0,
+        "denominator": 1
+      },
+      "no_prior_worse_and_some_better": "ruled_out",
+      "opposition": "opposite_signs_identified"
+    },
+    {
+      "team": "handoff-resume",
+      "registered": 4,
+      "delta": {
+        "committed": {
+          "low": 0,
+          "high": 0,
+          "denominator": 1
+        },
+        "dropped": {
+          "low": 1,
+          "high": 1,
+          "denominator": 1
+        }
+      },
+      "mean_delta": {
+        "low": 1,
+        "high": 1,
+        "denominator": 2
+      },
+      "no_prior_worse_and_some_better": "identified",
+      "opposition": "tradeoff_ruled_out"
+    },
+    {
+      "team": "late-return",
+      "registered": 4,
+      "delta": {
+        "committed": {
+          "low": 0,
+          "high": 0,
+          "denominator": 1
+        },
+        "dropped": {
+          "low": 0,
+          "high": 0,
+          "denominator": 1
+        }
+      },
+      "mean_delta": {
+        "low": 0,
+        "high": 0,
+        "denominator": 1
+      },
+      "no_prior_worse_and_some_better": "ruled_out",
+      "opposition": "tradeoff_ruled_out"
+    }
+  ],
+  "noncomparable_teams": 7,
+  "qualification": {
+    "bounded_offline_task_model": {
+      "verdict": "pass",
+      "sources_sha256": {
+        "shipment.py": "9826c5b59cacacb94f2f9c2f8d1fa2f256c003d30e35a4451e3ec83c1204a08a",
+        "verify.py": "c609d5206e504100ab199c99f0df3fdf4ffed629799778a2d44c5bc0852c53a5"
+      },
+      "totals": {
+        "schedules": 175180,
+        "distinct_cuts": 284,
+        "forged_cuts_rejected": 2048,
+        "ledger_step_checks": 3869408,
+        "steps": 3869408,
+        "verifier_evaluations": 284,
+        "world_runs": 745340
+      },
+      "limits": [
+        "Tier A: every schedule of length 0..3 over the 22-step alphabet (all routes, roles, bad bodies, freeze), run under 2 seeded reference sets.",
+        "Tier B: every schedule of length exactly 4 over the 18-step core alphabet (tier A minus briefs, outgoing inbox, unknown route).",
+        "Tier C: every schedule of length exactly 5 over the 9-step business alphabet (3 handoffs, 4 decisions, relief inbox, freeze). Tier D (opt-in) is the same alphabet at length 6.",
+        "Every schedule runs in all 4 worlds (prior x channel) and ends with one verifier freeze; longer interleavings and other body shapes are not explored.",
+        "Sequential in-process calls to Shipment.handle/freeze only: world.py HTTP handler, bearer auth, private-value leak guard, threading lock and 503 fault path are not exercised.",
+        "Verifier: parse_cut + evaluate offline on each distinct cut; freeze_world, expected_world env match, main() and file publishing are not run. Forged-cut set is small: effects substitution, inbox choice flip, inbox/handoff order swap, dropped resolve.",
+        "Error replies: only status and {\"error\": str} shape are checked, not reason text. Where the seat docs are silent the spec accepts: 400 or 409 for an invalid body after freeze; 200 (no event) or 409 for the first ready inbox read after freeze.",
+        "Spec is written from README.md and instructions/*.md; production logic is executed only as the subject. Private ledger/trace are read (not computed) after each step for the per-step ledger check."
+      ]
+    },
+    "exact_interval_completion_check": {
+      "partial_assignments": 13122,
+      "completed_assignments": 131072,
+      "stratum_denominators": [
+        [
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          1,
+          2,
+          2,
+          3
+        ]
+      ]
+    },
+    "archive_views": {
+      "missing": {
+        "affected": 1,
+        "affected_status": "no_result",
+        "valid": 25
+      },
+      "partial": {
+        "affected": 1,
+        "affected_status": "partial",
+        "valid": 25
+      },
+      "trial_exception": {
+        "affected": 1,
+        "affected_status": "native_error",
+        "valid": 25
+      },
+      "seat_exception": {
+        "affected": 1,
+        "affected_status": "native_error",
+        "valid": 25
+      },
+      "repeated_native_id": {
+        "affected": 2,
+        "affected_status": "duplicate",
+        "valid": 24
+      },
+      "repeated_world_id": {
+        "affected": 2,
+        "affected_status": "duplicate",
+        "valid": 24
+      },
+      "inconsistent_score": {
+        "affected": 1,
+        "affected_status": "invalid",
+        "valid": 25
+      },
+      "inconsistent_summary": {
+        "affected": 1,
+        "affected_status": "invalid",
+        "valid": 25
+      },
+      "wrong_task_lock": {
+        "affected": 1,
+        "affected_status": "invalid",
+        "valid": 25
+      },
+      "inconsistent_origin": {
+        "affected": 13,
+        "affected_status": "invalid",
+        "valid": 13
+      },
+      "wrong_task_stamp": {
+        "affected": 13,
+        "affected_status": "invalid",
+        "valid": 13
+      }
+    },
+    "restored_archives": {
+      "disjoint_shards_unchanged_cells": 26,
+      "disjoint_shards_identical_contrast": true,
+      "both_original_and_copy_statuses": {
+        "no_result": 0,
+        "partial": 0,
+        "ambiguous": 13,
+        "duplicate": 0,
+        "native_error": 0,
+        "invalid": 0,
+        "zero": 7,
+        "positive": 6
+      },
+      "cold_restore_does_not_enable_new_claims": true
+    },
+    "registration_design": {
+      "complete_blocks_per_design": 8,
+      "worlds_per_block": 4,
+      "designs": 3,
+      "distinct_tickets_across_designs": 96,
+      "seed_repeats_assignments_not_tickets": true,
+      "concurrent_publishers_with_one_winner": 2
+    }
+  },
+  "cells": [
+    {
+      "ticket": "sh-b948b3ba0415b4b4",
+      "team": "blind-fresh",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "absent",
+        "relief_action": "fresh",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "first_dispatch",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 1
+        },
+        "timeline": [
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-dfebc293dfd46fe2",
+      "team": "handoff-resume",
+      "prior": "committed",
+      "channel": "withhold",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "none",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-0543aaa04e80f7da",
+      "team": "draft-resume",
+      "prior": "committed",
+      "channel": "withhold",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "draft",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "none",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-d309a143a10761a3",
+      "team": "inspect-fresh",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "duplicate",
+        "outgoing_handoff": "original",
+        "relief_action": "fresh",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "original",
+        "effect_change": "duplicate_dispatch",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 1
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-6161d87f1647ab47",
+      "team": "sender-only",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "absent",
+        "inbox_before_resolve": null,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-e44e0683e00f9611",
+      "team": "pass-resume",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "none",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "none",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-d70fa9165058dcf4",
+      "team": "handoff-resume",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "original",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "original",
+        "effect_change": "first_dispatch",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-0eaad13de7fa90fa",
+      "team": "idle-both",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "absent",
+        "relief_action": "absent",
+        "inbox_before_resolve": null,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": []
+      }
+    },
+    {
+      "ticket": "sh-22c73be98e3f0b9b",
+      "team": "blind-close",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "absent",
+        "relief_action": "close",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-b2ca0dd795858f27",
+      "team": "late-return",
+      "prior": "dropped",
+      "channel": "withhold",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "resolve",
+          "handoff",
+          "inbox"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-9b7a44887d3d680e",
+      "team": "late-return",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "resolve",
+          "handoff",
+          "inbox"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-2e48bd7445c13492",
+      "team": "handoff-resume",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "original",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "original",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-90960c2b25dc21f3",
+      "team": "blind-close",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "absent",
+        "relief_action": "close",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-0c8a5db89b8b371d",
+      "team": "late-return",
+      "prior": "committed",
+      "channel": "withhold",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "resolve",
+          "handoff",
+          "inbox"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-62cd44a0680734d6",
+      "team": "draft-resume",
+      "prior": "dropped",
+      "channel": "withhold",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "draft",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "none",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-6bd8cfc80c5cb6b2",
+      "team": "pass-resume",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "none",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "none",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-e73e1687ff6d7047",
+      "team": "handoff-resume",
+      "prior": "dropped",
+      "channel": "withhold",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "none",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-ec79649690f4b3ed",
+      "team": "inspect-close",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "original",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-3bc8168d59f1177a",
+      "team": "inspect-close",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "original",
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-5420923ff432828b",
+      "team": "inspect-fresh",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "fresh",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "original",
+        "effect_change": "first_dispatch",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 1
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-70a345bb012b07c5",
+      "team": "late-return",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "original",
+        "relief_action": "close",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "resolve",
+          "handoff",
+          "inbox"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-7253e3fa1ef043dc",
+      "team": "blind-fresh",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "duplicate",
+        "outgoing_handoff": "absent",
+        "relief_action": "fresh",
+        "inbox_before_resolve": false,
+        "reference_before_resolve": null,
+        "effect_change": "duplicate_dispatch",
+        "effects": {
+          "original": 1,
+          "draft": 0,
+          "fresh": 1
+        },
+        "timeline": [
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-401fe321d0a3ae24",
+      "team": "idle-both",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "absent",
+        "relief_action": "absent",
+        "inbox_before_resolve": null,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": []
+      }
+    },
+    {
+      "ticket": "sh-9ea94502c35bef66",
+      "team": "draft-resume",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "positive",
+      "grade": 1,
+      "observation": {
+        "outcome": "exactly_one",
+        "outgoing_handoff": "draft",
+        "relief_action": "draft",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "draft",
+        "effect_change": "first_dispatch",
+        "effects": {
+          "original": 0,
+          "draft": 1,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-d96dd3388f9bd018",
+      "team": "draft-resume",
+      "prior": "committed",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "duplicate",
+        "outgoing_handoff": "draft",
+        "relief_action": "draft",
+        "inbox_before_resolve": true,
+        "reference_before_resolve": "draft",
+        "effect_change": "duplicate_dispatch",
+        "effects": {
+          "original": 1,
+          "draft": 1,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff",
+          "inbox",
+          "resolve"
+        ]
+      }
+    },
+    {
+      "ticket": "sh-8bb758aabfa4019b",
+      "team": "sender-only",
+      "prior": "dropped",
+      "channel": "deliver",
+      "status": "zero",
+      "grade": 0,
+      "observation": {
+        "outcome": "omission",
+        "outgoing_handoff": "original",
+        "relief_action": "absent",
+        "inbox_before_resolve": null,
+        "reference_before_resolve": null,
+        "effect_change": "unchanged",
+        "effects": {
+          "original": 0,
+          "draft": 0,
+          "fresh": 0
+        },
+        "timeline": [
+          "handoff"
+        ]
+      }
+    }
+  ]
+}

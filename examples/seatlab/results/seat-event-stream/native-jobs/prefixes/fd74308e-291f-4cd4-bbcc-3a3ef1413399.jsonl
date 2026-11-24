@@ -1,0 +1,5 @@
+{"schema":"harbor.seat-events/v1","kind":"open","seq":0,"trial":"fd74308e-291f-4cd4-bbcc-3a3ef1413399","seats":[{"name":"p1","under_test":true},{"name":"p2","under_test":false}]}
+{"kind":"run_enter","seq":1,"elapsed_ns":5810729375,"seat":"p1"}
+{"kind":"run_enter","seq":2,"elapsed_ns":5814337167,"seat":"p2"}
+{"kind":"play_end","seq":3,"elapsed_ns":11057538875,"seat":"p1","disposition":"returned"}
+{"kind":"play_end","seq":4,"elapsed_ns":11058666209,"seat":"p2","disposition":"stop_requested"}

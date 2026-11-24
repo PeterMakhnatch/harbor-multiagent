@@ -1,0 +1,256 @@
+{
+  "schema": "harbor.shift-board.registration/v1",
+  "task": {
+    "name": "harbor/shift-board",
+    "digest": "sha256:c2bd100c5bfb4b69887e338947b370fa16413ea0f51cf70f34934e2d7c8fd289",
+    "checksum": "648b6de6ebf27da2404274c46a286f1ec15e49ea0f91bdb11307d79e4fe738cd"
+  },
+  "teams": {
+    "once": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "BOARD_DISPATCH_POLICY": "once"
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "recheck": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "BOARD_DISPATCH_POLICY": "recheck"
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "override": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "BOARD_DISPATCH_POLICY": "override"
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ],
+    "read-first": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "planner"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "BOARD_DISPATCH_POLICY": "read-first"
+        },
+        "mcp_servers": [],
+        "seat": "dispatcher"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "sb-be1508a42a67a814",
+      "pair": "pair-f8e2fc79eaa5e298",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "team": "read-first",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-d6c0cc4a702bb89c",
+      "pair": "pair-a265555c73aa4b7c",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "team": "once",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-d7f73a3c073d7032",
+      "pair": "pair-ad485c9bd48ed861",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "team": "read-first",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-b690234165ebc852",
+      "pair": "pair-ad485c9bd48ed861",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "team": "read-first",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-b881dfaa92c82f4b",
+      "pair": "pair-f5f067ea3e110a58",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "team": "once",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-501bd28655de1861",
+      "pair": "pair-29b927729b4d0e97",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "team": "recheck",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-99a2d680323f1d34",
+      "pair": "pair-d02851368242dac7",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "team": "override",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-00d7073cde1eae9c",
+      "pair": "pair-43db924849623abe",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "team": "override",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-cef6af4b1c3d73fd",
+      "pair": "pair-f8e2fc79eaa5e298",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "team": "read-first",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-c9778cd226bc3ea2",
+      "pair": "pair-136dd5e4a36ce8fb",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "team": "recheck",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-fa90c9f326ab6efa",
+      "pair": "pair-f5f067ea3e110a58",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "team": "once",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-22a27833ab947408",
+      "pair": "pair-a265555c73aa4b7c",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "team": "once",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-a09036283f972e4d",
+      "pair": "pair-29b927729b4d0e97",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "team": "recheck",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-78ebf522ffede60f",
+      "pair": "pair-136dd5e4a36ce8fb",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "team": "recheck",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-e783ebe2ddaeffdb",
+      "pair": "pair-d02851368242dac7",
+      "seed": 913,
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "team": "override",
+      "repeat": 1
+    },
+    {
+      "ticket": "sb-60d9a301453c3450",
+      "pair": "pair-43db924849623abe",
+      "seed": 913,
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "team": "override",
+      "repeat": 1
+    }
+  ]
+}

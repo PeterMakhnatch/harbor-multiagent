@@ -1,0 +1,61 @@
+{
+  "schema": "harbor.ship-inflight.study/v1",
+  "task": {
+    "name": "harbor/ship-inflight",
+    "digest": "sha256:9a712fac1b44e4b70c91cb717b9b2cb2cbc2a3a43198839cc4f75be38c1c713e",
+    "checksum": "411796f5aee862b63b0c3a9c1a6a43149813422db5d715d8634ab865f09f8bda"
+  },
+  "teams": {
+    "sender-only": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "nop",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "si-2eecaed7d328371a",
+      "team": "sender-only",
+      "fate": "settles",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "si-50f1621f09b7ef28",
+      "team": "sender-only",
+      "fate": "settles",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "si-42111ceae155f3b8",
+      "team": "sender-only",
+      "fate": "fails",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "si-3c52880c8d563c79",
+      "team": "sender-only",
+      "fate": "fails",
+      "channel": "deliver"
+    }
+  ]
+}

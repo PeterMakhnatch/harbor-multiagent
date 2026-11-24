@@ -1,0 +1,95 @@
+{
+  "schema": "seatlab.native-seat-event-question/v1",
+  "question": "Can a passive, opt-in, host-only event stream distinguish a native seat entering its agent and its actual play outcome while another seat still has no terminal evidence?",
+  "before": "7043e58e1d4021f90f500013368dbbc7cd9a6419",
+  "native_attempts": [
+    {
+      "case": "ship-default",
+      "task": "ship-handover",
+      "observe": false,
+      "native_dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      }
+    },
+    {
+      "case": "ship-observed",
+      "task": "ship-handover",
+      "observe": true,
+      "native_dispositions": {
+        "outgoing": "returned",
+        "relief": "returned"
+      }
+    },
+    {
+      "case": "support-return",
+      "task": "hello-seats",
+      "observe": true,
+      "native_dispositions": {
+        "p1": "returned",
+        "p2": "returned"
+      }
+    },
+    {
+      "case": "support-held",
+      "task": "hello-seats",
+      "observe": true,
+      "native_dispositions": {
+        "p1": "returned",
+        "p2": "stop_requested"
+      }
+    },
+    {
+      "case": "support-cancel",
+      "task": "hello-seats",
+      "observe": true,
+      "native_dispositions": {
+        "p1": "returned",
+        "p2": "cancelled"
+      }
+    },
+    {
+      "case": "support-fault",
+      "task": "hello-seats",
+      "observe": true,
+      "native_dispositions": {
+        "p1": "returned",
+        "p2": "raised"
+      }
+    },
+    {
+      "case": "team-deadline",
+      "task": "hello-seats",
+      "observe": true,
+      "native_dispositions": {
+        "p1": "stop_requested",
+        "p2": "stop_requested"
+      }
+    },
+    {
+      "case": "setup-refusal",
+      "task": "hello-seats",
+      "observe": true,
+      "native_dispositions": {
+        "p1": null,
+        "p2": null
+      }
+    }
+  ],
+  "contrasts": [
+    "An unmodified two-Oracle shipping config with observer off and on: same native seat dispositions, world reward of 1, six unscoped native event names and original default result schema; only the opt-in run creates the new journal.",
+    "Hello-seats uses scripted native participants. After honest stock Oracle work, the tested seat delays; the supporting seat can return, hold for a supervisor stop, self-cancel, or raise. In the deadline case both hold. A separate intentional setup refusal happens before either player runs."
+  ],
+  "pass": [
+    "For all seven opted-in attempts, final ordering is gapless in one host process, no raw prompts or arbitrary diagnostic payloads appear, and every recorded terminal disposition equals the native seat result.",
+    "Every expected play entry has one observed entry. Both setup-refusal seats have no entry or terminal event. A snapshot of an open or partial journal never reports an unobserved return.",
+    "For support-return, at least one external host snapshot while result.json is absent reports the supporting seat ended and no terminal for the tested seat.",
+    "The disabled control produces no journal. Do not rewrite the failure into a pass if any registered case disagrees."
+  ],
+  "limits": [
+    "A run_enter means the native runner is about to invoke agent.run. It is not a model request, message receipt, spend, tool execution, or evidence of attention.",
+    "The play_end event reports the play-scope finalizer, not container or child process termination. EOF without closed is not a crash diagnosis.",
+    "Any owner-side recovery experiments on partial lines or errors are separate from the registered native cohort. No retry can replace one of these 8 starts.",
+    "2 or fewer local wrapped Docker trials at a time. No model seats, no provider keys, $0."
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "schema": "harbor.shipping.disconnected-workers-result/v1",
+  "question_commit": "d96156b470d98b4224bfcac0b5317fd4f1771178",
+  "tickets_commit": "e649f723bead1da5311894f5f66b77fa39c9730f",
+  "plan_commit": "cd0512e1ac01b7e26563a17fca81907a302b9383",
+  "plan": "sha256:334a29d45edb19bf10f6088cf8df90e4b5464b8e87ffe794de847613c8697787",
+  "limits": [
+    "Two worker slots used separate local directories and one Docker engine. No SSH or second machine was used.",
+    "A coordinator grant is a permanent permission to attempt one native start. It is not a start, grade, authentication or exactly-once model execution.",
+    "The started controls used two native scripted Oracle seats. No model calls ran."
+  ],
+  "model_spend_usd": "0.00",
+  "native_firsts": {
+    "registered": 8,
+    "issued": 8,
+    "started": 7,
+    "unique_trial_ids": 7,
+    "unique_world_ids": 7,
+    "returned_seats": 14,
+    "matched_predictions": 7,
+    "raw_world_replay_agreed": 7,
+    "no_known_grade": [
+      "sh-abc9880d5d22d2ca"
+    ]
+  },
+  "worker_cases": {
+    "literal_directory_copy": {
+      "exit": 2,
+      "called_transporter": false
+    },
+    "fresh_stage_same_plan_race": {
+      "workers": 2,
+      "fresh_grants": 1,
+      "previously_issued": 1,
+      "starts_for_ticket": 1
+    },
+    "reply_discarded": {
+      "worker_exit": 2,
+      "issued_count_before": 1,
+      "issued_count_after": 2,
+      "new_worker_take_exit": 4,
+      "ticket": "sh-abc9880d5d22d2ca",
+      "native_starts_for_ticket": 0
+    },
+    "native_starts_per_logical_worker": {
+      "0": 4,
+      "1": 3
+    },
+    "eventual_empty_take_exit": [
+      3,
+      3
+    ]
+  },
+  "compatibility": {
+    "existing_board_status_sha256": "aa6a806a2b946ac4ffdb4ac80842f7a259f8c589792c980c32a50352340f4fb0",
+    "existing_first_grant_wire_sha256": "738ab519625e7b3e4093f9dda62556e3674cf9101c115c73afe2123831fdc367",
+    "existing_repeated_grant_wire_sha256": "465b7bb0aef818293cfd71ebe9b396d1600dbe0c39031d4959f294e1da845b25",
+    "cross_namespace_refusals": 4,
+    "two_old_rosters_text_and_json_unchanged": true
+  },
+  "interval_checks": 16,
+  "early_status_late_packets": {
+    "issued_eligible": 0,
+    "issued_unknown": 0,
+    "unissued_eligible": 7,
+    "unissued_unknown": 1
+  },
+  "final_status_same_packets": {
+    "issued_eligible": 7,
+    "issued_unknown": 1,
+    "unissued_eligible": 0,
+    "unissued_unknown": 0
+  },
+  "native_rows": [
+    {
+      "ticket": "sh-00d826f740984f7e",
+      "world": "stock",
+      "worker": 0,
+      "prior": "committed",
+      "channel": "deliver",
+      "handoff": "draft",
+      "receipt_before_decision": "draft",
+      "relief_action": "draft",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "duplicate",
+      "grade": 0,
+      "prediction": 0,
+      "matched": true
+    },
+    {
+      "ticket": "sh-64b2edcd04cca161",
+      "world": "stock",
+      "worker": 0,
+      "prior": "dropped",
+      "channel": "deliver",
+      "handoff": "draft",
+      "receipt_before_decision": "draft",
+      "relief_action": "draft",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "exactly_one",
+      "grade": 1,
+      "prediction": 1,
+      "matched": true
+    },
+    {
+      "ticket": "sh-a2f215b6ecaef17f",
+      "world": "stock",
+      "worker": 1,
+      "prior": "committed",
+      "channel": "withhold",
+      "handoff": "draft",
+      "receipt_before_decision": "none",
+      "relief_action": "close",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "exactly_one",
+      "grade": 1,
+      "prediction": 1,
+      "matched": true
+    },
+    {
+      "ticket": "si-3506e3a027e59c63",
+      "world": "inflight",
+      "worker": 1,
+      "fate": "settles",
+      "channel": "withhold",
+      "handoff": "draft",
+      "receipt_before_decision": "none",
+      "relief_action": "close",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "exactly_one",
+      "grade": 1,
+      "prediction": 1,
+      "matched": true
+    },
+    {
+      "ticket": "si-95380f4cceb16f77",
+      "world": "inflight",
+      "worker": 1,
+      "fate": "fails",
+      "channel": "withhold",
+      "handoff": "draft",
+      "receipt_before_decision": "none",
+      "relief_action": "close",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "omission",
+      "grade": 0,
+      "prediction": 0,
+      "matched": true
+    },
+    {
+      "ticket": "si-a287d6ee2658a883",
+      "world": "inflight",
+      "worker": 0,
+      "fate": "fails",
+      "channel": "deliver",
+      "handoff": "draft",
+      "receipt_before_decision": "draft",
+      "relief_action": "join-draft",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "exactly_one",
+      "grade": 1,
+      "prediction": 1,
+      "matched": true
+    },
+    {
+      "ticket": "si-e74454a2d7d5befa",
+      "world": "inflight",
+      "worker": 0,
+      "fate": "settles",
+      "channel": "deliver",
+      "handoff": "draft",
+      "receipt_before_decision": "draft",
+      "relief_action": "join-draft",
+      "native_dispositions": [
+        "returned",
+        "returned"
+      ],
+      "physical_outcome": "duplicate",
+      "grade": 0,
+      "prediction": 0,
+      "matched": true
+    }
+  ]
+}

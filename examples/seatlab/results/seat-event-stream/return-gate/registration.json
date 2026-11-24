@@ -1,0 +1,35 @@
+{
+  "schema": "seatlab.native-return-gate-question/v1",
+  "question": "Can an external host workflow wait for the supporting seat to return, without accepting a harness stop or inspecting a player?",
+  "before": "c8a5e69af50044ba191e62addb248f3fc45b428b",
+  "cases": [
+    {
+      "name": "gate-return",
+      "task": "hello-seats",
+      "tested": "delay",
+      "support": "return",
+      "wait_for": "p2",
+      "expected_state": "returned",
+      "expected_exit": 0,
+      "final_result_at_observation": "absent",
+      "independent_marker": "wrapper_returned"
+    },
+    {
+      "name": "gate-stopped",
+      "task": "hello-seats",
+      "tested": "delay",
+      "support": "hold",
+      "wait_for": "p2",
+      "expected_state": "not_returned",
+      "expected_exit": 1,
+      "expected_disposition": "stop_requested",
+      "independent_marker": "hold_cancelled"
+    }
+  ],
+  "pass": [
+    "Separate fresh native trial directories, one first per case, at most two wrapped Docker trials at once, no model and no interventions.",
+    "Start an external wait process once the owner reads the actual trial id from its freshly created local journal; keep a conservative timeout of 30 seconds on the waiter and 150 seconds on the driver.",
+    "The registered wait must return for the correct supporting seat, never its peer. The first case must fire before result.json exists. Both cases must agree with the later bound result and independent seat marker.",
+    "A missing wait receipt stays missing. A lost native first cannot be replaced. Additional altered-journal or disconnected-file checks are not additional native trials."
+  ]
+}

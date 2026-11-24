@@ -1,0 +1,25 @@
+{
+  "config": {
+    "job_id": "a8af33b9-820a-48ff-a6e9-0e83e50a9d77"
+  },
+  "id": "17dc6f76-ba03-4b13-bfc2-1c7e7d638a74",
+  "reward_valid": true,
+  "schema_version": 1,
+  "seat_results": [
+    {
+      "execution_disposition": "returned",
+      "seat": "p1",
+      "under_test": true
+    },
+    {
+      "execution_disposition": "raised",
+      "seat": "p2",
+      "under_test": false
+    }
+  ],
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  }
+}

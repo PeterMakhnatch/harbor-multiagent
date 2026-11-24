@@ -10,17 +10,35 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 ## SeatLab workbench
 
-Check the published SeatLab study reports from one fresh checkout. Start here:
+Use this fork branch to inspect real team traces, replay published studies, or assign new native trials to independent workers. Start with an offline check:
 
 ```sh
-git clone --depth 1 --branch experiments/seatlab-workbench https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch seatlab/team-operator-workbench https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
-python3.12 -BS -m examples.seatlab.workbench verify
+python3.12 -BS -m examples.seatlab.workbench verify team-return-partial team-return-complete
 ```
 
-`verify` checks every registered study. `list` shows the studies. `verify peer-fanin private-pricing` checks only the named studies. After the clone, the workbench works offline. It needs no Harbor install, Docker, model key, or model call.
+The first profile withholds one worker. The second includes all workers and adds verified timeouts to the archived population. Both keep **archived model teams** separate from **scripted native controls**. See [the team-return operator](examples/seatlab/workbench/team-return.md) to read the findings, change the inputs, or run your own team.
+
+`list` shows all studies. `verify` with no names checks the entire catalog. After the clone, these two commands work offline. They need no Harbor install, Docker, model key, or model call.
 
 A verified release means the bundled analyzer reproduces the published report bytes at the registered exit code. It is not a positive study result or a new native trial. Each study report states its own finding.
+
+To act on a participant's return instead of the final team reward, [watch a native seat](examples/seatlab/results/seat-event-stream/results.md) or [wait for a named return from another process](examples/seatlab/results/seat-event-stream/return-gate/results.md). The host records seat state, not prompts or messages. A harness stop does not count as a return.
+
+For a batch, [record each seat in a native `harbor run` job](examples/seatlab/results/seat-event-stream/native-jobs/results.md). If Harbor retries a slot, [keep each execution separately](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md). The retry report keeps a missing execution in the count and does not assign it a grade.
+
+To see which seats and retries account for the money, [inspect a saved team job or quote a locked plan](examples/seatlab/workbench/team-account.md). The operator separates harness estimates, token-priced usage and settled provider charges. It never starts a team.
+
+Before a future team job, [prepare the host observers and morning manifest together](examples/seatlab/workbench/team-account.md#prepare-observation-before-a-future-job). Nothing starts. Afterward, [check which finished jobs need attention](examples/seatlab/workbench/team-account.md#check-finished-jobs-from-several-workers). A missing job, seat journal, or END receipt is not a failed team.
+
+To see how much teammates' execution windows overlap, [inspect a saved native job](examples/seatlab/workbench/team-account.md#measure-overlap-and-the-last-seat). This works on older jobs without seat journals. It measures elapsed time, not model work.
+
+To tell whether a teammate received a report before a decision, [retain the message journal for each execution](examples/seat_handoffs/README.md#keep-message-evidence-when-harbor-retries-a-slot). You can [check message coverage against a saved host witness](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md#did-the-message-evidence-survive-too) without running a team.
+
+Before spending on a communication benchmark, [check what the world actually measures](examples/seat_handoffs/author.md). The same offline check distinguishes a returned report from a receiver acknowledgement. A reusable writer lets two authors instrument a new task without changing Harbor.
+
+To check a planned comparison before assigning teams, [compare two prepared native inputs](examples/seatlab/workbench/input-isolation.md). The command distinguishes one changed role instruction, one changed participant configuration, or one changed world setting. It needs the fork's Python environment but starts no seat.
 
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
@@ -52,7 +70,7 @@ To let **two operators collect separate four-seat teams**, use the [campaign com
 
 To **repeat a whole business panel**, give each worker [one of two company shards](examples/seatlab/market-handoff.md#run-or-verify-a-separate-repetition). Both workers use the recorded decisions without starting models. To inspect an existing result first, run `python3.12 -BS -m examples.seatlab.workbench verify native-business-repeat reporter-tokens`. The second check shows why the calendar teams used fewer calls but reported more tokens.
 
-The fork homepage and default branch do not include the workbench yet. Use the `experiments/seatlab-workbench` branch above.
+The fork's default branch does not include this workbench. Use `seatlab/team-operator-workbench` for the combined checkout. You do not need to switch branches for the linked studies.
 
 ## SeatLab: test what a receiver can do with a peer report
 

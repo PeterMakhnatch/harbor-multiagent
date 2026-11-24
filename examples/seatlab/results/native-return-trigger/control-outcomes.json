@@ -1,0 +1,864 @@
+{
+  "schema": "harbor.seat-seal.return-report/v1",
+  "registered": 8,
+  "directories": {
+    "roots": 1,
+    "claimed": 8,
+    "unknown": 0,
+    "skipped": 0
+  },
+  "statuses": {
+    "graded": 8,
+    "native_error": 0,
+    "incomplete": 0,
+    "invalid": 0,
+    "ambiguous": 0,
+    "duplicate_id": 0,
+    "missing": 0
+  },
+  "grades": {
+    "verified": 8,
+    "conflict": 0,
+    "unverified": 0,
+    "unavailable": 0
+  },
+  "verdicts": {
+    "pass": 8,
+    "fail": 0,
+    "unresolved": 0
+  },
+  "roster": "same",
+  "verdict": "pass",
+  "cases": [
+    {
+      "id": "v1-return-planner-fit",
+      "ticket": "sb-d6684e03c26a2d6b",
+      "observer": "v1",
+      "exit": "return",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "returned",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 1,
+        "native_reward": 1,
+        "final_action": "none"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v1"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "clean",
+        "after_seq": 4,
+        "prefix_grade": 1,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "committed",
+        "reason": null,
+        "after_seq": 4,
+        "decision_grade": 1,
+        "writes_after": 0,
+        "refusals": 1,
+        "truncated": false,
+        "peer_refused": true,
+        "on_terminal": true
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "return",
+        "planner_done": "returned",
+        "voluntary": true
+      },
+      "intervention": true,
+      "expected": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 1
+      },
+      "observed": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 1
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v2-cancel-dispatcher-fit",
+      "ticket": "sb-db72ccce903307f8",
+      "observer": "v2",
+      "exit": "cancel",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "cancelled",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 1,
+        "native_reward": 1,
+        "final_action": "publish"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v2"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "not_returned",
+        "after_seq": 4,
+        "prefix_grade": 0,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "none",
+        "reason": null,
+        "after_seq": null,
+        "decision_grade": null,
+        "writes_after": null,
+        "refusals": 0,
+        "truncated": false,
+        "peer_refused": false,
+        "on_terminal": null
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "cancel",
+        "planner_done": "cancelled",
+        "voluntary": true
+      },
+      "intervention": false,
+      "expected": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "not_returned",
+        "board_decision": false,
+        "refused_peer_write": false,
+        "reward": 1
+      },
+      "observed": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "not_returned",
+        "board_decision": false,
+        "refused_peer_write": false,
+        "reward": 1
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v2-return-planner-fit",
+      "ticket": "sb-4e990a495010191e",
+      "observer": "v2",
+      "exit": "return",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "returned",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 1,
+        "native_reward": 1,
+        "final_action": "none"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v2"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "clean",
+        "after_seq": 4,
+        "prefix_grade": 1,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "committed",
+        "reason": null,
+        "after_seq": 4,
+        "decision_grade": 1,
+        "writes_after": 0,
+        "refusals": 1,
+        "truncated": false,
+        "peer_refused": true,
+        "on_terminal": true
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "return",
+        "planner_done": "returned",
+        "voluntary": true
+      },
+      "intervention": true,
+      "expected": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 1
+      },
+      "observed": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 1
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v1-cancel-dispatcher-fit",
+      "ticket": "sb-4f2f004094fd5dad",
+      "observer": "v1",
+      "exit": "cancel",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "cancelled",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 0,
+        "native_reward": 0,
+        "final_action": "none"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v1"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "clean",
+        "after_seq": 4,
+        "prefix_grade": 0,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "committed",
+        "reason": null,
+        "after_seq": 4,
+        "decision_grade": 0,
+        "writes_after": 0,
+        "refusals": 1,
+        "truncated": false,
+        "peer_refused": true,
+        "on_terminal": true
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "cancel",
+        "planner_done": "cancelled",
+        "voluntary": true
+      },
+      "intervention": false,
+      "expected": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 0
+      },
+      "observed": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 0
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v2-cancel-planner-fit",
+      "ticket": "sb-babeae64caa28e0f",
+      "observer": "v2",
+      "exit": "cancel",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "cancelled",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 0,
+        "native_reward": 0,
+        "final_action": "publish"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v2"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "not_returned",
+        "after_seq": 4,
+        "prefix_grade": 1,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "none",
+        "reason": null,
+        "after_seq": null,
+        "decision_grade": null,
+        "writes_after": null,
+        "refusals": 0,
+        "truncated": false,
+        "peer_refused": false,
+        "on_terminal": null
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "cancel",
+        "planner_done": "cancelled",
+        "voluntary": true
+      },
+      "intervention": false,
+      "expected": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "not_returned",
+        "board_decision": false,
+        "refused_peer_write": false,
+        "reward": 0
+      },
+      "observed": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "not_returned",
+        "board_decision": false,
+        "refused_peer_write": false,
+        "reward": 0
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v1-return-dispatcher-fit",
+      "ticket": "sb-4c5a54b859b258e2",
+      "observer": "v1",
+      "exit": "return",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "returned",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 0,
+        "native_reward": 0,
+        "final_action": "none"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v1"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "clean",
+        "after_seq": 4,
+        "prefix_grade": 0,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "committed",
+        "reason": null,
+        "after_seq": 4,
+        "decision_grade": 0,
+        "writes_after": 0,
+        "refusals": 1,
+        "truncated": false,
+        "peer_refused": true,
+        "on_terminal": true
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "return",
+        "planner_done": "returned",
+        "voluntary": true
+      },
+      "intervention": true,
+      "expected": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 0
+      },
+      "observed": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 0
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v1-cancel-planner-fit",
+      "ticket": "sb-d8e9b9b9390fa6db",
+      "observer": "v1",
+      "exit": "cancel",
+      "fixture": "planner-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "cancelled",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 1,
+        "native_reward": 1,
+        "final_action": "none"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v1"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "clean",
+        "after_seq": 4,
+        "prefix_grade": 1,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "committed",
+        "reason": null,
+        "after_seq": 4,
+        "decision_grade": 1,
+        "writes_after": 0,
+        "refusals": 1,
+        "truncated": false,
+        "peer_refused": true,
+        "on_terminal": true
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "cancel",
+        "planner_done": "cancelled",
+        "voluntary": true
+      },
+      "intervention": false,
+      "expected": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 1
+      },
+      "observed": {
+        "native_planner": "cancelled",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": true,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 1
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    },
+    {
+      "id": "v2-return-dispatcher-fit",
+      "ticket": "sb-404bccad0c8b4115",
+      "observer": "v2",
+      "exit": "return",
+      "fixture": "dispatcher-fit",
+      "seed": 17,
+      "mode": "seal",
+      "status": "graded",
+      "reason": null,
+      "native": {
+        "error": null,
+        "seats": {
+          "planner": {
+            "disposition": "returned",
+            "error": null
+          },
+          "dispatcher": {
+            "disposition": "returned",
+            "error": null
+          }
+        }
+      },
+      "grade": {
+        "status": "verified",
+        "reason": null,
+        "reward": 0,
+        "native_reward": 0,
+        "final_action": "none"
+      },
+      "host": {
+        "status": "valid",
+        "reason": null,
+        "version": "v2"
+      },
+      "terminal": {
+        "status": "acknowledged",
+        "reason": null,
+        "target": "clean",
+        "after_seq": 4,
+        "prefix_grade": 0,
+        "prefix_writes": [
+          "dispatcher:prepare",
+          "planner:publish:accepted"
+        ]
+      },
+      "world": {
+        "status": "committed",
+        "reason": null,
+        "after_seq": 4,
+        "decision_grade": 0,
+        "writes_after": 0,
+        "refusals": 1,
+        "truncated": false,
+        "peer_refused": true,
+        "on_terminal": true
+      },
+      "witness": {
+        "status": "valid",
+        "reason": null,
+        "planner_stock": "returned",
+        "planner_action": "return",
+        "planner_done": "returned",
+        "voluntary": true
+      },
+      "intervention": true,
+      "expected": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 0
+      },
+      "observed": {
+        "native_planner": "returned",
+        "native_dispatcher": "returned",
+        "planner_task_cancelled": false,
+        "target_when_peer_waits": "clean",
+        "board_decision": true,
+        "refused_peer_write": true,
+        "reward": 0
+      },
+      "checks": {
+        "observer": "match",
+        "exit": "match",
+        "terminal": "match",
+        "native_planner": "match",
+        "native_dispatcher": "match",
+        "planner_task_cancelled": "match",
+        "target_when_peer_waits": "match",
+        "board_decision": "match",
+        "refused_peer_write": "match",
+        "reward": "match"
+      },
+      "verdict": "pass"
+    }
+  ],
+  "pairs": [
+    {
+      "observer": "v1",
+      "fixture": "planner-fit",
+      "prefix_at_terminal": "same",
+      "return_board_decision": true,
+      "return_refused_peer_write": true,
+      "return_reward": 1,
+      "cancel_board_decision": true,
+      "cancel_refused_peer_write": true,
+      "cancel_reward": 1
+    },
+    {
+      "observer": "v1",
+      "fixture": "dispatcher-fit",
+      "prefix_at_terminal": "same",
+      "return_board_decision": true,
+      "return_refused_peer_write": true,
+      "return_reward": 0,
+      "cancel_board_decision": true,
+      "cancel_refused_peer_write": true,
+      "cancel_reward": 0
+    },
+    {
+      "observer": "v2",
+      "fixture": "planner-fit",
+      "prefix_at_terminal": "same",
+      "return_board_decision": true,
+      "return_refused_peer_write": true,
+      "return_reward": 1,
+      "cancel_board_decision": false,
+      "cancel_refused_peer_write": false,
+      "cancel_reward": 0
+    },
+    {
+      "observer": "v2",
+      "fixture": "dispatcher-fit",
+      "prefix_at_terminal": "same",
+      "return_board_decision": true,
+      "return_refused_peer_write": true,
+      "return_reward": 0,
+      "cancel_board_decision": false,
+      "cancel_refused_peer_write": false,
+      "cancel_reward": 1
+    }
+  ]
+}

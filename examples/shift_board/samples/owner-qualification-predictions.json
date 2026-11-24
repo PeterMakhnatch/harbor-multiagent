@@ -1,0 +1,271 @@
+{
+  "schema": "harbor.shift-board.owner-qualification/v1",
+  "registered_utc": "2026-11-24T06:50:39.763694+00:00",
+  "question": "Can two independent host decision owners drive native Harbor seats without automatic reads, writes, or fallbacks? Can a previously inspected old base and a stop without a terminal write be distinguished from failure?",
+  "pass": "All 12 behavioral teams have usable native grades; both owner receipts match the registered script and native sequence. The separate failed-owner diagnostic is never a usable team or a successful negative decision. No substitution or retries.",
+  "unit": "one first native team per policy, fixture and rule",
+  "seed": 4935,
+  "planner": "operator/preferred-control",
+  "cost_usd": 0,
+  "model_calls": 0,
+  "cells": [
+    {
+      "policy": "inspect-stale-control",
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "native": {
+        "incumbent_correct": true,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": true,
+        "final_action": "publish",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "damage"
+      },
+      "dispatcher_receipt": {
+        "turns": 3,
+        "reads": 1,
+        "conflicts": 0,
+        "terminal": "publish"
+      }
+    },
+    {
+      "policy": "inspect-stale-control",
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "native": {
+        "incumbent_correct": true,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": true,
+        "final_action": "leave",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "unchanged"
+      },
+      "dispatcher_receipt": {
+        "turns": 4,
+        "reads": 1,
+        "conflicts": 1,
+        "terminal": "leave"
+      }
+    },
+    {
+      "policy": "inspect-stale-control",
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "native": {
+        "incumbent_correct": false,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": true,
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      },
+      "dispatcher_receipt": {
+        "turns": 3,
+        "reads": 1,
+        "conflicts": 0,
+        "terminal": "publish"
+      }
+    },
+    {
+      "policy": "inspect-stale-control",
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "native": {
+        "incumbent_correct": false,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": true,
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      },
+      "dispatcher_receipt": {
+        "turns": 4,
+        "reads": 1,
+        "conflicts": 1,
+        "terminal": "publish"
+      }
+    },
+    {
+      "policy": "recheck-control",
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "native": {
+        "incumbent_correct": true,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "final_action": "publish",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": "damage"
+      },
+      "dispatcher_receipt": {
+        "turns": 2,
+        "reads": 0,
+        "conflicts": 0,
+        "terminal": "publish"
+      }
+    },
+    {
+      "policy": "recheck-control",
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "native": {
+        "incumbent_correct": true,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "final_action": "leave",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "unchanged"
+      },
+      "dispatcher_receipt": {
+        "turns": 4,
+        "reads": 1,
+        "conflicts": 1,
+        "terminal": "leave"
+      }
+    },
+    {
+      "policy": "recheck-control",
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "native": {
+        "incumbent_correct": false,
+        "stale_attempts": 1,
+        "stale_refusals": 0,
+        "first_stale_current_returned": false,
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      },
+      "dispatcher_receipt": {
+        "turns": 2,
+        "reads": 0,
+        "conflicts": 0,
+        "terminal": "publish"
+      }
+    },
+    {
+      "policy": "recheck-control",
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "native": {
+        "incumbent_correct": false,
+        "stale_attempts": 1,
+        "stale_refusals": 1,
+        "first_stale_current_returned": false,
+        "final_action": "publish",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": "repair"
+      },
+      "dispatcher_receipt": {
+        "turns": 4,
+        "reads": 1,
+        "conflicts": 1,
+        "terminal": "publish"
+      }
+    },
+    {
+      "policy": "stop-control",
+      "fixture": "planner-fit",
+      "rule": "observe",
+      "native": {
+        "incumbent_correct": true,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "final_action": "none",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": null
+      },
+      "dispatcher_receipt": {
+        "turns": 2,
+        "reads": 0,
+        "conflicts": 0,
+        "terminal": "stop"
+      }
+    },
+    {
+      "policy": "stop-control",
+      "fixture": "planner-fit",
+      "rule": "guard",
+      "native": {
+        "incumbent_correct": true,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "final_action": "none",
+        "final_correct": true,
+        "reward": 1,
+        "observed_change": null
+      },
+      "dispatcher_receipt": {
+        "turns": 2,
+        "reads": 0,
+        "conflicts": 0,
+        "terminal": "stop"
+      }
+    },
+    {
+      "policy": "stop-control",
+      "fixture": "dispatcher-fit",
+      "rule": "observe",
+      "native": {
+        "incumbent_correct": false,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "final_action": "none",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": null
+      },
+      "dispatcher_receipt": {
+        "turns": 2,
+        "reads": 0,
+        "conflicts": 0,
+        "terminal": "stop"
+      }
+    },
+    {
+      "policy": "stop-control",
+      "fixture": "dispatcher-fit",
+      "rule": "guard",
+      "native": {
+        "incumbent_correct": false,
+        "stale_attempts": 0,
+        "stale_refusals": 0,
+        "first_stale_current_returned": null,
+        "final_action": "none",
+        "final_correct": false,
+        "reward": 0,
+        "observed_change": null
+      },
+      "dispatcher_receipt": {
+        "turns": 2,
+        "reads": 0,
+        "conflicts": 0,
+        "terminal": "stop"
+      }
+    }
+  ],
+  "disconnected_control": {
+    "attempts": 1,
+    "other_registered_cells_not_issued": 3,
+    "producer": "scripted owner returns an error after preparing, when the planner has already published",
+    "pass": "No usable cell. The native dispatcher has a recorded error. Never count the standing reward as a completed model decision."
+  }
+}

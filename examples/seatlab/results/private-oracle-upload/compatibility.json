@@ -1,0 +1,28 @@
+{
+  "schema": "harbor.seatlab.private-oracle-compat/v1",
+  "revision": "a4e80e7be44fe7971fa250a4ce432efed402e4c5",
+  "expected": {
+    "ticket": "so-6ea0044cf3ec2ed1",
+    "runner": "release",
+    "mode": "private",
+    "prior": "dropped",
+    "channel": "deliver",
+    "expected_disposition": "returned",
+    "expected_reward": 1
+  },
+  "native_seats": {
+    "outgoing": "returned",
+    "relief": "returned"
+  },
+  "native_reward_valid": true,
+  "native_reward": 1,
+  "verified_reward": 1,
+  "oracle_sha256": "e6be38436dc16ef381ffc097c44f2ab087234cf7b875472654bff8dfeff412ed",
+  "task_files": "sha256:454f01b76a674e0285163cfcb5c4825c2c5414d0e5650286672effbecbe48235",
+  "kind": "separate final-source smoke; not another primary row",
+  "unmodified_regression_files": [
+    "tests/unit/agents/test_oracle.py",
+    "tests/unit/test_agent_os_compat.py"
+  ],
+  "checks_passed": 21
+}

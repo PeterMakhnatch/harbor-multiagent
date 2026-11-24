@@ -1,0 +1,44 @@
+{
+  "schema": "harbor.seat-seal.admission-control/v1",
+  "question": "Can separate worker directories start no more than one native team for an enrolled ticket, even if a durable admission reply is lost?",
+  "population": "18 new native Shift Board scripted tickets; three assigned worker identities. No model or provider key. A spent ticket is not a completed trial.",
+  "source_before_change": "7f4f574d24fa9832694fc74a3c65b65b1e336caa",
+  "comparison_source": "00aff1ccc1d8b064fa78515d3a762f4a0d4c5491",
+  "plan": "sha256:d09f25377e56ca3c0d8a85d29141701272e6567dd1e974bc5dd6ac978c0359fc",
+  "registration": "sha256:194039900a0d3309a9ab6ab963ccdf206469ff2dbf5786d56c4f614c16dc5e71",
+  "task_files": "sha256:966f23032d584cab8d6123530bd0b39643fc0034159bfa13e68985363ab8243a",
+  "environment": "Independent worker directories and processes on one machine. Same Docker engine. Central coordinator uses a private disk; no shared worker trial directory. No SSH link or remote durability claim.",
+  "units": {
+    "local_only": {
+      "ticket": "sb-38db5d3aae608166",
+      "worker": 2,
+      "method": "Two sequential stock run-next commands on disjoint empty roots with one logical owner. Do not overlap two Docker jobs for the same old ticket.",
+      "pass": "Two distinct native trial IDs, each with a replayed grade. Joined collection keeps the single ticket ambiguous."
+    },
+    "race": {
+      "ticket": "sb-363e1a4ed1c3db27",
+      "worker": 0,
+      "method": "Two simultaneously started admitted worker processes, same ticket and owner, disjoint roots and nonces.",
+      "pass": "Exactly one grant, one denial, one native ID and independently replayed grade."
+    },
+    "lost_reply": {
+      "ticket": "sb-0104c3e5a36954eb",
+      "worker": 0,
+      "method": "Persist the grant, discard the whole reply before worker sees it. Restart serve-once on the same ledger; ask from a fresh root.",
+      "pass": "Neither worker has a native start, second request is denied, ticket stays issued and its grade stays unknown."
+    },
+    "unrelated": {
+      "ticket": "sb-1dfa4219f7eaa814",
+      "worker": 1,
+      "method": "Use the assigned different worker after the lost reply.",
+      "pass": "One new grant and one independently replayed native grade."
+    }
+  },
+  "primary_pass": "All 4 units pass on first attempts. Across the 18 tickets the admitted cohort has 3 issued, 2 unique native grades and 16 unknown. The two local-only starts form a separate comparison and never fill an admitted slot. No automatic retry.",
+  "out_of_scope": [
+    "Model behavior or charges",
+    "Distributed host or network-failure rates",
+    "Safety if the ledger is copied, rolled back or bypassed",
+    "Crash survival without a durable local filesystem and trusted coordinator"
+  ]
+}

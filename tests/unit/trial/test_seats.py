@@ -5,17 +5,20 @@ timeout cases rely on time.
 """
 
 import asyncio
+import contextlib
 import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
 from harbor.agents.base import BaseAgent
 from harbor.agents.installed.base import (
     AgentAuthenticationError,
+    BaseInstalledAgent,
     NonZeroAgentExitCodeError,
 )
 from harbor.agents.installed.codex import Codex
@@ -94,6 +97,8 @@ class ScriptedAgent(BaseAgent):
                 raise AgentAuthenticationError("401 invalid api key")
             if self.fail == "crash":
                 raise RuntimeError(f"{seat} crashed")
+            if self.fail == "cancel":
+                raise asyncio.CancelledError
             if self.hold:
                 await RELEASE[seat].wait()
             context.cost_usd = 0.5
@@ -102,7 +107,11 @@ class ScriptedAgent(BaseAgent):
             note("stopped", seat)
             if self.fail == "crash-on-cancel":
                 raise RuntimeError(f"{seat} crashed while stopping")
+            if self.fail == "return-on-cancel":
+                return
             raise
+        finally:
+            note("left", seat)
 
 
 AGENT = f"{__name__}:ScriptedAgent"
@@ -211,6 +220,70 @@ async def test_trial_create_keeps_ordinary_tasks_single_step(tmp_path: Path):
         await Trial.create(
             plain.model_copy(update={"participants": [_participant("maya")]})
         )
+
+
+@pytest.mark.parametrize("ending", ["normal", "timeout", "cancel", "error"])
+async def test_seat_trajectory_sync_wraps_play_and_finishes_before_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ending: str
+):
+    hold = ending in {"timeout", "cancel"}
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path, timeout_sec=0.2 if ending == "timeout" else 30),
+            _participant("maya", hold=hold, fail="crash" if ending == "error" else ""),
+            _participant("raj", hold=hold),
+            _participant("lee", hold=True),
+        )
+    )
+    active = set()
+    by_environment = {seat.environment: seat for seat in trial.seats}
+
+    @contextlib.asynccontextmanager
+    async def sync(environment, agent, directory):
+        seat = by_environment[environment]
+        assert agent is seat.agent
+        assert directory == seat.paths.agent_dir
+        active.add(seat.name)
+        note("sync-start", seat.name)
+        try:
+            yield
+        finally:
+            active.remove(seat.name)
+            note("sync-stop", seat.name)
+
+    monkeypatch.setattr("harbor.trial.seats.sync_trajectory", sync)
+    original_run = ScriptedAgent.run
+
+    async def run_agent(self, instruction, environment, context):
+        assert environment.service in active
+        await original_run(self, instruction, environment, context)
+
+    monkeypatch.setattr(ScriptedAgent, "run", run_agent)
+    run = asyncio.create_task(trial.run())
+    if ending == "cancel":
+        await seen("run", "maya", "You are maya.")
+        await seen("run", "raj", "You are raj.")
+        await seen("run", "lee", "You are lee.")
+        run.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+    else:
+        await run
+
+    assert not active
+    for seat in trial.seats:
+        assert (
+            index("sync-start", seat.name)
+            < index("run", seat.name, seat.instruction)
+            < index("sync-stop", seat.name)
+        )
+        download = (
+            "compose",
+            "cp",
+            f"{seat.name}:/logs/agent/.",
+            str(seat.paths.agent_dir),
+        )
+        assert index("sync-stop", seat.name) < index(*download)
 
 
 async def test_regrade_refuses_seat_tasks(tmp_path: Path):
@@ -408,12 +481,15 @@ async def test_agent_timeout_ends_everyone_still_running_and_still_grades(
     seats = _seat_results(result)
     assert ("stopped", "maya") in EVENTS and ("stopped", "lee") in EVENTS
     assert seats["raj"].exception_info is None
-    for seat in ("maya", "lee"):
-        info = seats[seat].exception_info
-        assert info is not None and info.exception_type == "AgentTimeoutError"
+    assert seats["lee"].exception_info is None
+    info = seats["maya"].exception_info
+    assert info is not None and info.exception_type == "AgentTimeoutError"
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "AgentTimeoutError"
     assert result.exception_info.exception_message.startswith("Seat 'maya': ")
+    assert seats["maya"].execution_disposition == "stop_requested"
+    assert seats["lee"].execution_disposition == "stop_requested"
+    assert seats["raj"].execution_disposition == "returned"
     assert _verified(trial) and result.verifier_result is not None
 
 
@@ -452,23 +528,171 @@ async def test_an_agent_failure_reaches_the_trial_and_job_stats_and_grades_by_po
     assert any(error in s.exception_stats for s in stats.evals.values())
 
 
-async def test_a_seat_crash_fails_the_trial_and_ends_play(tmp_path: Path):
+async def test_a_seat_crash_leaves_the_others_playing_and_grades_by_policy(
+    tmp_path: Path,
+):
     trial = await _seats_trial(
         _config(
             _task_dir(tmp_path),
             _participant("maya", hold=True),
-            _participant("raj", hold=True),
+            _participant("raj"),
             _participant("lee", fail="crash"),
+        )
+    )
+
+    run = asyncio.create_task(trial.run())
+    await seen("ended", "raj")
+    assert ("stopped", "maya") not in EVENTS
+    RELEASE["maya"].set()
+    result = await run
+
+    assert result.exception_info is not None
+    assert result.exception_info.exception_type == "RuntimeError"
+    assert result.exception_info.exception_message == "Seat 'lee': lee crashed"
+    assert ("ended", "maya") in EVENTS
+    assert _verified(trial)
+    assert EVENTS[-1] == ("stop",)
+
+
+async def test_override_error_policy_reaches_every_seat_error(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", fail="crash"),
+            _participant("raj"),
+            _participant("lee"),
+            override_error_policy={"RuntimeError": {"should_grade": False}},
         )
     )
 
     result = await trial.run()
 
+    maya = _seat_results(result)["maya"].exception_info
+    assert maya is not None and maya.policy.should_grade is False
+    assert result.exception_info is not None
+    assert result.exception_info.policy.should_grade is False
+    assert not _verified(trial)
+
+
+async def test_stopped_seats_have_their_processes_killed_before_collection(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", hold=True),
+        )
+    )
+
+    result = await trial.run()
+
+    assert result.exception_info is None
+    kills = [e for e in EVENTS if e[:2] == ("compose", "exec") and "/proc/" in e[-1]]
+    assert [_service_and_user(list(e[1:])) for e in kills] == [("lee", "root")]
+    lee = trial.seats[2]
+    download = ("compose", "cp", "lee:/logs/agent/.", str(lee.paths.agent_dir))
+    assert index("stopped", "lee") < index(*kills[0]) < index(*download)
+    assert index(*download) < index("verify")
+
+
+async def test_an_error_while_stopping_a_seat_does_not_fail_the_trial(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee", hold=True, fail="crash-on-cancel"),
+        )
+    )
+
+    result = await trial.run()
+
+    assert ("stopped", "lee") in EVENTS
+    assert result.exception_info is None
+    assert _seat_results(result)["lee"].exception_info is None
+    assert _verified(trial)
+
+
+@pytest.mark.parametrize(
+    "script, disposition, error",
+    [
+        ({"hold": True}, "stop_requested", None),
+        ({}, "returned", None),
+        ({"fail": "crash"}, "raised", "RuntimeError"),
+        ({"fail": "cancel"}, "cancelled", None),
+        ({"hold": True, "fail": "return-on-cancel"}, "stop_requested", None),
+        ({"hold": True, "fail": "crash-on-cancel"}, "stop_requested", None),
+    ],
+    ids=[
+        "stopped-by-team",
+        "finished-on-its-own",
+        "raised",
+        "cancelled-on-its-own",
+        "returned-after-team-stop",
+        "raised-after-team-stop",
+    ],
+)
+async def test_each_seat_records_how_its_play_ended(
+    tmp_path: Path, script: dict[str, Any], disposition: str, error: str | None
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", hold=True),
+            _participant("raj"),
+            _participant("lee", **script),
+        )
+    )
+
+    run = asyncio.create_task(trial.run())
+    await seen("ended", "raj")
+    if not script.get("hold"):
+        await seen("left", "lee")
+    RELEASE["maya"].set()
+    result = await run
+
+    seats = _seat_results(result)
+    assert seats["maya"].execution_disposition == "returned"
+    assert seats["raj"].execution_disposition == "returned"
+    lee = seats["lee"]
+    assert lee.execution_disposition == disposition
+    assert (lee.exception_info and lee.exception_info.exception_type) == error
+    assert lee.agent_execution is not None
+    assert lee.agent_execution.finished_at is not None
+    assert ("stopped", "lee") in EVENTS or disposition in {"returned", "raised"}
+    assert _verified(trial)
+    written = TrialResult.model_validate_json(trial.paths.result_path.read_text())
+    assert _seat_results(written)["lee"].execution_disposition == disposition
+
+
+async def test_a_verifier_error_after_a_seat_error_is_the_trials_error(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", fail="exit"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    trial._run_shared_verifier = AsyncMock(side_effect=RuntimeError("no reward"))
+
+    result = await trial.run()
+
     assert result.exception_info is not None
     assert result.exception_info.exception_type == "RuntimeError"
-    assert ("stopped", "maya") in EVENTS and ("stopped", "raj") in EVENTS
-    assert not _verified(trial)
-    assert EVENTS[-1] == ("stop",)
+    assert result.exception_info.exception_message == "no reward"
+    maya = _seat_results(result)["maya"].exception_info
+    assert maya is not None and maya.exception_type == "NonZeroAgentExitCodeError"
+    assert [e.exception_type for e in result.recorded_exceptions()] == [
+        "RuntimeError",
+        "NonZeroAgentExitCodeError",
+    ]
 
 
 async def test_a_failed_log_download_warns_and_continues(
@@ -514,6 +738,24 @@ async def test_any_setup_failure_fails_the_trial_before_play(tmp_path: Path):
     assert raj is not None and raj.exception_type == "AgentSetupTimeoutError"
     assert not any(e[0] == "run" for e in EVENTS)
     assert {e[1] for e in EVENTS if e[0] == "setup"} == {"maya", "raj", "lee"}
+
+
+async def test_seats_are_set_up_once_compose_reports_them_ready(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+
+    await trial.run()
+
+    wait = next(e for e in EVENTS if e[:3] == ("compose", "up", "--detach"))
+    assert wait[-3:] == ("maya", "raj", "lee") and "--wait" in wait
+    assert all(index(*wait) < index("setup", seat) for seat in ("maya", "raj", "lee"))
 
 
 async def test_install_only_sets_up_every_seat_and_plays_none(tmp_path: Path):
@@ -567,6 +809,95 @@ async def test_secrets_of_every_seat_are_scrubbed_in_each_pass(
         assert calls.count(log) == 2
 
 
+async def test_every_seats_resolved_model_key_is_scrubbed(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+    for seat in trial.seats[:2]:
+        agent = MagicMock(spec=BaseInstalledAgent)
+        agent.extra_env = {}
+        agent.mcp_servers = []
+        agent.model_connection.api_key = f"{seat.name}-resolved-key"
+        seat.agent = agent
+
+    secrets = trial._secrets_to_scrub()
+
+    assert {"maya-resolved-key", "raj-resolved-key"} <= secrets
+
+
+async def test_trial_create_keeps_the_reserved_trial_id(tmp_path: Path):
+    trial_id = uuid4()
+    trial = await Trial.create(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        ),
+        trial_id=trial_id,
+    )
+
+    assert trial.id == trial_id
+
+
+async def test_a_cancelled_trial_writes_the_usage_collected_so_far(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya", hold=True),
+            _participant("raj"),
+            _participant("lee", hold=True),
+        )
+    )
+
+    run = asyncio.create_task(trial.run())
+    await seen("ended", "raj")
+    run.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await run
+
+    written = TrialResult.model_validate_json(trial.paths.result_path.read_text())
+    assert written.exception_info is not None
+    assert written.exception_info.exception_type == "CancelledError"
+    assert _seat_results(written)["raj"].agent_result.cost_usd == 0.5
+    assert written.compute_token_cost_totals()[3] == 0.5
+    dispositions = {s.seat: s.execution_disposition for s in written.seat_results}
+    assert dispositions == {
+        "maya": "stop_requested",
+        "raj": "returned",
+        "lee": "stop_requested",
+    }
+
+
+async def test_lifecycle_events_are_journaled_in_the_trial_dir(tmp_path: Path):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+        )
+    )
+
+    await trial.run()
+
+    lines = (trial.paths.trial_dir / "trial-events.jsonl").read_text().splitlines()
+    events = [json.loads(line)["event"] for line in lines]
+    assert events == [
+        "start",
+        "environment-start",
+        "agent-start",
+        "agent-end",
+        "verification-start",
+        "end",
+    ]
+
+
 async def test_result_json_records_every_seat(tmp_path: Path):
     trial = await _seats_trial(
         _config(
@@ -596,6 +927,37 @@ async def test_result_json_records_every_seat(tmp_path: Path):
     assert "agent" not in config
     reloaded = TrialResult.model_validate_json(trial.paths.result_path.read_text())
     assert [p.seat for p in reloaded.config.participants] == ["maya", "raj", "lee"]
+
+
+async def test_an_older_result_without_dispositions_reloads_as_unknown(
+    tmp_path: Path,
+):
+    trial = await _seats_trial(
+        _config(
+            _task_dir(tmp_path),
+            _participant("maya"),
+            _participant("raj"),
+            _participant("lee"),
+            verifier=VerifierConfig(disable=True),
+        )
+    )
+
+    await trial.run()
+
+    data = json.loads(trial.paths.result_path.read_text())
+    assert [s["execution_disposition"] for s in data["seat_results"]] == [
+        "returned"
+    ] * 3
+    for seat in data["seat_results"]:
+        del seat["execution_disposition"]
+    older = TrialResult.model_validate(data)
+    assert [s.execution_disposition for s in older.seat_results] == [None] * 3
+    dumped = json.loads(older.model_dump_json())
+    assert [s.get("execution_disposition") for s in dumped["seat_results"]] == [
+        None
+    ] * 3
+    again = TrialResult.model_validate(dumped)
+    assert [s.execution_disposition for s in again.seat_results] == [None] * 3
 
 
 async def test_each_seat_logs_under_its_own_name(tmp_path: Path):
@@ -654,4 +1016,35 @@ def test_trial_start_names_each_participant(tmp_path: Path, monkeypatch):
         f"  maya: {AGENT} openai/gpt-6-luna (under test)",
         f"  raj: {AGENT} (under test)",
         f"  lee: {AGENT}",
+    ]
+
+
+def test_trial_start_preflights_every_participant(tmp_path: Path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from harbor.agents.factory import AgentFactory
+    from harbor.cli.main import app
+
+    preflighted: list[AgentConfig] = []
+    monkeypatch.setattr(
+        AgentFactory,
+        "run_preflight",
+        classmethod(lambda cls, config, **_: preflighted.append(config)),
+    )
+    monkeypatch.setattr(SeatsTrial, "run", AsyncMock(side_effect=RuntimeError("ran")))
+    launch = _config(
+        _task_dir(tmp_path),
+        _participant("maya"),
+        _participant("raj"),
+        _participant("lee"),
+    )
+    config_path = tmp_path / "launch.json"
+    config_path.write_text(launch.model_dump_json())
+
+    CliRunner().invoke(app, ["trial", "start", "--config", str(config_path)])
+
+    assert [getattr(config, "seat", None) for config in preflighted] == [
+        "maya",
+        "raj",
+        "lee",
     ]

@@ -1,0 +1,15 @@
+jobs_dir: jobs
+n_attempts: 3
+n_concurrent_trials: 1
+environment:
+  type: docker
+  delete: true
+  env: {HANDOFF_SEED: "808", HANDOFF_VARIANT: "replace"}
+participants:
+  - seat: booker
+    name: oracle
+    env: {HANDOFF_POLICY: "stale"}
+  - seat: reporter
+    name: oracle
+tasks:
+  - path: examples/tasks/revised-dispatch

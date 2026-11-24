@@ -1,0 +1,65 @@
+{
+  "schema": "harbor.seat-seal.worker-packet/v1",
+  "plan": "sha256:d09f25377e56ca3c0d8a85d29141701272e6567dd1e974bc5dd6ac978c0359fc",
+  "worker": 0,
+  "claims": [
+    [
+      "sb-363e1a4ed1c3db27",
+      "sha256:7c19c8f3e9849a61faeb4e663148888c5add67b413ccf0bf030aa898c357a255"
+    ],
+    [
+      "sb-363e1a4ed1c3db27",
+      "sha256:e90921ad9dd05c7e56c628d08fc16de244ef8b69ffa44457d794063e90224af6"
+    ]
+  ],
+  "rows": [
+    {
+      "ticket": "sb-0104c3e5a36954eb",
+      "status": "missing",
+      "grade": null,
+      "joined": false,
+      "gate": "unknown",
+      "native_tag": null
+    },
+    {
+      "ticket": "sb-363e1a4ed1c3db27",
+      "status": "graded",
+      "grade": 0,
+      "joined": true,
+      "gate": "complete",
+      "native_tag": "sha256:7c19c8f3e9849a61faeb4e663148888c5add67b413ccf0bf030aa898c357a255"
+    },
+    {
+      "ticket": "sb-486c43307c760670",
+      "status": "missing",
+      "grade": null,
+      "joined": false,
+      "gate": "unknown",
+      "native_tag": null
+    },
+    {
+      "ticket": "sb-7b463189b994a378",
+      "status": "missing",
+      "grade": null,
+      "joined": false,
+      "gate": "unknown",
+      "native_tag": null
+    },
+    {
+      "ticket": "sb-c3dea7f2ca13a306",
+      "status": "missing",
+      "grade": null,
+      "joined": false,
+      "gate": "unknown",
+      "native_tag": null
+    },
+    {
+      "ticket": "sb-e965efccdd5827a8",
+      "status": "missing",
+      "grade": null,
+      "joined": false,
+      "gate": "unknown",
+      "native_tag": null
+    }
+  ]
+}
