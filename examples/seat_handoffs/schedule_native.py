@@ -8,6 +8,7 @@ from typing import Any, TypeGuard
 from .core import canonical_uuid
 from .native_records import read_record, record_digest
 from .schedule_bounds import WINDOWS
+from .schedule_exit_clock import ExitCut, ExitPolicy, cut_at_exit
 
 RESULT_SCHEMA = 1
 FAMILY = "schedule"
@@ -75,6 +76,7 @@ class Team:
     messages: tuple[tuple[str, str, str], ...]
     reward: int
     timed_out: bool = False
+    seat_exit: ExitCut | None = None
 
 
 class AmbiguousRubric(ValueError):
@@ -441,7 +443,7 @@ def _versions(score: dict[str, Any], version: int) -> None:
     _require(score["deceived"] is None, "native score carries a scripted decoy")
 
 
-def read_team(path: Path) -> Team:
+def read_team(path: Path, *, seat_exit: ExitPolicy | None = None) -> Team:
     _directory(path)
     _directory(path / "verifier")
     result = _record(path / "result.json")
@@ -477,4 +479,9 @@ def read_team(path: Path) -> Team:
         messages=messages,
         reward=reward,
         timed_out=timed_out,
+        seat_exit=(
+            cut_at_exit(result, state, seats, drift_ms=seat_exit.drift_ms)
+            if seat_exit is not None and len(seats) == 2
+            else None
+        ),
     )

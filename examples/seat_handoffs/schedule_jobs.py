@@ -6,6 +6,7 @@ from typing import Any
 from .job_members import MAX_SLOTS, members
 from .schedule_changes import SCHEMA as BEHAVIOR_SCHEMA
 from .schedule_changes import empty_report, inspect_changes
+from .schedule_exit_clock import ExitPolicy
 
 SCHEMA = "harbor.schedule-jobs/v1"
 MAX_JOBS = 128
@@ -107,20 +108,31 @@ def _plan(member: Member) -> tuple[dict[str, int], list[Path]]:
 
 
 def _behavior(
-    paths: list[Path], *, include_timeouts: bool, checkpoints: bool
+    paths: list[Path],
+    *,
+    include_timeouts: bool,
+    checkpoints: bool,
+    seat_exit: ExitPolicy | None,
 ) -> dict[str, Any]:
     assert type(include_timeouts) is bool and type(checkpoints) is bool
+    assert seat_exit is None or isinstance(seat_exit, ExitPolicy)
     if not paths:
         report = empty_report(
-            include_timeouts=include_timeouts, checkpoints=checkpoints
+            include_timeouts=include_timeouts,
+            checkpoints=checkpoints,
+            seat_exit=seat_exit,
         )
         assert report["inputs"] == 0 and report["usable_trials"] == 0
         assert report["trials"] == []
     else:
         report = inspect_changes(
-            paths, include_timeouts=include_timeouts, checkpoints=checkpoints
+            paths,
+            include_timeouts=include_timeouts,
+            checkpoints=checkpoints,
+            seat_exit=seat_exit,
         )
     assert ("checkpoints" in report) == checkpoints
+    assert ("seat_exit" in report) == (seat_exit is not None)
     assert report["schema"] == BEHAVIOR_SCHEMA
     assert report["inputs"] == len(paths) == len(report["trials"])
     assert all(row["slot"] == index + 1 for index, row in enumerate(report["trials"]))
@@ -163,12 +175,18 @@ def _totals(rows: list[dict[str, Any]], behavior: dict[str, Any]) -> dict[str, i
 
 
 def inspect_jobs(
-    paths: list[Path], *, include_timeouts: bool = False, checkpoints: bool = False
+    paths: list[Path],
+    *,
+    include_timeouts: bool = False,
+    checkpoints: bool = False,
+    seat_exit: ExitPolicy | None = None,
 ) -> dict[str, Any]:
     if type(include_timeouts) is not bool:
         raise ValueError("include_timeouts must be a bool")
     if type(checkpoints) is not bool:
         raise ValueError("checkpoints must be a bool")
+    if seat_exit is not None and not isinstance(seat_exit, ExitPolicy):
+        raise ValueError("seat_exit must be an ExitPolicy or None")
     found = _members(paths)
     plans = [_plan(member) for member in found]
     joint: list[Path] = []
@@ -179,7 +197,10 @@ def inspect_jobs(
         spans.append(list(range(start + 1, len(joint) + 1)))
     assert len(joint) <= MAX_TOTAL
     behavior = _behavior(
-        joint, include_timeouts=include_timeouts, checkpoints=checkpoints
+        joint,
+        include_timeouts=include_timeouts,
+        checkpoints=checkpoints,
+        seat_exit=seat_exit,
     )
     trials = behavior["trials"]
     rows: list[dict[str, Any]] = []

@@ -7,7 +7,9 @@ from .core import canonical_uuid
 from .native_records import read_record
 from .schedule_bounds import METRICS, Window, bounds, possible
 from .schedule_checkpoints import SEATS as CHECKPOINT_SEATS
-from .schedule_checkpoints import measure
+from .schedule_checkpoints import measure as measure_checkpoints
+from .schedule_exit_bounds import measure as measure_exit
+from .schedule_exit_clock import ExitPolicy
 from .schedule_native import AmbiguousRubric, Team, Write, read_team
 from .schedule_tape import peer_returns
 
@@ -34,9 +36,9 @@ SAME_SEAT = "not_applicable"
 Reference = frozenset[Window]
 
 
-def _read(path: Path) -> tuple[str, Team | None]:
+def _read(path: Path, seat_exit: ExitPolicy | None) -> tuple[str, Team | None]:
     try:
-        team = read_team(path)
+        team = read_team(path, seat_exit=seat_exit)
     except OSError:
         return "missing_evidence", None
     except AmbiguousRubric:
@@ -185,22 +187,44 @@ def _summary(
     return summary
 
 
-def _checkpoints(
-    groups: dict[str, list[Team]], references: dict[str, Reference]
-) -> dict[str, Any]:
+def _replay_sections(
+    report: dict[str, Any],
+    groups: dict[str, list[Team]],
+    references: dict[str, Reference],
+    *,
+    checkpoints: bool,
+    seat_exit: ExitPolicy | None,
+) -> None:
+    if not checkpoints and seat_exit is None:
+        return
     paired = {
         digest: [team for team in group if len(team.seats) == CHECKPOINT_SEATS]
         for digest, group in groups.items()
     }
     paired = {digest: group for digest, group in paired.items() if group}
-    section = measure(paired, {digest: references[digest] for digest in paired})
-    excluded = sum(len(group) for group in groups.values()) - section["teams"]
-    assert "not_two_seats" not in section and excluded >= 0
-    return {**section, "not_two_seats": excluded}
+    refs = {digest: references[digest] for digest in paired}
+    count = sum(len(group) for group in paired.values())
+    excluded = sum(len(group) for group in groups.values()) - count
+    if checkpoints:
+        section = measure_checkpoints(paired, refs)
+        assert section["teams"] == count
+        report["checkpoints"] = {**section, "not_two_seats": excluded}
+    if seat_exit is not None:
+        cuts = {}
+        for group in paired.values():
+            for team in group:
+                assert team.seat_exit is not None
+                cuts[team.native_id] = team.seat_exit
+        section = measure_exit(paired, refs, cuts, drift_ms=seat_exit.drift_ms)
+        assert section["teams"] == count
+        report["seat_exit"] = {**section, "not_two_seats": excluded}
 
 
 def empty_report(
-    *, include_timeouts: bool = False, checkpoints: bool = False
+    *,
+    include_timeouts: bool = False,
+    checkpoints: bool = False,
+    seat_exit: ExitPolicy | None = None,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
         "schema": SCHEMA,
@@ -209,8 +233,7 @@ def empty_report(
         "trials": [],
         "summary": _summary([], {key: [0, 0] for key in METRICS}, include_timeouts),
     }
-    if checkpoints:
-        report["checkpoints"] = _checkpoints({}, {})
+    _replay_sections(report, {}, {}, checkpoints=checkpoints, seat_exit=seat_exit)
     return report
 
 
@@ -236,17 +259,23 @@ def _partial_id(path: Path) -> str | None:
 
 
 def inspect_changes(
-    paths: list[Path], *, include_timeouts: bool = False, checkpoints: bool = False
+    paths: list[Path],
+    *,
+    include_timeouts: bool = False,
+    checkpoints: bool = False,
+    seat_exit: ExitPolicy | None = None,
 ) -> dict[str, Any]:
     if type(include_timeouts) is not bool:
         raise ValueError("include_timeouts must be a bool")
     if type(checkpoints) is not bool:
         raise ValueError("checkpoints must be a bool")
+    if seat_exit is not None and not isinstance(seat_exit, ExitPolicy):
+        raise ValueError("seat_exit must be an ExitPolicy")
     if not isinstance(paths, list | tuple) or not 1 <= len(paths) <= MAX_INPUTS:
         raise ValueError(f"supply between 1 and {MAX_INPUTS} trial paths")
     if not all(isinstance(path, Path) for path in paths):
         raise ValueError("every trial path must be a pathlib.Path")
-    read = [_read(path) for path in paths]
+    read = [_read(path, seat_exit) for path in paths]
     statuses = [status for status, _ in read]
     teams = [team for _, team in read]
     identities = [
@@ -283,6 +312,7 @@ def inspect_changes(
         "trials": rows,
         "summary": _summary(rows, _bounds(groups, references), include_timeouts),
     }
-    if checkpoints:
-        report["checkpoints"] = _checkpoints(groups, references)
+    _replay_sections(
+        report, groups, references, checkpoints=checkpoints, seat_exit=seat_exit
+    )
     return report

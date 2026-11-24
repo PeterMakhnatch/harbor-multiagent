@@ -132,6 +132,28 @@ In the completed group, just 1 of 66 talking teams and 7 of 51 silent teams agre
 
 The [registered question](samples/schedule-checkpoint-question.json) fixes the population, the 3 rules, and the test. The [aggregate results](samples/schedule-checkpoint-outcomes.json) retain the full 192 scheduled slots. Bounds allow every answer key compatible with the native grades for each exact task checksum.
 
+### What if a supervisor freezes the board when one seat finishes?
+
+**Keep the other seat running unless you have stronger evidence.** One completed team made its first correct submission on write 4 of 4. Under the clock condition below, the first seat had already returned. Freezing the standing answer would lose that native success.
+
+```bash
+python3 -BS -m examples.seat_handoffs schedule-jobs "$job_dir" --seat-exit
+python3 -BS -m examples.seat_handoffs schedule-jobs "$job_dir" --seat-exit --exit-clock-ms 1000 --include-timeouts --json
+```
+
+The trigger is a clean seat return **strictly inside** its peer's recorded execution interval. With no trigger, keep the final answer. Harbor records host timestamps; the stock world records elapsed time. Without an alignment assumption, a return does not locate a board write. The default admits every ordered prefix, including the empty board.
+
+Give `--exit-clock-ms N` only for a fresh stock world that started after the native trial began and froze before verification finished. The operator also assumes that the two clocks disagree on elapsed intervals by at most `N` milliseconds. The reader does not measure that discrepancy. It keeps all prefixes if the source version or host bounds lack support. The next accepted write can bound an earlier append. A write's own timestamp is not an upper bound: the world takes it before the append.
+
+| Archived population | Native successes | Losses without clock alignment | Losses at 1 s | Losses at 5 s |
+|---|---:|---:|---:|---:|
+| 117 completed teams | 54 | 0–54 | 2–54 | 1–54 |
+| 171 teams including verified grades after a seat timeout | 65 | 0–61 | 3–61 | 2–61 |
+
+At 1 s, 34 completed teams certainly had a later write. Only 64 of the 117 had usable elapsed-clock evidence. The upper bounds remain wide. The minimum loss, not the total loss, is identified under the stated condition. A clean return does not prove that a detached process stopped. No agent was interrupted, and the study did not measure time or money saved.
+
+The [registered question](samples/schedule-seat-exit-question.json) fixes the test and clock settings. The [redacted results](samples/schedule-seat-exit-outcomes.json) include coverage, all settings, known-key checks, and the 3 conditional loss witnesses. All 8 job locks remain in the denominator, including the 12 missing directories.
+
 ## Add an instrumented world
 
 Start with the [reference producer](../tasks/revised-dispatch/environment/world.py) and [verifier](../tasks/revised-dispatch/tests/verify.py). The producer declares the possible message/receiver edges at startup. It records only the first send, reply prepared, and optional acknowledgement for each relevant edge. Each receiver can make one irreversible commit. A monotonically increasing `seq` orders the events within one world instance. Use symbolic message IDs, never message bodies or secrets.

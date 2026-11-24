@@ -6,7 +6,25 @@ from pathlib import Path
 from typing import Any
 
 from . import bespoke, calendar, core, job, schedule_changes, schedule_jobs
+from .schedule_exit_clock import MAX_DRIFT_MS, ExitPolicy
 from .trial import read_trial
+
+EXIT_CLOCK_DIGITS = len(str(MAX_DRIFT_MS))
+
+
+def _exit_clock_ms(text: str) -> int:
+    if (
+        not text.isascii()
+        or not text.isdigit()
+        or not 1 <= len(text) <= EXIT_CLOCK_DIGITS
+        or int(text) > MAX_DRIFT_MS
+    ):
+        raise argparse.ArgumentTypeError(
+            f"expected whole milliseconds from 0 to {MAX_DRIFT_MS}"
+        )
+    value = int(text)
+    assert 0 <= value <= MAX_DRIFT_MS
+    return value
 
 
 def _job_report(path: Path, boundary: str, as_json: bool) -> int:
@@ -60,6 +78,38 @@ def _checkpoint_lines(section: dict[str, Any]) -> None:
             )
 
 
+def _seat_exit_lines(section: dict[str, Any], clock_ms: int | None) -> None:
+    assert clock_ms is None or 0 <= clock_ms <= MAX_DRIFT_MS
+    if clock_ms is None:
+        print(
+            "Seat exit freeze, unanchored: native finish times are not aligned "
+            "with world elapsed time; after a trigger every ordered answer prefix, "
+            "including none, stays feasible."
+        )
+    else:
+        print(
+            "Seat exit freeze, conditional on operator attestation: a fresh native "
+            f"trial world and elapsed clock discrepancy of at most {clock_ms} ms."
+        )
+    print(
+        f"Seat exit teams (two seats): {section['teams']}   "
+        f"Not two seats: {section['not_two_seats']}"
+    )
+    cohort = section["cohorts"]["all"]
+    lost, gained, net = cohort["lost"], cohort["gained"], cohort["net"]
+    assert len(lost) == len(gained) == len(net) == 2
+    print(
+        f"All two-seat teams: lost {lost[0]} to {lost[1]}   "
+        f"gained {gained[0]} to {gained[1]}   "
+        f"net {net[0]} to {net[1]}   verdict {cohort['verdict']}"
+    )
+    print("Other strata appear only in --json output.")
+    print(
+        "Bounds cover recorded native grades only. A clean seat record does not "
+        "show that the agent stopped, and no speed or savings claim follows."
+    )
+
+
 def _schedule_report(
     paths: list[Path],
     *,
@@ -67,16 +117,28 @@ def _schedule_report(
     jobs: bool,
     include_timeouts: bool,
     checkpoints: bool,
+    seat_exit: bool,
+    clock_ms: int | None,
 ) -> int:
+    assert seat_exit or clock_ms is None
+    policy = None
+    if seat_exit:
+        policy = ExitPolicy() if clock_ms is None else ExitPolicy(drift_ms=clock_ms)
     try:
         if jobs:
             report = schedule_jobs.inspect_jobs(
-                paths, include_timeouts=include_timeouts, checkpoints=checkpoints
+                paths,
+                include_timeouts=include_timeouts,
+                checkpoints=checkpoints,
+                seat_exit=policy,
             )
             behavior = report["behavior"]
         else:
             report = schedule_changes.inspect_changes(
-                paths, include_timeouts=include_timeouts, checkpoints=checkpoints
+                paths,
+                include_timeouts=include_timeouts,
+                checkpoints=checkpoints,
+                seat_exit=policy,
             )
             behavior = report
     except ValueError as exc:
@@ -113,6 +175,8 @@ def _schedule_report(
             print(f"{row['slot']}\t{row['native_trial'] or '-'}\t{row['status']}")
     if checkpoints:
         _checkpoint_lines(behavior["checkpoints"])
+    if seat_exit:
+        _seat_exit_lines(behavior["seat_exit"], clock_ms)
     return 0
 
 
@@ -145,6 +209,24 @@ def main() -> int:
         action="store_true",
         help="for schedules: measure two-seat cutoff checkpoints against shared keys",
     )
+    parser.add_argument(
+        "--seat-exit",
+        action="store_true",
+        help=(
+            "for schedules: bound native successes lost or gained if the board froze "
+            "when the first clean seat returned; no clock alignment unless "
+            "--exit-clock-ms is given"
+        ),
+    )
+    parser.add_argument(
+        "--exit-clock-ms",
+        type=_exit_clock_ms,
+        metavar="N",
+        help=(
+            "with --seat-exit: attest a fresh native trial world and an elapsed clock "
+            f"discrepancy of at most N ms (0 to {MAX_DRIFT_MS})"
+        ),
+    )
     options = parser.parse_args()
     if options.boundary and options.source not in ("events", "job"):
         parser.error(
@@ -152,6 +234,10 @@ def main() -> int:
         )
     if options.checkpoints and options.source not in ("schedule", "schedule-jobs"):
         parser.error("--checkpoints applies only to schedule and schedule-jobs")
+    if options.seat_exit and options.source not in ("schedule", "schedule-jobs"):
+        parser.error("--seat-exit applies only to schedule and schedule-jobs")
+    if options.exit_clock_ms is not None and not options.seat_exit:
+        parser.error("--exit-clock-ms applies only with --seat-exit")
     boundary = options.boundary or "returned"
     if options.source in ("schedule", "schedule-jobs"):
         return _schedule_report(
@@ -160,6 +246,8 @@ def main() -> int:
             jobs=options.source == "schedule-jobs",
             include_timeouts=options.include_timeouts,
             checkpoints=options.checkpoints,
+            seat_exit=options.seat_exit,
+            clock_ms=options.exit_clock_ms,
         )
     if options.include_timeouts:
         parser.error("--include-timeouts applies only to schedule and schedule-jobs")

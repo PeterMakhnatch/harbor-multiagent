@@ -1,0 +1,1404 @@
+{
+  "schema": "harbor.seatlab.schedule-seat-exit-outcomes/v1",
+  "question_revision": "39d1dd44b8e45e5fdb23b96b0ee42aa182e45c09",
+  "question_file": "schedule-seat-exit-question.json",
+  "world_source_revision": "71ddf40b14ea81dd8eb0c32663e11abfe21cd1e3",
+  "budget_used_usd": 0,
+  "new_model_trials": 0,
+  "coverage": {
+    "registered_jobs": 8,
+    "locked_slots": 192,
+    "matched_directories": 180,
+    "missing_slots": 12,
+    "insufficient_verifier_evidence": 9,
+    "two_clean_seats": 117,
+    "additional_graded_timeout_teams": 54
+  },
+  "method": {
+    "unit": "One native two-seat team. Lock rows are not silently discarded.",
+    "unconditional": "No host/world alignment. Every trigger can freeze any recorded prefix including the empty prefix and the final prefix.",
+    "conditional": "Assume a fresh stock version 2 world after the native trial starts and frozen before native verification finishes. Bound the error of each elapsed host/world interval by the chosen tolerance. This is an operator attestation, not a measurement of clock drift. An unverified source version or missing host bracket leaves all prefixes feasible.",
+    "commit_fence": "The world samples time before appending a write. The next accepted write sample is an upper witness for the earlier append; its own timestamp is not. The final append has only the verifier finish as an upper host witness. Ties remain uncertain.",
+    "optimisation": "Per-team prefix intervals are outer approximations of physical timing. Each integer endpoint for gains, losses and net is sharp for the admitted interval sets, with one answer key per exact native task checksum. Different bounds need not hold together.",
+    "not_measured": [
+      "model attention",
+      "child process termination",
+      "live stopping",
+      "token savings",
+      "latency or cost savings"
+    ]
+  },
+  "registered_projections": [
+    {
+      "include_verified_timeouts": false,
+      "clock_error_ms": null,
+      "observation_model": "unanchored",
+      "all": {
+        "teams": 117,
+        "tasks": 49,
+        "graded_timeouts": 0,
+        "native_final_successes": 54,
+        "recorded_writes": 414,
+        "triggers": {
+          "observed": 117,
+          "absent": 0,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 117,
+          "fresh_interval": 0,
+          "clock_unknown": 0,
+          "inapplicable": 0
+        },
+        "gained": [
+          0,
+          39
+        ],
+        "lost": [
+          0,
+          54
+        ],
+        "net": [
+          -54,
+          39
+        ],
+        "policy_successes": [
+          0,
+          93
+        ],
+        "later_writes": {
+          "certain_teams": 0,
+          "certain_completed_teams": 0,
+          "possible_teams": 115,
+          "count": [
+            0,
+            414
+          ]
+        },
+        "verdict": "unresolved"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 117,
+          "keyed_teams": 116,
+          "admissible_prefixes_scored": 528,
+          "single_grade_ranges": 17,
+          "native_successes": 54
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            0,
+            54
+          ],
+          "gained": [
+            0,
+            26
+          ],
+          "net": [
+            -54,
+            26
+          ],
+          "policy_successes": [
+            0,
+            80
+          ]
+        }
+      },
+      "reason_counts": {
+        "unanchored_prefixes": 117
+      }
+    },
+    {
+      "include_verified_timeouts": false,
+      "clock_error_ms": 0,
+      "observation_model": "conditional_fresh_world",
+      "all": {
+        "teams": 117,
+        "tasks": 49,
+        "graded_timeouts": 0,
+        "native_final_successes": 54,
+        "recorded_writes": 414,
+        "triggers": {
+          "observed": 117,
+          "absent": 0,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 0,
+          "fresh_interval": 64,
+          "clock_unknown": 53,
+          "inapplicable": 0
+        },
+        "gained": [
+          0,
+          36
+        ],
+        "lost": [
+          2,
+          54
+        ],
+        "net": [
+          -54,
+          34
+        ],
+        "policy_successes": [
+          0,
+          88
+        ],
+        "later_writes": {
+          "certain_teams": 35,
+          "certain_completed_teams": 35,
+          "possible_teams": 115,
+          "count": [
+            62,
+            359
+          ]
+        },
+        "verdict": "rejected"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 117,
+          "keyed_teams": 116,
+          "admissible_prefixes_scored": 411,
+          "single_grade_ranges": 22,
+          "native_successes": 54
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            2,
+            54
+          ],
+          "gained": [
+            0,
+            22
+          ],
+          "net": [
+            -54,
+            20
+          ],
+          "policy_successes": [
+            0,
+            74
+          ]
+        }
+      },
+      "reason_counts": {
+        "fresh_interval_bounds": 64,
+        "world_source_unverified": 53
+      }
+    },
+    {
+      "include_verified_timeouts": false,
+      "clock_error_ms": 1000,
+      "observation_model": "conditional_fresh_world",
+      "all": {
+        "teams": 117,
+        "tasks": 49,
+        "graded_timeouts": 0,
+        "native_final_successes": 54,
+        "recorded_writes": 414,
+        "triggers": {
+          "observed": 117,
+          "absent": 0,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 0,
+          "fresh_interval": 64,
+          "clock_unknown": 53,
+          "inapplicable": 0
+        },
+        "gained": [
+          0,
+          36
+        ],
+        "lost": [
+          2,
+          54
+        ],
+        "net": [
+          -54,
+          34
+        ],
+        "policy_successes": [
+          0,
+          88
+        ],
+        "later_writes": {
+          "certain_teams": 34,
+          "certain_completed_teams": 34,
+          "possible_teams": 115,
+          "count": [
+            61,
+            359
+          ]
+        },
+        "verdict": "rejected"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 117,
+          "keyed_teams": 116,
+          "admissible_prefixes_scored": 412,
+          "single_grade_ranges": 22,
+          "native_successes": 54
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            2,
+            54
+          ],
+          "gained": [
+            0,
+            22
+          ],
+          "net": [
+            -54,
+            20
+          ],
+          "policy_successes": [
+            0,
+            74
+          ]
+        }
+      },
+      "reason_counts": {
+        "fresh_interval_bounds": 64,
+        "world_source_unverified": 53
+      }
+    },
+    {
+      "include_verified_timeouts": false,
+      "clock_error_ms": 5000,
+      "observation_model": "conditional_fresh_world",
+      "all": {
+        "teams": 117,
+        "tasks": 49,
+        "graded_timeouts": 0,
+        "native_final_successes": 54,
+        "recorded_writes": 414,
+        "triggers": {
+          "observed": 117,
+          "absent": 0,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 0,
+          "fresh_interval": 64,
+          "clock_unknown": 53,
+          "inapplicable": 0
+        },
+        "gained": [
+          0,
+          36
+        ],
+        "lost": [
+          1,
+          54
+        ],
+        "net": [
+          -54,
+          35
+        ],
+        "policy_successes": [
+          0,
+          89
+        ],
+        "later_writes": {
+          "certain_teams": 31,
+          "certain_completed_teams": 31,
+          "possible_teams": 115,
+          "count": [
+            58,
+            360
+          ]
+        },
+        "verdict": "rejected"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 117,
+          "keyed_teams": 116,
+          "admissible_prefixes_scored": 416,
+          "single_grade_ranges": 21,
+          "native_successes": 54
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            1,
+            54
+          ],
+          "gained": [
+            0,
+            22
+          ],
+          "net": [
+            -54,
+            21
+          ],
+          "policy_successes": [
+            0,
+            75
+          ]
+        }
+      },
+      "reason_counts": {
+        "fresh_interval_bounds": 64,
+        "world_source_unverified": 53
+      }
+    },
+    {
+      "include_verified_timeouts": true,
+      "clock_error_ms": null,
+      "observation_model": "unanchored",
+      "all": {
+        "teams": 171,
+        "tasks": 49,
+        "graded_timeouts": 54,
+        "native_final_successes": 65,
+        "recorded_writes": 2136,
+        "triggers": {
+          "observed": 152,
+          "absent": 19,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 152,
+          "fresh_interval": 0,
+          "clock_unknown": 0,
+          "inapplicable": 19
+        },
+        "gained": [
+          0,
+          48
+        ],
+        "lost": [
+          0,
+          61
+        ],
+        "net": [
+          -61,
+          48
+        ],
+        "policy_successes": [
+          4,
+          113
+        ],
+        "later_writes": {
+          "certain_teams": 0,
+          "certain_completed_teams": 0,
+          "possible_teams": 150,
+          "count": [
+            0,
+            1032
+          ]
+        },
+        "verdict": "unresolved"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 171,
+          "keyed_teams": 170,
+          "admissible_prefixes_scored": 1200,
+          "single_grade_ranges": 52,
+          "native_successes": 65
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            0,
+            61
+          ],
+          "gained": [
+            0,
+            38
+          ],
+          "net": [
+            -61,
+            38
+          ],
+          "policy_successes": [
+            4,
+            103
+          ]
+        }
+      },
+      "reason_counts": {
+        "no_clean_seat": 19,
+        "unanchored_prefixes": 152
+      },
+      "strata": {
+        "talk": {
+          "teams": 86,
+          "graded_timeouts": 20,
+          "native_final_successes": 53,
+          "lost": [
+            0,
+            52
+          ],
+          "gained": [
+            0,
+            15
+          ],
+          "net": [
+            -52,
+            15
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 83,
+            "absent": 3,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 83,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 3
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 83,
+            "count": [
+              0,
+              182
+            ]
+          }
+        },
+        "silent": {
+          "teams": 85,
+          "graded_timeouts": 34,
+          "native_final_successes": 12,
+          "lost": [
+            0,
+            9
+          ],
+          "gained": [
+            0,
+            33
+          ],
+          "net": [
+            -9,
+            33
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 69,
+            "absent": 16,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 69,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 16
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 67,
+            "count": [
+              0,
+              850
+            ]
+          }
+        },
+        "completed": {
+          "teams": 117,
+          "graded_timeouts": 0,
+          "native_final_successes": 54,
+          "lost": [
+            0,
+            54
+          ],
+          "gained": [
+            0,
+            37
+          ],
+          "net": [
+            -54,
+            37
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 117,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 117,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 115,
+            "count": [
+              0,
+              414
+            ]
+          }
+        },
+        "graded_timeout": {
+          "teams": 54,
+          "graded_timeouts": 54,
+          "native_final_successes": 11,
+          "lost": [
+            0,
+            7
+          ],
+          "gained": [
+            0,
+            14
+          ],
+          "net": [
+            -7,
+            14
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 35,
+            "absent": 19,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 35,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 19
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 35,
+            "count": [
+              0,
+              618
+            ]
+          }
+        },
+        "clean_0": {
+          "teams": 19,
+          "graded_timeouts": 19,
+          "native_final_successes": 4,
+          "lost": [
+            0,
+            0
+          ],
+          "gained": [
+            0,
+            0
+          ],
+          "net": [
+            0,
+            0
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 0,
+            "absent": 19,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 19
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 0,
+            "count": [
+              0,
+              0
+            ]
+          }
+        },
+        "clean_1": {
+          "teams": 35,
+          "graded_timeouts": 35,
+          "native_final_successes": 7,
+          "lost": [
+            0,
+            7
+          ],
+          "gained": [
+            0,
+            14
+          ],
+          "net": [
+            -7,
+            14
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 35,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 35,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 35,
+            "count": [
+              0,
+              618
+            ]
+          }
+        },
+        "clean_2": {
+          "teams": 117,
+          "graded_timeouts": 0,
+          "native_final_successes": 54,
+          "lost": [
+            0,
+            54
+          ],
+          "gained": [
+            0,
+            37
+          ],
+          "net": [
+            -54,
+            37
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 117,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 117,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 115,
+            "count": [
+              0,
+              414
+            ]
+          }
+        },
+        "clean_unknown": {
+          "teams": 0,
+          "graded_timeouts": 0,
+          "native_final_successes": 0,
+          "lost": [
+            0,
+            0
+          ],
+          "gained": [
+            0,
+            0
+          ],
+          "net": [
+            0,
+            0
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 0,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 0,
+            "count": [
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      "include_verified_timeouts": true,
+      "clock_error_ms": 0,
+      "observation_model": "conditional_fresh_world",
+      "all": {
+        "teams": 171,
+        "tasks": 49,
+        "graded_timeouts": 54,
+        "native_final_successes": 65,
+        "recorded_writes": 2136,
+        "triggers": {
+          "observed": 152,
+          "absent": 19,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 0,
+          "fresh_interval": 87,
+          "clock_unknown": 65,
+          "inapplicable": 19
+        },
+        "gained": [
+          0,
+          41
+        ],
+        "lost": [
+          3,
+          61
+        ],
+        "net": [
+          -61,
+          38
+        ],
+        "policy_successes": [
+          4,
+          103
+        ],
+        "later_writes": {
+          "certain_teams": 45,
+          "certain_completed_teams": 35,
+          "possible_teams": 150,
+          "count": [
+            278,
+            871
+          ]
+        },
+        "verdict": "rejected"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 171,
+          "keyed_teams": 170,
+          "admissible_prefixes_scored": 761,
+          "single_grade_ranges": 61,
+          "native_successes": 65
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            3,
+            61
+          ],
+          "gained": [
+            0,
+            31
+          ],
+          "net": [
+            -61,
+            28
+          ],
+          "policy_successes": [
+            4,
+            93
+          ]
+        }
+      },
+      "reason_counts": {
+        "fresh_interval_bounds": 87,
+        "no_clean_seat": 19,
+        "world_source_unverified": 65
+      }
+    },
+    {
+      "include_verified_timeouts": true,
+      "clock_error_ms": 1000,
+      "observation_model": "conditional_fresh_world",
+      "all": {
+        "teams": 171,
+        "tasks": 49,
+        "graded_timeouts": 54,
+        "native_final_successes": 65,
+        "recorded_writes": 2136,
+        "triggers": {
+          "observed": 152,
+          "absent": 19,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 0,
+          "fresh_interval": 87,
+          "clock_unknown": 65,
+          "inapplicable": 19
+        },
+        "gained": [
+          0,
+          41
+        ],
+        "lost": [
+          3,
+          61
+        ],
+        "net": [
+          -61,
+          38
+        ],
+        "policy_successes": [
+          4,
+          103
+        ],
+        "later_writes": {
+          "certain_teams": 44,
+          "certain_completed_teams": 34,
+          "possible_teams": 150,
+          "count": [
+            277,
+            872
+          ]
+        },
+        "verdict": "rejected"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 171,
+          "keyed_teams": 170,
+          "admissible_prefixes_scored": 763,
+          "single_grade_ranges": 61,
+          "native_successes": 65
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            3,
+            61
+          ],
+          "gained": [
+            0,
+            31
+          ],
+          "net": [
+            -61,
+            28
+          ],
+          "policy_successes": [
+            4,
+            93
+          ]
+        }
+      },
+      "reason_counts": {
+        "fresh_interval_bounds": 87,
+        "no_clean_seat": 19,
+        "world_source_unverified": 65
+      },
+      "strata": {
+        "talk": {
+          "teams": 86,
+          "graded_timeouts": 20,
+          "native_final_successes": 53,
+          "lost": [
+            1,
+            52
+          ],
+          "gained": [
+            0,
+            14
+          ],
+          "net": [
+            -52,
+            13
+          ],
+          "verdict": "rejected",
+          "triggers": {
+            "observed": 83,
+            "absent": 3,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 47,
+            "clock_unknown": 36,
+            "inapplicable": 3
+          },
+          "later_writes": {
+            "certain_teams": 23,
+            "certain_completed_teams": 21,
+            "possible_teams": 83,
+            "count": [
+              25,
+              175
+            ]
+          }
+        },
+        "silent": {
+          "teams": 85,
+          "graded_timeouts": 34,
+          "native_final_successes": 12,
+          "lost": [
+            2,
+            9
+          ],
+          "gained": [
+            0,
+            27
+          ],
+          "net": [
+            -9,
+            25
+          ],
+          "verdict": "rejected",
+          "triggers": {
+            "observed": 69,
+            "absent": 16,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 40,
+            "clock_unknown": 29,
+            "inapplicable": 16
+          },
+          "later_writes": {
+            "certain_teams": 21,
+            "certain_completed_teams": 13,
+            "possible_teams": 67,
+            "count": [
+              252,
+              697
+            ]
+          }
+        },
+        "completed": {
+          "teams": 117,
+          "graded_timeouts": 0,
+          "native_final_successes": 54,
+          "lost": [
+            2,
+            54
+          ],
+          "gained": [
+            0,
+            33
+          ],
+          "net": [
+            -54,
+            31
+          ],
+          "verdict": "rejected",
+          "triggers": {
+            "observed": 117,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 64,
+            "clock_unknown": 53,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 34,
+            "certain_completed_teams": 34,
+            "possible_teams": 115,
+            "count": [
+              61,
+              359
+            ]
+          }
+        },
+        "graded_timeout": {
+          "teams": 54,
+          "graded_timeouts": 54,
+          "native_final_successes": 11,
+          "lost": [
+            1,
+            7
+          ],
+          "gained": [
+            0,
+            11
+          ],
+          "net": [
+            -7,
+            10
+          ],
+          "verdict": "rejected",
+          "triggers": {
+            "observed": 35,
+            "absent": 19,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 23,
+            "clock_unknown": 12,
+            "inapplicable": 19
+          },
+          "later_writes": {
+            "certain_teams": 10,
+            "certain_completed_teams": 0,
+            "possible_teams": 35,
+            "count": [
+              216,
+              513
+            ]
+          }
+        },
+        "clean_0": {
+          "teams": 19,
+          "graded_timeouts": 19,
+          "native_final_successes": 4,
+          "lost": [
+            0,
+            0
+          ],
+          "gained": [
+            0,
+            0
+          ],
+          "net": [
+            0,
+            0
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 0,
+            "absent": 19,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 19
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 0,
+            "count": [
+              0,
+              0
+            ]
+          }
+        },
+        "clean_1": {
+          "teams": 35,
+          "graded_timeouts": 35,
+          "native_final_successes": 7,
+          "lost": [
+            1,
+            7
+          ],
+          "gained": [
+            0,
+            11
+          ],
+          "net": [
+            -7,
+            10
+          ],
+          "verdict": "rejected",
+          "triggers": {
+            "observed": 35,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 23,
+            "clock_unknown": 12,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 10,
+            "certain_completed_teams": 0,
+            "possible_teams": 35,
+            "count": [
+              216,
+              513
+            ]
+          }
+        },
+        "clean_2": {
+          "teams": 117,
+          "graded_timeouts": 0,
+          "native_final_successes": 54,
+          "lost": [
+            2,
+            54
+          ],
+          "gained": [
+            0,
+            33
+          ],
+          "net": [
+            -54,
+            31
+          ],
+          "verdict": "rejected",
+          "triggers": {
+            "observed": 117,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 64,
+            "clock_unknown": 53,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 34,
+            "certain_completed_teams": 34,
+            "possible_teams": 115,
+            "count": [
+              61,
+              359
+            ]
+          }
+        },
+        "clean_unknown": {
+          "teams": 0,
+          "graded_timeouts": 0,
+          "native_final_successes": 0,
+          "lost": [
+            0,
+            0
+          ],
+          "gained": [
+            0,
+            0
+          ],
+          "net": [
+            0,
+            0
+          ],
+          "verdict": "unresolved",
+          "triggers": {
+            "observed": 0,
+            "absent": 0,
+            "unknown": 0
+          },
+          "alignments": {
+            "unanchored": 0,
+            "fresh_interval": 0,
+            "clock_unknown": 0,
+            "inapplicable": 0
+          },
+          "later_writes": {
+            "certain_teams": 0,
+            "certain_completed_teams": 0,
+            "possible_teams": 0,
+            "count": [
+              0,
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      "include_verified_timeouts": true,
+      "clock_error_ms": 5000,
+      "observation_model": "conditional_fresh_world",
+      "all": {
+        "teams": 171,
+        "tasks": 49,
+        "graded_timeouts": 54,
+        "native_final_successes": 65,
+        "recorded_writes": 2136,
+        "triggers": {
+          "observed": 152,
+          "absent": 19,
+          "unknown": 0
+        },
+        "alignments": {
+          "unanchored": 0,
+          "fresh_interval": 87,
+          "clock_unknown": 65,
+          "inapplicable": 19
+        },
+        "gained": [
+          0,
+          41
+        ],
+        "lost": [
+          2,
+          61
+        ],
+        "net": [
+          -61,
+          39
+        ],
+        "policy_successes": [
+          4,
+          104
+        ],
+        "later_writes": {
+          "certain_teams": 41,
+          "certain_completed_teams": 31,
+          "possible_teams": 150,
+          "count": [
+            274,
+            875
+          ]
+        },
+        "verdict": "rejected"
+      },
+      "original_task_reference": {
+        "checks": {
+          "clock_rows": 171,
+          "keyed_teams": 170,
+          "admissible_prefixes_scored": 769,
+          "single_grade_ranges": 60,
+          "native_successes": 65
+        },
+        "unbound_teams": 1,
+        "conditioned_on_known_task_keys": {
+          "lost": [
+            2,
+            61
+          ],
+          "gained": [
+            0,
+            31
+          ],
+          "net": [
+            -61,
+            29
+          ],
+          "policy_successes": [
+            4,
+            94
+          ]
+        }
+      },
+      "reason_counts": {
+        "fresh_interval_bounds": 87,
+        "no_clean_seat": 19,
+        "world_source_unverified": 65
+      }
+    }
+  ],
+  "independent_checks": {
+    "physical_histories": {
+      "seed": 294801,
+      "world_histories": 1800,
+      "clock_projections": 3600,
+      "eligible_clean_exits": 907,
+      "eligible_with_return_between_sample_and_commit": 421,
+      "directed_cases": 15,
+      "small_shared_key_studies": 130,
+      "joint_key_prefix_assignments": 1731,
+      "exact_aggregate_metric_comparisons": 520,
+      "pooled_upper_stricter_than_sum_of_row_uppers": 0
+    },
+    "finite_contradiction": {
+      "sum_of_independent_marginal_upper_successes": 2,
+      "pooled_upper_successes": 1
+    },
+    "missing_host_endpoints_fall_back": 6,
+    "malformed_cuts_rejected": 5,
+    "public_cli_previous_output_sha256": {
+      "default": "4fe19164fc9ce918c68695040fccb734d87feabf566990a9449046d6eefdabc8",
+      "checkpoints": "9c3afca1093015188bbcbb59b2fd0d94b6d5453a528c6c979dc68f001c479188"
+    },
+    "invalid_cli_combinations_rejected": 4,
+    "key_bindings": {
+      "identical_bytes": 96,
+      "legacy_norm_start_reference": 74
+    },
+    "comparison_counts_over_eight_projections": {
+      "typed_clock_records": 1152,
+      "keyed_trial_projections": 1144,
+      "admissible_scored_prefixes": 5260
+    }
+  },
+  "conditional_witnesses_at_1000_ms": [
+    {
+      "job": "c1-qwen36-2seat",
+      "condition": "silent",
+      "graded_timeout": true,
+      "writes": 25,
+      "prefix_range": [
+        0,
+        1
+      ],
+      "empty_prefix_fails": true,
+      "first_correct_write": 3,
+      "world_version": 2,
+      "certain_later_writes": 24
+    },
+    {
+      "job": "c1-glm47-2seat",
+      "condition": "talk",
+      "graded_timeout": false,
+      "writes": 4,
+      "prefix_range": [
+        0,
+        3
+      ],
+      "empty_prefix_fails": true,
+      "first_correct_write": 4,
+      "world_version": 2,
+      "certain_later_writes": 1
+    },
+    {
+      "job": "c1-gptoss-2seat",
+      "condition": "silent",
+      "graded_timeout": false,
+      "writes": 8,
+      "prefix_range": [
+        5,
+        6
+      ],
+      "empty_prefix_fails": true,
+      "first_correct_write": 4,
+      "world_version": 2,
+      "certain_later_writes": 2
+    }
+  ],
+  "conditional_witnesses_at_5000_ms": [
+    {
+      "job": "c1-qwen36-2seat",
+      "condition": "silent",
+      "graded_timeout": true,
+      "writes": 25,
+      "prefix_range": [
+        0,
+        1
+      ],
+      "empty_prefix_fails": true,
+      "first_correct_write": 3,
+      "world_version": 2,
+      "certain_later_writes": 24
+    },
+    {
+      "job": "c1-glm47-2seat",
+      "condition": "talk",
+      "graded_timeout": false,
+      "writes": 4,
+      "prefix_range": [
+        0,
+        3
+      ],
+      "empty_prefix_fails": true,
+      "first_correct_write": 4,
+      "world_version": 2,
+      "certain_later_writes": 1
+    }
+  ],
+  "interpretation": "No loss is identified without a host/world timing condition. With 1000 ms of elapsed discrepancy, at least two previously successful completed teams and one additional graded-timeout team have only incorrect admissible standing answers. One completed case and the timeout case remain identified at 5000 ms. Unknown and missing trials are not evidence for or against loss. These are fixed historical answers, not the outcomes of actual live stops."
+}
