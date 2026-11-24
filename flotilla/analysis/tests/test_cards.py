@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from flotilla_analysis.cards import Card, build_cards, main, pick, render_card
+from flotilla_analysis.cards import Card, build_cards, main, pick, render_card, render_index
 from tests import fixtures as fx
 
 MODEL = "openrouter/test/model-a"
@@ -269,6 +269,38 @@ class Cards(unittest.TestCase):
         self.assertIn("(trial folder not found)", page)
         self.assertIn("rows 4, excluded 0, duplicates -, missing -, unmapped -", text(page))
         self.assertTrue((out / "trials" / "pc-b.html").read_text().startswith("<!doctype html>"))
+
+    def test_split_run_keys_cards_by_build(self):
+        plain, readfirst = "probe.verify", "probe.verify-readfirst"
+        rows = [
+            row("vf-b", "talk-false", correct=False, kind="verify", build=plain),
+            row("rf-a", "talk-false", correct=False, kind="verify", build=readfirst),
+            row("vf-a", "talk-false", correct=False, kind="verify", build=plain),
+            row("aa-unsplit", "talk-false", correct=False, kind="verify"),
+        ]
+        split = {
+            "plan": {"name": "vr9"},
+            "rows": rows,
+            "summaries": [verify() | {"build": plain}, verify() | {"build": readfirst}],
+        }
+        single = {"plan": {"name": "vf9"}, "rows": rows[3:], "summaries": [verify()]}
+        analyses = [("vr9.json", split), ("vf9.json", single)]
+        cards = build_cards(analyses, self.jobs, 3, None)
+        self.assertEqual(
+            [(c.label, c.build, c.wave) for c in cards],
+            [(plain, plain, "vr9"), (readfirst, readfirst, "vr9"), ("probe.verify", None, "vf9")],
+        )
+        wrong = [[e.row["job"] for e in dict(c.examples)["wrong final answers"]] for c in cards]
+        self.assertEqual(wrong, [["vf-a", "vf-b"], ["rf-a"], ["aa-unsplit"]])
+        self.assertIn(f"<h3>{readfirst} · {MODEL}</h3>", render_card(cards[1]))
+        page = render_index(analyses, cards, 3)
+        self.assertEqual(
+            re.findall(r"<h2>([^<]*)</h2>", page),
+            ["Sources", f"{plain} · wave vr9", f"{readfirst} · wave vr9", "probe.verify · wave vf9"],
+        )
+        self.assertEqual(
+            re.findall(r"split by build: [^<]*", page), [f"split by build: {plain}, {readfirst}"]
+        )
 
 
 if __name__ == "__main__":
