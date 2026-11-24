@@ -112,6 +112,17 @@ def test_rr1_does_not_treat_an_open_look_as_a_failure(tmp_path, capsys):
     assert result["reading"] == "undecided"
 
 
+@pytest.mark.parametrize(("new_passes", "reading"), [(2, "common"), (1, "undecided")])
+def test_rr1_reads_common_once_two_new_models_pass_even_with_one_open(tmp_path, capsys, new_passes, reading):
+    args, path, stages, _ = staged_files(tmp_path, new_passes=new_passes)
+    stages["stages_done"] = 1
+    open_model = stages["tests"][0]["models"]["openrouter/example/model-3"]
+    open_model["disposition"].update(status="continue", p=1, direction=0)
+    write_json(path, stages)
+    RR1.main([*args, "--json"])
+    assert json.loads(capsys.readouterr().out)["reading"] == reading
+
+
 def io_summary(model, p, *, pairs=32):
     return {"model": model, "primary": {"a": QUIET, "b_arm": FALSE, "pairs": pairs, "b": 7, "c": 0, "p": p,
                                        "rate_a": 1.0, "rate_b": (pairs - 7) / pairs, "decision": "FAIL"},

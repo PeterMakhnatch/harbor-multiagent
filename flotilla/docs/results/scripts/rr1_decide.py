@@ -41,7 +41,8 @@ def load_results(plan_path: Path, stages_path: Path) -> tuple[list[str], dict]:
     plan = json.loads(blob)
     spec = plan.get("stages", {})
     check_fields(plan_path, plan, {"name": "rr1"})
-    check_fields(plan_path, spec, {"alpha": ALPHA, "family": "model", "tests": [TEST]})
+    check_fields(plan_path, spec, {"fractions": [0.25, 0.5, 1.0], "alpha": ALPHA, "family": "model",
+                                   "futility": {"delta": 0.25, "beta_f": 0.05}, "tests": [TEST]})
     counts = stage_counts(len(plan["task_sets"][0]["instances"]), spec["fractions"])
     look_stages = [i + 1 for i, count in enumerate(counts) if i == 0 or count != counts[i - 1]]
     data = json.loads(stages_path.read_text())
@@ -102,9 +103,12 @@ def reading(rows: list[dict]) -> str:
     luna = decisions.pop(LUNA, "INCOMPLETE")
     if luna == "FAIL":
         return "not repeated"
-    if luna == "INCOMPLETE" or "INCOMPLETE" in decisions.values():
+    if luna == "INCOMPLETE":
         return "undecided"
-    return "common" if list(decisions.values()).count("PASS") >= 2 else "Luna habit"
+    passes = list(decisions.values()).count("PASS")
+    if passes >= 2:
+        return "common"
+    return "undecided" if passes + list(decisions.values()).count("INCOMPLETE") >= 2 else "Luna habit"
 
 
 def report(result: dict) -> None:
