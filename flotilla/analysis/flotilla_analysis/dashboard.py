@@ -30,7 +30,7 @@ from flotilla_analysis.timeline import (
     page_name,
     render_trial,
 )
-from flotilla_analysis.watch import _stamp, _usd, duration, replace_text
+from flotilla_analysis.watch import _stamp, _usd, duration, provider_text, replace_text
 
 TRIALS = "trials"
 DASHBOARD_STYLE = """
@@ -168,12 +168,18 @@ def _wave(status: dict[str, Any]) -> str:
         ("progress", esc(progress) + _bar(wave["done"], wave["total"])),
         ("spend", esc(spend) + _bar(spent or 0.0, cap)),
         ("in flight", esc(f"~{_usd(wave['in_flight_usd'])}")),
+        *((f"provider {row['provider']}", _provider(row)) for row in wave.get("providers") or []),
         ("mean trial", esc(duration(wave["mean_trial_s"]))),
         ("ETA", esc(duration(wave["eta_s"]))),
         ("updated", esc(status["generated_at"])),
     ]
     rows = "".join(f"<tr><th>{esc(k)}</th><td>{v}</td></tr>" for k, v in facts)
     return f'<table class="facts">{rows}</table>'
+
+
+def _provider(row: dict[str, Any]) -> str:
+    text = esc(provider_text(row))
+    return f'<span class="stall">{text}</span>' if row["level"] in ("WARN", "STOP") or row["error"] else text
 
 
 def _running(status: dict[str, Any]) -> str:
