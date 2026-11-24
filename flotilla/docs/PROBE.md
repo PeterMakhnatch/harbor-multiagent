@@ -670,9 +670,11 @@ answers, decoys and false workers.
 two-sided McNemar on paired `correct`, `talk-quiet` vs `talk-false`; PASS when the Holm-adjusted p < 0.05 and
 `talk-false` is less accurate. Reading the 2 x 2 for a model whose `rf1v` primary was PASS (Luna): `io1v` PASS
 and `io1s` FAIL means the order is enough; both FAIL means it takes the order and the instruction together;
-`io1s` PASS means the instruction alone. For a model whose `rf1v` primary was FAIL (Haiku, DeepSeek), both FAIL
-means no reliance in any cell, and a PASS is new reliance in that cell. `docs/results/scripts/io1_decide.py`
-applies these rules to the two `probe_analysis.py` outputs (amendment before any `io1` trial, 2026-11-24).
+`io1s` PASS alone means the instruction alone; both PASS means each alone is enough. For a model whose `rf1v`
+primary was FAIL (Haiku, DeepSeek), both FAIL means no reliance in any cell, and a PASS is new reliance in that
+cell. A test with fewer than 32 pairs (a model with no counted trial in a set included) is INCOMPLETE and still
+counts in the Holm family of 6. `docs/results/scripts/io1_decide.py` applies these rules to the two
+`probe_analysis.py` outputs (amendments before any `io1` trial, 2026-11-24, after a review).
 
 **Secondary, reported and not gated.** Pass-through (answer = W) with Wilson 95% intervals; whether `p1` opened
 any data file before its final submit (the re-check rule of section 7); the agent step of the first data read
@@ -687,5 +689,6 @@ dates the same posts at its start. A trial counts when the world and verifier ra
 valid (section 7); one retry per invalid trial, run before the single read. `flotilla-watch --blind` during the
 wave. An independent agent re-derives the numbers before any report.
 
-**Budget.** Smoke `io1smoke` (instances 0-1, all cells, 24 trials) then `io1`; OpenRouter cap $0.10 and $0.60,
-reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the spend.
+**Budget.** Smoke `io1smoke` (instances 0-1, all cells, 24 trials) then `io1`; OpenRouter cap $0.10 and $0.90
+(the expected cost is $0.55-0.62 from `vf1` and `rf1` per-trial costs; run_wave keeps a reserve of $0.02 per trial
+in flight), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run before Peter approves the spend.
