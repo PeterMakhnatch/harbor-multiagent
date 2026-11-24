@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -678,3 +679,421 @@ def test_stalled_connections_time_out_and_are_capped(tmp_path: Path):
         assert call(info, "GET", "/peek", "agent1") == (200, {"unread": 0})
         for conn in stalled:
             conn.close()
+
+
+# -- arms: solo, silent, talk ---------------------------------------------------
+
+ARM_WORDS = ("solo", "silent", "talk")
+
+
+def arms_build(root: Path, arms: tuple[str, ...] = ARM_WORDS) -> dict[str, Path]:
+    adapter = CooperBenchAdapter(output_dir=root / "tasks", seats=True, arms=arms)
+    paths, failures = adapter.generate_many([make_pair()])
+    assert not failures
+    manifest = json.loads((root / "tasks/manifest.json").read_text())
+    return {manifest[path.name]["arm"]: path for path in paths}
+
+
+def files(task_dir: Path) -> dict[str, bytes]:
+    return {
+        p.relative_to(task_dir).as_posix(): p.read_bytes()
+        for p in task_dir.rglob("*")
+        if p.is_file()
+    }
+
+
+def test_arms_get_opaque_names_and_a_manifest(tmp_path: Path):
+    tasks = arms_build(tmp_path)
+
+    manifest = json.loads((tmp_path / "tasks/manifest.json").read_text())
+    assert set(tasks) == set(ARM_WORDS)
+    for arm, task_dir in tasks.items():
+        task = Task(task_dir)
+        assert re.fullmatch(r"cb-[0-9a-f]{12}", task_dir.name)
+        assert task.name == f"cooperbench-seats/{task_dir.name}"
+        assert task.config.metadata["arm"] == arm
+        assert task.config.metadata["pair"] == "cb-jinja-t1621-f3-5"
+        assert manifest[task_dir.name]["arm"] == arm
+        for word in ARM_WORDS + ("jinja", "1621"):
+            assert word not in task_dir.name
+
+
+def test_a_rebuild_keeps_each_arms_name(tmp_path: Path):
+    first = arms_build(tmp_path)
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=ARM_WORDS
+    )
+    paths, failures = adapter.generate_many([make_pair()], overwrite=True)
+
+    assert not failures
+    assert sorted(paths) == sorted(first.values())
+
+
+def test_the_talk_arm_differs_from_the_seat_task_in_name_and_networks(
+    tmp_path: Path,
+):
+    default = files(generate(tmp_path / "default", make_pair()))
+    talk_dir = arms_build(tmp_path / "arms", ("silent", "talk"))["talk"]
+    talk = files(talk_dir)
+
+    assert set(talk) == set(default)
+    assert sorted(k for k in talk if talk[k] != default[k]) == [
+        "environment/docker-compose.yaml",
+        "task.toml",
+    ]
+    changed = set(talk["task.toml"].decode().splitlines()) ^ set(
+        default["task.toml"].decode().splitlines()
+    )
+    assert changed == {
+        'name = "cooperbench-seats/cb-jinja-t1621-f3-5"',
+        f'name = "cooperbench-seats/{talk_dir.name}"',
+        'arm = "talk"',
+        'pair = "cb-jinja-t1621-f3-5"',
+    }
+    arm_compose = yaml.safe_load(talk["environment/docker-compose.yaml"])
+    seat_compose = yaml.safe_load(default["environment/docker-compose.yaml"])
+    for service, spec in arm_compose["services"].items():
+        spec.pop("networks")
+        if service == "main":
+            assert spec.pop("sysctls") == {"net.ipv4.ip_forward": 0}
+        else:
+            assert spec.pop("cap_drop") == ["NET_RAW"]
+    arm_compose.pop("networks")
+    arm_compose.pop("x-seat").pop("cap_drop")
+    seat_compose.pop("x-seat")
+    assert arm_compose == seat_compose
+
+
+def test_talk_alone_is_an_arms_build(tmp_path: Path):
+    talk_dir = arms_build(tmp_path, ("talk",))["talk"]
+
+    assert re.fullmatch(r"cb-[0-9a-f]{12}", talk_dir.name)
+    assert compose(talk_dir)["services"]["agent1"]["networks"] == ["agent1-net"]
+
+
+@pytest.mark.parametrize("arm", ARM_WORDS)
+def test_each_seat_has_a_network_of_its_own_in_every_arm(tmp_path: Path, arm: str):
+    task_dir = arms_build(tmp_path, (arm,))[arm]
+    spec = compose(task_dir)
+    seats = list(Task(task_dir).config.agents)
+    networks = {seat: set(spec["services"][seat]["networks"]) for seat in seats}
+
+    for seat in seats:
+        assert len(networks[seat]) == 1, seat
+        assert networks[seat] <= set(spec["services"]["main"]["networks"])
+        for other in seats:
+            if other != seat:
+                assert not networks[seat] & networks[other], (seat, other)
+    assert set(spec["networks"]) == set().union(*networks.values())
+
+
+@pytest.mark.parametrize(
+    ("scale", "timeout"), [(2.0, 3600.0), (1.0, 1800.0), (1.5, 2700.0)]
+)
+def test_solo_gets_a_scaled_budget(tmp_path: Path, scale: float, timeout: float):
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks",
+        seats=True,
+        arms=ARM_WORDS,
+        solo_budget_scale=scale,
+    )
+    paths, _ = adapter.generate_many([make_pair()])
+    manifest = json.loads((tmp_path / "tasks/manifest.json").read_text())
+    tasks = {manifest[path.name]["arm"]: Task(path) for path in paths}
+
+    assert tasks["solo"].config.agent.timeout_sec == timeout
+    assert tasks["solo"].config.metadata["solo_budget_scale"] == scale
+    for arm in ("silent", "talk"):
+        assert tasks[arm].config.agent.timeout_sec == 1800.0
+        assert "solo_budget_scale" not in tasks[arm].config.metadata
+        assert tasks[arm].config.verifier.timeout_sec == 2190.0
+    assert tasks["solo"].config.verifier.timeout_sec == 1800.0
+
+
+def test_silent_differs_from_talk_only_where_messaging_is_off(tmp_path: Path):
+    tasks = arms_build(tmp_path, ("silent", "talk"))
+    talk, silent = files(tasks["talk"]), files(tasks["silent"])
+
+    assert set(silent) - set(talk) == {"environment/coop_off.py"}
+    assert sorted(k for k in talk if talk[k] != silent[k]) == [
+        "environment/Dockerfile",
+        "environment/docker-compose.yaml",
+        "instructions/agent1.md",
+        "instructions/agent2.md",
+        "task.toml",
+    ]
+    # What the seats read beyond their instruction is the same.
+    for name in ("environment/seat/Dockerfile", "environment/seat/coop_msg.py"):
+        assert silent[name] == talk[name]
+    services = yaml.safe_load(silent["environment/docker-compose.yaml"])["services"]
+    assert services["main"]["command"] == ["python3", "/opt/cooperbench/coop_off.py"]
+    assert (
+        services["agent1"]
+        == yaml.safe_load(talk["environment/docker-compose.yaml"])["services"]["agent1"]
+    )
+    for seat, teammate in (("agent1", "agent2"), ("agent2", "agent1")):
+        said = silent[f"instructions/{seat}.md"].decode()
+        talked = talk[f"instructions/{seat}.md"].decode()
+        assert "and you cannot exchange messages." in said
+        assert f"Messaging is off in this task: you and **{teammate}** cannot" in said
+        assert "coop-send <recipient>" in talked and "coop-send <recipient>" not in said
+        assert "Recommended workflow" not in said
+        # Only the messaging sentences differ: the feature, the team setup,
+        # the protocol's heading and its "features may overlap" paragraph stay.
+        same_head = talked.split("see each other's files;")[0]
+        assert said.startswith(same_head)
+        overlap = talked[talked.index("## Cooperation protocol") :].split(
+            "Available shell commands"
+        )[0]
+        assert "your features may overlap (touch the same files)" in overlap
+        assert overlap in said
+
+
+def test_arms_harden_every_seat_network(tmp_path: Path):
+    for arm, task_dir in arms_build(tmp_path).items():
+        spec = compose(task_dir)
+        assert spec["x-seat"]["cap_drop"] == ["NET_RAW"], arm
+        assert spec["services"]["main"]["sysctls"] == {"net.ipv4.ip_forward": 0}, arm
+
+
+def test_solo_files_match_the_team_files(tmp_path: Path):
+    """solo's compose file and Setup text are written by hand: hold them to
+    talk's, apart from the deliberate differences."""
+    tasks = arms_build(tmp_path, ("solo", "talk"))
+    solo, talk = compose(tasks["solo"]), compose(tasks["talk"])
+    solo_seat = dict(solo["services"]["agent1"])
+    talk_seat = dict(talk["services"]["agent1"])
+    assert solo_seat.pop("environment") == {
+        **talk_seat.pop("environment"),
+        "COOP_AGENTS": "agent1",
+    }
+    assert solo_seat == talk_seat
+    assert solo["x-seat"] == talk["x-seat"]
+    for key in ("init", "healthcheck", "sysctls"):
+        assert solo["services"]["main"][key] == talk["services"]["main"][key], key
+    solo_text = Task(tasks["solo"]).seat_instruction("agent1")
+    team_text = Task(tasks["talk"]).seat_instruction("agent1")
+    work = team_text[team_text.index("Your work is the state") :].split("\n\n")[0]
+    assert work in solo_text
+
+
+def test_solo_is_one_seat_with_both_features(tmp_path: Path):
+    solo_dir = arms_build(tmp_path, ("solo",))["solo"]
+    task = Task(solo_dir)
+
+    assert list(task.config.agents) == ["agent1"]
+    assert task.config.metadata["seat_features"] == {"agent1": ["3", "5"]}
+    instruction = task.seat_instruction("agent1")
+    assert instruction.startswith("## Feature 3\n\nAdd template path validation.")
+    assert "## Feature 5\n\nAdd template path caching." in instruction
+    assert "coop-" not in instruction and "teammate" not in instruction
+    services = compose(solo_dir)["services"]
+    assert set(services) == {"main", "agent1"}
+    assert services["main"]["command"] == ["python3", "/opt/cooperbench/coop_off.py"]
+    assert services["main"]["environment"]["COOP_AGENTS"] == "agent1"
+    assert all("agent2" not in entry for entry in services["main"]["volumes"])
+    assert (solo_dir / "solution/feature1.patch").read_text() == PATCH_A
+    assert (solo_dir / "solution/feature2.patch").read_text() == PATCH_B
+    assert not (solo_dir / "solution/agent1.patch").exists()
+    assert (solo_dir / "tests/test.sh").read_bytes() == (
+        SEATS_TEMPLATE / "tests/test.sh"
+    ).read_bytes()
+    assert (solo_dir / "tests/solo-mode").is_file()
+    assert not (solo_dir / "tests/feature-files.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"arms": ["silent"]}, "set seats=True"),
+        ({"seats": True, "arms": ["loud"]}, "arms must be distinct values"),
+        ({"seats": True, "arms": ["talk", "talk"]}, "arms must be distinct values"),
+        ({"seats": True, "arms": []}, "arms must be distinct values"),
+        ({"seats": True, "arms": ["solo"], "solo_budget_scale": 0}, "must be positive"),
+    ],
+)
+def test_bad_arms_are_refused(tmp_path: Path, kwargs: dict[str, Any], match: str):
+    with pytest.raises(ValueError, match=match):
+        CooperBenchAdapter(output_dir=tmp_path, **kwargs)
+
+
+def test_cli_parses_arms(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        sys, "argv", ["cooperbench", "--seats", "--arms", "solo", "silent"]
+    )
+    args = cli._parse_args()
+    assert (args.arms, args.solo_budget_scale) == (["solo", "silent"], 2.0)
+    assert args.output_dir == cli.DEFAULT_ARMS_OUTPUT_DIR
+    monkeypatch.setattr(sys, "argv", ["cooperbench", "--seats"])
+    args = cli._parse_args()
+    assert (args.arms, args.output_dir) == (None, cli.DEFAULT_SEATS_OUTPUT_DIR)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["cooperbench", "--seats", "--arms", "solo", "--solo-budget-scale", "1"],
+    )
+    assert cli._parse_args().solo_budget_scale == 1.0
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--arms", "solo"],
+        ["--seats", "--arms", "talk", "--solo-budget-scale", "2"],
+        ["--seats", "--arms", "solo", "--solo-budget-scale", "0"],
+        ["--seats", "--arms", "talk", "talk"],
+    ],
+)
+def test_cli_refuses_arms_that_do_not_fit(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str]
+):
+    monkeypatch.setattr(sys, "argv", ["cooperbench", *argv])
+    with pytest.raises(SystemExit) as exit_info:
+        cli._parse_args()
+    assert exit_info.value.code == 2
+
+
+@pytest.fixture
+def off_module(tmp_path: Path) -> Iterator[ModuleType]:
+    """coop_off.py from a generated silent task, next to its coop_server.py."""
+    silent_dir = arms_build(tmp_path / "build", ("silent",))["silent"]
+    env_dir = silent_dir / "environment"
+    spec = importlib.util.spec_from_file_location("coop_off", env_dir / "coop_off.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        yield module
+    finally:
+        sys.modules.pop("coop_server", None)
+        if str(env_dir.resolve()) in sys.path:
+            sys.path.remove(str(env_dir.resolve()))
+
+
+def test_the_silent_service_refuses_every_message(
+    tmp_path: Path, off_module: ModuleType
+):
+    off = (403, {"error": "messaging is off in this task"})
+    with serving(tmp_path / "service", off_module) as info:
+        assert (
+            call(info, "POST", "/send", "agent1", {"to": "agent2", "content": "x"})
+            == off
+        )
+        assert call(info, "POST", "/recv", "agent2", {}) == off
+        assert call(info, "GET", "/peek", "agent1") == off
+        assert call(info, "GET", "/agents", "agent2") == off
+        assert call(info, "GET", "/health", None) == (200, {"ok": True})
+        assert (
+            call(info, "POST", "/send", None, {"to": "agent2", "content": "x"})[0]
+            == 401
+        )
+        sent = coop(info, "agent1", "send", "agent2", "hello")
+        events = [
+            json.loads(line)
+            for line in (info["logs"] / "events.jsonl").read_text().splitlines()
+        ]
+        messages = (info["logs"] / "messages.jsonl").read_text()
+
+    assert sent.returncode == 1
+    assert sent.stderr.strip() == "coop: messaging is off in this task (HTTP 403)"
+    assert messages == ""
+    assert [(e["seat"], e["kind"]) for e in events] == [
+        ("agent1", "denied"),
+        ("agent2", "denied"),
+        ("agent1", "denied"),
+        ("agent2", "denied"),
+        (None, "bad_token"),
+        ("agent1", "denied"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("arms", "arm"), [(None, "silent"), (("silent",), "talk"), (ARM_WORDS, "loud")]
+)
+def test_generate_task_refuses_an_arm_it_was_not_built_for(
+    tmp_path: Path, arms: tuple[str, ...] | None, arm: str
+):
+    adapter = CooperBenchAdapter(output_dir=tmp_path / "tasks", seats=True, arms=arms)
+
+    with pytest.raises(ValueError, match="this adapter writes the arms"):
+        adapter.generate_task(make_pair(), arm=arm)
+    assert not any((tmp_path / "tasks").iterdir())
+
+
+def test_an_arms_build_refuses_a_folder_of_other_tasks(tmp_path: Path):
+    generate(tmp_path, make_pair())  # a seat task in tmp_path/tasks
+
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=ARM_WORDS
+    )
+    with pytest.raises(ValueError, match="not arm tasks"):
+        adapter.generate_many([make_pair()])
+    assert not (tmp_path / "tasks/manifest.json").exists()
+
+
+@pytest.mark.parametrize("seats", [True, False])
+def test_a_build_without_arms_refuses_an_arms_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seats: bool
+):
+    monkeypatch.setitem(
+        _combined_patch_cache, ("pallets/jinja", "1621"), PATCH_A + PATCH_B
+    )
+    arms_build(tmp_path, ("talk",))
+
+    with pytest.raises(ValueError, match="holds an arms build"):
+        CooperBenchAdapter(output_dir=tmp_path / "tasks", seats=seats).generate_task(
+            make_pair()
+        )
+
+
+def test_a_failed_arm_task_leaves_no_folder_and_no_entry(tmp_path: Path):
+    bad = make_pair(repo="nobody/nothing")  # no image mapping: generation fails
+    adapter = CooperBenchAdapter(
+        output_dir=tmp_path / "tasks", seats=True, arms=["talk"]
+    )
+
+    with pytest.raises(KeyError):
+        adapter.generate_task(bad, arm="talk")
+    assert list((tmp_path / "tasks").iterdir()) == []
+
+
+def test_a_failed_rebuild_keeps_the_manifest_and_the_folders_in_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    tasks = arms_build(tmp_path)
+    root = tmp_path / "tasks"
+
+    def entries_match_folders() -> dict[str, dict[str, Any]]:
+        manifest = json.loads((root / "manifest.json").read_text())
+        assert set(manifest) == {d.name for d in root.iterdir() if d.is_dir()}
+        return manifest
+
+    adapter = CooperBenchAdapter(output_dir=root, seats=True, arms=ARM_WORDS)
+
+    def fail_after_writing(*args: object) -> None:  # the last step of a task
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(adapter, "_apply_seat_upstream_fixes", fail_after_writing)
+    with pytest.raises(RuntimeError, match="disk full"):
+        adapter.generate_task(make_pair(), overwrite=True, arm="silent")
+
+    manifest = entries_match_folders()
+    assert not tasks["silent"].exists()
+    assert sorted(e["arm"] for e in manifest.values()) == ["solo", "talk"]
+
+    rebuilt = CooperBenchAdapter(
+        output_dir=root, seats=True, arms=["silent"]
+    ).generate_task(make_pair(), arm="silent")
+    assert entries_match_folders()[rebuilt.name]["arm"] == "silent"
+
+
+@pytest.mark.parametrize("scale", [float("inf"), float("nan"), 0.0, -1.0])
+def test_solo_budget_scale_must_be_positive_and_finite(tmp_path: Path, scale: float):
+    """An infinite scale would render timeout_sec = inf (review of #26)."""
+    with pytest.raises(ValueError, match="must be positive and finite"):
+        CooperBenchAdapter(
+            output_dir=tmp_path / "tasks",
+            seats=True,
+            arms=ARM_WORDS,
+            solo_budget_scale=scale,
+        )

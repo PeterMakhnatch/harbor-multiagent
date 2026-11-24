@@ -12,6 +12,9 @@ are ``[agents.<service>]`` seats, so any Harbor harness can fill each one.
 Each seat has its own workspace volume, the seats message each other through
 an authenticated service in main, and the verifier in main merges both
 seats' patches and runs both features' tests, as in the sidecar tasks.
+``arms`` writes the arms of a coordination experiment: ``talk`` (the seat
+task), ``silent`` (messaging off) and ``solo`` (one seat implements both
+features), each seat on a network of its own.
 
 Uses pre-built Docker images from DockerHub (akhatua/cooperbench-*) and
 the runner.sh protocol from the CooperBench evaluation framework.
@@ -22,8 +25,10 @@ GitHub:  https://github.com/cooperbench/CooperBench
 
 from __future__ import annotations
 
+import math
 import json
 import re
+import secrets
 import shutil
 import subprocess
 import urllib.request
@@ -331,6 +336,32 @@ def _render(template: str, **kwargs: str) -> str:
     return out
 
 
+def _render_once(template: str, **kwargs: str) -> str:
+    """Fill every placeholder in one pass, so text that fills one placeholder
+    is never scanned for another."""
+    pattern = "|".join(re.escape(k) for k in kwargs)
+    return re.sub(r"\{(" + pattern + r")\}", lambda m: kwargs[m.group(1)], template)
+
+
+def _swap(text: str, old: str, new: str) -> str:
+    """Replace ``old``, which must occur exactly once in ``text``."""
+    if text.count(old) != 1:
+        raise ValueError(f"template text not found exactly once: {old[:60]!r}")
+    return text.replace(old, new)
+
+
+def _swap_span(text: str, start: str, end: str, new: str) -> str:
+    """Replace the text from ``start`` through ``end``; each must occur
+    exactly once, ``start`` before ``end``."""
+    for mark in (start, end):
+        if text.count(mark) != 1:
+            raise ValueError(f"template text not found exactly once: {mark[:60]!r}")
+    first, last = text.index(start), text.index(end) + len(end)
+    if last <= first:
+        raise ValueError(f"template text out of order: {start[:40]!r}")
+    return text[:first] + new + text[last:]
+
+
 class CooperBenchAdapter:
     """CooperBench → Harbor adapter.
 
@@ -340,6 +371,11 @@ class CooperBenchAdapter:
     AGENT_HARNESSES = ("mini-swe-agent", "openhands-sdk")
     # Seat names in seat mode: agent1 implements feature A, agent2 feature B.
     SEATS = ("agent1", "agent2")
+    # Arms of a coordination experiment (Flotilla's design): talk is the seat
+    # task as it is; silent is the same with messaging off; solo is one seat
+    # with both features.
+    ARMS = ("solo", "silent", "talk")
+    MANIFEST = "manifest.json"
 
     def __init__(
         self,
@@ -355,6 +391,8 @@ class CooperBenchAdapter:
         subset: str | None = None,
         instance_ids: list[str] | None = None,
         seats: bool = False,
+        arms: Iterable[str] | None = None,
+        solo_budget_scale: float = 2.0,
     ):
         """Initialize the adapter.
 
@@ -372,6 +410,14 @@ class CooperBenchAdapter:
                 (e.g., dottxt-ai__outlines-1371-1).
             seats: Write seat tasks (agent1 and agent2 as [agents.<service>]
                 seats) instead of sidecar tasks; agent_harness does not apply.
+            arms: The arms to write for each pair in seat mode, out of solo,
+                silent and talk. Given, every arm's task has opaque names
+                (manifest.json maps them to pair and arm) and each seat on a
+                network of its own; None writes the seat task as it is.
+            solo_budget_scale: The solo seat's per-seat caps that the task
+                controls (its agent timeout) are a team seat's times this; 2,
+                the default, gives solo the team's total budget, and 1 is
+                upstream CooperBench's solo budget.
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -392,6 +438,23 @@ class CooperBenchAdapter:
             )
         self.agent_harness = agent_harness
         self.seats = seats
+        self._arms_build = arms is not None
+        self.arms = ("talk",) if arms is None else tuple(arms)
+        if (
+            not self.arms
+            or len(set(self.arms)) != len(self.arms)
+            or not set(self.arms) <= set(self.ARMS)
+        ):
+            raise ValueError(f"arms must be distinct values from {self.ARMS}: {arms}")
+        if self._arms_build and not seats:
+            raise ValueError("arms apply to seat tasks: set seats=True")
+        if not (math.isfinite(solo_budget_scale) and solo_budget_scale > 0):
+            raise ValueError(
+                f"solo_budget_scale must be positive and finite: {solo_budget_scale}"
+            )
+        self.solo_budget_scale = solo_budget_scale
+        self._manifest: dict[str, dict] | None = None
+        self._output_checked = False
 
     def run(self) -> tuple[list[Path], list[tuple[str, str]]]:
         """Load the dataset, apply filters, and generate tasks.
@@ -414,10 +477,17 @@ class CooperBenchAdapter:
             print("No feature pairs found. Check filters.")
             return [], []
 
-        print(
-            f"Generating {len(pairs)} CooperBench tasks "
-            f"(from {len(features)} features) into {self.output_dir}"
-        )
+        if self._arms_build:
+            print(
+                f"Generating {len(pairs) * len(self.arms)} CooperBench tasks "
+                f"(pairs: {len(pairs)}, arms: {len(self.arms)}, from "
+                f"{len(features)} features) into {self.output_dir}"
+            )
+        else:
+            print(
+                f"Generating {len(pairs)} CooperBench tasks "
+                f"(from {len(features)} features) into {self.output_dir}"
+            )
         return self.generate_many(pairs, overwrite=self.overwrite)
 
     @staticmethod
@@ -775,15 +845,36 @@ class CooperBenchAdapter:
         pair: CooperBenchPair,
         *,
         overwrite: bool = False,
+        arm: str = "talk",
     ) -> Path:
-        task_dir = self.output_dir / pair.pair_id
+        if arm not in self.arms:
+            raise ValueError(
+                f"this adapter writes the arms {self.arms}, not {arm!r}; "
+                "pass arms= to the constructor"
+            )
+        self._check_output_dir()
+        name = self._task_dir_name(pair, arm)
+        task_dir = self.output_dir / name
         if task_dir.exists():
             if not overwrite:
                 raise FileExistsError(f"Target already exists: {task_dir}")
             shutil.rmtree(task_dir)
+            if self._opaque_names:
+                self._drop_from_manifest(name)  # the folder is gone: so is its entry
 
+        if self.seats and self._opaque_names:
+            # manifest.json lists exactly the arm tasks on disk: an entry is
+            # written only once its task is complete, and dropped with it.
+            try:
+                out = self._generate_seat_task(pair, task_dir, arm)
+            except BaseException:
+                shutil.rmtree(task_dir, ignore_errors=True)
+                self._drop_from_manifest(name)
+                raise
+            self._record_in_manifest(name, pair, arm)
+            return out
         if self.seats:
-            return self._generate_seat_task(pair, task_dir)
+            return self._generate_seat_task(pair, task_dir, arm)
 
         paths = HarborTaskPaths(task_dir)
         gh_dir = GITHUB_DIR_FOR_REPO[pair.repo]
@@ -877,69 +968,141 @@ class CooperBenchAdapter:
 
         return task_dir
 
-    def _generate_seat_task(self, pair: CooperBenchPair, task_dir: Path) -> Path:
+    def _generate_seat_task(
+        self, pair: CooperBenchPair, task_dir: Path, arm: str = "talk"
+    ) -> Path:
         """Write a seat task: agent1 (feature A) and agent2 (feature B) are
         [agents.<service>] seats, both under test, each with its own
         instruction, container and workspace volume. main holds the base
-        commit, serves the seats' messages, and runs the verifier."""
+        commit, serves the seats' messages, and runs the verifier.
+
+        ``arm`` silent is the same task with messaging off: main runs
+        coop_off.py, and the instructions say that messaging is off. ``arm``
+        solo has one seat, agent1, with both features in one instruction; the
+        verifier tests its patch alone. No file a seat reads names the arm;
+        task.toml's metadata does."""
         paths = SeatTaskPaths(task_dir)
         template = self.template_dir / "seats"
+        arms_dir = template / "arms"
         image_name = get_image_name(GITHUB_DIR_FOR_REPO[pair.repo], pair.task_id)
         features = dict(zip(self.SEATS, (pair.feature_a, pair.feature_b)))
-        verifier_timeout = (
-            self.verifier_timeout_sec
-            + 3 * SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC
-            + SEAT_ATTRIBUTION_OVERHEAD_SEC
-        )
+        verifier_timeout = self.verifier_timeout_sec
+        if arm != "solo":
+            verifier_timeout += (
+                3 * SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC + SEAT_ATTRIBUTION_OVERHEAD_SEC
+            )
 
         # -- task.toml -----------------------------------------------------
+        toml_text = (template / "task.toml").read_text(encoding="utf-8")
+        agent_timeout_sec = self.agent_timeout_sec
+        if arm == "solo":
+            toml_text = self._solo_task_toml(toml_text)
+            agent_timeout_sec *= self.solo_budget_scale
+        if self._opaque_names:
+            extra = 'arm = "{arm}"\npair = "{pair}"\n'
+            if arm == "solo":
+                extra += f"solo_budget_scale = {self.solo_budget_scale:g}\n"
+            lines = [
+                ln
+                for ln in toml_text.splitlines(True)
+                if ln.startswith("seat_features = ")
+            ]
+            if len(lines) != 1:
+                raise ValueError(
+                    "template task.toml needs exactly one seat_features line"
+                )
+            toml_text = _swap(toml_text, lines[0], lines[0] + extra)
         task_toml = _render(
-            (template / "task.toml").read_text(encoding="utf-8"),
-            pair_id=pair.pair_id,
-            agent_timeout_sec=f"{self.agent_timeout_sec:.1f}",
+            toml_text,
+            pair_id=task_dir.name,
+            agent_timeout_sec=f"{agent_timeout_sec:.1f}",
             verifier_timeout_sec=f"{verifier_timeout:.1f}",
             seat_attribution_run_timeout_sec=str(SEAT_ATTRIBUTION_RUN_TIMEOUT_SEC),
             repo=pair.repo,
             task_id=pair.task_id,
             feature_a=pair.feature_a.cooperbench_feature_id,
             feature_b=pair.feature_b.cooperbench_feature_id,
+            arm=arm,
+            pair=pair.pair_id,
         )
         paths.task_toml_path.write_text(task_toml, encoding="utf-8")
 
         # -- instructions/<seat>.md: the seat's feature, then the team setup
         # and the cooperation protocol (feature text last, so it is not
         # scanned for placeholders) --------------------------------------
-        instruction = (template / "instruction.md").read_text(encoding="utf-8")
-        for seat, feature in features.items():
-            (teammate,) = (other for other in self.SEATS if other != seat)
-            (paths.instructions_dir / f"{seat}.md").write_text(
-                _render(
-                    instruction,
-                    agent_id=seat,
-                    teammate=teammate,
-                    feature_description=feature.problem_statement,
+        if arm == "solo":
+            (paths.instructions_dir / "agent1.md").write_text(
+                _render_once(
+                    (arms_dir / "instruction.solo.md").read_text(encoding="utf-8"),
+                    feature_a_id=pair.feature_a.cooperbench_feature_id,
+                    feature_b_id=pair.feature_b.cooperbench_feature_id,
+                    feature_a_description=pair.feature_a.problem_statement,
+                    feature_b_description=pair.feature_b.problem_statement,
                 ),
                 encoding="utf-8",
             )
+        else:
+            instruction = (template / "instruction.md").read_text(encoding="utf-8")
+            if arm == "silent":
+                instruction = self._silent_instruction(instruction)
+            for seat, feature in features.items():
+                (teammate,) = (other for other in self.SEATS if other != seat)
+                (paths.instructions_dir / f"{seat}.md").write_text(
+                    _render(
+                        instruction,
+                        agent_id=seat,
+                        teammate=teammate,
+                        feature_description=feature.problem_statement,
+                    ),
+                    encoding="utf-8",
+                )
 
         # -- environment/: main, the seat image, and the compose file -------
         for dockerfile_dir, out_dir in (
             (template / "environment", paths.environment_dir),
             (template / "environment" / "seat", paths.seat_dir),
         ):
+            dockerfile = (dockerfile_dir / "Dockerfile").read_text(encoding="utf-8")
+            if arm != "talk" and out_dir == paths.environment_dir:
+                dockerfile = _swap(
+                    dockerfile,
+                    "COPY coop_server.py /opt/cooperbench/coop_server.py\n",
+                    "COPY coop_server.py /opt/cooperbench/coop_server.py\n"
+                    "COPY coop_off.py /opt/cooperbench/coop_off.py\n",
+                )
             (out_dir / "Dockerfile").write_text(
-                _render(
-                    (dockerfile_dir / "Dockerfile").read_text(encoding="utf-8"),
-                    image_name=image_name,
-                ),
-                encoding="utf-8",
+                _render(dockerfile, image_name=image_name), encoding="utf-8"
             )
-        for src, dst in (
-            ("docker-compose.yaml", paths.environment_dir),
-            ("coop_server.py", paths.environment_dir),
-            ("seat/coop_msg.py", paths.seat_dir),
-        ):
-            shutil.copy2(template / "environment" / src, dst)
+        copies = [
+            ("environment/coop_server.py", paths.environment_dir),
+            ("environment/seat/coop_msg.py", paths.seat_dir),
+        ]
+        if arm != "talk":
+            copies.append(("arms/coop_off.py", paths.environment_dir))
+        if arm == "solo":
+            shutil.copy2(
+                arms_dir / "docker-compose.solo.yaml",
+                paths.environment_dir / "docker-compose.yaml",
+            )
+        elif not self._arms_build:
+            copies.append(("environment/docker-compose.yaml", paths.environment_dir))
+        else:
+            compose_text = self._arm_compose(
+                (template / "environment" / "docker-compose.yaml").read_text(
+                    encoding="utf-8"
+                )
+            )
+            if arm == "silent":
+                compose_text = _swap(
+                    compose_text,
+                    '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n',
+                    '    command: ["python3", "/opt/cooperbench/coop_off.py"]\n',
+                )
+            (paths.environment_dir / "docker-compose.yaml").write_text(
+                compose_text, encoding="utf-8"
+            )
+        for src, dst in copies:
+            shutil.copy2(template / src, dst)
 
         # -- tests/ --------------------------------------------------------
         (paths.tests_dir / "tests1.patch").write_text(
@@ -950,32 +1113,209 @@ class CooperBenchAdapter:
         )
         test_sh_path = paths.tests_dir / "test.sh"
         shutil.copy2(template / "tests" / "test.sh", test_sh_path)
+        if arm == "solo":
+            (paths.tests_dir / "solo-mode").touch()
         test_sh_path.chmod(0o755)
 
-        # -- solution/: each seat's own feature's gold patch ----------------
+        # -- solution/: each seat's own feature's gold patch (solo: both,
+        # applied in turn by the one seat) ----------------------------------
         seat_patches = []
-        for seat, feature in features.items():
-            patch_path = paths.solution_dir / f"{seat}.patch"
-            patch_path.write_text(feature.patch, encoding="utf-8")
-            seat_patches.append(patch_path)
+        if arm == "solo":
+            for n, feature in enumerate((pair.feature_a, pair.feature_b), start=1):
+                patch_path = paths.solution_dir / f"feature{n}.patch"
+                patch_path.write_text(feature.patch, encoding="utf-8")
+                seat_patches.append(patch_path)
+            solve_template = arms_dir / "solve.solo.sh"
+        else:
+            for seat, feature in features.items():
+                patch_path = paths.solution_dir / f"{seat}.patch"
+                patch_path.write_text(feature.patch, encoding="utf-8")
+                seat_patches.append(patch_path)
+            solve_template = template / "solution" / "solve.sh"
         solve_sh_path = paths.solution_dir / "solve.sh"
-        shutil.copy2(template / "solution" / "solve.sh", solve_sh_path)
+        shutil.copy2(solve_template, solve_sh_path)
         solve_sh_path.chmod(0o755)
 
         # -- upstream bug fixes ------------------------------------------------
         self._apply_seat_upstream_fixes(pair, paths, seat_patches)
-        (paths.tests_dir / "feature-files.json").write_text(
-            json.dumps(
-                {
-                    seat: _reference_patch_paths(patch_path.read_text(encoding="utf-8"))
-                    for seat, patch_path in zip(self.SEATS, seat_patches, strict=True)
-                }
+        if arm != "solo":
+            (paths.tests_dir / "feature-files.json").write_text(
+                json.dumps(
+                    {
+                        seat: _reference_patch_paths(
+                            patch_path.read_text(encoding="utf-8")
+                        )
+                        for seat, patch_path in zip(
+                            self.SEATS, seat_patches, strict=True
+                        )
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
             )
-            + "\n",
-            encoding="utf-8",
-        )
 
         return task_dir
+
+    # -- arms -----------------------------------------------------------------
+
+    @property
+    def _opaque_names(self) -> bool:
+        """With arms: task names that say nothing, because a seat can read its
+        trial's container names (Harbor derives them from the task folder)
+        through reverse DNS."""
+        return self.seats and self._arms_build
+
+    @staticmethod
+    def _arm_compose(text: str) -> str:
+        """The talk compose file for an arm: each seat on a network of its
+        own, shared only with main, so neither seat can reach the other's
+        container (the seats' messages go through main); the seats without
+        NET_RAW, so they cannot forge frames; main not forwarding packets
+        between the seat networks."""
+        text = _swap(
+            text,
+            "#   reach it as http://main:8080.\n",
+            "#   reach it as http://main:8080.\n"
+            "# - Each seat is on a network of its own, shared only with main, so\n"
+            "#   neither seat can reach the other's container. The seats have no\n"
+            "#   NET_RAW, and main does not forward packets between the networks.\n",
+        )
+        text = _swap(
+            text,
+            "  init: true\n  working_dir: /workspace/repo\n",
+            "  init: true\n  working_dir: /workspace/repo\n  cap_drop: [NET_RAW]\n",
+        )
+        text = _swap(
+            text,
+            '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n',
+            '    command: ["python3", "/opt/cooperbench/coop_server.py"]\n'
+            "    networks: [agent1-net, agent2-net]\n"
+            "    sysctls:\n"
+            "      net.ipv4.ip_forward: 0\n",
+        )
+        for seat in ("agent1", "agent2"):
+            text = _swap(
+                text,
+                f"  {seat}:\n    <<: *seat\n",
+                f"  {seat}:\n    <<: *seat\n    networks: [{seat}-net]\n",
+            )
+        return _swap(
+            text,
+            "\nvolumes:\n  agent1-repo: {}\n",
+            "\nnetworks:\n  agent1-net: {}\n  agent2-net: {}\n\nvolumes:\n  agent1-repo: {}\n",
+        )
+
+    def _task_dir_name(self, pair: CooperBenchPair, arm: str) -> str:
+        if not self._opaque_names:
+            return pair.pair_id
+        manifest = self._load_manifest()
+        for name, entry in manifest.items():
+            if entry.get("pair") == pair.pair_id and entry.get("arm") == arm:
+                return name  # a rebuild into the same folder keeps the name
+        while True:
+            name = f"cb-{secrets.token_hex(6)}"
+            if name not in manifest and not (self.output_dir / name).exists():
+                return name
+
+    def _record_in_manifest(self, name: str, pair: CooperBenchPair, arm: str) -> None:
+        """Add a written task to manifest.json (only then, so a failed task
+        leaves no entry)."""
+        self._load_manifest()[name] = {
+            "pair": pair.pair_id,
+            "arm": arm,
+            "repo": pair.repo,
+            "task_id": pair.task_id,
+            "features": [
+                pair.feature_a.cooperbench_feature_id,
+                pair.feature_b.cooperbench_feature_id,
+            ],
+        }
+        self._write_manifest()
+
+    def _drop_from_manifest(self, name: str) -> None:
+        if self._load_manifest().pop(name, None) is not None:
+            self._write_manifest()
+
+    def _check_output_dir(self) -> None:
+        """An arms build and a build without arms never share a folder, so a
+        job over one folder never mixes arm tasks with other tasks."""
+        if self._output_checked:
+            return
+        if self._opaque_names:
+            listed = set(self._load_manifest())
+            others = sorted(
+                d.name
+                for d in self.output_dir.iterdir()
+                if (d / "task.toml").is_file() and d.name not in listed
+            )
+            if others:
+                raise ValueError(
+                    f"{self.output_dir} holds tasks that are not arm tasks "
+                    f"({', '.join(others[:3])}...); write the arms to another folder"
+                )
+        elif (self.output_dir / self.MANIFEST).exists():
+            raise ValueError(
+                f"{self.output_dir} holds an arms build ({self.MANIFEST}); "
+                "write these tasks to another folder"
+            )
+        self._output_checked = True
+
+    def _load_manifest(self) -> dict[str, dict]:
+        if self._manifest is None:
+            path = self.output_dir / self.MANIFEST
+            self._manifest = json.loads(path.read_text()) if path.exists() else {}
+        return self._manifest
+
+    def _write_manifest(self) -> None:
+        (self.output_dir / self.MANIFEST).write_text(
+            json.dumps(self._load_manifest(), indent=2, sort_keys=True) + "\n"
+        )
+
+    @staticmethod
+    def _silent_instruction(text: str) -> str:
+        """The talk instruction with only its messaging sentences changed: the
+        seats cannot exchange messages, and the protocol's commands and
+        messaging workflow become one paragraph that says messaging is off.
+        The protocol's heading and its "features may overlap" paragraph stay."""
+        text = _swap(
+            text,
+            "see each other's files; you can only exchange messages.",
+            "see each other's files, and you cannot exchange messages.",
+        )
+        return _swap_span(
+            text,
+            "Available shell commands for cross-agent messaging",
+            "Messages are not magic — your peers only know what you tell them.\n",
+            "Messaging is off in this task: you and **{teammate}** cannot exchange\n"
+            "messages. The `coop-send`, `coop-broadcast`, `coop-recv`, `coop-peek` and\n"
+            "`coop-agents` commands only report that.\n",
+        )
+
+    @staticmethod
+    def _solo_task_toml(text: str) -> str:
+        """The talk task.toml with one seat, agent1, that has both features."""
+        text = _swap(
+            text,
+            'seat_features = { agent1 = "{feature_a}", agent2 = "{feature_b}" }\n',
+            'seat_features = { agent1 = ["{feature_a}", "{feature_b}"] }\n',
+        )
+        text = _swap(
+            text,
+            "# One agent timeout, shared by both seats.\n",
+            "# The one seat's agent timeout: a team seat's times solo_budget_scale\n"
+            "# ([metadata]), 2 by default, so solo gets the team's total budget.\n",
+        )
+        text = _swap(
+            text,
+            "they size the sandbox that holds main and both seats.\n",
+            "they size the sandbox that holds main and the seat.\n",
+        )
+        return _swap(
+            text,
+            "# Both seats are under test: play lasts until both agents have ended.\n"
+            "[agents.agent1]\n\n[agents.agent2]\n",
+            "# The one seat is under test.\n[agents.agent1]\n",
+        )
 
     # -- batch generation ---------------------------------------------------
 
@@ -987,15 +1327,20 @@ class CooperBenchAdapter:
     ) -> tuple[list[Path], list[tuple[str, str]]]:
         success: list[Path] = []
         failures: list[tuple[str, str]] = []
+        self._check_output_dir()  # a mixed folder stops the build, not one task
 
         for idx, pair in enumerate(pairs, start=1):
-            try:
-                out = self.generate_task(pair, overwrite=overwrite)
-                print(f"[{idx}] OK   {pair.pair_id} -> {out}")
-                success.append(out)
-            except Exception as e:
-                msg = f"{type(e).__name__}: {e}"
-                print(f"[{idx}] FAIL {pair.pair_id}: {msg}")
-                failures.append((pair.pair_id, msg))
+            for arm in self.arms:
+                label = (
+                    f"{pair.pair_id} ({arm})" if self._opaque_names else pair.pair_id
+                )
+                try:
+                    out = self.generate_task(pair, overwrite=overwrite, arm=arm)
+                    print(f"[{idx}] OK   {label} -> {out}")
+                    success.append(out)
+                except Exception as e:
+                    msg = f"{type(e).__name__}: {e}"
+                    print(f"[{idx}] FAIL {label}: {msg}")
+                    failures.append((label, msg))
 
         return success, failures
