@@ -1,0 +1,339 @@
+{
+  "channels": [
+    "deliver",
+    "withhold"
+  ],
+  "comparisons": [
+    "smaller",
+    "equal",
+    "larger",
+    "unresolved"
+  ],
+  "notes": {
+    "comparison": "larger when the whole transfer interval is > 0, smaller when it is < 0, equal when it is exactly [0/1,0/1], unresolved otherwise",
+    "delta": "deliver success interval minus withhold success interval, sharp bounds",
+    "eligible": "only reported rows with status positive or zero (world grade 1 or 0, grade source native_agreed) count as known outcomes: both native seats returned with no error and the grade was verified",
+    "fractions": "every bound is an exact reduced fraction written numerator/denominator",
+    "physical": "physical_known and physical_positive count unresolved or native_error rows that still carry a world grade; they are reported per world and never enter a success interval",
+    "pooling": "no success rate is pooled across states, channels or worlds; world totals are accounting counts only",
+    "reported": "reported counts packet rows received for registered cells; receipt of a row is not a witnessed seat return",
+    "scope": "registrations and packets are stationary operator inputs read once; digests name content only and are not credentials, signatures or proof of a model response; the report describes the registered team under the registered worlds only, with no causal or model attribution, p-value or cost claim",
+    "states": "original_succeeds pairs stock committed with inflight settles; original_fails pairs stock dropped with inflight fails",
+    "success": "[k/n,(k+u)/n] over the registered n of one world, state and channel, with k positive and u unknown; an exact identification bound, not a sampling confidence interval",
+    "transfer": "inflight delta minus stock delta within one original state, sharp bounds",
+    "unknown": "every other registered cell is unknown, never a failure: missing cells (no reported row, no_result) and every declared other status; the status duplicate is a declared collection status, distinct from a repeated ticket claim across packets, which is rejected"
+  },
+  "question": "For the same named native team with an identical roster, how does the deliver-minus-withhold good-outcome rate differ between the stock task (prior committed or dropped) and the inflight task (fate settles or fails), within each original-shipment state?",
+  "schema": "harbor.ship-handover.transfer/v1",
+  "states": {
+    "original_fails": {
+      "inflight": "fails",
+      "stock": "dropped"
+    },
+    "original_succeeds": {
+      "inflight": "settles",
+      "stock": "committed"
+    }
+  },
+  "team": "recovery",
+  "transfer": {
+    "original_fails": {
+      "comparison": "smaller",
+      "interval": {
+        "high": "-1/1",
+        "low": "-1/1"
+      }
+    },
+    "original_succeeds": {
+      "comparison": "equal",
+      "interval": {
+        "high": "0/1",
+        "low": "0/1"
+      }
+    }
+  },
+  "worlds": {
+    "inflight": {
+      "delta": {
+        "original_fails": {
+          "high": "0/1",
+          "low": "0/1"
+        },
+        "original_succeeds": {
+          "high": "0/1",
+          "low": "0/1"
+        }
+      },
+      "packet_schema": "harbor.shipping.returns-packet/v1",
+      "packets": [
+        "sha256:295a419410d9a474c0977a5465a2f09592cabd81d2fffe5b262e543ecf7c935d",
+        "sha256:2f6cfad702579481355a2456b32ba198b0b674700832d77b36541023b609c2a2"
+      ],
+      "registration_sha256": "sha256:08e790b7ed4abb2c2c51f2e3909b97208ec84b07d4aaf83b4aa89037a35f9688",
+      "schema": "harbor.ship-inflight.study/v1",
+      "strata": [
+        {
+          "channel": "deliver",
+          "eligible": 1,
+          "fate": "settles",
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 1,
+          "registered": 1,
+          "reported": 1,
+          "state": "original_succeeds",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "1/1",
+            "low": "1/1"
+          },
+          "unknown": 0,
+          "zero": 0
+        },
+        {
+          "channel": "withhold",
+          "eligible": 1,
+          "fate": "settles",
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 1,
+          "registered": 1,
+          "reported": 1,
+          "state": "original_succeeds",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "1/1",
+            "low": "1/1"
+          },
+          "unknown": 0,
+          "zero": 0
+        },
+        {
+          "channel": "deliver",
+          "eligible": 1,
+          "fate": "fails",
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 0,
+          "registered": 1,
+          "reported": 1,
+          "state": "original_fails",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "0/1",
+            "low": "0/1"
+          },
+          "unknown": 0,
+          "zero": 1
+        },
+        {
+          "channel": "withhold",
+          "eligible": 1,
+          "fate": "fails",
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 0,
+          "registered": 1,
+          "reported": 1,
+          "state": "original_fails",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "0/1",
+            "low": "0/1"
+          },
+          "unknown": 0,
+          "zero": 1
+        }
+      ],
+      "totals": {
+        "eligible": 4,
+        "missing": 0,
+        "physical_known": 0,
+        "registered": 4,
+        "reported": 4,
+        "statuses": {
+          "ambiguous": 0,
+          "duplicate": 0,
+          "invalid": 0,
+          "native_error": 0,
+          "partial": 0,
+          "unresolved": 0
+        },
+        "unknown": 0
+      }
+    },
+    "stock": {
+      "delta": {
+        "original_fails": {
+          "high": "1/1",
+          "low": "1/1"
+        },
+        "original_succeeds": {
+          "high": "0/1",
+          "low": "0/1"
+        }
+      },
+      "packet_schema": "harbor.shipping.returns-packet/v1",
+      "packets": [
+        "sha256:37702acb63770f9f4f8b95dcf8cdeccd9c76077c0775ec915c8e2a0d840ff125",
+        "sha256:a5a76bb9becc1e3991f62ba7c81e07029c3748edebf692b8d67bdb284a421893"
+      ],
+      "registration_sha256": "sha256:18b2813af04338d30ca95a1056659a2f9bf595f77fe5114ef1232117baa6e132",
+      "schema": "harbor.ship-handover.study/v1",
+      "strata": [
+        {
+          "channel": "deliver",
+          "eligible": 1,
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 1,
+          "prior": "committed",
+          "registered": 1,
+          "reported": 1,
+          "state": "original_succeeds",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "1/1",
+            "low": "1/1"
+          },
+          "unknown": 0,
+          "zero": 0
+        },
+        {
+          "channel": "withhold",
+          "eligible": 1,
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 1,
+          "prior": "committed",
+          "registered": 1,
+          "reported": 1,
+          "state": "original_succeeds",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "1/1",
+            "low": "1/1"
+          },
+          "unknown": 0,
+          "zero": 0
+        },
+        {
+          "channel": "deliver",
+          "eligible": 1,
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 1,
+          "prior": "dropped",
+          "registered": 1,
+          "reported": 1,
+          "state": "original_fails",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "1/1",
+            "low": "1/1"
+          },
+          "unknown": 0,
+          "zero": 0
+        },
+        {
+          "channel": "withhold",
+          "eligible": 1,
+          "missing": 0,
+          "physical_known": 0,
+          "physical_positive": 0,
+          "positive": 0,
+          "prior": "dropped",
+          "registered": 1,
+          "reported": 1,
+          "state": "original_fails",
+          "statuses": {
+            "ambiguous": 0,
+            "duplicate": 0,
+            "invalid": 0,
+            "native_error": 0,
+            "partial": 0,
+            "unresolved": 0
+          },
+          "success": {
+            "high": "0/1",
+            "low": "0/1"
+          },
+          "unknown": 0,
+          "zero": 1
+        }
+      ],
+      "totals": {
+        "eligible": 4,
+        "missing": 0,
+        "physical_known": 0,
+        "registered": 4,
+        "reported": 4,
+        "statuses": {
+          "ambiguous": 0,
+          "duplicate": 0,
+          "invalid": 0,
+          "native_error": 0,
+          "partial": 0,
+          "unresolved": 0
+        },
+        "unknown": 0
+      }
+    }
+  }
+}

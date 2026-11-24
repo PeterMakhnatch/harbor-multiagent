@@ -6,16 +6,16 @@ import textwrap
 from collections import Counter
 from fractions import Fraction
 from pathlib import Path
+from typing import NamedTuple
 
 from ..native_evidence import Invalid, Record, require
 from . import collect as collector
-from .study import CHANNELS, MAX_CELLS, PRIORS, load_registration
+from .study import CHANNELS, INFLIGHT_WORLD, PRIORS, WORLD, load_registration
 
-SCHEMA = "harbor.ship-handover.contrast/v1"
 DELIVER, WITHHOLD = CHANNELS
 KNOWN = {"zero": 0, "positive": 1}
 OUTCOMES = ("omission", "exactly_one", "duplicate")
-FAILURE = {"committed": "duplicate", "dropped": "omission"}
+FATES = ("settles", "fails")
 MONOTONIC = ("identified", "ruled_out", "unresolved", "not_comparable")
 OPPOSITION = (
     "opposite_signs_identified",
@@ -23,88 +23,217 @@ OPPOSITION = (
     "tradeoff_ruled_out",
     "not_comparable",
 )
-STRATA = tuple((prior, channel) for prior in PRIORS for channel in CHANNELS)
 MAX_DIAGNOSTIC = collector.MAX_DIAGNOSTIC
 assert CHANNELS == ("deliver", "withhold")
-assert PRIORS == ("committed", "dropped") and set(FAILURE) == set(PRIORS)
-assert set(KNOWN) < set(collector.STATUSES)
-assert len(STRATA) == len(set(STRATA)) == 4
+assert PRIORS == ("committed", "dropped")
+assert set(KNOWN) < set(collector.STATUSES) < set(collector.INFLIGHT_STATUSES)
 
-QUESTION = (
-    "Does delivering the outgoing handoff improve both business risks"
-    " (duplicate dispatch on committed fixtures, omission on dropped fixtures),"
-    " or does a flat average hide opposite changes?"
+
+def _unknown(statuses: tuple[str, ...]) -> str:
+    names = [
+        "duplicate ticket claim" if status == "duplicate" else status
+        for status in statuses
+        if status not in KNOWN
+    ]
+    assert 0 < len(names) == len(statuses) - len(KNOWN)
+    return (
+        f"every other registered cell ({', '.join(names)}) is unknown, never a"
+        " failure; the collection status duplicate is a repeated ticket claim,"
+        " not a duplicate dispatch"
+    )
+
+
+SUCCESS = (
+    "[low,high]/denominator sets every unknown cell of the stratum to"
+    " failure, then to success; an exact identification bound, not a"
+    " sampling confidence interval"
 )
-NOTES = {
-    "observed": (
-        "per registered team, prior and channel: registered cells (the"
-        " denominator), completed cells whose native reward matches the"
-        " trusted verifier replay, and the business outcome of each completed"
-        " cell as omission, exactly_one or duplicate dispatch"
+FRACTIONS = (
+    "every bound is exact: low and high share the least denominator that holds both"
+)
+
+
+class World(NamedTuple):
+    registration: str
+    schema: str
+    axis: str
+    states: tuple[str, str]
+    statuses: tuple[str, ...]
+    failure: dict[str, str]
+    inherits: bool
+    max_cells: int
+    question: str
+    notes: dict[str, str]
+
+    @property
+    def monotonic(self) -> str:
+        return f"no_{self.axis}_worse_and_some_better"
+
+    @property
+    def strata(self) -> tuple[tuple[str, str], ...]:
+        return tuple((state, channel) for state in self.states for channel in CHANNELS)
+
+    @property
+    def boundaries(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        return (
+            ("Observed:", ("observed", "unknown", "failure")),
+            (
+                "Inferred (exact bounds only):",
+                (
+                    "success",
+                    "delta",
+                    "mean_delta",
+                    self.monotonic,
+                    "opposition",
+                    "fractions",
+                ),
+            ),
+            ("Not inferred:", ("scope",)),
+        )
+
+
+def _notes(
+    axis: str,
+    states: tuple[str, str],
+    statuses: tuple[str, ...],
+    texts: tuple[str, str, str],
+) -> dict[str, str]:
+    observed, failure, scope = texts
+    return {
+        "observed": observed,
+        "unknown": _unknown(statuses),
+        "failure": failure,
+        "success": SUCCESS,
+        "delta": (
+            f"deliver minus withhold success rate within one {axis}; sharp bounds"
+            " over every completion of the unknown cells"
+        ),
+        "mean_delta": (
+            f"equally weighted mean of the {states[0]} and {states[1]} deltas, not a"
+            " pooled rate over completed cells"
+        ),
+        f"no_{axis}_worse_and_some_better": (
+            "identified when both lower deltas are >= 0 and one is > 0; ruled_out"
+            " when an upper delta is < 0 or no upper delta is > 0; unresolved"
+            " otherwise; not_comparable when one of the four registered"
+            f" {axis} and channel denominators is zero"
+        ),
+        "opposition": (
+            f"opposite_signs_identified when one {axis} delta is surely > 0 and the"
+            " other surely < 0, even if their average is zero;"
+            " possible_tradeoff when the bounds still allow opposite signs;"
+            " tradeoff_ruled_out otherwise; not_comparable as above"
+        ),
+        "fractions": FRACTIONS,
+        "scope": scope,
+    }
+
+
+STOCK = World(
+    registration=WORLD[0],
+    schema="harbor.ship-handover.contrast/v1",
+    axis="prior",
+    states=PRIORS,
+    statuses=collector.STATUSES,
+    failure={"committed": "duplicate", "dropped": "omission"},
+    inherits=False,
+    max_cells=WORLD[5],
+    question=(
+        "Does delivering the outgoing handoff improve both business risks"
+        " (duplicate dispatch on committed fixtures, omission on dropped fixtures),"
+        " or does a flat average hide opposite changes?"
     ),
-    "unknown": (
-        "every other registered cell (no_result, partial, ambiguous, duplicate"
-        " ticket claim, native_error, invalid) is unknown, never a failure;"
-        " the collection status duplicate is a repeated ticket claim, not a"
-        " duplicate dispatch"
-    ),
-    "failure": (
-        "a committed fixture can fail only by duplicate dispatch and a dropped"
-        " fixture only by omission; a committed success can be inherited with"
-        " no recovery action"
-    ),
-    "success": (
-        "[low,high]/denominator sets every unknown cell of the stratum to"
-        " failure, then to success; an exact identification bound, not a"
-        " sampling confidence interval"
-    ),
-    "delta": (
-        "deliver minus withhold success rate within one prior; sharp bounds"
-        " over every completion of the unknown cells"
-    ),
-    "mean_delta": (
-        "equally weighted mean of the committed and dropped deltas, not a"
-        " pooled rate over completed cells"
-    ),
-    "no_prior_worse_and_some_better": (
-        "identified when both lower deltas are >= 0 and one is > 0; ruled_out"
-        " when an upper delta is < 0 or no upper delta is > 0; unresolved"
-        " otherwise; not_comparable when one of the four registered prior and"
-        " channel denominators is zero"
-    ),
-    "opposition": (
-        "opposite_signs_identified when one prior delta is surely > 0 and the"
-        " other surely < 0, even if their average is zero;"
-        " possible_tradeoff when the bounds still allow opposite signs;"
-        " tradeoff_ruled_out otherwise; not_comparable as above"
-    ),
-    "fractions": (
-        "every bound is exact: low and high share the least denominator that holds both"
-    ),
-    "scope": (
-        "describes each registered team under the registered worlds only; no"
-        " causal or model attribution to a seat, handoff content, inbox read or"
-        " recovery action, no p-value, stopping rule or cost claim"
-    ),
-}
-BOUNDARIES = (
-    ("Observed:", ("observed", "unknown", "failure")),
-    (
-        "Inferred (exact bounds only):",
+    notes=_notes(
+        "prior",
+        PRIORS,
+        collector.STATUSES,
         (
-            "success",
-            "delta",
-            "mean_delta",
-            "no_prior_worse_and_some_better",
-            "opposition",
-            "fractions",
+            (
+                "per registered team, prior and channel: registered cells (the"
+                " denominator), completed cells whose native reward matches the"
+                " trusted verifier replay, and the business outcome of each"
+                " completed cell as omission, exactly_one or duplicate dispatch"
+            ),
+            (
+                "a committed fixture can fail only by duplicate dispatch and a"
+                " dropped fixture only by omission; a committed success can be"
+                " inherited with no recovery action"
+            ),
+            (
+                "describes each registered team under the registered worlds only;"
+                " no causal or model attribution to a seat, handoff content, inbox"
+                " read or recovery action, no p-value, stopping rule or cost claim"
+            ),
         ),
     ),
-    ("Not inferred:", ("scope",)),
 )
-assert sorted(key for _, keys in BOUNDARIES for key in keys) == sorted(NOTES)
+INFLIGHT = World(
+    registration=INFLIGHT_WORLD[0],
+    schema="harbor.ship-inflight.contrast/v1",
+    axis="fate",
+    states=FATES,
+    statuses=collector.INFLIGHT_STATUSES,
+    failure={"settles": "duplicate", "fails": "omission"},
+    inherits=True,
+    max_cells=INFLIGHT_WORLD[5],
+    question=(
+        "Does delivering the outgoing handoff improve both business risks of a"
+        " shipment still in flight at the change of shift (duplicate dispatch"
+        " when the original settles, omission when it fails), or does a flat"
+        " average hide opposite changes?"
+    ),
+    notes=_notes(
+        "fate",
+        FATES,
+        collector.INFLIGHT_STATUSES,
+        (
+            (
+                "per registered team, fate and channel: registered cells (the"
+                " denominator), completed cells whose native reward matches the"
+                " trusted inflight verifier replay, the business outcome of each"
+                " completed cell after the supplier drain as omission, exactly_one"
+                " or duplicate dispatch, and inherited: exactly_one cells whose"
+                " relief settled nothing before the freeze"
+            ),
+            (
+                "success is exactly one dispatch after the drain; the original"
+                " settles after the freeze unless relief replaced it, so a settles"
+                " fixture can fail only by duplicate dispatch and a fails fixture"
+                " only by omission; a settles success can be inherited with no"
+                " relief action and still counts as success"
+            ),
+            (
+                "describes each registered team under the registered worlds only;"
+                " no causal or model attribution to a seat, handoff content, inbox"
+                " read or relief action; a reference served before resolve is"
+                " receipt, not attention, and a runtime model may act without"
+                " reading it; unresolved marks a trial with a seat lacking a"
+                " recorded execution disposition; execution and world evidence of"
+                " unresolved or native_error trials stay outside these counts; no"
+                " p-value, stopping rule or cost claim"
+            ),
+        ),
+    ),
+)
+WORLDS = (STOCK, INFLIGHT)
+for _checked_world in WORLDS:
+    assert len(_checked_world.strata) == len(set(_checked_world.strata)) == 4
+    assert set(_checked_world.failure) == set(_checked_world.states)
+    assert set(_checked_world.failure.values()) == {"omission", "duplicate"}
+    assert sorted(
+        key for _, keys in _checked_world.boundaries for key in keys
+    ) == sorted(_checked_world.notes)
+assert len({world.registration for world in WORLDS}) == len(WORLDS)
+assert len({world.schema for world in WORLDS}) == len(WORLDS)
+assert INFLIGHT.failure["settles"] == "duplicate"
 
 Interval = tuple[Fraction, Fraction]
+
+
+def _world(field: str, value: object) -> World:
+    found = [world for world in WORLDS if getattr(world, field) == value]
+    require(len(found) == 1, f"{field} {value!r} names no known world")
+    return found[0]
 
 
 def _bound(interval: Interval | None) -> Record | None:
@@ -127,15 +256,37 @@ def _text(bound: Record | None) -> str | None:
     return "[{low},{high}]/{denominator}".format(**bound)
 
 
-def _outcome(row: Record) -> str | None:
+def _inherited(world: World, row: Record, outcome: str) -> bool:
+    if not world.inherits:
+        return False
+    observation = row["observation"]
+    inherited = observation.get("inherited")
+    settled = observation.get("settled")
+    require(
+        type(inherited) is bool and type(settled) is list,
+        "observation lacks the inherited settlement",
+    )
+    require(
+        inherited == (outcome == "exactly_one" and settled == []),
+        "observation inherited differs from its settlement",
+    )
+    require(
+        not inherited or world.failure[row[world.axis]] == "duplicate",
+        "a success is inherited in a state that never drains",
+    )
+    return bool(inherited)
+
+
+def _outcome(world: World, row: Record) -> tuple[str | None, bool]:
     status = row["status"]
-    require(status in collector.STATUSES, "collection status is not known")
+    require(status in world.statuses, "collection status is not known")
+    require(row[world.axis] in world.states, f"cell {world.axis} is not known")
     if status not in KNOWN:
         require(
             row["grade"] is None and row["observation"] is None,
             "an unknown cell carries an outcome",
         )
-        return None
+        return None, False
     observation = row["observation"]
     require(type(observation) is dict, "a completed cell has no observation")
     outcome = observation.get("outcome")
@@ -145,22 +296,24 @@ def _outcome(row: Record) -> str | None:
         "observation outcome differs from the grade",
     )
     require(
-        outcome in ("exactly_one", FAILURE[row["prior"]]),
-        "observation outcome is impossible for its prior",
+        outcome in ("exactly_one", world.failure[row[world.axis]]),
+        f"observation outcome is impossible for its {world.axis}",
     )
-    return str(outcome)
+    return str(outcome), _inherited(world, row, str(outcome))
 
 
 def _stratum(
-    prior: str, channel: str, outcomes: list[str | None]
+    world: World, key: tuple[str, str], found: list[tuple[str | None, bool]]
 ) -> tuple[Record, Interval | None]:
-    counts = Counter(outcome for outcome in outcomes if outcome is not None)
-    registered = len(outcomes)
+    state, channel = key
+    counts = Counter(outcome for outcome, _ in found if outcome is not None)
+    inherited = sum(flag for _, flag in found)
+    registered = len(found)
     completed = sum(counts.values())
     unknown = registered - completed
     positive = counts["exactly_one"]
-    assert 0 <= positive <= completed <= registered <= MAX_CELLS
-    assert set(counts) <= {"exactly_one", FAILURE[prior]}
+    assert 0 <= inherited <= positive <= completed <= registered <= world.max_cells
+    assert set(counts) <= {"exactly_one", world.failure[state]}
     interval = (
         None
         if registered == 0
@@ -169,16 +322,18 @@ def _stratum(
             Fraction(positive + unknown, registered),
         )
     )
-    record = {
-        "prior": prior,
+    record: Record = {
+        world.axis: state,
         "channel": channel,
         "registered": registered,
         "completed": completed,
         "unknown": unknown,
         "outcomes": {outcome: counts[outcome] for outcome in OUTCOMES},
-        "failure": FAILURE[prior],
-        "success": _bound(interval),
     }
+    if world.inherits:
+        record["inherited"] = inherited
+    record["failure"] = world.failure[state]
+    record["success"] = _bound(interval)
     return record, interval
 
 
@@ -191,7 +346,7 @@ def _delta(deliver: Interval | None, withhold: Interval | None) -> Interval | No
 
 
 def _monotonic(deltas: list[Interval]) -> str:
-    assert len(deltas) == len(PRIORS)
+    assert len(deltas) == 2
     lows = [low for low, _ in deltas]
     highs = [high for _, high in deltas]
     if min(lows) >= 0 and max(lows) > 0:
@@ -210,12 +365,14 @@ def _opposition(first: Interval, second: Interval) -> str:
     return "tradeoff_ruled_out"
 
 
-def _statuses(deltas: dict[str, Interval | None]) -> tuple[Interval | None, str, str]:
-    found = [deltas[prior] for prior in PRIORS]
+def _statuses(
+    world: World, deltas: dict[str, Interval | None]
+) -> tuple[Interval | None, str, str]:
+    found = [deltas[state] for state in world.states]
     if any(delta is None for delta in found):
         return None, "not_comparable", "not_comparable"
     known = [delta for delta in found if delta is not None]
-    assert len(known) == len(PRIORS)
+    assert len(known) == len(world.states)
     mean = (
         sum((low for low, _ in known), Fraction(0)) / len(known),
         sum((high for _, high in known), Fraction(0)) / len(known),
@@ -227,20 +384,23 @@ def _statuses(deltas: dict[str, Interval | None]) -> tuple[Interval | None, str,
     return mean, monotonic, opposition
 
 
-def _team(label: str, rows: list[Record]) -> Record:
-    outcomes: dict[tuple[str, str], list[str | None]] = {key: [] for key in STRATA}
+def _team(world: World, label: str, rows: list[Record]) -> Record:
+    found: dict[tuple[str, str], list[tuple[str | None, bool]]] = {
+        key: [] for key in world.strata
+    }
     for row in rows:
-        outcomes[(row["prior"], row["channel"])].append(_outcome(row))
+        outcome = _outcome(world, row)
+        found[(row[world.axis], row["channel"])].append(outcome)
     strata: list[Record] = []
     success: dict[tuple[str, str], Interval | None] = {}
-    for (prior, channel), found in outcomes.items():
-        record, success[(prior, channel)] = _stratum(prior, channel, found)
+    for key, outcomes in found.items():
+        record, success[key] = _stratum(world, key, outcomes)
         strata.append(record)
     deltas = {
-        prior: _delta(success[(prior, DELIVER)], success[(prior, WITHHOLD)])
-        for prior in PRIORS
+        state: _delta(success[(state, DELIVER)], success[(state, WITHHOLD)])
+        for state in world.states
     }
-    mean, monotonic, opposition = _statuses(deltas)
+    mean, monotonic, opposition = _statuses(world, deltas)
     comparable = all(interval is not None for interval in success.values())
     assert comparable == (mean is not None) == (monotonic != "not_comparable")
     assert monotonic in MONOTONIC and opposition in OPPOSITION
@@ -249,44 +409,49 @@ def _team(label: str, rows: list[Record]) -> Record:
         "registered": len(rows),
         "comparable": comparable,
         "strata": strata,
-        "delta": {prior: _bound(deltas[prior]) for prior in PRIORS},
+        "delta": {state: _bound(deltas[state]) for state in world.states},
         "mean_delta": _bound(mean),
-        "no_prior_worse_and_some_better": monotonic,
+        world.monotonic: monotonic,
         "opposition": opposition,
     }
 
 
-def contrast(registration_path: Path, workspaces: list[Path]) -> Record:
+def contrast(
+    registration_path: Path, workspaces: list[Path], task_dir: Path | None
+) -> Record:
     registration = load_registration(registration_path)
-    trusted = collector.load_trusted(registration["task"])
+    world = _world("registration", registration["schema"])
+    trusted = collector.load_trusted(registration, task_dir)
     collection = collector.collect_registered(registration, workspaces, trusted)
     cells = collection["cells"]
+    require(
+        tuple(collection["statuses"]) == world.statuses,
+        "collection statuses differ from the registered world",
+    )
     grouped: dict[str, list[Record]] = {label: [] for label in registration["teams"]}
     for row in cells:
         require(row["team"] in grouped, "a cell names an unregistered team")
         grouped[row["team"]].append(row)
-    teams = [_team(label, grouped[label]) for label in sorted(grouped)]
+    teams = [_team(world, label, grouped[label]) for label in sorted(grouped)]
     completed = sum(
         stratum["completed"] for team in teams for stratum in team["strata"]
     )
     require(completed == collection["valid"], "collection valid count differs")
     assert sum(team["registered"] for team in teams) == len(cells)
     return {
-        "schema": SCHEMA,
-        "question": QUESTION,
+        "schema": world.schema,
+        "question": world.question,
         "task": collection["task"],
-        "priors": list(PRIORS),
+        f"{world.axis}s": list(world.states),
         "channels": list(CHANNELS),
         "registered": len(cells),
         "completed": completed,
         "unknown": len(cells) - completed,
         "statuses": collection["statuses"],
         "teams": teams,
-        "no_prior_worse_and_some_better": _tally(
-            teams, "no_prior_worse_and_some_better", MONOTONIC
-        ),
+        world.monotonic: _tally(teams, world.monotonic, MONOTONIC),
         "opposition": _tally(teams, "opposition", OPPOSITION),
-        "notes": NOTES,
+        "notes": world.notes,
     }
 
 
@@ -306,48 +471,53 @@ def _tsv(rows: list[Record]) -> str:
     return "\n".join(lines)
 
 
-def _stratum_row(team: Record, stratum: Record) -> Record:
-    return {
+def _stratum_row(world: World, team: Record, stratum: Record) -> Record:
+    row: Record = {
         "team": team["team"],
-        "prior": stratum["prior"],
+        world.axis: stratum[world.axis],
         "channel": stratum["channel"],
         "registered": stratum["registered"],
         "completed": stratum["completed"],
         "unknown": stratum["unknown"],
         **{f"outcome_{key}": count for key, count in stratum["outcomes"].items()},
-        "failure": stratum["failure"],
-        "success": _text(stratum["success"]),
     }
+    if world.inherits:
+        row["inherited"] = stratum["inherited"]
+    row["failure"] = stratum["failure"]
+    row["success"] = _text(stratum["success"])
+    return row
 
 
-def _team_row(team: Record) -> Record:
+def _team_row(world: World, team: Record) -> Record:
     return {
         "team": team["team"],
         "registered": team["registered"],
-        **{f"delta_{prior}": _text(team["delta"][prior]) for prior in PRIORS},
+        **{f"delta_{state}": _text(team["delta"][state]) for state in world.states},
         "mean_delta": _text(team["mean_delta"]),
-        "no_prior_worse_and_some_better": team["no_prior_worse_and_some_better"],
+        world.monotonic: team[world.monotonic],
         "opposition": team["opposition"],
     }
 
 
 def render(report: Record) -> str:
+    world = _world("schema", report["schema"])
     summary = {
         **{key: report[key] for key in ("registered", "completed", "unknown")},
         **{f"status_{key}": count for key, count in report["statuses"].items()},
-        **{
-            f"monotonic_{key}": count
-            for key, count in report["no_prior_worse_and_some_better"].items()
-        },
+        **{f"monotonic_{key}": count for key, count in report[world.monotonic].items()},
         **{f"opposition_{key}": count for key, count in report["opposition"].items()},
     }
     sections = [_tsv([summary])]
     teams = report["teams"]
     if teams:
         strata = [
-            _stratum_row(team, stratum) for team in teams for stratum in team["strata"]
+            _stratum_row(world, team, stratum)
+            for team in teams
+            for stratum in team["strata"]
         ]
-        sections.extend((_tsv(strata), _tsv([_team_row(team) for team in teams])))
+        sections.extend(
+            (_tsv(strata), _tsv([_team_row(world, team) for team in teams]))
+        )
     notes = report["notes"]
     sections.append("\n".join(f"{key}: {text}" for key, text in notes.items()))
     return "\n\n".join(sections)
@@ -360,11 +530,11 @@ def _safe(text: str) -> str:
 
 def _epilog() -> str:
     lines: list[str] = []
-    for title, keys in BOUNDARIES:
+    for title, keys in STOCK.boundaries:
         lines.append(title)
         lines.extend(
             textwrap.fill(
-                f"{key}: {NOTES[key]}",
+                f"{key}: {STOCK.notes[key]}",
                 width=78,
                 initial_indent="  ",
                 subsequent_indent="    ",
@@ -377,12 +547,13 @@ def _epilog() -> str:
 def parser() -> argparse.ArgumentParser:
     found = argparse.ArgumentParser(
         prog="python3 -BS -m examples.ship_handover.contrast",
-        description=QUESTION,
+        description=STOCK.question,
         epilog=_epilog(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     found.add_argument("registration", type=Path)
     found.add_argument("workspaces", type=Path, nargs="+", metavar="WORKSPACE")
+    found.add_argument("--task", type=Path, metavar="MATERIALIZED")
     found.add_argument("--json", action="store_true")
     return found
 
@@ -390,7 +561,7 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        report = contrast(args.registration, args.workspaces)
+        report = contrast(args.registration, args.workspaces, args.task)
     except OSError as error:
         reason = _safe(error.strerror or "storage failed")
         print(f"contrast: {reason}", file=sys.stderr)

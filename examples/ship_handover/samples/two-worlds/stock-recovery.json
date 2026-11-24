@@ -1,0 +1,64 @@
+{
+  "schema": "harbor.ship-handover.study/v1",
+  "task": {
+    "name": "harbor/ship-handover",
+    "digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607",
+    "checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+  },
+  "teams": {
+    "recovery": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "resume"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "sh-7bb5c021c6bf483e",
+      "team": "recovery",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-38d4cd13d3cd3f50",
+      "team": "recovery",
+      "prior": "committed",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-2aee895ee6268f1a",
+      "team": "recovery",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-f64fd52b07ae1e11",
+      "team": "recovery",
+      "prior": "dropped",
+      "channel": "withhold"
+    }
+  ]
+}

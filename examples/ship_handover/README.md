@@ -2,6 +2,8 @@
 
 Use [Ship Handover](../tasks/ship-handover/README.md) to test whether a change of operator loses the identity of unfinished work. The outgoing seat knows the original request reference. The relief seat decides whether to dispatch. Neither seat knows whether the supplier already dispatched. Both seats run under test. The native reward counts parcels, not messages.
 
+To keep the same named team and change when the supplier settles, use [the two-world operator](two-worlds.md). It accepts worker packets independently and reports what the missing workers can still change.
+
 ## Run one team
 
 Use this fork with its locked dependencies and a working local Docker environment. From the checkout root:
