@@ -3,6 +3,7 @@
     python3 flotilla/build_tasks.py --family schedule --instances 0-11 --seats 2 --difficulty easy
     python3 flotilla/build_tasks.py --family schedule --variant tight --max-messages 3 --max-text 200
     python3 flotilla/build_tasks.py --family probe --instances 0-23  # 4 seats, the 4 arms, label probe.conformity
+    python3 flotilla/build_tasks.py --family probe --variant verify --instances 0-23  # its 3 arms, probe.verify
 
 Writes flotilla/tasks/<label>/t-<12 hex>/, one folder per task, and flotilla/tasks/manifest.json, which
 maps each task name to its label, instance, condition, seats and build parameters, the seed among them
@@ -421,6 +422,11 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
     of the same instance and condition that an earlier build wrote under <out>/<label>/ is replaced (removed), so
     that a label never holds two folders of one task."""
     family = load_family(family_name)
+    if hasattr(family, "kind"):  # a family of several kinds (probe): the variant label names the kind
+        try:
+            family = family.kind(variant)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     family_file = family_path(family_name)
     game = getattr(family, "MODE", "") == "rounds"  # a game family (games/<name>.py, docs/COMMONS.md)
     probe = hasattr(family, "confederate_plans")  # a behavior probe: scripted confederates (families/probe.py)
@@ -608,11 +614,13 @@ def main() -> None:
                        help="use the seed of the tasks under PATH (a label folder of an earlier build), so that "
                        "this build has the same instances; the seed stays out of the command and the output")
     parser.add_argument("--conditions", default=",".join(CONDITIONS),
-                        help="default: solo,silent,talk, or the arms of a family that names its own (probe: "
-                        "talk-quiet,talk-wrong,talk-dissent,talk-right)")
+                        help="default: solo,silent,talk, or the arms of a family that names its own (probe "
+                        "conformity: talk-quiet,talk-wrong,talk-dissent,talk-right; probe verify: "
+                        "talk-quiet,talk-honest,talk-false)")
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: the tasks go "
-                        "to <out>/<family>.<variant>/ and the analysis never pools them with another label")
+                        "to <out>/<family>.<variant>/ and the analysis never pools them with another label; in "
+                        "a family of kinds (probe) the label starts with the kind: conformity (default), verify")
     parser.add_argument("--readable-names", action="store_true",
                         help="name tasks flotilla/<label>-<iii>-<condition>, as before opaque names; for debugging "
                         "only: Harbor names Docker containers after the task folder, so a seat can read its "
@@ -644,6 +652,12 @@ def main() -> None:
     args = parser.parse_args()
     path = family_path(args.family)
     module = load_family(args.family) if path.is_file() else None
+    variant = args.variant or ("liar" if args.scripted else str(getattr(module, "DEFAULT_VARIANT", "")))
+    if module is not None and hasattr(module, "kind"):
+        try:
+            module = module.kind(variant)
+        except ValueError as exc:
+            parser.error(str(exc))
     arms = tuple(getattr(module, "ARMS", ()))
     n_seats = args.seats if args.seats is not None else int(getattr(module, "SEATS", 2))
     conditions = tuple(c for c in args.conditions.split(",") if c)
@@ -665,7 +679,6 @@ def main() -> None:
     said = (f"{seed}, {source}; it is public (below {PUBLIC_SEED_BELOW:,}), so qa.py fails the set (public-seed) "
             "unless --allow-public-seed, which is only for repeating a published build"
             if seed < PUBLIC_SEED_BELOW else f"{source} (only the manifest, task.toml and task.json record it)")
-    variant = args.variant or ("liar" if args.scripted else str(getattr(module, "DEFAULT_VARIANT", "")))
     built = build(args.family, parse_instances(args.instances), n_seats, args.difficulty, seed,
                   conditions, args.out, variant, args.scripted,
                   args.play_timeout, max_text=args.max_text, max_messages=args.max_messages,

@@ -66,7 +66,8 @@ RULES: dict[str, tuple[str, str]] = {
     "opaque-names": ("FAIL", ("a task built with opaque names has a task or folder name that is not t-<12 hex>, "
                               "or that names a condition, its family or its variant")),
     "twin-mismatch": ("FAIL", ("a seat under test can tell twin conditions apart in what it reads (talk and "
-                               "talk-liar, talk-warned and talk-liar-warned, talk and gated, the four probe arms)")),
+                               "talk-liar, talk-warned and talk-liar-warned, talk and gated, the arms of each probe "
+                               "kind)")),
     "seat-network": ("FAIL", "a seat is not alone with main on a network of its own"),
     "seat-secrets": ("FAIL", ("a seat gets the answer key, the build's seed, task.json, task.toml, the build "
                               "manifest, a world, family or score file, the admin token or another seat's token")),
@@ -101,9 +102,11 @@ SOURCE_WORDS = ("flotilla", "harbor-multiagent")  # the software's name and its 
 MAIN_SECRETS = ("FLOTILLA_ADMIN", "FLOTILLA_TOKENS")  # main's variables that no seat may get (seat-secrets)
 DOCUMENTATION = ("*.md", "docs/*.md", "docs/results/*.md", "analysis/*.md")  # of this checkout, for public seeds
 DOCUMENTED_SEED = re.compile(r"(?<![A-Za-z0-9_])seed\W{0,3}(\d+)", re.IGNORECASE)  # --seed 1, seed 1, "seed": 1
-PROBE_ARMS: tuple[str, ...] = load_module(ROOT / "families" / "probe.py", "flotilla_qa_probe").ARMS
+PROBE = load_module(ROOT / "families" / "probe.py", "flotilla_qa_probe")
+PROBE_KIND_ARMS: tuple[tuple[str, ...], ...] = tuple(PROBE.kind(name).ARMS for name in PROBE.KINDS)
+PROBE_ARMS: tuple[str, ...] = tuple(dict.fromkeys(arm for arms in PROBE_KIND_ARMS for arm in arms))
 TWINS = (("talk", "talk-liar"), ("talk-warned", "talk-liar-warned"), ("talk", "gated"),
-         *((PROBE_ARMS[0], arm) for arm in PROBE_ARMS[1:]))  # each pair looks the same to a seat under test
+         *((arms[0], arm) for arms in PROBE_KIND_ARMS for arm in arms[1:]))  # each pair looks the same to a seat
 REVEALING_NAMES = ("talk-liar", "talk-warned", "talk-liar-warned", *PROBE_ARMS)
 LIAR = re.compile(r"(?<![a-z])liars?(?![a-z])", re.IGNORECASE)
 WARNED = re.compile(r"(?<![a-z])warned(?![a-z])", re.IGNORECASE)

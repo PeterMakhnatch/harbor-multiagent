@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import FAMILIES, FLOTILLA, TEAM_FAMILIES, family, instance, load
+from conftest import FAMILY_KINDS, FLOTILLA, TEAM_FAMILIES, family, instance, load
 
 INSTANCES = range(30)
 SETTINGS = [(difficulty, n_seats) for difficulty in ("easy", "hard") for n_seats in (2, 3)]
@@ -21,10 +21,10 @@ def texts(inst: dict) -> list[str]:
     return [inst["goal"], inst["answer_format"], inst["solo_text"], *inst["private_text"].values()]
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_interface(name):
     module = family(name)
-    assert module.FAMILY == name and isinstance(module.TITLE, str) and module.TITLE
+    assert module.FAMILY == name.partition(".")[0] and isinstance(module.TITLE, str) and module.TITLE
     for difficulty, n_seats in SETTINGS:
         inst = instance(name, 0, n_seats, difficulty)
         assert set(inst) >= {"goal", "answer_format", "private", "private_text", "solo_private", "solo_text",
@@ -34,7 +34,7 @@ def test_interface(name):
         json.dumps(inst)  # everything is plain JSON (briefings travel as JSON)
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_generation_is_deterministic(name):
     module = family(name)
     for difficulty, n_seats in SETTINGS:
@@ -44,10 +44,12 @@ def test_generation_is_deterministic(name):
 
 
 def _digest_in_subprocess(name: str, hash_seed: str) -> str:
+    base, _dot, kind = name.partition(".")
     code = (
         "import hashlib, importlib.util, json, sys\n"
-        f"spec = importlib.util.spec_from_file_location('f', {str(FLOTILLA / 'families' / f'{name}.py')!r})\n"
+        f"spec = importlib.util.spec_from_file_location('f', {str(FLOTILLA / 'families' / f'{base}.py')!r})\n"
         "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        f"m = m.kind({kind!r}) if {bool(kind)!r} else m\n"
         "out = [m.generate(1, i, n, d) for i in range(3) for n in (2, 3) for d in ('easy', 'hard')]\n"
         "print(hashlib.sha256(json.dumps(out, sort_keys=True).encode()).hexdigest())\n"
     )
@@ -56,7 +58,7 @@ def _digest_in_subprocess(name: str, hash_seed: str) -> str:
     return result.stdout.strip()
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_generation_does_not_depend_on_string_hashing(name):
     """Set iteration order changes with PYTHONHASHSEED; the instances must not."""
     expected = [instance(name, i, n, d) for i in range(3) for n in (2, 3) for d in ("easy", "hard")]
@@ -65,7 +67,7 @@ def test_generation_does_not_depend_on_string_hashing(name):
     assert _digest_in_subprocess(name, "4242") == digest
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 @pytest.mark.parametrize(("difficulty", "n_seats"), SETTINGS)
 def test_oracle_with_all_parts_scores_one(name, difficulty, n_seats):
     module = family(name)
@@ -96,7 +98,7 @@ def test_oracle_with_one_part_scores_clearly_below_one(name, difficulty, n_seats
     assert math.fsum(scores) / len(scores) <= MAX_MEAN_ALONE[name]
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_every_briefing_fits_one_oracle_message_at_the_default_limits(name):
     for difficulty, n_seats in SETTINGS:
         for i in range(10):
@@ -105,7 +107,7 @@ def test_every_briefing_fits_one_oracle_message_at_the_default_limits(name):
                 assert len(ORACLE.briefing_messages(payload, WORLD.DEFAULT_MAX_TEXT, WORLD.DEFAULT_MAX_MESSAGES)) == 1
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_texts_and_briefings_do_not_contain_the_answer_key(name):
     for difficulty, n_seats in SETTINGS:
         for i in range(10):
@@ -126,7 +128,7 @@ WEIRD = [None, {}, {"answer": None}, {"balances": None}, {"day": None, "start": 
          {"Ana": {"floor": 10**400}}, {"balances": {"Elm": 10**400, "Oak": 1e308, "Fir": -0.0}}]
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_score_never_raises_and_stays_in_range(name):
     module = family(name)
     key = instance(name, 0, 2, "easy")["answer_key"]
@@ -152,7 +154,7 @@ def test_schedule_example_is_never_the_answer_or_the_decoy():
 SECRET_SEED = 8_398_302_271_514_603  # of the size that build_tasks.py draws (up to 2**53), fixed for this test
 
 
-@pytest.mark.parametrize("name", FAMILIES)
+@pytest.mark.parametrize("name", FAMILY_KINDS)
 def test_a_secret_seed_gives_its_own_valid_instances(name):
     """build_tasks.py draws a secret seed per build: the same seed gives the same instances, the next seed other
     ones, and the oracle and no-leak properties hold for it as for seed 1."""
