@@ -1,0 +1,45 @@
+{
+  "schema": "harbor.seat-seal.workers/v1",
+  "registration": "sha256:194039900a0d3309a9ab6ab963ccdf206469ff2dbf5786d56c4f614c16dc5e71",
+  "task_files": "sha256:966f23032d584cab8d6123530bd0b39643fc0034159bfa13e68985363ab8243a",
+  "layout": "paired",
+  "workers": 3,
+  "blocks": [
+    {
+      "continue": "sb-363e1a4ed1c3db27",
+      "seal": "sb-0104c3e5a36954eb"
+    },
+    {
+      "continue": "sb-1dfa4219f7eaa814",
+      "seal": "sb-153ae47972f519e1"
+    },
+    {
+      "continue": "sb-38db5d3aae608166",
+      "seal": "sb-6df5b8a596cc5f8c"
+    },
+    {
+      "continue": "sb-486c43307c760670",
+      "seal": "sb-c3dea7f2ca13a306"
+    },
+    {
+      "continue": "sb-fe4973b9af01ba87",
+      "seal": "sb-4928a66bb9f72ad1"
+    },
+    {
+      "continue": "sb-6653fb61816b6705",
+      "seal": "sb-a821233d85949768"
+    },
+    {
+      "continue": "sb-e965efccdd5827a8",
+      "seal": "sb-7b463189b994a378"
+    },
+    {
+      "continue": "sb-8208e8bf39fae355",
+      "seal": "sb-ce0425ccf82b119c"
+    },
+    {
+      "continue": "sb-859f9a7bfc12b93d",
+      "seal": "sb-a4bac5c2eba2e796"
+    }
+  ]
+}
