@@ -261,6 +261,20 @@ For an example where coordination and reward can disagree, run `harbor trial sta
   - Token totals sum every agent. The cost total sums every agent, and is unknown (`null`) when an agent that ran a model reported no cost. An agent without a model, such as `oracle` or `nop`, costs nothing.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
 
+Where available, `seat_results[].execution_disposition` records what Harbor observed in the seat's play scope:
+
+| Value | Meaning |
+| --- | --- |
+| `returned` | The play scope, including its harness cleanup, returned normally. |
+| `raised` | The play scope raised an exception. See the seat's `exception_info`. |
+| `cancelled` | A cancellation propagated from the play scope without a stop request from the team runner. |
+| `stop_requested` | The team runner requested cancellation while the seat task was pending. This remains true if the agent catches the cancellation and returns. |
+| Missing or `null` | No disposition was recorded. This includes older results and a setup failure before play. A stop request can still be recorded for a scheduled seat that did not start. |
+
+`stop_requested` may appear before `agent_execution.finished_at`. It does not establish that a process stopped or that the seat stopped changing the world. A timed-out agent under test also has `AgentTimeoutError`. A supporting agent can have the same stop request without an error. Read `reward_valid` and `verifier_result.rewards` separately; none of these labels is a team score.
+
+From the checkout, run `python3 -BS -m examples.seat_outcomes TRIAL_DIR --json` to inspect the seats without installing Harbor. A finished timestamp and no exception in an older result do not prove a normal return.
+
 ## Limitations
 
 - Multi-agent tasks need an environment that can exec in, upload to and download from any Compose service: `docker`, `podman`, and the cloud environments that run Compose (`modal`, `daytona`, `sail`, `gke`, `ec2` and others). On the rest, Harbor raises `ServiceOperationsUnsupportedError` at the first operation the environment cannot perform in an agent's container.
