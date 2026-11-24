@@ -28,8 +28,9 @@ from ..native_study import TASK_FILES, registration_request, task_files_digest
 from .study import (
     ROLES,
     TASK_DIR,
+    accepted_task,
     load_registration,
-    pinned_task,
+    refused_task,
     spec_for,
     task_dir_for,
     world_env,
@@ -158,10 +159,9 @@ def load_trusted(registration: Record, task_dir: Path | None) -> Trusted:
     supplied = None if task_dir is None else str(task_dir)
     root = task_dir_for(spec, supplied).resolve(strict=True)
     before = task_files_digest(root, task)
-    pin = pinned_task(spec)
     require_usage(
-        pin is None or (same(pin[0], task) and pin[1] == before),
-        "task package is not the pinned materialized task",
+        accepted_task(spec, task, before),
+        refused_task(spec, f"task package {root} for the registered {task['digest']}"),
     )
     source = _source(TASK_DIR, VERIFIER)
     pinned = [(VERIFIER, source)]

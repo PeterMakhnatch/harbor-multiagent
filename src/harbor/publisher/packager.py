@@ -4,10 +4,12 @@ Shared logic used by both the publisher and the `harbor dataset add` command.
 """
 
 import hashlib
+import tomllib
 from pathlib import Path
 
 import pathspec
 
+from harbor.models.task.config import TaskConfig
 from harbor.models.task.file_filter import TaskFileFilter
 from harbor.models.task.paths import TaskPaths
 from harbor.utils.file_selection import select_files
@@ -68,12 +70,70 @@ class Packager:
         else:
             spec = pathspec.PathSpec.from_lines("gitignore", DEFAULT_IGNORES)
 
+        files.extend(Packager._seat_instruction_files(paths, spec, file_filter))
         files = [
             f for f in files if not spec.match_file(f.relative_to(task_dir).as_posix())
         ]
 
         files.sort(key=lambda p: p.relative_to(task_dir).as_posix())
         return files
+
+    @staticmethod
+    def _seat_instruction_files(
+        paths: TaskPaths,
+        spec: pathspec.PathSpec[pathspec.Pattern],
+        file_filter: TaskFileFilter,
+    ) -> list[Path]:
+        config_path = paths.config_path
+        if not config_path.exists() and not config_path.is_symlink():
+            return []
+        if not config_path.resolve().is_relative_to(paths.task_dir):
+            raise ValueError(f"Input paths must stay within the task: {config_path}")
+        if not config_path.is_file():
+            raise ValueError(f"task.toml must be a regular file: {config_path}")
+        try:
+            with config_path.open("rb") as handle:
+                raw_config = tomllib.load(handle)
+        except tomllib.TOMLDecodeError as error:
+            raise ValueError(
+                f"Invalid task.toml in {paths.task_dir}: {error}"
+            ) from error
+        if "agents" not in raw_config:
+            return []
+        seats = TaskConfig.model_validate({"agents": raw_config["agents"]}).agents
+        if seats and Packager._is_ignored(paths, spec, config_path):
+            raise ValueError(
+                "task.toml declares [agents] seats but is excluded by task "
+                "ignore rules; it is required to publish the task."
+            )
+        seat_files: list[Path] = []
+        if seats:
+            file_filter.require_included(config_path)
+        for seat in seats:
+            path = paths.seat_instruction_path(seat)
+            relative_path = path.relative_to(paths.task_dir).as_posix()
+            paths.validate_input_tree(path)
+            if not path.is_file():
+                raise FileNotFoundError(
+                    f"Seat {seat!r} has no instruction: expected {relative_path}"
+                )
+            file_filter.require_included(path)
+            if Packager._is_ignored(paths, spec, path):
+                raise ValueError(
+                    f"Seat {seat!r} instruction {relative_path} is excluded by "
+                    "task ignore rules; it is required to publish the task."
+                )
+            seat_files.append(path)
+        return seat_files
+
+    @staticmethod
+    def _is_ignored(
+        paths: TaskPaths, spec: pathspec.PathSpec[pathspec.Pattern], path: Path
+    ) -> bool:
+        return any(
+            spec.match_file(candidate.relative_to(paths.task_dir).as_posix())
+            for candidate in (path, path.resolve())
+        )
 
     @staticmethod
     def compute_file_hash(file_path: Path) -> str:

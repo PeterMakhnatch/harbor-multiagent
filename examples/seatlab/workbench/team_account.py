@@ -91,15 +91,21 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument(
             "--trial", metavar="UUID", help="inspect one retained final execution"
         )
-        command.add_argument(
+        billing = command.add_mutually_exclusive_group()
+        billing.add_argument(
             "--ledger",
             metavar="EVENTS.jsonl",
             help="read a saved OpenRouter generation settlement ledger; never contacts the provider",
         )
+        billing.add_argument(
+            "--generation-details",
+            metavar="DETAILS.jsonl",
+            help="read previously saved per-generation data.id and data.total_cost; no provider lookup",
+        )
         command.add_argument(
             "--owners",
             metavar="OWNERS.jsonl",
-            help="bind generation receipts using exact host-captured request hashes; requires --ledger",
+            help="match host-captured generation hashes with --ledger or --generation-details",
         )
     return root
 
@@ -163,13 +169,18 @@ def main(argv: list[str] | None = None) -> int:
         _require(
             not exporting
             or not (
-                kept or fragments or options.ledger or options.owners or options.trial
+                kept
+                or fragments
+                or options.ledger
+                or options.generation_details
+                or options.owners
+                or options.trial
             ),
             "export a packet before adding external evidence or selecting a trial",
         )
         _require(
-            not options.owners or options.ledger is not None,
-            "ownership records require a generation ledger",
+            not options.owners or bool(options.ledger or options.generation_details),
+            "ownership records require a generation ledger or saved generation details",
         )
         _require(
             options.trial is None or UUID.fullmatch(options.trial) is not None,
@@ -193,6 +204,12 @@ def main(argv: list[str] | None = None) -> int:
 
             report["provider_receipts"] = reconcile(
                 packets, options.ledger, options.owners
+            )
+        elif options.generation_details:
+            from .generation_details import reconcile as reconcile_details
+
+            report["provider_receipts"] = reconcile_details(
+                packets, options.generation_details, options.owners
             )
         if options.json:
             print(_json(report))

@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, override
+from uuid import UUID
 
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
@@ -72,6 +73,10 @@ _RULES = {
 
 class _Unmeasured(RuntimeError):
     """The seat could not submit a valid decision under the declared policy."""
+
+
+class _OwnerUnavailable(_Unmeasured):
+    pass
 
 
 def _unique_object(items: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -394,6 +399,93 @@ def _model_request(route: _Route, role: str, view: dict[str, Any]) -> dict[str, 
     }
 
 
+def _owner_directory(raw: str, logs: Path, environment: SeatEnvironment) -> Path:
+    directory = Path(raw)
+    if not directory.is_absolute() or directory.resolve(strict=True) != directory:
+        raise ValueError("Invalid owner directory")
+
+    roots = {logs}
+    if logs.name == "agent" and logs.parent.parent.name == "seats":
+        roots.add(logs.absolute().parents[3])
+    project = getattr(environment, "project", None)
+    for scope in (environment, project):
+        trial = getattr(getattr(scope, "trial_paths", None), "trial_dir", None)
+        if isinstance(trial, Path):
+            roots.add(trial)
+            if scope is project:
+                roots.add(trial.parent)
+        source = getattr(scope, "environment_dir", None)
+        if isinstance(source, Path):
+            roots.add(source)
+            if source.name == "environment":
+                roots.add(source.parent)
+        for mount in getattr(scope, "_host_mounts", ()):
+            if mount["type"] == "bind":
+                roots.add(Path(mount["source"]))
+
+    # Compare filesystem identities too: different spellings can name the same
+    # directory on a case-insensitive host.
+    pin = directory.stat()
+    ancestors = {
+        (info.st_dev, info.st_ino) for info in (p.stat() for p in directory.parents)
+    }
+    for path in roots:
+        root = path.resolve()
+        for part in (root, *root.parents):
+            try:
+                info = part.stat()
+            except FileNotFoundError:
+                continue
+            if os.path.samestat(info, pin) or (
+                part == root and (info.st_dev, info.st_ino) in ancestors
+            ):
+                raise ValueError("Owner directory overlaps a native input or output")
+    return directory
+
+
+def _captured_chat(
+    request: dict[str, Any],
+    key: str,
+    raw_dir: str,
+    trial: UUID | None,
+    seat: str,
+    logs: Path,
+    environment: SeatEnvironment,
+) -> tuple[dict[str, Any], str]:
+    try:
+        # Frozen arrival and default hosted adapters need only this module.
+        if __package__:
+            from .workbench.generation_details import generation_id
+            from .workbench.owner_journal import OwnerJournal
+        else:
+            from workbench.generation_details import generation_id
+            from workbench.owner_journal import OwnerJournal
+
+        if type(trial) is not UUID:
+            raise ValueError("Missing native trial UUID")
+        directory = _owner_directory(raw_dir, logs, environment)
+        journal = OwnerJournal.bind(directory)
+    except (ImportError, LookupError, OSError, RuntimeError, TypeError, ValueError):
+        raise _OwnerUnavailable("Hosted owner capture is unavailable") from None
+
+    status = "no_generation_id"
+    try:
+        result = _openrouter(_CHAT, payload=request, key=key)
+        returned_id = result.get("id")
+        if generation_id(returned_id):
+            try:
+                journal.append(str(trial), seat, returned_id)
+                status = "recorded"
+            except (OSError, RuntimeError, ValueError):
+                status = "write_failed"
+    finally:
+        try:
+            journal.close()
+        except (OSError, RuntimeError, ValueError):
+            status = "write_failed"
+    return result, status
+
+
 def _count(value: object) -> int | None:
     if type(value) is int and value >= 0:
         return value
@@ -502,13 +594,21 @@ class SeatAgent(BaseAgent):
         model_name: str | None = None,
         *,
         policy: str,
+        expected_episodes: int | None = None,
         **kwargs: Any,
     ) -> None:
         if policy not in ("arrival", "hosted"):
             raise ValueError("Unknown SeatAgent policy")
+        if expected_episodes is not None and (
+            policy != "hosted"
+            or type(expected_episodes) is not int
+            or not 1 <= expected_episodes <= 256
+        ):
+            raise ValueError("A registered hosted seat requires 1 to 256 episodes")
         if kwargs.get("extra_env"):
             raise ValueError("SeatAgent accepts no participant environment variables")
         self._policy = policy
+        self._expected_episodes = expected_episodes
         self._requested_model = None
         self._provider_slug = None
         if policy == "hosted":
@@ -563,8 +663,16 @@ class SeatAgent(BaseAgent):
             "decision_source": "script" if self._policy == "arrival" else "model",
             "model_turns": 0,
         }
+        owners_dir = (
+            os.environ.get("SEATLAB_OPENROUTER_OWNERS_DIR")
+            if self._policy == "hosted"
+            else None
+        )
+        trial = self.context_id if owners_dir is not None else None
         view = await _view(environment)
         cases = _checked_view(view, role)
+        if self._expected_episodes is not None and len(cases) != self._expected_episodes:
+            raise _Unmeasured("Native view does not match the registered episode count")
         # Match the capsule encoding without adding a dependency to the native adapter.
         view_bytes = json.dumps(
             view,
@@ -593,9 +701,26 @@ class SeatAgent(BaseAgent):
             route = _verify_route(model, slug, catalog, endpoints)
             request = _model_request(route, role, view)
             context.metadata["model_turns"] = 1
-            result = await asyncio.to_thread(
-                _openrouter, _CHAT, payload=request, key=key
-            )
+            if owners_dir is None:
+                result = await asyncio.to_thread(
+                    _openrouter, _CHAT, payload=request, key=key
+                )
+            else:
+                try:
+                    result, capture = await asyncio.to_thread(
+                        _captured_chat,
+                        request,
+                        key,
+                        owners_dir,
+                        trial,
+                        role,
+                        self.logs_dir,
+                        environment,
+                    )
+                except _OwnerUnavailable:
+                    context.metadata["model_turns"] = 0
+                    raise
+                context.metadata["owner_capture"] = capture
             submission = _decision(result, route, context)
         _checked_submission(submission, role, len(cases))
         status, body = await _world_request(

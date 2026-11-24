@@ -33,6 +33,115 @@ Before observing results, we expect `fresh`, revision-aware `reordered` and `poo
 
 **Prospective transport amendment (before any model call):** Use an explicitly free API route instead of a subscription login. The primary route is `baidu/ernie-5.5-flash-preview:free` at provider `baidu`. Require zero quoted input and output prices, an explicit provider, no fallback and a server-side maximum price of zero. Admit only the seat's synthetic view as input. The model can return JSON decisions, not tools or shell commands. Keep the previously declared seeds, treatments, denominators and one-generation limit. An unavailable route is an operational outcome, not permission to switch models within the panel.
 
+## Review a Dispatch panel without running it
+
+Use Python 3.12 or later. The coordinator can register jobs and a second worker can check them without Harbor, Docker, a key, or a provider catalog.
+
+```sh
+root=$(mktemp -d)
+panel=examples.seatlab.run_panel
+python3.12 -BS -m "$panel" --plan-only --out "$root/held" --policy arrival \
+  --seeds 17,29 --conditions fresh,reordered --episodes 12 --jobs 1
+packet="$root/held/registration.json"
+pin=$(python3.12 -BS -c 'import hashlib,sys; print(hashlib.file_digest(open(sys.argv[1], "rb"), "sha256").hexdigest())' "$packet")
+python3.12 -BS -m "$panel" --check-plan "$packet" --sha256 "$pin"
+```
+
+Keep the digest outside the worker's write access. Transfer the packet and provide the trusted digest separately. `--check-plan` checks the exact bytes against that digest. It also checks every task source, both role instructions and the registered panel runner in the worker's checkout. A hosted packet also includes the seat adapter. A copied packet does not authorize a launch.
+
+The report separates native teams, seat slots, shipment evaluations and maximum hosted calls **by role**. For example, 2 seeds, `fresh,pooled` and 12 shipments give 4 teams, 8 seat slots and 48 evaluations. Under `hosted`, only 2 inventory seats and 4 dispatch seats can call a model. Each request permits 3,008 output tokens, or 18,048 in total. `pooled` uses a no-op inventory seat. Cases repeat across arms. The report does not predict input tokens, actual completions, runtime or price. It does not check that the route is online.
+
+After separate authorization, `--from-plan "$packet" --sha256 "$pin" --harbor EXECUTABLE --out NEW` is the mode that starts Harbor. Use the site's concurrency guard. This mode takes the route, cases and job limit from the packet; it rejects new design flags. The hosted seat rejects a different case count before it can request a completion. Older runs retain their original plans and source checkout.
+
+### Can the inputs distinguish the intended behavior?
+
+Run this before allocating seats. It reads the registered `fresh` and `reordered` inputs, not any seat choices. Nothing is submitted to the world.
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_opportunity design "$packet" --sha256 "$pin"
+```
+
+The comparison asks whether the **newest revision** and the **last delivered report** recommend different best bays, assuming truthful inventory reports. In the registered seeds `17,29`, only **10 of 24 unique shipments** distinguish these rules. Using the older report would make 7 choices infeasible and 3 feasible but suboptimal. The other 14 shipments cannot distinguish the rules by their optimal choice, even though availability changed in 2. The 2 arms expose the same 24 shipments twice; they do not create 48 independent opportunities.
+
+Exit `0` means at least one shipment distinguishes the rules. Exit `1` means none do. Exit `3` means a comparison arm is absent; the denominators stay null. Exit `2` rejects an invalid packet or changed source. This is a design check, not a team reward, a forecast of model behavior, or a reason to select favorable seeds.
+
+The [retained native study](results/native-model-primary.json) provides an independent check with different seeds. At seed `2001`, its truthful arrival-order scripts scored 12 optimal and 12 feasible in `fresh`, then 8 optimal and 10 feasible in `reordered`. At seed `2003`, they scored 9 optimal and 9 feasible in `reordered`. All 3 results match the input calculation. The `2003 / fresh` script team never ran.
+
+After a team returns, use the [retained-choice diagnostic](native-model-results.md#did-the-model-choose-as-if-it-used-the-last-older-report). It compares actual decisions, not just the opportunity to distinguish them.
+
+### Isolate report order without changing what the sender said
+
+**Question:** Does a receiver choose a different bay when the same two peer reports arrive in the opposite order? The native `fresh` arm omits the old report. A `fresh` versus `reordered` grade alone cannot isolate order.
+
+For a packaged example, run `python3.12 -BS -m examples.seatlab.workbench order prepare --example --draws 2`. The [public registration](results/dispatch-order/registration.json) produces the [prepared panel](results/dispatch-order/prepared.json). This uses neither a private job folder nor a model. The 8 worker inputs total 19,192 canonical UTF-8 bytes. There are no receiver observations in that file.
+
+**How much work is actually different?** Run `python3.12 -BS -m examples.seatlab.workbench order-coverage --example --draws 2`. It accepts the same source flags as `order`. Pass `--panel-sha256` to check an existing design. This read-only analysis does not change any worker IDs.
+
+The [released census](results/dispatch-order/input-coverage.json) finds **4 distinct complete prompts across 8 requests**, with 24 distinct per-shipment evidence patterns. The 2 archived native worlds also contain 24 shipment positions, but only **22 distinct patterns**. A pattern preserves utilities, bay identities, both reported sets, and their revision labels. It ignores the shipment ID, position, and order of the bay names within a set. The full-prompt count uses the exact messages.
+
+An ambiguous pattern has the same per-shipment evidence but different correct bays in the retained stock. `best_case_only_correct` sums the most frequent correct bay for each pattern. It measures how well a fixed rule could fit those cases after seeing their answers. It is not an observed score, a guaranteed future score, or a limit on a receiver using other shipments for context.
+
+Start with the `$packet` and `$pin` from [the registration above](#review-a-dispatch-panel-without-running-it). These commands generate inputs only. They do not start a receiver.
+
+```sh
+order() {
+  mode=$1; shift
+  python3.12 -BS -m examples.seatlab.dispatch_order "$mode" \
+    --registration "$packet" --sha256 "$pin" "$@"
+}
+order prepare > "$root/order-plan.json"
+order_pin=$(python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["panel_sha256"])' "$root/order-plan.json")
+order emit --panel-sha256 "$order_pin" --wave 0 > "$root/wave-0.jsonl"
+order emit --panel-sha256 "$order_pin" --wave 1 > "$root/wave-1.jsonl"
+order score --panel-sha256 "$order_pin"  # exit 3: no first replies yet
+```
+
+The example has 2 worlds, 24 distinct shipments and **4 first replies**. In 10 shipments the two reports recommend different best bays. The input is otherwise identical across arms, including both report payloads, available actions, utilities, and instructions. Each wave contains one input per world. The first ordering alternates across worlds. Add `--shard 0/2` or `--shard 1/2` to split a wave between workers.
+
+Send only `messages` to a fresh receiver. Give each request its own session. Return a JSON line with `id`, `prompt_sha256`, and the first raw `reply` string. Do not retry a malformed reply. Keep the plan digest with the coordinator. The worker does not receive the ordering label, seed, actual stock, old choices, or native reward.
+
+After authorized calls, use `order score --panel-sha256 "$order_pin" first-*.jsonl`. The report separates choice changes, agreement with the newest **reported** stock, and correctness against **actual** stock. Only complete world pairs contribute to counts. Missing and invalid replies stay visible. A worker file with a duplicate subject or mismatched digest is rejected. Different decisions do not, by themselves, establish an order effect.
+
+To use a real inventory seat's reports, replace `--registration … --sha256 …` with `--trial "$trial_dir" --trial-id "$expected_uuid"`. Repeat the arguments for distinct worlds. The reader requires a matching dispatch view acknowledgment and a valid native result. It retains incorrect peer reports. It regenerates the replay prompt, not the original model session. In the retained `2001` and `2003` worlds, the same check found 7 informative shipments among 24. No altered order has a measured team reward.
+
+#### Compare different orderings against repeated answers to identical prompts
+
+If the receiver can vary its answer, two different decisions do not isolate an order effect. Register `--draws 2` before distributing any work. For the example above, this registers 8 first replies across 2 worlds. It does not make any calls.
+
+```sh
+order prepare --draws 2 > "$root/repeated.json"
+repeat_pin=$(python3.12 -BS -c 'import json,sys; print(json.load(open(sys.argv[1]))["panel_sha256"])' "$root/repeated.json")
+for wave in 0 1 2 3; do
+  order emit --draws 2 --panel-sha256 "$repeat_pin" --wave "$wave" > "$root/repeat-$wave.jsonl"
+done
+order score --draws 2 --panel-sha256 "$repeat_pin"  # exit 3: 8 replies missing
+```
+
+Each ordering gets 2 fresh sessions with identical messages and different request IDs. In successive waves, one world uses chronological, reversed, reversed, chronological. The next world uses the opposite sequence. Give the receiver only its own messages. Keep the model, settings and first-reply policy fixed. The scorer cannot verify which model or session produced a reply.
+
+Waves specify dispatch order, not elapsed time. If time is part of the design, finish one wave before releasing the next. The queue does not impose a cross-machine barrier.
+
+For each shipment, the scorer compares both pairs with identical inputs and all 4 pairs with opposite orderings. It reports disagreement on all shipments and on the subset where the two reports recommend different bays. These comparisons reuse answers. They are not independent trials. The primary descriptive contrast is the cross-order disagreement rate minus the same-order disagreement rate, averaged with equal weight per world. It can be negative. The full-panel contrast stays null until every registered world returns all 4 valid replies. Worlds with no informative shipments do not enter the informative contrast. This is not an estimate of team reward.
+
+#### Reserve work once when multiple operators share a machine
+
+`emit` previews inputs and can repeat them. Do **not** feed its output to a launcher that retries. For handoff, use `claim` with one private directory on a trusted local POSIX filesystem. Keep that directory after a coordinator restart. Every operator for this panel must use the same directory and the same panel digest.
+
+```sh
+umask 077
+mkdir -m 700 "$root/claims"  # create once, under a trusted parent
+out=$(mktemp "$root/handoff.XXXXXXXX")  # never truncate a previous handoff
+order claim --draws 2 --panel-sha256 "$repeat_pin" --wave 0 --shard 0/2 \
+  --spool "$root/claims" --max-requests 8 --max-input-bytes 65536 > "$out"
+order status --draws 2 --panel-sha256 "$repeat_pin" --spool "$root/claims"
+```
+
+The limits apply to the **whole registered panel**, even for one shard of one wave. `prepare` counts the canonical UTF-8 bytes of the message arrays. It does not count model tokens or quote a price. `claim` exits `1` without reserving or printing anything if either limit is too low. These limits apply to requests issued by this coordinator. They do not cap an external launcher's retries, provider charges, or other jobs.
+
+`claim` persists a subject reservation before printing a worker request. If operators contend for the same subject, only one gets its request. A repeated claim succeeds with empty output for subjects already reserved. A crash after reservation but before delivery leaves an unresolved reservation. This prevents automatic duplicate handoffs; it does **not** prove delivery, payment, exactly-once execution, or model identity. Do not delete claims or create another spool to retry.
+
+Supply trusted first-reply files to `status` to distinguish reserved-but-missing, invalid, and valid replies. It also shows replies without a local reservation. It prints only subject IDs, block and wave numbers, and states. Exit `0` means every subject has both a reservation and a valid first reply. Exit `1` means at least one reply has no reservation. Exit `3` means coverage is incomplete. Exit `2` rejects malformed receipts or an unsafe spool. Status is a read-only snapshot, not permission to resubmit. Use one coordinator spool for remote workers; separate machines or copied spools cannot deduplicate each other.
+
 ## Runtime and retention
 
 The initial study targets Olam commit `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, not stock Harbor 0.26. Run the maintained `hello-seats` task as an independent positive control first. Use local Docker with at most 1 trial at a time for this run. No cloud provisioning or metered API is required for the controls. Use fresh output directories. Keep all failed attempts and their reason in the study record. Keep host paths, personal credentials and raw provider traces out of public evidence. Publish to the personal fork only.

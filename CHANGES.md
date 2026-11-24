@@ -14,6 +14,7 @@ several Harbor agents in one environment, each in its own Compose service
 | `src/harbor/models/task/config.py` | `SeatConfig` and `TaskConfig.agents` (`[agents.<service>]`), with the seat refusals at task load, including a seat named `main`. |
 | `src/harbor/models/task/paths.py` | `seat_instruction_path`: `instructions/<seat>.md`. |
 | `src/harbor/models/task/task.py` | Reads each seat's instruction and does not require `instruction.md` for a seat task. |
+| `src/harbor/publisher/packager.py` | Includes each declared `instructions/<seat>.md` in the task package and its content digest. Undeclared files in `instructions/` stay local. |
 | `src/harbor/models/trial/config.py` | `Participant` (an `AgentConfig` plus `seat`) and `TrialConfig.participants`, refusing duplicate seats and per-agent settings seats cannot honor. |
 | `src/harbor/models/job/config.py` | `JobConfig.participants`. |
 | `src/harbor/job_plan.py` | Passes the job's participants into each trial config, as it does `user_agent`. |

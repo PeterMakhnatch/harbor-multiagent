@@ -61,6 +61,35 @@ Each entry shows **choices changed / change in optimal choices / change in feasi
 - **Dispatch:** All `2001 / fresh` cells reached 12 optimal choices. In `2003 / reordered`, `SS` → `SM` gained 1 optimal choice and lost 2, even as feasibility rose from 9 to 12. With model inventory in that group, `MS` → `MM` raised both counts from 9 to 12.
 - **Inventory:** Both actors matched their own native input on all 144 revision reports per actor. In `2003 / reordered`, `SM` → `MM` changed 4 choices with equal messages and the same accepted dispatch view digest. The 2 cells used separate dispatch model generations. This contrast does not show a speaker effect through the messages.
 
+### Did the model choose as if it used the last, older report?
+
+**Not on a single choice that distinguishes the rules.** In the 4 measured `reordered` teams with a model in dispatch, newest and last recommended different bays on 14 decisions. The model chose the newest report's best bay 12 times, the older report's best bay 0 times, and neither 2 times. The 14 decisions repeat **7 distinct shipments across 2 worlds**. They are not 14 independent trials.
+
+On the other 34 decisions, the rules recommended the same bay. The model chose that bay 32 times and a different bay twice. All 4 misses came from one native team, `2003 / SM`. The full study contains 16 registered teams: 12 measured, 1 invalid and 3 not attempted. None of the missing grades enter these counts.
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_opportunity observed
+```
+
+This command reads the [saved study](results/native-model-primary.json). It checks the native world fingerprint, both actors, sent-report fidelity, delivered-message digests and per-shipment grades. It emits counts for each `reordered` team. A wrong inventory report is not counted as a receiver choosing the older report. The released projections omit incorrect payloads, so the reader cannot reconstruct those decisions.
+
+Exit `3` preserves measured rows when the study is incomplete. Exit `0` requires a fully measured grid. Exit `2` rejects an invalid input. To inspect a new `team_report.collect` return of the same registered protocol, add `--report FILE --sha256 HELD_DIGEST`. A matching choice shows consistency with a rule. It does not prove how the model read the reports.
+
+### Check one private native trial
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_opportunity trial "$trial_dir" \
+  --trial-id "$expected_uuid" --require-bound
+```
+
+Use your own completed trial directory. Take the expected UUID from your job record. The reader checks both native role results, the verifier reward and the regenerated stock world. It reports three separate counts: choices consistent with truthful reports, choices consistent with actual delivered reports, and the subset where inventory sent an incorrect report. It does not print a prompt, an answer, or a host path.
+
+`observations` gives the evidence for each active role. `bound` means the client acknowledged the matching view digest. `reconstructed` means only the world record supports the view. Neither proves that a model used the view. Use `--require-bound` to require matching receipts for all active roles. A contradictory receipt is invalid, not reconstructed.
+
+Exit `0` means the requested comparison is available. Exit `3` covers missing evidence, missing required acknowledgments, or a different condition. A completed non-`reordered` trial retains its actual grade but has no order comparison. Exit `2` rejects inconsistent or invalid evidence. These are local, unsigned records. The UUID and the checks do not authenticate their producer.
+
+In this study, the direct reader reproduced all 8 reorder comparisons and all 4 fresh grades. Both role receipts matched in all 12 completed teams. The reader rejected the invalid team. The other 3 teams had no recorded attempt.
+
 ## Model resources
 
 The table sums the CLI fields by role. CLI and API durations are sums across calls, not trial elapsed time.

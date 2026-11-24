@@ -37,8 +37,9 @@ from .study import (
     STOCK,
     TEAM,
     Spec,
+    accepted_task,
     load_registration,
-    pinned_task,
+    refused_task,
     task_dir_for,
     validate_registration,
     world_env,
@@ -74,9 +75,12 @@ ${KEY} references that the launch host resolves later.
 --world stock (default) uses the published harbor/ship-handover package. Its
 cells set prior committed/dropped (SH_PRIOR) and carry sh- tickets.
 --world inflight needs --task MATERIALIZED, made by
-python3 -B -m examples.ship_inflight.materialize OUT. The package must match
-the harbor/ship-inflight identity and files pinned in
-examples/ship_inflight/samples/task-pin.json. Its cells set fate
+python3 -B -m examples.ship_inflight.materialize OUT. The package must be one
+of exactly two harbor/ship-inflight pairs derived from the files pinned in
+examples/ship_inflight/samples/task-pin.json: the legacy identity and tree,
+or the role-aware identity and tree whose digest also covers the
+instructions/outgoing.md and instructions/relief.md role files. The installed
+packager decides which pair is registered. Its cells set fate
 settles/fails (SH_FATE) and carry si- tickets. The same participants file
 registers on both worlds, except oracle relief policy replace (inflight only).
 
@@ -204,9 +208,8 @@ def _verified_task(
     except (ValueError, OSError) as error:
         raise ValueError("native Task/Packager cannot load the task") from error
     require(found == again and before == after, "task changed while it was checked")
-    pin = pinned_task(spec)
-    if pin is not None and pin != (found, before):
-        raise InputError(f"task {task_dir} is not the pinned {spec.task_name} package")
+    if not accepted_task(spec, found, before):
+        raise InputError(f"{refused_task(spec, f'task {task_dir}')}: {found}")
     return dict(found), before
 
 
