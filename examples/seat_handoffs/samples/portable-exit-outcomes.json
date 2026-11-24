@@ -1,0 +1,784 @@
+{
+  "schema": "harbor.schedule-exit-pack.outcomes/v1",
+  "registration": "portable-exit-question.json",
+  "pack": "portable-exit/manifest.json",
+  "full_manifest_sha256": "b6f95056a602937afc97bd502d242dbf84dbf833f01c39e09937a6254ce8e38a",
+  "scope": "Existing native teams, no new decisions, no enforcement of stopping and no claim about money or time saved. Different settings describe the same teams.",
+  "locked": {
+    "slots": 192,
+    "measured": 117,
+    "registered_excluded_timeouts": 54,
+    "quarantined": 0,
+    "unknown_grade": 21,
+    "unscored_shard_slots": 0,
+    "statuses": {
+      "usable": 117,
+      "seat_timeout": 54,
+      "conflicting_reference": 0,
+      "missing_slot": 12,
+      "ambiguous_slot": 0,
+      "missing_evidence": 9,
+      "invalid_evidence": 0,
+      "rubric_ambiguous": 0,
+      "duplicate_trial": 0,
+      "not_two_seats": 0,
+      "missing_shard": 0,
+      "duplicate_shard": 0,
+      "changed_shard": 0
+    }
+  },
+  "reference_completed": {
+    "source": "all_present_eligible_rows_of_population",
+    "complete": true,
+    "rows": 117,
+    "tasks": 49,
+    "keyed_tasks": 28,
+    "open_tasks": 21,
+    "quarantined_tasks": 0,
+    "choices_per_task": 35
+  },
+  "grid": [
+    {
+      "gained": [
+        0,
+        39
+      ],
+      "include_timeouts": false,
+      "lost": [
+        0,
+        54
+      ],
+      "ms": null,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        39
+      ],
+      "policy_successes": [
+        0,
+        93
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        2,
+        54
+      ],
+      "ms": 0,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        34
+      ],
+      "policy_successes": [
+        0,
+        88
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        2,
+        54
+      ],
+      "ms": 100,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        34
+      ],
+      "policy_successes": [
+        0,
+        88
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        2,
+        54
+      ],
+      "ms": 250,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        34
+      ],
+      "policy_successes": [
+        0,
+        88
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        2,
+        54
+      ],
+      "ms": 500,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        34
+      ],
+      "policy_successes": [
+        0,
+        88
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        2,
+        54
+      ],
+      "ms": 1000,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        34
+      ],
+      "policy_successes": [
+        0,
+        88
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        2,
+        54
+      ],
+      "ms": 2000,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        34
+      ],
+      "policy_successes": [
+        0,
+        88
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        1,
+        54
+      ],
+      "ms": 5000,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        35
+      ],
+      "policy_successes": [
+        0,
+        89
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        1,
+        54
+      ],
+      "ms": 10000,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        35
+      ],
+      "policy_successes": [
+        0,
+        89
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        1,
+        54
+      ],
+      "ms": 30000,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        35
+      ],
+      "policy_successes": [
+        0,
+        89
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        36
+      ],
+      "include_timeouts": false,
+      "lost": [
+        1,
+        54
+      ],
+      "ms": 60000,
+      "native_final_successes": 54,
+      "net": [
+        -54,
+        35
+      ],
+      "policy_successes": [
+        0,
+        89
+      ],
+      "tasks": 49,
+      "teams": 117
+    },
+    {
+      "gained": [
+        0,
+        48
+      ],
+      "include_timeouts": true,
+      "lost": [
+        0,
+        61
+      ],
+      "ms": null,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        48
+      ],
+      "policy_successes": [
+        4,
+        113
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        3,
+        61
+      ],
+      "ms": 0,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        38
+      ],
+      "policy_successes": [
+        4,
+        103
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        3,
+        61
+      ],
+      "ms": 100,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        38
+      ],
+      "policy_successes": [
+        4,
+        103
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        3,
+        61
+      ],
+      "ms": 250,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        38
+      ],
+      "policy_successes": [
+        4,
+        103
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        3,
+        61
+      ],
+      "ms": 500,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        38
+      ],
+      "policy_successes": [
+        4,
+        103
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        3,
+        61
+      ],
+      "ms": 1000,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        38
+      ],
+      "policy_successes": [
+        4,
+        103
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        3,
+        61
+      ],
+      "ms": 2000,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        38
+      ],
+      "policy_successes": [
+        4,
+        103
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        41
+      ],
+      "include_timeouts": true,
+      "lost": [
+        2,
+        61
+      ],
+      "ms": 5000,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        39
+      ],
+      "policy_successes": [
+        4,
+        104
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        42
+      ],
+      "include_timeouts": true,
+      "lost": [
+        2,
+        61
+      ],
+      "ms": 10000,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        40
+      ],
+      "policy_successes": [
+        4,
+        105
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        43
+      ],
+      "include_timeouts": true,
+      "lost": [
+        1,
+        61
+      ],
+      "ms": 30000,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        42
+      ],
+      "policy_successes": [
+        4,
+        107
+      ],
+      "tasks": 49,
+      "teams": 171
+    },
+    {
+      "gained": [
+        0,
+        43
+      ],
+      "include_timeouts": true,
+      "lost": [
+        1,
+        61
+      ],
+      "ms": 60000,
+      "native_final_successes": 65,
+      "net": [
+        -61,
+        42
+      ],
+      "policy_successes": [
+        4,
+        107
+      ],
+      "tasks": 49,
+      "teams": 171
+    }
+  ],
+  "completed_at_1000ms": {
+    "upper_net_using_independent_team_keys": 41,
+    "upper_net_using_one_key_per_task": 34
+  },
+  "leave_one_shard_completed_at_1000ms": [
+    {
+      "keyed_tasks": 27,
+      "lost": [
+        2,
+        43
+      ],
+      "measured": 98,
+      "net": [
+        -43,
+        30
+      ],
+      "omitted_job": 1,
+      "retained_cases_with_wider_grade": 1
+    },
+    {
+      "keyed_tasks": 28,
+      "lost": [
+        1,
+        52
+      ],
+      "measured": 103,
+      "net": [
+        -52,
+        33
+      ],
+      "omitted_job": 2,
+      "retained_cases_with_wider_grade": 0
+    },
+    {
+      "keyed_tasks": 25,
+      "lost": [
+        1,
+        42
+      ],
+      "measured": 93,
+      "net": [
+        -42,
+        32
+      ],
+      "omitted_job": 3,
+      "retained_cases_with_wider_grade": 4
+    },
+    {
+      "keyed_tasks": 27,
+      "lost": [
+        2,
+        49
+      ],
+      "measured": 110,
+      "net": [
+        -49,
+        32
+      ],
+      "omitted_job": 4,
+      "retained_cases_with_wider_grade": 0
+    },
+    {
+      "keyed_tasks": 27,
+      "lost": [
+        2,
+        48
+      ],
+      "measured": 109,
+      "net": [
+        -48,
+        33
+      ],
+      "omitted_job": 5,
+      "retained_cases_with_wider_grade": 1
+    },
+    {
+      "keyed_tasks": 27,
+      "lost": [
+        2,
+        52
+      ],
+      "measured": 103,
+      "net": [
+        -52,
+        30
+      ],
+      "omitted_job": 6,
+      "retained_cases_with_wider_grade": 1
+    },
+    {
+      "keyed_tasks": 24,
+      "lost": [
+        2,
+        45
+      ],
+      "measured": 93,
+      "net": [
+        -45,
+        27
+      ],
+      "omitted_job": 7,
+      "retained_cases_with_wider_grade": 2
+    },
+    {
+      "keyed_tasks": 27,
+      "lost": [
+        2,
+        47
+      ],
+      "measured": 110,
+      "net": [
+        -47,
+        34
+      ],
+      "omitted_job": 8,
+      "retained_cases_with_wider_grade": 1
+    }
+  ],
+  "validation": {
+    "stock_commit": "1462b3eddce938459f13e2cb09edc9eaadd35f18",
+    "original_job_roots": 8,
+    "settings": 22,
+    "matched_stock_checks": 2860,
+    "case_projections_per_random_encoding": 3168,
+    "independent_random_encodings": 2,
+    "job_slice_checks": 8,
+    "surviving_native_reader_leave_one_comparisons": 8,
+    "transfer_probes": {
+      "all_parts_absent": {
+        "job_1": "missing_shard",
+        "measured": 0,
+        "registered_slots": 192,
+        "unscored_shard_slots": 192
+      },
+      "certified_but_unknown_field": {
+        "rejected": true
+      },
+      "changed_bytes_valid_json": {
+        "job_1": "changed_shard",
+        "measured": 98,
+        "registered_slots": 192,
+        "unscored_shard_slots": 24
+      },
+      "disagreeing_job_number": {
+        "rejected": true
+      },
+      "empty_recognizable_filename": {
+        "job_1": "changed_shard",
+        "measured": 98,
+        "registered_slots": 192,
+        "unscored_shard_slots": 24
+      },
+      "foreign_pack": {
+        "rejected": true
+      },
+      "malformed_grid": {
+        "rejected": true
+      },
+      "manifest_as_shard": {
+        "rejected": true
+      },
+      "one_absent": {
+        "job_1": "missing_shard",
+        "measured": 98,
+        "registered_slots": 192,
+        "unscored_shard_slots": 24
+      },
+      "one_private_case_changed_with_cohorts_untouched": {
+        "aggregate_would_match": true,
+        "case_audit_detected": true
+      },
+      "original_and_changed": {
+        "job_1": "duplicate_shard",
+        "measured": 98,
+        "registered_slots": 192,
+        "unscored_shard_slots": 24
+      },
+      "same_evidence_copied": {
+        "job_1": "duplicate_shard",
+        "measured": 98,
+        "registered_slots": 192,
+        "unscored_shard_slots": 24
+      },
+      "same_path_twice": {
+        "rejected": true
+      },
+      "shards_in_reverse_order": {
+        "job_1": "present",
+        "measured": 117,
+        "registered_slots": 192,
+        "unscored_shard_slots": 0
+      },
+      "truncated_recognizable_filename": {
+        "job_1": "changed_shard",
+        "measured": 98,
+        "registered_slots": 192,
+        "unscored_shard_slots": 24
+      },
+      "truncated_unplaceable": {
+        "rejected": true
+      },
+      "unregistered_clock": {
+        "rejected": true
+      },
+      "unregistered_job": {
+        "rejected": true
+      }
+    },
+    "finite_oracle": {
+      "finite_views": 672,
+      "distinct_input_packs": 16,
+      "enumerated_key_prefix_assignments": 7876,
+      "targets_per_view": 4
+    },
+    "private_string_screen": {
+      "raw_records": 180,
+      "distinct_native_strings_checked": 1181,
+      "found": 0,
+      "classes": {
+        "ids": 188,
+        "checksums": 49,
+        "uris": 368,
+        "names": 212,
+        "times": 360,
+        "models": 4
+      },
+      "random_task_labels": 49,
+      "labels_in_both_releases": 0,
+      "bytes": 57126
+    }
+  },
+  "cost": {
+    "new_model_calls": 0,
+    "new_docker_trials": 0,
+    "new_paid_spend_usd": 0
+  }
+}
