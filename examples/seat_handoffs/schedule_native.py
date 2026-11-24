@@ -443,12 +443,26 @@ def _versions(score: dict[str, Any], version: int) -> None:
     _require(score["deceived"] is None, "native score carries a scripted decoy")
 
 
-def read_team(path: Path, *, seat_exit: ExitPolicy | None = None) -> Team:
+Records = tuple[dict[str, Any], dict[str, Any], dict[str, Any]]
+
+
+def read_records(path: Path) -> Records:
     _directory(path)
     _directory(path / "verifier")
     result = _record(path / "result.json")
     score = _record(path / "verifier" / "score.json")
     state = _record(path / "verifier" / "world-state.json")
+    return result, score, state
+
+
+def team_from_records(
+    result: dict[str, Any],
+    score: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    seat_exit: ExitPolicy | None = None,
+) -> Team:
+    assert type(result) is dict and type(score) is dict and type(state) is dict
     native = _native(result)
     native_id, digest, instance, condition, reward, seat_results, timed_out = native
     assert condition in CONDITIONS
@@ -485,3 +499,8 @@ def read_team(path: Path, *, seat_exit: ExitPolicy | None = None) -> Team:
             else None
         ),
     )
+
+
+def read_team(path: Path, *, seat_exit: ExitPolicy | None = None) -> Team:
+    result, score, state = read_records(path)
+    return team_from_records(result, score, state, seat_exit=seat_exit)

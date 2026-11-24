@@ -154,6 +154,8 @@ At 1 s, 34 completed teams certainly had a later write. Only 64 of the 117 had u
 
 The [registered question](samples/schedule-seat-exit-question.json) fixes the test and clock settings. The [redacted results](samples/schedule-seat-exit-outcomes.json) include coverage, all settings, known-key checks, and the 3 conditional loss witnesses. All 8 job locks remain in the denominator, including the 12 missing directories.
 
+You can now [replay the same real teams from public shards](portable-exit.md) without Docker, private trials or a model key. Try changing the clock allowance or omitting one worker's shard. At 1 second, losing one shard made as many as 4 *remaining* teams' grades less certain.
+
 ## Add an instrumented world
 
 Start with the [reference producer](../tasks/revised-dispatch/environment/world.py) and [verifier](../tasks/revised-dispatch/tests/verify.py). The producer declares the possible message/receiver edges at startup. It records only the first send, reply prepared, and optional acknowledgement for each relevant edge. Each receiver can make one irreversible commit. A monotonically increasing `seq` orders the events within one world instance. Use symbolic message IDs, never message bodies or secrets.

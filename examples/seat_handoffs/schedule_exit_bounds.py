@@ -1,4 +1,5 @@
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -51,8 +52,8 @@ assert EXIT_REASONS == (
 
 
 @dataclass(frozen=True)
-class _Trial:
-    native_id: str
+class ExitCase:
+    case_id: str
     condition: str
     timed_out: bool
     reward: int
@@ -81,14 +82,15 @@ def _check_writes(team: Team) -> None:
             raise ValueError("native write normalizes outside the schedule windows")
 
 
-def _check_fields(cut: ExitCut, team: Team) -> None:
+def _check_fields(cut: ExitCut, seats: tuple[str, ...], length: int) -> None:
     if type(cut.trigger) is not str or cut.trigger not in TRIGGERS:
         raise ValueError("exit cut has an unknown trigger status")
     if type(cut.alignment) is not str or cut.alignment not in ALIGNMENTS:
         raise ValueError("exit cut has an unknown alignment status")
     if type(cut.reason) is not str or cut.reason not in EXIT_REASONS:
         raise ValueError("exit cut reason is outside the published exit reasons")
-    length = len(team.writes)
+    if type(length) is not int or not 0 <= length <= MAX_WRITES:
+        raise ValueError("exit cut belongs to an unbounded write count")
     if type(cut.lo) is not int or type(cut.hi) is not int:
         raise ValueError("exit cut prefix range is not integral")
     if not 0 <= cut.lo <= cut.hi <= length:
@@ -97,7 +99,7 @@ def _check_fields(cut: ExitCut, team: Team) -> None:
     if clean is not None and (type(clean) is not int or not 0 <= clean <= SEATS):
         raise ValueError("exit cut clean seat count is outside the team")
     seat = cut.first_seat
-    if seat is not None and (type(seat) is not str or seat not in team.seats):
+    if seat is not None and (type(seat) is not str or seat not in seats):
         raise ValueError("exit cut first seat is outside the team")
 
 
@@ -129,40 +131,53 @@ def _check_observed(cut: ExitCut, length: int, drift_ms: int | None) -> None:
         raise ValueError("an observed cut without a fresh interval allows every prefix")
 
 
-def _check_cut(cut: object, team: Team, drift_ms: int | None) -> ExitCut:
+def check_cut(
+    cut: object, *, seats: tuple[str, ...], length: int, drift_ms: int | None
+) -> ExitCut:
     if not isinstance(cut, ExitCut):
         raise ValueError("every native team needs one ExitCut")
-    _check_fields(cut, team)
+    _check_fields(cut, seats, length)
     if cut.trigger == "observed":
-        _check_observed(cut, len(team.writes), drift_ms)
+        _check_observed(cut, length, drift_ms)
     else:
-        _check_unobserved(cut, len(team.writes))
+        _check_unobserved(cut, length)
     return cut
 
 
-def _trial(team: Team, cut: ExitCut) -> _Trial:
-    choices: set[Window] = set()
+def exit_case(
+    case_id: str,
+    *,
+    condition: str,
+    timed_out: bool,
+    reward: int,
+    choices: Sequence[Window | None],
+    cut: ExitCut,
+) -> ExitCase:
+    assert isinstance(case_id, str) and case_id
+    assert type(timed_out) is bool and type(reward) is int and reward in (0, 1)
+    assert 0 <= cut.lo <= cut.hi <= len(choices) <= MAX_WRITES
+    written: set[Window] = set()
     invalid = cut.lo == 0
     for index in range(max(cut.lo, 1) - 1, cut.hi):
-        choice = team.writes[index].choice
+        choice = choices[index]
         if choice is None:
             invalid = True
         else:
-            choices.add(choice)
-    assert cut.hi > 0 or (invalid and not choices)
-    return _Trial(
-        native_id=team.native_id,
-        condition=team.condition,
-        timed_out=team.timed_out,
-        reward=team.reward,
-        length=len(team.writes),
+            written.add(choice)
+    assert cut.hi > 0 or (invalid and not written)
+    return ExitCase(
+        case_id=case_id,
+        condition=condition,
+        timed_out=timed_out,
+        reward=reward,
+        length=len(choices),
         cut=cut,
-        choices=frozenset(choices),
+        choices=frozenset(written),
         invalid=invalid,
     )
 
 
-def _key_bounds(trials: list[_Trial], key: Window) -> dict[str, list[int]]:
+def _key_bounds(trials: list[ExitCase], key: Window) -> dict[str, list[int]]:
     gained, lost = [0, 0], [0, 0]
     for trial in trials:
         low, high = trial.grades(key)
@@ -182,7 +197,7 @@ def _key_bounds(trials: list[_Trial], key: Window) -> dict[str, list[int]]:
 
 
 def _task_bounds(
-    trials: list[_Trial], reference: frozenset[Window]
+    trials: list[ExitCase], reference: frozenset[Window]
 ) -> dict[str, list[int]]:
     scored = [_key_bounds(trials, key) for key in sorted(reference)]
     assert scored
@@ -195,7 +210,7 @@ def _task_bounds(
     }
 
 
-def _later_writes(trials: list[_Trial]) -> dict[str, Any]:
+def _later_writes(trials: list[ExitCase]) -> dict[str, Any]:
     certain = [trial for trial in trials if trial.cut.hi < trial.length]
     possible = [trial for trial in trials if trial.cut.lo < trial.length]
     assert len(certain) <= len(possible) <= len(trials)
@@ -219,7 +234,7 @@ def _verdict(lost: list[int], certain_completed: int) -> str:
 
 
 def _cohort(
-    tasks: dict[str, list[_Trial]], references: dict[str, frozenset[Window]]
+    tasks: dict[str, list[ExitCase]], references: dict[str, frozenset[Window]]
 ) -> dict[str, Any]:
     trials = [trial for group in tasks.values() for trial in group]
     totals = {target: [0, 0] for target in TARGETS}
@@ -252,7 +267,7 @@ def _cohort(
     }
 
 
-def _memberships(trial: _Trial) -> tuple[str, ...]:
+def _memberships(trial: ExitCase) -> tuple[str, ...]:
     outcome = "graded_timeout" if trial.timed_out else "completed"
     return ("all", trial.condition, outcome, CLEAN_COHORTS[trial.cut.clean_seats])
 
@@ -267,45 +282,82 @@ def _check_partitions(cohorts: dict[str, dict[str, Any]]) -> None:
             assert sum(cohorts[part][target][1] for part in parts) >= whole[target][1]
 
 
-def _row(trial: _Trial, reference: frozenset[Window]) -> dict[str, Any]:
-    grades = [trial.grades(key) for key in sorted(reference)]
-    cut = trial.cut
+def case_row(case: ExitCase, reference: frozenset[Window]) -> dict[str, Any]:
+    grades = [case.grades(key) for key in sorted(reference)]
+    assert grades
+    cut = case.cut
     return {
-        "native_id": trial.native_id,
-        "condition": trial.condition,
-        "native_grade": trial.reward,
-        "timed_out": trial.timed_out,
-        "writes": trial.length,
+        "condition": case.condition,
+        "native_grade": case.reward,
+        "timed_out": case.timed_out,
+        "writes": case.length,
         "clean_seats": cut.clean_seats,
         "trigger": cut.trigger,
         "first_seat": cut.first_seat,
         "reason": cut.reason,
         "alignment": cut.alignment,
         "prefix": [cut.lo, cut.hi],
-        "later_writes": [trial.length - cut.hi, trial.length - cut.lo],
+        "later_writes": [case.length - cut.hi, case.length - cut.lo],
         "grade": [min(low for low, _ in grades), max(high for _, high in grades)],
     }
 
 
 def _trials(
     groups: dict[str, list[Team]], cuts: dict[str, ExitCut], drift_ms: int | None
-) -> dict[str, list[_Trial]]:
+) -> dict[str, list[ExitCase]]:
     if not isinstance(cuts, dict):
         raise ValueError("exit cuts must be a dict keyed by native id")
     ids = {team.native_id for group in groups.values() for team in group}
     if cuts.keys() != ids:
         raise ValueError("exit cuts must match the native team ids exactly")
-    tasks: dict[str, list[_Trial]] = {}
+    tasks: dict[str, list[ExitCase]] = {}
     for digest, group in groups.items():
         tasks[digest] = []
         for team in group:
             if not canonical_uuid(team.native_id):
                 raise ValueError("native team id is not a canonical trial id")
             _check_writes(team)
-            cut = _check_cut(cuts[team.native_id], team, drift_ms)
-            tasks[digest].append(_trial(team, cut))
+            cut = check_cut(
+                cuts[team.native_id],
+                seats=team.seats,
+                length=len(team.writes),
+                drift_ms=drift_ms,
+            )
+            case = exit_case(
+                team.native_id,
+                condition=team.condition,
+                timed_out=team.timed_out,
+                reward=team.reward,
+                choices=tuple(write.choice for write in team.writes),
+                cut=cut,
+            )
+            tasks[digest].append(case)
     assert sum(len(group) for group in tasks.values()) == len(ids)
     return tasks
+
+
+def reduce_cohorts(
+    tasks: dict[str, list[ExitCase]], references: dict[str, frozenset[Window]]
+) -> dict[str, dict[str, Any]]:
+    if tasks.keys() != references.keys():
+        raise ValueError("references must cover exactly the measured tasks")
+    for reference in references.values():
+        if not isinstance(reference, frozenset) or not reference <= WINDOWS:
+            raise ValueError("every task needs a reference of schedule windows")
+        if not reference:
+            raise ValueError("a measured task has no shared candidate answer")
+    members: dict[str, dict[str, list[ExitCase]]] = {
+        name: {digest: [] for digest in tasks} for name in COHORTS
+    }
+    for digest, group in tasks.items():
+        for case in group:
+            assert isinstance(case, ExitCase)
+            for name in _memberships(case):
+                members[name][digest].append(case)
+    cohorts = {name: _cohort(members[name], references) for name in COHORTS}
+    _check_partitions(cohorts)
+    assert cohorts["all"]["teams"] == sum(len(group) for group in tasks.values())
+    return cohorts
 
 
 def measure(
@@ -319,17 +371,13 @@ def measure(
     _check_groups(groups, references)
     ExitPolicy(drift_ms=drift_ms)
     tasks = _trials(groups, cuts, drift_ms)
-    members: dict[str, dict[str, list[_Trial]]] = {
-        name: {digest: [] for digest in tasks} for name in COHORTS
-    }
-    for digest, group in tasks.items():
-        for trial in group:
-            for name in _memberships(trial):
-                members[name][digest].append(trial)
-    cohorts = {name: _cohort(members[name], references) for name in COHORTS}
-    _check_partitions(cohorts)
+    cohorts = reduce_cohorts(tasks, references)
     rows = sorted(
-        (_row(trial, references[d]) for d, group in tasks.items() for trial in group),
+        (
+            {"native_id": case.case_id, **case_row(case, references[digest])}
+            for digest, group in tasks.items()
+            for case in group
+        ),
         key=lambda row: row["native_id"],
     )
     assert len(rows) == cohorts["all"]["teams"]
