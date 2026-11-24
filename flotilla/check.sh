@@ -29,5 +29,7 @@ uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --insta
     >/dev/null  # a behavior probe: 4 seats, the 4 arms (docs/PROBE.md)
 uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --variant verify --instances 0-1 \
     --out "$tmp" >/dev/null  # the probe's verify kind: 4 seats, its 3 arms (docs/PROBE.md)
+uvx --quiet --python "$PY" python flotilla/build_tasks.py --family probe --variant audit --instances 0-1 \
+    --out "$tmp" >/dev/null  # the probe's audit kind: 4 seats, its 3 arms, no data in the seat (docs/PROBE.md)
 uvx --quiet --python "$PY" --with pyyaml python flotilla/qa.py "$tmp/*/*"
 echo "flotilla checks: OK"

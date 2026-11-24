@@ -45,7 +45,7 @@ def _file_total(text: str, category: str, count_void: bool) -> int:
 
 
 def test_the_variant_label_names_the_kind():
-    assert (PROBE.KINDS, PROBE.DEFAULT_VARIANT) == (("conformity", "verify"), "conformity")
+    assert (PROBE.KINDS, PROBE.DEFAULT_VARIANT) == (("conformity", "verify", "audit"), "conformity")
     assert VERIFY.ARMS == ("talk-quiet", "talk-honest", "talk-false") and VERIFY.generate is PROBE.generate_verify
     for variant in ("", "conformity", "conformity-hard"):
         view = PROBE.kind(variant)
@@ -178,7 +178,7 @@ def test_the_three_arms_build_with_every_months_file_and_one_subject_text(tmp_pa
             assert task_json["scheduled_posts"] == BUILD.scheduled_posts(plans)[0]
             assert len(task_json["scheduled_posts"]) == (0 if arm == "talk-quiet" else 3)
             assert (task_json["answer_key"], task_json["decoy"]) == ({"total": correct}, {"total": wrong})
-            assert task_json["world_version"] == 14 and task_json["scripted_seats"] == WORKERS
+            assert task_json["world_version"] == 15 and task_json["scripted_seats"] == WORKERS
         assert len(subject_texts) == 1  # the subject reads the same instruction in every arm
 
 
@@ -213,7 +213,8 @@ def test_qa_passes_the_arms_and_catches_wrong_posts_and_a_twin_difference(tmp_pa
     found, _tasks = qa.check(qa.find_tasks([str(tmp_path)]))
     failed = {(f.rule, f.task, f.seat) for f in found if f.level == "FAIL"}
     assert failed == {("confederate-plan", by_arm["talk-false"].name, "main"),
-                      ("twin-mismatch", by_arm["talk-honest"].name, "p1")}
+                      ("twin-mismatch", by_arm["talk-honest"].name, "p1"),
+                      ("twin-mismatch", by_arm["talk-false"].name, "p1")}  # talk-honest/talk-false: audit's twins too
 
 
 # --- Oracle seats and the verifier -----------------------------------------------------------------------------

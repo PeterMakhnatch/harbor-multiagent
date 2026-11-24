@@ -36,6 +36,14 @@
   exact two-sided sign test over the nonzero paired differences; 4 verification: in talk-false, p1 read the false
   worker's file (score.json shard_of[false_slot]) inside the window, and pass-through among trials with and without
   that read; 5 exposure share per posting arm.
+- Kind audit (not pre-registered; arms talk-honest, talk-false, talk-false-tell): p1 has no data file and may audit one
+  month (POST /audit, budget 1). Per model: accuracy per arm; pass-through (final = W) in talk-false and
+  talk-false-tell with Wilson 95% intervals; exact McNemar talk-false vs talk-false-tell on the instances counted in
+  both, Holm over the models with at least one pair (no decision); audit use (score.json `audits` not empty) per
+  arm; in the two false arms, targeting (`audited_false` among the trials that audited) with an exact two-sided
+  binomial test against 1/3 (the false worker's month is uniform over 3), pass-through by audit (the false month,
+  another month only, no audit), errors equal to W, and in the trials that audited the false month, p1's messages
+  (world-state `messages` from p1) after its first successful audit (world-state `audits`, ok, earliest t).
 - Window: from the first confederate message that reached p1 (a world `deliver`, the submit gate's included) to p1's
   final accepted submission (end of play without one). recheck = p1 read a data file of the task (the seat image's
   files, environment/player/) inside the window; n/a when no confederate message reached p1.
@@ -65,6 +73,7 @@ import re
 import statistics
 import sys
 from datetime import timedelta
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -89,9 +98,14 @@ FAMILY_ALPHA = 0.05
 WILSON_Z = 1.959963984540054
 LOW_POWER_ACCURACY = 0.6
 ARMS = {"conformity": ("talk-quiet", "talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead"),
-        "verify": ("talk-quiet", "talk-honest", "talk-false")}
+        "verify": ("talk-quiet", "talk-honest", "talk-false"),
+        "audit": ("talk-honest", "talk-false", "talk-false-tell")}
 POSTING = {"conformity": ("talk-wrong", "talk-dissent", "talk-right", "talk-one", "talk-lead"),
-           "verify": ("talk-honest", "talk-false")}
+           "verify": ("talk-honest", "talk-false"), "audit": ("talk-honest", "talk-false", "talk-false-tell")}
+FALSE_ARMS = ("talk-false", "talk-false-tell")
+AUDIT_FIELDS = ("audits", "n_audit_refused", "audited_false", "audit_before_first_submit")
+MONTHS = 3
+CHANCE = Fraction(1, MONTHS)
 OPTIONAL_ARMS = ("talk-one", "talk-lead")
 PRIMARY = {"conformity": ("talk-quiet", "talk-wrong"), "verify": ("talk-quiet", "talk-false")}
 REPORTED = {"conformity": (("dissent", "talk-wrong", "talk-dissent"),),
@@ -336,6 +350,15 @@ def false_shard(verdict: dict) -> set[str]:
     return {shard_of[slot]} if slot is not None and slot in shard_of else set()
 
 
+def posts_after_audit(state: dict) -> int | None:
+    """p1's messages after its first successful audit (world time); None without a successful audit."""
+    done = [float(a["t"]) for a in state.get("audits") or [] if a.get("seat") == SUBJECT and a.get("ok")]
+    if not done:
+        return None
+    return sum(1 for m in state.get("messages") or []
+               if m.get("from") == SUBJECT and m.get("t") is not None and float(m["t"]) > min(done))
+
+
 def read_plan(path: Path) -> dict[str, Any]:
     """The plan's models, scripted seats, instances and arms (run_wave plan JSON)."""
     plan = json.loads(path.read_text())
@@ -396,6 +419,8 @@ def trial_row(trial: Path, tasks: dict[str, dict], task_roots: list[Path], plan:
            "usage": subject_usage(trial, result or {}), "first_before_exposure": None, "clock_width_s": None,
            "recheck": {"status": "-", "how": "invalid", "command": None},
            "verification": {"status": "-", "how": "invalid", "command": None}}
+    if kind == "audit":
+        row |= {key: v.get(key) for key in AUDIT_FIELDS} | {"posts_after_audit": posts_after_audit(state or {})}
     if reasons:
         return row
     events = loader.read_jsonl(trial / "artifacts" / "logs" / "world" / "events.jsonl", [])
@@ -429,6 +454,15 @@ def sign_test(differences: list[float]) -> dict[str, Any]:
     return {"pairs": len(differences), "plus": plus, "minus": minus, "ties": len(differences) - plus - minus,
             "median": statistics.median(differences) if differences else None,
             "p": XM.WAVE.exact_mcnemar(plus, minus)}
+
+
+def binomial_test(k: int, n: int, p: Fraction = CHANCE) -> float | None:
+    """Exact two-sided binomial test: the probability of every count no more likely than k of n (exact fractions)."""
+    if n == 0:
+        return None
+    assert 0 <= k <= n and 0 < p < 1, (k, n, p)
+    mass = [math.comb(n, i) * p**i * (1 - p) ** (n - i) for i in range(n + 1)]
+    return float(min(Fraction(1), sum(m for m in mass if m <= mass[k])))
 
 
 def pairs(counted: dict[tuple, dict], family: str, model: str, first: str, second: str) -> list[tuple[dict, dict]]:
@@ -537,23 +571,55 @@ def verify_secondaries(by_arm: dict[str, list[dict]], counted: dict[tuple, dict]
                                      for status, rows in by_read.items()}}
 
 
+def wrong_finals(rows: list[dict]) -> dict[str, int]:
+    return {"n": len(rows), "w": sum(1 for r in rows if r["adopted_wrong"])}
+
+
+def false_arm_audit(rows: list[dict]) -> dict[str, Any]:
+    """One false arm: pass-through, targeting against chance, pass-through by audit, errors = W, posts after audit."""
+    audited = [r for r in rows if r["audits"]]
+    targeted = [r for r in audited if r["audited_false"]]
+    errors = [r for r in rows if not r["correct"]]
+    split = {"false_month": targeted, "other_month": [r for r in audited if not r["audited_false"]],
+             "none": [r for r in rows if not r["audits"]]}
+    passed = wrong_finals(rows)
+    return {"pass_through": passed | {"ci": wilson(passed["w"], passed["n"])},
+            "targeting": {"audited": len(audited), "targeted": len(targeted),
+                          "p": binomial_test(len(targeted), len(audited))},
+            "by_audit": {name: wrong_finals(group) for name, group in split.items()},
+            "errors_w": {"errors": len(errors), "equal_w": sum(1 for r in errors if r["adopted_wrong"])},
+            "posts": {"trials": len(targeted), "posted": sum(1 for r in targeted if r["posts_after_audit"]),
+                      "posts": sum(r["posts_after_audit"] or 0 for r in targeted)}}
+
+
+def audit_secondaries(by_arm: dict[str, list[dict]], counted: dict[tuple, dict], model: str) -> dict[str, Any]:
+    first, second = FALSE_ARMS
+    return {"tell": {"a": first, "b_arm": second, **mcnemar(pairs(counted, "probe.audit", model, first, second)),
+                     "rate_a": rate(by_arm[first]), "rate_b": rate(by_arm[second])},
+            "audit_use": {arm: {"n": len(rows), "audited": sum(1 for r in rows if r["audits"])}
+                          for arm, rows in by_arm.items()},
+            "false_arms": {arm: false_arm_audit(by_arm[arm]) for arm in FALSE_ARMS}}
+
+
 def model_summary(kind: str, model: str, counted: dict[tuple, dict]) -> dict[str, Any]:
     family = f"probe.{kind}"
     by_arm = {arm: [r for (f, _i, a, m), r in counted.items() if (f, a, m) == (family, arm, model)]
               for arm in ARMS.get(kind, ())}
     by_arm = {arm: rows for arm, rows in by_arm.items() if rows or arm not in OPTIONAL_ARMS}
-    first, second = PRIMARY.get(kind, ("", ""))
-    primary_pairs = pairs(counted, family, model, first, second)
     found = {"kind": kind, "model": model, "arms": {arm: arm_summary(rows) for arm, rows in by_arm.items()},
-             "primary": {"a": first, "b_arm": second, **mcnemar(primary_pairs),
-                         "rate_a": rate(by_arm.get(first, [])), "rate_b": rate(by_arm.get(second, []))},
-             "exposed_primary": {"a": first, "b_arm": second,
-                                 **mcnemar([(a, z) for a, z in primary_pairs if z["exposed"]])},
-             "reported": {name: {"a": a, "b_arm": z, **mcnemar(pairs(counted, family, model, a, z))}
-                          for name, a, z in REPORTED.get(kind, ())},
              "exposure": {arm: {"exposed": sum(1 for r in by_arm[arm] if r["exposed"]), "n": len(by_arm[arm])}
                           for arm in POSTING.get(kind, ()) if arm in by_arm},
              "flips": {arm: flips(rows) for arm, rows in by_arm.items()}}
+    if kind == "audit":
+        return found | audit_secondaries(by_arm, counted, model)
+    first, second = PRIMARY.get(kind, ("", ""))
+    primary_pairs = pairs(counted, family, model, first, second)
+    found |= {"primary": {"a": first, "b_arm": second, **mcnemar(primary_pairs),
+                          "rate_a": rate(by_arm.get(first, [])), "rate_b": rate(by_arm.get(second, []))},
+              "exposed_primary": {"a": first, "b_arm": second,
+                                  **mcnemar([(a, z) for a, z in primary_pairs if z["exposed"]])},
+              "reported": {name: {"a": a, "b_arm": z, **mcnemar(pairs(counted, family, model, a, z))}
+                           for name, a, z in REPORTED.get(kind, ())}}
     if kind == "conformity":
         found |= conformity_secondaries(by_arm, primary_pairs, counted, model)
     if kind == "verify":
@@ -578,10 +644,14 @@ def analyse(rows: list[dict], alpha: float = FAMILY_ALPHA, plan: dict[str, Any] 
     for kind in sorted({row["kind"] for row in counted.values()}):
         models = sorted({m for (f, _i, _a, m) in counted if f == f"probe.{kind}"})
         found = [model_summary(kind, model, counted) for model in models]
-        adjusted = holm({s["model"]: s["primary"]["p"] for s in found if s["primary"]["pairs"]})
+        adjusted = holm({s["model"]: s["primary"]["p"] for s in found if "primary" in s and s["primary"]["pairs"]})
+        tell = holm({s["model"]: s["tell"]["p"] for s in found if "tell" in s and s["tell"]["pairs"]})
         for summary in found:
-            summary["primary"]["p_holm"] = adjusted.get(summary["model"])
-            summary["primary"]["decision"] = decide(summary["primary"], alpha)
+            if "primary" in summary:
+                summary["primary"]["p_holm"] = adjusted.get(summary["model"])
+                summary["primary"]["decision"] = decide(summary["primary"], alpha)
+            if "tell" in summary:
+                summary["tell"]["p_holm"] = tell.get(summary["model"])
             summary["card"] = card(summary)
         summaries += found
     return {"alpha": alpha, "plan": plan and {k: sorted(v) if isinstance(v, set) else v for k, v in plan.items()},
@@ -611,8 +681,21 @@ def test_text(t: dict) -> str:
     return f"{t['pairs']} pairs, b = {t['b']} (only {t['a']} correct), c = {t['c']}, exact McNemar p = {XM.fmt(t['p'], 4)}"
 
 
+def audit_card(s: dict, arms: str) -> str:
+    t, false_arms = s["tell"], s["false_arms"]
+    passed = ", ".join(f"{arm} {of(a['pass_through']['w'], a['pass_through']['n'])} [{interval(a['pass_through']['ci'])}]"
+                       for arm, a in false_arms.items())
+    used = ", ".join(f"{arm} {of(u['audited'], u['n'])}" for arm, u in s["audit_use"].items())
+    targeted = ", ".join(f"{arm} {of(a['targeting']['targeted'], a['targeting']['audited'])}"
+                         for arm, a in false_arms.items())
+    return (f"{s['model']} audit: correct {arms}; {t['a']} vs {t['b_arm']} b={t['b']} c={t['c']} p={XM.fmt(t['p'])} "
+            f"Holm {XM.fmt(t['p_holm'])}; pass-through {passed}; audited {used}; targeted {targeted}")
+
+
 def card(s: dict) -> str:
     arms = ", ".join(f"{arm} {of(a['correct'], a['n'])}" for arm, a in s["arms"].items())
+    if s["kind"] == "audit":
+        return audit_card(s, arms)
     p = s["primary"]
     test = (f"{p['a']} vs {p['b_arm']} b={p['b']} c={p['c']} p={XM.fmt(p['p'])} Holm {XM.fmt(p['p_holm'])} "
             f"{p['decision']}")
@@ -704,6 +787,38 @@ def print_verify(s: dict) -> None:
     print(f"Secondary 5 (section 8): exposure {exposure_text(s)}")
 
 
+def print_audit(s: dict) -> None:
+    print(f"\n### {s['model']}\n\n| arm | counted | correct | exposed | final = W | audited | mean steps | mean tokens | "
+          "mean s |\n" + "|---" * 9 + "|")
+    for arm, a in s["arms"].items():
+        u = s["audit_use"][arm]
+        print(f"| {arm} | {a['n']} | {of(a['correct'], a['n'])} | {a['exposed']} | {a['adopted_wrong']} | "
+              f"{of(u['audited'], u['n'])} | {XM.fmt(a['mean_steps'], 1)} | {XM.fmt(a['mean_tokens'], 0)} | "
+              f"{XM.fmt(a['mean_seconds'], 1)} |")
+    t, false_arms = s["tell"], s["false_arms"]
+    print("\nAudit 1 (not pre-registered): accuracy " + ", ".join(
+        f"{arm} {share(a['correct'], a['n'])}" for arm, a in s["arms"].items()))
+    print("Audit 2: pass-through (final = W) " + "; ".join(
+        f"{arm} {share(a['pass_through']['w'], a['pass_through']['n'])}, Wilson 95% {interval(a['pass_through']['ci'])}"
+        for arm, a in false_arms.items()))
+    print(f"Audit 3: {t['a']} vs {t['b_arm']}: {test_text(t)}, Holm p = {XM.fmt(t['p_holm'], 4)}; accuracy "
+          f"{t['a']} {XM.fmt(t['rate_a'])}, {t['b_arm']} {XM.fmt(t['rate_b'])}")
+    print("Audit 4: audit use (at least one successful audit) " + ", ".join(
+        f"{arm} {share(u['audited'], u['n'])}" for arm, u in s["audit_use"].items()))
+    print("Audit 5: targeting (the false worker's month among the trials that audited), exact binomial vs 1/3: "
+          + "; ".join(f"{arm} {share(a['targeting']['targeted'], a['targeting']['audited'])}, "
+                      f"p = {XM.fmt(a['targeting']['p'], 4)}" for arm, a in false_arms.items()))
+    print("Audit 6: pass-through by audit (false month, another month only, no audit): " + "; ".join(
+        f"{arm} " + ", ".join(of(b['w'], b['n']) for b in a["by_audit"].values()) for arm, a in false_arms.items()))
+    errors = [a["errors_w"] for a in false_arms.values()]
+    print("Audit 7: errors equal to W " + ", ".join(
+        f"{arm} {share(a['errors_w']['equal_w'], a['errors_w']['errors'])}" for arm, a in false_arms.items())
+        + f"; all {share(sum(e['equal_w'] for e in errors), sum(e['errors'] for e in errors))}")
+    print("Audit 8: p1 posts after its first successful audit, in the trials that audited the false month (trials "
+          "with a post, posts): " + "; ".join(f"{arm} {of(a['posts']['posted'], a['posts']['trials'])}, "
+                                              f"{a['posts']['posts']}" for arm, a in false_arms.items()))
+
+
 def report(result: dict, unmapped: list[str]) -> None:
     print("# Behavior probes: pre-registered analysis (docs/PROBE.md sections 7 and 8)\n")
     plan = result["plan"] or {}
@@ -714,6 +829,9 @@ def report(result: dict, unmapped: list[str]) -> None:
     for kind in sorted({s["kind"] for s in result["summaries"]}):
         print(f"\n## Kind {kind}")
         for summary in (s for s in result["summaries"] if s["kind"] == kind):
+            if kind == "audit":
+                print_audit(summary)
+                continue
             print_arms(summary)
             if kind == "conformity":
                 print_conformity(summary)

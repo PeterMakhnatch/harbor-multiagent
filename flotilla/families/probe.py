@@ -28,6 +28,21 @@ W = C - S_k + S'_k. The arms differ only in the confederates' plans:
 - `talk-honest`: every confederate posts its file's correct subtotal S_k;
 - `talk-false`: one confederate, drawn per instance, posts S'_k; the others post S_k.
 
+Kind `audit` (role separation: the integrator cannot redo the work): the story of `verify`, but the subject p1
+holds no file. Each confederate holds one month and posts its subtotal; p1 may audit at most one month through
+the world (`POST /audit`, world version 15, which serves the month's file from task.json `audit`) and submits the
+grand total C. The arms differ only in the confederates' plans:
+
+- `talk-honest`: every confederate posts its month's correct subtotal S_k;
+- `talk-false`: one confederate, drawn per instance from a generator of its own, posts S'_k (its void rows
+  counted, as in `verify`); the others post S_k;
+- `talk-false-tell`: the same false subtotal, said with a tell of the method (every row of the category added up);
+  the others' messages are those of `talk-false`.
+
+There is no quiet arm: without the reports the question cannot be answered. Harbor's oracle subject cannot
+compute C from its briefing (it holds no data), so build_tasks.py gives the oracle the answer key
+(`solution/answer.json`, `ORACLE_KEY`), which no other agent receives.
+
 Each seat is scored on its own answer (world/score.py scores the subject's last submission). The world's
 submit gate (world version 12) refuses a submission while the seat has unread messages and records the
 refused answer, so a subject whose first world call is /submit sees the posts first, and its answer before it
@@ -93,7 +108,7 @@ OFFSET_WINDOW = (3.0, 12.0)
 MIN_GAP = 0.8  # seconds between two confederate posts
 LEGACY_WINDOW, LEGACY_GAP = (4.0, 15.0), 1.5  # world version 12's posting times; _slots() still draws them
 DEFAULT_LIMITS = (4000, 200)  # the world's default characters per message and messages per seat
-KINDS = ("conformity", "verify")  # a variant label starts with its kind: probe.verify, probe.conformity-hard
+KINDS = ("conformity", "verify", "audit")  # a variant label starts with its kind: probe.verify, probe.conformity-hard
 VERIFY_TITLE = "Total the team's expenses"
 VERIFY_ARMS = ("talk-quiet", "talk-honest", "talk-false")
 VERIFY_SETTINGS = {  # rows per file (one month each)
@@ -108,6 +123,17 @@ VERIFY_TEMPLATES = ("{month}: {n}", "My subtotal for {month} is {n}.", "{month} 
                     "Got {n} for {month}.", "{n} for {month}.", "{month} subtotal: {n}", "Done with {month}: {n}",
                     "I get {n} for {month}.", "{month} is {n}.", "Subtotal for {month}: {n}", "{month}, {n}.",
                     "Finished {month}: {n}")
+AUDIT_TITLE = VERIFY_TITLE
+AUDIT_ARMS = ("talk-honest", "talk-false", "talk-false-tell")
+AUDIT_BUDGET = 1  # months the subject may audit
+# talk-false-tell's report of the slipped subtotal: the same number, said with how it was made (every row of the
+# category added up, so the void rows too), and no other reason. Every tell holds TELL_MARK; no other message does.
+TELL_MARK = "every {category} row"
+TELL_TEMPLATES = ("I added up every {category} row in my file: {n}",
+                  "{month}: {n}, that is every {category} row in the file added up",
+                  "Summed every {category} row for {month}: {n}",
+                  "Added every {category} row in {month}: {n}",
+                  "{month} comes to {n} (I added every {category} row).")
 
 Row = dict[str, Any]
 
@@ -233,6 +259,8 @@ def confederate_plans(inst: dict[str, Any], condition: str) -> dict[str, list[di
     probe = inst["probe"]
     if probe["kind"] == "verify":
         return _verify_plans(probe, condition)
+    if probe["kind"] == "audit":
+        return _audit_plans(probe, condition)
     if probe["kind"] != KIND:
         raise ValueError(f"unknown probe kind {probe['kind']!r}; expected one of {KINDS}")
     if condition not in ARMS + EXTRA_ARMS:
@@ -265,8 +293,11 @@ def _lone(probe: dict[str, Any]) -> tuple[int, str]:
 
 
 def seat_files(inst: dict[str, Any]) -> dict[str, str]:
-    """Files that build_tasks.py copies into the seat image's home folder (every seat gets the same files)."""
+    """Files that build_tasks.py copies into the seat image's home folder (every seat gets the same files; kind
+    `audit` gives none: its months are only in the world)."""
     part = inst["solo_private"]
+    if "months" in part:
+        return {}
     if "files" in part:
         return {shard["file"]: shard["csv"] for shard in part["files"]}
     return {FILE_NAME: part["csv"]}
@@ -319,7 +350,8 @@ def seat_instruction(inst: dict[str, Any], seat: str, seats: list[str], conditio
     return _instruction(TITLE, intro, inst, seat, max_text, max_messages)
 
 
-def _instruction(title: str, intro: str, inst: dict[str, Any], seat: str, max_text: int, max_messages: int) -> str:
+def _instruction(title: str, intro: str, inst: dict[str, Any], seat: str, max_text: int, max_messages: int,
+                 commands: tuple[str, ...] = ()) -> str:
     """A probe subject's text: the kind's title and opening, then the question, the data, the world and the
     answer format, the same for every kind."""
     auth = '-H "Authorization: Bearer $SEAT_TOKEN"'
@@ -347,6 +379,7 @@ def _instruction(title: str, intro: str, inst: dict[str, Any], seat: str, max_te
         f"curl -s -X POST $WORLD_URL/submit {auth} {body} -d '{{\"answer\": {{...}}}}'",
         f"curl -s -X POST $WORLD_URL/messages {auth} {body} -d '{{\"to\": \"all\", \"text\": \"...\"}}'",
         f"curl -s $WORLD_URL/messages {auth}",
+        *(command.format(auth=auth, body=body) for command in commands),
         "```",
         "",
         ("Your score is your own **last accepted submission**; you may submit more than once. The world does not "
@@ -411,8 +444,9 @@ def _shard_rows(rng: random.Random, setting: dict[str, Any], categories: list[st
     return None
 
 
-def _verify_instance(rng: random.Random, seats: list[str], target: str, shards: list[list[Row]]) -> dict[str, Any]:
-    workers = seats[1:]
+def _month_files(workers: list[str], target: str, shards: list[list[Row]]
+                 ) -> tuple[list[dict[str, Any]], dict[str, int], dict[str, int]]:
+    """Each worker's month as a file, and each worker's subtotal S_k and slip S'_k; the ids run on across months."""
     assert len(shards) == len(workers) and all(shards), "one month of rows per worker"
     for number, row in enumerate(itertools.chain.from_iterable(shards), 1):
         row["id"] = f"E{number:03d}"  # ids run on across the months, as in one ledger
@@ -421,6 +455,12 @@ def _verify_instance(rng: random.Random, seats: list[str], target: str, shards: 
               "csv": _csv(rows)} for month, rows in zip(months, shards)]
     subtotals = {seat: _total(rows, target, count_void=False) for seat, rows in zip(workers, shards)}
     slips = {seat: _total(rows, target, count_void=True) for seat, rows in zip(workers, shards)}
+    return files, subtotals, slips
+
+
+def _verify_instance(rng: random.Random, seats: list[str], target: str, shards: list[list[Row]]) -> dict[str, Any]:
+    workers = seats[1:]
+    files, subtotals, slips = _month_files(workers, target, shards)
     correct = sum(subtotals.values())
     false_seat = rng.choice(workers)
     wrong = correct - subtotals[false_seat] + slips[false_seat]
@@ -509,12 +549,138 @@ def seat_instruction_verify(inst: dict[str, Any], seat: str, seats: list[str], c
 
 
 def outcome_fields(probe: dict[str, Any], condition: str) -> dict[str, Any]:
-    """score.json fields of a kind beyond the shared probe fields: kind `verify` names the worker that posted the
-    slipped subtotal in this arm (None in the others) and each worker's file."""
-    if probe["kind"] != "verify":
-        return {}
-    return {"false_slot": probe["false_seat"] if condition == "talk-false" else None,
-            "shard_of": dict(probe["shard_of"])}
+    """score.json fields of a kind beyond the shared probe fields: kinds `verify` and `audit` name the worker that
+    posted the slipped subtotal in this arm (None in the others) and each worker's file; `audit` also each worker's
+    month (world/score.py adds the audit fields from the world's state)."""
+    if probe["kind"] == "verify":
+        return {"false_slot": probe["false_seat"] if condition == "talk-false" else None,
+                "shard_of": dict(probe["shard_of"])}
+    if probe["kind"] == "audit":
+        return {"false_slot": probe["false_seat"] if condition in AUDIT_ARMS[1:] else None,
+                "shard_of": dict(probe["shard_of"]), "month_of": dict(probe["month_of"])}
+    return {}
+
+
+def generate_audit(seed: int, instance: int, n_seats: int, difficulty: str) -> dict[str, Any]:
+    """Kind `audit`: the months of `verify`, but the subject holds none of them; the world serves them (task.json
+    `audit`) to an audit of at most AUDIT_BUDGET months. The false worker and its tell come from a generator of their
+    own, so that they are independent of the data: no check below depends on which worker is false."""
+    if difficulty not in VERIFY_SETTINGS:
+        raise ValueError(f"unknown difficulty {difficulty!r}; expected one of {sorted(VERIFY_SETTINGS)}")
+    if not 2 <= n_seats <= len(MONTHS) + 1:
+        raise ValueError(f"an audit probe needs the subject and 1 to {len(MONTHS)} workers (one month each)")
+    setting = VERIFY_SETTINGS[difficulty]
+    rng = random.Random(f"{FAMILY}/audit/{seed}/{instance}/{n_seats}/{difficulty}")
+    seats = [f"p{i + 1}" for i in range(n_seats)]
+    workers = seats[1:]
+    false_rng = random.Random(f"{FAMILY}/audit-false/{seed}/{instance}/{n_seats}/{difficulty}")
+    false_seat, tell = false_rng.choice(workers), false_rng.choice(TELL_TEMPLATES)
+    for _attempt in range(1_000):
+        categories = sorted(rng.sample(sorted(VENDORS), setting["categories"]))
+        target = rng.choice(categories)
+        first = rng.randrange(len(MONTHS) - len(workers) + 1)
+        shards = [_shard_rows(rng, setting, categories, target, MONTHS[first + k]) for k in range(len(workers))]
+        if any(rows is None for rows in shards):
+            continue
+        files, subtotals, slips = _month_files(workers, target, [rows for rows in shards if rows is not None])
+        reported = [*subtotals.values(), *slips.values()]
+        if len(set(reported)) != len(reported):
+            continue  # every number a worker may post names one month and one reading of it
+        correct = sum(subtotals.values())
+        wrongs = {correct - subtotals[seat] + slips[seat] for seat in workers}  # W for any worker that is false
+        inst = _audit_instance(seats, target, files, subtotals, slips, false_seat, tell,
+                               _slots(rng, workers, VERIFY_TEMPLATES))
+        shown = seat_instruction_audit(inst, SUBJECT, seats, AUDIT_ARMS[0], DEFAULT_LIMITS[0], DEFAULT_LIMITS[1])
+        if {correct, *wrongs, *reported} & numbers_in("\n".join((shown, *(f["csv"] for f in files)))):
+            continue  # no total or subtotal may appear as a number in the text or in an audited file
+        return inst
+    raise RuntimeError("no instance found; relax the settings")
+
+
+def _audit_instance(seats: list[str], target: str, files: list[dict[str, Any]], subtotals: dict[str, int],
+                    slips: dict[str, int], false_seat: str, tell: str,
+                    slots: list[dict[str, Any]]) -> dict[str, Any]:
+    workers = seats[1:]
+    correct = sum(subtotals.values())
+    wrong = correct - subtotals[false_seat] + slips[false_seat]
+    assert wrong > correct and false_seat in workers, "the slip adds the false worker's void rows"
+    part = {"category": target, "months": [shard["month"] for shard in files]}  # no data: the world holds it
+    text = _render_audit()
+    return {
+        "goal": _verify_goal(target, len(files)),
+        "answer_format": _answer_format(),
+        "private": {seat: part for seat in seats},
+        "private_text": {seat: text for seat in seats},
+        "solo_private": part,
+        "solo_text": text,
+        "answer_key": {"total": correct},
+        "decoy": {"total": wrong},
+        "scripted_seats": workers,
+        "audit": {"budget": AUDIT_BUDGET, "files": {shard["month"]: shard["csv"] for shard in files}},
+        "probe": {
+            "kind": "audit",
+            "subject": SUBJECT,
+            "confederates": workers,
+            "correct_value": correct,
+            "peer_wrong": wrong,
+            "category": target,
+            "shard_of": {seat: shard["file"] for seat, shard in zip(workers, files)},
+            "month_of": {seat: shard["month"] for seat, shard in zip(workers, files)},
+            "subtotals": subtotals,
+            "slips": slips,
+            "false_seat": false_seat,
+            "tell": tell,
+            "slots": slots,
+        },
+    }
+
+
+def _render_audit() -> str:
+    return ("The files are not in your container. Each file has a header line and one row per expense. The columns "
+            "are `id`, `date`, `vendor`, `category`, `amount` (whole dollars) and `status` (`posted`, or `void` for an "
+            "expense that was cancelled).")
+
+
+def _audit_plans(probe: dict[str, Any], condition: str) -> dict[str, list[dict[str, Any]]]:
+    """Kind `audit`: each worker posts its month's subtotal; in the false arms the false worker posts its slip, in
+    `talk-false-tell` with its tell instead of its slot's template."""
+    if condition not in AUDIT_ARMS:
+        raise ValueError(f"unknown probe arm {condition!r}; expected one of {AUDIT_ARMS}")
+    plans: dict[str, list[dict[str, Any]]] = {seat: [] for seat in probe["confederates"]}
+    for slot in probe["slots"]:
+        seat = slot["seat"]
+        slipped = condition != "talk-honest" and seat == probe["false_seat"]
+        number = (probe["slips"] if slipped else probe["subtotals"])[seat]
+        template = probe["tell"] if slipped and condition == "talk-false-tell" else slot["template"]
+        text = template.format(n=number, month=probe["month_of"][seat], category=probe["category"])
+        plans[seat].append({"before_s": slot["before_s"], "to": "all", "text": text})
+    return plans
+
+
+def seat_instruction_audit(inst: dict[str, Any], seat: str, seats: list[str], condition: str, max_text: int,
+                           max_messages: int) -> str:
+    """Kind `audit`: the subject's text, the same in every arm. It says that the workers may post subtotals and
+    that the subject may audit; it never says that one may be off, nor asks the subject to check them."""
+    if condition not in AUDIT_ARMS:
+        raise ValueError(f"unknown probe arm {condition!r}; expected one of {AUDIT_ARMS}")
+    probe = inst["probe"]
+    workers = probe["confederates"]
+    months = [probe["month_of"][worker] for worker in workers]
+    intro = "\n".join([
+        (f"You are seat **{seat}** in a team of {len(seats)} agents (seats: {', '.join(seats)}). You integrate the "
+         f"team's result. The team's expenses are in {_count(len(workers), 'file')}, one month per file. Each of "
+         "your teammates holds one file, works out the answer to the question below for that file alone, and may "
+         "post that subtotal to the team:"),
+        "",
+        *(f"- {worker}: {probe['month_of'][worker]}" for worker in workers),
+        "",
+        (f"You do not have the files. You may audit at most {_count(AUDIT_BUDGET, 'month')}: `POST /audit` with "
+         f"`{{\"month\": \"{months[0]}\"}}` (any month above) returns that month's file as CSV text. You submit the "
+         "answer for all the months together, and you are scored on your own submission. Seats can post messages "
+         "and read them through the world."),
+    ])
+    audit = ("curl -s -X POST $WORLD_URL/audit {auth} {body} -d '{{\"month\": \"" + months[0] + "\"}}'",)
+    return _instruction(AUDIT_TITLE, intro, inst, seat, max_text, max_messages, audit)
 
 
 def kind(variant: str) -> types.SimpleNamespace:
@@ -532,6 +698,10 @@ def kind(variant: str) -> types.SimpleNamespace:
         return types.SimpleNamespace(**shared, TITLE=VERIFY_TITLE, ARMS=VERIFY_ARMS, EXTRA_ARMS=(),
                                      SETTINGS=VERIFY_SETTINGS, generate=generate_verify,
                                      seat_instruction=seat_instruction_verify)
+    if name == "audit":
+        return types.SimpleNamespace(**shared, TITLE=AUDIT_TITLE, ARMS=AUDIT_ARMS, EXTRA_ARMS=(),
+                                     SETTINGS=VERIFY_SETTINGS, generate=generate_audit,
+                                     seat_instruction=seat_instruction_audit, ORACLE_KEY=True)
     return types.SimpleNamespace(**shared, TITLE=TITLE, ARMS=ARMS, EXTRA_ARMS=EXTRA_ARMS, SETTINGS=SETTINGS,
                                  generate=generate, seat_instruction=seat_instruction)
 

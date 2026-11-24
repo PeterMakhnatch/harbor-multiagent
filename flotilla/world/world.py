@@ -66,7 +66,12 @@ from urllib.parse import parse_qs, urlsplit
 # test), before it handles that request, with message `t` = that request's time minus `before_s` (all offsets shrunk
 # by one factor if the request comes too early for the largest), so the posts look like they came a few seconds
 # before the seat started. Posts with `at_s` (version 13 builds) keep the world's clock. One task uses one of the two.
-WORLD_VERSION = 14
+# Version 15: audits. When task.json has `audit` ({"budget": n, "files": {month: csv text}}, the probe family's kind
+# `audit`), POST /audit {"month": "<month>"} returns {"month", "csv", "audits_left"} to a seat that task.json does not
+# list in `scripted_seats`, at most `budget` times per seat; a further audit gets 403 ("audit budget used"), a
+# scripted seat 403, an unknown month 400. Every attempt is an `audit` event (month, ok, status, left) and an entry of
+# `audits` in the state. Without the key /audit is an unknown path (404) and nothing else changes.
+WORLD_VERSION = 15
 SERVER = "world"  # the whole Server header: the host name that seats already use, no name and no version
 LOGS = Path(os.environ.get("FLOTILLA_LOGS", "/logs/world"))
 CONDITION = os.environ.get("FLOTILLA_CONDITION", "talk")
@@ -85,6 +90,7 @@ MAX_TEXT = int(os.environ.get("FLOTILLA_MAX_TEXT") or DEFAULT_MAX_TEXT)  # chara
 MAX_MESSAGES_PER_SEAT = int(os.environ.get("FLOTILLA_MAX_MESSAGES") or DEFAULT_MAX_MESSAGES)
 MAX_BODY = max(64_000, 8 * MAX_TEXT)  # bytes; a message at the text limit always fits
 MAX_SUBMIT_ATTEMPTS = 100
+MAX_AUDIT_ATTEMPTS = 100  # per seat, refusals included: the state's audit log stays bounded
 ANSWER_EVENT_BYTES = 1024
 UNATTRIBUTED_EVENT_LIMIT = 8
 ROUTES = {  # path -> methods
@@ -144,6 +150,35 @@ def _load_scheduled() -> tuple[list[dict[str, Any]], str, list[str], list[str]]:
 SCHEDULED, SCHEDULE_KEY, SCHEDULE_TRIGGERS, SCHEDULE_PROBLEMS = _load_scheduled()  # pending posts (_post_scheduled)
 
 
+def _load_audit() -> tuple[dict[str, Any] | None, list[str], list[str]]:
+    """The task's audit settings (version 15: {"budget", "files": {month: csv}}), the seats that may audit (those
+    task.json does not list in `scripted_seats`), and what is wrong (the world then refuses to start)."""
+    if not TASK_JSON_PATH.is_file():
+        return None, [], []
+    try:
+        task = json.loads(TASK_JSON_PATH.read_text())
+        audit, scripted = task.get("audit"), task.get("scripted_seats") or []
+    except (OSError, ValueError, AttributeError):
+        return None, [], [f"{TASK_JSON_PATH} is not a JSON object"]
+    if audit is None:
+        return None, [], []
+    files = audit.get("files") if isinstance(audit, dict) else None
+    budget = audit.get("budget") if isinstance(audit, dict) else None
+    if (not isinstance(files, dict) or not files or not all(isinstance(k, str) and k.strip() and isinstance(v, str)
+                                                            for k, v in files.items())
+            or isinstance(budget, bool) or not isinstance(budget, int) or budget < 0):
+        return None, [], ["audit is not {budget: whole number >= 0, files: {month: csv text}}"]
+    if len({month.strip().casefold() for month in files}) != len(files):
+        return None, [], ["two audit months differ only in case or spaces"]
+    auditors = [seat for seat in SEATS if seat not in scripted]
+    if not auditors:
+        return None, [], ["an audit needs a seat that is not in scripted_seats"]
+    return {"budget": budget, "files": files}, auditors, []
+
+
+AUDIT, AUDITORS, AUDIT_PROBLEMS = _load_audit()
+
+
 def _load_game() -> tuple[Any, dict[str, Any]]:
     if not GAME_PATH:
         return None, {}
@@ -168,6 +203,10 @@ if GAME is not None:
         "/state": ("GET",), GAME_ACTION: ("POST",), "/wait": ("GET",)}
 if ROUND_PROTOCOL is not None:
     ROUTES.update(dict.fromkeys(ROUND_PROTOCOL.paths, ("POST",)))
+if AUDIT is not None and GAME is not None:
+    AUDIT_PROBLEMS.append("audits are for answer-slot tasks, not games")
+if AUDIT is not None:
+    ROUTES["/audit"] = ("POST",)
 
 START = time.monotonic()
 LOCK = threading.Lock()
@@ -190,6 +229,9 @@ if GAME is not None:
     }
 if SUBMIT_GATE:
     STATE["gated_submissions"] = []  # {"seat", "answer", "t", "ids", "after"}: submissions the gate did not record
+if AUDIT is not None:
+    STATE["audits"] = []  # every audit attempt: {"seat", "month", "t", "ok", "status", "left", "attempts_before"}
+    STATE["audit_attempts"] = dict.fromkeys(SEATS, 0)
 _SEQ = [0]
 
 
@@ -244,7 +286,7 @@ def config_problems() -> list[str]:
         "the admin token is also a seat token" if ADMIN and ADMIN in tokens else "",
         "a token names a seat that is not in FLOTILLA_SEATS" if set(TOKENS.values()) - set(SEATS) else "",
     ]
-    return [problem for problem in problems if problem] + SCHEDULE_PROBLEMS
+    return [problem for problem in problems if problem] + SCHEDULE_PROBLEMS + AUDIT_PROBLEMS
 
 
 def expire() -> None:
@@ -677,11 +719,50 @@ class World(BaseHTTPRequestHandler):
             self._harvest(seat, body)
         elif ROUND_PROTOCOL is not None and path in ROUND_PROTOCOL.paths:
             self._round_action(path, seat, body)
+        elif path == "/audit":
+            self._audit(seat, body)
         else:  # /admin/freeze
             with LOCK:
                 STATE["frozen"] = True
                 record("freeze", "admin")
             self._reply(200, {"frozen": True})
+
+    def _audit(self, seat: str, body: dict[str, Any]) -> None:
+        """Version 15: one month's file for a seat under test, within its budget. Callers checked the route, so the
+        task has `audit`."""
+        assert AUDIT is not None, "the /audit route exists only with an audit config"
+        asked = body.get("month")
+        names = {month.strip().casefold(): month for month in AUDIT["files"]}
+        month = names.get(asked.strip().casefold()) if isinstance(asked, str) else None
+        with LOCK:
+            if STATE["frozen"]:
+                record("late", seat, {"path": "/audit"})
+                self._reply(409, {"error": "play has ended"})
+                return
+            STATE["audit_attempts"][seat] += 1
+            if STATE["audit_attempts"][seat] > MAX_AUDIT_ATTEMPTS:
+                if STATE["audit_attempts"][seat] == MAX_AUDIT_ATTEMPTS + 1:
+                    record("denied", seat, {"path": "/audit", "reason": "audit attempt limit"})
+                self._reply(429, {"error": f"limit of {MAX_AUDIT_ATTEMPTS} audit attempts per seat reached"})
+                return
+            used = sum(1 for entry in STATE["audits"] if entry["seat"] == seat and entry["ok"])
+            if seat not in AUDITORS:
+                status, reply = 403, {"error": "this seat cannot audit"}
+            elif month is None:
+                status, reply = 400, {"error": f'unknown month; send {{"month": "<month>"}} with one of: '
+                                               f'{", ".join(AUDIT["files"])}'}
+            elif used >= AUDIT["budget"]:
+                status, reply = 403, {"error": "audit budget used"}
+            else:
+                status, used = 200, used + 1
+                reply = {"month": month, "csv": AUDIT["files"][month], "audits_left": AUDIT["budget"] - used}
+            left = max(0, AUDIT["budget"] - used) if seat in AUDITORS else 0
+            entry = {"seat": seat, "month": month if month is not None else str(asked)[:64], "t": now(),
+                     "ok": status == 200, "status": status, "left": left,
+                     "attempts_before": STATE["submit_attempts"][seat]}
+            STATE["audits"].append(entry)
+            record("audit", seat, {key: entry[key] for key in ("month", "ok", "status", "left")})
+        self._reply(status, reply)
 
     def _deny_messaging(self, seat: str) -> bool:
         if MESSAGING:
@@ -876,7 +957,9 @@ def serve(host: str = "0.0.0.0", port: int = 8080) -> ThreadingHTTPServer:
                                                       "read_gate": READ_GATE}
                                                      if GAME is not None else {})
                                | ({"submit_gate": True} if SUBMIT_GATE else {})
-                               | ({"scheduled_posts": len(SCHEDULED), "scheduled_by": SCHEDULE_KEY} if SCHEDULED else {}))
+                               | ({"scheduled_posts": len(SCHEDULED), "scheduled_by": SCHEDULE_KEY} if SCHEDULED else {})
+                               | ({"audit_budget": AUDIT["budget"], "audit_months": len(AUDIT["files"])}
+                                  if AUDIT is not None else {}))
     return server
 
 

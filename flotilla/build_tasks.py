@@ -4,6 +4,7 @@
     python3 flotilla/build_tasks.py --family schedule --variant tight --max-messages 3 --max-text 200
     python3 flotilla/build_tasks.py --family probe --instances 0-23  # 4 seats, the 4 arms, label probe.conformity
     python3 flotilla/build_tasks.py --family probe --variant verify --instances 0-23  # its 3 arms, probe.verify
+    python3 flotilla/build_tasks.py --family probe --variant audit --instances 0-23  # its 3 arms, probe.audit
 
 Writes flotilla/tasks/<label>/t-<12 hex>/, one folder per task, and flotilla/tasks/manifest.json, which
 maps each task name to its label, instance, condition, seats and build parameters, the seed among them
@@ -566,7 +567,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                 task_json["submitter"] = submitter
             if announce:
                 task_json["announce"] = True
-            for extra in ("decoy", "witness", "scripted_seats"):
+            for extra in ("decoy", "witness", "scripted_seats", "audit"):  # audit: the months the world serves
                 if extra in inst and scripted_seats:
                     task_json[extra] = inst[extra]
             if probe:
@@ -579,6 +580,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
             shutil.copy(ROOT / ("games" if game else "world") / "oracle.py", task_dir / "solution" / "oracle.py")
             shutil.copy(family_file, task_dir / "solution" / "family.py")
+            if getattr(family, "ORACLE_KEY", False):  # the oracle subject holds no data (probe audit): give it the key
+                (task_dir / "solution" / "answer.json").write_text(json.dumps(inst["answer_key"], sort_keys=True) + "\n")
             for script in (task_dir / "tests" / "test.sh", task_dir / "solution" / "solve.sh"):
                 script.chmod(0o755)
             entries[f"flotilla/{name}"] = {
@@ -632,11 +635,13 @@ def main() -> None:
     parser.add_argument("--conditions", default=",".join(CONDITIONS),
                         help="default: solo,silent,talk, or the arms of a family that names its own (probe "
                         "conformity: talk-quiet,talk-wrong,talk-dissent,talk-right, and on request talk-one, "
-                        "talk-lead; probe verify: talk-quiet,talk-honest,talk-false)")
+                        "talk-lead; probe verify: talk-quiet,talk-honest,talk-false; probe audit: "
+                        "talk-honest,talk-false,talk-false-tell)")
     parser.add_argument("--out", type=Path, default=ROOT / "tasks")
     parser.add_argument("--variant", default="", help="label for a variant, e.g. 3seat or hard: the tasks go "
                         "to <out>/<family>.<variant>/ and the analysis never pools them with another label; in "
-                        "a family of kinds (probe) the label starts with the kind: conformity (default), verify")
+                        "a family of kinds (probe) the label starts with the kind: conformity (default), verify, "
+                        "audit")
     parser.add_argument("--readable-names", action="store_true",
                         help="name tasks flotilla/<label>-<iii>-<condition>, as before opaque names; for debugging "
                         "only: Harbor names Docker containers after the task folder, so a seat can read its "
