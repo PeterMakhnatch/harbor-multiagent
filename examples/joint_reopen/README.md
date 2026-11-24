@@ -14,6 +14,47 @@ uv run harbor trial start -c examples/joint_reopen/sample-trial.yaml
 
 To test regular agents, copy the config. Set each participant's native `name` and `model_name`, keep distinct `seat` values, and remove `JR_POLICY`. Configure credentials through the approved provider adapter outside the task. The world and the verifier need no provider credentials. Record the exact task checksum, roster, exposure limit, and first attempts before a model study. A configured model name is not proof of which model served a turn.
 
+## Bring your own decision loop
+
+Use this when you want each participant, rather than the benchmark, to decide whether to inspect its card or ask for the other report. A native [roster](samples/owner-team.json) maps each role to `JointOwnerSeat`. Run one complete team with the supplied scripted programs:
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+export JOINT_REOPEN_EAST_OWNER="$PWD/examples/joint_reopen/scripted_owner.py"
+export JOINT_REOPEN_WEST_OWNER="$PWD/examples/joint_reopen/scripted_owner.py"
+space=$(mktemp -d)
+reg=examples/joint_reopen/samples/owner-registration.json
+uv run python -m examples.joint_reopen.study emit "$reg" --out "$space/east-west" --shard 0/12
+cfg=$(python3 -BS -m examples.native_worklist take --study "$reg" "$space/east-west" 0/12)
+trial="$space/east-west/trials/$(basename "$cfg" .json)"
+uv run harbor trial start -c "$cfg"
+```
+
+To use another harness, point each variable at an absolute executable path. The program receives one JSON object on stdin per decision. It returns one JSON object on stdout: `{"schema":"harbor.joint-reopen.choice/v1","requested":"…","choice":"…","served_model":null}`. Echo the request's `requested` identifier and select an entry from `view.choices`. Use `null` for `served_model` unless the program can name the model. The identifier is self-reported.
+
+The view contains the role, provisional slot, public options, turn, stage, and what this seat actually requested. `card` and `inbox` start as `null`. An inbox returned empty is different from an inbox withheld. A truthful report, an empty report, another legal report, an optional read, a final vote, and a deliberate stop are all real choices. No strategic action happens automatically. A missing executable is a seat error, not a vote or a stop.
+
+The host executable is trusted. It receives no seat token, provider key, peer path or study setting through this interface. A shared host user, filesystem, session store or network can still connect the programs outside the world. Isolate these when measuring communication. A new process starts each turn; the view carries the seat's task state. The command does not start a paid model by itself.
+
+### Inspect an unfinished team
+
+Run this command from the same checkout, in another terminal, while Harbor runs:
+
+```bash
+python3 -BS -m examples.joint_reopen.progress "$trial" --json
+```
+
+Pass the native trial directory, not its `trials` parent. The reader shows the last marker from each instrumented seat. `owner_turn` means the adapter requested a decision. `request` names an action it is about to attempt. `barrier` means the world had not yet reached the named phase on a status check. `confirmed` lists actions the world accepted. It includes no card, report, vote contents or seed.
+
+A marker can outlive its process. It does not establish that the process is alive, why the partner is slow, or whether the team is deadlocked. The two markers are separate snapshots, not a simultaneous world event. Stock participants do not produce them. `not_observed` is not inactivity. A present `result.json` is not a verified reward.
+
+After the run, use `collect` below. Its optional `owner_evidence.roles[ROLE]` compares the declared decisions with that seat's ordered world actions. A matched receipt does not authenticate a model or prove it used a report. Evidence can be missing or inconsistent without changing the native grade.
+
+**Qualification history.** The [first registration](samples/owner-registration.json) and its [predictions](samples/owner-predictions.json) precede the harness run. Its first 2 reserved tickets stopped at adapter import, before Harbor created a trial directory. The public instructions exceeded their 1,024-byte limit. The other 10 tickets were not reserved. This qualification failed; neither missing result is a grade.
+
+The [repair registration](samples/owner-repair-registration.json) is a separate qualification. It changes only the ticket IDs. In row order it inherits all 12 predictions, interventions, and pass conditions from the first registration. It keeps the original task checksum, rosters, calendars, report treatment and verifier. The repaired public instructions fit in 755 ASCII bytes. Neither qualification uses a model.
+
 ## Register a private study for your own harness
 
 The 32 public controls are for qualification. Do not use their two published seeds to measure model performance. A new registration can cover every private card layout for one public incumbent, without oversampling layouts where both seats guess the same fallback.

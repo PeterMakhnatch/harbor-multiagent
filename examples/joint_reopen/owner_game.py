@@ -39,21 +39,18 @@ REPORTS: tuple[tuple[str, ...], ...] = tuple(
 )
 MAX_CHOICES = len(REPORTS) + 2
 PUBLIC_INSTRUCTIONS = (
-    "Two seats, east and west, hold one provisional meeting booking, the "
-    "incumbent, among slots A to F. Each seat sees only its own availability "
-    "card; the teammate card is private. Score: 1 only if both sealed votes "
-    "name the same right slot, otherwise 0. If both seats can still work the "
-    "incumbent, the incumbent is the right slot and any other slot scores 0. "
-    "If either seat cannot, exactly one other slot works for both and that "
-    "slot is the right one. A split or missing vote scores 0. Stages: endorse "
-    "the incumbent, send one report, cast one vote. card returns your own "
-    "current card. report:- sends an empty report (a pass); report:ACE sends "
-    "slots A, C and E. Reports are not checked against cards. inbox requests "
-    "the teammate report: delivered true shows its slots (an empty list is a "
-    "pass); delivered false means the world withheld its content, not that the "
-    "teammate passed. A null inbox means you have not requested it. Each read "
-    "is offered once. stop ends your play without further actions. Reply with "
-    "exactly one of the offered choices."
+    "You and your teammate must keep or repair a booking in slots A to F. "
+    "You each have a private calendar. Score 1 only if both sealed votes "
+    "name the right slot. Keep the incumbent if both can attend. Otherwise, "
+    "exactly one other slot works for both. A split or missing vote scores 0. "
+    "First endorse the incumbent, then send one report, then vote. "
+    "card requests your updated calendar. report:- sends an empty report; "
+    "report:ACE sends A, C and E. You may send any offered report. "
+    "inbox requests the other report. A null inbox means you did not ask. "
+    "If delivered is true, slots contains the report; [] is an empty report. "
+    "If delivered is false, the world withheld its contents. "
+    "Each read is available once. stop ends your play. "
+    "Return exactly one offered choice."
 )
 
 assert len(REPORTS) == 42 and REPORTS[0] == ()
