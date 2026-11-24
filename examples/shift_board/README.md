@@ -116,3 +116,5 @@ Can a guarded write protect a good proposal without blocking the other seat's va
 The numbers are team rewards, one paired observation per cell. In the first row the guard protected a correct answer **and blocked a repair**. Combining the two fixtures hides both effects. In the third row it prevented the stale write but not the deliberate replacement. Report both fixture types and the dispatcher's action after a conflict, not just the average reward. None of these controls estimates how a model changes its behavior.
 
 The [stock scheduling archive](../seat_handoffs/README.md#what-this-recovered-from-model-teams) provides the motivation. The archived teams sometimes repaired a teammate's answer and sometimes replaced a correct one. They did not run this board rule. The standalone YAML example also ran once on a different seed; it is outside the 16 registered trials.
+
+To measure the standing grade when a native seat returns, use the [seat return checkpoint](../seat_checkpoints/README.md). It records world markers without stopping the dispatcher or comparing two clocks.
