@@ -13,9 +13,6 @@ services:
   main:
     command: ["python3", "/app/world.py"]
     init: true
-    environment:
-      HANDOFF_VARIANT: ${HANDOFF_VARIANT:-replace}
-      HANDOFF_SEED: ${HANDOFF_SEED:-0}
     volumes:
       - reporter-token:/run/reporter
       - booker-token:/run/booker

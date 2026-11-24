@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -21,6 +22,9 @@ EDGES = [
 ]
 SLOTS = frozenset(("A", "B", "C"))
 MESSAGES = ("initial", "revision")
+VARIANTS = frozenset(("replace", "confirm"))
+MAX_SEED = 1_000_000
+MAX_SEED_DIGITS = len(str(MAX_SEED))
 MAX_FILE_BYTES = 16384
 MAX_LINE_BYTES = 1024
 MAX_EVENTS = 8
@@ -68,10 +72,32 @@ class Cut:
 
 
 @dataclass(frozen=True)
+class Fixture:
+    variant: str
+    seed: int
+
+    def __post_init__(self) -> None:
+        if self.variant not in VARIANTS:
+            raise WorldEvidenceError("expected world fixture is invalid")
+        if type(self.seed) is not int or not 0 <= self.seed <= MAX_SEED:
+            raise WorldEvidenceError("expected world fixture is invalid")
+
+
+@dataclass(frozen=True)
 class Grade:
     reward: int
     sealed: bytes
     decision: dict[str, object]
+
+
+def expected_fixture(environ: Mapping[str, str]) -> Fixture:
+    variant = environ.get("HANDOFF_VARIANT")
+    seed = environ.get("HANDOFF_SEED")
+    if variant is None or seed is None:
+        raise WorldEvidenceError("expected world fixture is missing")
+    if not (seed.isascii() and seed.isdigit() and len(seed) <= MAX_SEED_DIGITS):
+        raise WorldEvidenceError("expected world fixture is invalid")
+    return Fixture(variant, int(seed))
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -192,7 +218,7 @@ def _slot(value: object, nullable: bool, field: str) -> str | None:
     return value
 
 
-def _check_state(state: dict[str, object], facts: LogFacts) -> None:
+def _check_state(state: dict[str, object], facts: LogFacts, expected: Fixture) -> None:
     if set(state) != STATE_KEYS:
         raise WorldEvidenceError("world state has unexpected fields")
     if state["fault"] is not None:
@@ -201,19 +227,23 @@ def _check_state(state: dict[str, object], facts: LogFacts) -> None:
         raise WorldEvidenceError("world state is not frozen")
     if state["run"] != facts.run:
         raise WorldEvidenceError("world state and handoff log name different runs")
-    events, seed = state["events"], state["seed"]
+    events = state["events"]
     if (
         not isinstance(events, int)
         or isinstance(events, bool)
         or events != facts.events
     ):
         raise WorldEvidenceError("world state and handoff log disagree on events")
-    if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
-        raise WorldEvidenceError("world state seed is invalid")
+    if (
+        type(state["seed"]) is not int
+        or state["seed"] != expected.seed
+        or type(state["variant"]) is not str
+        or state["variant"] != expected.variant
+    ):
+        raise WorldEvidenceError("world fixture does not match the expected fixture")
     initial = _slot(state["initial"], False, "initial")
     final = _slot(state["final"], False, "final")
-    expected_same = {"confirm": True, "replace": False}.get(str(state["variant"]))
-    if expected_same is None or (initial == final) != expected_same:
+    if (initial == final) != (expected.variant == "confirm"):
         raise WorldEvidenceError("world state truth does not match its variant")
     draft = _slot(state["draft"], True, "draft")
     commit = _slot(state["commit"], True, "commit")
@@ -226,12 +256,12 @@ def _check_state(state: dict[str, object], facts: LogFacts) -> None:
         raise WorldEvidenceError("a revision was sent before any draft")
 
 
-def grade(log: bytes, state_bytes: bytes, cut: Cut) -> Grade:
+def grade(log: bytes, state_bytes: bytes, cut: Cut, expected: Fixture) -> Grade:
     facts = parse_log(log)
     if cut.run != facts.run or cut.events != facts.events:
         raise WorldEvidenceError("freeze cut does not match the handoff log")
     state = _object(state_bytes, "world state")
-    _check_state(state, facts)
+    _check_state(state, facts, expected)
     draft, commit, final = state["draft"], state["commit"], state["final"]
     reward = int(commit is not None and commit == final)
     closed = {"seq": facts.events, "type": "closed", "reward": reward}
@@ -292,8 +322,9 @@ def _publish(name: str, data: bytes) -> None:
 
 def main() -> int:
     try:
+        expected = expected_fixture(os.environ)
         cut = freeze_world()
-        result = grade(*_snapshot(), cut)
+        result = grade(*_snapshot(), cut, expected)
     except WorldEvidenceError as error:
         print(f"no grade: {error}", file=sys.stderr)
         return 1

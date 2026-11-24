@@ -20,6 +20,10 @@ timeout_sec = 600.0
 [environment]
 build_timeout_sec = 600.0
 
+[environment.env]
+HANDOFF_SEED = "0"
+HANDOFF_VARIANT = "replace"
+
 [agents.booker]
 
 [agents.reporter]

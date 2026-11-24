@@ -7,11 +7,12 @@ Can a booker revise its choice after a teammate receives new information? This i
 Use Docker and a checkout of this fork. From the repository root:
 
 ```bash
-HANDOFF_VARIANT=replace HANDOFF_SEED=39 uv run harbor trial start \
-  -c examples/configs/features/revised-dispatch-oracle.yaml
+uv run harbor trial start -c examples/configs/features/revised-dispatch-oracle.yaml
 ```
 
-Both participants use Harbor's scripted `oracle`. No provider key is required. Set `HANDOFF_VARIANT=confirm` with the same seed to keep the initial slot but remove the need to change it. Seeds range from 0 to 1000000. Record both settings with each run. To test a model, change a participant in a copy of the [config](../../configs/features/revised-dispatch-oracle.yaml). Leave the other participant as an oracle to test one seat at a time. Keep variants, seeds, and the verifier's decision file out of seat prompts.
+Both participants use Harbor's scripted `oracle`. No provider key is required. The [example config](../../configs/features/revised-dispatch-oracle.yaml) sets the seed to `"39"` and the variant to `"replace"` under `environment.env`. These are world inputs, not seat inputs. Harbor records the literal values in `lock.json`. Do not use `${...}` references or shell exports for fixture selection.
+
+To run a matched control, copy the config and change only `HANDOFF_VARIANT` to `"confirm"`. Keep `HANDOFF_SEED` the same; valid seeds range from 0 to 1000000. Each worker can use a separate config without changing the shell. To test one model seat, replace one `oracle` participant in a copy. Leave the other as an oracle. Never put the fixture or the verifier's decision file in a seat prompt.
 
 After Harbor prints the trial name, inspect that trial directory:
 

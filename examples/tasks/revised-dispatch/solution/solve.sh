@@ -8,6 +8,10 @@ import time
 from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
+EXPOSED = [name for name in ("HANDOFF_VARIANT", "HANDOFF_SEED") if name in os.environ]
+if EXPOSED:
+    raise RuntimeError(f"seat environment exposes {', '.join(EXPOSED)}; refusing to run")
+
 BASE = "http://world:8080"
 SLOTS = frozenset(("A", "B", "C"))
 POLICIES = frozenset(("fresh", "stale", "late", "ignore", "unconfirmed"))
