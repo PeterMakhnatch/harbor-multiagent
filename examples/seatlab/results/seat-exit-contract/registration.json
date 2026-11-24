@@ -1,0 +1,52 @@
+{
+  "schema": "seatlab.native-disposition-control/v1",
+  "question": "When a native seat finishes without its own exception, can an operator distinguish its return from a supervisor stop and unsolicited task cancellation?",
+  "population": "8 first attempts, not a model cohort. 7 controlled native hello-seats cases plus an unmodified two-oracle ship-handover task. 2 seats per attempt. No models or external services.",
+  "roles": {
+    "hello-seats": {
+      "p1": "under_test",
+      "p2": "supporting"
+    },
+    "ship-handover": {
+      "outgoing": "under_test",
+      "relief": "under_test"
+    }
+  },
+  "expected": {
+    "support-held": {
+      "p1": "returned",
+      "p2": "stop_requested"
+    },
+    "support-returned": {
+      "p1": "returned",
+      "p2": "returned"
+    },
+    "support-self-cancel": {
+      "p1": "returned",
+      "p2": "cancelled"
+    },
+    "support-raised": {
+      "p1": "returned",
+      "p2": "raised"
+    },
+    "team-deadline": {
+      "p1": "stop_requested",
+      "p2": "stop_requested"
+    },
+    "trial-cancel": {
+      "p1": "stop_requested",
+      "p2": "stop_requested"
+    },
+    "support-swallows-stop": {
+      "p1": "returned",
+      "p2": "stop_requested"
+    },
+    "unmodified-ship-handover": {
+      "outgoing": "returned",
+      "relief": "returned"
+    }
+  },
+  "pass": "On available raw native receipts, correct dispositions for all 16 seats, an independent harness witness for each controlled boundary, native AgentTimeoutError for the deadline tested seat, no fabricated exit for older rows with the field absent, and no reward attributed from a helper exit. Missing attempts stay missing and fail full calibration.",
+  "scope": "A stop is a pending-task cancellation request, not proof of delivery, termination, inactivity, or a particular reward. A native trial can fail while its verifier score remains valid. The study holds no model and does not measure behavior rates.",
+  "retry": "Never repeat an appointed first attempt to replace an outcome. Spell out any unexercised case and new diagnostic attempts separately."
+}
