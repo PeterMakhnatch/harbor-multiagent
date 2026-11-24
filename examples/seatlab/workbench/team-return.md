@@ -56,5 +56,6 @@ For native jobs, [record the batch](../results/seat-event-stream/native-jobs/res
 | Two shipping workers without a shared filesystem | [Stage each worker and admit native starts](../../ship_handover/disconnected-workers.md). Try `verify ship-campaign` with the workbench. |
 | An observed team success and an unclear explanation | [Compare actions under indistinguishable relief views](../../ship_handover/receiver-options.md). `verify ship-receiver-options ship-receiver-archive` separates the handler census from actual native decisions. |
 | A private task checkout and an Oracle seat that cannot start | [Check the native private-upload comparison](../results/private-oracle-upload/results.md). A valid world grade does not prove a seat ran. |
+| A model bill, a partial team job or a proposed budget | [Account for each seat and attempt](team-account.md). Inspect saved evidence or quote the registered team without launching it. |
 
 You can run either source separately: `examples.seat_handoffs.work_report show` for the book, or `examples.seat_seals.workers show` for a plan and its packets. Share their digests over a trusted channel. These reports check internal consistency. They do not authenticate who produced the evidence or establish what a new model team will do.

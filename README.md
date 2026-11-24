@@ -28,6 +28,8 @@ To act on a participant's return instead of the final team reward, [watch a nati
 
 For a batch, [record each seat in a native `harbor run` job](examples/seatlab/results/seat-event-stream/native-jobs/results.md). If Harbor retries a slot, [keep each execution separately](examples/seatlab/results/seat-event-stream/native-jobs/retry/results.md). The retry report keeps a missing execution in the count and does not assign it a grade.
 
+To see which seats and retries account for the money, [inspect a saved team job or quote a locked plan](examples/seatlab/workbench/team-account.md). The operator separates harness estimates, token-priced usage and settled provider charges. It never starts a team.
+
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
 ```sh

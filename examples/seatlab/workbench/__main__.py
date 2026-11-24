@@ -14,7 +14,7 @@ from .catalog import STUDIES, Study
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = "seatlab.workbench/v1"
-USAGE = "python3.12 -BS -m examples.seatlab.workbench list | verify [STUDY ...]"
+USAGE = "python3.12 -BS -m examples.seatlab.workbench list | verify [STUDY ...] | account --help"
 STUDY_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 MODULE = re.compile(
     r"examples\.(?:seatlab(?:\.[a-z_][a-z0-9_]{0,63}){1,4}|ship_inflight\.replay|"
@@ -245,6 +245,10 @@ def _select(ids: list[str]) -> list[Study] | int:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["account"]:
+        from .team_account import main as account
+
+        return account(args[1:])
     if not args or args[0] not in ("list", "verify"):
         return _usage_error("unknown_command")
     if len(args) > 1 + MAX_ARGS:
