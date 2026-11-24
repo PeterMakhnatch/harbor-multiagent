@@ -1,0 +1,17 @@
+# Seat mode: one participant per seat. Generate the tasks first with
+# `uv run cooperbench --seats` (see README.md, Seat mode).
+jobs_dir: jobs
+n_attempts: 1
+timeout_multiplier: 1.0
+n_concurrent_trials: 1
+quiet: false
+environment:
+  type: docker
+  delete: true
+participants:
+  - seat: agent1
+    name: oracle
+  - seat: agent2
+    name: oracle
+datasets:
+  - path: datasets/cooperbench-seats
