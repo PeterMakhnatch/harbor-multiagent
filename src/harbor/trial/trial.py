@@ -1,5 +1,6 @@
 from typing import Any, override
 import asyncio
+import codecs
 import contextlib
 import hashlib
 import logging
@@ -103,6 +104,8 @@ TrialHookCallback = Callable[[TrialHookEvent], Awaitable[None]]
 
 _MAX_VERIFIER_ENV_SESSION_ID_LEN = 63
 _UNSET_BRIDGE_USER = object()
+# The scrub reads this many bytes of a file to skip binary files early.
+_SCRUB_SAMPLE_BYTES = 8192
 
 
 def check_trial_config(
@@ -1351,18 +1354,27 @@ class Trial(ABC):
             if not path.is_file() or path.is_symlink():
                 continue
             try:
+                # The sample is the binary filter: a NUL byte, or bytes that
+                # cannot start or continue UTF-8, skip the file. With
+                # final=False, a character cut at the end of the sample does
+                # not.
                 with path.open("rb") as file:
-                    sample = file.read(8192)
+                    sample = file.read(_SCRUB_SAMPLE_BYTES)
                 if b"\0" in sample:
                     continue
                 try:
-                    sample.decode("utf-8")
+                    codecs.getincrementaldecoder("utf-8")().decode(sample, final=False)
                 except UnicodeDecodeError:
                     continue
-                text = path.read_text()
+                # Bytes, not text mode: the locale's encoding and newline
+                # translation must not change anything but the secrets.
+                # surrogateescape round-trips bytes that are not UTF-8 later
+                # in the file, so such a file is scrubbed, not skipped, and
+                # each of those bytes stays as it is.
+                text = path.read_bytes().decode("utf-8", errors="surrogateescape")
                 scrubbed = scrub_file_text(path, text, ordered_secrets)
                 if scrubbed != text:
-                    path.write_text(scrubbed)
+                    path.write_bytes(scrubbed.encode("utf-8", errors="surrogateescape"))
             except (OSError, UnicodeDecodeError) as exc:
                 # Leave unreadable/unscrubbable files alone; don't delete them.
                 self.logger.debug(
