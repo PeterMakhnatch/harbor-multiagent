@@ -1,0 +1,619 @@
+{
+  "schema": "harbor.shipping.receiver-options/v1",
+  "worlds": {
+    "stock": {
+      "opaque": {
+        "received": {
+          "census": "valid",
+          "cases": [
+            "committed/original/deliver",
+            "committed/draft/deliver",
+            "dropped/original/deliver",
+            "dropped/draft/deliver"
+          ],
+          "trials": 16,
+          "views": [
+            "sha256:44e46976ae7010aa4c30b38c62049962c815bb46b40dc362061ba48da43086b0"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 1,
+                "committed/draft/deliver": 1,
+                "dropped/original/deliver": 0,
+                "dropped/draft/deliver": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 1,
+                "committed/draft/deliver": 1,
+                "dropped/original/deliver": 0,
+                "dropped/draft/deliver": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 0,
+                "committed/draft/deliver": 0,
+                "dropped/original/deliver": 1,
+                "dropped/draft/deliver": 1
+              }
+            },
+            "resume_received": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 1,
+                "committed/draft/deliver": 0,
+                "dropped/original/deliver": 1,
+                "dropped/draft/deliver": 1
+              }
+            }
+          },
+          "guaranteed": []
+        },
+        "empty": {
+          "census": "valid",
+          "cases": [
+            "committed/original/withhold",
+            "committed/draft/withhold",
+            "committed/null/deliver",
+            "committed/null/withhold",
+            "dropped/original/withhold",
+            "dropped/draft/withhold",
+            "dropped/null/deliver",
+            "dropped/null/withhold"
+          ],
+          "trials": 24,
+          "views": [
+            "sha256:d6ca9e7b7a25f5c2cb48fd154e08068a0e342058fa757ce04c15f7ddf612d2a2"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/withhold": 1,
+                "committed/draft/withhold": 1,
+                "committed/null/deliver": 1,
+                "committed/null/withhold": 1,
+                "dropped/original/withhold": 0,
+                "dropped/draft/withhold": 0,
+                "dropped/null/deliver": 0,
+                "dropped/null/withhold": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/withhold": 1,
+                "committed/draft/withhold": 1,
+                "committed/null/deliver": 1,
+                "committed/null/withhold": 1,
+                "dropped/original/withhold": 0,
+                "dropped/draft/withhold": 0,
+                "dropped/null/deliver": 0,
+                "dropped/null/withhold": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/withhold": 0,
+                "committed/draft/withhold": 0,
+                "committed/null/deliver": 0,
+                "committed/null/withhold": 0,
+                "dropped/original/withhold": 1,
+                "dropped/draft/withhold": 1,
+                "dropped/null/deliver": 1,
+                "dropped/null/withhold": 1
+              }
+            }
+          },
+          "guaranteed": []
+        }
+      },
+      "original_only": {
+        "received": {
+          "census": "valid",
+          "cases": [
+            "committed/original/deliver",
+            "dropped/original/deliver"
+          ],
+          "trials": 8,
+          "views": [
+            "sha256:44e46976ae7010aa4c30b38c62049962c815bb46b40dc362061ba48da43086b0"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 1,
+                "dropped/original/deliver": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 1,
+                "dropped/original/deliver": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 0,
+                "dropped/original/deliver": 1
+              }
+            },
+            "resume_received": {
+              "grades": [
+                1
+              ],
+              "cells": {
+                "committed/original/deliver": 1,
+                "dropped/original/deliver": 1
+              }
+            }
+          },
+          "guaranteed": [
+            "resume_received"
+          ]
+        },
+        "empty": {
+          "census": "valid",
+          "cases": [
+            "committed/original/withhold",
+            "dropped/original/withhold"
+          ],
+          "trials": 6,
+          "views": [
+            "sha256:d6ca9e7b7a25f5c2cb48fd154e08068a0e342058fa757ce04c15f7ddf612d2a2"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/withhold": 1,
+                "dropped/original/withhold": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/withhold": 1,
+                "dropped/original/withhold": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "committed/original/withhold": 0,
+                "dropped/original/withhold": 1
+              }
+            }
+          },
+          "guaranteed": []
+        }
+      }
+    },
+    "inflight": {
+      "opaque": {
+        "received": {
+          "census": "valid",
+          "cases": [
+            "settles/original/deliver",
+            "settles/draft/deliver",
+            "fails/original/deliver",
+            "fails/draft/deliver"
+          ],
+          "trials": 20,
+          "views": [
+            "sha256:44e46976ae7010aa4c30b38c62049962c815bb46b40dc362061ba48da43086b0"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "settles/draft/deliver": 1,
+                "fails/original/deliver": 0,
+                "fails/draft/deliver": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "settles/draft/deliver": 1,
+                "fails/original/deliver": 0,
+                "fails/draft/deliver": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 0,
+                "settles/draft/deliver": 0,
+                "fails/original/deliver": 1,
+                "fails/draft/deliver": 1
+              }
+            },
+            "resume_received": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "settles/draft/deliver": 0,
+                "fails/original/deliver": 0,
+                "fails/draft/deliver": 1
+              }
+            },
+            "replace_received": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "settles/draft/deliver": 0,
+                "fails/original/deliver": 1,
+                "fails/draft/deliver": 1
+              }
+            }
+          },
+          "guaranteed": []
+        },
+        "empty": {
+          "census": "valid",
+          "cases": [
+            "settles/original/withhold",
+            "settles/draft/withhold",
+            "settles/null/deliver",
+            "settles/null/withhold",
+            "fails/original/withhold",
+            "fails/draft/withhold",
+            "fails/null/deliver",
+            "fails/null/withhold"
+          ],
+          "trials": 24,
+          "views": [
+            "sha256:d6ca9e7b7a25f5c2cb48fd154e08068a0e342058fa757ce04c15f7ddf612d2a2"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/withhold": 1,
+                "settles/draft/withhold": 1,
+                "settles/null/deliver": 1,
+                "settles/null/withhold": 1,
+                "fails/original/withhold": 0,
+                "fails/draft/withhold": 0,
+                "fails/null/deliver": 0,
+                "fails/null/withhold": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/withhold": 1,
+                "settles/draft/withhold": 1,
+                "settles/null/deliver": 1,
+                "settles/null/withhold": 1,
+                "fails/original/withhold": 0,
+                "fails/draft/withhold": 0,
+                "fails/null/deliver": 0,
+                "fails/null/withhold": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/withhold": 0,
+                "settles/draft/withhold": 0,
+                "settles/null/deliver": 0,
+                "settles/null/withhold": 0,
+                "fails/original/withhold": 1,
+                "fails/draft/withhold": 1,
+                "fails/null/deliver": 1,
+                "fails/null/withhold": 1
+              }
+            }
+          },
+          "guaranteed": []
+        }
+      },
+      "original_only": {
+        "received": {
+          "census": "valid",
+          "cases": [
+            "settles/original/deliver",
+            "fails/original/deliver"
+          ],
+          "trials": 10,
+          "views": [
+            "sha256:44e46976ae7010aa4c30b38c62049962c815bb46b40dc362061ba48da43086b0"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "fails/original/deliver": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "fails/original/deliver": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 0,
+                "fails/original/deliver": 1
+              }
+            },
+            "resume_received": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "fails/original/deliver": 0
+              }
+            },
+            "replace_received": {
+              "grades": [
+                1
+              ],
+              "cells": {
+                "settles/original/deliver": 1,
+                "fails/original/deliver": 1
+              }
+            }
+          },
+          "guaranteed": [
+            "replace_received"
+          ]
+        },
+        "empty": {
+          "census": "valid",
+          "cases": [
+            "settles/original/withhold",
+            "fails/original/withhold"
+          ],
+          "trials": 6,
+          "views": [
+            "sha256:d6ca9e7b7a25f5c2cb48fd154e08068a0e342058fa757ce04c15f7ddf612d2a2"
+          ],
+          "problems": [],
+          "actions": {
+            "stop": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/withhold": 1,
+                "fails/original/withhold": 0
+              }
+            },
+            "close": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/withhold": 1,
+                "fails/original/withhold": 0
+              }
+            },
+            "fresh": {
+              "grades": [
+                0,
+                1
+              ],
+              "cells": {
+                "settles/original/withhold": 0,
+                "fails/original/withhold": 1
+              }
+            }
+          },
+          "guaranteed": []
+        }
+      }
+    }
+  },
+  "limits": [
+    "pinned role handlers and native verifiers called in process; HTTP framing, bearer checks, seat containers and models are not exercised",
+    "hidden cases are enumerated, never sampled or weighted; a grade set is a range, not a rate",
+    "the delivered value is one fixed public stand-in X; the draft case swaps the private identities, never the delivered bytes",
+    "explicit null handoffs keep the unswapped identity order; the relief view carries no reference in those cases",
+    "original_only is an assumed sender convention that filters hidden cases; it is not a signal in the relief view",
+    "view digests cover only relief GET /brief, /status and /inbox before the decision; outgoing replies and later reads are excluded",
+    "one accepted handoff and one irreversible relief move; not a bound on multi-turn team protocols",
+    "archived native cuts are not read; whether their grades fall inside these sets is a separate report that needs eligible evidence",
+    "a nonpass group is not assessed: its empty aggregate grades and guarantees are not proof of absence; per-case cells keep raw grades, null where no grade exists"
+  ],
+  "question": {
+    "path": "samples/receiver-options/question.json",
+    "sha256": "sha256:76a2384505c4295b22210602aca5437b8bc725abab23e33986681ae78812c299"
+  },
+  "trials": {
+    "stock": 40,
+    "inflight": 44
+  },
+  "census": "valid",
+  "predictions": [
+    {
+      "id": 1,
+      "text": "With a delivered opaque X and no sender convention, no one-step relief rule guarantees one parcel in either task. The same delivered bytes can denote different private objects.",
+      "expected": {
+        "stock": [],
+        "inflight": []
+      },
+      "found": {
+        "stock": [],
+        "inflight": []
+      },
+      "holds": true
+    },
+    {
+      "id": 2,
+      "text": "When the sender is guaranteed to hand over the original, resume(X) guarantees one parcel in stock and replace(X) guarantees it in-flight. This knowledge is a team convention, not a signal observable in X.",
+      "expected": {
+        "guaranteed": {
+          "stock": [
+            "resume_received"
+          ],
+          "inflight": [
+            "replace_received"
+          ]
+        },
+        "convention_views_match_opaque": {
+          "stock": true,
+          "inflight": true
+        }
+      },
+      "found": {
+        "guaranteed": {
+          "stock": [
+            "resume_received"
+          ],
+          "inflight": [
+            "replace_received"
+          ]
+        },
+        "convention_views_match_opaque": {
+          "stock": true,
+          "inflight": true
+        }
+      },
+      "holds": true
+    },
+    {
+      "id": 3,
+      "text": "With no received reference and no supplied fate, neither one-step team has a guaranteed rule, even under the original-only convention. At least one action earns 1 in some states.",
+      "expected": {
+        "stock/opaque": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        },
+        "stock/original_only": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        },
+        "inflight/opaque": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        },
+        "inflight/original_only": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        }
+      },
+      "found": {
+        "stock/opaque": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        },
+        "stock/original_only": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        },
+        "inflight/opaque": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        },
+        "inflight/original_only": {
+          "guaranteed": [],
+          "some_action_earns_1": true
+        }
+      },
+      "holds": true
+    }
+  ],
+  "verdict": "pass"
+}

@@ -4,6 +4,8 @@ Use [Ship Handover](../tasks/ship-handover/README.md) to test whether a change o
 
 To keep the same named team and change when the supplier settles, use [the two-world operator](two-worlds.md). It accepts worker packets independently and reports what the missing workers can still change.
 
+For a benchmark design check, [compare the actions available to the relief seat](receiver-options.md). A successful outcome does not establish that the same action was safe for every case the seat could see.
+
 ## Run one team
 
 Use this fork with its locked dependencies and a working local Docker environment. From the checkout root:
