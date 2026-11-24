@@ -179,3 +179,34 @@ python3.12 -BS -m examples.seatlab.workbench worker-plan check \
 `matches_reference` (exit `0`) returns the **worker-local** trial-lock keys. Keep those keys, not the coordinator’s local ones. After registration, pass them and the same concurrency and retry counts to `cohort-jobs --job-locks … --schedule …`. `different_plan` (exit `1`) withholds both keys. A wrong reference digest, a non-isolated reference, or an unreadable receipt returns exit `2`.
 
 The coordinator trusts the workers that issue these receipts. The digests identify inputs; they do not authenticate a worker or hide guessable settings. They do not pin Harbor, custom adapter code, container images, or a served model. Use the same known fork revision. A match does not authorize spending or prove what ran. Without an existing isolated reference, these receipts cannot establish that only one input differs.
+
+## Return results without sharing job directories
+
+Use `worker-result` when two workers keep their jobs on separate machines. Each worker needs the fork installed. The coordinator needs only this checkout and Python 3.12 or later. No command starts a team.
+
+At registration, keep **both** `lock.json` file digests independently of the workers' later returns. Send the same ordered pair of digests to both workers. Keep the trial input keys, copies, concurrency and retry limit from the checked plans. Do not take the expected values from the returned files.
+
+**Each worker:** Set `side` to your assigned `left` or `right`. Send only the receipt, not the native job directory:
+
+```sh
+umask 077
+"$py" -B -m examples.seatlab.workbench worker-result export "$my_job" \
+  --job-locks "$left_job_pin" "$right_job_pin" --side "$side" > "$my_receipt"
+```
+
+**Coordinator:** Use the plans and locks you held. This check runs without Harbor, either job directory, Docker or provider access:
+
+```sh
+python3.12 -BS -m examples.seatlab.workbench worker-result check \
+  "$exchange/left-result.json" "$exchange/right-result.json" \
+  --job-locks "$left_job_pin" "$right_job_pin" --pair "$left_key" "$right_key" \
+  --copies "$copies" --schedule "$concurrency" "$max_retries" --json
+```
+
+If the study requires START witnesses, have **both** workers supply `--starts "$my_start_archive"` on export. Add `--require-starts` on the check. A job with no START archive cannot establish start-time coverage. An absent result file yields no report, not a zero.
+
+The coordinator uses the same attribution rules as `cohort-jobs`. Exit `0` means both returns cover the planned finals, even if every grade is zero. Exit `3` means evidence is missing. Exit `1` means the returns conflict with each other or the plan; the check withholds both grade tallies. Exit `2` means a file or option is unusable.
+
+The receipts contain counts, grade categories, full trial input keys and the held lock digests. Job, execution, slot and build identifiers become comparison-specific tags. No raw task paths, prompts, traces, UUIDs or model names are needed. The tags are not encryption. The receipts are unsigned worker claims, not independent proof that code ran.
+
+**Try the saved example:** `python3.12 -BS -m examples.seatlab.workbench verify worker-result-return`. The two earlier three-seat jobs each produced one valid zero. The coordinator needed two files of 1,026 bytes each. We calculated their lock digests after the runs. In a separate software check, removing one saved final gave `incomplete`, not a zero. Changing both jobs to the same unplanned concurrency withheld both tallies. No new teams ran.

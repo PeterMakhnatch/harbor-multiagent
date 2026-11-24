@@ -44,6 +44,8 @@ Before assigning teams, [compare two unrun local trial configs](examples/seatlab
 
 Harbor applies one roster and one world configuration to a whole job. For a roster or channel comparison, [check two worker jobs](examples/seatlab/workbench/input-isolation.md#check-a-participant-or-channel-comparison-across-two-worker-jobs) against the planned inputs and repeat count. On separate machines, [exchange two small plan receipts](examples/seatlab/workbench/input-isolation.md#hand-a-planned-comparison-to-independent-workers) instead of private configs or paths. `ship-worker-plans` verifies a real handoff without starting either job.
 
+After the jobs finish, [compare returned results without copying either job directory](examples/seatlab/workbench/input-isolation.md#return-results-without-sharing-job-directories). Two saved three-seat jobs reproduce the native verdict from two small JSON files. Run `python3.12 -BS -m examples.seatlab.workbench verify worker-result-return`.
+
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 
 ```sh

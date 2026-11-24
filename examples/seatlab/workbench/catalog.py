@@ -32,6 +32,7 @@ _GATE = f"{_JOURNAL}/return-gate"
 _JOBS = f"{_JOURNAL}/native-jobs"
 _HISTORY = f"{_JOBS}/retry/indexed"
 _SHIP_PLANS = f"{_RESULTS}/ship-worker-plans"
+_NATIVE_RETURNS = f"{_RESULTS}/native-worker-returns"
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,6 +479,33 @@ STUDIES: tuple[Study, ...] = (
         report=f"{_RESULTS}/shipping-decision-pairs.json",
         exit_code=0,
         sha256="d52c94257d641c08f85b662f8da5dac7f8f1b974da269855cb792b7ec1f8d34b",
+    ),
+    Study(
+        id="worker-result-return",
+        question="Can two private three-seat jobs return their native grade coverage without exchanging job directories?",
+        kind="secondary-native-receipt-analysis",
+        guide="examples/seatlab/workbench/input-isolation.md",
+        module="examples.seatlab.workbench.worker_result",
+        argv=(
+            "check",
+            f"{_NATIVE_RETURNS}/left.json",
+            f"{_NATIVE_RETURNS}/right.json",
+            "--job-locks",
+            "sha256:5224d3b7e7637222587548c129e1527a3580ecbb28e272dd9a49bfcfeb694c19",
+            "sha256:a50834f66f193f3440de6c1cabc363a8b369830c493fd7307d1aca7cacefa633",
+            "--pair",
+            "sha256:d44a8235545f3d74a8a0fa3d12a3b890bdc8a6f932642ba1415a82e3f11bccc5",
+            "sha256:01349cd6890e750489a830c42d59727bfebf88b488201d43108dc40c5140811d",
+            "--copies",
+            "1",
+            "--schedule",
+            "1",
+            "0",
+            "--json",
+        ),
+        report=f"{_NATIVE_RETURNS}/matched.json",
+        exit_code=0,
+        sha256="995fb1fe44fa1e0d4ce29f998efb76878c4c57ae40cacfae66a7ebf4283ec78b",
     ),
 )
 
