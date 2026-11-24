@@ -33,6 +33,10 @@ The [native exit calibration](../results/seat-exit-contract/results.md) tests th
 Run `python3.12 -BS -m examples.seatlab.workbench verify seat-exit-contract` to reproduce the published result.
 The study itself exits 1: 7 of 8 attempts matched. The workbench succeeds when it reproduces that nonpass.
 
+The [live return-trigger comparison](../results/native-return-trigger/results.md) tests what the supervisor does with that signal.
+The old observer closed the board after 2 of 2 cancellations. The new observer closed it after neither cancellation.
+Both observers still closed it after both genuine returns. The average reward did not change.
+
 ## Bring your own work
 
 | If you have… | Start here |
