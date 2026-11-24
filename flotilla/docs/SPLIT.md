@@ -993,8 +993,9 @@ Peter added credit at 7:06 PM ET. The paused waves resumed at 7:07 PM ET, and lw
 (Amendment 1 of section 19). Final counts: xm1 192 trials, pv10 96, lw1 128, lwc 32 (xp1: section 21); every trial
 is harness-valid, none is truncated, and every model-arm misses at most 10% of its seat-rounds. A separate agent
 re-derived every count, pair, p value and decision in this section from the raw files with code that shares nothing
-with the analysis scripts (`/tmp/flotilla/rederive/derive.py`, extended for v11): 0 mismatches. Its own unread count
-also matches the `unread` that v11 logs on every lw1 and lwc action (0 mismatches).
+with the analysis scripts (`derive.py`, extended for v11): 0 mismatches. Its own unread count also matches the
+`unread` that v11 logs on every lw1 and lwc action (0 mismatches). The code, its reports and all trajectory readings
+of sections 20 and 21 are kept in research-context, `bridge/2026-11-19-flotilla/readings-2026-11-23/`.
 
 ### xm1, split part (section 15 as amended): FAIL
 
@@ -1109,7 +1110,7 @@ Test-retest of the talk arm (lw1 v11 against xm1 v9, same 16 instances, same ins
 the deal outcome agrees on 13 of 16 instances for Haiku (deals 11 against 8) and 9 of 16 for Luna (10 against 9).
 
 How the seats played (an independent reading of all 128 lw1 trials and the 6 smoke trials, with quotes;
-`/tmp/flotilla/lw1/readings/gate.md`):
+`readings-2026-11-23/lw1-gate.md`):
 
 1. **The gate turns a message on the wire into a counter-offer.** In 9 of the 11 gated-only deals, the 409 gave a
    seat the other seat's offer in round 1, and the seat changed its claim to fit it in the same round
@@ -1200,7 +1201,7 @@ cross-play 3); deals that give both seats at least their outside options are 26 
 cross-play (descriptive).
 
 How the seats played (an independent reading of all 144 trials, with quotes;
-`/tmp/flotilla/xp1/readings/crossplay.md`):
+`readings-2026-11-23/xp1-crossplay.md`):
 
 1. **The weak seat's reading decides cross-play deals.** As the weak seat in cross-play, DeepSeek claimed first in
    1 of 32 trials, Haiku in 17 and Luna in 27. DeepSeek made 17 round-1 deals, each after it read the strong seat's
