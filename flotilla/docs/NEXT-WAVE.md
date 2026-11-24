@@ -210,6 +210,9 @@ Pre-registered in PROBE.md section 14 (commit a542223d, with the amendments made
 trial); task sets `.flotilla-local/tasks/io1v` (`--inbox`) and `io1s` (`--read-first --post-trigger first_submit`),
 built from `rf1v`'s seed with the commands in section 14 (qa: 0 FAIL); plans `flotilla/plans/io1smoke.json`
 (24 trials, cap $0.10) and `io1.json` (384 trials, cap $0.90; expected cost $0.55-0.62).
+Amended 2026-11-24 11:45 ET (PROBE.md section 14): `io1` runs after `rr1`, on Luna and every `rr1` PASS model only.
+Before it runs, set `models` in `io1smoke.json` and `io1.json` to those models, set the `io1` cap to $0.30 per model,
+and change `io1_decide.py` to take the Holm family size from the plan and the reliance result from `rr1`.
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/io1smoke.json --run-dir .flotilla-local/runs/io1smoke
@@ -242,20 +245,36 @@ python3 flotilla/docs/results/scripts/probe_analysis.py .flotilla-local/jobs 'cr
 python3 flotilla/docs/results/scripts/cr1_decide.py --plan flotilla/plans/cr1.json /tmp/cr1.json
 ```
 
-### Order for an approved batch
+### Order for an approved batch (revised 2026-11-24 11:50 ET)
 
-Run the ready waves one at a time in this order. "Most" is the plans' OpenRouter caps plus Modal at about $0.0021
-per trial. Before each step, add its "most" to the spend so far (run logs, the key's usage, Modal's usage report),
-and do not start a step that could pass the approved total.
+Run one step at a time, and only after Peter approves its spend. "Most" is the plan's OpenRouter cap plus Modal at
+about $0.0021 per trial for every planned trial. Before each step, add its "most" to the spend so far (run logs,
+the key's usage, Modal's usage report), and do not start a step that could pass the approved total.
 
-| Step | Plans | Trials | Expected | Most |
-|---|---|---|---|---|
-| 1 | `io1smoke`, `io1` | 24 + 384 | about $1.4 | $1.86 |
-| 2 | `cards/tc1` | 552 | about $2.2 | $4.47 |
-| 3 | `cr1smoke`, `cr1` | 18 + 360 | about $1.6 | $2.19 |
-| 4 | `cards/tc2smoke`, `cards/tc2` | 30 + 1104 | about $4.5-7 (prompt caching or not) | $7.68 |
+| Step | Plans | Trials (most) | Expected | Most | What it decides |
+|---|---|---|---|---|---|
+| 1 | `rrs`, then `rr1` (PROBE.md section 16, staged) | 14 + 672 | $0.05 + about $0.75-1.05 (about 220 trials if 6 of 7 models stop at the first look) | $0.13 + $3.21 | Is read-first reliance common among low-cost models, or a Luna habit? |
+| 2 | `io1smoke`, `io1` on Luna and every `rr1` PASS model (section 14, amendment) | 8 + 128 per model | about $0.35-0.65 per model | about $0.60 per model | Is it the order of the inputs or the instruction? |
 
-Trust card waves (steps 2 and 4) run and report as `trust_card.py plan` prints; for `tc2`, run `tc2smoke` first:
+Deferred, because no decision depends on them before steps 1 and 2: `cards/tc1`, `cr1`, `cards/tc2`, audit budgets,
+`--policy-file`. `tc2` also needs a model swap first: `qwen/qwen3.8-flash` has no zero-data-retention endpoint, so
+this account gets 404 (OpenRouter's public list `GET /api/v1/endpoints/zdr`; none of the `:free` models has one
+either, so `--smoke` with `:free` models fails here too).
+
+Before step 1:
+- OpenRouter: the shared key had $0 of its $100 limit left at 09:39 ET and the account $6.91. Each run needs the $2
+  floor plus its cap. A Flotilla-only key (`FLOTILLA_OPENROUTER_API_KEY`, used first by the runner and the watch)
+  with its own daily limit keeps other lanes from draining the wave.
+- Sandboxes: Modal (the plans as committed; about 1 hour) or local Docker (`"env": "docker"`, `"concurrency": 2`;
+  $0 for sandboxes, several hours, and it holds both shared local slots). Change the plan before the first trial.
+
+```bash
+keys run -- python3 flotilla/run_wave.py flotilla/plans/rrs.json --run-dir .flotilla-local/runs/rrs
+# read validity only (flotilla-watch --blind); drop from rr1.json every model with an invalid smoke trial, commit
+keys run -- python3 flotilla/run_wave.py flotilla/plans/rr1.json --run-dir .flotilla-local/runs/rr1
+```
+
+The trust cards (section "Trust card" below) run and report as `trust_card.py plan` prints:
 
 ```bash
 keys run -- python3 flotilla/run_wave.py flotilla/plans/cards/tc1.json --run-dir .flotilla-local/runs/tc1 && \
