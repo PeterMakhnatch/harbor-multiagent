@@ -1,13 +1,16 @@
 """FastAPI server for the Harbor Viewer."""
 
 import asyncio
+import errno
 import functools
 import html
+import io
 import json
 import math
 import os
 from ipaddress import ip_address
 import shutil
+import stat
 import sys
 import tempfile
 from collections import Counter
@@ -17,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
+    BinaryIO,
     TypedDict,
     cast,
 )
@@ -31,6 +35,7 @@ from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -77,9 +82,11 @@ from harbor.viewer.task_scanner import TaskDefinitionScanner
 from harbor.viewer.trial_utils import (
     agent_name_from_config,
     reasoning_effort_from_config,
+    reasoning_effort_from_result,
     agent_name_from_result,
     model_info_from_model_name,
     partial_trial_result_from_config,
+    primary_agent_config,
     task_name_from_config,
     trial_summary_from_config,
 )
@@ -252,6 +259,101 @@ MEDIA_EXTENSIONS = {
 
 RECORDING_FILE_NAME = "recording.mp4"
 RECORDING_MEDIA_TYPE = "video/mp4"
+
+# An agent-logs entry whose file links outside the trial, or is not a
+# regular file when it is read.
+REFUSED_LOG = "[Access denied: not a regular file in the trial]"
+
+# POSIX can open each part of a path without following a link; Windows
+# cannot, and reads by name.
+_NO_FOLLOW_OPEN = (
+    os.open in os.supports_dir_fd
+    and hasattr(os, "O_NOFOLLOW")
+    and hasattr(os, "O_DIRECTORY")
+)
+
+
+def _trial_file(trial_dir: Path, path: Path) -> Path | None:
+    """The final path of ``path``, after links, if it is inside the trial;
+    otherwise None.
+
+    An agent's logs come from its container and can hold links, below a seat
+    or step root as well as at the trial's own ``agent/``. Open the returned
+    path with ``_open_trial_file``.
+    """
+    try:
+        target = path.resolve()
+    except (OSError, RuntimeError, ValueError):
+        # Python 3.12 raises RuntimeError for a link loop; a NUL byte raises
+        # ValueError.
+        return None
+    return target if trial_dir.resolve() in target.parents else None
+
+
+def _open_trial_file(trial_dir: Path, target: Path) -> BinaryIO | None:
+    """Open ``target``, a path that ``_trial_file`` returned, for reading
+    without following a link; None when it is not a regular file now.
+
+    From the trial folder down, each part of the path is opened from its
+    parent's descriptor with O_NOFOLLOW. A file or folder on the path that
+    became a link after the check, as it can in a live ``agent/`` mount,
+    then fails the open instead of redirecting it. O_NONBLOCK keeps a FIFO
+    from blocking the request. A missing file raises FileNotFoundError, as
+    open() does. Without O_NOFOLLOW and dir_fd (Windows), the file is opened
+    by name.
+    """
+    if not _NO_FOLLOW_OPEN:
+        file = target.open("rb")
+    else:
+        root = trial_dir.resolve()
+        parts = target.relative_to(root).parts
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in parts[:-1]:
+                child = os.open(
+                    part,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=directory,
+                )
+                os.close(directory)
+                directory = child
+            fd = os.open(
+                parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+            )
+        except OSError as exc:
+            # ELOOP: the file is a link now; ENOTDIR: a folder on its path is.
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                return None
+            raise
+        finally:
+            os.close(directory)
+        file = os.fdopen(fd, "rb")
+    if not stat.S_ISREG(os.fstat(file.fileno()).st_mode):
+        file.close()
+        return None
+    return file
+
+
+def _read_trial_bytes(trial_dir: Path, path: Path) -> bytes | None:
+    """The bytes of a regular file inside the trial, read without following a
+    link out of it; None when the path is missing, leaves the trial or is not
+    a regular file now.
+
+    Every reader of trial files goes through ``_trial_file`` and
+    ``_open_trial_file``, so a plain link out of the trial and a folder
+    swapped after the check both fail (fork PR #4 review, F3).
+    """
+    target = _trial_file(trial_dir, path)
+    if target is None:
+        return None
+    try:
+        file = _open_trial_file(trial_dir, target)
+    except FileNotFoundError:
+        return None
+    if file is None:
+        return None
+    with file:
+        return file.read()
 
 
 _LOOPBACK_HOSTNAMES = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -1281,12 +1383,41 @@ def _register_job_endpoints(
         if step is None:
             return trial_dir
         trial_resolved = trial_dir.resolve()
-        step_dir = (trial_dir / "steps" / step).resolve()
+        try:
+            step_dir = (trial_dir / "steps" / step).resolve()
+        except ValueError:
+            # A NUL byte, which no path can hold.
+            raise HTTPException(status_code=400, detail="Invalid step name")
         if trial_resolved not in step_dir.parents:
             raise HTTPException(status_code=400, detail="Invalid step name")
         if not step_dir.exists():
             raise HTTPException(status_code=404, detail=f"Step '{step}' not found")
         return step_dir
+
+    def _resolve_agent_root(
+        trial_dir: Path, step: str | None, seat: str | None
+    ) -> Path:
+        """Return the directory whose ``agent/`` holds the trajectory and logs.
+
+        ``seat`` selects one agent of a multi-agent trial, in
+        ``trial_dir/seats/{seat}`` (the trial result's ``seat_results`` names
+        them); otherwise this is ``_resolve_step_root``. A trial has seats or
+        steps, never both.
+        """
+        if seat is None:
+            return _resolve_step_root(trial_dir, step)
+        if step is not None:
+            raise HTTPException(status_code=400, detail="Pass step or seat, not both")
+        try:
+            seat_dir = (trial_dir / "seats" / seat).resolve()
+        except ValueError:
+            # A NUL byte, which no path can hold.
+            raise HTTPException(status_code=400, detail="Invalid seat name")
+        if seat_dir.parent != trial_dir.resolve() / "seats":
+            raise HTTPException(status_code=400, detail="Invalid seat name")
+        if not seat_dir.is_dir():
+            raise HTTPException(status_code=404, detail=f"Seat '{seat}' not found")
+        return seat_dir
 
     def _find_trial_recording(trial_dir: Path) -> tuple[Path, str] | None:
         """Find an OSWorld-style trial recording under agent/recording.mp4."""
@@ -1775,7 +1906,9 @@ def _register_job_endpoints(
                 if not config:
                     continue
                 agent_name = agent_name_from_config(config)
-                model_info = model_info_from_model_name(config.agent.model_name)
+                model_info = model_info_from_model_name(
+                    primary_agent_config(config).model_name
+                )
                 source = config.task.source
                 task_name = task_name_from_config(config)
                 key = (
@@ -1987,9 +2120,10 @@ def _register_job_endpoints(
         efforts = []
         for name in scanner.list_trials(job_name):
             result = scanner.get_trial_result(job_name, name)
-            config = (
-                result.config if result else scanner.get_trial_config(job_name, name)
-            )
+            if result is not None:
+                efforts.append(reasoning_effort_from_result(result))
+                continue
+            config = scanner.get_trial_config(job_name, name)
             if config:
                 efforts.append(reasoning_effort_from_config(config))
         options = filter_options(_get_all_task_summaries(job_name), efforts)
@@ -2191,7 +2325,7 @@ def _register_job_endpoints(
                     source=result.source,
                     agent_name=result_agent_name,
                     reported_agent_name=result.agent_info.name,
-                    reasoning_effort=reasoning_effort_from_config(result.config),
+                    reasoning_effort=reasoning_effort_from_result(result),
                     model_provider=model_info.provider if model_info else None,
                     model_name=model_info.name if model_info else None,
                     reward=reward,
@@ -2404,8 +2538,12 @@ def _register_job_endpoints(
         job_name: str,
         trial_name: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
+        seat: str | None = Query(
+            default=None, description="Seat of a multi-agent trial to scope to"
+        ),
     ) -> dict[str, Any] | None:
-        """Get trajectory.json content for a trial (optionally a specific step)."""
+        """Get trajectory.json content for a trial (optionally a specific step,
+        or a specific seat of a multi-agent trial)."""
         trial_dir = _validate_trial_path(job_name, trial_name)
         if not trial_dir.exists():
             raise HTTPException(
@@ -2413,17 +2551,24 @@ def _register_job_endpoints(
                 detail=f"Trial '{trial_name}' not found in job '{job_name}'",
             )
 
-        root = _resolve_step_root(trial_dir, step)
-        trajectory_path = root / "agent" / "trajectory.json"
-        if not trajectory_path.exists():
-            return None
-
+        root = _resolve_agent_root(trial_dir, step, seat)
+        trajectory_path = _trial_file(trial_dir, root / "agent" / "trajectory.json")
+        if trajectory_path is None:
+            raise HTTPException(status_code=403, detail="Access denied")
         try:
-            return json.loads(trajectory_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=500, detail="Failed to parse trajectory.json"
-            )
+            file = _open_trial_file(trial_dir, trajectory_path)
+        except FileNotFoundError:
+            return None
+        if file is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        with io.TextIOWrapper(file, encoding="utf-8") as text_file:
+            try:
+                return json.loads(text_file.read())
+            except json.JSONDecodeError:
+                raise HTTPException(
+                    status_code=500, detail="Failed to parse trajectory.json"
+                )
 
     @app.get("/api/jobs/{job_name}/trials/{trial_name}/interaction")
     def get_interaction(
@@ -2447,12 +2592,13 @@ def _register_job_endpoints(
         root = _resolve_step_root(trial_dir, step)
 
         def read_text(path: str | None) -> str | None:
-            if path is None or not (root / path).is_file():
+            if path is None:
                 return None
             try:
-                return (root / path).read_text()
+                data = _read_trial_bytes(trial_dir, root / path)
             except OSError as error:
                 raise HTTPException(500, f"Failed to read {path}: {error}") from error
+            return None if data is None else data.decode()
 
         user = artifacts.json_object(
             read_text("user-agent/trajectory.json"), "user-agent trajectory"
@@ -2503,10 +2649,9 @@ def _register_job_endpoints(
         verifier_dir = _resolve_step_root(trial_dir, step) / "verifier"
 
         def _read_text(path: Path) -> str | None:
-            if not path.exists():
-                return None
             try:
-                return path.read_text()
+                data = _read_trial_bytes(trial_dir, path)
+                return None if data is None else data.decode()
             except Exception:
                 return "[Error reading file]"
 
@@ -2543,6 +2688,10 @@ def _register_job_endpoints(
         def scan_dir(dir_path: Path, relative_base: str = "") -> None:
             try:
                 for item in sorted(dir_path.iterdir()):
+                    if (
+                        item.is_symlink()
+                    ):  # a linked folder could list names outside the trial
+                        continue
                     relative_path = (
                         f"{relative_base}/{item.name}" if relative_base else item.name
                     )
@@ -2632,7 +2781,7 @@ def _register_job_endpoints(
         trial_name: str,
         file_path: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
-    ) -> PlainTextResponse | FileResponse:
+    ) -> PlainTextResponse | StreamingResponse:
         """Get content of a file in a trial directory.
 
         For text files, returns PlainTextResponse with the content.
@@ -2678,8 +2827,17 @@ def _register_job_endpoints(
         size_limit = (
             MAX_MEDIA_FILE_SIZE if suffix in MEDIA_EXTENSIONS else MAX_FILE_SIZE
         )
-        file_size = full_path.stat().st_size
+        # Read from a descriptor opened without following a link: a folder
+        # swapped after the check above fails the open (fork PR #4 review, F3).
+        try:
+            file = _open_trial_file(trial_dir, full_path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found")
+        if file is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+        file_size = os.fstat(file.fileno()).st_size
         if file_size > size_limit:
+            file.close()
             raise HTTPException(
                 status_code=413,
                 detail=f"File too large: {_format_size(file_size)} (max {_format_size(size_limit)})",
@@ -2687,16 +2845,26 @@ def _register_job_endpoints(
 
         # Handle image files - serve as binary with correct media type
         if suffix in MEDIA_EXTENSIONS:
-            return FileResponse(
-                path=full_path,
+
+            def chunks() -> Iterable[bytes]:
+                with file:
+                    while chunk := file.read(1 << 16):
+                        yield chunk
+
+            return StreamingResponse(
+                chunks(),
                 media_type=MEDIA_EXTENSIONS[suffix],
-                filename=full_path.name,
+                headers={
+                    "Content-Length": str(file_size),
+                    "Content-Disposition": f'attachment; filename="{full_path.name}"',
+                },
             )
 
         # For text files, read and return as plain text
+        with file:
+            data = file.read()
         try:
-            content = full_path.read_text()
-            return PlainTextResponse(content)
+            return PlainTextResponse(data.decode())
         except UnicodeDecodeError:
             raise HTTPException(
                 status_code=415, detail="File is binary and cannot be displayed"
@@ -2725,8 +2893,9 @@ def _register_job_endpoints(
         manifest_path = artifacts_dir / "manifest.json"
         if manifest_path.exists():
             try:
-                manifest = json.loads(manifest_path.read_text())
-            except (json.JSONDecodeError, OSError):
+                data = _read_trial_bytes(trial_dir, manifest_path)
+                manifest = json.loads(data) if data is not None else None
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError):
                 manifest = None
 
         # Scan artifacts directory for files, excluding manifest.json
@@ -2735,6 +2904,10 @@ def _register_job_endpoints(
         def scan_dir(dir_path: Path, relative_base: str = "") -> None:
             try:
                 for item in sorted(dir_path.iterdir()):
+                    if (
+                        item.is_symlink()
+                    ):  # a linked folder could list names outside the trial
+                        continue
                     relative_path = (
                         f"{relative_base}/{item.name}" if relative_base else item.name
                     )
@@ -2762,6 +2935,9 @@ def _register_job_endpoints(
         job_name: str,
         trial_name: str,
         step: str | None = Query(default=None, description="Step name to scope to"),
+        seat: str | None = Query(
+            default=None, description="Seat of a multi-agent trial to scope to"
+        ),
     ) -> dict[str, Any]:
         """Get agent log files (oracle.txt, setup/stdout.txt, command-*/stdout.txt)."""
         trial_dir = _validate_trial_path(job_name, trial_name)
@@ -2771,7 +2947,7 @@ def _register_job_endpoints(
                 detail=f"Trial '{trial_name}' not found in job '{job_name}'",
             )
 
-        root = _resolve_step_root(trial_dir, step)
+        root = _resolve_agent_root(trial_dir, step, seat)
         agent_dir = root / "agent"
         logs: dict[str, Any] = {
             "oracle": None,
@@ -2781,37 +2957,41 @@ def _register_job_endpoints(
             "analysis": None,
         }
 
-        # Read analysis.md if it exists (always trial-level)
-        analysis_path_md = trial_dir / "analysis.md"
-        if analysis_path_md.exists():
+        def read_log(path: Path) -> str | None:
+            """A log file's text, None if it is absent, or a marker when it is
+            refused or cannot be read. A refused file does not hide the other
+            logs."""
+            target = _trial_file(trial_dir, path)
+            if target is None:
+                return REFUSED_LOG
             try:
-                logs["summary"] = analysis_path_md.read_text()
+                file = _open_trial_file(trial_dir, target)
+                if file is None:
+                    return REFUSED_LOG
+                with io.TextIOWrapper(file) as text_file:
+                    return text_file.read()
+            except FileNotFoundError:
+                return None
             except Exception:
-                logs["summary"] = "[Error reading file]"
+                return "[Error reading file]"
 
-        # Read analysis.json if it exists (structured analysis from harbor analyze)
-        analysis_path = trial_dir / "analysis.json"
-        if analysis_path.exists():
+        # analysis.md is trial-level.
+        logs["summary"] = read_log(trial_dir / "analysis.md")
+
+        # Structured analysis from harbor analyze; it stays None when absent,
+        # refused or unreadable.
+        analysis_path = _trial_file(trial_dir, trial_dir / "analysis.json")
+        if analysis_path is not None:
             try:
-                logs["analysis"] = json.loads(analysis_path.read_text())
+                file = _open_trial_file(trial_dir, analysis_path)
+                if file is not None:
+                    with io.TextIOWrapper(file) as text_file:
+                        logs["analysis"] = json.loads(text_file.read())
             except Exception:
                 logs["analysis"] = None
 
-        # Read oracle.txt if it exists
-        oracle_path = agent_dir / "oracle.txt"
-        if oracle_path.exists():
-            try:
-                logs["oracle"] = oracle_path.read_text()
-            except Exception:
-                logs["oracle"] = "[Error reading file]"
-
-        # Read setup/stdout.txt if it exists
-        setup_stdout_path = agent_dir / "setup" / "stdout.txt"
-        if setup_stdout_path.exists():
-            try:
-                logs["setup"] = setup_stdout_path.read_text()
-            except Exception:
-                logs["setup"] = "[Error reading file]"
+        logs["oracle"] = read_log(agent_dir / "oracle.txt")
+        logs["setup"] = read_log(agent_dir / "setup" / "stdout.txt")
 
         # Read command-*/stdout.txt files
         i = 0
@@ -2819,16 +2999,9 @@ def _register_job_endpoints(
             command_dir = agent_dir / f"command-{i}"
             if not command_dir.exists():
                 break
-            stdout_path = command_dir / "stdout.txt"
-            if stdout_path.exists():
-                try:
-                    logs["commands"].append(
-                        {"index": i, "content": stdout_path.read_text()}
-                    )
-                except Exception:
-                    logs["commands"].append(
-                        {"index": i, "content": "[Error reading file]"}
-                    )
+            content = read_log(command_dir / "stdout.txt")
+            if content is not None:
+                logs["commands"].append({"index": i, "content": content})
             i += 1
 
         return logs

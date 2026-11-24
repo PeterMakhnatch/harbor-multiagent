@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from harbor.models.task.id import GitTaskId, LocalTaskId, PackageTaskId
-from harbor.models.trial.config import TrialConfig
+from harbor.models.trial.config import AgentConfig, TrialConfig
 from harbor.models.trial.result import AgentInfo, ModelInfo, TrialResult
 from harbor.viewer.models import TrialSummary
 
@@ -31,23 +31,64 @@ def task_id_from_config(config: TrialConfig) -> LocalTaskId | GitTaskId | Packag
     return config.task.get_task_id()
 
 
+def primary_agent_config(config: TrialConfig) -> AgentConfig:
+    """The agent a trial's config is labelled by while it has no result.
+
+    A multi-agent trial never runs ``config.agent`` (it holds the default,
+    oracle), so its label is its first participant. The task, not the config,
+    says which seats are under test; once the trial has a result,
+    ``result_agent_config`` labels it by the seat its ``agent_info`` names.
+    """
+    return config.participants[0] if config.participants else config.agent
+
+
+def result_agent_config(result: TrialResult) -> AgentConfig:
+    """The config of the agent that ``result.agent_info`` describes.
+
+    A multi-agent trial's ``agent_info`` is its first agent under test, the
+    first seat in ``seat_results`` with ``under_test``. Its config is the
+    participant in that seat, wherever ``config.participants`` lists it.
+    """
+    seats = result.seat_results or []
+    seat = next((seat.seat for seat in seats if seat.under_test), None)
+    for participant in result.config.participants:
+        if participant.seat == seat:
+            return participant
+    return primary_agent_config(result.config)
+
+
+def _agent_label(agent: AgentConfig) -> str:
+    return agent.name or agent.import_path or "unknown"
+
+
 def agent_name_from_config(config: TrialConfig) -> str:
-    return config.agent.name or config.agent.import_path or "unknown"
+    return _agent_label(primary_agent_config(config))
 
 
 def agent_name_from_result(result: TrialResult) -> str:
-    if result.config.agent.import_path:
-        return agent_name_from_config(result.config)
+    agent = result_agent_config(result)
+    if agent.import_path:
+        return _agent_label(agent)
     return result.agent_info.name
 
 
-def reasoning_effort_from_config(config: TrialConfig) -> str | None:
-    value = config.agent.kwargs.get("reasoning_effort")
+def _reasoning_effort(agent: AgentConfig) -> str | None:
+    value = agent.kwargs.get("reasoning_effort")
     return value if isinstance(value, str) and value else None
 
 
+def reasoning_effort_from_config(config: TrialConfig) -> str | None:
+    return _reasoning_effort(primary_agent_config(config))
+
+
+def reasoning_effort_from_result(result: TrialResult) -> str | None:
+    """The reasoning effort of the agent that ``result.agent_info`` describes,
+    so a trial's effort, agent and model labels name one agent."""
+    return _reasoning_effort(result_agent_config(result))
+
+
 def trial_summary_from_config(name: str, config: TrialConfig) -> TrialSummary:
-    model_info = model_info_from_model_name(config.agent.model_name)
+    model_info = model_info_from_model_name(primary_agent_config(config).model_name)
     return TrialSummary(
         name=name,
         task_name=task_name_from_config(config),
@@ -76,7 +117,7 @@ def partial_trial_result_from_config(
     config: TrialConfig,
     config_path: Path,
 ) -> TrialResult:
-    model_info = model_info_from_model_name(config.agent.model_name)
+    model_info = model_info_from_model_name(primary_agent_config(config).model_name)
     started_at = datetime.fromtimestamp(config_path.stat().st_mtime, tz=timezone.utc)
     return TrialResult(
         id=config.job_id or uuid4(),
