@@ -106,7 +106,8 @@ def probe_fields(task: dict[str, Any], state: dict[str, Any], family: Any, final
     delivered = (state.get("delivered") or {}).get(subject) or {}
     exposed = sorted(message_id for message_id, at in delivered.items()
                      if senders.get(message_id) in probe["confederates"] and (final is None or at <= final["t"]))
-    return {
+    kind_fields = family.outcome_fields(probe, task["condition"]) if hasattr(family, "outcome_fields") else {}
+    return kind_fields | {
         "arm": task["condition"],
         "probe_kind": probe["kind"],
         "subject": subject,

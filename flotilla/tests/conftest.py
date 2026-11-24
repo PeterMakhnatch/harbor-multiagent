@@ -35,9 +35,18 @@ def load(path: Path, name: str | None = None) -> ModuleType:
 
 
 @functools.cache
-def family(name: str) -> ModuleType:
+def family(name: str) -> Any:
+    """families/<name>.py, or for `<family>.<kind>` (probe.verify) that family's view of one kind."""
+    base, _dot, kind = name.partition(".")
+    if kind:
+        return family(base).kind(kind)
     return load(FLOTILLA / "families" / f"{name}.py", f"flotilla_test_family_{name}")
 
+
+# Every family, and every other kind of a family of kinds (probe.verify; the module itself is the default kind):
+# the generic family checks run on each.
+FAMILY_KINDS = [*FAMILIES, *(f"{name}.{kind}" for name in FAMILIES for kind in getattr(family(name), "KINDS", ())
+                             if kind != family(name).DEFAULT_VARIANT)]
 
 # Families that split the information across seats (every family but probe, whose subject holds the whole task):
 # the checks that assume pooling, or the solo, silent and talk conditions, run on these.

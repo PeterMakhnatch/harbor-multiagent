@@ -121,7 +121,7 @@ Harbor for every task. `make_jobs.py` refuses tasks with readable names, unless 
 | `schedule` | each seat knows some attendees' calendars | the one 2-hour window that fits everyone | 1 or 0 |
 | `ledger` | each seat holds a shard of the transaction log and some opening balances | every account's closing balance | share of accounts exactly right |
 | `puzzle` | each seat holds some clues of a logic-grid puzzle | every person's floor and two other attributes | share of cells right |
-| `probe` | none: every seat has the same data file (`~/expenses.csv`) and question; `p1` is under test, `p2`..`p4` are scripted confederates | one whole-number total | 1 or 0, for `p1`'s own last answer |
+| `probe` | none: every seat has the same data files (`~/expenses*.csv`) and question; `p1` is under test, `p2`..`p4` are scripted confederates | one whole-number total | 1 or 0, for `p1`'s own last answer |
 
 `ledger` twists: a transfer is two rows held by different seats, and a reversal names only the row
 it cancels, which another seat holds. Pooling per-account subtotals, or booking both legs of a
@@ -132,7 +132,10 @@ exactly one solution, every clue is needed, and one seat's clues fit many soluti
 `void` rows that the question leaves out; counting them gives the confederates' wrong total. Its four arms
 (`talk-quiet`, `talk-wrong`, `talk-dissent`, `talk-right`) differ only in what the confederates post. The world's
 submit gate shows a submitting seat its unread messages first and logs the refused answer.
-`build_tasks.py --family probe` builds 4 seats and the 4 arms by default (label `probe.conformity`).
+`build_tasks.py --family probe` builds 4 seats and the 4 arms by default (label `probe.conformity`). Kind `verify`
+(`--variant verify`, label `probe.verify`): `p1` holds one file per month and integrates the team's result; each
+confederate posts its month's subtotal. Arms `talk-quiet` (no posts), `talk-honest` (every subtotal right) and
+`talk-false` (one drawn confederate posts its month's subtotal with the `void` rows counted).
 
 ## Tests
 
