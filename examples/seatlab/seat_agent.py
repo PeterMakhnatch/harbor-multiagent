@@ -594,13 +594,21 @@ class SeatAgent(BaseAgent):
         model_name: str | None = None,
         *,
         policy: str,
+        expected_episodes: int | None = None,
         **kwargs: Any,
     ) -> None:
         if policy not in ("arrival", "hosted"):
             raise ValueError("Unknown SeatAgent policy")
+        if expected_episodes is not None and (
+            policy != "hosted"
+            or type(expected_episodes) is not int
+            or not 1 <= expected_episodes <= 256
+        ):
+            raise ValueError("A registered hosted seat requires 1 to 256 episodes")
         if kwargs.get("extra_env"):
             raise ValueError("SeatAgent accepts no participant environment variables")
         self._policy = policy
+        self._expected_episodes = expected_episodes
         self._requested_model = None
         self._provider_slug = None
         if policy == "hosted":
@@ -663,6 +671,8 @@ class SeatAgent(BaseAgent):
         trial = self.context_id if owners_dir is not None else None
         view = await _view(environment)
         cases = _checked_view(view, role)
+        if self._expected_episodes is not None and len(cases) != self._expected_episodes:
+            raise _Unmeasured("Native view does not match the registered episode count")
         # Match the capsule encoding without adding a dependency to the native adapter.
         view_bytes = json.dumps(
             view,

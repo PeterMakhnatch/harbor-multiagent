@@ -6,7 +6,6 @@ import fcntl
 import hashlib
 import json
 import os
-import re
 import subprocess
 import tempfile
 from collections import defaultdict
@@ -15,16 +14,21 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
-from evidence import TrialEvidence, read_trial
+if __package__:
+    from . import dispatch_plan
+    from .evidence import TrialEvidence, read_trial
+else:
+    import dispatch_plan
+    from evidence import TrialEvidence, read_trial
 
 PANEL_DIR = Path(__file__).resolve().parent
 EXAMPLES_DIR = PANEL_DIR.parent
 TASK_DIR = EXAMPLES_DIR / "tasks/dispatch-handoff"
-CONDITIONS = ("silent", "stale", "fresh", "reordered", "pooled")
-POLICIES = ("oracle", "arrival", "hosted")
+CONDITIONS = dispatch_plan.CONDITIONS
+POLICIES = dispatch_plan.POLICIES
 NATIVE_VERSION = "0.26.0"
 OLAM_BASE = "6aeb609e31fd77e5f89ce3bcb018db8045520fb7"
-PLAN_SCHEMA = "seatlab.panel-plan/v1"
+PLAN_SCHEMA = dispatch_plan.PLAN_SCHEMA
 RUNS_SCHEMA = "seatlab.panel-runs/v1"
 SCENARIO = "environment/scenario.json"
 TASK_FILES = (
@@ -42,7 +46,12 @@ TASK_FILES = (
     "tests/test.sh",
 )
 SEAT_ADAPTER = "seatlab/seat_agent.py"
-CORE_TOOLS = ("seatlab/run_panel.py", "seatlab/evidence.py")
+CORE_TOOLS = (
+    "seatlab/run_panel.py",
+    "seatlab/evidence.py",
+    "seatlab/dispatch_plan.py",
+)
+DESIGN_FLAGS = ("seeds", "conditions", "episodes", "jobs", "policy")
 
 
 class Cell(TypedDict):
@@ -106,14 +115,6 @@ def _snapshot(policy: str) -> dict[str, bytes]:
     return {name: (EXAMPLES_DIR / name).read_bytes() for name in _source_names(policy)}
 
 
-def _hosted_route(model: str, provider: str) -> dict[str, str]:
-    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*:free", model):
-        raise ValueError("hosted requires SEATLAB_FREE_MODEL in author/model:free form")
-    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", provider):
-        raise ValueError("hosted requires an explicit SEATLAB_FREE_PROVIDER slug")
-    return {"model": model, "provider": provider}
-
-
 def _make_plan(
     seeds: list[int],
     conditions: list[str],
@@ -132,6 +133,8 @@ def _make_plan(
         raise ValueError(f"use one or more conditions from {','.join(CONDITIONS)}")
     if len(set(conditions)) != len(conditions):
         raise ValueError("conditions must not repeat")
+    if len(seeds) * len(conditions) > dispatch_plan.MAX_CELLS:
+        raise ValueError(dispatch_plan.TOO_MANY_CELLS)
     if type(episodes) is not int or not 1 <= episodes <= 256:
         raise ValueError("episodes must be between 1 and 256")
     if policy not in POLICIES:
@@ -161,42 +164,63 @@ def _make_plan(
     }
 
 
-def _load_plan(out: Path) -> Plan:
-    stored = _read_object(out / "plan.json")
-    seeds, conditions, episodes, policy, sources = (
-        stored.get(key)
-        for key in ("seeds", "conditions", "episodes", "policy", "source_sha256")
-    )
-    if (
-        not isinstance(seeds, list)
-        or not isinstance(conditions, list)
-        or not isinstance(episodes, int)
-        or not isinstance(policy, str)
-        or not isinstance(sources, dict)
-    ):
-        raise ValueError("invalid panel plan")
-    if any(
-        not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest)
-        for digest in sources.values()
-    ) or sources.keys() != set(_source_names(policy)):
+def _check_checkout(plan: Plan) -> None:
+    if plan["source_sha256"].keys() != set(_source_names(plan["policy"])):
         raise ValueError("invalid source checksum manifest")
-    route = stored.get("hosted_route")
-    if route is not None:
-        if not isinstance(route, dict) or any(
-            not isinstance(route.get(key), str) for key in ("model", "provider")
-        ):
-            raise ValueError("invalid registered hosted route")
-        route = _hosted_route(route["model"], route["provider"])
-    canonical = _make_plan(seeds, conditions, episodes, policy, sources, route)
-    if _json(stored) != _json(canonical):
-        raise ValueError("panel plan does not match the registered design")
-    for name, digest in sources.items():
-        if _sha256((EXAMPLES_DIR / name).read_bytes()) != digest:
-            raise ValueError(f"registered source changed since launch: {name}")
-    return canonical
+    if plan["native"] != {"expected_version": NATIVE_VERSION, "olam_base": OLAM_BASE}:
+        raise ValueError("panel plan targets a different native version")
 
 
-def _participants(policy: str, condition: str) -> list[dict[str, Any]]:
+def _check_sources(plan: Plan, sources: dict[str, bytes]) -> None:
+    registered = plan["source_sha256"]
+    if sources.keys() != registered.keys():
+        raise ValueError("source snapshot does not match the registered manifest")
+    for name, digest in registered.items():
+        if _sha256(sources[name]) != digest:
+            raise ValueError(f"registered source changed since registration: {name}")
+
+
+def _load_plan(out: Path) -> Plan:
+    plan = cast(Plan, dispatch_plan.normalize(_read_object(out / "plan.json")))
+    _check_checkout(plan)
+    _check_sources(plan, _snapshot(plan["policy"]))
+    return plan
+
+
+def _pinned(path: Path, pin: str) -> tuple[dict[str, Any], Plan, dict[str, bytes]]:
+    registration = dispatch_plan.read_pinned(path, pin)
+    plan = cast(Plan, registration["plan"])
+    _check_checkout(plan)
+    sources = _snapshot(plan["policy"])
+    _check_sources(plan, sources)
+    return registration, plan, sources
+
+
+def _create_private(path: Path, content: bytes) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    with os.fdopen(os.open(path, flags, 0o400), "wb") as output:
+        os.fchmod(output.fileno(), 0o400)
+        output.write(content)
+
+
+def _report(registration: dict[str, Any], pin: str) -> None:
+    plan = registration["plan"]
+    route = plan["hosted_route"]
+    via = f" via {route['model']} ({route['provider']})" if route else ""
+    print(f"SHA-256: {pin}")
+    print(f"Policy: {plan['policy']}{via}")
+    print(
+        f"Cells: {len(plan['cells'])} = {len(plan['seeds'])} seeds"
+        f" x {len(plan['conditions'])} conditions;"
+        f" episodes: {plan['episodes']}; jobs: {registration['jobs']}"
+    )
+    for name, count in sorted(registration["workload"].items()):
+        print(f"{name}: {count}")
+    if route:
+        print("The hosted route is a label only: availability and price are unchecked.")
+
+
+def _participants(policy: str, condition: str, episodes: int) -> list[dict[str, Any]]:
     participants = []
     for seat in ("inventory", "dispatch"):
         if seat == "inventory" and condition == "pooled":
@@ -204,10 +228,13 @@ def _participants(policy: str, condition: str) -> list[dict[str, Any]]:
         elif policy == "oracle":
             participant = {"name": "oracle", "import_path": None, "kwargs": {}}
         else:
+            kwargs: dict[str, Any] = {"policy": policy}
+            if policy == "hosted":
+                kwargs["expected_episodes"] = episodes
             participant = {
                 "name": None,
                 "import_path": "seat_agent:SeatAgent",
-                "kwargs": {"policy": policy},
+                "kwargs": kwargs,
             }
         participants.append({"seat": seat, "model_name": None, **participant})
     return participants
@@ -237,7 +264,9 @@ def _trial_config(out: Path, plan: Plan, cell: Cell) -> dict[str, Any]:
             "stream": False,
         },
         "verifier": {"disable": False},
-        "participants": _participants(plan["policy"], cell["condition"]),
+        "participants": _participants(
+            plan["policy"], cell["condition"], plan["episodes"]
+        ),
     }
 
 
@@ -275,7 +304,9 @@ def _config_matches(actual: object, expected: object) -> bool:
         return actual == {}
     if isinstance(expected, dict):
         return isinstance(actual, dict) and all(
-            isinstance(key, str) and key in actual and _config_matches(actual[key], value)
+            isinstance(key, str)
+            and key in actual
+            and _config_matches(cast(dict[str, Any], actual)[key], value)
             for key, value in expected.items()
         )
     if isinstance(expected, list):
@@ -543,6 +574,7 @@ async def _launch(
     env: dict[str, str],
     jobs: int,
 ) -> bool:
+    _check_sources(plan, sources)
     runs = {cell["cell_id"]: _inspect_cell(out, plan, cell) for cell in plan["cells"]}
     complete = _write_index(out, plan, runs)
     pending = iter(plan["cells"])
@@ -569,24 +601,164 @@ def _collect(out: Path) -> bool:
         return _write_index(out, plan, runs)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _new_output(requested: Path) -> Path:
+    out = requested.resolve()
+    if out.exists() or requested.is_symlink():
+        raise ValueError(
+            "output already exists; use --collect or select a new output path"
+        )
+    if out.is_relative_to(PANEL_DIR) or out.is_relative_to(TASK_DIR):
+        raise ValueError("output must not be inside the panel or task source folder")
+    return out
+
+
+def _requested_plan(args: argparse.Namespace) -> tuple[Plan, dict[str, bytes]]:
+    policy = args.policy or "oracle"
+    route = (
+        dispatch_plan.hosted_route(
+            os.environ.get("SEATLAB_FREE_MODEL", ""),
+            os.environ.get("SEATLAB_FREE_PROVIDER", ""),
+        )
+        if policy == "hosted"
+        else None
+    )
+    seeds = (args.seeds if args.seeds is not None else "17,29").split(",")
+    conditions = (
+        [condition.strip() for condition in args.conditions.split(",")]
+        if args.conditions is not None
+        else list(CONDITIONS)
+    )
+    sources = _snapshot(policy)
+    plan = _make_plan(
+        [int(seed) for seed in seeds],
+        conditions,
+        args.episodes if args.episodes is not None else 12,
+        policy,
+        {name: _sha256(content) for name, content in sources.items()},
+        route,
+    )
+    return plan, sources
+
+
+def _plan_only(out: Path, plan: Plan, jobs: int) -> None:
+    registration = dispatch_plan.seal(plan, jobs)
+    content = dispatch_plan.encode(registration)
+    out.mkdir(mode=0o700, parents=True)
+    out.chmod(0o700)
+    path = out / "registration.json"
+    _create_private(path, content)
+    print(f"Registered: {path}")
+    _report(registration, _sha256(content))
+    print("No trials ran: no Harbor, Docker, or provider was contacted.")
+
+
+def _check_registered_route(route: dict[str, str] | None) -> None:
+    labels = {"SEATLAB_FREE_MODEL": "model", "SEATLAB_FREE_PROVIDER": "provider"}
+    if route is not None and any(
+        os.environ.get(name, route[key]) != route[key] for name, key in labels.items()
+    ):
+        raise ValueError(
+            "SEATLAB_FREE_MODEL or SEATLAB_FREE_PROVIDER differs from the registration"
+        )
+
+
+def _start(
+    out: Path,
+    plan: Plan,
+    sources: dict[str, bytes],
+    harbor: Path,
+    jobs: int,
+    registration: bytes | None,
+) -> bool:
+    harbor = harbor.expanduser().resolve(strict=True)
+    env = _native_env(plan["hosted_route"])
+    _check_native(harbor, {k: v for k, v in env.items() if k != "OPENROUTER_API_KEY"})
+    out.mkdir(mode=0o700, parents=True)
+    with _index_lock(out):
+        if registration is not None:
+            _create_private(out / "registration.json", registration)
+        plan_path = out / "plan.json"
+        _create_json(plan_path, plan)
+        plan_path.chmod(0o400)
+        return asyncio.run(_launch(out, plan, sources, harbor, env, jobs))
+
+
+def _from_plan(path: Path, pin: str, requested_out: Path, harbor: Path) -> bool:
+    registration, plan, sources = _pinned(path, pin)
+    _check_registered_route(plan["hosted_route"])
+    content = dispatch_plan.encode(registration)
+    if _sha256(content) != pin:
+        raise ValueError("registration does not re-encode to its pinned bytes")
+    out = _new_output(requested_out)
+    return _start(out, plan, sources, harbor, registration["jobs"], content)
+
+
+def _check_usage(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    design = any(getattr(args, name) is not None for name in DESIGN_FLAGS)
+    pinned = args.check_plan is not None or args.from_plan is not None
+    if args.collect:
+        if design or args.harbor is not None or args.sha256 is not None:
+            parser.error("--collect only takes --out")
+    elif args.plan_only:
+        if args.harbor is not None or args.sha256 is not None:
+            parser.error("--plan-only takes --out and design flags only")
+    elif args.check_plan is not None:
+        if design or args.harbor is not None or args.out is not None:
+            parser.error("--check-plan only takes --sha256")
+    elif args.from_plan is not None:
+        if design:
+            parser.error("--from-plan uses the registered design; omit design flags")
+    elif args.sha256 is not None:
+        parser.error("--sha256 only applies to --check-plan or --from-plan")
+    if pinned and args.sha256 is None:
+        parser.error("--sha256 is required with a registration")
+    if args.check_plan is None and args.out is None:
+        parser.error("--out is required")
+    launch = not (args.collect or args.plan_only or args.check_plan is not None)
+    if launch and args.harbor is None:
+        parser.error("--harbor is required for a launch")
+
+
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__,
         epilog=(
             "Use a new output path for each launch. "
-            "Collect again from the original path without starting any jobs."
+            "Collect again from the original path without starting any jobs. "
+            "Register with --plan-only, review with --check-plan, "
+            "then launch the pinned registration with --from-plan."
         ),
     )
     parser.add_argument(
         "--out",
         type=Path,
-        required=True,
-        help="new panel directory, or the original directory with --collect",
+        help="new panel or registration directory, or the panel to --collect",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--collect",
         action="store_true",
         help="rebuild runs.json from native dossiers; launch nothing",
+    )
+    mode.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="write registration.json into a new --out directory; launch nothing",
+    )
+    mode.add_argument(
+        "--check-plan",
+        type=Path,
+        metavar="REGISTRATION",
+        help="validate a pinned registration against current sources; launch nothing",
+    )
+    mode.add_argument(
+        "--from-plan",
+        type=Path,
+        metavar="REGISTRATION",
+        help="launch a pinned registration into a new --out directory",
+    )
+    parser.add_argument(
+        "--sha256", metavar="PIN", help="SHA-256 of the registration file bytes"
     )
     parser.add_argument(
         "--harbor", type=Path, help="path to the Olam Harbor executable for launches"
@@ -609,73 +781,42 @@ def main(argv: list[str] | None = None) -> int:
         choices=POLICIES,
         help="seat policy (default: oracle); hosted requires the frozen free OpenRouter route",
     )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _parser()
     args = parser.parse_args(argv)
-    requested_out = cast(Path, args.out).expanduser()
-    out = requested_out.resolve()
-    if args.collect:
-        if any(
-            value is not None
-            for value in (
-                args.harbor,
-                args.seeds,
-                args.conditions,
-                args.episodes,
-                args.jobs,
-                args.policy,
-            )
-        ):
-            parser.error("--collect only takes --out")
-    elif args.harbor is None:
-        parser.error("--harbor is required for a launch")
+    _check_usage(parser, args)
     try:
+        if args.check_plan is not None:
+            registration, _, _ = _pinned(
+                cast(Path, args.check_plan).expanduser(), args.sha256
+            )
+            _report(registration, args.sha256)
+            print("Valid against the current sources and native plan. No trials ran.")
+            return 0
+        requested_out = cast(Path, args.out).expanduser()
         if args.collect:
+            out = requested_out.resolve()
             complete = _collect(out)
+        elif args.from_plan is not None:
+            out = requested_out.resolve()
+            complete = _from_plan(
+                cast(Path, args.from_plan).expanduser(),
+                args.sha256,
+                requested_out,
+                cast(Path, args.harbor),
+            )
         else:
-            if out.exists() or requested_out.is_symlink():
-                raise ValueError(
-                    "output already exists; use --collect or select a new output path"
-                )
-            if out.is_relative_to(PANEL_DIR) or out.is_relative_to(TASK_DIR):
-                raise ValueError(
-                    "output must not be inside the panel or task source folder"
-                )
-            policy = args.policy or "oracle"
-            route = (
-                _hosted_route(
-                    os.environ.get("SEATLAB_FREE_MODEL", ""),
-                    os.environ.get("SEATLAB_FREE_PROVIDER", ""),
-                )
-                if policy == "hosted"
-                else None
+            out = _new_output(requested_out)
+            plan, sources = _requested_plan(args)
+            if args.plan_only:
+                _plan_only(out, plan, args.jobs or 1)
+                return 0
+            complete = _start(
+                out, plan, sources, cast(Path, args.harbor), args.jobs or 1, None
             )
-            seeds = (args.seeds if args.seeds is not None else "17,29").split(",")
-            conditions = (
-                [condition.strip() for condition in args.conditions.split(",")]
-                if args.conditions is not None
-                else list(CONDITIONS)
-            )
-            sources = _snapshot(policy)
-            plan = _make_plan(
-                [int(seed) for seed in seeds],
-                conditions,
-                args.episodes if args.episodes is not None else 12,
-                policy,
-                {name: _sha256(content) for name, content in sources.items()},
-                route,
-            )
-            harbor = cast(Path, args.harbor).expanduser().resolve(strict=True)
-            env = _native_env(route)
-            _check_native(
-                harbor, {k: v for k, v in env.items() if k != "OPENROUTER_API_KEY"}
-            )
-            out.mkdir(mode=0o700, parents=True)
-            with _index_lock(out):
-                plan_path = out / "plan.json"
-                _create_json(plan_path, plan)
-                plan_path.chmod(0o400)
-                complete = asyncio.run(
-                    _launch(out, plan, sources, harbor, env, args.jobs or 1)
-                )
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         parser.exit(1, f"{parser.prog}: {error}\n")
     print(

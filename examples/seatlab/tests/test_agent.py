@@ -151,11 +151,13 @@ def _world_wire(
     return connection.request
 
 
-def _hosted(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> seat_agent.SeatAgent:
+def _hosted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, expected_episodes: int | None = None
+) -> seat_agent.SeatAgent:
     monkeypatch.setenv("SEATLAB_FREE_MODEL", _MODEL)
     monkeypatch.setenv("SEATLAB_FREE_PROVIDER", _SLUG)
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-not-a-credential")
-    return seat_agent.SeatAgent(tmp_path, policy="hosted")
+    return seat_agent.SeatAgent(tmp_path, policy="hosted", expected_episodes=expected_episodes)
 
 
 @pytest.mark.parametrize(
@@ -224,15 +226,16 @@ async def test_native_import_posts_inventory_actions_with_view_digest(
     ]
 
 
+@pytest.mark.parametrize("expected_episodes", [None, 1])
 async def test_hosted_submits_the_model_answer_without_oracle_repair(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, expected_episodes: int | None
 ) -> None:
     view = _dispatch_view("fresh")
     environment = _seat("dispatch")
+    agent = _hosted(monkeypatch, tmp_path, expected_episodes)
     world = _world_wire(monkeypatch, environment, view)
     router = Mock(side_effect=[_CATALOG, _ENDPOINTS, _response()])
     monkeypatch.setattr(seat_agent, "_openrouter", router)
-    agent = _hosted(monkeypatch, tmp_path)
     context = AgentContext()
 
     await agent.run("private instruction", environment, context)
@@ -255,6 +258,7 @@ async def test_hosted_submits_the_model_answer_without_oracle_repair(
         assert not lookup.kwargs
     request = router.call_args.kwargs["payload"]
     assert request["model"] == _MODEL
+    assert request["max_tokens"] == 2128
     assert request["provider"]["only"] == [_SLUG]
     assert request["provider"]["allow_fallbacks"] is False
     assert request["provider"]["max_price"] == {
@@ -432,6 +436,29 @@ async def test_missing_hosted_charge_is_not_reported_as_zero(
     assert context.cost_usd is None
     assert context.n_cache_tokens is None
     assert (context.n_input_tokens, context.n_output_tokens) == (101, 22)
+
+@pytest.mark.parametrize("role", ["inventory", "dispatch"])
+@pytest.mark.parametrize(("planned", "actual"), [(1, 2), (2, 1)])
+async def test_registered_seat_rejects_wrong_view_before_any_provider_access(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, role: str, planned: int, actual: int
+) -> None:
+    view = _inventory_view() if role == "inventory" else _dispatch_view("fresh")
+    case = view["cases"][0]
+    view["cases"] = [case | {"id": i} for i in range(actual)]
+    world = _world(monkeypatch, view)
+    router = Mock(side_effect=AssertionError("provider access"))
+    monkeypatch.setattr(seat_agent, "_openrouter", router)
+    agent = _hosted(monkeypatch, tmp_path, planned)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    environment = _seat(role)
+    context = AgentContext()
+    with pytest.raises(RuntimeError, match="registered episode count"):
+        await agent.run("", environment, context)
+    world.assert_awaited_once_with(environment, "/view")
+    router.assert_not_called()
+    assert context.metadata and context.metadata["model_turns"] == 0
+    assert context.cost_usd is None
+
 
 
 async def test_malformed_world_view_is_not_sent_to_model(

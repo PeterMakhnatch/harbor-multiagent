@@ -33,6 +33,26 @@ Before observing results, we expect `fresh`, revision-aware `reordered` and `poo
 
 **Prospective transport amendment (before any model call):** Use an explicitly free API route instead of a subscription login. The primary route is `baidu/ernie-5.5-flash-preview:free` at provider `baidu`. Require zero quoted input and output prices, an explicit provider, no fallback and a server-side maximum price of zero. Admit only the seat's synthetic view as input. The model can return JSON decisions, not tools or shell commands. Keep the previously declared seeds, treatments, denominators and one-generation limit. An unavailable route is an operational outcome, not permission to switch models within the panel.
 
+## Review a Dispatch panel without running it
+
+Use Python 3.12 or later. The coordinator can register jobs and a second worker can check them without Harbor, Docker, a key, or a provider catalog.
+
+```sh
+root=$(mktemp -d)
+panel=examples.seatlab.run_panel
+python3.12 -BS -m "$panel" --plan-only --out "$root/held" --policy arrival \
+  --seeds 17,29 --conditions fresh,reordered --episodes 12 --jobs 1
+packet="$root/held/registration.json"
+pin=$(python3.12 -BS -c 'import hashlib,sys; print(hashlib.file_digest(open(sys.argv[1], "rb"), "sha256").hexdigest())' "$packet")
+python3.12 -BS -m "$panel" --check-plan "$packet" --sha256 "$pin"
+```
+
+Keep the digest outside the worker's write access. Transfer the packet and provide the trusted digest separately. `--check-plan` checks the exact bytes against that digest. It also checks every task source, both role instructions and the registered panel runner in the worker's checkout. A hosted packet also includes the seat adapter. A copied packet does not authorize a launch.
+
+The report separates native teams, seat slots, shipment evaluations and maximum hosted calls **by role**. For example, 2 seeds, `fresh,pooled` and 12 shipments give 4 teams, 8 seat slots and 48 evaluations. Under `hosted`, only 2 inventory seats and 4 dispatch seats can call a model. Each request permits 3,008 output tokens, or 18,048 in total. `pooled` uses a no-op inventory seat. Cases repeat across arms. The report does not predict input tokens, actual completions, runtime or price. It does not check that the route is online.
+
+After separate authorization, `--from-plan "$packet" --sha256 "$pin" --harbor EXECUTABLE --out NEW` is the mode that starts Harbor. Use the site's concurrency guard. This mode takes the route, cases and job limit from the packet; it rejects new design flags. The hosted seat rejects a different case count before it can request a completion. Older runs retain their original plans and source checkout.
+
 ## Runtime and retention
 
 The initial study targets Olam commit `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, not stock Harbor 0.26. Run the maintained `hello-seats` task as an independent positive control first. Use local Docker with at most 1 trial at a time for this run. No cloud provisioning or metered API is required for the controls. Use fresh output directories. Keep all failed attempts and their reason in the study record. Keep host paths, personal credentials and raw provider traces out of public evidence. Publish to the personal fork only.

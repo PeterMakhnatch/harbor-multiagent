@@ -2,6 +2,8 @@
 
 Start with the released data. Use Python 3.12 or later from this checkout. These commands do not install Harbor, run containers, contact a provider, or read API keys.
 
+Before approving a Dispatch Handoff study, [register its workload](../protocol.md#review-a-dispatch-panel-without-running-it). The packet fixes each role's maximum requests and total requested output. It is not a price quote.
+
 ```sh
 wb=examples.seatlab.workbench
 python3.12 -BS -m "$wb" account calendar
