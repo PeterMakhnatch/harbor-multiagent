@@ -24,6 +24,7 @@ from .native_study import (
 from .seat_handoffs.core import reject_constant, unique_object
 from .seat_handoffs.native_records import record_digest
 from .shift_board import plan
+from .ship_handover import study as ship_handover
 
 CLAIM_MODE = 0o600
 MAX_CELLS = 2048
@@ -73,6 +74,7 @@ WORLDS = {
         study.load_registration,
         study.world_env,
     ),
+    ship_handover.SCHEMA: World(*ship_handover.WORLD),
 }
 assert all(world.max_cells <= MAX_CELLS for world in WORLDS.values())
 

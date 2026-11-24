@@ -1,0 +1,448 @@
+{
+  "schema": "harbor.ship-handover.study/v1",
+  "task": {
+    "name": "harbor/ship-handover",
+    "digest": "sha256:79e59fb1e00f2269ea46118cd28933005f21f4c3f6a29fe58079125febb20607",
+    "checksum": "4bc30f977321363eb46432239b5df43dcae88cce405aaef671bf978b9283bf40"
+  },
+  "teams": {
+    "handoff-resume": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "resume"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "draft-resume": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "draft"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "resume"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "pass-resume": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "pass"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "resume"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "inspect-fresh": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "fresh"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "inspect-close": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "close"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "blind-fresh": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "idle"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "blind-fresh"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "blind-close": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "idle"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "blind-close"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "idle-both": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "idle"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "idle"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "late-return": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "late"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "late-read"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ],
+    "sender-only": [
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "original"
+        },
+        "mcp_servers": [],
+        "seat": "outgoing"
+      },
+      {
+        "name": "oracle",
+        "skip_model_parsing": false,
+        "skills": [],
+        "resume_trajectory": false,
+        "extra_allowed_hosts": [],
+        "kwargs": {},
+        "env": {
+          "SH_POLICY": "idle"
+        },
+        "mcp_servers": [],
+        "seat": "relief"
+      }
+    ]
+  },
+  "cells": [
+    {
+      "ticket": "sh-b948b3ba0415b4b4",
+      "team": "blind-fresh",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-dfebc293dfd46fe2",
+      "team": "handoff-resume",
+      "prior": "committed",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-0543aaa04e80f7da",
+      "team": "draft-resume",
+      "prior": "committed",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-d309a143a10761a3",
+      "team": "inspect-fresh",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-6161d87f1647ab47",
+      "team": "sender-only",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-e44e0683e00f9611",
+      "team": "pass-resume",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-d70fa9165058dcf4",
+      "team": "handoff-resume",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-0eaad13de7fa90fa",
+      "team": "idle-both",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-22c73be98e3f0b9b",
+      "team": "blind-close",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-b2ca0dd795858f27",
+      "team": "late-return",
+      "prior": "dropped",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-9b7a44887d3d680e",
+      "team": "late-return",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-2e48bd7445c13492",
+      "team": "handoff-resume",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-90960c2b25dc21f3",
+      "team": "blind-close",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-0c8a5db89b8b371d",
+      "team": "late-return",
+      "prior": "committed",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-62cd44a0680734d6",
+      "team": "draft-resume",
+      "prior": "dropped",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-6bd8cfc80c5cb6b2",
+      "team": "pass-resume",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-e73e1687ff6d7047",
+      "team": "handoff-resume",
+      "prior": "dropped",
+      "channel": "withhold"
+    },
+    {
+      "ticket": "sh-ec79649690f4b3ed",
+      "team": "inspect-close",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-3bc8168d59f1177a",
+      "team": "inspect-close",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-5420923ff432828b",
+      "team": "inspect-fresh",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-70a345bb012b07c5",
+      "team": "late-return",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-7253e3fa1ef043dc",
+      "team": "blind-fresh",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-401fe321d0a3ae24",
+      "team": "idle-both",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-9ea94502c35bef66",
+      "team": "draft-resume",
+      "prior": "dropped",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-d96dd3388f9bd018",
+      "team": "draft-resume",
+      "prior": "committed",
+      "channel": "deliver"
+    },
+    {
+      "ticket": "sh-8bb758aabfa4019b",
+      "team": "sender-only",
+      "prior": "dropped",
+      "channel": "deliver"
+    }
+  ]
+}
