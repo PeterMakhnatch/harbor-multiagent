@@ -97,6 +97,9 @@ def test_first_submit_keeps_each_arms_posts_and_order_and_dates_them_before_the_
             late = PROBE.at_first_submit(inst["probe"], plans)
             assert plans == PROBE.confederate_plans(inst, arm)  # the arm's own plans are not changed
             posts, late_posts = BUILD.scheduled_posts(plans)[0], BUILD.scheduled_posts(late)[0]
+            replies = [p for p in posts if BUILD.is_reply(p)]  # world version 20: they keep their own trigger
+            assert [p for p in late_posts if BUILD.is_reply(p)] == replies
+            posts, late_posts = ([p for p in found if not BUILD.is_reply(p)] for found in (posts, late_posts))
             assert [(p["from"], p["to"], p["text"]) for p in late_posts] == [(p["from"], p["to"], p["text"])
                                                                                for p in posts]
             assert all(p["trigger"] == "first_submit" and 1.0 <= p["before_s"] <= 3.0 for p in late_posts)
