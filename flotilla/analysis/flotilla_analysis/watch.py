@@ -38,6 +38,11 @@ default stall threshold is 300 s. A seat under test stalls when the trial has no
 has not ended, and its trajectory (or, before its first episode, the trial start) is older than the
 threshold. Scripted seats (Harbor's ``oracle`` agent, or ``under_test = false`` in ``task.toml``) write no
 trajectory and never stall.
+
+``--blind`` is for pre-registered waves that forbid interim looks at outcomes: every surface (text,
+``--json``, ``--html``) keeps progress, validity, spend, stalls and errors, and drops the reward of each
+trial, the reward summary and the reason a trial is unscored (it can quote the reward); no timeline page is
+written (it shows rewards, ``score.json`` and answers).
 """
 
 from __future__ import annotations
@@ -63,6 +68,7 @@ from flotilla_analysis.names import Names, read_task_toml
 ABANDONED_SECONDS = 3 * 3600  # no write for this long: longer than any agent timeout plus verification
 NOTIFY_PER_PASS = 5
 SHOWN_ERRORS = 10
+BLIND_UNSCORED = "reason hidden (blind)"
 PROGRESS = re.compile(r"^(?P<at>\S+ \S+) ET (?P<kind>start|end) (?P<job>[A-Za-z0-9._-]+) set ")
 STOP = re.compile(r"^\S+ \S+ ET stop (?P<reason>[A-Za-z-]+): spent ")
 RESUME = re.compile(r"^\S+ \S+ ET (resume|order|start spacing)\b")
@@ -244,11 +250,13 @@ class Watcher:
         stall_seconds: float = 300.0,
         cap_usd: float | None = None,
         notifier: Notifier | None = None,
+        blind: bool = False,
     ) -> None:
         self.target = target.resolve()
         self.stall_seconds = stall_seconds
         self.cap_usd = cap_usd
         self.notifier = notifier
+        self.blind = blind
         self.names = Names()
         self.seen: dict[str, float] = {}
         self.passes = 0
@@ -447,7 +455,7 @@ class Watcher:
             label, condition, team, reward, unscored, exceptions, costs = _other_trial(data)
         known = [c for c in costs if c is not None]
         errors = self._cached("log", directory / "trial.log", read_log_errors) or {}
-        return {
+        summary = {
             "path": relative,
             "directory": str(directory),
             "job": directory.parent.name,
@@ -465,6 +473,10 @@ class Watcher:
             "finished_at": data.get("finished_at"),
             "duration_s": (finished - started).total_seconds() if started and finished else None,
         }
+        if self.blind:
+            del summary["reward"]
+            summary["unscored"] = BLIND_UNSCORED if unscored else None
+        return summary
 
     def _task(self, task_path: str | None) -> tuple[str | None, str | None, dict[str, bool]]:
         """Label, condition and per-seat under_test of a task folder (cached for the watch)."""
@@ -548,11 +560,12 @@ class Watcher:
         wave["in_flight_usd"] = sum(r["cost_usd"] for r in live)
         wave["mean_trial_s"] = mean
         wave["eta_s"] = eta(wave, live, mean)
-        return {
+        status = {
             "generated_at": datetime.fromtimestamp(now).astimezone().isoformat(timespec="seconds"),
             "now": now,
             "target": str(self.target),
             "mode": mode,
+            "blind": self.blind,
             "stall_seconds": self.stall_seconds,
             "wave": wave,
             "running": sorted(running, key=lambda r: (r["state"] != "running", r["path"])),
@@ -567,9 +580,11 @@ class Watcher:
                 for t in sorted(trials, key=lambda t: (t["finished_at"] or "", t["path"]))
                 if t["exceptions"] or t["provider_errors"]
             ],
-            "rewards": reward_summary(trials),
             "finished": sorted(trials, key=lambda t: (t["finished_at"] or "", t["path"]), reverse=True),
         }
+        if not self.blind:
+            status["rewards"] = reward_summary(trials)
+        return status
 
 
 def _child_dirs(target: Path) -> list[Path]:
@@ -732,7 +747,8 @@ def _usd(value: float | None) -> str:
 
 def render(status: dict[str, Any]) -> str:
     wave = status["wave"]
-    head = f"flotilla-watch {status['generated_at']}  {status['mode']} {status['target']}"
+    blind = " BLIND" if status.get("blind") else ""
+    head = f"flotilla-watch{blind} {status['generated_at']}  {status['mode']} {status['target']}"
     lines = [head + (f"  plan {wave['plan']}" if wave["plan"] else "") + f"  [{wave['state']}]"]
     lines.append(
         f"{wave['units']} {wave['total']}: done {wave['done']} "
@@ -760,6 +776,9 @@ def render(status: dict[str, Any]) -> str:
             provider = ", ".join(f"{k} x{v['count']}" for k, v in sorted(error["provider_errors"].items()))
             parts = [", ".join(error["exceptions"]), provider]
             lines.append(f"  {error['path']}: " + "; ".join(p for p in parts if p))
+    if status.get("blind"):
+        lines.append("rewards: hidden (blind)")
+        return "\n".join(lines) + "\n"
     lines.append("rewards (finished trials):")
     if not status["rewards"]:
         lines.append("  none")
@@ -838,6 +857,12 @@ def parser() -> argparse.ArgumentParser:
         help="seat quiet this long while its trial runs (default 300)",
     )
     p.add_argument("--cap-usd", type=float, help="spend cap to show (default: the run's plan budget)")
+    p.add_argument(
+        "--blind",
+        action="store_true",
+        help="pre-registered wave: show progress, validity, spend, stalls and errors only; no rewards, "
+        "scores, answers or trial timeline pages",
+    )
     return p
 
 
@@ -854,6 +879,7 @@ def main(argv: list[str] | None = None) -> int:
         stall_seconds=args.stall_seconds,
         cap_usd=args.cap_usd,
         notifier=notify if args.notify else None,
+        blind=args.blind,
     )
     dashboard = None
     if args.html:

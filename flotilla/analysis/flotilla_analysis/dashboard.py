@@ -6,7 +6,9 @@ seen, errors of finished trials, the reward summary, and every finished trial wi
 cost, flags and a link to its timeline page. The timeline page (``timeline.py``) of a finished trial is
 written once, as ``DIR/trials/<job>__<trial>.html``, and again only when its ``result.json`` changes. A
 trial whose page cannot be rendered is flagged and the watch goes on. Every text is HTML-escaped and the
-page needs no other file; while the watch runs, it reloads itself at the pass interval.
+page needs no other file; while the watch runs, it reloads itself at the pass interval. In blind mode
+(``status["blind"]``, ``flotilla-watch --blind``) the page has no rewards, no unscored reasons and no
+timeline pages: a finished trial shows whether it is valid, its duration, cost and error flags.
 """
 
 from __future__ import annotations
@@ -54,6 +56,9 @@ class Page:
     problem: str | None
 
 
+BLIND_PAGE = Page(None, [], None)
+
+
 class Dashboard:
     """Writes ``DIR/index.html`` per pass and each finished trial's timeline page once."""
 
@@ -69,7 +74,8 @@ class Dashboard:
         self._files: dict[str, str] = {}
 
     def update(self, status: dict[str, Any]) -> Path:
-        rows = [(trial, self.page(trial)) for trial in status["finished"]]
+        blind = bool(status.get("blind"))
+        rows = [(trial, BLIND_PAGE if blind else self.page(trial)) for trial in status["finished"]]
         path = self.out / "index.html"
         replace_text(path, render_dashboard(status, rows, self.refresh_s))
         return path
@@ -264,6 +270,8 @@ def _errors(status: dict[str, Any]) -> str:
 
 
 def _rewards(status: dict[str, Any]) -> str:
+    if status.get("blind"):
+        return '<h2>Rewards: hidden (blind)</h2><p class="muted">a pre-registered wave: no interim looks</p>'
     title = "<h2>Rewards (finished trials)</h2>"
     if not status["rewards"]:
         return title + '<p class="muted">none</p>'
@@ -294,7 +302,7 @@ def trial_flags(trial: dict[str, Any], page: Page) -> list[str]:
     return flags + ([page.problem] if page.problem else [])
 
 
-def _finished(rows: list[tuple[dict[str, Any], Page]]) -> str:
+def _finished(rows: list[tuple[dict[str, Any], Page]], blind: bool) -> str:
     title = f"<h2>Finished trials: {len(rows)}</h2>"
     if not rows:
         return title + '<p class="muted">none</p>'
@@ -302,8 +310,12 @@ def _finished(rows: list[tuple[dict[str, Any], Page]]) -> str:
     for trial, page in rows:
         name = f"{trial['job']}/{trial['trial']}"
         link = f'<a href="{esc(page.href)}">{esc(name)}</a>' if page.href else esc(name)
-        reward = trial["reward"]
-        shown = f"{reward:.3f}" if reward is not None else f"unscored: {trial['unscored']}"
+        if blind:
+            outcome = _cell("yes" if trial["valid"] else "no")
+        else:
+            reward = trial["reward"]
+            shown = f"{reward:.3f}" if reward is not None else f"unscored: {trial['unscored']}"
+            outcome = _cell(shown, sort="" if reward is None else reward, css="num")
         flags = "; ".join(trial_flags(trial, page))
         lines.append(
             "<tr>"
@@ -312,7 +324,7 @@ def _finished(rows: list[tuple[dict[str, Any], Page]]) -> str:
             + _cell(trial["label"])
             + _cell(trial["condition"])
             + _cell(trial["team"])
-            + _cell(shown, sort="" if reward is None else reward, css="num")
+            + outcome
             + _cell(duration(trial["duration_s"]), sort=trial["duration_s"] or "", css="num")
             + _cell(
                 _usd(trial["cost_usd"]),
@@ -322,7 +334,8 @@ def _finished(rows: list[tuple[dict[str, Any], Page]]) -> str:
             + _cell(flags, css="flag")
             + "</tr>"
         )
-    head = ["finished", "trial", "label", "condition", "team", "reward", "duration", "cost", "flags"]
+    head = ["finished", "trial", "label", "condition", "team", "valid" if blind else "reward"]
+    head += ["duration", "cost", "flags"]
     return title + '<p class="muted">Click a column head to sort.</p>' + _table(head, lines, "trials")
 
 
@@ -331,7 +344,8 @@ def render_dashboard(
 ) -> str:
     wave = status["wave"]
     name = wave["plan"] or Path(status["target"]).name
-    title = f"flotilla-watch: {name} [{wave['state']}]"
+    blind = bool(status.get("blind"))
+    title = f"flotilla-watch{' BLIND' if blind else ''}: {name} [{wave['state']}]"
     refresh = f'<meta http-equiv="refresh" content="{max(1, round(refresh_s))}">\n' if refresh_s else ""
     body = "\n".join(
         [
@@ -341,7 +355,7 @@ def render_dashboard(
             _alerts(status),
             _errors(status),
             _rewards(status),
-            _finished(rows),
+            _finished(rows, blind),
         ]
     )
     return (
