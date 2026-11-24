@@ -53,6 +53,20 @@ The report separates native teams, seat slots, shipment evaluations and maximum 
 
 After separate authorization, `--from-plan "$packet" --sha256 "$pin" --harbor EXECUTABLE --out NEW` is the mode that starts Harbor. Use the site's concurrency guard. This mode takes the route, cases and job limit from the packet; it rejects new design flags. The hosted seat rejects a different case count before it can request a completion. Older runs retain their original plans and source checkout.
 
+### Can the inputs distinguish the intended behavior?
+
+Run this before allocating seats. It reads the registered `fresh` and `reordered` inputs, not any seat choices. Nothing is submitted to the world.
+
+```sh
+python3.12 -BS -m examples.seatlab.dispatch_opportunity design "$packet" --sha256 "$pin"
+```
+
+The comparison asks whether the **newest revision** and the **last delivered report** recommend different best bays, assuming truthful inventory reports. In the registered seeds `17,29`, only **10 of 24 unique shipments** distinguish these rules. Using the older report would make 7 choices infeasible and 3 feasible but suboptimal. The other 14 shipments cannot distinguish the rules by their optimal choice, even though availability changed in 2. The 2 arms expose the same 24 shipments twice; they do not create 48 independent opportunities.
+
+Exit `0` means at least one shipment distinguishes the rules. Exit `1` means none do. Exit `3` means a comparison arm is absent; the denominators stay null. Exit `2` rejects an invalid packet or changed source. This is a design check, not a team reward, a forecast of model behavior, or a reason to select favorable seeds.
+
+The [retained native study](results/native-model-primary.json) provides an independent check with different seeds. At seed `2001`, its truthful arrival-order scripts scored 12 optimal and 12 feasible in `fresh`, then 8 optimal and 10 feasible in `reordered`. At seed `2003`, they scored 9 optimal and 9 feasible in `reordered`. All 3 results match the input calculation. The `2003 / fresh` script team never ran.
+
 ## Runtime and retention
 
 The initial study targets Olam commit `6aeb609e31fd77e5f89ce3bcb018db8045520fb7`, not stock Harbor 0.26. Run the maintained `hello-seats` task as an independent positive control first. Use local Docker with at most 1 trial at a time for this run. No cloud provisioning or metered API is required for the controls. Use fresh output directories. Keep all failed attempts and their reason in the study record. Keep host paths, personal credentials and raw provider traces out of public evidence. Publish to the personal fork only.
