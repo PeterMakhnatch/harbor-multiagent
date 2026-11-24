@@ -687,7 +687,7 @@ class World(BaseHTTPRequestHandler):
                 return
             if game["opened"] is None:
                 record("early", seat, action)
-                self._reply(409, {"error": "the season has not started; it starts when every fisher has called once"})
+                self._reply(409, {"error": "the season has not started; it starts when every player has called once"})
                 return
             if seat in game["requests"]:
                 record("repeat", seat, {"round": game["round"], **action})
