@@ -45,7 +45,17 @@ done
 
 Omit `--take` to list the unclaimed configs without writing anything. Workers on the same filesystem can use the same worklist. Each successful claim reserves exactly one ticket. A crash after the claim does not release it. A pre-existing native trial directory, even an empty one, also prevents reissue. An unused claim is not a completed team. On separate machines, assign disjoint shards; two copies of a workspace cannot coordinate. Use your installation's concurrency limit. Keep failed runs. Do not publish the raw workspaces as anonymous model traces.
 
-`emit` records a fingerprint of the local task files after Harbor verifies the manifest's task checksum. `--take` refuses a different tree without using a ticket. Keep the checkout unchanged, including files that Harbor might ignore. The native checksum in each completed result remains authoritative. Older workspaces without `task.sha256` can still be listed and collected. To claim their remaining tickets, emit the same manifest and shard into a fresh directory against the original task. Copy only that fresh `task.sha256` into the older workspace. Never reset its `claims/` or `trials/` directory.
+`emit` records a fingerprint after Harbor verifies the registered task. `take` refuses a changed task without using a ticket. For an older workspace without `task.sha256`, bind it **in place** against the original task using `uv run python -m examples.native_worklist bind --study "$study/manifest.json" "$study/worker-0" 0/2`. The command does not copy the workspace or change its claims or trials.
+
+The same workers can draw from Shift Board and [Joint Reopen](../joint_reopen/README.md). Pass the same list to every process on the host:
+
+```bash
+python3 -BS -m examples.native_worklist status \
+  --study "$shift_reg" "$shift_workspace" 0/1 \
+  --study "$reopen_reg" "$reopen_workspace" 0/1
+```
+
+Use `take` instead of `status` to reserve one config from the least occupied workspace, measured as a fraction of its assigned tickets. Ties follow argument order. `take` returns exit 3 when no ticket remains available. A reservation does not expire. A result file counts as present, not as a valid team result. Use the task's collector for grades. The worklist rejects overlapping tickets in the same invocation. It cannot protect against a separate operator starting Harbor directly or using a second copy of a workspace.
 
 ## 3. Compare the original arms offline
 

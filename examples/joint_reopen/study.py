@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from ..native_study import (
     API_FORMAT,
     KEY_NAME,
     NATIVE_DEFAULTS,
+    TASK_FILES,
     as_choice,
     as_int,
     as_list,
@@ -19,8 +21,10 @@ from ..native_study import (
     check_task,
     native,
     parse_shard,
+    record_task_files,
     require,
     require_normalized,
+    task_files_digest,
     task_identity,
     trial_request,
     write_exclusive,
@@ -118,14 +122,18 @@ def _check_cells(value: object, teams: dict[str, Any]) -> None:
         as_choice(cell["channel"], f"{where} channel", CHANNELS)
 
 
-def load_registration(path: Path) -> dict[str, Any]:
-    record = read_record(path, MAX_REGISTRATION_BYTES)
-    require(record is not None, f"registration {path} does not exist")
-    registration = as_record(record, "registration", REGISTRATION_FIELDS)
+def validate_registration(value: object) -> dict[str, Any]:
+    registration = as_record(value, "registration", REGISTRATION_FIELDS)
     require(registration["schema"] == SCHEMA, f"registration schema must be {SCHEMA}")
     check_task(registration["task"], TASK_NAME)
     _check_cells(registration["cells"], _check_teams(registration["teams"]))
     return registration
+
+
+def load_registration(path: Path) -> dict[str, Any]:
+    record = read_record(path, MAX_REGISTRATION_BYTES)
+    require(record is not None, f"registration {path} does not exist")
+    return validate_registration(record)
 
 
 def world_env(cell: dict[str, Any]) -> dict[str, str]:
@@ -136,18 +144,32 @@ def world_env(cell: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def fresh_workspace(text: str) -> Path:
+    out = Path(text).absolute()
+    require(out.name not in ("", ".", ".."), f"--out {text} names no new directory")
+    workspace = out.parent.resolve(strict=True) / out.name
+    require(not os.path.lexists(workspace), f"workspace {workspace} already exists")
+    return workspace
+
+
 def emit(args: argparse.Namespace) -> list[Path]:
     index, count = parse_shard(args.shard)
     registration = load_registration(Path(args.registration))
     selected = [c for i, c in enumerate(registration["cells"]) if i % count == index]
     require(len(selected) > 0, f"shard {index}/{count} selects no cells")
+    workspace = fresh_workspace(args.out)
     harbor = native()
     task_dir = Path(args.task).resolve() if args.task else TASK_DIR
+    identity = registration["task"]
+    files_digest = task_files_digest(task_dir, identity)
     found = task_identity(harbor, task_dir, TASK_NAME)
-    require(found == registration["task"], f"task {task_dir} is unregistered: {found}")
+    require(found == identity, f"task {task_dir} is unregistered: {found}")
+    require(
+        task_files_digest(task_dir, identity) == files_digest,
+        "task changed while it was checked",
+    )
     teams = registration["teams"]
     require_normalized(harbor, teams)
-    workspace = Path(os.path.abspath(args.out))
     configs, trials = workspace / "configs", workspace / "trials"
     requests = [
         trial_request(
@@ -157,7 +179,10 @@ def emit(args: argparse.Namespace) -> list[Path]:
     ]
     workspace.mkdir()
     written: list[Path] = []
+    created = False
     try:
+        created = record_task_files(workspace / TASK_FILES, files_digest)
+        require(created, f"another writer bound {workspace} first")
         configs.mkdir()
         for cell, request in zip(selected, requests, strict=True):
             target = configs / f"{cell['ticket']}.json"
@@ -166,9 +191,12 @@ def emit(args: argparse.Namespace) -> list[Path]:
     except BaseException:
         for path in written:
             path.unlink(missing_ok=True)
-        if configs.is_dir():
+        if created:
+            (workspace / TASK_FILES).unlink(missing_ok=True)
+        with suppress(OSError):
             configs.rmdir()
-        workspace.rmdir()
+        with suppress(OSError):
+            workspace.rmdir()
         raise
     return written
 
