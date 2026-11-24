@@ -249,6 +249,8 @@ The verifier writes whatever rewards it likes, whether or not an agent is under 
 
 The job summary reports each key.
 
+For an example where coordination and reward can disagree, run `harbor trial start -c examples/configs/features/revised-dispatch-oracle.yaml`. Both seats are scripted and need no provider key. From the checkout, run `python3 -m examples.seat_handoffs events <trial-directory> --boundary acknowledged`. The reader reports whether the booker acknowledged the revision before its final choice. A correct choice alone does not prove that it did.
+
 ## Logs and results
 
 - `seats/<service>/agent/`: the agent's logs, and its `trajectory.json` if the harness writes one.
@@ -258,8 +260,6 @@ The job summary reports each key.
   - `agent_setup` and `agent_execution` span all agents.
   - Token totals sum every agent. The cost total sums every agent, and is unknown (`null`) when an agent that ran a model reported no cost. An agent without a model, such as `oracle` or `nop`, costs nothing.
   - `seat_results` lists every agent with `seat`, `under_test`, `agent_info`, `agent_result` (tokens and cost), `agent_setup`, `agent_execution` and `exception_info`.
-
-For an example where coordination and reward can disagree, run `harbor trial start -c examples/configs/features/revised-dispatch-oracle.yaml`. Both seats are scripted and need no provider key. From the checkout, run `python3 -m examples.seat_handoffs events <trial-directory> --boundary acknowledged`. The reader reports whether the booker acknowledged the revision before its final choice. A correct choice alone does not prove that it did.
 
 ## Limitations
 
