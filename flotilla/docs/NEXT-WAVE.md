@@ -9,6 +9,9 @@ through OpenRouter, from the observed cost per trial; Modal adds about $0.01 per
 - Use the fork's Harbor from its own environment (`.venv/bin/harbor` in the fork's clone), never a
   globally installed `harbor`.
 - Keys come from the `keys` store: run Harbor as `keys run -- .venv/bin/harbor run -c <config> -y`.
+- The waves up to 2026-11-23 ran the harness at fork `main` `6aeb609e`, now tag `baseline/6aeb609e`. On
+  2026-11-23 fork `main` moved to Olam's `main` (`711ca65a`), and the weekly fork integrator now syncs it. A new
+  wave names its harness by tag or SHA in the pre-registration, never as "fork `main`".
 
 ## The 5 steps of a wave
 
