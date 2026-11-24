@@ -38,7 +38,7 @@ To tell whether a teammate received a report before a decision, [retain the mess
 
 Before spending on a communication benchmark, [check what the world actually measures](examples/seat_handoffs/author.md). The same offline check distinguishes a returned report from a receiver acknowledgement. A reusable writer lets two authors instrument a new task without changing Harbor.
 
-To check a planned comparison before assigning teams, [compare two prepared native inputs](examples/seatlab/workbench/input-isolation.md). The command distinguishes one changed role instruction, one changed participant configuration, or one changed world setting. It needs the fork's Python environment but starts no seat.
+Before assigning teams, [compare two unrun local trial configs](examples/seatlab/workbench/input-isolation.md#check-trial-configs-before-any-worker-starts) or two saved native locks. Check that only the named role instruction, participant configuration or world setting changes. The command starts no seat.
 
 To collect **new native calendar trials** from the shallow clone above, fetch its stock generator once:
 

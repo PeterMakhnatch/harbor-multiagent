@@ -1,6 +1,6 @@
 # Check what changes between two native teams
 
-Before paying for a comparison, name the one prepared input that should differ. `isolate` compares two local task directories and two native **trial** locks. It starts no team and reads no API key. Use the fork's installed Python environment. A job lock describes a batch and is not a trial lock.
+Before paying for a comparison, name the one prepared input that should differ. `isolate` compares two local task directories. By default it reads two native **trial** locks. Use `--configs` to build the locks in memory from two local trial configs instead. Neither mode starts a seat. Use the fork's installed Python environment. A job lock describes a batch and is not a trial lock.
 
 ## Try two controls and one confound
 
@@ -29,6 +29,24 @@ locks="$work/locks"
 For your own task, replace each directory and lock. Use `--role-instruction SEAT` for the native instruction a seat loads. A line-ending change alone does not qualify. Use `--participant SEAT` for a harness or participant configuration, not for evidence about the served model. Use `--world-setting NAME` for one explicitly set environment key, not for proof of delivery.
 
 Give the second worker the `comparison` value from the JSON report. Add `--expected-comparison sha256:…` when checking the same ordered pair. Reversing the arms, renaming the target, or changing a checked input produces a different value. Keep the inputs private. The output omits paths, role texts, participant settings and environment values. The digest is an input check, not a signature.
+
+## Check trial configs before any worker starts
+
+Use the [shipping benchmark's preparation commands](../decision_receipt/README.md#prepare-and-check-the-four-native-controls) to create a task and four native JSON configs. Stop after preparation. With those commands' `work` and `py` variables, compare two planned controls:
+
+```sh
+t="$work/task"
+c="$work/controls/configs"
+"$py" -B -m examples.seatlab.workbench isolate --configs \
+  "$t" "$c/dr-settles-plain.json" "$t" "$c/dr-settles-cited.json" \
+  --participant relief --json
+```
+
+Exit `0` means only the receiver configuration differs in this pair. Now substitute `dr-fails-cited.json` on the right. Exit `1` means the pair does **not** isolate the receiver: the supplier fate also changes. Neither result measures a decision, a citation, or a reward.
+
+For a prompt comparison, keep the participant configurations and world settings identical. Use two copies of the task with the same directory name and different parent directories. Change one seat's instruction in one copy. Set each config's `task.path` to its own absolute task directory. Compare with `--role-instruction SEAT`. Use the resulting `comparison` digest to share the prepared inputs. Use `trial_lock_records` only to compare with actual registration records later.
+
+Config mode accepts a plain local JSON trial config, not a job, YAML, or a fully general Harbor invocation. Use an explicit local `task.path`, the participant roster and optional Docker world settings. Configs that depend on external skill files, compose overlays, or a source trial do not qualify. No participant adapter is imported or run. Trial names and output paths do not identify a treatment. The report describes inputs under this checkout's native lock builder; it is not evidence that a worker used them.
 
 ## Interpret the report
 

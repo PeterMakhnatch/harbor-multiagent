@@ -24,6 +24,12 @@ CAVEAT = (
     "host gates, mutable images, schedules, file ownership, effective container settings or what a seat actually saw. "
     "An isolated input is not a behavioral result or permission to spend."
 )
+INPUT_BASIS = "prospective_local_configs"
+PROSPECTIVE = (
+    "Input basis: prospective local trial configs, built into trial locks by the Harbor fork before any run. "
+    "These locks are not registered, nothing was observed, and this result does not authorize a run."
+)
+MAX_ARGS = {False: 9, True: 10}
 
 
 class Arm(NamedTuple):
@@ -69,11 +75,17 @@ def _changed(left: dict[str, str], right: dict[str, str]) -> set[str]:
     return {k for k in left.keys() | right.keys() if left.get(k) != right.get(k)}
 
 
-def _arm(task: Path, lock: Path) -> Arm:
-    from .arm_runtime import inspect_lock
+def _arm(task: Path, path: Path, configs: bool) -> Arm:
     from .arm_sources import inspect_source
 
-    runtime = inspect_lock(lock)
+    if configs:
+        from .arm_config import inspect_config
+
+        runtime = inspect_config(task.absolute(), path)
+    else:
+        from .arm_runtime import inspect_lock
+
+        runtime = inspect_lock(path)
     source = inspect_source(task.absolute(), runtime.task)
     if source.seats != runtime.seats or len(source.seats) < 2:
         raise ValueError("the local task and trial lock must declare the same team")
@@ -178,15 +190,33 @@ def _parse(args: list[str]) -> argparse.Namespace:
         prog="python -m examples.seatlab.workbench isolate",
         allow_abbrev=False,
         description="Check that a prepared multi-agent comparison changes exactly one declared input. Reads local files only.",
+        epilog="By default LEFT_INPUT and RIGHT_INPUT are recorded trial-lock files. With --configs they are local "
+        "trial-config JSON files, checked before any run; the result is prospective, not registered or observed.",
     )
-    for name in ("left_task", "left_lock", "right_task", "right_lock"):
-        parser.add_argument(name, type=Path, metavar=name.upper())
+    for side in ("left", "right"):
+        parser.add_argument(
+            f"{side}_task",
+            type=Path,
+            metavar=f"{side.upper()}_TASK",
+            help=f"local task directory of the {side} arm",
+        )
+        parser.add_argument(
+            f"{side}_input",
+            type=Path,
+            metavar=f"{side.upper()}_INPUT",
+            help=f"trial lock of the {side} arm, or its local trial config with --configs",
+        )
     group = parser.add_mutually_exclusive_group(required=True)
     for name in MODES:
         group.add_argument(
             "--" + name.replace("_", "-"),
             metavar="KEY" if name == "world_setting" else "SEAT",
         )
+    parser.add_argument(
+        "--configs",
+        action="store_true",
+        help="read LEFT_INPUT and RIGHT_INPUT as local trial configs and build their trial locks with the Harbor fork; nothing runs or is registered",
+    )
     parser.add_argument(
         "--expected-comparison",
         metavar="SHA256",
@@ -210,6 +240,7 @@ def _text(result: Record) -> str:
             f"Target differs: {target['changed']}. Additional changes: {other}.",
             f"Native lock includes declared role files: left {covered['left']}, right {covered['right']}.",
             f"Reasons: {reasons}. Comparison: {result['comparison']}",
+            *((PROSPECTIVE,) if result.get("input_basis") == INPUT_BASIS else ()),
             CAVEAT,
         )
     )
@@ -217,7 +248,9 @@ def _text(result: Record) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) > 9 or any(len(os.fsencode(arg)) > 4096 for arg in args):
+    if len(args) > MAX_ARGS["--configs" in args] or any(
+        len(os.fsencode(arg)) > 4096 for arg in args
+    ):
         print("Invalid isolate arguments. Use isolate --help.", file=sys.stderr)
         return 2
     opts = _parse(args)
@@ -232,12 +265,13 @@ def main(argv: list[str] | None = None) -> int:
         print("Invalid target or comparison digest.", file=sys.stderr)
         return 2
     arms: list[Arm] = []
-    for side, task, lock in (
-        ("left", opts.left_task, opts.left_lock),
-        ("right", opts.right_task, opts.right_lock),
+    inputs = "trial config" if opts.configs else "lock"
+    for side, task, path in (
+        ("left", opts.left_task, opts.left_input),
+        ("right", opts.right_task, opts.right_input),
     ):
         try:
-            arms.append(_arm(task, lock))
+            arms.append(_arm(task, path, opts.configs))
         except ImportError:
             print(
                 "Isolation needs the installed Harbor fork. Use its Python environment, without -S.",
@@ -246,11 +280,14 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         except (ValueError, OSError):
             print(
-                f"Cannot verify the {side} local task, lock or roster. No comparison.",
+                f"Cannot verify the {side} local task, {inputs} or roster. No comparison.",
                 file=sys.stderr,
             )
             return 2
     result = compare(arms[0], arms[1], mode, target, opts.expected_comparison)
+    if opts.configs:
+        result["input_basis"] = INPUT_BASIS
+        result["input_note"] = PROSPECTIVE
     print(
         json.dumps(result, sort_keys=True, separators=(",", ":"))
         if opts.json

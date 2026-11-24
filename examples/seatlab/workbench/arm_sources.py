@@ -66,8 +66,7 @@ def inspect_source(root: Path, task_lock: dict[str, Any]) -> Source:
     effective = _native_roles(harbor, task_dir, roles)
     digest, packaged = _native_package(harbor, task_dir, hashes)
     _bind_lock(harbor, task_lock, task_dir, config, digest)
-    if _listing(task_dir)[1] != before:
-        raise ValueError(MOVED)
+    require_unchanged(task_dir, before)
     role_paths = frozenset(roles.values())
     others = [rel for rel in hashes if rel not in role_paths]
     executable = [rel for rel in hashes if before[rel][2] & EXECUTABLE]
@@ -80,6 +79,23 @@ def inspect_source(root: Path, task_lock: dict[str, Any]) -> Source:
         native_digest=digest,
         unpackaged_files=sum(rel not in packaged for rel in others),
     )
+
+
+def bounded_tree(root: Path) -> tuple[Path, dict[str, Stamp]]:
+    task_dir = _task_root(root)
+    files, stamps = _listing(task_dir)
+    if CONFIG_FILE not in files:
+        raise ValueError(NO_CONFIG)
+    if any(not stat.S_ISREG(stamps[name][2]) for name in files):
+        raise ValueError(BAD_TREE)
+    if sum(stamps[name][3] for name in files) > MAX_TASK_BYTES:
+        raise ValueError(BAD_TREE)
+    return task_dir, stamps
+
+
+def require_unchanged(task_dir: Path, stamps: dict[str, Stamp]) -> None:
+    if _listing(task_dir)[1] != stamps:
+        raise ValueError(MOVED)
 
 
 def _native() -> SimpleNamespace:
