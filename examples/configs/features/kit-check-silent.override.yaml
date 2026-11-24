@@ -1,0 +1,4 @@
+services:
+  main:
+    environment:
+      KIT_CHECK_MODE: silent
