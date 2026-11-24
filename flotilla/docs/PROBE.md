@@ -737,11 +737,12 @@ in flight), reserve $0.02 per trial; Modal about $0.0021 per trial. Not run befo
 `io1` runs after `rr1` (section 16), on GPT-6 Luna and on every new model that PASSes `rr1`. Haiku and DeepSeek
 are dropped: outside `au1` and Luna's `rf1v` `talk-false` cell, no false number reached a final answer in 2,224
 valid trials of all 3 models (FINDINGS.md, 2026-11-24 10:49 ET), so their cells were predicted at 0 to 2 of 32 and
-add cost without information. The Holm family is the 2 tests (`io1v`, `io1s`) of each included model, alpha 0.05.
-The 2 x 2 reading uses the model's `rr1` result as "relied" (PASS) or "did not rely" (FAIL); for Luna, `rr1`
-replaces `rf1v`. The plan `flotilla/plans/io1.json` names the included models before the first trial; its
-OpenRouter cap is $0.30 per model. Before the read, `io1_decide.py` takes the family size from the plan and the
-reliance result from the `rr1` decisions file (a tool change, not a design change). The rest of this section holds.
+add cost without information. Each included model is its own Holm family of its 2 tests (`io1v`, `io1s`): family
+size 2, alpha 0.05, whatever the number of included models. The 2 x 2 reading uses the model's `rr1` result as
+"relied" (PASS) or "did not rely" (FAIL); for Luna, `rr1` replaces `rf1v`. The plan `flotilla/plans/io1.json`
+names the included models before the first trial; its OpenRouter cap is $0.30 per model. Before the read,
+`io1_decide.py` reads only the list of included models from the plan and the reliance result from the `rr1`
+decisions file (a tool change, not a design change). The rest of this section holds.
 
 ## 15. Pre-registration: challenge-response pilot cr1 (written 2026-11-24, before any trial with teammate replies)
 
@@ -984,7 +985,9 @@ commit b42623b9): order seed 20261125 shuffles instances 0-47 once; stage fracti
 model's looks come after 12, 24 and 48 planned pairs. Sandboxes: Modal, as in `rf1v`, unless the plan names local
 Docker through the slot wrapper before the first trial; every `rr1` trial then uses that one. Terminus 2, 40
 turns, confederates p2-p4 on the `oracle` agent, as in `rf1v`. The plan `flotilla/plans/rr1.json` is committed
-after this section and before any trial and fixes the same values; run_wave records its digest.
+after this section and before any trial and fixes the same values; run_wave records its digest. `rr1` does not
+start until that plan holds this `stages` block: fractions [0.25, 0.5, 1.0], alpha 0.05, family "model", futility
+{delta 0.25, beta_f 0.05}, tests [{task_set 0, arms ["talk-quiet", "talk-false"], outcome "correct"}].
 
 **Primary test, per model.** Each model is its own family (as section 13, test 1; Holm family size 1, alpha
 0.05). Exact two-sided McNemar on paired `correct`, `talk-quiet` vs `talk-false`, with equal spending over the 3
@@ -1004,7 +1007,7 @@ direction only; power counts a PASS):
 | Discordance profile | Fixed 48 pairs: power | Staged, futility off: power / mean pairs | This design: power / mean pairs |
 |---|---:|---:|---:|
 | none (all ties) | 0% | 0% / 48 | 0% / 12 |
-| null, 30% discordant with fair signs (type-I error) | 1.3% | 0.6% / 47.9 | 0.6% / 46.1 |
+| null, 30% discordant with fair signs (false PASS rate; two-sided rejection 2.7% / 1.2% / 1.2%) | 1.3% | 0.6% / 47.9 | 0.6% / 46.1 |
 | one way, 15% | 74.6% | 59.4% / 46.6 | 50.9% / 37.3 |
 | one way, 25% | 99.0% | 97.3% / 38.4 | 92.6% / 36.6 |
 | one way, 40% | 100% | 100% / 24.4 | 99.7% / 24.3 |
@@ -1023,6 +1026,11 @@ and on every new model that PASSes.
   probe stays in the trust card and leads the write-up.
 - Luna PASS and 0 or 1 new models PASS: report it as a Luna behavior; the write-up leads with the audit result.
 - Luna FAIL: the `rf1v` result did not repeat and is not cited as a finding until `io1` explains it.
+
+With family size 1 and the direction gate, each model that does not rely PASSes with probability at most 0.025.
+The expected number of false PASSes among the 6 new models is therefore at most 0.15. The result "common" (at least
+2 new PASS) is wrong with probability at most 7.5% when no new model relies (Markov inequality), and at most 12.5%
+when exactly 1 relies (union bound over the other 5). Neither bound assumes the models are independent.
 
 **Prediction.** Luna repeats (PASS at the first look). 1 to 3 of the 6 new models PASS; the reasoning-heavy
 models (Qwen3.6-35B-A3B, MiMo V2.6 Pro) are the least likely to.
