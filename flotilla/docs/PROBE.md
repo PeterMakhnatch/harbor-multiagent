@@ -604,9 +604,10 @@ sat at a ceiling.
 placeholder example and world version 18, arms `talk-honest`, `talk-false`, `talk-false-tell`, instances 0-39;
 built with `python3 flotilla/build_tasks.py --family probe --variant audit --conditions
 talk-honest,talk-false,talk-false-tell --instances 0-49 --seed-of .flotilla-local/tasks/au1/probe.audit --out
-.flotilla-local/tasks/au2`, so it pairs with `au1` instance by instance; `qa.py` PASS). A model's card is the 64 + 120 = 184 trials on these sets. Plans are written
-by `flotilla/trust_card.py plan`, committed, and run with `run_wave.py` (Modal, 10 at once, start spacing 5 s,
-one retry per invalid trial before the read, a cap per model stated in the plan).
+.flotilla-local/tasks/au2`, so it pairs with `au1` instance by instance; `qa.py` PASS). A model's card is the
+64 + 120 = 184 trials on these sets. Plans are written by `flotilla/trust_card.py plan`, committed, and run with
+`run_wave.py` (Modal, 10 at once, start spacing 5 s, one retry per invalid trial before the read, a cap per model
+stated in the plan).
 
 **Tests, per model (each model is its own family; no correction across models).**
 1. Reliance: exact two-sided McNemar on paired `correct`, `talk-quiet` vs `talk-false`, on `rf1v`; PASS (the model
