@@ -26,7 +26,7 @@ To check which registered team inputs the retained final grades support, use the
 | --- | --- | --- |
 | Harness USD | Each native seat's `agent_result.cost_usd` | A reported subtotal with known and unknown seats. Other seats do not disappear when one has no price. |
 | Token-priced USD | The released study's joined seat, turn and usage receipts | A calculation at the recorded rates. Input already includes cached input. Do not add cache a second time. |
-| Provider USD | Settled generations in an explicitly supplied local ledger | A team subtotal only for exact request-to-seat matches. It is not all spend on the account. |
+| Provider USD | Settlements in a local host ledger, or saved OpenRouter generation details | A team subtotal only for exact request-to-seat matches. It is not all spend on the account. |
 
 Do not add those columns. They can describe the same call. Keep JSON for exact source decimals. Digits beyond billing precision can come from the harness's serialized floating-point estimate.
 
@@ -177,6 +177,17 @@ python3.12 -BS -m "$wb" account native "$job" --ledger "$events" --owners "$owne
 
 `--ledger` accepts the host's saved OpenRouter settlement JSONL, not a dashboard CSV or arbitrary JSON. It verifies `openrouter_generation.total_cost` against the ledger's nanodollar rounding policy. Omit `--owners` to see how much is unassigned. A failed or unsettled call is not proof that it was free.
 
+If you have [OpenRouter generation details](https://openrouter.ai/docs/guides/features/logs) instead of the host ledger, keep one **already saved** response per line. Do not include a dashboard export or a chat response. Use the same owner records:
+
+```sh
+python3.12 -BS -m "$wb" account native "$job" \
+  --generation-details "$saved_details" --owners "$owners" --json
+```
+
+A minimal line is `{"data":{"id":"gen-example","total_cost":0.0015}}`. The reader uses `data.id`, not `request_id` or `upstream_id`. It reads `data.total_cost` as an exact decimal, not a token estimate. It does not call OpenRouter, print raw IDs, or copy other fields from the provider. Keep the input private: a full response can include user and routing metadata.
+
+Import the ledger **or** the saved details, not both. They can describe the same charge. Copies with the same ID and price count once. Conflicting prices are an input error. A receipt with a zero price is evidence. An absent receipt gives no price. The details format cannot tell you how many calls started, failed, or are missing. Local files do not authenticate the provider.
+
 A trusted host that has the native attempt UUID, seat and returned generation ID can produce an ownership row with `examples.seatlab.workbench.generation_receipts.owner(trial, seat, generation_id)`. Store one JSON object per line in a private file. The row contains a domain-separated hash, not the raw generation ID. Duplicate delivery is safe. Conflicting owners are an error. Never match using the model name, time, cost, or seat label alone. The provider subtotal covers executions in the supplied packets. Executions from an open job can later be replaced. Retries absent from the packets and detached candidates are outside the subtotal.
 
 The stock native seat adapters do not supply this trusted three-way link in an OpenRouter settlement file. A trajectory's self-reported response ID is not independent evidence. If you lack an ownership file, read the ledger on its own. Do not charge a Harbor seat just because the model and time match.
@@ -215,3 +226,13 @@ For each model seat, specify its exact `agent`, `model`, `max_calls`, `max_input
 The native preview supports explicit `terminus-2` routes and the registered scripted seats. It rejects custom agents, route overrides and unsupported settings rather than guessing a price. The result identifies the exact rate card, limits file and lock or plan by SHA-256. Keep these digests with a spending decision.
 
 An existing two-world shipping plan can be quoted per worker with `account shipping-plan STOCK_REG INFLIGHT_REG PLAN --expected-plan DIGEST --rates RATES --limits LIMITS --declared-usd USD`. See the [released worker assignments](../../ship_handover/disconnected-workers.md). Both commands exit 0 when within the declared amount, 1 when above it, and 2 when they cannot price the input. Quotes round the ceiling **up** to cents. A quote is conditional on external enforcement of its call, token, model and retry limits; it is not an enforced spend cap. An exit of 0 does not grant permission to start.
+
+### Which controls can stop a charge?
+
+| Path | What happens before a generation | What it cannot enforce |
+| --- | --- | --- |
+| [Direct Flash adapter](../visibility/deepseek.py) | Every participating process reserves a hold in the [same local SQLite file](../visibility/spend.py). A refused hold stops that request. An uncertain response keeps the hold. | A different ledger, a different host, code that bypasses the adapter, or a provider price change. |
+| [Dispatch Handoff hosted seat](../seat_agent.py) | The request pins one free route, disables fallback and sets provider maximum prices to zero. | Any other OpenRouter client or another use of its key. |
+| Native `account plan` or `account shipping-plan` | The operator calculates a conditional ceiling from the supplied rates and limits. No request occurs. | Any runtime limit. A quote is not a reservation. |
+
+Reading old jobs and settlements uses none of these model routes. It needs no key. Do not start a paid native harness on the strength of a quote alone.

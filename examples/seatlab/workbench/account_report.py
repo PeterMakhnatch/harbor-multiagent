@@ -246,15 +246,23 @@ def text(report: Record) -> str:
                 f"  {s['name']}: {_value(s['disposition'])}; reported model {_value(s['reported_model'])}; served model(s) {', '.join(s['served_models']) or 'unknown'}; input {_value(s['input_tokens'])}; output {_value(s['output_tokens'])}; harness USD {_usd(s['harness_usd'])}; token-priced USD {_usd(s['priced_low_usd'])} to {_usd(s['priced_high_usd'])}"
             )
     if report["provider_receipts"] is None:
-        lines.append("Provider charges: unknown (no generation ledger supplied)")
+        lines.append("Provider charges: unknown (no settlement evidence supplied)")
     else:
         receipt = report["provider_receipts"]
         usd, gens = receipt["known_usd"], receipt["generations"]
-        lines.append(
-            f"Provider ledger: {_usd(usd['settled'])} USD settled; {_usd(usd['assigned_to_team'])} USD assigned to these teams ({gens['matched']['count']} generations); {_usd(usd['not_assigned'])} USD unassigned"
+        label = (
+            "Saved generation details" if "documents" in receipt else "Provider ledger"
         )
         lines.append(
-            f"  Seats without an owner record: {receipt['seats']['without_owner_record']}; unsettled calls: {sum(receipt['ledger']['unsettled_calls'].values())}. This is not an invoice."
+            f"{label}: {_usd(usd['settled'])} USD in supplied settlements; {_usd(usd['assigned_to_team'])} USD assigned to these teams ({gens['matched']['count']} generations); {_usd(usd['not_assigned'])} USD unassigned"
+        )
+        if "documents" in receipt:
+            coverage = "Call starts, failures and missing bills are unknown."
+        else:
+            pending = sum(receipt["ledger"]["unsettled_calls"].values())
+            coverage = f"Unsettled calls in this ledger: {pending}."
+        lines.append(
+            f"  Seats without an owner record: {receipt['seats']['without_owner_record']}. {coverage} This is not an invoice."
         )
     if (archive := report.get("attempt_archive")) is not None:
         method = archive["harness_usd"]

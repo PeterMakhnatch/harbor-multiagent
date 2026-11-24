@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from decimal import (
     ROUND_CEILING,
@@ -384,15 +385,16 @@ def _kind(claim: tuple[str, str] | None, roster: dict[str, frozenset[str]]) -> s
 
 
 def _assign(
-    ledger: _Ledger,
+    settled: Iterable[tuple[str, Decimal]],
     owners: dict[str, tuple[str, str]],
     roster: dict[str, frozenset[str]],
 ) -> Record:
     totals = {kind: [0, Decimal(0)] for kind in KINDS}
     team: dict[tuple[str, str], list[Any]] = {}
     settled_digests: set[str] = set()
-    for _, (generation, usd) in sorted(ledger.settled.items()):
+    for generation, usd in settled:
         digest = _generation_hash(generation)
+        _require(digest not in settled_digests, "settled generation is not unique")
         settled_digests.add(digest)
         claim = owners.get(digest)
         kind = _kind(claim, roster)
@@ -474,7 +476,7 @@ def reconcile(
             roster, repeated_packets = _roster(packets)
             ledger = _ledger(ledger_path)
             owners, owner_rows, repeated_owners = _owners(owners_path)
-            assigned = _assign(ledger, owners, roster)
+            assigned = _assign(ledger.settled.values(), owners, roster)
     except DecimalException as error:
         raise Malformed("USD arithmetic exceeds exact supported range") from error
     return {
