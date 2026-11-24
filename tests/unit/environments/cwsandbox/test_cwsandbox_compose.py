@@ -24,6 +24,27 @@ def backend(monkeypatch):
         commands.append(shlex.split(argv[-1]))
         return SimpleNamespace(stdout="ok", stderr="", returncode=0)
 
+    execute_command = AsyncMock(side_effect=execute)
+
+    def sdk_exec(argv, **kwargs):
+        if not kwargs.get("stdin"):
+            return execute_command(argv, **kwargs)
+        chunks = []
+
+        async def write_stdin(data):
+            chunks.append(data)
+
+        class Process:
+            stdin = SimpleNamespace(write=write_stdin, close=AsyncMock())
+
+            def __await__(self):
+                script = (
+                    b"".join(chunks).decode().removesuffix(" </dev/null\nexit $?\n")
+                )
+                return execute_command(["sh", "-c", script], **kwargs).__await__()
+
+        return Process()
+
     async def write(path, data, **kwargs):
         uploads[path] = data
 
@@ -35,7 +56,7 @@ def backend(monkeypatch):
         sandbox_id="test-sandbox",
         start=AsyncMock(),
         ready=AsyncMock(),
-        exec=AsyncMock(side_effect=execute),
+        exec=Mock(side_effect=sdk_exec),
         write_file=AsyncMock(side_effect=write),
         read_file=AsyncMock(return_value=b"artifact"),
         stop=AsyncMock(),
@@ -44,7 +65,11 @@ def backend(monkeypatch):
     factory.delete = AsyncMock()
     monkeypatch.setattr(cwsandbox._cwsandbox, "Sandbox", factory)
     return SimpleNamespace(
-        sandbox=sandbox, factory=factory, commands=commands, uploads=uploads
+        sandbox=sandbox,
+        factory=factory,
+        commands=commands,
+        uploads=uploads,
+        execute=execute_command,
     )
 
 
@@ -143,6 +168,11 @@ def test_compose_lifecycle_and_service_operations(tmp_path, backend, filename):
     assert (tmp_path / "output.txt").read_bytes() == b"artifact"
     assert any(c[-2:] == ["stop", "cache"] for c in commands)
     assert any(c[-2:] == ["down", "--remove-orphans"] for c in commands)
+    assert all(
+        call.args[0] == ["sh", "-s"]
+        for call in backend.sandbox.exec.call_args_list
+        if call.kwargs.get("stdin")
+    )
     backend.sandbox.stop.assert_awaited_once_with(missing_ok=True)
     backend.factory.delete.assert_awaited_once()
     assert backend.factory.delete.await_args.args == ("test-sandbox",)
@@ -152,7 +182,7 @@ def test_compose_lifecycle_and_service_operations(tmp_path, backend, filename):
 @pytest.mark.parametrize("phase", ["docker info", "build", "up", "cancel"])
 def test_failed_compose_start_deletes_sandbox(tmp_path, backend, phase):
     env = make_env(tmp_path)
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def fail(argv, **kwargs):
         words = shlex.split(argv[-1])
@@ -166,7 +196,7 @@ def test_failed_compose_start_deletes_sandbox(tmp_path, backend, phase):
             raise asyncio.CancelledError()
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = fail
+    backend.execute.side_effect = fail
     with pytest.raises(asyncio.CancelledError if phase == "cancel" else RuntimeError):
         asyncio.run(env.start(force_build=False))
     backend.factory.delete.assert_awaited_once()
@@ -187,7 +217,7 @@ def test_compose_start_recovers_from_transient_readiness_error(
     tmp_path, backend, phase, error_type
 ):
     env = make_env(tmp_path)
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
     failed = False
 
     async def transient(argv, **kwargs):
@@ -202,7 +232,7 @@ def test_compose_start_recovers_from_transient_readiness_error(
             raise error_type("temporarily unavailable")
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = transient
+    backend.execute.side_effect = transient
 
     async def run():
         await env.start(force_build=False)
@@ -226,7 +256,7 @@ def test_compose_readiness_deadline_cleans_up(
         else "_MAIN_CONTAINER_TIMEOUT_SEC"
     )
     monkeypatch.setattr(cwsandbox._CWSandboxDinD, timeout_name, 0.03)
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def not_ready(argv, **kwargs):
         probe = (
@@ -240,7 +270,7 @@ def test_compose_readiness_deadline_cleans_up(
             await asyncio.Event().wait()
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = not_ready
+    backend.execute.side_effect = not_ready
 
     async def run():
         with pytest.raises(RuntimeError, match="after 0.03s") as exc:
@@ -328,14 +358,14 @@ def test_overlay_environment_upload_failure_cleans_up(tmp_path, backend):
     env = make_env(tmp_path, extra_docker_compose=[overlay])
     (env.environment_dir / "docker-compose.yaml").unlink()
     (env.environment_dir / "Dockerfile").unlink()
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def fail_copy(argv, **kwargs):
         if shlex.split(argv[-1])[-1] == "main:/work":
             return SimpleNamespace(stdout="", stderr="copy failed", returncode=1)
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = fail_copy
+    backend.execute.side_effect = fail_copy
     with pytest.raises(RuntimeError, match="copy failed"):
         asyncio.run(env.start(force_build=False))
     backend.factory.delete.assert_awaited_once()
@@ -373,7 +403,7 @@ def test_cancelled_teardown_finishes_cleanup_before_propagating(
     async def run():
         await env.start(force_build=False)
         entered, release = asyncio.Event(), asyncio.Event()
-        execute = backend.sandbox.exec.side_effect
+        execute = backend.execute.side_effect
 
         async def block(*args, **kwargs):
             entered.set()
@@ -385,7 +415,7 @@ def test_cancelled_teardown_finishes_cleanup_before_propagating(
             return await execute(argv, **kwargs)
 
         if phase == "down":
-            backend.sandbox.exec.side_effect = execute_down
+            backend.execute.side_effect = execute_down
         elif phase == "stop":
             backend.sandbox.stop.side_effect = block
         else:
@@ -411,7 +441,7 @@ def test_cancelled_teardown_finishes_cleanup_before_propagating(
 
 def test_direct_teardown_cancellation_still_deletes_sandbox(tmp_path, backend):
     env = make_env(tmp_path)
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def cancelled_down(argv, **kwargs):
         if shlex.split(argv[-1])[-2:] == ["down", "--remove-orphans"]:
@@ -420,7 +450,7 @@ def test_direct_teardown_cancellation_still_deletes_sandbox(tmp_path, backend):
 
     async def run():
         await env.start(force_build=False)
-        backend.sandbox.exec.side_effect = cancelled_down
+        backend.execute.side_effect = cancelled_down
         with pytest.raises(asyncio.CancelledError):
             await env.stop(delete=True)
         backend.factory.delete.assert_awaited_once()
@@ -443,7 +473,7 @@ def test_download_archive_cleanup_does_not_replace_result(
         backend.sandbox.read_file.side_effect = RuntimeError(
             "original download failure"
         )
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def fail_cleanup(argv, **kwargs):
         if argv[-1].startswith("rm -f ") and argv[-1].endswith(".tar.gz"):
@@ -452,7 +482,7 @@ def test_download_archive_cleanup_does_not_replace_result(
 
     async def run():
         await env.start(force_build=False)
-        backend.sandbox.exec.side_effect = fail_cleanup
+        backend.execute.side_effect = fail_cleanup
         if read_fails:
             with pytest.raises(RuntimeError, match="original download failure"):
                 await env.download_dir("/output", tmp_path / "download")
@@ -470,7 +500,7 @@ def test_compose_failure_diagnostics_do_not_publish_environment_values(
 ):
     secret = "sensitive-test-environment-value"
     env = make_env(tmp_path, persistent_env={"APP_TOKEN": secret})
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def fail(argv, **kwargs):
         words = shlex.split(argv[-1])
@@ -482,7 +512,7 @@ def test_compose_failure_diagnostics_do_not_publish_environment_values(
             )
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = fail
+    backend.execute.side_effect = fail
     with pytest.raises(RuntimeError, match=f"docker compose {phase} failed") as error:
         asyncio.run(env.start(force_build=False))
     assert secret not in str(error.value)
@@ -493,7 +523,7 @@ def test_compose_failure_diagnostics_do_not_publish_environment_values(
 @pytest.mark.parametrize("phase", ["daemon", "main"])
 def test_inner_readiness_timeout_is_not_reported_as_deadline(tmp_path, backend, phase):
     env = make_env(tmp_path)
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def fail(argv, **kwargs):
         probe = (
@@ -505,7 +535,7 @@ def test_inner_readiness_timeout_is_not_reported_as_deadline(tmp_path, backend, 
             raise TimeoutError("inner probe timeout")
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = fail
+    backend.execute.side_effect = fail
     with pytest.raises(TimeoutError, match="inner probe timeout"):
         asyncio.run(env.start(force_build=False))
     backend.factory.delete.assert_awaited_once()
@@ -639,14 +669,14 @@ def test_compose_bind_directory_failure_cleans_up_before_start(tmp_path, backend
         tmp_path,
         mounts=[{"type": "bind", "source": "/caller/logs", "target": "/logs/agent"}],
     )
-    execute = backend.sandbox.exec.side_effect
+    execute = backend.execute.side_effect
 
     async def denied(argv, **kwargs):
         if "&& chmod 777" in argv[-1]:
             return SimpleNamespace(stdout="", stderr="denied", returncode=1)
         return await execute(argv, **kwargs)
 
-    backend.sandbox.exec.side_effect = denied
+    backend.execute.side_effect = denied
     with pytest.raises(RuntimeError, match="bind-mount directories"):
         asyncio.run(env.start(force_build=False))
     backend.factory.delete.assert_awaited_once()
@@ -702,7 +732,7 @@ def test_compose_forwards_referenced_host_env_and_resolves_log_paths(
     async def run():
         await env.start(force_build=False)
         up = next(c for c in backend.commands if c[-2:] == ["up", "-d"])
-        exported = dict(part.split("=", 1) for part in up[: up.index("docker")])
+        exported = dict(part.split("=", 1) for part in up[1 : up.index("&&")])
         assert {
             name: exported[name]
             for name in ["HOST_ONLY", "UNBRACED", "EXTRA", "DEFAULTED", "NESTED"]
@@ -788,7 +818,7 @@ def test_compose_host_environment_requires_explicit_opt_in(
     async def run():
         await env.start(force_build=False)
         up = next(c for c in backend.commands if c[-2:] == ["up", "-d"])
-        exported = dict(part.split("=", 1) for part in up[: up.index("docker")])
+        exported = dict(part.split("=", 1) for part in up[1 : up.index("&&")])
         assert exported.get("AWS_SECRET_ACCESS_KEY") == (
             "host-only-secret" if forward else None
         )

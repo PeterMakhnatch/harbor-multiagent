@@ -110,5 +110,8 @@ class SingleStepTrial(Trial):
                     timeout_sec=self._verifier_timeout_sec,
                     user=user,
                 )
+        except Exception:
+            self.result.exception_info = None
+            raise
         finally:
             self.result.verifier.finished_at = self._now()

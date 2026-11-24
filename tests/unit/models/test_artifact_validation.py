@@ -117,7 +117,7 @@ class TestVerifierCollectConfig:
     def test_defaults(self) -> None:
         hook = VerifierCollectConfig(command="pg_dump app > /tmp/dump.sql")
         assert hook.service == "main"
-        assert hook.timeout_sec == 60.0
+        assert hook.timeout_sec is None
         assert hook.user is None
 
     def test_sidecar_hook(self) -> None:

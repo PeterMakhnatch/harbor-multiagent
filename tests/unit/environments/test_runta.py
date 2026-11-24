@@ -321,18 +321,25 @@ async def test_compose_restricted_start_applies_policy_before_containers_start(
     )
 
 
-def test_docker_start_injects_startup_environment(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+async def test_docker_start_passes_startup_environment_outside_argv(
+    tmp_path: Path,
+) -> None:
     env = _FakeRuntaEnvironment(tmp_path)
+    env.task_env_config.docker_image = "example/main:latest"
     strategy = _RuntaDockerStrategy(env)  # pyright: ignore[reportArgumentType]
 
-    argv = shlex.split(strategy._docker_create_command("example/main:latest"))
+    await strategy.start(force_build=False)
 
-    injected = {
-        argv[index + 1].split("=", 1)[0]: argv[index + 1].split("=", 1)[1]
-        for index, value in enumerate(argv)
-        if value == "-e"
-    }
-    assert injected == {
+    create = next(
+        entry for entry in env.commands if entry["command"].startswith("docker create ")
+    )
+    argv = shlex.split(create["command"])
+    assert [argv[i + 1] for i, value in enumerate(argv) if value == "-e"] == [
+        "TASK_ENV",
+        "PERSISTENT_ENV",
+    ]
+    assert create["env"] == {
         "TASK_ENV": "task",
         "PERSISTENT_ENV": "persistent",
     }
@@ -363,7 +370,7 @@ def test_docker_run_preserves_mount_types_and_read_only(tmp_path: Path) -> None:
     env = _FakeRuntaEnvironment(tmp_path, mounts=mounts)
     strategy = _RuntaDockerStrategy(env)  # pyright: ignore[reportArgumentType]
 
-    argv = shlex.split(strategy._docker_create_command("example/main:latest"))
+    argv = shlex.split(strategy._docker_create_command("example/main:latest", env={}))
     mount_specs = [
         argv[index + 1] for index, value in enumerate(argv) if value == "--mount"
     ]
@@ -501,7 +508,8 @@ async def test_sidecar_exec_uses_requested_service_without_main_defaults(
 
     argv = shlex.split(env.commands[-1]["command"])
     assert "-w" not in argv
-    assert argv[-8:] == ["-e", "SIDE=1", "-u", "1000", "db", "sh", "-c", "printf ok"]
+    assert argv[-8:] == ["-e", "SIDE", "-u", "1000", "db", "sh", "-c", "printf ok"]
+    assert env.commands[-1]["env"]["SIDE"] == "1"
     assert env.commands[-1]["timeout_sec"] == 30
 
 
@@ -519,8 +527,9 @@ async def test_environment_sidecar_exec_does_not_merge_main_persistent_env(
 
     argv = shlex.split(fake.commands[-1]["command"])
     assert "-e" in argv
-    assert "SIDE=1" in argv
-    assert "MAIN_ONLY=1" not in argv
+    assert "SIDE" in argv
+    assert "MAIN_ONLY" not in argv
+    assert "MAIN_ONLY" not in fake.commands[-1]["env"]
     assert "agent" not in argv
 
 
@@ -680,34 +689,27 @@ async def test_set_network_policy_uses_harbor_lifecycle_and_updates_state() -> N
     assert runtime.egress.policies[-1].mode == EgressMode.DENYLIST
 
 
-def test_docker_exec_injects_runta_ca_env_and_preserves_explicit_values(
+@pytest.mark.asyncio
+async def test_docker_exec_injects_runta_ca_env_and_preserves_explicit_values(
     tmp_path: Path,
 ) -> None:
     env = _FakeRuntaEnvironment(tmp_path)
     strategy = _RuntaDockerStrategy(env)  # pyright: ignore[reportArgumentType]
 
-    argv = shlex.split(
-        strategy._docker_exec_command(
-            "python -c 'print(1)'",
-            cwd=None,
-            env={
-                "SSL_CERT_FILE": "/custom/ca.pem",
-                "TASK_ONLY": "1",
-            },
-            user=None,
-        )
-    )
-    injected = {
-        argv[index + 1].split("=", 1)[0]: argv[index + 1].split("=", 1)[1]
-        for index, value in enumerate(argv)
-        if value == "-e"
-    }
-
-    assert injected == {
-        **_RUNTA_CONTAINER_CA_ENV,
+    override_env = {
         "SSL_CERT_FILE": "/custom/ca.pem",
-        "TASK_ONLY": "1",
+        "TASK_ONLY": "synthetic='value'\n",
+        "EMPTY": "",
     }
+    await strategy.exec("python -c 'print(1)'", env=override_env)
+
+    call = env.commands[-1]
+    argv = shlex.split(call["command"])
+    injected = call["env"]
+    assert [argv[i + 1] for i, value in enumerate(argv) if value == "-e"] == list(
+        injected
+    )
+    assert injected == {**_RUNTA_CONTAINER_CA_ENV, **override_env}
     assert injected["REQUESTS_CA_BUNDLE"] == _RUNTA_CONTAINER_CA_BUNDLE
 
 
@@ -719,24 +721,22 @@ async def test_compose_exec_injects_runta_ca_env_for_main_and_sidecars(
     strategy = _RuntaComposeStrategy(env)  # pyright: ignore[reportArgumentType]
 
     await strategy.exec("python -c 'print(1)'")
-    main_argv = shlex.split(env.commands[-1]["command"])
+    main_call = env.commands[-1]
 
     await strategy.service_exec(
         "curl https://example.com",
         service="api",
         env={"CURL_CA_BUNDLE": "/custom/curl.pem"},
     )
-    sidecar_argv = shlex.split(env.commands[-1]["command"])
+    sidecar_call = env.commands[-1]
 
-    def exec_env(argv: list[str]) -> dict[str, str]:
-        return {
-            argv[index + 1].split("=", 1)[0]: argv[index + 1].split("=", 1)[1]
-            for index, value in enumerate(argv)
-            if value == "-e"
-        }
+    def exec_env(call: dict[str, Any]) -> dict[str, str]:
+        argv = shlex.split(call["command"])
+        keys = [argv[i + 1] for i, option in enumerate(argv) if option == "-e"]
+        return {key: call["env"][key] for key in keys}
 
-    assert exec_env(main_argv) == _RUNTA_CONTAINER_CA_ENV
-    assert exec_env(sidecar_argv) == {
+    assert exec_env(main_call) == _RUNTA_CONTAINER_CA_ENV
+    assert exec_env(sidecar_call) == {
         **_RUNTA_CONTAINER_CA_ENV,
         "CURL_CA_BUNDLE": "/custom/curl.pem",
     }
@@ -1170,6 +1170,45 @@ async def test_runtime_download_dir_uses_sdk_content_merge(
     )
     files.download.assert_not_awaited()
     env._runtime_exec_raw.assert_not_awaited()
+
+
+async def test_runtime_exec_env_does_not_enter_sdk_bootstrap() -> None:
+    from runta._internal.execution import _bootstrap
+    from runta._internal.helpers import command_parts
+
+    value = "synthetic='value'\n"
+    command_env = {"TOKEN": value, "EMPTY": ""}
+    runtime_exec = AsyncMock(
+        return_value=SimpleNamespace(stdout_text="", stderr_text="", exit_code=0)
+    )
+    env = RuntaEnvironment.__new__(RuntaEnvironment)
+    env._runtime = SimpleNamespace(exec=runtime_exec)
+
+    await env._runtime_exec_raw(
+        """printf '%s=%s' "$TOKEN" "$EMPTY" """, env=command_env
+    )
+
+    args, kwargs = runtime_exec.await_args
+    command, arguments = command_parts(args[0], cwd=kwargs.get("cwd"))
+    bootstrap = _bootstrap(
+        "/tmp/runta-test",
+        command,
+        arguments,
+        env=kwargs.get("env"),
+        timeout=None,
+        limit=1024,
+        stdin_size=len(kwargs["stdin"].encode()),
+    )
+    assert "synthetic" not in bootstrap
+    process = await asyncio.create_subprocess_exec(
+        command,
+        *arguments,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await process.communicate(kwargs["stdin"].encode())
+    assert process.returncode == 0
+    assert stdout.decode() == value + "="
 
 
 @pytest.mark.parametrize(

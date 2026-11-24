@@ -2072,8 +2072,12 @@ async def test_compose_exec_applies_main_defaults_but_not_to_sidecars(
     assert env._dind is not None
     calls: list[list[str]] = []
 
-    async def capture(subcommand: list[str], timeout_sec: int | None = None):
+    async def capture(
+        subcommand: list[str], timeout_sec: int | None = None, *, env=None
+    ):
         calls.append(subcommand)
+        if "main" in subcommand:
+            assert env == {"PERSISTENT": "1", "LOCAL": "2"}
         return ExecResult(stdout="", stderr="", return_code=0)
 
     env._dind._compose_exec = capture  # type: ignore[method-assign]
@@ -2088,9 +2092,9 @@ async def test_compose_exec_applies_main_defaults_but_not_to_sidecars(
             "-w",
             "/workspace",
             "-e",
-            "PERSISTENT=1",
+            "PERSISTENT",
             "-e",
-            "LOCAL=2",
+            "LOCAL",
             "-u",
             "agent",
             "main",

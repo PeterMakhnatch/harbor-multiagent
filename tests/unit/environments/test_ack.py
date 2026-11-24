@@ -1,10 +1,13 @@
+import asyncio
 import json
 import os
 import tempfile
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from harbor.environments.ack import ACKEnvironment
+from harbor.models.task.config import EnvironmentConfig
 
 
 @pytest.mark.parametrize(
@@ -25,6 +28,43 @@ def test_legacy_json_options(name):
         {"namespace": "test", name: json.dumps(value)}
     )
     assert getattr(options, name) == value
+
+
+@pytest.mark.asyncio
+async def test_exec_forwards_environment_over_stdin(monkeypatch):
+    env = object.__new__(ACKEnvironment)
+    env._ensure_client = AsyncMock()
+    env._merge_env = Mock(side_effect=lambda values: values)
+    env._core_api = Mock()
+    env._exec_api = Mock()
+    env._read_exec_output = Mock(return_value=("", ""))
+    env.default_user = None
+    env.task_env_config = EnvironmentConfig()
+    env.pod_name = "test-pod"
+    env.namespace = "test-ns"
+    response = Mock(returncode=0)
+    stream = Mock(return_value=response)
+    monkeypatch.setattr("harbor.environments.ack.stream", stream)
+    value = "synthetic='value' $(not-a-command)\n"
+
+    await env.exec(
+        """printf '%s=%s' "$TOKEN" "$EMPTY" """,
+        env={"TOKEN": value, "EMPTY": ""},
+    )
+
+    request = stream.call_args.kwargs
+    assert request["stdin"] is True
+    assert request["command"] == ["sh", "-s"]
+    script = response.write_stdin.call_args.args[0]
+    process = await asyncio.create_subprocess_exec(
+        *request["command"],
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate(script.encode())
+    assert process.returncode == 0, stderr
+    assert stdout.decode() == value + "="
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import shlex
 import tempfile
+import uuid
 from datetime import timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any, override
@@ -26,6 +27,7 @@ from harbor.environments.definition import (
     require_agent_environment_definition,
     should_use_prebuilt_docker_image,
 )
+from harbor.environments.dind_compose import shell_env_stdin
 from harbor.environments.options import EnvironmentOptions
 from harbor.models.environment_type import EnvironmentType
 from harbor.models.task.config import (
@@ -674,19 +676,17 @@ class RunloopEnvironment(BaseEnvironment):
         if not self._devbox or not self._client:
             raise RuntimeError("Devbox not found. Please build the environment first.")
 
-        full_command = f"bash -c {shlex.quote(command)}"
-
-        # Add environment variables
+        full_command = f"/bin/bash -c {shlex.quote(command)}"
+        script = None
         if env:
-            for key, value in env.items():
-                full_command = f"{key}={shlex.quote(value)} {full_command}"
-
+            script = shell_env_stdin(full_command, env)
+            full_command = "bash -s"
         # Add working directory
         effective_cwd = effective_exec_cwd(
             cwd, self.task_env_config.workdir, self._workdir
         )
         if effective_cwd:
-            full_command = f"cd {effective_cwd} && {full_command}"
+            full_command = f"cd {shlex.quote(effective_cwd)} && {full_command}"
 
         if user is not None:
             # su requires a username; resolve numeric UIDs via getent
@@ -702,17 +702,38 @@ class RunloopEnvironment(BaseEnvironment):
         # to avoid timing out long-running agent commands. This doesn't impact trial length
         timeout = (timeout_sec or 60 * 60 * 24) / interval_seconds
 
-        try:
-            # Execute the command and await completion
-            polling_config = PollingConfig(
-                interval_seconds=interval_seconds,
-                max_attempts=int(timeout),
-            )
-            result = await self._devbox.cmd.exec(
-                command=full_command,
+        polling_config = PollingConfig(
+            interval_seconds=interval_seconds,
+            max_attempts=int(timeout),
+        )
+        devbox = self._devbox
+
+        async def run(body: str):
+            return await devbox.cmd.exec(
+                command=body,
                 shell_name=self._shell_name,
                 polling_config=polling_config,
             )
+
+        try:
+            if script is None:
+                result = await run(full_command)
+            else:
+                directory = f"/tmp/harbor-env-{uuid.uuid4().hex}"
+                created = await run(f"mkdir -m 700 {directory}")
+                if created.exit_code != 0:
+                    raise RuntimeError(
+                        f"Could not create Runloop exec directory: {await created.stderr()}"
+                    )
+                path = f"{directory}/env.sh"
+                try:
+                    with tempfile.TemporaryDirectory() as local_dir:
+                        source = Path(local_dir) / "env.sh"
+                        source.write_text(script, encoding="utf-8")
+                        await devbox.file.upload(path=path, file=source)
+                    result = await run(f"{full_command} < {path}")
+                finally:
+                    await run(f"rm -rf {directory}")
 
             stdout_text = await result.stdout()
             stderr_text = await result.stderr()
