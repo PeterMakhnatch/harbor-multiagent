@@ -145,6 +145,9 @@ month with `POST /audit` (world version 15; `?format=csv` gives the plain file f
 month's CSV from task.json. Arms `talk-honest`, `talk-false` and `talk-false-tell` (the false confederate also says
 it added up every row of the category).
 
+`flotilla/trust_card.py` runs one model through the standing trust-card protocol (PROBE.md section 13, `verify`
+reliance and `audit` sets): `plan` writes a run_wave plan, `report` analyses the finished wave (docs/NEXT-WAVE.md).
+
 ## Tests
 
 The fork runs no CI, so run `flotilla/check.sh` before you push: it runs both test suites, `ruff check`,

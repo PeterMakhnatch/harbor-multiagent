@@ -163,6 +163,30 @@ each wave in PROBE.md, watch it with `flotilla-watch --blind`, and re-derive bef
 Do not repeat `vf1`, `pc2`, `pc3`, `pa1` or `rf1c` on these models: in every one, each subject computed the answer
 from its own data and nothing moved it (FINDINGS.md, 2026-11-24).
 
+### Trust card
+
+One command per stage gives any model a card under the standing protocol of PROBE.md section 13: reliance
+(`rf1v`, 32 instances x `talk-quiet`, `talk-false`) and audit (`au2`, 40 instances x `talk-honest`, `talk-false`,
+`talk-false-tell`), 184 trials per model, confederates p2-p4 on the `oracle` agent.
+
+```bash
+python3 flotilla/trust_card.py plan --model openrouter/<model> --name card-<short> --prereg-commit <sha with section 13>
+# commit the plan, then run_wave.py --dry-run, the run and one --retry-invalid run, as the command prints
+python3 flotilla/trust_card.py report --plan flotilla/plans/cards/card-<short>.json --jobs .flotilla-local/jobs \
+    --pattern 'card-<short>-??????' --out .flotilla-local/cards/card-<short>
+```
+
+- `plan` writes `flotilla/plans/cards/<name>.json`: Modal, 10 jobs at once, 5 s start spacing, reserve $0.02 per
+  trial and a cap of $0.006 per trial (`--cap-usd` overrides). It refuses a set that lacks a planned instance or arm,
+  tasks of another probe kind, reliance tasks not built `--read-first`, other scripted seats, a prereg commit
+  without the section heading, a plan name with a condition or model word, and an existing plan file. It commits and
+  runs nothing.
+- `report` runs `probe_analysis.py --plan --json` once per set (into `<out>/reliance.json`, `audit.json` and `.md`),
+  then `python3 -m flotilla_analysis.cards` into `<out>`, and prints one block per model (`<out>/card.txt`; the
+  decisions in `card.json`). The decisions are section 13's, computed by `trust_card.py` from the raw exact McNemar
+  p of the JSON (p < 0.05 per model, no correction across models); the Holm-adjusted decisions in the analysis output
+  are not used. `--reliance-pattern` and `--audit-pattern` read older waves (for example `rf1-*` and `au1-*`).
+
 ## Lessons to keep
 
 - Every byte a seat can see is evidence to it: names, headers, counters, formats, examples, networks.
