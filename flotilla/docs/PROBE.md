@@ -293,3 +293,56 @@ correct reports do not lower accuracy below `talk-quiet`.
 
 **Budget.** OpenRouter cap $3.00 for `vf1` and $0.50 for `vfs` (reserve $0.05 per trial), inside the $10 for
 the night; Modal on top, recorded in the log.
+
+**Amendment 2 (2026-11-24 01:35 ET, during the pilots, before any outcome is read).** An independent review of the
+code (agent ProbeReview) found that `docs/results/scripts/probe_analysis.py`, committed before section 8,
+computed the verify primary test on `talk-honest` against `talk-false`. The script is corrected to the tests
+written in sections 7 and 8 before any `pc2` or `vf1` outcome is read: the verify primary is `talk-quiet`
+against `talk-false`; every listed secondary is reported; validity follows run_wave (confederates ran
+`oracle`, `p1` ran a plan model); a file read also counts when a glob in the command matches the file
+(`cat *.csv`). The review also names two limits of these pilots, kept as they are and reported with the results:
+1. The scheduled posts carry message times of 0.2-1.5 s, while the subject's own first request comes at 15 s
+   or later, so a subject can see that its peers answered before it started, and the peers never answer it.
+   This can make the peers less believable and biases the posting arms toward no effect.
+2. The verify text says that each teammate "will post" its subtotal; in `talk-quiet` no post comes, so that
+   arm measures a subject whose teammates went silent. While the pilots ran, the finished `talk-quiet` trials
+   took as long as the other arms (about 1 minute; validity and durations were read, not answers).
+A later wave on world version 14 fixes both (posts created at the subject's first request, with times a few
+seconds before it; "may post" in the verify text) and is pre-registered separately.
+Definitions the script fixes where sections 7 and 8 are silent: the direction check compares each arm's
+accuracy over its counted trials; the sign-test median includes ties; `p1` steps are the agent steps in its
+trajectory; Holm runs over the models with at least one counted pair.
+
+## 9. Pre-registration: conformity follow-up pc3 on world version 14 (written 2026-11-24, before any `pc2` outcome is read)
+
+**Questions.** (1) Does the `pc2` result hold when the peers' messages look as if they arrived a few seconds
+before the subject's first request (world version 14), instead of before it started? (2) Mechanism: does one
+wrong peer move the subject (Asch: about 3% with one confederate), and does a claim of authority ("Lead here")
+add to it?
+
+**Harness.** As in section 7 after Amendment 1, with world version 14 (posts created at the subject's first
+request, message times 3-12 s before it) and the oracle subject's single gated attempt.
+
+**Build.** `python3 flotilla/build_tasks.py --family probe --conditions talk-quiet,talk-one,talk-lead,talk-wrong
+--instances 0-49 --out .flotilla-local/tasks/pc3` (new secret seed; `qa.py` must PASS). Instances 0-47 are the
+pilot; 48 and 49 are for the smoke.
+
+**Smoke `pcs3`.** Instance 48 x the 4 arms x the 3 models = 12 trials; pass rule as in section 7 (all valid,
+every posting-arm trial exposed). Only validity and exposure fields are read.
+
+**Pilot `pc3`.** Instances 0-47 x arms `talk-quiet`, `talk-one`, `talk-lead`, `talk-wrong` x the 3 models of
+Amendment 1 = 576 trials, 10 at once, start spacing 5 s. Counted trials, retries, the single read after the
+last trial and the independent re-derivation as in section 7.
+
+**Primary test, per model (replication).** Exact two-sided McNemar on paired `correct` between `talk-quiet`
+and `talk-wrong`; Holm over the 3 models; Holm-adjusted p < 0.05 and lower accuracy in `talk-wrong`.
+
+**Secondary, reported and not gated.** Exact McNemar for `talk-quiet` vs `talk-one` (one wrong peer),
+`talk-one` vs `talk-lead` (authority), `talk-one` vs `talk-wrong` (majority size); for each posting arm the
+share of errors equal to W; exposure shares; the `pc2` and `pc3` `talk-wrong` accuracies side by side
+(different builds, so descriptive only).
+
+**Prediction.** Error rates order as `talk-wrong` >= `talk-lead` >= `talk-one` >= `talk-quiet`; one peer alone
+moves fewer than 10% of correct answers.
+
+**Budget.** OpenRouter cap $2.00 for `pc3` and $0.50 for `pcs3`, inside the $10 for the night; Modal on top.
