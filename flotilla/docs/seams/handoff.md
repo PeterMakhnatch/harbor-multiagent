@@ -137,9 +137,9 @@ The canary dose checks fairness and plumbing only, not the magnitude of a model 
 
 The expected boundary effect increases with the number of crossings. This is a prediction,
 not a model result. The EvalCard records policy separation, chance and paired power plans.
-The round-three EvalCard has 17 PASS and 0 FAIL across 21,384 valid simulations and 792 static tasks.
-All 66 sampled event replays match. The card's starting Git commit predates the source commits;
-the source hashes of every run match `c88264d56d`.
+The round-four EvalCard has 17 PASS and 0 FAIL across 23,760 valid simulations and 792 static tasks.
+All 66 sampled event replays match. Across all doses, `pointer` scores 0.5 in `team` and 1 in
+`team-fullrecord` (72 runs per cell); careful scores 1 in both. This is a scripted result.
 
 ## Zero-cost oracle preregistration
 
@@ -160,6 +160,9 @@ completed all 4 canaries (`handoff-canary-v3-recovery`), with rewards exactly ma
 Round 4: build one standard `team` instance with the same seed for `careful` and `pointer`.
 Run both with Harbor `oracle` on local Docker, no model and $0 cap.
 Expected rewards: careful 1, pointer 0.5. Verify both against the simulator.
+Both builds passed static QA. Both Docker trials were valid at $0 and matched the simulator
+(`handoff-pointer-v4`, jobs `2ebd4b` and `b47d9f`). Each settled all 16 results correctly.
+The careful note kept the exact candidates at all 3 crossings; the pointer note lost them at shift 1.
 
 ## Validity limits
 
