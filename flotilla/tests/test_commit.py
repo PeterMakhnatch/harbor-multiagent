@@ -15,7 +15,7 @@ QA = load(FLOTILLA / "qa.py")
 SEED = 7920628754219
 N = int(os.getenv("COMMIT_SWEEP_INSTANCES", "3"))
 POLICIES = ("careful", "naive", "nop", "lone", "blind", "random", "script-loop",
-            "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+            "script-filter", "script-check", "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 EARLY = ("solo", "probe-control", "probe-quiet")
 
 
@@ -127,7 +127,7 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 result = SIM.simulate_built(path, policy, schedule)
                 score = evidence(task, result)
                 scores.append(score)
-                if policy == "careful":
+                if policy in ("careful", "script-check"):
                     assert score["reward"] == 1 and score["closed"] and score["stale_after_delivery"] == 0
                     assert score["p1_stalled"] == score["p2_stalled"] == 0
                     opening = [e["kind"] for e in result["events"]
@@ -136,10 +136,10 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                     if arm not in ("solo", "probe-quiet"):
                         assert score["affected_after_delivery"] == score["affected_total"]
                     for seat, calls in result["requests"].items():
-                        requests[seat] = max(requests[seat], calls)
-                elif policy in ("naive", "script-loop"):
+                        requests[f"{policy}/{seat}"] = max(requests[f"{policy}/{seat}"], calls)
+                elif policy in ("naive", "script-loop", "script-filter"):
                     assert score["reward"] == int(arm in EARLY)
-                    if arm not in EARLY and policy == "script-loop":
+                    if arm not in EARLY and policy in ("script-loop", "script-filter"):
                         assert score["stale_after_delivery"] == (
                             len(task["params"]["outages"]) * task["params"]["batch"] // FAMILY.BATCH)
                     if arm in ("probe-trap", "hint", "solo-seam") and policy == "naive":
