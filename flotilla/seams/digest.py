@@ -110,6 +110,7 @@ def resolve(action, home, job, replies):
 
 def note_text(home, rules):
     lines = ["home " + " ".join(f"{k}={v}" for k, v in home.items())]
+    lines.append("First matching rule wins; later clauses on its line are nested exceptions.")
     lines.extend("; ".join(f"{condition}=>{action}" for condition, action in rule["clauses"]) for rule in rules)
     return "\n".join(lines)
 
@@ -132,11 +133,12 @@ def parse_note(text, card=False):
     home = dict(p.split("=") for p in pairs)
     rules = []
     for i, line in enumerate(lines[1:]):
-        if not line.strip():
+        if not line.strip() or line.startswith("First matching rule wins"):
             continue
         clauses = []
         for clause in line.split(";"):
             condition, action = (part.strip() for part in clause.split("=>"))
+            condition = re.sub(r"\s+", "", condition)
             clauses.append([condition, action])
         rules.append({"id": i + 1, "clauses": clauses})
     if card:
@@ -242,3 +244,170 @@ def generate(seed, instance, n_seats, difficulty):
                 "batches": batches, "products": products, "fields": list(defaults), "cap": cap,
                 "card_cap": card_cap, "reference": reference, "card": card, "difficulty": difficulty}
     raise ValueError("unable to generate balanced distinct cells")
+
+
+def action_prose(action):
+    if action == "hold":
+        return "Hold the job."
+    if action == "home":
+        return "Send the job home."
+    if action.startswith("check:"):
+        check, *choices = action.split()
+        return f"Check {check[6:]} before the final action. " + " ".join(
+            f"If the reply is {reply}, {action_prose(outcome)[0].lower() + action_prose(outcome)[1:]}"
+            for reply, outcome in (item.split("=") for item in choices))
+    return f"Send the job to {action}."
+
+
+def condition_prose(condition):
+    return " and ".join(re.sub(r"([=<>])", lambda m: {"=": " is ", ">": " is over ", "<": " is under "}[m[0]],
+                               part) for part in condition.split(","))
+
+
+def render_manual(home, rules):
+    lines = ["# Finishing desk manual", "",
+             "The shop runs a print finishing service for walk-in and trade customers. "
+             "The office maintains the equipment and sets the routing rules for this edition.",
+             "The home lane is the normal destination for each product."]
+    lines.extend(f"Product {p} has home lane {lane}." for p, lane in home.items())
+    lines.extend(["", "Apply the first numbered rule that fits the ticket. "
+                  "Within that rule, apply its deepest matching exception. "
+                  "Each exception adds its conditions to all preceding conditions in that rule. "
+                  "If no rule applies, send the job home.", ""])
+    for index, rule in enumerate(rules, 1):
+        lines.append(f"Rule {index}.")
+        for depth, (condition, action) in enumerate(rule["clauses"]):
+            label = "Main" if not depth else f"Exception {depth}"
+            lines.append(f"{label}: When {condition_prose(condition)}, {action_prose(action)}")
+            lines.append("This is a standing rule for the desk, not a recommendation for a particular order. "
+                         "The office reviews these arrangements when it updates the manual.")
+        lines.append("")
+    lines.append("The desk is responsible for routing tickets. Cleaning, payroll and equipment repair belong "
+                 "to separate office teams. This paragraph adds no routing rule.")
+    return "\n".join(lines)
+
+
+def parse_action(sentence):
+    if sentence == "Hold the job.":
+        return "hold"
+    if sentence == "Send the job home.":
+        return "home"
+    if match := re.fullmatch(r"Send the job to ([A-Z])\.", sentence):
+        return match[1]
+    match = re.fullmatch(r"Check (\w+) before the final action\. (.+)", sentence)
+    replies = re.findall(r"If the reply is (\w+), ([^.]+\.)", match[2])
+    return " ".join([f"check:{match[1]}", *(f"{k}={parse_action(v[0].upper() + v[1:])}" for k, v in replies)])
+
+
+def parse_manual(text):
+    home = dict(re.findall(r"Product (\w+) has home lane ([A-Z])\.", text))
+    rules = []
+    for line in text.splitlines():
+        if match := re.fullmatch(r"Rule (\d+)\.", line):
+            rules.append({"id": int(match[1]), "clauses": []})
+        elif match := re.fullmatch(r"(?:Main|Exception \d+): When ([^,]+), (.+)", line):
+            conditions = match[1].replace(" is over ", ">").replace(" is under ", "<").replace(" is ", "=")
+            rules[-1]["clauses"].append([conditions.replace(" and ", ","), parse_action(match[2])])
+    return home, rules
+
+
+def extension_arm(inst, arm, max_text, max_messages):
+    if arm not in ARMS:
+        raise ValueError("unknown arm")
+    seats, batches = inst["seats"], inst["batches"]
+    card = arm.startswith("probe-writer-")
+    if arm == "solo":
+        seats, batches = seats[:1], batches[-1:]
+    elif card:
+        seats, batches = seats[:2], [batches[0], batches[-1]]
+    elif arm == "probe-worker-control":
+        final = batches[-1]
+        batches = batches[:-1] + [sorted(final, key=lambda row: row["cell"].endswith(".0"))]
+    cap = inst["card_cap"] if card else inst["cap"]
+    if arm == "probe-writer-control":
+        cap *= 4
+    roles = {s: "worker" if i == len(seats) - 1 else "planner" if i == 0 else "relay"
+             for i, s in enumerate(seats)}
+    manual = render_manual(inst["home"], inst["rules"])
+    briefings, instructions = {}, {}
+    public = public_briefing(inst["fields"])
+    for i, seat in enumerate(seats):
+        role = roles[seat]
+        own = {"role": role, "jobs": len(batches[i])}
+        if card:
+            own["format"] = "card"
+        if i == 0:
+            own["manual"] = manual
+        briefings[seat] = own
+        instructions[seat] = public + role_briefing(own, cap, arm) + ("\n\n" + manual if i == 0 else "")
+    scripted = seats[1:] if card else seats[:-1] if arm.startswith("probe-worker-") else []
+    return {"briefings": briefings, "instructions": instructions, "initial_active": seats[:1],
+            "messaging": False, "scripted_seats": scripted,
+            "params": {"batches": dict(zip(seats, batches, strict=True)), "roles": roles, "cap": cap}}
+
+
+def public_briefing(fields):
+    extra = ", ".join(f for f in fields if f not in ("rush", "proof", "account", "stock"))
+    return (
+        "You work the finishing desk at Harbor Print. Each ticket has an ID, product code and quantity "
+        "(`qty`). It also has rush (yes or no), proof (approved or pending), account, and stock (house or custom)"
+        + (f", and {extra}" if extra else "") + ".\n"
+        "Every job must end with one final action: send it to a lane or desk (N, E, S, W, P, C, X, F, Q), "
+        "or hold it. Some jobs need a check first. Check systems are credit (ok or stop), press (free or busy), "
+        "freight (booked or none) and ink (ready or short). Extra checks are allowed. Each final action is permanent.\n"
+        "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
+        "If your shift has not started, wait until GET /whoami returns `active` equal to `active`. "
+        "GET /work returns your role, up to 5 open jobs, and your incoming note on the first read. "
+        "POST /check with `{\"job\":\"example\",\"what\":\"credit\"}` returns the check reply. "
+        "POST /act with `{\"actions\":[{\"job\":\"example\",\"do\":\"send\",\"to\":\"C\"}]}` sends one job. "
+        "For a hold action, use `\"do\":\"hold\"` and omit `to`. Replace the example ID with an open job ID. "
+        "You can send 1 to 5 actions per call, only for your current page. GET /work then shows the next jobs. "
+        "Work until GET /work returns `done: true`. GET /note shows your incoming note again at any time.\n\n")
+
+
+def role_briefing(own, cap, arm):
+    role = own["role"]
+    if role == "worker" and "manual" in own:
+        return "You work the desk alone today. Use the manual below for all your jobs. No handover note is needed."
+    if role == "planner":
+        text = "You are the day planner. The manual below is yours alone. Work your own jobs first."
+    else:
+        address = ("You left yourself a note on your last shift." if arm == "solo-seam" else
+                   "The previous shift left you a note.")
+        text = (f"You work this desk shift. {address} The note is your only copy of the house rules. "
+                "You cannot see the manual or ask questions. Work every job. "
+                "If no rule in the note applies, send the job to its home lane. If no home lane is known, hold it.")
+    if role == "worker":
+        return text
+    if arm == "solo-seam":
+        text += " Write a note for yourself on the next shift; you will lose this shift's context."
+    elif own.get("format") == "card":
+        text += (" Write a rule card. Line 1 is `home` followed by product=lane pairs separated by spaces. "
+                 "Each further line has conditions joined by commas, then `=>`, then an outcome. "
+                 "A condition is field=value, qty>N or qty<N. An outcome is a destination code, `hold`, `home`, "
+                 "or `check:<what>` followed by reply=outcome pairs separated by spaces. "
+                 "The matching line with the most conditions decides; on a tie, the earlier line wins. "
+                 "A job matching no line goes home. The desk terminal applies your card exactly. "
+                 "If it cannot parse the card, it holds the jobs.")
+    else:
+        text += " Write the handover note for the next shift's worker. That worker has only your note and its jobs."
+    text += f"\nThe note can hold at most {cap} characters, including newlines."
+    if arm == "hint":
+        text += ("\nRules that seldom apply matter as much as common ones: keep every rule and every exception "
+                 "in the note, and cut background and reasons first.")
+    return text + ("\nPOST /note/check with `{\"text\":\"...\"}` measures its size without sending it. "
+                   "POST /note/seal with the same body sends it once and ends your shift. "
+                   "A note over the cap is rejected. Finish your own jobs before sealing.")
+
+
+def qa(task, views):
+    import json
+
+    final = task["params"]["batches"][task["seats"][-1]]
+    ids = [r["job"]["id"] for r in final]
+    for seat, view in views.items():
+        own = json.loads(view["env.SEAT_BRIEFING"])
+        if ("manual" in own) != (seat == task["seats"][0]):
+            yield f"{seat}: inappropriate manual access"
+        if any(job in view["instruction"] or job in view["env.SEAT_BRIEFING"] for job in ids):
+            yield f"{seat}: leaked final ticket"
