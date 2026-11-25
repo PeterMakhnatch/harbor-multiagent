@@ -256,6 +256,8 @@ def _load_push() -> tuple[bool, list[str], list[str]]:
     try:
         task = json.loads(TASK_JSON_PATH.read_text())
         push, scripted = task.get("push", False), task.get("scripted_seats") or []
+        if task.get("extension"):
+            return False, [], []
     except (OSError, ValueError, AttributeError):
         return False, [], [f"{TASK_JSON_PATH} is not a JSON object"]
     if push is False:
@@ -420,7 +422,7 @@ HOST: ExtensionHost | None = None
 
 
 def load_extension() -> None:
-    global EXTENSION, HOST, MESSAGING
+    global EXTENSION, HOST, MESSAGING, PUSH, PUSH_SEATS
     if not TASK_JSON_PATH.is_file():
         return
     task = json.loads(TASK_JSON_PATH.read_text())
@@ -429,7 +431,7 @@ def load_extension() -> None:
         return
     if not isinstance(name, str) or not name.isidentifier():
         raise ValueError("invalid extension name")
-    if GAME is not None or AUDIT is not None or SCHEDULED or REPLIES or PUSH or INBOX or SUBMIT_GATE:
+    if GAME is not None or AUDIT is not None or SCHEDULED or REPLIES or INBOX or SUBMIT_GATE:
         raise ValueError("extensions cannot combine with legacy game or probe hooks")
     path = Path(__file__).with_name("ext") / f"{name}.py"
     spec = importlib.util.spec_from_file_location("world_extension", path)
@@ -443,6 +445,10 @@ def load_extension() -> None:
     if type(messaging) is not bool:
         raise ValueError("extension messaging must be boolean")
     MESSAGING = messaging
+    PUSH = task.get("push", messaging)
+    if type(PUSH) is not bool or (PUSH and not messaging):
+        raise ValueError("invalid extension push setting")
+    PUSH_SEATS = SEATS if PUSH else []
     EXTENSION = module.create(task, HOST)
     for route, methods in EXTENSION.routes.items():
         if (not route.startswith("/") or route.startswith("/admin/") or route in ROUTES
@@ -824,14 +830,19 @@ class World(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         self._handle("POST")
 
-    def _reply(self, status: int, body: object, headers: dict[str, str] | None = None) -> None:
+    def _reply(self, status: int, body: object, headers: dict[str, str] | None = None,
+               receipt: tuple[str, str, list[str]] | None = None) -> None:
         pushed = self._pushed(body)
         if pushed:
             body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
         written = self._write(status, json.dumps(body).encode(), "application/json", headers)
-        if pushed and written:  # pushed messages count as delivered only once a body carrying them was written
+        if written and (pushed or receipt):
             with LOCK:
-                _deliver(self.push_seat or "", [m["id"] for m in pushed], "push")
+                if pushed:
+                    _deliver(self.push_seat or "", [m["id"] for m in pushed], "push")
+                if receipt:
+                    seat, path, ids = receipt
+                    record("delivered", seat, {"ids": ids, "path": path})
 
     def _write(self, status: int, data: bytes, content_type: str, headers: dict[str, str] | None = None) -> bool:
         """Send a reply; True when its body was written (a HEAD reply has the headers only)."""
@@ -1042,12 +1053,16 @@ class World(BaseHTTPRequestHandler):
                 self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
                 return
             HOST.attempts[seat] += 1
+            receipt = None
             if HOST.attempts[seat] > 1000:
                 status, reply = 429, {"error": "request limit reached"}
             else:
-                status, reply = EXTENSION.handle(seat, method, path, body, parse_qs(urlsplit(self.path).query))
+                result = EXTENSION.handle(seat, method, path, body, parse_qs(urlsplit(self.path).query))
+                status, reply = result[:2]
+                if len(result) == 3 and result[2]:
+                    receipt = (seat, path, result[2])
             record("extension_call", seat, {"method": method, "path": path, "status": status})
-        self._reply(status, reply)
+        self._reply(status, reply, receipt=receipt)
 
 
     def _audit(self, seat: str, body: dict[str, Any]) -> None:
