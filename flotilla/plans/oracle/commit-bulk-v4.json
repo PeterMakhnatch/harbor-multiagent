@@ -1,0 +1,37 @@
+{
+  "name": "commit-bulk-rehearsal-v4",
+  "prereg": {
+    "commit": "61807695faa411cbfe8a0334dbfcc4dfb609228a",
+    "doc": "flotilla/docs/seams/commit.md",
+    "section": "## Bulk rehearsal pre-registration (2026-11-25)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b4-commit/tasks",
+      "manifest": "/tmp/seams1125/b4-commit/tasks/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b4-commit/filter",
+      "manifest": "/tmp/seams1125/b4-commit/filter/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 15,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}
