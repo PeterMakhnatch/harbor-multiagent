@@ -152,8 +152,9 @@ class Desk:
         if path == "/desk":
             return 200, self.desk()
         if path == "/log":
-            records = (self.logs.copy() if self.arm == "team-record" and self.closed
-                       else [r for r in self.logs if r["shift"] == self.shift])
+            full = (self.arm == "team-fullrecord" or (self.arm == "team-record" and self.closed)
+                    or (self.arm.endswith("-control") and self.shift == self.params["shifts"]))
+            records = self.logs.copy() if full else [r for r in self.logs if r["shift"] == self.shift]
             return 200, {"calls": records}
         if path == "/handover":
             return self.handover(seat, body)

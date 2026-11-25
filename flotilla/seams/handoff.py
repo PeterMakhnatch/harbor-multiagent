@@ -10,16 +10,17 @@ DOSES = {"canary": 3, "standard": 4, "heavy": 8}
 SEATS = DOSES
 CALL_CAP = 18
 NOTE_CAP = 200
-ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record",
+ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record", "team-fullrecord",
         "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
 TWINS = (("probe-hunt-control", "probe-hunt-trap"), ("probe-ref-control", "probe-ref-trap"))
-PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record"))
-ARM_WORDS = ("handoff", "solo-seam", "team-record", *[arm for arm in ARMS if arm.startswith("probe-")])
+PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record", "team-fullrecord"))
+ARM_WORDS = ("handoff", "solo-seam", "team-record", "team-fullrecord", *[arm for arm in ARMS if arm.startswith("probe-")])
 TEAM_SENTENCE = "A different operator works each shift."
 RESET_SENTENCE = "You are the same operator across shifts, with a fresh session and container each time."
 EXTRA_SENTENCES = {
     "hint": "Keep each outstanding batch ID with its carrier reference, and keep the list of possible bad lots in your note.",
     "team-record": "After `POST /close`, `GET /log` also shows every earlier shift's calls and replies.",
+    "team-fullrecord": "During work and after closing it, `GET /log` also shows the complete uncapped record of all earlier shifts.",
     "twin": "At handover the desk writes the outgoing note from the full record instead of using your note.",
 }
 
@@ -233,7 +234,7 @@ def extension_arm(inst, arm, max_text, max_messages):
         else:
             framing = RESET_SENTENCE if arm == "solo-seam" else TEAM_SENTENCE
             suffix = (f"You work shift {index} of {count}. At each handover, the current session closes. "
-                      f"The next session starts with only the note; the old log closes.\n{framing}")
+                      f"The next session starts with your note. Your own log closes at handover.\n{framing}")
         if arm in EXTRA_SENTENCES:
             suffix += "\n" + EXTRA_SENTENCES[arm]
         instructions[seat] = common + "\n" + suffix + "\n"

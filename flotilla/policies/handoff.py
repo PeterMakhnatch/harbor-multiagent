@@ -15,7 +15,7 @@ def check(code, reply):
     return reply
 
 
-def record_candidates(log, lots, family):
+def record_state(log, lots, family):
     batches, refs, results = {}, {}, {}
     for call in log:
         reply = call["reply"]
@@ -26,7 +26,7 @@ def record_candidates(log, lots, family):
     for ref, status in results.items():
         if ref in refs and refs[ref] in batches:
             possible = family.narrow(possible, batches[refs[ref]], status)
-    return possible
+    return {batch: ref for ref, batch in refs.items()}, possible
 
 
 def shuffled(values, salt):
@@ -50,6 +50,10 @@ def work(name, client, own, memory, family):
     else:
         bindings, possible = family.parse_note(desk["note"], lots)
     local = set(lots)
+    if memory is None and name not in ("lone", "blind"):
+        record = check(*(yield from client.get("/log")))
+        if any(call["shift"] < desk["shift"] for call in record["calls"]):
+            bindings, possible = record_state(record["calls"], lots, family)
     available = {b["batch"]: b["lots"] for b in desk["plan"] + desk["open"]}
     planned = [b["batch"] for b in desk["plan"] if b["state"] == "planned"]
     if name == "reverse":
@@ -103,7 +107,7 @@ def work(name, client, own, memory, family):
         suspects = local
         record = check(*(yield from client.get("/log")))
         if any(call["shift"] < desk["shift"] for call in record["calls"]):
-            suspects = record_candidates(record["calls"], lots, family)
+            _, suspects = record_state(record["calls"], lots, family)
     elif name in ("lone", "blind"):
         keep, suspects = {}, set()
     else:
