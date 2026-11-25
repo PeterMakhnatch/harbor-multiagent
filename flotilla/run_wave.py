@@ -955,7 +955,7 @@ def primary_of(task: str):
 
 
 def primary_success(score: dict, primary) -> bool:
-    if score.get("flags") or score.get("omission"):
+    if any(score.get(key) for key in ("flags", "flagged", "omission", "stalled_seats")):
         return False
     if isinstance(primary, str):
         value = score.get(primary)
@@ -963,7 +963,7 @@ def primary_success(score: dict, primary) -> bool:
             return value
     elif isinstance(primary, dict) and set(primary) == {"field", "gte"}:
         value, threshold = score.get(primary["field"]), primary["gte"]
-        if type(value) in (int, float) and type(threshold) in (int, float):
+        if all(type(item) in (int, float) and math.isfinite(item) for item in (value, threshold)):
             return value >= threshold
     raise ValueError(f"missing or invalid primary outcome {primary!r}")
 
@@ -976,16 +976,24 @@ def extension_problem(score: dict, task: str) -> str | None:
         return f"invalid extension result: {score['invalid']}"
     if score.get("mode") != "extension" or score.get("family") != data["family"]:
         return "score for another family"
-    if data.get("versions") != score.get("versions"):
+    if not isinstance(data.get("versions"), dict) or data["versions"] != score.get("versions"):
         return "extension version mismatch"
     reward = score.get("reward")
     if type(reward) not in (int, float) or not 0 <= reward <= 1:
         return "missing or invalid extension reward"
     try:
         primary_success(score, primary_of(task))
-    except (ValueError, TypeError, KeyError) as exc:
+    except (ValueError, TypeError, KeyError, SyntaxError, OSError) as exc:
         return str(exc)
     return None
+
+def read_score(path: Path) -> dict | None:
+    try:
+        score = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return score if isinstance(score, dict) else None
+
 
 
 def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | None:
@@ -1000,7 +1008,9 @@ def trial_problem(trial: Path | None, result: dict | None, cell: dict) -> str | 
     score_path, state_path = trial / "verifier" / "score.json", trial / "verifier" / "world-state.json"
     if not score_path.is_file() or not state_path.is_file():
         return "no verifier output"
-    verdict = json.loads(score_path.read_text())
+    verdict = read_score(score_path)
+    if verdict is None:
+        return "invalid verifier output"
     if verdict.get("error") is not None:
         return f"score error {verdict['error']}"
     if (verdict.get("instance"), verdict.get("condition")) != (cell["instance"], cell["arm"]):
@@ -1512,9 +1522,9 @@ class Outcomes:
             if trial is None or result is None:
                 continue
             path = trial / "verifier" / "score.json"
-            if not path.is_file():
+            score = read_score(path)
+            if score is None:
                 continue
-            score = json.loads(path.read_text())
             instance, arm = score.get("instance"), score.get("condition")
             task = self.paths.get((task_set, instance, arm))
             if not task:

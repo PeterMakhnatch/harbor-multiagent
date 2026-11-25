@@ -2150,6 +2150,9 @@ def test_extension_outcomes_pair_valid_trials_and_count_flagged_omission(tmp_pat
     assert RUN.primary_success({"reward": .2, "passed": True}, "passed")
     assert RUN.primary_success({"accuracy": .8}, {"field": "accuracy", "gte": .8})
     assert not RUN.primary_success({"accuracy": .79}, {"field": "accuracy", "gte": .8})
+    assert not RUN.primary_success({"reward": 1, "stalled_seats": ["p2"]}, {"field": "reward", "gte": 1})
+    assert not RUN.primary_success({"passed": True, "flags": ["missing duty"]}, "passed")
+    assert RUN.read_score(tmp_path / "absent.json") is None
     with pytest.raises(ValueError):
         RUN.primary_success({}, "passed")
 
