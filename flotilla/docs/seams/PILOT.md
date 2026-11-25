@@ -23,6 +23,17 @@ A family enters when all of this is true:
 A family that every live trial passes at `standard` and `heavy` is at the ceiling for this model class. It
 stays in the suite as a canary for smaller models. It does not enter a frontier pilot.
 
+Result on 2026-11-25 (playtests of GPT-6.2 Sol and Claude Opus 5.5; see README.md):
+
+| Family | Entry | Reason |
+|---|---|---|
+| `handoff` | Yes, with the twin pair | `team-implicit`: Opus lost 10 of 25, Sol 1 of 16 (not at the seam); `team`: 0 of 20 lost |
+| `digest`, `commit`, `tell`, `interface`, `settle` (base arms) | No | No loss at the seam, or 1, in 20 to 52 playtests each; canaries for this class |
+| `week` | No | An integration scenario; it has no matched pair |
+
+A pilot with smaller models (GPT-6 Luna, Claude Haiku 5.5) is a separate, cheaper option: they lost 15 of 23
+playtests on `digest`, `handoff`, `tell`, `interface` and `commit`, most of them at the seam.
+
 ## 3. Models and harnesses
 
 - Models: `openai/gpt-6.2-sol` and `anthropic/claude-opus-5.5`. Both have zero-data-retention endpoints in the
@@ -38,10 +49,16 @@ stays in the suite as a canary for smaller models. It does not enter a frontier 
 |---|---|---|
 | A, control gate | The control arms (`solo`; `team-fullrecord` where the family has it) at each requested level; 10 instances per model | 9 of 10 full successes per model and level. A level that fails is void for that model and is dropped. |
 | B, effect check | Each matched pair of arms (test arm and its control, same instances) at the first level that passed A; 12 pairs per model; staged exact McNemar at 3, 6 and 12 pairs | 2 or more control-only successes in 1 pair for 1 model. If no effect is seen with all 12 pairs valid, the family is "at the ceiling at this level"; the same check then runs at the next level that passed A. |
-| C, headline | `team` against the primary control, with `hint` and `solo-seam` where the family has them; n pairs per model from the eval card's power plan, at most 100 | None. Fixed sample, exact McNemar, alpha 0.05, Holm correction per model. |
+| C, headline | `team` against the primary control, with `hint`, `solo-seam` and `team-implicit` where the family has them; n pairs per model from the eval card's power plan, at most 100 | None. Fixed sample, exact McNemar, alpha 0.05, Holm correction per model. |
 
 Run a stage with `python3 flotilla/run_wave.py <plan> --stop-after-stage A`, read the gate result, then resume
 the same plan without the flag. Each stage has its own cumulative cap in the plan.
+
+For `handoff`, stage B tests the 2 scripted-successor pairs. No live playtest has exercised them since their
+repair, and the playtest finding is in the twin pair `team` / `team-implicit`, which the plan runs in stage C.
+With a loss on about 1 instance in 8 (the fresh-instance rate for Opus), 12 pairs show 2 or more losses with
+a probability of about 0.45, so a 12-pair gate on the twin pair would be too weak. The recommended first paid
+step is therefore stage A, then the twin pair alone on the stage C instances (94 per model).
 
 ## 5. Outcomes
 
@@ -71,15 +88,25 @@ Retire a family for this model class when one of these is true:
 
 ## 8. Cost
 
-`pilot-forecast.md` has the table per family, per stage and per model, with low, expected and high values.
-The estimate uses a turn model fitted on 2,679 finished seats of the earlier probe waves (in-sample error 36%
-to 40%), 1 world call per model turn, and an uncertainty factor of 2. It is an upper envelope: every branch,
-no early stop. A profile from playtest logs (`flotilla/token_profile.py --from-playtest`) replaces the turn
-model when it exists. Stage A is the first decision: it costs the least and voids a level early.
+`pilot-forecast.md` has the table per stage, arm and model, with low, expected and high values, and
+`flotilla/plans/seams/handoff.json` is the plan (1,076 trials, `standard` only, 2 models). Token use per seat
+comes from 72 playtests of this family (`flotilla/plans/seams/handoff.playtest-profile.json`: about 7,000
+fresh input tokens, 150,000 cached input tokens and 1,700 output tokens per seat in the native CLIs) with an
+uncertainty factor of 2; arms without a playtest use the turn model of the earlier probe waves. Terminus 2
+can differ from both. The envelope has every branch and no early stop.
+
+| Step | Trials | Expected | High |
+|---|---:|---:|---:|
+| Stage A (controls) | 40 | $24 | $47 |
+| Stage B (2 scripted-successor pairs) | 96 | $11 | $22 |
+| Stage C, twin pair only (`team`, `team-implicit`) | 376 | $107 | $213 |
+| Stage C, other arms (`hint`, `solo-seam`, `team-fullrecord`) | 564 | $213 | $425 |
+| All | 1,076 | $355 | $707 |
 
 ## 9. Before any paid stage
 
 1. Rebuild the tasks with a private seed and run `flotilla/qa.py`.
 2. Run the plan's oracle stage on Docker ($0) and compare with the simulator.
-3. Write the pre-registration section into `flotilla/docs/PROBE.md` and commit it before the first trial.
+3. The plan records its protocol text and the commit of `flotilla/pilot_plan.py` that holds it; the runner
+   refuses a plan whose text differs. To change the protocol, change that text, commit, and make a new plan.
 4. Set the cap of the stage. Check the key's limit. Check the zero-data-retention warning of the dry run.
