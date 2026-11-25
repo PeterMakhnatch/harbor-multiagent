@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -42,11 +43,12 @@ def world_restarts() -> int:
     return max(0, sum('"kind": "start"' in line for line in EVENTS.read_text().splitlines()) - 1)
 
 
-def load_family(path: Path) -> Any:
-    spec = importlib.util.spec_from_file_location("family", path)
+def load_family(path: Path, name: str = "family") -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -85,6 +87,60 @@ def score_game_task(task: dict[str, Any], game: Any) -> None:
     (VERIFIER / "score.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     (VERIFIER / "world-state.json").write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
     print(json.dumps(summary, sort_keys=True))
+
+
+def extension_score(task: dict[str, Any], events: list[dict[str, Any]], root: Path) -> dict[str, Any]:
+    for event in events:
+        if event["kind"] in ("extension_error", "play_timeout", "simulation_stalled"):
+            return {"invalid": event["kind"]}
+    name = task["extension"]
+    if not isinstance(name, str) or not name.isidentifier():
+        raise ValueError("invalid extension name")
+    if (root / "family.py").is_file():
+        load_family(root / "family.py")
+    extension = load_family(root / "ext" / f"{name}.py", "world_extension_score")
+    result = extension.score(task, events)
+    if not isinstance(result, dict):
+        raise TypeError("extension score must be an object")
+    json.dumps(result, allow_nan=False)
+    if "invalid" in result:
+        if not isinstance(result["invalid"], str) or not result["invalid"] or "reward" in result:
+            raise ValueError("invalid score must have a reason and no reward")
+        return result
+    if type(result.get("reward")) not in (int, float):
+        raise ValueError("extension reward must be numeric")
+    reward = float(result["reward"])
+    if not 0 <= reward <= 1:
+        raise ValueError(f"extension scorer returned {reward}, outside [0, 1]")
+    return result | {"reward": reward}
+
+
+def score_extension_task(task: dict[str, Any]) -> None:
+    state, error = {}, None
+    try:
+        call("POST", "/admin/freeze")
+        state = call("GET", "/admin/state")
+        events = [json.loads(line) for line in EVENTS.read_text().splitlines()]
+        if sum(event["kind"] == "start" for event in events) != 1:
+            raise ValueError("world restarted or did not start")
+        result = extension_score(task, events, WORLD_DIR)
+    except Exception as exc:  # noqa: BLE001 - a failed referee cannot establish a valid reward
+        result = {"invalid": f"extension verification failed: {type(exc).__name__}: {exc}"[:500]}
+    error = result.get("invalid")
+    summary = result | {
+        "family": task["family"], "mode": "extension", "instance": task["instance"],
+        "condition": task["condition"], "seats": task["seats"], "world_version": task["world_version"],
+        "score": result.get("reward"), "error": error,
+    }
+    if error is None:
+        (VERIFIER / "reward.json").write_text(json.dumps({"reward": result["reward"]}) + "\n")
+    else:
+        (VERIFIER / "reward.json").unlink(missing_ok=True)
+    (VERIFIER / "score.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (VERIFIER / "world-state.json").write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    print(json.dumps(summary, sort_keys=True))
+    if error is not None:
+        raise RuntimeError(error)
 
 
 def post_trigger(posts: list[dict[str, Any]], inbox: bool = False) -> str | None:
@@ -167,6 +223,9 @@ def audit_fields(task: dict[str, Any], state: dict[str, Any], false_slot: str | 
 def main() -> None:
     VERIFIER.mkdir(parents=True, exist_ok=True)
     task = json.loads((WORLD_DIR / "task.json").read_text())
+    if task.get("mode") == "extension":
+        score_extension_task(task)
+        return
     family = load_family(WORLD_DIR / "family.py")
     if task.get("mode") == "rounds":
         score_game_task(task, family)

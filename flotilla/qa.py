@@ -263,7 +263,7 @@ def load_task(path: Path) -> Task:
     if not isinstance(task.task_json, dict):
         task.error("environment/task.json is not a JSON object")
         task.task_json = {}
-    elif task.answer_key is None and task.task_json.get("mode") != "rounds":  # a game has no answer key
+    elif task.answer_key is None and task.task_json.get("mode") not in ("rounds", "extension"):
         task.error("environment/task.json has no answer_key object")
     task.family_name = str(meta.get("family") or task.task_json.get("family") or "")
     variant = str(meta.get("variant") or "")
@@ -302,6 +302,8 @@ def load_task(path: Path) -> Task:
         task.error(f"solution/family.py cannot be loaded ({type(exc).__name__})")
     else:
         needs = ("settle", "score_game") if task.task_json.get("mode") == "rounds" else ("score", "oracle_answer")
+        if task.task_json.get("mode") == "extension":
+            needs = ("generate", "extension_arm", "qa")
         if all(callable(getattr(module, name, None)) for name in needs):
             task.family = module
         else:
@@ -594,10 +596,10 @@ def check_example_leak(task: Task) -> Iterator[Finding]:
                                   f"the JSON example on line {line} of its instruction scores 1 against {what}")
 
 
-def reveal_hits(text: str, condition: str) -> list[tuple[int, str]]:
+def reveal_hits(text: str, condition: str, extra: tuple[str, ...] = ()) -> list[tuple[int, str]]:
     """(offset, word) for each word that names or reveals a condition, leaving out a word inside a longer one
     ("liar" inside "talk-liar")."""
-    names = sorted({*REVEALING_NAMES, *([condition] if condition else [])})
+    names = sorted({*REVEALING_NAMES, *extra, *([condition] if condition else [])})
     patterns = [re.compile(rf"(?<![A-Za-z0-9_-]){re.escape(n)}(?![A-Za-z0-9_-])", re.IGNORECASE) for n in names]
     spans = sorted((m.start(), -m.end(), m.group(0)) for p in [*patterns, LIAR, WARNED] for m in p.finditer(text))
     hits, reach = [], -1
@@ -625,7 +627,15 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
             if WARNING in text and not warned:
                 yield Finding("condition-leak", task.name, seat,
                               f"{name} has the warning sentence, but {task.condition} is not a warned condition")
-            hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition)
+            words = getattr(task.family, "ARM_WORDS", None)
+            if words is None:
+                extra = tuple(arm for arm in getattr(task.family, "ARMS", ()) if "-" in arm)
+                hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition, extra)
+            else:
+                hits = [(m.start(), m.group()) for word in words
+                        for m in re.finditer(rf"(?<![A-Za-z0-9_-]){re.escape(word)}(?![A-Za-z0-9_-])",
+                                             text, re.IGNORECASE)]
+                hits.sort()
             if hits:
                 where = f" (line {text.count(chr(10), 0, hits[0][0]) + 1})" if name == "instruction" else ""
                 words = ", ".join(sorted({repr(word) for _start, word in hits}))
@@ -729,7 +739,11 @@ def protected_files(task: Task, seat: str) -> dict[Path, str]:
     """Files that a seat must never get: main's files, the family module, the other seats' instructions (their
     private information), task.toml and the build manifest (both say the condition of an opaque task)."""
     paths = {task.env_dir / name: f"environment/{name}" for name in WORLD_FILES}
+    paths.update((path, f"environment/ext/{path.name}") for path in (task.env_dir / "ext").glob("*.py"))
     paths[task.path / "solution" / "family.py"] = "solution/family.py"
+    paths.update((path, f"solution/{path.name}") for path in (task.path / "solution").glob("policy*"))
+    paths[task.path / "solution" / "family_policy.py"] = "solution/family_policy.py"
+    paths[task.path / "solution" / "answer.json"] = "solution/answer.json"
     paths[task.path / "task.toml"] = "task.toml"
     for root in (task.path.parent, task.path.parent.parent):  # <out>/<label>/<task>: the manifest is at <out>
         paths[root / BUILD.MANIFEST] = f"the build manifest ({BUILD.MANIFEST})"
@@ -867,9 +881,12 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
         return
     missing, differ = [], []
     game = task.task_json.get("mode") == "rounds"  # a game ships games/oracle.py and games/<family>.py
+    extension = task.task_json.get("mode") == "extension"
     for built, source in SHIPPED.items():
         if game:
             source = source.replace("world/oracle.py", "games/oracle.py").replace("families/", "games/")
+        elif extension:
+            source = source.replace("families/", "seams/")
         expected = checkout_bytes(source.format(family=task.family_name))
         if expected is None:
             yield Finding("stale-code", task.name, "*", f"this checkout has no family {task.family_name!r}")
@@ -877,6 +894,24 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
             missing.append(built)
         elif (task.path / built).read_bytes() != expected:
             differ.append(built)
+    if extension:
+        source = f"world/ext/{task.family_name}.py"
+        built = f"environment/ext/{task.family_name}.py"
+        expected = checkout_bytes(source)
+        if expected is None or not (task.path / built).is_file():
+            missing.append(built)
+        elif (task.path / built).read_bytes() != expected:
+            differ.append(built)
+    if "policy" in task.task_json:
+        sources = {"solution/policy.py": "world/policy.py"}
+        custom = f"policies/{task.family_name}.py"
+        if checkout_bytes(custom) is not None:
+            sources["solution/family_policy.py"] = custom
+        for built, source in sources.items():
+            if not (task.path / built).is_file():
+                missing.append(built)
+            elif (task.path / built).read_bytes() != checkout_bytes(source):
+                differ.append(built)
     if differ:
         yield Finding("stale-code", task.name, "*",
                       f"{', '.join(differ)} differ from this checkout's files: build the set again")
@@ -942,6 +977,71 @@ def check_solo_sufficient(task: Task) -> Iterator[Finding]:
                           "its own briefing alone gives a correct answer (oracle_answer scores 1)")
 
 
+def check_extension(task: Task) -> Iterator[Finding]:
+    if task.task_json.get("mode") != "extension" or task.family is None:
+        return
+    data = task.task_json
+    try:
+        if data.get("extension") != task.family_name:
+            raise ValueError("extension name differs from family")
+        config = tomllib.loads((task.path / "task.toml").read_text())
+        metadata = config["metadata"]
+        count = None if metadata.get("generator_seats") == 0 else metadata["team_seats"]
+        inst = task.family.generate(data["seed"], data["instance"], count, data["difficulty"])
+        arm = BUILD.validate_arm(task.family.extension_arm(inst, data["condition"], data["max_text"],
+                                                          data["max_messages"]), inst["seats"], data["condition"])
+        seats = sorted(arm["briefings"])
+        scripted = sorted(arm.get("scripted_seats", ()))
+        if (seats != task.seats or seats != sorted(data["seats"]) or scripted != sorted(data["scripted_seats"])
+                or sorted(set(seats) - set(scripted)) != task.under_test
+                or any(data.get(key) != arm[key] for key in
+                       ("params", "initial_active", "messaging", "push", "senders", "max_calls"))):
+            yield Finding("qa-error", task.name, "*", "extension arm differs from family generator")
+        actual_edges = {seat: config["agents"][seat]["start_after"] for seat in seats
+                        if "start_after" in config["agents"][seat]}
+        if actual_edges != arm.get("start_after", {}):
+            yield Finding("qa-error", task.name, "*", "extension start_after differs from generator")
+        for name, text in arm.get("files", {}).items():
+            if (task.env_dir / "player" / name).read_text() != text:
+                yield Finding("qa-error", task.name, "*", "extension file differs from generator")
+        for seat in seats:
+            text = BUILD.SCRIPTED_INSTRUCTION if seat in scripted else arm["instructions"][seat]
+            if (task.view(seat)["instruction"] != text
+                    or json.loads(task.env(seat)["SEAT_BRIEFING"]) != arm["briefings"][seat]):
+                yield Finding("qa-error", task.name, seat, "extension briefing or instruction differs from generator")
+        task.cache[("extension", "arm")] = arm
+        for detail in task.family.qa(data, {seat: task.view(seat) for seat in seats}):
+            yield Finding("qa-error", task.name, "*", detail)
+    except Exception as exc:  # noqa: BLE001 - malformed extension task is a QA failure
+        yield Finding("qa-error", task.name, "*", f"extension QA failed: {type(exc).__name__}")
+
+
+def check_policy_runner(task: Task) -> Iterator[Finding]:
+    data = task.task_json
+    solution = task.path / "solution"
+    selected = data.get("policy")
+    if selected is None:
+        if (solution / "policy.json").exists() or data.get("mode") == "extension":
+            yield Finding("qa-error", task.name, "*", "task lacks policy metadata")
+        return
+    try:
+        if selected not in ("careful", "naive", "nop"):
+            raise ValueError("invalid selected policy")
+        metadata = tomllib.loads((task.path / "task.toml").read_text())["metadata"]
+        if metadata["policy"] != selected:
+            raise ValueError("policy metadata differs")
+        mode = data.get("mode", "answer")
+        arm = task.cache.get(("extension", "arm"), {})
+        custom = BUILD.load_policy(task.family_name)
+        expected = BUILD.policy_settings(task.family, custom, data["variant"], mode, selected, task.seats,
+                                         tuple(set(task.seats) - set(task.under_test)), arm.get("scripted_policies", {}))
+        if (json.loads((solution / "policy.json").read_text()) != expected
+                or (solution / "solve.sh").read_text() != BUILD.POLICY_SH):
+            raise ValueError("policy solution differs")
+    except Exception as exc:  # noqa: BLE001
+        yield Finding("qa-error", task.name, "*", f"policy QA failed: {type(exc).__name__}")
+
+
 def check_confederate_plan(task: Task) -> Iterator[Finding]:
     """A probe task (task.json `probe`, CONTRACT.md 12 and 13) has its subject as the only seat under test, the
     world's scheduled posts (task.json `scheduled_posts`) are the posts of the family's plan for the task's own arm and
@@ -997,6 +1097,8 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
 def check_push(task: Task) -> Iterator[Finding]:
     """A push task (task.json `push: true`, CONTRACT.md 17) is a probe task in a messaging condition whose subject's
     text holds PUSH_NOTE; any other task has neither the key nor the note."""
+    if task.task_json.get("mode") == "extension":
+        return
     push = task.task_json.get("push")
     probe = task.task_json.get("probe")
     subject = probe.get("subject") if isinstance(probe, dict) else None
@@ -1200,7 +1302,8 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
-              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy)
+              check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
+              check_extension, check_policy_runner)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------
@@ -1255,7 +1358,9 @@ def check_twins(tasks: list[Task]) -> Iterator[Finding]:
         if task.instance is not None and task.condition:
             groups[(str(task.path.parent), task.label, task.instance)].setdefault(task.condition, task)
     for _key, by_condition in sorted(groups.items()):
-        for first, second in TWINS:
+        exemplar = next(iter(by_condition.values()))
+        twins = (*TWINS, *getattr(exemplar.family, "TWINS", ()))
+        for first, second in twins:
             if first not in by_condition or second not in by_condition:
                 continue
             a, b = by_condition[first], by_condition[second]
@@ -1268,6 +1373,19 @@ def check_twins(tasks: list[Task]) -> Iterator[Finding]:
                     if name != "env.SEAT_TOKEN" and theirs.get(name) != mine.get(name):
                         yield Finding("twin-mismatch", b.name, seat,
                                       describe_difference(name, mine.get(name), theirs.get(name), a.shown))
+        for first, second in getattr(exemplar.family, "PAIRS", ()):
+            if first not in by_condition or second not in by_condition:
+                continue
+            a, b = by_condition[first], by_condition[second]
+            views = []
+            for task in (a, b):
+                views.append({seat: {key: value for key, value in twin_view(task, seat).items()
+                                     if key != "env.SEAT_TOKEN"} for seat in task.under_test})
+            try:
+                for detail in exemplar.family.pair_difference(first, second, *views):
+                    yield Finding("twin-mismatch", b.name, "*", detail)
+            except Exception as exc:  # noqa: BLE001
+                yield Finding("qa-error", b.name, "*", f"pair check failed: {type(exc).__name__}")
 
 
 def compose_project(name: str) -> str:
