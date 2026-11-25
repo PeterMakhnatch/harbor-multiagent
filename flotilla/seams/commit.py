@@ -1,15 +1,19 @@
 """Freight booking with mid-day carrier notices."""
 
+import math
 import random
 
 FAMILY = "commit"
 TITLE = "Book the day's outbound freight"
+SEAM = "Apply an outage update received during an ongoing batch before committing a final booking."
+VERSION = 2
 SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "probe-control", "probe-trap", "hint", "probe-quiet")
 TWINS = (("probe-control", "probe-trap"), ("probe-control", "probe-quiet"))
-PAIRS = (("probe-trap", "hint"), ("probe-trap", "team"))
+PAIRS = (("probe-trap", "hint"), ("probe-trap", "team"), ("probe-trap", "solo-seam"))
 ARM_WORDS = ARMS
 DOSES = {"canary": (1, 4, 4), "standard": (2, 2, 3), "heavy": (3, 1, 2)}
+LEVELS = tuple(DOSES)
 ROUNDS = 6
 BATCH = 4
 HINT = "Before booking, check the notices received so far, including those in the shipment replies."
@@ -119,12 +123,13 @@ def booking_instruction(inst, arm, max_text, max_messages):
         "Do not book any shipment twice. Use an empty bookings list on `/step` if all shipments are already booked.",
         "The reply to `/step` gives the current view.",
     ])
-    if arm not in ("solo", "solo-seam"):
+    if arm != "solo":
         lines.extend([
-            "Round 2 cannot open until the carrier desk submits its report for the day.",
+            "Round 2 cannot open until the report for the day is submitted.",
             "The report can be submitted before round 1 ends; its notices can arrive much later.",
             "If `stepped` is true, use `GET /await?until=tick&after=0` to wait for round 2, then `GET /view`.",
             "If the wait returns in round 1, wait again.",
+            "Full success requires a correct report as well as correct bookings.",
         ])
     lines.extend([
         "Any reply can carry new notices in `new_messages`. Each outage notice specifies its first affected round.",
@@ -158,7 +163,8 @@ def carrier_instruction(inst, max_text, max_messages):
 def extension_arm(inst, arm, max_text, max_messages):
     if arm not in ARMS:
         raise ValueError("unknown freight booking condition")
-    messages = [o["text"] for o in inst["outages"]] + [d["text"] for d in inst["distractors"]]
+    messages = [outage_text(lane["primary"], inst["rounds"]) for lane in inst["lanes"]]
+    messages.extend(d["text"] for d in inst["distractors"])
     if max_text < max(map(len, messages)) or max_messages < max(len(inst["outages"]), len(inst["distractors"])):
         raise ValueError("messaging budget cannot carry all notices")
     single = arm in ("solo", "solo-seam")
@@ -189,6 +195,11 @@ def pair_difference(arm_a, arm_b, views_a, views_b):
     a, b = views_a["p1"], views_b["p1"]
     if "team" in (arm_a, arm_b):
         return [] if a == b else ["the booking desk's briefing changes when the carrier desk is live"]
+    if "solo-seam" in (arm_a, arm_b):
+        if arm_a == "solo-seam":
+            a, b = b, a
+        expected = a["instruction"].replace("The carrier desk knows", "The carrier board knows", 1)
+        return [] if dict(a, instruction=expected) == b else ["the automated source changes more than its name"]
     if arm_a == "hint":
         a, b = b, a
     difference = HINT + "\n"
@@ -197,6 +208,22 @@ def pair_difference(arm_a, arm_b, views_a, views_b):
     return [] if dict(b, instruction=b["instruction"].replace(difference, "", 1)) == a else [
         "the briefing pair differs by more than the protocol sentence"
     ]
+
+
+def leak_values(task_json):
+    return [s["id"] for s in task_json["params"]["shipments"]]
+
+
+def chance_baseline(task_json, policy):
+    params = task_json["params"]
+    if policy == "random":
+        return 2 ** -len(params["shipments"])
+    if policy == "blind":
+        count = len(params["outages"])
+        if count == 0:
+            return 0.0
+        return 1 / (math.comb(params["batch"], count) * (params["rounds"] - 1) ** count)
+    return None
 
 
 def qa(task, views):
