@@ -106,3 +106,15 @@ python3 flotilla/run_wave.py flotilla/plans/oracle/digest-canary.json --run-dir 
 The rehearsal uses staged Harbor (`a5713557`, *support staged multi-agent seat execution*) with the existing Harbor environment. Use a Harbor binary that includes that commit. For the local rehearsal, export that commit's `src` into the scratch directory and use an executable launcher that sets `PYTHONPATH` to the exported `src` before invoking the existing Harbor CLI. The family does not change Harbor core.
 
 Do not run a model wave without approval. The release gate after oracle agreement is a blind human note for each dose, then an approved canary model pilot. Record provider failures separately from reward.
+
+## Zero-cost validation (2026-11-25)
+
+QA checked 32 fresh opaque tasks: all 8 arms at each dose, plus the naive canary build. There were 0 FAIL and 0 WARN findings. The paired prompts passed the independent QA pair checks.
+
+All 6 canary Docker oracle trials completed with no seat or verifier exception. The simulator, on the exact built task and policy, produced identical rewards. Post-write note receipts appeared in every trial. Total reported spend was $0.
+
+| Arm | Careful | Naive |
+|---|---:|---:|
+| team | 1 | 3/9 |
+| probe-writer-trap | 1 | 3/9 |
+| probe-writer-control | 1 | 1 |
