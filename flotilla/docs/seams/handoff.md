@@ -251,6 +251,16 @@ and seed. No world rule, policy, note, scoring rule or prediction changes. Requi
 per trial to exit 0, all 16 settlements per trial to be correct, and the exact 4 rewards registered above.
 The original run must remain inspectable. Do not substitute a later successful attempt into its records.
 
+The packaging-only repeat matched all 4 predictions in real non-root Docker seats. All 4 trials settled
+16/16 results correctly. With only a note, the pointer policy missed the ticket and scored 0.5; with
+the full record it earned the ticket and scored 1. The careful policy scored 1 in both arms. All 16
+seats completed and left oracle logs with no error marker. This is a control on the task, not model data.
+
+To reproduce the comparison, run `flotilla/oracle_parity.py` with the retained `pointer-access-v2` wave,
+plan `flotilla/plans/oracle/handoff-access-contrast.json` and `--rev feb06383`. The private trial archive
+`pointer-access-v2.tar.gz` has SHA-256 `eac776323673bdf0f7119f2aaf105f919ab908ee4053412a07d2d6d78d68d328`.
+The shareable receipt is `seams/evidence/handoff-access-v2-observations.json` in the research report.
+
 ## Validity limits
 
 - Rules are stated, not learned from unfamiliar worlds. Frontier models can reach the ceiling.

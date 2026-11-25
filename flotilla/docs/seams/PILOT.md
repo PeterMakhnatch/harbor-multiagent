@@ -56,9 +56,10 @@ owner-only. The new package keeps the same 8 instances, seed, world, briefs and 
 contents, only the opaque package names and local service credentials changed. The relevant file modes
 now allow the container's non-root player to run the solver. The host build root remains private.
 
-Before any model play, 96 in-process script runs on the original 16 tasks matched the predicted contrast
-(2 policies × 3 schedules per task). Only `pointer` without the record lost the ticket; it scored 0.5.
-Every run settled 16/16 results correctly. These checks do not count toward the model entry screen.
+Before any model play, 96 in-process script runs on the original 16 tasks matched the predicted contrast.
+Repeating the same 96 runs on the rebuilt tasks gave the same rewards (2 policies × 3 schedules per task).
+Only `pointer` without the record lost the ticket; it scored 0.5. Every run settled 16/16 results correctly.
+These checks do not count toward the model entry screen.
 
 Opus is the primary model because its development notes contain the failure. Sol is a comparison, not a
 second opportunity to pass. Use fresh native CLI seats. On even instances, play `team` first for Opus and
