@@ -151,7 +151,9 @@ The Linux containers have not yet provided a round-three reward.
 - The complementary batch structure avoids a size or frequency leak but is synthetic; repeated
   partitions can be recognizable. The chance baseline is the best tested no-note script, not a
   proof over all possible model reasoning.
-- The cap carries the canonical note; it binds only for writers that copy, not careful writers.
+- The cap binds only for writers that copy, not careful writers. Across 1,400 heavy boundaries
+  (200 instances), the sufficient note was at most 97 characters (2.06× margin). A compact JSON
+  copy of the cumulative matched results was at least 320 characters; all copies exceeded 200.
   A larger lot × press fault space remains future headroom.
 - Open-batch state and the ticket are true shared state, and a residual communication channel.
 - A seat ending without handing over counts as a valid omission, not an infrastructure error.
