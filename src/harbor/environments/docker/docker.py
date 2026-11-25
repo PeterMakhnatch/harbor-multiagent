@@ -192,14 +192,19 @@ class DockerEnvironment(BaseEnvironment):
             )
         try:
             subprocess.run(
-                cls._engine_cmd("info"),
+                cls._engine_cmd("version", "--format", "{{.Server.Version}}"),
                 capture_output=True,
                 timeout=10,
                 check=True,
             )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        except subprocess.TimeoutExpired:
             raise SystemExit(
-                "Docker daemon is not running. Please start Docker and try again."
+                "Docker did not return its server version within 10 seconds. "
+                "Check the current Docker context and host load."
+            )
+        except subprocess.CalledProcessError:
+            raise SystemExit(
+                "Docker daemon is not running or cannot be reached in the current context."
             )
 
     def __init__(

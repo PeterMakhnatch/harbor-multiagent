@@ -30,6 +30,9 @@ The scheduled packages also lack a complete Docker rehearsal. On v8, 21/24 compl
 matching the simulator. The other 3 exhausted the runner's 1 retry at Docker preflight. We kept those
 cells missing. The prior v7 result (24/24) does not certify v8. The separate 4-cell positive and negative
 policy control passed on `handoff`; it does not fill missing pilot cells.
+After that rehearsal, the fork changed Docker preflight to request the server version instead of the full
+info report. It still rejects an unreachable engine. A new rehearsal must start in a separate run
+directory and cover all 24 cells. Do not retry the 3 exhausted cells or combine receipts.
 
 | Family | Entry | Reason |
 |---|---|---|
