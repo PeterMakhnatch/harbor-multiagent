@@ -127,11 +127,16 @@ class Desk:
         pending = [b for b, state in self.state.items() if state == "dispatched" and self.batches[b]["lag"] is not None]
         if self.arm == "twin":
             note = self.canonical()
-        tokens = set(re.findall(r"\b[BLR]\d{2}\b", note))
-        missing = [b for b in pending if not {b, self.batches[b]["reference"]} <= tokens]
+        tokens = set(re.findall(r"\b[BLR]\d{2}\b", note.upper()))
+        bindings, possible = self.host.family.parse_note(note, self.params["lots"])
+        unparsed = [b for b in pending if b not in bindings and self.batches[b]["reference"] not in bindings.values()
+                    and {b, self.batches[b]["reference"]} <= tokens]
+        if unparsed:
+            self.host.record("note_unparsed", seat, {"shift": self.shift, "bindings": unparsed})
+        missing = [b for b in pending if bindings.get(b) != self.batches[b]["reference"] and b not in unparsed]
         self.host.record("handover", seat, {"shift": self.shift, "note": note, "length": len(note),
                                             "pending": len(pending), "missing_bindings": missing,
-                                            "kept_lots": self.observed_possible <= tokens})
+                                            "unparsed_bindings": unparsed, "kept_lots": possible == self.observed_possible})
         self.note = note
         if self.shift == self.params["shifts"]:
             self.host.freeze()
@@ -287,6 +292,9 @@ def score(task, events):
     if arm.startswith("probe-hunt"):
         reward = ticket
     elif arm.startswith("probe-ref"):
+        if any(e["kind"] == "note_unparsed" and e["data"]["shift"] == params["shifts"] - 1
+               and params["ref_target"] in e["data"]["bindings"] for e in events):
+            return {"invalid": "note_unparsed"}
         reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
     crossings = [h for h in handovers if h["shift"] < params["shifts"]]
     losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
@@ -295,7 +303,9 @@ def score(task, events):
             "handover_missing": sum(e["kind"] == "handover_missing" for e in events),
             "first_loss_shift": min(losses) if losses else None,
             "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
-            "kept_bindings": sum(h["pending"] - len(h["missing_bindings"]) for h in crossings),
+            "unparsed_bindings": sum(len(h["unparsed_bindings"]) for h in crossings),
+            "kept_bindings": sum(h["pending"] - len(h["missing_bindings"]) - len(h["unparsed_bindings"])
+                                 for h in crossings),
             "kept_lots": sum(h["kept_lots"] for h in crossings),
             "ticket_early": sum(e["data"]["early"] for e in events if e["kind"] == "ticket"),
             **reader_metrics(params, scored, correct, events)}

@@ -124,7 +124,7 @@ def work(name, client, own, memory, family):
         keep = {b: r for b, r in keep.items() if not own.lapse(percent, ["binding", shift, b])}
         suspects = suspects | {lot for lot in lots if lot not in suspects
                               and own.lapse(percent, ["clearance", shift, lot])}
-    note = family.write_note(keep, suspects, name)
+    note = family.write_note(keep, suspects, name, lots)
     if own["continuous"] and len(note) > own["cap"]:
         note = ""
     check(*(yield from client.post("/handover", {"note": note})))

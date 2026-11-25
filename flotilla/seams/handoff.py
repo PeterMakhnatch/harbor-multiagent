@@ -1,5 +1,6 @@
 """Shift continuity tasks with independently assigned dispatch and carrier identifiers."""
 
+import json
 import random
 import re
 from itertools import pairwise
@@ -29,18 +30,62 @@ EXTRA_SENTENCES = {
 }
 
 def parse_note(note, lots):
-    bindings = dict(re.findall(r"\b(B\d{2})[=:/ ](R\d{2})\b", note))
-    bindings.update((batch, ref) for ref, batch in re.findall(r"\b(R\d{2})>(B\d{2})\b", note))
-    suspects = set(re.findall(r"\bL\d{2}\b", note))
-    return bindings, suspects or set(lots)
+    """Read the documented notebook notation, not arbitrary natural language."""
+    bindings = {}
+    suspects = None
+    cleared = set()
+    pairs = []
+    try:
+        payload = json.loads(note)
+    except (ValueError, RecursionError):
+        payload = None
+    if isinstance(payload, dict):
+        pending = payload.get("pending")
+        if isinstance(pending, dict):
+            pairs = list(pending.items())
+        for key in ("suspects", "cleared"):
+            values = payload.get(key)
+            if isinstance(values, list) and all(isinstance(v, str) for v in values):
+                if key == "suspects":
+                    suspects = set(values)
+                else:
+                    cleared = set(values)
+    else:
+        pairs = re.findall(r"\b([BR]\d{2})(?:\s*(?:->|>|=|:|/)\s*|\s+\(?ref\s+|"
+                           r"\s+has\s+carrier\s+ref\s+|\s+)([BR]\d{2})\b", note, re.IGNORECASE)
+        for clause in re.split(r"[;\n]", note):
+            label = re.search(r"\b(suspects|bad lot is one of|cleared|ruled out)\b", clause, re.IGNORECASE)
+            if label:
+                values = set(re.findall(r"\bL\d{2}\b", clause[label.end():], re.IGNORECASE))
+                if label[0].lower() in ("cleared", "ruled out"):
+                    cleared.update(values)
+                else:
+                    suspects = values if suspects is None else suspects & values
+    for first, second in pairs:
+        if not isinstance(second, str):
+            continue
+        first, second = first.upper(), second.upper()
+        batch, ref = (first, second) if first.startswith("B") else (second, first)
+        if re.fullmatch(r"B\d{2}", batch) and re.fullmatch(r"R\d{2}", ref):
+            bindings[batch] = ref
+    possible = set(lots) if suspects is None or not suspects else set(lots) & {v.upper() for v in suspects}
+    return bindings, possible - {v.upper() for v in cleared}
 
 
-def write_note(bindings, possible, style="careful"):
+def write_note(bindings, possible, style="careful", lots=None):
+    if style == "json":
+        return json.dumps({"pending": bindings, "suspects": sorted(possible)}, separators=(",", ":"))
     order = sorted(bindings, reverse=style == "reverse")
-    separator = {"colon": ":", "slash": "/", "lines": " "}.get(style, "=")
-    pairs = [f"{bindings[b]}>{b}" if style == "ref-first" else f"{b}{separator}{bindings[b]}" for b in order]
+    separator = {"colon": ":", "slash": "/", "lines": " ", "arrow": " -> "}.get(style, "=")
+    if style in ("ref-first", "ref-eq"):
+        pairs = [f"{bindings[b]}{'>' if style == 'ref-first' else '='}{b}" for b in order]
+    elif style == "paren":
+        pairs = [f"{b} (ref {bindings[b]})" for b in order]
+    else:
+        pairs = [f"{b}{separator}{bindings[b]}" for b in order]
     joiner = "\n" if style == "lines" else " "
-    return "Pending " + joiner.join(pairs) + "; Suspects " + " ".join(sorted(possible))
+    label, values = ("Cleared", set(lots) - possible) if style == "cleared" else ("Suspects", possible)
+    return "Pending " + joiner.join(pairs) + f"; {label} " + " ".join(sorted(values))
 
 
 def narrow(possible, lots, status):
@@ -228,16 +273,21 @@ Calls:
 - `POST /close {{}}`: end the work part of this shift. You cannot print, dispatch, settle or file a ticket after this.
 - `POST /handover {{"note":"..."}}`: end this shift. This also closes work if not already closed.
   The note can contain up to {cap} characters. A longer note is refused.
+  A note can include prose. For ID pairs, use `Bxx=Rxx`, `Rxx=Bxx`, `Bxx -> Rxx`, or
+  separate the two IDs with a colon, slash, space, or `(ref …)`. For lot-ID lists, label the
+  list `Suspects` (possible lots) or `Cleared` (ruled-out lots). Separate lists with a semicolon
+  or newline. JSON with a `pending` ID map and `suspects` or `cleared` arrays is also accepted.
 
 Carrier results arrive 0, 1, 2 or 3 shifts after dispatch.
 The carrier uses only the carrier reference and the status `returned` or `delivered`.
 The `inbox` field in each desk call reply contains results that have not been settled.
-A result due in the current shift appears in the reply to the next desk call after dispatch.
-Results due from earlier shifts appear with the first desk call. Settled results leave the inbox.
+A result due in the current shift appears in the next reply from a desk route after dispatch.
+Results due from earlier shifts appear in the first reply from a desk route. Settled results leave the inbox.
 The `note` field holds the previous shift's note (empty in shift 1).
 The desk does not keep past results or past lot clearances.
-Before closing the shift, settle all results you can match and file the ticket if it is due.
-Finish with a note and handover. Your work is checked on correct settlements and the correct ticket.
+Before closing the shift, settle all results you can match and file the ticket if the evidence pins the lot.
+End work with `POST /close`. Then write your note and call `POST /handover`, including in the last shift.
+The score checks correct settlements and the correct ticket. Do not guess before the evidence pins the lot.
 """
 
 
