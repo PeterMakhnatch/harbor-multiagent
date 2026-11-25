@@ -45,6 +45,41 @@ def test_live_list_reports_do_not_include_rule_or_order():
         assert FAMILY.parse_blocked(text, windows) is None, text
 
 
+def test_round_two_live_blocked_only_and_parenthesized_reports():
+    cases = [
+        (("p3 blocked only W-LN; last used W-NG. Please share blocked lists in R1. Propose choosing first jointly "
+          "unblocked window in listed order (W-MT W-ZH W-NG W-LN W-NX W-HF), confirm in R2 before filing."), "LN"),
+        (("p3: blocked only W-BS. Rule: all post blocked lists in R1; then file the first window in order "
+          "W-LT,W-VL,W-KB,W-JX,W-HF,W-BS not blocked by anyone. I propose W-HF if free for you."), "BS"),
+        (("p2: blocked only W-JR. OK: W-JT W-ZC W-LM W-SZ W-MV. Propose W-MV (used last time). Please post your "
+          "blocked lists; pick first in order W-MV,W-JT,W-ZC,W-LM,W-SZ free for all."), "JR"),
+        (("p2: blocked only W-XT. Proposal: W-SQ. Rule: everyone posts blocked list in R1; in R2 all file the "
+          "first window in order NB,SQ,VN,RN,ZF,XT that nobody blocks."), "XT"),
+        (("p3 blocked only W-DM. Please share blocked lists; suggest choose first unblocked by all in listed "
+          "order W-JM W-SL W-GS W-SN W-DM W-SK. Confirm in round 2."), "DM"),
+        (("p2 blocked only W-SM. Please share blocked lists. Suggest choose alphabetically first mutually "
+          "unblocked window, unless p1 proposes another mutually safe window in round 2; confirm before filing."), "SM"),
+        (("p3 blocked only W-DM. Please share all blocked windows. Suggest choosing lexicographically smallest "
+          "window not blocked by any desk; follow p1 if it announces a verified common window."), "DM"),
+        (("p1: I can use W-TS W-GD W-DJ W-SX W-VH (blocked W-GK W-KM W-TM). Please each post your usable "
+          "windows; propose we pick the first in list order usable by all."), "GK KM TM"),
+        (("p3 OK: W-RN W-VN W-SQ W-ZF (blocked W-NB W-XT). Rule: file the first window in list order "
+          "RN,NB,VN,SQ,ZF,XT that nobody reports blocked. Please post your OK list."), "NB XT"),
+        ("p1: (blocked W-GK, W-KM)", "GK KM"),
+        ("p1 blocked only W-GK. Correction: p1 blocked only W-KM.", "KM"),
+    ]
+    windows = [f"W-{a}{b}" for a in FAMILY.LETTERS for b in FAMILY.LETTERS]
+    for text, codes in cases:
+        assert FAMILY.parse_blocked(text, windows, text[:2]) == {f"W-{code}" for code in codes.split()}, text
+    for text in (
+        "Rule: file the first in order W-GK,W-KM (blocked W-GK).",
+        "Common free: W-GK,W-KM (blocked W-TM).",
+        "p2 OK: W-GK W-KM (blocked W-TM).",
+        "p1: blocked only W-GK?",
+    ):
+        assert FAMILY.parse_blocked(text, windows, "p1") is None, text
+
+
 class Own(dict):
     lapse_percent = None
 

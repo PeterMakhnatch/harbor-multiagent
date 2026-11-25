@@ -38,10 +38,14 @@ LIST_CODE = r"(?:[Ww][-_ ]?[A-Za-z]{2}|[A-Z]{2})"
 LIST_CODES = rf"{LIST_CODE}(?:(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+|\s+){LIST_CODE})*"
 CORRECTION = r"^\s*(?:(?i:correction|update|updated list)\s*:\s*)?"
 REPORT_PREFIX = rf"{CORRECTION}(?:(?i:p\d+|I|we|my desk|our desk)\s*:?\s*)?"
-REPORT_SUFFIX = r"(?i:(?:\s+(?:only|for (?:me|us|my desk|our desk)))*)\s*$"
-BLOCK_REPORT = re.compile(
-    rf"{REPORT_PREFIX}(?i:{BLOCK_WORDS})(?:\s+(?:use|do|these windows|windows|list|for us|for me))*"
+REPORT_SUFFIX = r"(?i:(?:\s+(?:only|for (?:me|us|my desk|our desk)))*)\s*"
+BLOCK_DECLARATION = (
+    rf"(?i:{BLOCK_WORDS}(?:\s+(?:use|do|these windows|windows|list|for us|for me|only))*)"
     rf"\s*[:=]?\s*(?P<codes>{LIST_CODES}){REPORT_SUFFIX}")
+BLOCK_REPORT = re.compile(rf"{REPORT_PREFIX}{BLOCK_DECLARATION}")
+BLOCK_PAREN = re.compile(
+    rf"{REPORT_PREFIX}(?:(?i:(?:I\s+|we\s+)?(?:can use|OK(?: for me)?))\s*:?\s*{LIST_CODES}\s+)?"
+    rf"\(\s*{BLOCK_DECLARATION}\)\s*")
 BLOCK_REVERSE = re.compile(
     rf"{CORRECTION}(?P<codes>{LIST_CODES})\s+(?i:(?:(?:are|is)\s+)?{BLOCK_WORDS}){REPORT_SUFFIX}")
 FREE_REPORT = re.compile(
@@ -97,15 +101,15 @@ def parse_blocked(text, windows, sender=None):
             continue
         if re.search(r"\b(?:union|overall|common|all lists|full lists)\b", sentence, re.IGNORECASE):
             aggregate = True
-        report = BLOCK_REPORT.fullmatch(sentence) or BLOCK_REVERSE.fullmatch(sentence)
+        report = BLOCK_REPORT.fullmatch(sentence) or BLOCK_REVERSE.fullmatch(sentence) or BLOCK_PAREN.fullmatch(sentence)
         if report:
             codes = mentions(report["codes"], windows)
             if len(codes) == len(re.findall(LIST_CODE, report["codes"])):
-                blocked.update(codes)
+                blocked = set(codes)
         elif not aggregate and (report := FREE_REPORT.fullmatch(sentence)):
             codes = mentions(report["codes"], windows)
             if len(codes) == len(re.findall(LIST_CODE, report["codes"])):
-                free.update(codes)
+                free = set(codes)
     if blocked:
         return blocked
     return set(windows) - free if free else None
