@@ -33,8 +33,11 @@ PREFACE = ("You are working in a sandbox directory.\n"
 PLACEHOLDER = re.compile(r"\{(instruction|seat|workdir|log)\}")
 PATH_MENTION = re.compile(
     r"(?<![\w:/])(?:\"((?:/|~/|\.\.?/)[^\"\r\n]+)\"|'((?:/|~/|\.\.?/)[^'\r\n]+)'"
-    r"|((?:/|~/|\.\.?/)[^\s\"'<>|;,)\]}]+)|(~|\.\.)(?=$|[\s\"';,)]))"
+    r"|((?:/|~/|\.\.?/)[^\s\"'`<>|;,)\]}]+)|(~|\.\.)(?=$|[\s\"';,)]))"
 )
+ROOT_ACCESS = re.compile(r"\b(?:find|ls|cd|du|tree|rg|grep)\b[^;&|\n]*?(?<=\s)[\"']?/[\"']?(?=$|[\s;&|)])")
+IGNORED_PATHS = frozenset({"/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty",
+                           "/bin/bash", "/bin/sh", "/bin/zsh"})
 WORLD_BOOT = """\
 import sys
 import json
@@ -338,16 +341,39 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-def outside_paths(text: str, workdir: Path) -> list[str]:
+def log_strings(text: str) -> list[str]:
+    """Plain log lines as they are; JSON lines as their decoded string values, so escaped newlines split paths."""
+    strings = []
+    for line in text.splitlines():
+        try:
+            pending = [json.loads(line)]
+        except ValueError:
+            strings.append(line)
+            continue
+        while pending:
+            value = pending.pop()
+            if isinstance(value, str):
+                strings.append(value)
+            elif isinstance(value, dict):
+                pending.extend(value.values())
+            elif isinstance(value, list):
+                pending.extend(value)
+    return strings
+
+
+def outside_paths(text: str, workdir: Path, root: Path) -> list[str]:
     """Conservative log-text scan, not an access trace. Resolve relative mentions against the initial cwd."""
     paths = set()
-    for match in PATH_MENTION.finditer(text):
-        raw = next(value for value in match.groups() if value is not None)
-        if raw.startswith("//"):
-            continue
-        path = Path(os.path.abspath(workdir / Path(raw).expanduser()))
-        if not path.is_relative_to(workdir):
-            paths.add(str(path))
+    for chunk in log_strings(text):
+        if ROOT_ACCESS.search(chunk):
+            paths.add("/")
+        for match in PATH_MENTION.finditer(chunk):
+            raw = next(value for value in match.groups() if value is not None).rstrip(":")
+            if raw.startswith("//") or raw in IGNORED_PATHS:
+                continue
+            path = Path(os.path.abspath(workdir / Path(raw).expanduser()))
+            if not path.is_relative_to(root):
+                paths.add(str(path))
     return sorted(paths)
 
 
@@ -396,7 +422,7 @@ def archive_seats(seats: list[SeatRun]) -> dict[str, list[str]]:
         dest = seat.output
         shutil.copyfile(seat.root / "command.log", dest / "command.log")
         text = "\n".join((dest / name).read_text(errors="replace") for name in ("seat.log", "command.log"))
-        audit[seat.seat] = outside_paths(text, seat.workdir)
+        audit[seat.seat] = outside_paths(text, seat.workdir, seat.root)
     return audit
 
 

@@ -51,6 +51,7 @@ assert f'/home/player maps to {workdir}' in Path(prompt).read_text()
 assert f'http://world:8080 maps to {os.environ["WORLD_URL"]}' in Path(prompt).read_text()
 print('Read', prompt, flush=True)
 print('ls ..', flush=True)
+print('ls ../..', flush=True)
 print('token-sha256', hashlib.sha256(os.environ['SEAT_TOKEN'].encode()).hexdigest(), flush=True)
 Path(log).write_text('Native command log\\n')
 if mode == 'wait':
@@ -62,7 +63,7 @@ elif mode in ('careful', 'json'):
         import urllib.request
         codex = {'id': 'item_1', 'type': 'command_execution', 'command': "/bin/zsh -lc 'find / -name x'"}
         print(json.dumps({'type': 'item.started', 'item': codex}), flush=True)
-        print(json.dumps({'type': 'item.completed', 'item': codex | {'aggregated_output': './a\\n/b.csv\\n./c'}}),
+        print(json.dumps({'type': 'item.completed', 'item': codex | {'aggregated_output': workdir + '\\ntotal 8'}}),
               flush=True)
         claude = {'type': 'tool_use', 'id': 'toolu_1', 'name': 'Bash', 'input': {'command': 'cd /home/player && ls'}}
         print(json.dumps({'type': 'assistant', 'message': {'content': [claude]}}), flush=True)
@@ -131,7 +132,8 @@ def assert_evidence(task, out, result, expected):
             assert (logs / "command.log").read_text() == "Native command log\n"
             prompt = Path(info["workdir"]).parent / "prompt.md"
             assert f"Read {prompt}" in log
-            assert f"`{prompt}`" in summary and f"`{prompt.parent}`" in summary
+            assert f"`{prompt}`" not in summary and f"`{prompt.parent}`" not in summary
+            assert f"`{prompt.parent.parent}`" in summary
             old_token = QA.load_task(task).env(seat)["SEAT_TOKEN"]
             assert hashlib.sha256(old_token.encode()).hexdigest() not in log
     return events, summary
@@ -243,6 +245,24 @@ def test_summary_lists_commands_requests_and_scripted_sends(tmp_path):
     assert "cd /home/player && ls" in commands
     assert "should-not-parse" not in commands
     assert "scripted send:" in summary.split("## p2 (external)")[0]
+    audit = receiver.split("### Outside-path audit")[1]
+    assert "- `/`" in audit and "- `/home/player`" in audit
+    assert "total" not in audit and "/bin/zsh" not in audit
+
+
+def test_audit_root_access_and_escaped_newlines(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(FLOTILLA))
+    runner = load(FLOTILLA / "playtest.py")
+    root = tmp_path / "seat"
+    work = root / "work"
+    for command in ("find / -name x", "ls /", "cd /; cat etc/passwd", "cd '/' && ls"):
+        assert runner.outside_paths(command, work, root) == ["/"], command
+    assert runner.outside_paths("ls ./data; cat x/y; echo $((4 / 2))", work, root) == []
+    record = json.dumps({"type": "item.completed", "item": {"aggregated_output": f"{work}\ntotal 8\n./a.csv"}})
+    assert "\\n" in record
+    assert runner.outside_paths(record, work, root) == []
+    assert runner.outside_paths(f"cat {root / 'prompt.md'} {root / 'tmp' / 'x'} /dev/null", work, root) == []
+    assert runner.outside_paths("cat /etc/hosts", work, root) == ["/etc/hosts"]
 
 
 def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):
