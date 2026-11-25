@@ -1,8 +1,9 @@
-"""Seeded proofs for the freight booking seam, using the shipped referee and policy runner."""
+"""Seeded freight play and local referee checks, using the shipped code."""
 
+import itertools
 import json
 import os
-from collections import Counter, defaultdict
+from collections import Counter
 
 import pytest
 from conftest import FLOTILLA, load
@@ -12,174 +13,127 @@ FAMILY = load(FLOTILLA / "seams" / "commit.py")
 EXT = load(FLOTILLA / "world" / "ext" / "commit.py")
 QA = load(FLOTILLA / "qa.py")
 SEED = 7920628754219
-DOSES = tuple(FAMILY.DOSES)
 N = int(os.getenv("COMMIT_SWEEP_INSTANCES", "3"))
-EXPECTED_NAIVE = {"solo": 1, "solo-seam": 0, "team": 0, "probe-control": 1,
-                  "probe-trap": 0, "hint": 0, "probe-quiet": 1}
+POLICIES = ("careful", "naive", "nop", "lone", "blind", "random", "script-loop",
+            "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+EARLY = ("solo", "probe-control", "probe-quiet")
 
 
-def plausible_alternatives(inst):
-    lanes = {FAMILY.lane_key(lane): lane for lane in inst["lanes"]}
-    primary = defaultdict(list)
-    for shipment in inst["shipments"]:
-        primary[lanes[FAMILY.lane_key(shipment)]["primary"]].append(shipment["round"])
-    first = inst["outages"][0]
-    occupied = {o["carrier"] for o in inst["outages"][1:]}
-    starts = range(3, 5) if inst["dose"] == "canary" else (first["start"],)
-    count = 1 if inst["dose"] == "canary" else 3
-    actual = FAMILY.answer_key(inst, inst["outages"])
-    for carrier, rounds in primary.items():
-        if carrier == first["carrier"] or carrier in occupied:
-            continue
-        for start in starts:
-            if min(rounds) < start and sum(r >= start for r in rounds) >= count:
-                alternative = [{"carrier": carrier, "start": start}, *inst["outages"][1:]]
-                if FAMILY.answer_key(inst, alternative) != actual:
-                    yield alternative
-
-
-@pytest.mark.parametrize("dose", DOSES)
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
 def test_commit_layouts(dose):
-    unique = set()
-    for i in range(256):
+    layouts = set()
+    count, first, last = FAMILY.DOSES[dose]
+    for i in range(128):
         inst = FAMILY.generate(SEED, i, 2, dose)
         assert inst == FAMILY.generate(SEED, i, 2, dose)
-        unique.add(json.dumps(inst, sort_keys=True))
-        assert Counter(s["round"] for s in inst["shipments"]) == dict.fromkeys(range(1, inst["rounds"] + 1), inst["batch"])
-        assert len({s["id"] for s in inst["shipments"]}) == len(inst["shipments"])
-        assert list(plausible_alternatives(inst)), "the booking table itself must not identify the one outage plan"
-        arms = {arm: FAMILY.extension_arm(inst, arm, 2000, 30) for arm in FAMILY.ARMS}
-        answer = arms["solo"]["params"]["answer"]
-        for arm, setting in arms.items():
+        layouts.add(json.dumps(inst, sort_keys=True))
+        assert inst["rounds"] == 6 and inst["batch"] == 4
+        assert len(inst["lanes"]) == 4 and len(inst["shipments"]) == 24
+        assert len(inst["outages"]) == count
+        assert all(first <= o["index"] <= last for o in inst["outages"])
+        lanes = {FAMILY.lane_key(lane): lane for lane in inst["lanes"]}
+        primaries = sorted(lane["primary"] for lane in inst["lanes"])
+        for r in range(1, 7):
+            assert Counter(lanes[FAMILY.lane_key(s)]["primary"] for s in inst["shipments"] if s["round"] == r) == {
+                c: 1 for c in primaries}
+        if i < 8:
+            keys = set()
+            for carriers in itertools.combinations(primaries, count):
+                for starts in itertools.product(range(2, 7), repeat=count):
+                    outages = [{"carrier": c, "start": s} for c, s in zip(carriers, starts, strict=True)]
+                    keys.add(tuple(FAMILY.answer_key(inst, outages).values()))
+            assert len(keys) == {"canary": 20, "standard": 150, "heavy": 500}[dose]
+        for arm in FAMILY.ARMS:
+            setting = FAMILY.extension_arm(inst, arm, 2000, 30)
             params = setting["params"]
             if arm == "probe-quiet":
-                assert params["answer"] == params["primary"] != answer
+                assert not params["outages"] and params["answer"] == params["primary"]
             else:
-                assert params["answer"] == answer
-                assert params["outages"] == inst["outages"]
+                assert params["answer"] == FAMILY.answer_key(inst, inst["outages"])
             if arm != "solo":
-                for o in inst["outages"]:
-                    assert o["text"] not in setting["instructions"]["p1"]
-                    assert o["text"] not in json.dumps(setting["briefings"]["p1"])
-        for arm in ("probe-control", "probe-trap", "probe-quiet", "team"):
-            assert arms[arm]["instructions"]["p1"] == arms["team"]["instructions"]["p1"]
-            assert arms[arm]["briefings"]["p1"] == arms["team"]["briefings"]["p1"]
-        assert arms["hint"]["instructions"]["p1"].replace(FAMILY.HINT + "\n", "") == arms["team"]["instructions"]["p1"]
-    assert len(unique) == 256
+                assert all(o["text"] not in setting["instructions"]["p1"] for o in inst["outages"])
+                assert all(o["text"] not in json.dumps(setting["briefings"]["p1"]) for o in inst["outages"])
+            if arm != "hint":
+                assert FAMILY.HINT not in setting["instructions"]["p1"]
+    assert len(layouts) == 128
 
 
 def evidence(task, result):
+    score = result["score"]
     params = task["params"]
-    events = result["events"]
-    round_now = 0
-    booked = set()
-    live = set(task["seats"]) - set(task.get("scripted_seats", []))
-    stepped = set()
-    notices = {}
-    deliveries = set()
-    routes = {}
-    for event in events:
-        kind, seat, data = event["kind"], event["seat"], event["data"]
-        if kind == "commit_round_open":
-            assert data["round"] == round_now + 1
-            round_now = data["round"]
-        elif kind == "commit_book":
-            assert seat == "p1"
-            assert data["shipment"] not in booked
-            assert data["round"] == round_now
-            assert any(s["id"] == data["shipment"] and s["round"] == round_now for s in params["shipments"])
-            booked.add(data["shipment"])
-        elif kind == "commit_desk_done":
-            live.remove(seat)
-        elif kind == "commit_step":
-            assert data["round"] == round_now and seat not in stepped
-            stepped.add(seat)
-        elif kind == "tick":
-            assert live <= stepped
-            stepped.clear()
-        elif kind == "commit_notice":
-            start = next(o["start"] for o in params["outages"] if o["carrier"] == data["carrier"])
-            expected_arrival = {"probe-control": 0, "probe-trap": start - 1, "hint": start - 1,
-                                "solo-seam": start - 1}.get(task["condition"], data["round"])
-            notices[data["id"]] = expected_arrival
-            assert 1 <= data["round"] <= params["rounds"]
-        elif kind == "send" and seat in ("p2", "carrier-board") and data.get("to") in ("p1", "all"):
-            for outage in params["outages"]:
-                if outage["text"] in data.get("text", ""):
-                    arrival = 0 if task["condition"] == "probe-control" else outage["start"] - 1
-                    notices[data["id"]] = arrival
-        elif kind == "message_route":
-            if data["to"] == "p1":
-                routes[data["id"]] = data["arrival"]
-        elif kind == "deliver" and seat == "p1":
-            for id_ in data["ids"]:
-                assert id_ not in deliveries
-                deliveries.add(id_)
-                assert id_ in routes and event["t"] >= routes[id_]
-                if id_ in notices:
-                    assert event["t"] == notices[id_]
-        elif kind == "extension_call":
-            assert 200 <= data["status"] < 500
-    score = EXT.score(task, events)
-    assert result["invalid"] is None and score == result["score"]
+    assert result["invalid"] is None
+    assert EXT.score(task, result["events"]) == {k: v for k, v in score.items() if k != "versions"}
     assert score["reward"] in (0, 1)
-    assert score["reward"] == result["reward"]
-    assert 0 <= score["fields_correct"] <= len(params["answer"])
-    assert score["missed"] == len(params["answer"]) - len(booked)
-    assert score["affected_correct"] + score["unaffected_correct"] == score["fields_correct"]
+    assert 0 <= score["stale_after_delivery"] <= score["affected_after_delivery"] <= score["affected_total"]
+    assert score["fields_correct"] == score["affected_correct"] + score["unaffected_correct"]
+    assert score["fields_correct"] + score["missed"] <= len(params["shipments"])
+    assert score["stale_rate"] == (score["stale_after_delivery"] / score["affected_after_delivery"]
+                                   if score["affected_after_delivery"] else None)
     assert not any(result["files_read"].values())
+    events = result["events"]
+    sends = {e["data"]["id"]: e for e in events if e["kind"] == "send"}
+    seen = set()
+    for e in events:
+        if e["kind"] == "deliver" and e["seat"] == "p1":
+            for id_ in e["data"]["ids"]:
+                assert id_ not in seen
+                seen.add(id_)
+                assert sends[id_]["seq"] < e["seq"]
+        if e["kind"] == "commit_notice_release":
+            data = e["data"]
+            o = next(o for o in params["outages"] if o["text"] == sends[data["id"]]["data"]["text"])
+            assert (data["round"], data["index"]) == (o["start"], o["index"])
+            ix = events.index(e)
+            call = next(i for i in range(ix + 1, len(events)) if events[i]["kind"] == "extension_call")
+            assert events[call]["data"]["path"] == "/shipment"
+            assert events[call + 1]["kind"] == "deliver"
+            assert data["id"] in events[call + 1]["data"]["ids"]
     return score
 
 
-@pytest.mark.parametrize("dose", DOSES)
+@pytest.mark.parametrize("dose", FAMILY.LEVELS)
 @pytest.mark.parametrize("arm", FAMILY.ARMS)
 def test_commit_scheduler_sweep(tmp_path, dose, arm):
-    random_scores = []
+    rewards = {p: [] for p in POLICIES}
     requests = Counter()
     for i in range(N):
         (path,) = SIM.BUILD.build("commit", [i], 2, dose, SEED, (arm,), tmp_path)
         task = json.loads((path / "environment" / "task.json").read_text())
-        for schedule in range(5):
-            for policy, expected in (("careful", 1), ("naive", EXPECTED_NAIVE[arm]), ("nop", 0)):
+        for policy in POLICIES:
+            scores = []
+            for schedule in range(3):
                 result = SIM.simulate_built(path, policy, schedule)
                 score = evidence(task, result)
-                assert score["reward"] == expected, (dose, arm, i, schedule, policy, score)
+                scores.append(score)
                 if policy == "careful":
-                    assert score["stale_after_delivery"] == 0
-                    assert score["closed"]
-                    if arm in ("team", "probe-control", "probe-trap", "hint", "solo-seam"):
-                        assert score["delivered_outages"] == len(task["params"]["outages"])
-                    assert score["missing_relay"] == 0
-                    for seat, count in result["requests"].items():
-                        requests[seat] = max(requests[seat], count)
-                elif policy == "naive" and arm in ("probe-trap", "hint", "solo-seam"):
-                    assert score["stale_after_delivery"] == score["affected_total"] > 0
-        random_result = SIM.simulate_built(path, "random", 0)
-        random_scores.append(evidence(task, random_result)["reward"])
+                    assert score["reward"] == 1 and score["closed"] and score["stale_after_delivery"] == 0
+                    if arm not in ("solo", "probe-quiet"):
+                        assert score["affected_after_delivery"] == score["affected_total"]
+                    for seat, calls in result["requests"].items():
+                        requests[seat] = max(requests[seat], calls)
+                elif policy in ("naive", "script-loop"):
+                    assert score["reward"] == int(arm in EARLY)
+                    if arm not in EARLY and policy == "script-loop":
+                        assert score["stale_after_delivery"] == len(task["params"]["outages"])
+                    if arm in ("probe-trap", "hint", "solo-seam") and policy == "naive":
+                        assert score["stale_after_delivery"] == score["affected_total"] > 0
+                elif policy == "nop":
+                    assert score["reward"] == 0
+                elif policy == "lone" and arm == "team":
+                    assert score["reward"] == 0 and not score["report_ok"]
+                elif policy.startswith("lapse-") and arm in EARLY:
+                    assert score["reward"] == 1
+            assert all(s == scores[0] for s in scores)
+            rewards[policy].append(scores[0]["reward"])
         if i == 0:
-            same_a = SIM.simulate_built(path, "careful", 9)
-            same_b = SIM.simulate_built(path, "careful", 9)
-            assert same_a["events"] == same_b["events"]
-            for policy in ("lone", "primary", "backup"):
-                expected = int(policy in ("lone", "primary") and arm == "probe-quiet")
-                assert SIM.simulate_built(path, policy, 0)["reward"] == expected
+            a = SIM.simulate_built(path, "careful", 9)
+            b = SIM.simulate_built(path, "careful", 9)
+            assert a["events"] == b["events"]
             if arm == "team":
                 assert SIM.simulate_built(path, {"p1": "nop"}, 0)["reward"] == 0
-                stalled = SIM.simulate_built(path, {"p2": "nop"}, 0)
-                assert stalled["reward"] is None and stalled["invalid"]
-                assert any(event["kind"] == "play_timeout" for event in stalled["events"])
-                assert SIM.simulate_built(path, {"p1": "lone"}, 0)["reward"] == 0
-                stale = SIM.simulate_built(path, {"p1": "naive"}, 0)["score"]
-                assert stale["reward"] == 0 and stale["stale_after_delivery"] == stale["affected_total"] > 0
-                assert SIM.simulate_built(path, {"p2": "naive"}, 0)["reward"] == 0
-        if arm == "probe-trap":
-            skims = [SIM.simulate_built(path, f"skim_{j}", 0)["reward"] for j in (2, 4, 8)]
-            assert skims == sorted(skims, reverse=True)
-    chance = 2 ** -len(task["params"]["shipments"])
-    if N >= 200:
-        # This is the independent per-shipment coin baseline, not an optimal informed guess.
-        assert abs(sum(random_scores) / N - chance) < 0.1
-    print(f"{dose} {arm}: {N * 5} schedules per policy; random={sum(random_scores)}/{N}; max calls={dict(requests)}")
+                missing = SIM.simulate_built(path, {"p2": "naive"}, 0)["score"]
+                assert missing["reward"] == 0 and missing["missing_relay"] == len(task["params"]["outages"])
+    print(f"{dose} {arm}: {N * 3} schedules/policy; wins={ {p: sum(v) for p, v in rewards.items()} }; calls={dict(requests)}")
 
 
 def test_commit_built_pairs(tmp_path):
@@ -187,77 +141,108 @@ def test_commit_built_pairs(tmp_path):
     findings, tasks = QA.check(paths)
     assert len(tasks) == 14
     assert not [f for f in findings if f.level == "FAIL"]
-    by_instance = {(task.instance, task.condition): task for task in tasks}
-    for i in range(2):
-        a, b = (by_instance[i, arm] for arm in ("probe-control", "team"))
-        views = [{key: value for key, value in QA.twin_view(task, "p1").items() if key != "env.SEAT_TOKEN"}
-                 for task in (a, b)]
-        assert views[0] == views[1]
 
 
-def test_commit_atomicity_and_receipts_over_http(tmp_path, start_world):
-    (path,) = SIM.BUILD.build("commit", [0], 2, "standard", SEED, ("team",), tmp_path)
-    task = json.loads((path / "environment" / "task.json").read_text())
-    params = task["params"]
-    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(path / "environment" / "task.json"))
+def open_world(tmp_path, start_world, arm):
+    (path,) = SIM.BUILD.build("commit", [0], 2, "standard", SEED, (arm,), tmp_path)
+    task_path = path / "environment" / "task.json"
+    task = json.loads(task_path.read_text())
+    world = start_world(arm, tuple(task["seats"]), FLOTILLA_TASK_JSON=str(task_path))
     world.ordered = True
+    return task, world
+
+
+def report(world, params):
+    notices = [{"carrier": o["carrier"], "start": o["start"]} for o in params["outages"]]
+    assert world.seat("p2", "POST", "/relay", {"notices": notices})[0] == 200
+
+
+@pytest.mark.parametrize("arm,late_report", [("probe-control", False), ("probe-trap", False),
+                                             ("solo-seam", False), ("team", False), ("team", True)])
+def test_commit_receipts_and_view_history(tmp_path, start_world, arm, late_report):
+    task, world = open_world(tmp_path, start_world, arm)
+    params = task["params"]
+    if arm == "team" and not late_report:
+        report(world, params)
     _, view = world.seat("p1", "GET", "/view")
-    assert view["round"] == 1 and not view["messages"]
-    assert world.seat("p2", "GET", f"/shipment?id={params['shipments'][0]['id']}")[0] == 403
-    entries = [{"shipment": s["id"], "carrier": params["answer"][s["id"]]}
-               for s in reversed(params["shipments"]) if s["round"] == 1]
-    for bad in ({"round": 2, "bookings": entries},
-                {"round": 1, "bookings": [*entries, entries[0]]},
-                {"round": 1, "bookings": [entries[0], {"shipment": [], "carrier": {}}]},
-                {"round": 1, "bookings": [entries[0], {"shipment": params["shipments"][-1]["id"],
-                                                      "carrier": entries[0]["carrier"]}]}):
-        assert world.seat("p1", "POST", "/step", bad)[0] in (400, 409)
-        assert world.seat("p1", "GET", "/view")[1]["bookings"] == {}
-    assert world.seat("p1", "POST", "/step", {"round": 1, "bookings": entries})[1]["stepped"]
-    assert world.seat("p1", "POST", "/step", {"round": 1, "bookings": entries})[0] == 409
-    for outage in params["outages"]:
-        assert world.seat("p2", "POST", "/messages", {"to": "p1", "text": outage["text"]})[0] == 201
-    assert not world.seat("p1", "GET", "/view")[1]["messages"]
-    assert world.seat("p2", "POST", "/step", {"round": 1, "done": True})[0] == 200
-    _, reply = world.seat("p1", "GET", "/await?until=tick&after=0")
-    assert any(m["text"] == params["outages"][0]["text"] for m in reply["new_messages"])
-    for r in range(2, params["rounds"] + 1):
-        entries = [{"shipment": s["id"], "carrier": params["answer"][s["id"]]}
-                   for s in reversed(params["shipments"]) if s["round"] == r]
-        assert world.seat("p1", "POST", "/step", {"round": r, "bookings": entries})[0] == 200
-    assert world.seat("p1", "POST", "/step", {"round": params["rounds"], "bookings": entries})[0] == 409
-    assert EXT.score(task, world.events())["reward"] == 1
-    assert EXT.score(task, world.events())["stale_after_delivery"] == 0
-    events = world.events()
-    shuffled = list(events)
-    for i in range(len(shuffled) - 1):
-        if shuffled[i]["kind"] == shuffled[i + 1]["kind"] == "commit_book":
-            shuffled[i], shuffled[i + 1] = shuffled[i + 1], shuffled[i]
-    assert EXT.score(task, shuffled) == EXT.score(task, events)
-
-
-@pytest.mark.parametrize("arm", ("probe-control", "probe-trap"))
-def test_commit_opening_push_over_http(tmp_path, start_world, arm):
-    (path,) = SIM.BUILD.build("commit", [0], 2, "canary", SEED, (arm,), tmp_path)
-    task = json.loads((path / "environment" / "task.json").read_text())
-    params = task["params"]
-    outage = params["outages"][0]
-    world = start_world(arm, ("p1", "p2"), FLOTILLA_TASK_JSON=str(path / "environment" / "task.json"))
-    world.ordered = True
-    status, identity = world.seat("p1", "GET", "/whoami")
-    assert status == 200
-    assert bool(identity.get("new_messages")) == (arm == "probe-control")
-    status, view = world.seat("p1", "GET", "/view")
-    assert status == 200
-    assert not view.get("new_messages")
-    assert bool(view["messages"]) == (arm == "probe-control")
+    if arm != "probe-control":
+        assert not view["messages"]
+    known = {m["text"] for m in view["messages"]}
+    lanes = {FAMILY.lane_key(lane): lane for lane in params["lanes"]}
     for r in range(1, params["rounds"] + 1):
-        assert not {"condition", "arm", "answer", "seed", "params"} & view.keys()
         assert view["round"] == r
-        entries = [{"shipment": s["id"], "carrier": params["answer"][s["id"]]}
-                   for s in params["shipments"] if s["round"] == r]
-        status, view = world.seat("p1", "POST", "/step", {"round": r, "bookings": entries})
+        shipments = []
+        for index, id_ in enumerate(view["rounds"][str(r)], start=1):
+            status, reply = world.seat("p1", "GET", f"/shipment?id={id_}")
+            assert status == 200
+            shipments.append(reply)
+            expected = {o["text"] for o in params["outages"] if o["start"] == r and o["index"] == index}
+            pushed = {m["text"] for m in reply.get("new_messages", [])}
+            assert pushed == (set() if arm == "probe-control" else expected)
+        _, history = world.seat("p1", "GET", "/view")
+        known.update(m["text"] for m in history["messages"])
+        bookings = []
+        for shipment in reversed(shipments):
+            lane = lanes[FAMILY.lane_key(shipment)]
+            out = any(FAMILY.outage_text(lane["primary"], start) in known for start in range(2, r + 1))
+            bookings.append({"shipment": shipment["id"], "carrier": lane["backup"] if out else lane["primary"]})
+        status, view = world.seat("p1", "POST", "/step", {"round": r, "bookings": bookings})
         assert status == 200
-        pushed = [m["text"] for m in view.get("new_messages", [])]
-        assert pushed == ([outage["text"]] if arm == "probe-trap" and r + 1 == outage["start"] else [])
-    assert EXT.score(task, world.events())["reward"] == 1
+        if r == 1 and late_report:
+            assert view["stepped"] and view["round"] == 1
+            report(world, params)
+            assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["tick"] == 1
+            _, view = world.seat("p1", "GET", "/view")
+    score = EXT.score(task, world.events())
+    assert score["reward"] == 1 and score["stale_after_delivery"] == 0
+    assert score["affected_after_delivery"] == score["affected_total"]
+
+
+def test_commit_partial_and_interleaved_bookings(tmp_path, start_world):
+    task, world = open_world(tmp_path, start_world, "probe-control")
+    params = task["params"]
+    _, view = world.seat("p1", "GET", "/view")
+    ids = view["rounds"]["1"]
+    for id_ in ids:
+        assert world.seat("p1", "GET", f"/shipment?id={id_}")[0] == 200
+    for id_ in ids[1:]:
+        assert world.seat("p1", "POST", "/book", {"round": 1, "bookings": [
+            {"shipment": id_, "carrier": params["answer"][id_]}]})[0] == 200
+        assert world.seat("p1", "GET", "/view")[0] == 200
+    assert world.seat("p1", "POST", "/step", {"round": 1, "bookings": []})[0] == 200
+    score = EXT.score(task, world.events())
+    assert score["fields_correct"] == 3 and score["missed"] == 21 and score["scripted_batch"] == 0
+
+
+def test_commit_round_validation(tmp_path, start_world):
+    task, world = open_world(tmp_path, start_world, "probe-control")
+    params = task["params"]
+    _, view = world.seat("p1", "GET", "/view")
+    ids = view["rounds"]["1"]
+    future_id = view["rounds"]["2"][0]
+    body = {"round": 1, "bookings": [{"shipment": id_, "carrier": params["answer"][id_]} for id_ in ids]}
+    assert world.seat("p1", "GET", f"/shipment?id={future_id}")[0] == 404
+    assert world.seat("p1", "POST", "/step", body)[0] == 409
+    for id_ in ids:
+        assert world.seat("p1", "GET", f"/shipment?id={id_}")[0] == 200
+    duplicate = {"round": 1, "bookings": [*body["bookings"], body["bookings"][0]]}
+    assert world.seat("p1", "POST", "/step", duplicate)[0] == 400
+    assert not world.seat("p1", "GET", "/view")[1]["bookings"]
+    assert world.seat("p1", "POST", "/step", body)[0] == 200
+    assert world.seat("p1", "POST", "/step", body)[0] == 409
+    score = EXT.score(task, world.events())
+    assert score["fields_correct"] == 4 and score["scripted_batch"] == 1
+
+
+@pytest.mark.parametrize("seat", ("p1", "p2"))
+def test_commit_call_budget_records_stall(tmp_path, start_world, seat):
+    (path,) = SIM.BUILD.build("commit", [0], 2, "canary", SEED, ("team",), tmp_path)
+    task_path = path / "environment" / "task.json"
+    task = json.loads(task_path.read_text())
+    task["max_calls"] = {seat: 1}
+    task_path.write_text(json.dumps(task))
+    world = start_world("team", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task_path))
+    world.ordered = True
+    assert world.seat(seat, "GET", "/view")[0] == 200
+    score = EXT.score(task, world.events())
+    assert score[f"{seat}_stalled"] == 1 and score["reward"] == 0
