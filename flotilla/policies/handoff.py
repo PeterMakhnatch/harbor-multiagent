@@ -4,7 +4,7 @@ import hashlib
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", *NO_NOTE, "reverse", "colon", "slash", "lines", "ref-first",
+    return name in ("careful", "naive", "pointer", *NO_NOTE, "reverse", "colon", "slash", "lines", "ref-first",
                     "json", "arrow", "dash", "ref-colon", "comma", "table", "ref-eq", "cleared", "paren",
                     "bare-paren", "json-list", "json-unknown", "candidates", "suspect-lots", "possible-bad",
                     "remaining", "bad-one-of", "ambiguous-pair", "ambiguous-lot", "exhaust", "stall", "extra",
@@ -137,6 +137,11 @@ def work(name, client, own, memory, family):
         suspects = suspects | {lot for lot in lots if lot not in suspects
                               and own.lapse(percent, ["clearance", shift, lot])}
     note = family.write_note(keep, suspects, name, lots)
+    if name == "pointer" and not own["continuous"]:
+        returned = [item["batch"] for item in items if item["action"] == "reissue"]
+        if returned:
+            batch = next((b for b in returned if b in fresh), returned[0])
+            note = family.write_note(keep, set()).removesuffix("; Suspects ") + f"; Bad lot in {batch}."
     if own["continuous"] and len(note) > own["cap"]:
         note = ""
     check(*(yield from client.post("/handover", {"note": note})))
