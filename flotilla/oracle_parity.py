@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 QUESTION = "did every task in this local Docker oracle rehearsal get the same reward as its simulator?"
 SCHEDULES = 3
+ABSOLUTE = re.compile(r"(?<![\w.~/-])~?/[^\s'\"(),]+")
 NOT_BOUND = (
     "Docker image bytes: job configs set force_build false, so Docker may reuse an image built from older "
     "environment bytes; no retained file records the image digest.",
@@ -191,29 +193,42 @@ def the_trial(job_dir: Path) -> tuple[Path | None, str | None]:
     return folders[0], None
 
 
-def identity_problem(cell: dict, job: str, jobs_dir: Path, trial: Path, result: dict, digest_of) -> str | None:
-    config = result.get("config") or {}
-    task = cell["task"]
+def rows_of(value) -> list[dict] | None:
+    return value if isinstance(value, list) and all(isinstance(row, dict) for row in value) else None
+
+
+def identity_problem(cell: dict, job: str, jobs_dir: Path, trial: Path, result, digest_of) -> str | None:
+    if not isinstance(result, dict) or not isinstance(result.get("config"), dict):
+        return "trial result.json is malformed"
+    config, task = result["config"], cell["task"]
     if result.get("trial_name") != trial.name or config.get("trial_name") != trial.name:
         return "trial id differs from its folder"
     if (result.get("task_id") or {}).get("path") != task or (config.get("task") or {}).get("path") != task:
         return "trial ran another task path"
-    if Path(config.get("trials_dir", "")).resolve() != (jobs_dir / job).resolve():
+    if Path(str(config.get("trials_dir", ""))).resolve() != (jobs_dir / job).resolve():
         return "trial belongs to another job folder"
     if (result.get("agent_info") or {}).get("name") != "oracle" or (config.get("agent") or {}).get("name") != "oracle":
         return "trial agent is not oracle"
+    planned, ran = rows_of(config.get("participants")), rows_of(result.get("seat_results"))
+    if planned is None or ran is None:
+        return "trial participants or seat results are malformed"
     seats, _scripted = RUN.roster_of(task)
-    planned = sorted(row.get("seat") for row in config.get("participants") or [])
-    ran = sorted(row.get("seat") for row in result.get("seat_results") or [])
-    if tuple(planned) != seats or tuple(ran) != seats:
-        return "trial roster differs from task.toml"
-    if any((row.get("agent_info") or {}).get("name") != "oracle" for row in result["seat_results"]):
-        return "a seat did not run the oracle agent"
+    if tuple(sorted(str(row.get("seat")) for row in planned)) != seats:
+        return "trial participants differ from the task.toml roster"
+    if tuple(sorted(str(row.get("seat")) for row in ran)) != seats:
+        return "trial seat results differ from the task.toml roster"
+    for row in planned:
+        if row.get("name") != "oracle" or row.get("model_name") is not None:
+            return f"seat {row['seat']} was configured as {row.get('name')!r}, not the oracle with no model"
+    for row in ran:
+        name = (row.get("agent_info") or {}).get("name")
+        if name != "oracle":
+            return f"seat {row['seat']} ran {name!r}, not the oracle agent"
     lock_path = trial / "lock.json"
     lock = json.loads(lock_path.read_text()).get("task") if lock_path.is_file() else None
     if not isinstance(lock, dict) or lock.get("path") != task or not lock.get("digest"):
         return "trial lock does not name this task"
-    if digest_of is not None and digest_of(task) != lock["digest"]:
+    if digest_of(task) != lock["digest"]:
         return "task folder bytes changed since the trial ran"
     return None
 
@@ -266,8 +281,8 @@ def check_cell(cell: dict, row: dict | None, run_dir: Path, jobs_dir: Path, wave
         return {**out, "problem": problem}
     out["trial"] = trial.name
     _trial, result = RUN.read_trial(jobs_dir, job)
-    problem = (RUN.trial_problem(trial, result, cell)
-               or identity_problem(cell, job, jobs_dir, trial, result, digest_of))
+    problem = (identity_problem(cell, job, jobs_dir, trial, result, digest_of)
+               or RUN.trial_problem(trial, result, cell))
     if problem:
         return {**out, "problem": f"invalid trial: {problem}"}
     out["oracle"], problem = harbor_reward(trial, result)
@@ -290,9 +305,14 @@ def unaccounted(run_dir: Path, jobs_dir: Path, wave: dict, state: dict) -> list[
             for job in sorted((configs | folders) - known)]
 
 
+def scrub(text: str) -> str:
+    """A refusal from a run_wave helper without absolute machine paths (task folders, manifests, jobs)."""
+    return ABSOLUTE.sub("<path>", text)
+
+
 def verify(plan_path: Path, run_dir: Path, *, jobs_dir: Path | None = None, rev: str | None = None,
            schedules: int = SCHEDULES, simulate=None, digest_of=None) -> dict:
-    """The receipt. simulate defaults to sim.simulate_built; digest_of to Harbor's task hash when importable."""
+    """The receipt. simulate defaults to sim.simulate_built; digest_of to Harbor's task hash, which PASS requires."""
     if schedules < 1:
         raise SystemExit("refused: --schedules must be >= 1")
     receipt = {"question": QUESTION, "verdict": "FAIL", "plan": None, "plan_sha256": None, "plan_source": None,
@@ -315,18 +335,20 @@ def verify(plan_path: Path, run_dir: Path, *, jobs_dir: Path | None = None, rev:
             raise SystemExit("refused: state.json has no finished cells")
         jobs = [item.get("job") for row in finished.values() for item in RUN.attempts_of(row)]
         jobs_dir = jobs_dir_of(run_dir, jobs_dir, jobs)
-    except (SystemExit, ValueError, OSError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
-        receipt["problems"].append(str(exc) if isinstance(exc, SystemExit)
+    except (SystemExit, ValueError, OSError, KeyError, TypeError, AttributeError,
+            subprocess.CalledProcessError) as exc:
+        receipt["problems"].append(scrub(str(exc)) if isinstance(exc, SystemExit)
                                    else f"refused: unreadable run record ({type(exc).__name__})")
+        return receipt
+    if digest_of is None:
+        digest_of = task_digest_fn()
+    if digest_of is None:
+        receipt["problems"].append("refused: Harbor's task digest is not importable, so the task bytes the trials "
+                                   "ran cannot be checked; run under the repo's environment (uv run)")
         return receipt
     if simulate is None:
         simulate = _load(ROOT / "sim.py", "flotilla_parity_sim").simulate_built
-    if digest_of is None:
-        digest_of = task_digest_fn()
-    receipt["task_digest"] = "checked against each trial lock" if digest_of else "not checked (Harbor not importable)"
-    if digest_of is None:
-        receipt["not_bound"].insert(0, "Task folder bytes: the simulator reads each folder as it is now; it was not "
-                                       "compared with the bytes the trial ran.")
+    receipt["task_digest"] = "checked against each trial lock"
     receipt["planned"] = len(order)
     keys = {cell["key"] for cell in order}
     receipt["problems"] += [f"extra: finished cell {key} is not in the plan" for key in sorted(set(finished) - keys)]
@@ -335,7 +357,10 @@ def verify(plan_path: Path, run_dir: Path, *, jobs_dir: Path | None = None, rev:
         try:
             row = check_cell(cell, finished.get(cell["key"]), run_dir, jobs_dir, wave, schedules, simulate, digest_of)
         except (SystemExit, ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
-            row = {**blank_row(cell), "problem": f"invalid: unreadable record ({type(exc).__name__})"}
+            detail = scrub(str(exc)) if isinstance(exc, SystemExit) else type(exc).__name__
+            row = {**blank_row(cell), "problem": f"invalid: unreadable record ({detail})"}
+        if row["problem"]:
+            row["problem"] = scrub(row["problem"])
         receipt["cells"].append(row)
     receipt["matched"] = sum(row["problem"] is None for row in receipt["cells"])
     if not receipt["problems"] and receipt["planned"] and receipt["matched"] == receipt["planned"]:
