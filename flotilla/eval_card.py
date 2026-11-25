@@ -811,8 +811,9 @@ def main(argv: list[str] | None = None) -> int:
     families = args.suite or (args.family,)
     if not all(family.isidentifier() for family in families):
         parser.error("--family and --suite require Python identifiers; use --variant separately")
-    if not set(args.levels) <= {*LEVELS, "easy", "hard"}:
-        parser.error("--levels must contain canary, standard, heavy (or legacy easy, hard)")
+    if not all(level.replace("-", "").isalnum() for level in args.levels):
+        parser.error("--levels takes the family's level names (canary, standard, heavy, or a level that the "
+                     "family declares, for example standard-bulk)")
     if args.seed is None:
         args.seed = secrets.randbelow(2**53 - 1_000_000) + 1_000_000
     args.out.mkdir(parents=True, exist_ok=True)
