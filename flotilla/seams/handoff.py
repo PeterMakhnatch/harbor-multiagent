@@ -6,6 +6,9 @@ from itertools import pairwise
 
 FAMILY = "handoff"
 TITLE = "Operate a print dispatch desk"
+VERSION = 2
+SEAM = "A capped note carries unfinished work and unresolved evidence to a fresh context across shifts."
+LEVELS = ("canary", "standard", "heavy")
 DOSES = {"canary": 3, "standard": 4, "heavy": 8}
 SEATS = DOSES
 CALL_CAP = 18
@@ -14,7 +17,8 @@ ARMS = ("solo", "solo-seam", "team", "hint", "twin", "team-record", "team-fullre
         "probe-hunt-control", "probe-hunt-trap", "probe-ref-control", "probe-ref-trap")
 TWINS = (("probe-hunt-control", "probe-hunt-trap"), ("probe-ref-control", "probe-ref-trap"))
 PAIRS = tuple(("team", arm) for arm in ("solo-seam", "hint", "twin", "team-record", "team-fullrecord"))
-ARM_WORDS = ("handoff", "solo-seam", "team-record", "team-fullrecord", *[arm for arm in ARMS if arm.startswith("probe-")])
+COMMON_WORDS = ("team",)
+ARM_WORDS = ("handoff", *(arm for arm in ARMS if arm not in COMMON_WORDS))
 TEAM_SENTENCE = "A different operator works each shift."
 RESET_SENTENCE = "You are the same operator across shifts, with a fresh session and container each time."
 EXTRA_SENTENCES = {
@@ -142,15 +146,31 @@ def shift_view(params, shift):
     return known, open_batches, results
 
 
-def chance_baseline(params):
-    """Blind injection from a clean incoming desk, plus a uniform final ticket."""
-    matches = 0.0
-    total = len([b for b in params["batches"] if b["lag"] is not None])
-    for shift in range(1, params["shifts"] + 1):
-        known, pending, results = shift_view(params, shift)
-        matches += len(known) + (len(results) / len(pending) if pending else 0)
-    possible, _ = visible_possibilities(params["lots"], known, pending, results)
-    return 0.5 * (matches / total + 1 / len(possible))
+def chance_baseline(task_json, policy):
+    """Exact expectation for the blind policy's final conditional assignment."""
+    if policy != "blind":
+        return None
+    if task_json["condition"].endswith("-trap"):
+        return 0.0  # the blind writer leaves no note and the script does not guess
+    if task_json["condition"] != "team":
+        return None
+    params = task_json["params"]
+    batches = params["batches"]
+    known = [b for b in batches if b["shift"] == params["shifts"]]
+    delayed = [b for b in batches if b["lag"]]
+    possible, _ = visible_possibilities(params["lots"], known, delayed, delayed)
+    matches = len(batches) - len(delayed)
+    for lot in possible:
+        for batch in delayed:
+            if (lot in batch["lots"]) == (batch["status"] == "returned"):
+                size = sum((lot in other["lots"]) == (batch["status"] == "returned") for other in delayed)
+                matches += 1 / (size * len(possible))
+    return 0.5 * (matches / len(batches) + 1 / len(possible))
+
+
+def leak_values(task_json):
+    params = task_json["params"]
+    return [params["bad"], *(batch[key] for batch in params["batches"] for key in ("batch", "reference"))]
 
 
 def validate_case(params, dose, arm):
