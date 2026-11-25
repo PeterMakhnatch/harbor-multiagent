@@ -31,7 +31,18 @@ EXAMPLE = "W-AA"
 BLOCK_WORDS = (r"\b(?:block\w*|cannot|can't|can not|cant|unavailable|not available|not free|not open|unable|"
                r"off[- ]limits|excluded?|forbidden|closed|ruled out|no[- ]go)\b")
 FREE_WORDS = r"\b(?:free|can|ok|okay|open|available|usable|works?|fine|possible)\b"
-KEYWORDS = re.compile(f"(?P<b>{BLOCK_WORDS})|(?P<f>{FREE_WORDS})", re.IGNORECASE)
+LIST_CODE = r"(?:[Ww][-_ ]?[A-Za-z]{2}|[A-Z]{2})"
+LIST_CODES = rf"{LIST_CODE}(?:(?:\s*,\s*|\s+(?:and|or)\s+|\s+){LIST_CODE})*"
+REPORT_PREFIX = r"^\s*(?:(?i:p\d+|I|we|my desk|our desk)\s*:?\s*)?"
+REPORT_SUFFIX = r"(?i:(?:\s+(?:only|for (?:me|us|my desk|our desk)))*)\s*$"
+BLOCK_REPORT = re.compile(
+    rf"{REPORT_PREFIX}(?i:{BLOCK_WORDS})(?:\s+(?:use|do|these windows|windows|list|for us|for me))*"
+    rf"\s*[:=]?\s*(?P<codes>{LIST_CODES}){REPORT_SUFFIX}")
+BLOCK_REVERSE = re.compile(
+    rf"^\s*(?P<codes>{LIST_CODES})\s+(?i:(?:are\s+)?{BLOCK_WORDS}){REPORT_SUFFIX}")
+FREE_REPORT = re.compile(
+    rf"{REPORT_PREFIX}(?i:(?:are\s+)?{FREE_WORDS})(?:\s+(?:use|on|these windows|windows))*"
+    rf"\s*[:=]?\s*(?P<codes>{LIST_CODES}){REPORT_SUFFIX}")
 CODE = re.compile(r"(?<![A-Za-z0-9])(?:[Ww][-_ ]?)?([A-Za-z]{2})(?![A-Za-z0-9])")
 
 
@@ -59,9 +70,8 @@ def window_code(value, windows):
     return found[0] if len(found) == 1 and len(value.strip()) <= 6 else None
 
 
-def parse_blocked(text, windows):
-    """A blocked list stated with a blocking word (`p2 blocked: W-KT, W-BD`, `I cannot use KT or BD`, JSON with
-    a `blocked` key). Returns a set, or None when the text states no such list."""
+def parse_blocked(text, windows, sender=None):
+    """Read a desk's own list declaration, not a proposal, an aggregate, or a question."""
     if "{" in text and "}" in text:
         try:
             data = json.loads(text[text.index("{"):text.rindex("}") + 1])
@@ -69,27 +79,37 @@ def parse_blocked(text, windows):
             data = None
         if isinstance(data, dict):
             for key, value in data.items():
-                if re.search(BLOCK_WORDS, str(key), re.IGNORECASE) and isinstance(value, list):
-                    return set(mentions(" ".join(map(str, value)), windows))
-    found = set()
-    for sentence in sentences(text):
-        marks = [(m.start(), "b" if m.group("b") else "f") for m in KEYWORDS.finditer(sentence)]
-        if not any(kind == "b" for _, kind in marks):
+                if key in ("blocked", "blocked_windows") and isinstance(value, list):
+                    codes = [window_code(item, windows) for item in value]
+                    if all(code is not None for code in codes):
+                        return set(codes)
+    blocked, free = set(), set()
+    aggregate = False
+    for sentence in re.findall(r"[^.;!?\n]+[?]?", text):
+        if sentence.endswith("?"):
             continue
-        for position, code in spans(sentence, windows):
-            before = [kind for start, kind in marks if start < position]
-            if (before[-1] if before else marks[0][1]) == "b":
-                found.add(code)
-    return found or None
+        desk = re.match(r"\s*(p\d+)\b", sentence, re.IGNORECASE)
+        if sender and desk and desk[1].lower() != sender:
+            continue
+        if re.search(r"\b(?:union|overall|common|all lists|full lists)\b", sentence, re.IGNORECASE):
+            aggregate = True
+        report = BLOCK_REPORT.fullmatch(sentence) or BLOCK_REVERSE.fullmatch(sentence)
+        if report:
+            codes = mentions(report["codes"], windows)
+            if len(codes) == len(re.findall(LIST_CODE, report["codes"])):
+                blocked.update(codes)
+        elif not aggregate and (report := FREE_REPORT.fullmatch(sentence)):
+            codes = mentions(report["codes"], windows)
+            if len(codes) == len(re.findall(LIST_CODE, report["codes"])):
+                free.update(codes)
+    if blocked:
+        return blocked
+    return set(windows) - free if free else None
 
 
 def tells(text, windows, blocked):
-    """Paraphrase-tolerant and referenced to the truth: every blocked code of the sender is named, or every
-    free code of the sender is named together with a word such as free, can, ok, open or available."""
-    named = set(mentions(text, windows))
-    free = set(windows) - set(blocked)
-    return bool(blocked) and set(blocked) <= named or (
-        free <= named and not named & set(blocked) and re.search(FREE_WORDS, text, re.IGNORECASE) is not None)
+    """A declaration that gives the sender's true blocked list."""
+    return parse_blocked(text, windows) == set(blocked)
 
 
 def choices(text, windows):

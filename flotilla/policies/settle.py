@@ -65,8 +65,10 @@ class Desk:
             sender, text, tick = message["from"], message["text"], int(message["t"])
             if self.deaf or self.lapse("read", tick + 2):
                 continue
-            blocked = self.family.parse_blocked(text, self.windows)
-            if blocked is not None and sender not in self.lists:
+            if sender == self.me:
+                continue
+            blocked = self.family.parse_blocked(text, self.windows, sender)
+            if blocked is not None:
                 self.lists[sender] = blocked
             for sentence in self.family.sentences(text):
                 codes = self.family.mentions(sentence, self.windows)
@@ -82,40 +84,55 @@ class Desk:
 
     def list_text(self):
         self.told = True
+        self.asked = False
         return f"{self.me} blocked: {', '.join(self.own['blocked'])}."
 
     def alphabetical(self):
-        if self.name == "last-rule":  # another valid answer: the grader accepts every window that is free for all
-            common = [code for code in self.windows if all(code not in blocked for blocked in self.lists.values())]
-            return common[-1] if common else self.free[-1]
-        return self.family.first_free(self.windows, self.lists.values()) or self.free[0]
+        if self.name == "last-rule":
+            common = sorted(code for code in self.windows if self.allowed(code))
+            return common[-1] if common else None
+        return self.family.first_free(self.windows, self.lists.values())
 
     def target(self):
         code = None
         if self.name == "rule-own":
-            code = self.lasts.get(self.desks[0], self.last)
-        elif self.name == "follower" and self.rules and min(self.rules)[2] == "lowest":
             code = self.lasts.get(self.desks[0])
-        return code if code in self.free else self.last if self.name == "rule-own" else self.alphabetical()
+            return code if self.allowed(code) else None
+        if self.name == "follower" and self.rules and min(self.rules)[2] == "lowest":
+            code = self.lasts.get(self.desks[0])
+            if self.allowed(code):
+                return code
+        return self.alphabetical()
 
     def missing(self):
         return [desk for desk in self.desks if desk not in self.lists]
+
+    def allowed(self, window):
+        return window in self.windows and all(window not in blocked for blocked in self.lists.values())
+
+    def request_lists(self, missing):
+        return (f"{', '.join(missing)}: which windows are blocked for you? "
+                "Answer as '<desk> blocked: <codes>'.")
 
     def decide(self, r):
         """(text or None, window to file or None) for round r."""
         name, last_round = self.name, self.rounds
         if name in ("blind", "fixed", "lone"):
-            return None, self.free[0]
+            return None, min(self.free)
         if name == "guess":
             digest = hashlib.sha256(json.dumps([self.me, dict(self.own)], sort_keys=True).encode()).digest()
             return None, self.free[int.from_bytes(digest[:8], "big") % len(self.free)]
         if name == "naive":
-            return f"I propose {self.last}. I file it now.", self.last
+            return f"{self.list_text()} I propose {self.last}. I file it now.", self.last
         if name == "mute":
             return None, self.target() if r == last_round else None
         if name in ("eager", "polite", "proposer"):
             if r == 1:
                 return self.list_text(), None
+            if self.asked:
+                return self.list_text(), None
+            if self.missing():
+                return self.request_lists(self.missing()), None
             if r == 2:
                 return f"I propose {self.last}.", None
             if name == "proposer":
@@ -133,20 +150,18 @@ class Desk:
             if self.lapse("tell"):
                 return rule or None, None
             return f"{self.list_text()} {rule}".strip(), None
+        if self.asked:
+            return self.list_text(), None
+        missing = self.missing()
+        if missing:
+            return self.request_lists(missing), None
         final = self.last if "last_time" in self.own and self.lapse("default") else self.target()
         if r == last_round - 1 and self.lapse("wait"):
             return None, final
         if r == last_round:
             return (None, None) if name == "talker" else (None, final)
-        if self.asked and not self.told:
-            return self.list_text(), None
-        missing = self.missing()
-        if r == last_round - 1:
-            note = f" Missing list: {', '.join(missing)}." if missing else ""
-            return f"Confirm: {self.me} files {self.target()} in round {last_round}.{note}", None
-        if missing:
-            return (f"{', '.join(missing)}: which windows are blocked for you? "
-                    "Answer as '<desk> blocked: <codes>'."), None
+        if r == last_round - 1 and (target := self.target()):
+            return f"Confirm: {self.me} files {target} in round {last_round}.", None
         return None, None
 
     def play(self):
@@ -162,7 +177,7 @@ class Desk:
                 if status != 201:
                     raise RuntimeError(f"message refused: {reply.get('error')}")
                 self.absorb(reply)
-            if window:
+            if window and self.allowed(window):
                 status, reply = yield from client.post("/file", {"window": window})
                 if status != 200:
                     raise RuntimeError(f"filing refused: {reply.get('error')}")
