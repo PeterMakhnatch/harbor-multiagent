@@ -327,7 +327,7 @@ def extension_arm(inst, arm, max_text, max_messages):
               "fullrecord": arm == "team-fullrecord"}
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": messaging,
             "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "careful"),
-            "play_timeout_sec": 1200.0, "agent_timeout_sec": 1200.0}
+            "play_timeout_sec": 1260.0, "agent_timeout_sec": 1200.0}
 
 
 def pair_difference(first, second, views_a, views_b):

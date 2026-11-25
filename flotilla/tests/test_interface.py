@@ -306,7 +306,7 @@ def test_arms_timeouts_and_qa(tmp_path):
     paths = [*build(tmp_path / "canary", "canary", ALL_ARMS), *build(tmp_path / "heavy", "heavy", ALL_ARMS)]
     for path in paths:
         toml = tomllib.loads((path / "task.toml").read_text())
-        assert toml["metadata"]["play_timeout_sec"] == 1200
+        assert toml["metadata"]["play_timeout_sec"] == 1260 and toml["agent"]["timeout_sec"] == 1200
         text = (path / "instruction.md").read_text() if (path / "instruction.md").exists() else ""
         assert "adapter" not in text
     findings, tasks = QA.check(paths)
