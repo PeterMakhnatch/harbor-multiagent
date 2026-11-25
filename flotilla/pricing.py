@@ -610,6 +610,40 @@ def _profile_lines(history: History, kinds: list[str]) -> list[str]:
     return lines
 
 
+def _range_text(rows: dict[str, dict], modal: float, divisor: int = 1, precision: int = 4) -> str:
+    if any(row["priced"] < row["trials"] for row in rows.values()):
+        return "UNKNOWN (some seats lack a price)"
+    totals = [(sum(row[key] for row in rows.values()) + modal) / divisor for key in ("low", "usd", "high")]
+    return " / ".join(f"${value:.{precision}f}" for value in totals)
+
+
+def _detail_lines(plan: dict, order: list[dict], layouts: dict, estimate,
+                  stages: list[list[dict]] | None) -> list[str]:
+    """Grouped experimental cells and cumulative stage totals, excluding retries."""
+    modal_rate = MODAL_PER_TRIAL_USD if plan["make_jobs"]["env"] == "modal" else 0.0
+    groups: dict[tuple, list[dict]] = {}
+    for cell in order:
+        choice = tuple(cell.get("assignment") or [cell["model"] or ORACLE])
+        groups.setdefault((cell["task_set"], cell["arm"], choice), []).append(cell)
+    lines = ["  by cell (set, arm, model roster; low / expected / high, includes sandbox):"]
+    for (index, arm, choice), cells in sorted(groups.items()):
+        count = len(cells)
+        rows = _tally(cells, layouts, estimate)
+        modal = modal_rate * count
+        lines.append(f"    set {index} {arm} {', '.join(choice)}: {count} trials; "
+                     f"mean/trial {_range_text(rows, modal, count, 6)}; cell total {_range_text(rows, modal)}")
+    if stages is not None:
+        lines.append("  by stage (low / expected / high, includes sandbox, excludes retries):")
+        cumulative = []
+        for index, cells in enumerate(stages, 1):
+            cumulative.extend(cells)
+            added = _range_text(_tally(cells, layouts, estimate), modal_rate * len(cells))
+            total = _range_text(_tally(cumulative, layouts, estimate), modal_rate * len(cumulative))
+            lines.append(f"    stage {index}: {len(cells)} trials, added {added}; "
+                         f"cumulative {len(cumulative)} trials, {total}")
+    return lines
+
+
 def _total_lines(plan: dict, trials: int, rows: dict[str, dict]) -> list[str]:
     modal = MODAL_PER_TRIAL_USD * trials if plan["make_jobs"]["env"] == "modal" else 0.0
     openrouter = sum(row["usd"] for model, row in rows.items() if model.startswith("openrouter/"))
@@ -633,20 +667,18 @@ def _total_lines(plan: dict, trials: int, rows: dict[str, dict]) -> list[str]:
     else:
         lines.append(f"  expected: ${expected:.4f} = {spend} + Modal ${modal:.4f}")
     if plan.get("token_profiles") and not plan.get("smoke"):
-        if unknown:
-            lines.append("  low / expected / high total: UNKNOWN (some seats lack a price)")
-        else:
-            low = sum(row["low"] for row in rows.values()) + modal
-            high = sum(row["high"] for row in rows.values()) + modal
-            lines.append(f"  low / expected / high total: ${low:.4f} / ${expected:.4f} / ${high:.4f}")
+        lines.append(f"  low / expected / high total: {_range_text(rows, modal)}")
     cap = float(plan["budget"]["cap_usd"])
     note = "; expected model spend is above the cap" if openrouter + deepseek > cap else ""
+    if plan.get("token_profiles") and not plan.get("smoke") and sum(row["high"] for row in rows.values()) > cap:
+        note += "; high model estimate is above the cap"
     lines.append(f"  maximum: ${cap + modal:.4f} = model cap ${cap:.4f} + Modal ${modal:.4f}{note}")
     return lines
 
 
 def forecast_lines(plan: dict, order: list[dict], repo: Path, history_jobs: Path | None, *,
-                   fetch_catalog: Callable[[], dict], now: datetime | None = None) -> list[str]:
+                   fetch_catalog: Callable[[], dict], now: datetime | None = None,
+                   stages: list[list[dict]] | None = None) -> list[str]:
     """The dry-run cost block, title first. history_jobs None means <repo>/.flotilla-local/jobs. The catalog cache is
     <repo>/.flotilla-local/cache. A smoke plan (plan["smoke"]) reads neither history nor catalog: the oracle agent and
     ':free' models cost $0, anything else is unknown."""
@@ -675,4 +707,7 @@ def forecast_lines(plan: dict, order: list[dict], repo: Path, history_jobs: Path
     lines += _profile_lines(history, kinds)
     if not smoke:
         lines.append(f"  catalog: {catalog.status or 'not read (no model needed list prices)'}")
-    return lines + _total_lines(plan, len(order), rows)
+    lines += _total_lines(plan, len(order), rows)
+    if plan.get("token_profiles") and not smoke:
+        lines += _detail_lines(plan, order, layouts, estimate, stages)
+    return lines

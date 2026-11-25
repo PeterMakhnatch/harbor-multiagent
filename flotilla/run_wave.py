@@ -1505,8 +1505,13 @@ def run(plan_path: Path, *, run_dir: Path | None = None, dry_run: bool = False, 
         if "stages" in wave:
             staged = Staged(wave, order)
             most, fewest = staged.planned(True), staged.planned(False)
-            forecasts = [PRICING.forecast_lines(wave, cells, repo, history_jobs, fetch_catalog=fetch)
-                         for cells in (most, fewest)]
+            forecasts = []
+            for cells in (most, fewest):
+                options = {}
+                if wave.get("token_profiles"):
+                    options["stages"] = [[cell for cell in cells if staged.block_stage(cell) == stage]
+                                         for stage in range(staged.count)]
+                forecasts.append(PRICING.forecast_lines(wave, cells, repo, history_jobs, fetch_catalog=fetch, **options))
             print_staged_dry_run(wave, staged, scripted, key_line(base, models), most, fewest,
                                  (forecasts[0] + zdr, forecasts[1]))
             return []
