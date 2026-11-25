@@ -50,14 +50,17 @@ def generate(seed, instance, n_seats, difficulty):
         first = rng.sample(lanes, 2)
         second = rng.sample(first, 2)
         slots = first + second
-        chosen = [rng.choice(second[starts[0] - 3:])["primary"]]
+        selected = rng.randrange(2)
+        chosen = [second[selected]["primary"]]
+        if selected == 0:
+            starts[0] = 3
     else:
-        alternate = rng.sample(primaries, 3 if difficulty == "heavy" else 2)
+        alternate = rng.sample(primaries, 4 if difficulty == "heavy" else 2)
         constraints = [(carrier, starts[0]) for carrier in alternate[:2]]
         chosen = [rng.choice(alternate[:2])]
         if difficulty == "heavy":
-            constraints.insert(0, (alternate[2], starts[1]))
-            chosen.append(alternate[2])
+            constraints = [(carrier, starts[1]) for carrier in alternate[2:]] + constraints
+            chosen.append(rng.choice(alternate[2:]))
         for carrier, start in constraints:
             boundary = (start - 1) * batch
             candidates = [lane for lane in lanes if lane["primary"] == carrier]

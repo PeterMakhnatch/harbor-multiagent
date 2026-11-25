@@ -98,7 +98,11 @@ def evidence(task, result):
             assert live <= stepped
             stepped.clear()
         elif kind == "commit_notice":
-            notices[data["id"]] = data
+            start = next(o["start"] for o in params["outages"] if o["carrier"] == data["carrier"])
+            expected_arrival = {"probe-control": 0, "probe-trap": start - 1, "hint": start - 1,
+                                "solo-seam": start - 1}.get(task["condition"], data["round"])
+            notices[data["id"]] = expected_arrival
+            assert 1 <= data["round"] <= params["rounds"]
         elif kind == "message_route":
             if data["to"] == "p1":
                 routes[data["id"]] = data["arrival"]
@@ -107,6 +111,8 @@ def evidence(task, result):
                 assert id_ not in deliveries
                 deliveries.add(id_)
                 assert id_ in routes and event["t"] >= routes[id_]
+                if id_ in notices:
+                    assert event["t"] == notices[id_]
         elif kind == "extension_call":
             assert 200 <= data["status"] < 500
     score = EXT.score(task, events)
