@@ -29,7 +29,7 @@ SEEDS = 5
 FEW = 8
 LEVELS = FAMILY.LEVELS
 ARMS = FAMILY.ARMS
-TEAM_ARMS = ("team", "hint", "team-nolast")
+TEAM_ARMS = ("team", "hint", "team-nolast", *FAMILY.PRIVATE_ORDER_ARMS)
 TRAPS = ("probe-rule-trap", "probe-cross-trap")
 CONTROLS = ("probe-rule-control", "probe-cross-control")
 
@@ -162,7 +162,9 @@ def test_naive_scores_1_in_controls_and_0_in_traps(pool, built):
         assert row["invalid"] is None
         assert row["reward"] == (1 if arm in ("solo", *CONTROLS) else 0)
         if arm in (*TEAM_ARMS, *TRAPS):
-            assert row["score"]["shape"] == "premature" and row["score"]["pooled"] == 0
+            assert row["score"]["shape"] == "premature"
+            expected_pooled = 1 / len(row["score"]["filed"]) if arm in TRAPS else 0
+            assert row["score"]["pooled"] == expected_pooled
         if arm in (*TRAPS, *CONTROLS):
             subject = row["score"]["subject"]
             assert subject["premature"] and subject["filed_last_time"] and subject["round"] == 1
@@ -207,27 +209,31 @@ def test_named_teams_produce_each_failure_shape(pool, built):
             return names
         return choose
 
-    for policy, shape in (("naive", "premature"), ("eager", "premature"), ("talker", "late")):
+    for policy, shape in (("naive", "premature"), ("eager", "late"), ("talker", "late")):
         rows = run(pool, built, keys, policy)
         assert all(row["reward"] == 0 and row["score"]["shape"] == shape for row in rows.values())
-    polite = [(row["reward"], row["score"]["shape"]) for row in run(pool, built, keys, "polite").values()]
-    shapes = [shape for reward, shape in polite if not reward]
-    assert len(shapes) > len(polite) / 2 and shapes.count("crossed") > len(shapes) / 2
-    assert set(shapes) <= {"crossed", "premature"}
-    clash = unpooled = 0
+    polite = run(pool, built, keys, "polite")
+    for (key, _seed), row in polite.items():
+        common = built[key][1]["params"]["free_for_all"]
+        assert all(item is None or item["window"] in common for item in row["score"]["filed"].values())
+        assert not row["score"]["premature_filing"]
+    shapes = [row["score"]["shape"] for row in polite.values() if not row["reward"]]
+    assert len(shapes) > len(polite) / 2 and set(shapes) <= {"crossed", "rule_clash", "late"}
+    clash = 0
     for (key, _seed), row in run(pool, built, keys, mixed(first="rule-own")).items():
         params = built[key][1]["params"]
-        same = params["last_time"][params["desks"][0]] == params["free_for_all"][0]
-        assert (row["reward"], row["score"]["shape"]) == ((1, "none") if same else (0, "rule_clash"))
-        clash += not same
+        first = params["last_time"][params["desks"][0]]
+        shape = "none" if first == params["free_for_all"][0] else (
+            "rule_clash" if first in params["free_for_all"] else "late")
+        assert (row["reward"], row["score"]["shape"]) == (int(shape == "none"), shape)
+        clash += shape == "rule_clash"
     for (key, _seed), row in run(pool, built, keys, mixed(last="mute")).items():
         params = built[key][1]["params"]
-        others = [params["blocked"][desk] for desk in params["desks"][:-1]]
-        same = FAMILY.first_free(params["windows"], others) == params["free_for_all"][0]
-        assert (row["reward"], row["score"]["shape"]) == ((1, "none") if same else (0, "unpooled"))
-        assert row["score"]["pooled"] < 1
-        unpooled += not same
-    assert clash and unpooled
+        assert row["reward"] == 0 and row["score"]["shape"] == "late"
+        assert row["score"]["not_filed"] == params["desks"][:-1]
+        assert row["score"]["filed"][params["desks"][-1]]["window"] == params["free_for_all"][0]
+        assert row["score"]["pooled"] == (len(params["desks"]) - 1) / len(params["desks"])
+    assert clash
     for team in (mixed(rest="follower"), mixed(first="careful", rest="follower"), mixed(last="careful", rest="follower")):
         assert all(row["reward"] == 1 for row in run(pool, built, keys, team).values())
     for (key, _seed), row in run(pool, built, keys, "last-rule").items():  # another valid answer scores 1
@@ -274,7 +280,8 @@ def test_refusals_budget_and_cut_off_are_valid_flagged_outcomes(pool, built, mon
     for (key, _seed), row in run(pool, built, keys, beside("burn", "careful")).items():
         score, first = row["score"], built[key][1]["params"]["desks"][0]
         assert row["reward"] == 0 and row["invalid"] is None and score["rounds_used"] == 4
-        assert score["budget_exhausted"] == [first] == score["not_filed"] and score["shape"] == "late"
+        assert score["budget_exhausted"] == [first] and score["shape"] == "late"
+        assert score["not_filed"] == built[key][1]["params"]["desks"]
     path = Path(built["canary", "team", 0][0])
     monkeypatch.setattr(SIM, "MAX_STEPS", 1)  # a simulator limit is void, never a reward
     stalled = SIM.simulate_built(path, "careful", 0)
@@ -335,3 +342,38 @@ def test_text_readers_accept_paraphrase():
     assert FAMILY.choices("Either W-MZ or W-QR works", windows) == []
     assert [FAMILY.window_code(value, windows) for value in ("W-KT", " w-kt ", "WKT", "KT", "W-AA", "W-KT W-BD", 5)
             ] == ["W-KT", "W-KT", "W-KT", "W-KT", None, None, None]
+
+
+def test_order_policies_and_one_careful_desk(pool, built):
+    arms = ("team", *FAMILY.PRIVATE_ORDER_ARMS)
+    keys = cells(built, arms, count=24)
+
+    def mixed(task):
+        desks = task["params"]["desks"]
+        return {desks[0]: "careful"} | dict.fromkeys(desks[1:], "own-order")
+
+    for label, policy in (("careful", "careful"), ("leader", "leader"),
+                          ("own-order", "own-order"), ("one-careful", mixed)):
+        rows = run(pool, built, keys, policy, range(3))
+        for (key, _seed), row in rows.items():
+            params, score = built[key][1]["params"], row["score"]
+            assert row["invalid"] is None and score["pooled"] == 1 and not score["premature_filing"]
+            expected = 1
+            if key[1] != "team" and label in ("own-order", "one-careful"):
+                firsts = {desk: next(code for code in order if code in params["free_for_all"])
+                          for desk, order in params["orders"].items()}
+                if label == "one-careful":
+                    firsts[params["desks"][0]] = min(params["free_for_all"])
+                expected = int(len(set(firsts.values())) == 1)
+                assert {desk: item["window"] for desk, item in score["filed"].items()} == firsts
+            assert row["reward"] == expected
+            if label == "own-order":
+                assert all(item["round"] == 2 for item in score["filed"].values())
+                assert score["filed_on_rule"] == params["desks"]
+                assert score["first_divergent"] is None
+            if label == "leader":
+                assert all(item["round"] == 3 for item in score["filed"].values())
+        for level in LEVELS:
+            for arm in arms:
+                subset = [row["reward"] for (key, _seed), row in rows.items() if key[:2] == (level, arm)]
+                print(f"{label} {level} {arm}: {sum(subset):g}/{len(subset)}")

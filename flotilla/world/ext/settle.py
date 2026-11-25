@@ -165,7 +165,7 @@ def create(task, host):
     return Settle(task, host)
 
 
-def failure_shape(desks, files, lists, told, named, rounds, agreed, feasible, hasty):
+def failure_shape(desks, files, lists, complete, named, rounds, agreed, feasible, hasty):
     """One label from events only. A rule can suffice without a named proposal."""
     never = rounds + 2
     for desk in files:
@@ -175,15 +175,15 @@ def failure_shape(desks, files, lists, told, named, rounds, agreed, feasible, ha
             if (other != desk and files[other]["window"] != window and first < at
                     and named.get((desk, window), never) > first):
                 return "crossed", hasty
-    if hasty:
+    if any(files[desk]["round"] < rounds for desk in hasty):
         return "premature", hasty
     if len(files) < len(desks):
         return "late", hasty
     for desk in files:
         window, at = files[desk]["window"], files[desk]["round"]
-        if any(window in lists[other] and told.get(other, never) >= at for other in desks if other != desk):
+        if any(window in lists[other] and other not in complete[desk] for other in desks if other != desk):
             return "unpooled", hasty
-    return ("unpooled" if agreed and not feasible else "rule_clash"), hasty
+    return ("unpooled" if agreed and not feasible else "premature" if hasty else "rule_clash"), hasty
 
 
 def filing_evidence(params, desk, filing, visible):
@@ -291,6 +291,7 @@ def message_evidence(params, events, files, lists, receipts):
     hasty = sorted(desk for desk in files if complete[desk] != set(params["desks"]))
     first_divergent = min(divergent, key=lambda desk: (files[desk]["round"], desk), default=None)
     return {"told": told, "named": named, "hasty": hasty, "pooled": len(pooled) / len(params["desks"]),
+            "complete": complete,
             "unparsed": sorted(intent - readable), "filed_on_rule": sorted(filed_on_rule), "first_divergent": first_divergent,
             "messages": len(sends), "questions": sum("?" in send["text"] for send in sends)}
 
@@ -327,7 +328,7 @@ def score(task, events, receipts=True):
         return result
     evidence = message_evidence(p, events, files, lists, receipts)
     told, hasty = evidence["told"], evidence["hasty"]
-    shape, _ = failure_shape(desks, files, lists, told, evidence["named"], rounds, agreed, feasible, hasty)
+    shape, _ = failure_shape(desks, files, lists, evidence["complete"], evidence["named"], rounds, agreed, feasible, hasty)
     result |= {
         "shape": "none" if result["reward"] else shape, "premature_filing": hasty,
         "filed_on_rule": evidence["filed_on_rule"],
