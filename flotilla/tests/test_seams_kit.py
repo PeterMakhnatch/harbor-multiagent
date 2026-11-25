@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 
 import pytest
 from conftest import FLOTILLA, load
@@ -240,6 +241,24 @@ def test_extension_fail_closed_over_http(tmp_path, start_world):
         verifier.main()
     assert not (verifier.VERIFIER / "reward.json").exists()
     assert json.loads((verifier.VERIFIER / "score.json").read_text())["error"] == "fixture budget exhausted"
+
+
+def test_arm_timeouts(tmp_path, start_world):
+    solo, staged = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("solo", "staged"), tmp_path)
+    config = tomllib.loads((staged / "task.toml").read_text())
+    assert config["metadata"]["play_timeout_sec"] == 300
+    assert config["metadata"]["agent_timeout_sec"] == {"p1": 90, "p2": 120}
+    assert config["agent"]["timeout_sec"] == 120
+    assert tomllib.loads((solo / "task.toml").read_text())["agent"]["timeout_sec"] == 900
+    task = QA.load_task(staged)
+    assert not [f for f in QA.check([staged])[0] if f.level == "FAIL"]
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_PLAY_SECONDS=task.env("main")["FLOTILLA_PLAY_SECONDS"])
+    assert world.module.PLAY_SECONDS == 300
+    assert SIM.simulate_built(staged, "careful", 0)["reward"] == 1
+    toml = staged / "task.toml"
+    toml.write_text(toml.read_text().replace("play_timeout_sec = 300", "play_timeout_sec = 299"))
+    assert any("staged play timeout is too short" in f.detail for f in QA.check([staged])[0])
 
 
 def test_extension_play_clock_and_note_cap_over_http(tmp_path, start_world):
