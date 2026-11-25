@@ -18,10 +18,10 @@ arm, where every desk is a model and every desk's own choice decides the result.
 | OBSERVED (review, PDF table) | ParallACT, [arXiv 2611.00314](https://arxiv.org/html/2611.00314), Table 1 | Opus 4.8 + Claude Code: 86% alone, 77% in sequence, 57% parallel without awareness, 63% with messaging, 71% with synchronization | Code work with several causes |
 | OBSERVED (abstract) | Zero-shot coordination, [arXiv 2611.06409](https://arxiv.org/abs/2611.06409) | Frontier text agents struggle to coordinate without a shared convention | Small games; the "7 of 9" count is not confirmed |
 | CLAIMED (secondary blog) | Self-play 9.75 against cross-play -0.51 | Same-model priors do not transfer across models | Not a paper number |
-| CLAIMED (lead's build specification, 2026-11-25) | Live playtests of `handoff` and `week` | Frontier assistant teams scored 1.0: a capped note alone did not make them lose | Not checked by this builder; small n; other mechanism |
 
-There is no direct frontier evidence for this mechanism. All numbers on this page are simulator proofs with
-scripted desks, not model results.
+There is no direct frontier evidence for this mechanism. The labels are those of `interface.md` after the skeptic
+review (AMENDMENTS A7); this builder did not open the sources again. All numbers on this page are simulator proofs
+with scripted desks, not model results.
 
 ## Mechanism and one example
 
@@ -83,7 +83,8 @@ stalled seats: valid, reward 0); an infrastructure fault (invalid, no reward).
 |---|---|---|---|
 | `blind`: every desk files its alphabetically first free window | 0 | 0 | 0 |
 | `naive`: every desk files its last-time window in round 1 | 0 | 0 | 0 |
-| `guess`: every desk files one of its free windows at random (computed) | 0.20 | 0.03 | below 0.001 |
+| `guess`: every desk files one of its free windows at random (computed, 1,000 instances) | 0.19 | 0.025 | 0.0005 |
+| `guess` by the model desk alone in a trap arm (computed) | 0.33 | 0.24 | 0.18 |
 
 The generator rejects every instance in which the silent alphabetical default would succeed, so `blind` is 0 by
 construction. `canary` has 4 windows and 1 free for all: it is a fairness and plumbing check, and this page makes
@@ -97,10 +98,9 @@ no measurement claim at `canary`.
 | `standard` | 3 | 6 | 2 | 4 | 1 | 0.6 to 0.9: a tie must be broken and confirmed |
 | `heavy` | 5 | 8 | 3 | 4 | 1 | 0.4 to 0.8: 5 lists and 3 candidates in the same 4 rounds |
 
-Turns and briefing size per seat stay about constant (about 12 world calls for `careful` at every level). The load
-is on the seam: more desks and more valid options in the same number of rounds. Basis: ParallACT (86 alone against
-57 to 71 in parallel). If frontier teams agree by a focal rule at `heavy`, the next knob is `tight` (3 rounds) and
-delay 2; both are parameters of the world (`rounds`, `delay`) and are not built as arms yet.
+Calls and briefing size per seat stay constant (10 counted calls for `careful` at every level). The load is on the
+seam: more desks and more valid options in the same 4 rounds. Basis: ParallACT (86 alone, 57 to 71 in parallel).
+The next knobs are `tight` (3 rounds) and delay 2: world parameters `rounds` and `delay`, not built as arms yet.
 
 ## Simulator proof (scripted desks; n is instances x schedule seeds)
 
@@ -119,7 +119,7 @@ power plan in the card.
 2. Generator inference. Because the silent default never succeeds, a desk whose first free window is the first
    window of the list can infer that this window is not free for all. At `canary` this can identify the answer
    for one desk. At `standard` and `heavy` each desk has 2 or more free windows beyond the common ones.
-3. The last-time window is free for all less often than a uniform draw (0.33, 0.39, 0.43 against 0.44, 0.46, 0.51).
+3. The last-time window is free for all less often than a uniform draw (0.32, 0.41, 0.43 against 0.44, 0.47, 0.52).
 4. Scripted teammates hold their announced choice. A live teammate could instead follow a desk that filed early.
    The probe arms measure the desk's own action, not what a rescuing team would score.
 5. `rule_clash` is the residual label. A text reader that misses a paraphrase changes a measure, not the reward.
