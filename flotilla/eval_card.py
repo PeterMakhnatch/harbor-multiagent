@@ -790,6 +790,16 @@ def csv_names(value: str) -> tuple[str, ...]:
     return names
 
 
+def stored(card: dict) -> dict:
+    """The card as stored: counts and a hash replace the per-run records (20,000 runs are a 20 MB file)."""
+    runs = card["runs"]
+    digest = hashlib.sha256(json.dumps(runs, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    load = [{key: value for key, value in row.items() if key != "trials"} | {"trials_n": len(row.get("trials", ()))}
+            for row in card["load"]]
+    return {key: value for key, value in card.items() if key != "runs"} | {
+        "load": load, "runs_digest": {"n": len(runs), "sha256": digest}}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     selection = parser.add_mutually_exclusive_group(required=True)
@@ -809,6 +819,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=None, help="repeat a disposable simulation seed")
     parser.add_argument("--from-cards", action="store_true",
                         help="with --suite: write SUITE.md from the stored <family>.card.json files in --out; no run")
+    parser.add_argument("--keep-runs", action="store_true",
+                        help="store every simulated run in the card JSON (20 MB and more); default: a count and a hash")
     args = parser.parse_args(argv)
     if args.from_cards:
         if not args.suite:
@@ -831,7 +843,8 @@ def main(argv: list[str] | None = None) -> int:
     cards = []
     for family in families:
         card = build_card(argparse.Namespace(**(vars(args) | {"family": family})))
-        (args.out / f"{family}.card.json").write_text(json.dumps(card, indent=2, sort_keys=True, allow_nan=False) + "\n")
+        (args.out / f"{family}.card.json").write_text(
+            json.dumps(card if args.keep_runs else stored(card), indent=2, sort_keys=True, allow_nan=False) + "\n")
         (args.out / f"{family}.card.md").write_text(render(card))
         cards.append(card)
     if args.suite:

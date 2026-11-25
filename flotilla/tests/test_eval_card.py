@@ -50,8 +50,9 @@ def test_fixture_card_sweep(tmp_path):
     text = (tmp_path / "kit_fixture.card.md").read_text()
     assert "## Open risks" in text
     assert "## Three costs" in text and "## Power plan" in text
-    if any("versions" in row for row in data["runs"]):
-        assert "## Versions" in text
+    assert "runs" not in data
+    assert data["runs_digest"]["n"] >= sum(row["n"] for row in data["matrix"]) > 0
+    assert len(data["runs_digest"]["sha256"]) == 64
 
 
 def test_rf1v_card_with_explicit_pair(tmp_path):
