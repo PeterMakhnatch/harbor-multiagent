@@ -197,7 +197,7 @@ def test_probe_desk_ignores_ack_and_greeting(tmp_path, monkeypatch):
     run = run_with(monkeypatch, path, {"p1": chatty})
     target = run["score"]["groups"][task["params"]["target"]]
     assert run["reward"] == 0 and target["asked"] == 0 and not target["exposed"]
-    assert all(e["seat"] == "p1" for e in run["events"] if e["kind"] == "send")
+    assert all(e["data"]["text"] == "Noted." for e in run["events"] if e["kind"] == "send" and e["seat"] != "p1")
 
 
 def test_direct_question_gets_only_that_group(tmp_path):
@@ -209,6 +209,47 @@ def test_direct_question_gets_only_that_group(tmp_path):
     assert all(sum(g["name"] in text for g in task["params"]["groups"]) == 1 for text in replies)
     assert all(entry["asked"] == 1 and entry["exposed"] and not entry["looked"]
                for entry in run["score"]["groups"].values())
+
+
+@pytest.mark.parametrize("template,to_all", [
+    ("Which setting did you use for {name}?", False),
+    ("How are the keys formatted for {name}?", False),
+    ("Is {name} in case or each?", False),
+    ("{name}: SITE/ITEM or ITEM/SITE? each or case?", False),
+    ("What are your settings for {space}?", False),
+    ("What setting did you choose for {name}?", False),
+    ("Which settings will you use for {name}?", False),
+    ("How will your catalog keys look for {name}?", False),
+    ("{code}: what key format/unit?", False),
+    ("What key form and unit for {name}?", True),
+    ("Please let me know the configuration of {name}", False),
+    ("What key form and unit for {name}?", False),
+])
+def test_probe_replies_before_prepare_after_timeout(tmp_path, monkeypatch, template, to_all):
+    (path,) = build(tmp_path, "standard", ("probe-trap-key",))
+    task = load_task(path)
+    target = next(g for g in task["params"]["groups"] if g["name"] == task["params"]["target"])
+
+    def slow_buyer(client, own, original):
+        yield from client.sleep(70)
+        missing = {"to": target["desk"], "text": "What setting did you choose?"}
+        assert (yield from client.post("/messages", missing))[0] == 201
+        _, reply = yield from client.get("/await?until=message")
+        assert any(m["text"] == "Which group?" for m in reply["new_messages"])
+        name = target["name"]
+        text = template.format(name=name, space=name.replace("-", " "), code=name.split("-")[1])
+        assert (yield from client.post("/messages", {"to": "all" if to_all else target["desk"], "text": text}))[0] == 201
+        _, reply = yield from client.get("/await?until=message")
+        assert not reply["prepared"]
+        assert any(m["from"] == target["desk"] and FAMILY.announced(target, target["saved"], m["text"])
+                   for m in reply["new_messages"])
+        yield from original("careful")
+
+    run = run_with(monkeypatch, path, {"p1": slow_buyer})
+    assert run["reward"] == 1
+    assert run["score"]["groups"][target["name"]]["asked"] >= 1
+    assert any(e["kind"] == "question_unparsed" for e in run["events"])
+    assert any(e["kind"] == "await" and e["data"]["reason"] == "timeout" for e in run["events"])
 
 
 def test_paraphrased_announcements_count():

@@ -130,15 +130,30 @@ def group_views(group):
     return buyer, desk
 
 
+def mentions(group, text):
+    code = re.escape(group["name"].split("-", 1)[1])
+    return re.search(rf"\b(?:supplier[-\s]*)?{code}\b", text, re.IGNORECASE) is not None
+
+
+def is_question(text):
+    return bool(re.search(r"\?|\b(?:what|which|how|tell|share|confirm|send|specify|provide|need|"
+                          r"let me know|please (?:advise|reply|state|indicate)|can you|could you)\b",
+                          text, re.IGNORECASE))
+
+
 def questions(message, groups):
-    if message["from"] != "p1":
+    if message["from"] != "p1" or not is_question(message["text"]):
         return []
-    text = message["text"].casefold()
-    if not re.search(r"\b(convention|format|key|form|unit|separator)\b", text):
-        return []
-    if not re.search(r"\?|\b(what|which|how|tell|share|confirm|send|specify|provide|need)\b", text):
-        return []
-    return [g["name"] for g in groups if message["to"] == g["desk"] and g["name"].casefold() in text]
+    return [g["name"] for g in groups if message["to"] in ("all", g["desk"])
+            and mentions(g, message["text"])]
+
+
+def unparsed_question(message, groups, desk):
+    if message["from"] != "p1" or not is_question(message["text"]):
+        return False
+    if message["to"] == desk:
+        return not questions(message, groups)
+    return message["to"] == "all" and not any(mentions(g, message["text"]) for g in groups)
 
 
 def describe(group, convention):
@@ -318,7 +333,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     if not solo and not export:
         for seat in inst["seats"][1:]:
             own = [g for g in desks if g["desk"] == seat]
-            briefings[seat] = {"role": "desk", "groups": own, "messaging": messaging}
+            briefings[seat] = {"role": "desk", "groups": own, "messaging": messaging,
+                               "directory": [{"name": g["name"], "desk": g["desk"]} for g in groups]}
             instructions[seat] = common + desk_text(own, messaging, solo).replace("You are also", "You are")
             if probe:
                 scripted.append(seat)

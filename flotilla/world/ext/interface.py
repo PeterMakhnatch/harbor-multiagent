@@ -136,6 +136,11 @@ class Interface:
         self.message_counts[message["from"]] += 1
         for name in self.host.family.questions(message, self.groups.values()):
             self.host.record("catalog_question", "p1", {"group": name})
+        if message["from"] == "p1":
+            for desk in sorted(self.desks):
+                if self.host.family.unparsed_question(message, self.groups.values(), desk):
+                    self.host.record("question_unparsed", "p1", {"desk": desk, "id": message["id"]})
+            self.host.advance()
 
     def receipt(self, kind, seat, data):
         self.receipts += 1
@@ -254,7 +259,8 @@ class Interface:
     def augment_reply(self, seat, method, path):
         if seat in self.done:
             return None
-        return {"staging": self.summary()} | {k: v for k, v in self.readiness().items() if k != "tick"}
+        return {"staging": self.summary()} | {k: v for k, v in self.readiness().items()
+                                              if k != "tick" or path == "/messages"}
 
     def pending(self, seat):
         return seat in self.players and seat not in self.done

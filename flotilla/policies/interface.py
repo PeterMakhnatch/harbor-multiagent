@@ -26,7 +26,7 @@ def infer(family, group, catalog):
     return candidates[0]
 
 
-def publish_catalogs(name, client, groups, family):
+def catalog_choices(name, groups, family):
     choices = {}
     for group in groups:
         saved = tuple(group["saved"])
@@ -34,7 +34,13 @@ def publish_catalogs(name, client, groups, family):
         if name == "focal" and list(family.CONVENTIONS[0]) in group["support"]:
             convention = family.CONVENTIONS[0]
         choices[group["name"]] = convention
-        body = make_file(family, group, convention, "catalog", [row["price"] for row in group["rows"]])
+    return choices
+
+
+def publish_catalogs(name, client, groups, family):
+    choices = catalog_choices(name, groups, family)
+    for group in groups:
+        body = make_file(family, group, choices[group["name"]], "catalog", [row["price"] for row in group["rows"]])
         status, _ = yield from client.post("/publish", body)
         if status != 201:
             raise ValueError("catalog upload refused")
@@ -42,35 +48,60 @@ def publish_catalogs(name, client, groups, family):
 
 
 def wait_status(client, predicate):
-    for _ in range(32):
-        status, reply = yield from client.get("/staging")
-        if status != 200 or predicate(reply):
+    status, reply = yield from client.get("/staging")
+    while status == 200 and not predicate(reply) and not reply.get("frozen"):
+        status, reply = yield from client.get(f"/await?until=tick&after={reply['tick']}")
+        if reply.get("reason") in ("retired", "frozen"):
+            break
+    return reply
+
+
+def desk_replies(client, own, family, choices, reply):
+    pending = list(reply.get("new_messages", []))
+    groups = own["groups"]
+    while pending:
+        message = pending.pop(0)
+        if message["from"] != "p1":
+            continue
+        asked = family.questions(message, groups)
+        replies = [family.describe(group, choices[group["name"]]) for group in groups
+                   if group["name"] in asked and not lapses(own, "answer", group)]
+        if family.unparsed_question(message, own["directory"], client.seat):
+            replies = ["Which group?"]
+        elif not asked and message["to"] == client.seat:
+            replies = ["Noted."]
+        if not replies:
+            continue
+        status, reply = yield from client.post("/messages", {"to": "p1", "text": " ".join(replies)})
+        if status == 429 or status == 409:
             return reply
-        status, waiting = yield from client.get(f"/await?until=tick&after={reply['tick']}")
-        if status != 200 or waiting["reason"] in ("timeout", "retired", "frozen"):
-            return reply
-    raise ValueError("too many logical barrier transitions")
+        if status != 201:
+            raise ValueError("catalog reply refused")
+        pending.extend(reply.get("new_messages", []))
+    return reply
 
 
 def desk_play(name, client, own, family):
     if name == "lone":
         return
     groups = own["groups"]
-    choices = yield from publish_catalogs(name, client, groups, family)
-    state = yield from wait_status(client, lambda reply: reply["prepared"])
-    if not state.get("prepared"):
-        return
-    if own["messaging"] and name not in ("naive", "naive_read", "focal", "blind"):
-        status, inbox = yield from client.get("/messages")
-        if status != 200:
+    choices = catalog_choices(name, groups, family)
+    coordinate = own["messaging"] and name not in ("naive", "naive_read", "focal", "blind")
+    for group in groups:
+        body = make_file(family, group, choices[group["name"]], "catalog", [row["price"] for row in group["rows"]])
+        status, reply = yield from client.post("/publish", body)
+        if status != 201:
+            raise ValueError("catalog upload refused")
+        if coordinate:
+            reply = yield from desk_replies(client, own, family, choices, reply)
+    while not reply.get("prepared") and "p1" not in reply.get("finished", []):
+        if reply.get("reason") in ("retired", "frozen") or "tick" not in reply:
             return
-        asked = {group for message in inbox["messages"] for group in family.questions(message, groups)}
-        for group in groups:
-            if group["name"] in asked and not lapses(own, "answer", group):
-                text = family.describe(group, choices[group["name"]])
-                status, _ = yield from client.post("/messages", {"to": "p1", "text": text})
-                if status != 201:
-                    raise ValueError("catalog reply refused")
+        status, reply = yield from client.get(f"/await?until=tick&after={reply['tick']}")
+        if status != 200 or reply.get("reason") in ("retired", "frozen"):
+            return
+        if coordinate:
+            reply = yield from desk_replies(client, own, family, choices, reply)
     yield from client.post("/done", {})
 
 
