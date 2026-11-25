@@ -4,17 +4,23 @@ import re
 
 
 def supports(name, variant):
-    return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message", "script-loop")
+    return (name in ("careful", "naive", "sender", "exhaust", "stall", "fault", "wait-message",
+                     "script-loop", "free-calls", "retry", "core-note")
             or re.fullmatch(r"lapse-(?:0|[1-9][0-9]?|100)", name) is not None)
 
 
 def play(name, client, own, family):
     if name == "exhaust":
         for _ in range(21):
-            _, me = yield from client.get("/whoami")
+            _, me = yield from client.get("/board")
             if me.get("frozen"):
                 return
         return
+    if name == "free-calls":
+        for _ in range(25):
+            yield from client.get("/whoami")
+            yield from client.get("/await?until=active")
+            yield from client.get("/health")
     if name == "stall":
         for _ in range(100_000):
             yield from client.sleep(0)
@@ -27,9 +33,19 @@ def play(name, client, own, family):
         yield from client.post("/commit", {"total": own["left"] + own["right"]})
         return
     if role == "seal":
-        yield from client.post("/handoff", {"note": str(own["left"])})
+        _, reply = yield from client.post("/handoff", {"note": str(own["left"])})
+        if name == "retry":
+            status, repeated = yield from client.post("/handoff", {"note": str(own["left"])})
+            if status != 200 or reply != repeated:
+                raise RuntimeError("retired retry differs from the original reply")
         return
     if role == "read":
+        _, me = yield from client.get("/await?until=active")
+        if me["reason"] != "active":
+            return
+        if name == "core-note":
+            yield from client.post("/commit", {"total": own["right"] + int(me["note"])})
+            return
         status, board = yield from client.get("/board")
         if status == 200 and "note" in board:
             yield from client.post("/commit", {"total": own["right"] + int(board["note"])})

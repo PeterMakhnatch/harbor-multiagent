@@ -59,6 +59,7 @@ def extension_arm(inst, arm, max_text, max_messages):
                 "and read the messages again. Add both parts. " + commit)
     if arm == "staged":
         return {"params": params, "initial_active": ["p1"], "start_after": {"p2": ["p1"]}, "messaging": False,
+                "play_timeout_sec": 300, "agent_timeout_sec": {"p1": 90, "p2": 120},
                 "briefings": {"p1": {"role": "seal", "left": left}, "p2": {"role": "read", "right": right}},
                 "instructions": {"p1": auth + f"POST /handoff with your part {left} as a string in `note`. "
                                  "The note must have at most 12 characters. End your shift.",

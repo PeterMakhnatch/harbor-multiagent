@@ -358,9 +358,9 @@ if AUDIT is not None:
 _SEQ = [0]
 EVENT_SINK: Callable[[dict[str, Any]], None] | None = None
 EXTENSION_RESERVED = frozenset({
-    "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition",
-    "send", "message_route", "deliver", "delivered", "extension_call", "extension_error",
-    "await", "call_budget", "simulation_stalled", "health", "whoami", "state",
+    "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition", "seat_end",
+    "send", "message_route", "deliver", "delivered", "extension_call", "extension_error", "retired_retry",
+    "await", "call_budget", "simulation_stalled", "play_incomplete", "deadline_score", "health", "whoami", "state",
     "bad_token", "invalid_http", "probe", "invalid", "denied", "late", "inactive",
     "submit", "gated", "audit", "open", "close", "season-over", "look", "wait",
     "request", "pass", "early", "repeat",
@@ -388,6 +388,57 @@ class ExtensionHost:
         if any(type(value) is not int or value < 1 for value in self.max_calls.values()):
             raise ValueError("invalid extension call cap")
         self.budget_notified: set[str] = set()
+        self.start_after = task.get("start_after", {})
+        self.predecessors = {p for predecessors in self.start_after.values() for p in predecessors}
+        self.ended: set[str] = set()
+        self.open_waits = dict.fromkeys(seats, 0)
+
+    def stalled_seats(self) -> list[str]:
+        pending = getattr(EXTENSION, "pending", None)
+        return [seat for seat in sorted(self.status)
+                if self.open_waits[seat] or (pending and pending(seat))]
+
+    def deadline(self, kind: str, data: dict[str, Any]) -> None:
+        if STATE["frozen"]:
+            record(kind, None, data | {"stalled_seats": []})
+            return
+        try:
+            stalled = self.stalled_seats()
+            record(kind, None, data | {"stalled_seats": stalled})
+            hook = getattr(EXTENSION, "on_deadline", None)
+            if hook:
+                result = hook(stalled.copy())
+                if result is not None:
+                    json.dumps(result, allow_nan=False)
+                    record("deadline_score", None, {"result": result})
+        except Exception as exc:  # noqa: BLE001 - contain family-code failures
+            self.fail(None, kind, exc)
+        self.freeze()
+
+    def finish(self) -> None:
+        if STATE["frozen"]:
+            return
+        try:
+            if self.stalled_seats():
+                self.deadline("play_incomplete", {})
+        except Exception as exc:  # noqa: BLE001 - contain family-code failures
+            self.fail(None, "play_incomplete", exc)
+
+    def seat_end(self, seat: str) -> None:
+        if seat not in self.predecessors or seat in self.ended:
+            return
+        self.ended.add(seat)
+        record("seat_end", seat)
+        hook = getattr(EXTENSION, "on_seat_end", None)
+        if hook and not STATE["frozen"]:
+            try:
+                hook(seat)
+            except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                self.fail(seat, "seat_end", exc)
+
+    def predecessor_ended(self, seat: str) -> bool:
+        predecessors = self.start_after.get(seat, [])
+        return bool(predecessors) and set(predecessors) <= self.ended
 
     def admit(self, seat: str) -> bool:
         if self.status[seat] != "active" or STATE["frozen"]:
@@ -408,7 +459,7 @@ class ExtensionHost:
             if hook:
                 hook(seat)
 
-    def fail(self, seat: str, path: str, exc: Exception) -> None:
+    def fail(self, seat: str | None, path: str, exc: Exception) -> None:
         record("extension_error", seat, {"path": path, "error": type(exc).__name__})
         STATE["extension_failed"] = True
         self.freeze()
@@ -618,8 +669,7 @@ def expire() -> None:
     if HOST is not None:
         first = STATE.get("first_wall")
         if PLAY_SECONDS and not STATE["frozen"] and first is not None and time.monotonic() >= first + PLAY_SECONDS:
-            record("play_timeout", None, {"after_s": PLAY_SECONDS})
-            HOST.freeze()
+            HOST.deadline("play_timeout", {"after_s": PLAY_SECONDS})
         return
     first = STATE["first_call"]
     if PLAY_SECONDS and not STATE["frozen"] and first is not None and now() >= first + PLAY_SECONDS:
@@ -922,7 +972,19 @@ class World(BaseHTTPRequestHandler):
         self._handle("POST")
 
     def _reply(self, status: int, body: object, headers: dict[str, str] | None = None,
-               receipt: tuple[str, str, list[str]] | None = None) -> None:
+               receipt: tuple[str, str, list[str]] | None = None) -> bool:
+        augmented = True
+        path = self.path.split("?", 1)[0]
+        if HOST is not None and 200 <= status < 300 and path in ("/await", "/messages"):
+            seat = self._caller()
+            if seat in HOST.status:
+                with LOCK:
+                    try:
+                        body, receipt = self._augment_core_reply(seat, path, body, receipt)
+                    except Exception as exc:  # noqa: BLE001 - contain family-code failures
+                        HOST.fail(seat, path, exc)
+                        status, body, receipt, augmented = 500, {"error": "world failed"}, None, False
+                        self.push_seat = None
         pushed = self._pushed(body)
         if pushed:
             body = dict(body) | {"new_messages": pushed}  # type: ignore[call-overload]
@@ -944,6 +1006,26 @@ class World(BaseHTTPRequestHandler):
                     record("delivered", seat, {"ids": ids, "path": path})
         if not self.delivering:
             self._finish_budget()
+        return written and augmented
+
+    def _augment_core_reply(self, seat: str, path: str, body: object,
+                            receipt: tuple[str, str, list[str]] | None) -> tuple[object, Any]:
+        hook = getattr(EXTENSION, "augment_reply", None)
+        if not hook:
+            return body, receipt
+        result = hook(seat, self.command, path)
+        if result is None:
+            return body, receipt
+        fields, ids = result if isinstance(result, tuple) else (result, [])
+        if (not isinstance(body, dict) or not isinstance(fields, dict)
+                or fields.keys() & (body.keys() | {"new_messages"})):
+            raise ValueError("invalid core reply fields")
+        if not isinstance(ids, list) or any(not isinstance(item, str) or not item for item in ids):
+            raise ValueError("invalid delivery ids")
+        json.dumps(fields, allow_nan=False)
+        if ids:
+            receipt = (seat, path, ids.copy())
+        return body | fields, receipt
 
     def _finish_budget(self) -> None:
         if self.budget_seat is not None:
@@ -986,7 +1068,7 @@ class World(BaseHTTPRequestHandler):
         try:
             connection.settimeout(REPLY_WRITE_SECONDS)
             self.delivering = True  # this reply shows its messages itself: nothing more is pushed with it
-            self._reply(status, body)
+            written = self._reply(status, body)
         except OSError:  # a reset, a broken pipe or the timeout
             self.close_connection = True
             return
@@ -996,7 +1078,7 @@ class World(BaseHTTPRequestHandler):
                 connection.settimeout(previous)
             except OSError:
                 self.close_connection = True
-        if self.command != "HEAD":  # a HEAD reply shows no messages
+        if written:
             with LOCK:
                 _deliver(seat, ids, via)
         self._finish_budget()
@@ -1085,9 +1167,12 @@ class World(BaseHTTPRequestHandler):
                 if HOST is not None:
                     STATE.setdefault("first_wall", time.monotonic())
                 expire()
+                if HOST is not None:
+                    for predecessor in HOST.start_after.get(seat, []):
+                        HOST.seat_end(predecessor)
                 if SCHEDULED:
                     _post_scheduled(seat)  # version 14: the first request of a seat under test adds every post
-                if HOST is not None:
+                if HOST is not None and path not in ("/await", "/whoami", "/health"):
                     try:
                         admitted = HOST.admit(seat)
                     except Exception as exc:  # noqa: BLE001 - contain family-code failures
@@ -1095,7 +1180,8 @@ class World(BaseHTTPRequestHandler):
                         self._reply(500, {"error": "world failed"})
                         return
                     if not admitted:
-                        self._reply(429, {"error": "request limit reached"})
+                        self._reply(429, {"error": "max_calls budget exhausted",
+                                          "budget": "max_calls", "limit": HOST.max_calls[seat]})
                         return
                     if HOST.status[seat] == "active" and not STATE["frozen"] and HOST.attempts[seat] == HOST.max_calls[seat]:
                         self.budget_seat = seat
@@ -1115,7 +1201,9 @@ class World(BaseHTTPRequestHandler):
             return
         if HOST is not None and seat != "admin" and path not in ("/whoami", "/await"):
             with LOCK:
-                if STATE["frozen"] or HOST.status[seat] != "active":
+                replay = (HOST.status[seat] == "retired" and path in EXTENSION_ROUTES
+                          and callable(getattr(EXTENSION, "on_retired_call", None)))
+                if (STATE["frozen"] or HOST.status[seat] != "active") and not replay:
                     record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
                     self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
                     return
@@ -1170,6 +1258,7 @@ class World(BaseHTTPRequestHandler):
             with LOCK:
                 if HOST is not None:
                     expire()
+                    HOST.finish()
                 STATE["frozen"] = True
                 record("freeze", "admin")
             self._reply(200, {"frozen": True})
@@ -1182,6 +1271,8 @@ class World(BaseHTTPRequestHandler):
         with LOCK:
             expire()
             if STATE["frozen"] or HOST.status[seat] != "active":
+                if HOST.status[seat] == "retired" and self._retired_call(seat, method, path, body):
+                    return
                 record("late" if STATE["frozen"] else "inactive", seat, {"path": path})
                 self._reply(409, {"error": "play has ended" if STATE["frozen"] else "seat is not active"})
                 return
@@ -1207,6 +1298,31 @@ class World(BaseHTTPRequestHandler):
                 status, reply, receipt = 500, {"error": "world failed"}, None
             record("extension_call", seat, {"method": method, "path": path, "status": status})
             self._reply(status, reply, receipt=receipt)
+
+
+    def _retired_call(self, seat: str, method: str, path: str, body: dict[str, Any]) -> bool:
+        hook = getattr(EXTENSION, "on_retired_call", None)
+        if not hook:
+            return False
+        try:
+            result = hook(seat, method, path, body, parse_qs(urlsplit(self.path).query))
+            if result is None:
+                return False
+            if not isinstance(result, tuple) or len(result) != 2:
+                raise ValueError("invalid retired retry result")
+            status, reply = result
+            if type(status) is not int or not 200 <= status < 500 or not isinstance(reply, dict):
+                raise ValueError("invalid retired retry reply")
+            if "new_messages" in reply:
+                raise ValueError("reserved reply field")
+            json.dumps(reply, allow_nan=False)
+            record("retired_retry", seat, {"method": method, "path": path, "status": status})
+        except Exception as exc:  # noqa: BLE001 - contain family-code failures
+            HOST.fail(seat, path, exc)
+            status, reply = 500, {"error": "world failed"}
+        self.push_seat = None
+        self._reply(status, reply)
+        return True
 
 
     def _audit(self, seat: str, body: dict[str, Any]) -> None:
@@ -1461,6 +1577,14 @@ class World(BaseHTTPRequestHandler):
             return
         self._await_wait(seat, until[0], int(after[0]), time.monotonic() + WAIT_SECONDS)
 
+    def _wait_begin(self, seat: str) -> None:
+        with LOCK:
+            HOST.open_waits[seat] += 1
+
+    def _wait_end(self, seat: str) -> None:
+        with LOCK:
+            HOST.open_waits[seat] -= 1
+
     def _await_poll(self, seat: str, until: str, after: int, deadline: float) -> bool:
         with LOCK:
             expire()
@@ -1470,6 +1594,8 @@ class World(BaseHTTPRequestHandler):
                 reason = "retired"
             elif until == "active" and HOST.status[seat] == "active":
                 reason = "active"
+            elif until == "active" and HOST.predecessor_ended(seat):
+                reason = "predecessor_ended"
             elif until == "tick" and HOST.tick > after:
                 reason = "tick"
             elif until == "message" and _unread(seat):
@@ -1484,8 +1610,12 @@ class World(BaseHTTPRequestHandler):
             return True
 
     def _await_wait(self, seat: str, until: str, after: int, deadline: float) -> None:
-        while not self._await_poll(seat, until, after, deadline):
-            time.sleep(0.05)
+        self._wait_begin(seat)
+        try:
+            while not self._await_poll(seat, until, after, deadline):
+                time.sleep(0.05)
+        finally:
+            self._wait_end(seat)
 
 
     def _wait(self, seat: str) -> None:

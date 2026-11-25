@@ -37,6 +37,29 @@ class Fixture:
         self.host.record("fixture_budget", seat)
         self.host.freeze()
 
+    def on_seat_end(self, seat):
+        if self.protocol == "staged" and seat == "p1" and not self.handed_off:
+            self.host.record("handover_missing", seat)
+
+    def pending(self, seat):
+        return (self.protocol == "staged" and seat == "p1" and not self.handed_off
+                and seat not in self.host.ended)
+
+    def on_deadline(self, stalled_seats):
+        if self.protocol == "staged":
+            return {"reward": 0, "handover_missing": not self.handed_off, "omission": bool(stalled_seats)}
+
+    def on_retired_call(self, seat, method, path, body, query):
+        if (self.protocol == "staged" and seat == "p1" and method == "POST" and path == "/handoff"
+                and body == {"note": self.note} and not query and self.handed_off):
+            return 200, {"tick": 1}
+
+    def augment_reply(self, seat, method, path):
+        if self.protocol == "staged" and seat == "p2" and self.handed_off:
+            return {"note": self.note}, ["note-1"]
+        if self.protocol == "team" and seat == "p2" and path == "/messages":
+            return {"summary": {"tick": self.host.tick}}, ["summary"]
+
     def message_delay(self, message, recipient):
         return self.params["delay"] if message["text"].startswith("handoff ") else None
 
@@ -118,4 +141,7 @@ def score(task, events):
         notes = [event for event in events if event["kind"] == "sealed_note"]
         receipts = [event for event in events if event["kind"] == "delivered" and event["seat"] == "p2"]
         correct = correct and len(notes) == 1 and bool(receipts)
-    return {"reward": float(correct), "handoffs": len(handoffs)}
+    result = {"reward": float(correct), "handoffs": len(handoffs)}
+    if task["params"].get("protocol") == "staged":
+        result["handover_missing"] = any(event["kind"] == "handover_missing" for event in events)
+    return result
