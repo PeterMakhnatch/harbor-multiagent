@@ -1,5 +1,6 @@
 """Finishing desk referee; the reward is a macro-average over final-shift rule clauses."""
 
+import re
 from collections import Counter
 from typing import ClassVar
 
@@ -124,7 +125,7 @@ class Digest:
             return 400, {"error": "use printable ASCII and newlines only"}
         size = {"bytes": len(text), "limit": cap}
         if self.params["card"]:
-            _, _, errors = self.host.family.card_parts(text)
+            _, _, errors = self.host.family.card_parts(text, self.params.get("ordered", False))
             size["parse"] = "unparsed" if errors else "ok"
             size["bad_lines"] = errors
         if measure:
@@ -167,9 +168,54 @@ def create(task, host):
     return Digest(task, host)
 
 
+RULE_LABEL = re.compile(
+    r"^\s*(?:[-*+]\s+)?(?:\*\*|__|`)?(?:(?:rule|r)\s*)?(\d+)(?!\d|\.\d)"
+    r"(?:\*\*|__|`)?(?:\s*[:.)-]\s*|\s+|$)(.*)$", re.IGNORECASE)
+
+
+def note_measures(params, note):
+    """Read numbered rule headings without requiring the scripted note syntax."""
+    unknown = {"order_kept": None, "numbers_kept": None}
+    if params["card"]:
+        return unknown | {"note_measure_flag": "card_format"}
+    if note is None:
+        return unknown | {"note_measure_flag": "no_final_note"}
+    heads = params.get("rule_heads")
+    if not heads:
+        return unknown | {"note_measure_flag": "no_reference"}
+    expected = {field: number for number, field in heads}
+    field_pattern = re.compile(r"\b(" + "|".join(expected) + r")\b", re.IGNORECASE)
+    observed = {}
+    numbers_match = True
+    lines = [line for line in note.splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        label = RULE_LABEL.match(line)
+        if label is None:
+            continue
+        body = label[2].strip("*`_ ")
+        if not body and index + 1 < len(lines) and not RULE_LABEL.match(lines[index + 1]):
+            body = lines[index + 1]
+        field = field_pattern.search(body)
+        if field is None:
+            return unknown | {"note_measure_flag": "unreadable_rule_heading"}
+        name = field[1].lower()
+        number = int(label[1])
+        if name in observed and observed[name] != number:
+            numbers_match = False
+        observed[name] = number
+        numbers_match &= number == expected[name]
+    if not observed:
+        return unknown | {"note_measure_flag": "unreadable_note"}
+    return {"order_kept": list(observed) == [field for field in expected if field in observed],
+            "numbers_kept": numbers_match and observed.keys() == expected.keys(),
+            "note_measure_flag": None}
+
+
 def score(task, events):
     checks, moves = {}, {}
     note_sizes, copies = [], 0
+    final = task["seats"][-1]
+    final_note = None
     for event in events:
         seat, kind, data = event["seat"], event["kind"], event["data"]
         if kind == "check":
@@ -178,13 +224,15 @@ def score(task, events):
             key = (seat, data["job"])
             moves.setdefault(key, (data["outcome"], frozenset(checks.get(key, ()))))
         elif kind == "note_seal":
+            if data.get("id") == f"note-{final}":
+                final_note = data["text"]
             if data["limit"] is not None:
                 note_sizes.append(data["bytes"] / data["limit"])
             copies += data["copy_forward"]
     omissions = extras = 0
     accuracy, totals, correct, points = {}, Counter(), Counter(), Counter()
+    overlap = {}
     unfinished = {}
-    final = task["seats"][-1]
     for seat, rows in task["params"]["batches"].items():
         good = 0
         for row in rows:
@@ -198,6 +246,8 @@ def score(task, events):
                 omissions += bool(missing)
                 points[row["cell"]] += 1 if ok else -task["params"]["wrong_send_cost"] if move not in (None, "hold") else 0
                 extras += len(set(before) - set(row["checks"]))
+                if row.get("overlap"):
+                    overlap[row["job"]["id"]] = ok
         accuracy[seat] = good / len(rows) if rows else None
         unfinished[seat] = sum((seat, row["job"]["id"]) not in moves for row in rows)
     cells = {cell: correct[cell] / total for cell, total in totals.items()}
@@ -221,4 +271,6 @@ def score(task, events):
             "extra_checks": extras, "notes_fraction": note_sizes, "handover_missing": missing,
             "unfinished_jobs": unfinished,
             "unparsed": sum(bool(e["data"].get("bad_lines")) for e in events if e["kind"] == "note_seal"),
-            "copy_forward": copies, "shift_accuracy": accuracy, "job_accuracy": accuracy[final]}
+            "copy_forward": copies, "shift_accuracy": accuracy, "job_accuracy": accuracy[final],
+            "overlap_first_match": overlap,
+            **note_measures(task["params"], final_note)}

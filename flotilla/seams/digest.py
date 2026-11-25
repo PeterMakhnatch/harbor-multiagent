@@ -16,9 +16,12 @@ TWINS = (("probe-worker-trap", "probe-worker-control"),)
 PAIRS = (("probe-writer-trap", "probe-writer-control"), ("team", "hint"), ("team", "solo-seam"))
 ARM_WORDS = ("digest", *[arm for arm in ARMS if "-" in arm])
 SEAM = "A capped note must carry standing rules through successive revisions across fresh contexts."
-VERSION = 3
-LEVELS = ("canary", "standard", "heavy")
+VERSION = 4
+BASE_LEVELS = ("canary", "standard", "heavy")
+LEVELS = (*BASE_LEVELS, "standard-order", "heavy-order")
 HINT = "When a replacement arrives, replace the old rule in your note instead of appending the new rule."
+ORDER_HINT = "Keep the manual's rule numbers and listed order in your note, replacing each changed rule in place."
+ORDER_FACTS = "Jobs can match more than one main rule. A replacement keeps the place of the rule it replaces."
 TEAM_ADDRESS = "The previous shift left you a note."
 SELF_ADDRESS = "You left yourself a note on your last shift."
 TEAM_HANDOVER = ("Write the handover note for the next shift's worker. That worker gets only your note, its own "
@@ -40,6 +43,8 @@ DOSES = {
     "canary": Dose(3, 4, 2, 4, 24, 12),
     "standard": Dose(4, 4, 3, 4, 24, 12),
     "heavy": Dose(5, 4, 4, 4, 24, 12),
+    "standard-order": Dose(4, 4, 3, 4, 24, 12),
+    "heavy-order": Dose(5, 4, 4, 4, 24, 12),
 }
 SEATS = {name: dose.hops + 1 for name, dose in DOSES.items()}
 OUTCOMES = ("N", "E", "S", "W", "P", "C", "X", "F", "Q", "hold")
@@ -88,7 +93,7 @@ def rule_pool(rng, dose, products):
                 action = mapping[action]
             clauses.append([condition, action])
         result.append({"id": i + 1, "clauses": clauses})
-    # Rule numbers, not the sequence of revisions, set the ordering.
+    # The listed order sets precedence, independently of the rule numbers.
     return result
 
 
@@ -148,17 +153,18 @@ def note_text(home, rules):
                       *rule_lines(rules, alternate)])
 
 
-def card_text(home, rules):
+def card_text(home, rules, ordered=False):
     lines = ["home " + " ".join(f"{k}={v}" for k, v in home.items())]
     for rule in rules:
-        prefix = []
+        prefix, block = [], []
         for condition, action in rule["clauses"]:
             prefix.append(condition)
-            lines.append(f"{','.join(prefix)}=>{action}")
+            block.append(f"{','.join(prefix)}=>{action}")
+        lines.extend(reversed(block) if ordered else block)
     return "\n".join(lines)
 
 
-def card_parts(text):
+def card_parts(text, ordered=False):
     home, rules, errors = {}, [], []
     for i, line in enumerate(text.splitlines(), 1):
         if not line.strip():
@@ -183,13 +189,14 @@ def card_parts(text):
             errors.append(i)
     if not text.strip():
         errors.append(1)
-    rules.sort(key=lambda r: -len(r["clauses"][0][0].split(",")))
+    if not ordered:
+        rules.sort(key=lambda r: -len(r["clauses"][0][0].split(",")))
     return home, rules, errors
 
 
-def parse_note(text, card=False):
+def parse_note(text, card=False, ordered=False):
     if card:
-        home, rules, _ = card_parts(text)
+        home, rules, _ = card_parts(text, ordered)
         return home, rules
     lines = text.splitlines()
     head, *pairs = lines[0].split()
@@ -289,6 +296,47 @@ def batch(rng, products, defaults, rules, home, cells, size, shift, late=0):
     return jobs
 
 
+def overlap_jobs(rng, final, rules, home):
+    """Add a second, later matching rule without changing the scored cell or action."""
+    candidates = []
+    for row in final:
+        rid, depth = map(int, row["cell"].split("."))
+        if not rid:
+            continue
+        index = next(i for i, r in enumerate(rules) if r["id"] == rid)
+        options = []
+        for later in rules[index + 1:]:
+            job = row["job"].copy()
+            for part in later["clauses"][0][0].split(","):
+                field, op, value = re.fullmatch(r"(\w+)([=<>])(\w+)", part).groups()
+                job[field] = value if op == "=" else (max(job[field], int(value) + 1) if op == ">"
+                                                       else min(job[field], int(value) - 1))
+            fitting = [r["id"] for r in rules if matches(job, r["clauses"][0][0])]
+            if fitting != [rid, later["id"]]:
+                continue
+            actual_rid, actual_depth, action = decision(rules, job)
+            if (actual_rid, actual_depth) != (rid, depth):
+                continue
+            if resolve(action, home, job, row["replies"]) != (row["checks"], row["outcome"]):
+                continue
+            alternative = decision([later], job)[2]
+            if resolve(alternative, home, job, row["replies"])[1] == row["outcome"]:
+                continue
+            options.append((job, fitting))
+        if options:
+            reversed_options = [option for option in options if option[1][0] > option[1][1]]
+            candidates.append((row, rng.choice(reversed_options or options)))
+    if len(candidates) < 8:
+        return False
+    rng.shuffle(candidates)
+    selected = candidates[:8]
+    if not any(ids[0] > ids[1] for _, (_, ids) in selected):
+        return False
+    for row, (job, ids) in selected:
+        row.update(job=job, overlap=ids)
+    return True
+
+
 def merge_amendments(rules, amendments):
     by_id = {r["id"]: r for r in amendments}
     merged = [by_id.pop(r["id"], r) for r in rules]
@@ -314,6 +362,7 @@ def amend_rules(rng, initial, current, ids, home):
 
 def generate(seed, instance, n_seats, difficulty):
     dose = DOSES[difficulty]
+    ordered = difficulty.endswith("-order")
     if n_seats is not None and n_seats != dose.hops + 1:
         raise ValueError(f"{difficulty} requires {dose.hops + 1} seats")
     rng = random.Random(f"digest:{seed}:{instance}:{difficulty}")
@@ -322,6 +371,10 @@ def generate(seed, instance, n_seats, difficulty):
     for _ in range(200):
         home = {product: rng.choice(OUTCOMES[:4]) for product in products}
         initial = rule_pool(rng, dose, products)
+        if ordered:
+            rng.shuffle(initial)
+            for rule, number in zip(initial, rng.sample(range(11, 100, 3), dose.rules), strict=True):
+                rule["id"] = number
         rules = initial
         ids = rng.sample([r["id"] for r in initial], dose.rules)
         amendments = [[]]
@@ -335,6 +388,8 @@ def generate(seed, instance, n_seats, difficulty):
                 batches.append(batch(rng, products, defaults, rules, home, early, dose.load, hop))
             cells = [(0, 0), *((r["id"], d) for r in rules for d in range(len(r["clauses"])))]
             final = batch(rng, products, defaults, rules, home, cells, dose.final_size, dose.hops, dose.late)
+            if ordered and not overlap_jobs(rng, final, rules, home):
+                continue
         except ValueError:
             continue
         totals = Counter(row["cell"] for row in final)
@@ -344,7 +399,7 @@ def generate(seed, instance, n_seats, difficulty):
         if max(weights.values()) > 0.2 + 1e-9:
             continue
         reference = note_text(home, rules)
-        card = card_text(home, rules)
+        card = card_text(home, rules, ordered)
         cap = (13 * len(reference) + 99) // 100 * 10
         current = initial
         lengths = [len(note_text(home, current))]
@@ -449,13 +504,16 @@ def extension_arm(inst, arm, max_text, max_messages):
     roles = {s: "worker" if i == len(seats) - 1 else "planner" if i == 0 else "relay"
              for i, s in enumerate(seats)}
     manual = render_manual(inst["home"], inst["rules"] if arm == "solo" or card else inst["initial_rules"])
+    ordered = inst["difficulty"].endswith("-order")
     amendments = {s: render_rules(inst["amendments"][i], replacement=True)
                   for i, s in enumerate(seats) if roles[s] == "relay"}
     briefings, instructions = {}, {}
-    public = public_briefing(inst["fields"])
+    public = public_briefing(inst["fields"], ordered)
     for i, seat in enumerate(seats):
         role = roles[seat]
         own = {"role": role, "jobs": len(batches[i])}
+        if ordered:
+            own["ordered"] = True
         if card:
             own["format"] = "card"
         if fullrecord:
@@ -476,10 +534,13 @@ def extension_arm(inst, arm, max_text, max_messages):
             "start_after": {s: [seats[i - 1]] for i, s in enumerate(seats) if i},
             "params": {"batches": dict(zip(seats, batches, strict=True)), "roles": roles, "cap": cap,
                        "card": card, "fullrecord": fullrecord, "manual": manual, "amendments": amendments,
+                       "ordered": ordered,
+                       "rule_heads": [[r["id"], re.match(r"\w+", r["clauses"][0][0])[0]]
+                                      for r in inst["initial_rules"]],
                        "wrong_send_cost": WRONG_SEND_COST}}
 
 
-def public_briefing(fields):
+def public_briefing(fields, ordered=False):
     choices = {"finish": "finish (plain, laminate or foil)", "ship": "ship (pickup, delivery, courier or freight)",
                "due": "due (today or later)", "ink": "ink (process or spot)", "bind": "bind (stapled or perfect)",
                "pack": "pack (loose or boxed)"}
@@ -497,6 +558,7 @@ def public_briefing(fields):
         f"an incorrect send costs {WRONG_SEND_COST} points, and an incorrect hold or an unfinished job earns 0. "
         "The reward is the mean of final rule cell scores, with a floor of 0.\n"
         + NESTING + " A later complete rule with the same number replaces the earlier rule.\n"
+        + (ORDER_FACTS + "\n" if ordered else "") +
         "Free-form notes are allowed unless your role specifies a rule card.\n"
         "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
         "Chat is disabled. You can make up to 200 world calls during your shift, including refused calls. "
@@ -534,7 +596,9 @@ def role_briefing(own, cap, arm):
                  "Each further line has conditions joined by commas, then `=>`, then an outcome. "
                  "A condition is field=value, qty>N or qty<N. An outcome is a destination code, `hold`, `home`, "
                  "or `check:<what>` followed by reply=outcome pairs separated by spaces. "
-                 "The matching line with the most conditions decides; on a tie, the earlier line wins. "
+                 + ("The first matching line decides. List each rule's deepest exceptions before its main clause. "
+                    if own.get("ordered") else
+                    "The matching line with the most conditions decides; on a tie, the earlier line wins. ") +
                  "A job matching no line goes home. The desk terminal applies your card exactly. "
                  "The terminal skips unreadable lines. The note check lists their line numbers.")
     elif own.get("fullrecord"):
@@ -543,8 +607,11 @@ def role_briefing(own, cap, arm):
         text += " " + TEAM_HANDOVER
     text += ("\nThe note has no family length cap; use printable ASCII and newlines." if cap is None else
              f"\nThe note can hold at most {cap} bytes of printable ASCII, including newlines.")
-    if arm == "hint" and role == "relay":
-        text += "\n" + HINT
+    if arm == "hint":
+        if own.get("ordered"):
+            text += "\n" + ORDER_HINT
+        elif role == "relay":
+            text += "\n" + HINT
     return text + ("\nPOST /note/check with `{\"text\":\"...\"}` measures its size without sending it. "
                    "POST /note/seal with the same body sends it once and ends your shift. "
                    "Empty or whitespace-only notes and characters outside printable ASCII and newline are rejected. "
@@ -582,11 +649,12 @@ def pair_difference(first, second, views_a, views_b):
     for seat, view in normalized.items():
         instruction = view["instruction"]
         if second == "hint":
-            role = json.loads(view["env.SEAT_BRIEFING"])["role"]
-            expected = int(role == "relay")
-            if instruction.count("\n" + HINT) != expected:
+            own = json.loads(view["env.SEAT_BRIEFING"])
+            sentence = ORDER_HINT if own.get("ordered") else HINT
+            expected = int(own["role"] != "worker" if own.get("ordered") else own["role"] == "relay")
+            if instruction.count("\n" + sentence) != expected:
                 yield f"{seat}: incorrect hint sentence count"
-            instruction = instruction.replace("\n" + HINT, "")
+            instruction = instruction.replace("\n" + sentence, "")
         elif second == "solo-seam":
             instruction = instruction.replace(SELF_ADDRESS, TEAM_ADDRESS).replace(SELF_HANDOVER, TEAM_HANDOVER)
         elif second == "probe-writer-control":
