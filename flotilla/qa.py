@@ -1052,16 +1052,17 @@ def check_policy_runner(task: Task) -> Iterator[Finding]:
             yield Finding("qa-error", task.name, "*", "task lacks policy metadata")
         return
     try:
-        if selected not in ("careful", "naive", "nop"):
+        mode = data.get("mode", "answer")
+        if mode != "extension" and selected not in ("careful", "naive", "nop"):
             raise ValueError("invalid selected policy")
         metadata = tomllib.loads((task.path / "task.toml").read_text())["metadata"]
         if metadata["policy"] != selected:
             raise ValueError("policy metadata differs")
-        mode = data.get("mode", "answer")
         arm = task.cache.get(("extension", "arm"), {})
         custom = BUILD.load_policy(task.family_name)
         expected = BUILD.policy_settings(task.family, custom, data["variant"], mode, selected, task.seats,
-                                         tuple(set(task.seats) - set(task.under_test)), arm.get("scripted_policies", {}))
+                                         tuple(set(task.seats) - set(task.under_test)), arm.get("scripted_policies", {}),
+                                         seed=data["seed"], instance=data["instance"])
         script = BUILD.POLICY_SH.encode()
         if mode == "extension":
             script = BUILD.marked(script)

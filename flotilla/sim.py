@@ -265,7 +265,8 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
 
                 client = POLICY.Client(seat, read_file)
                 generators[seat] = POLICY.play(name, client, own, family, oracle, custom, settings["variant"],
-                                               settings["mode"] == "extension")
+                                               settings["mode"] == "extension", settings.get("seed"),
+                                               settings.get("instance"))
             agents = tomllib.loads((task_dir / "task.toml").read_text())["agents"]
             sim.run(generators, {seat: row["start_after"] for seat, row in agents.items() if "start_after" in row})
             state = sim.finish()
