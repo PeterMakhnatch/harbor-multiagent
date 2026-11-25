@@ -46,6 +46,9 @@ def write_trial(jobs: Path, job: str, cell: dict, reward: float) -> Path:
     score = {"error": None, "instance": cell["instance"], "condition": cell["arm"], "reward": reward}
     (trial / "verifier" / "score.json").write_text(json.dumps(score))
     (trial / "verifier" / "reward.json").write_text(json.dumps({"reward": reward}))
+    for seat in SEATS:
+        (trial / "seats" / seat / "agent").mkdir(parents=True)
+        (trial / "seats" / seat / "agent" / "oracle.txt").write_text("" if seat == SEATS[0] else "solved\n")
     (trial / "verifier" / "world-state.json").write_text("{}")
     return trial
 
@@ -157,6 +160,24 @@ def edited_config(case):
     path.write_text(json.dumps(config))
 
 
+def exit_marker(case, seat: str, text: str) -> None:
+    _job, trial = first_trial(case)
+    (trial / "seats" / seat / "agent" / "exit-code.txt").write_text(text)
+
+
+def nonzero_exit(case):
+    exit_marker(case, SEATS[1], "1")
+
+
+def malformed_exit(case):
+    exit_marker(case, SEATS[1], "bash: /solution/solve.sh: Permission denied")
+
+
+def no_oracle_log(case):
+    _job, trial = first_trial(case)
+    (trial / "seats" / SEATS[0] / "agent" / "oracle.txt").unlink()
+
+
 def two_valid_attempts(case):
     state = json.loads((case["run"] / "state.json").read_text())
     row = state["finished"][case["order"][0]["key"]]
@@ -173,6 +194,9 @@ FAULTS = [
     (wrong_agent, "seat p2 ran 'terminus-2', not the oracle agent", None),
     (edited_config, "stored job config differs", None),
     (two_valid_attempts, "ambiguous: 2 valid attempts", None),
+    (nonzero_exit, "invalid trial: seat p2 oracle solve.sh exited with status 1 (exit-code.txt)", None),
+    (malformed_exit, "invalid trial: seat p2 exit-code.txt is malformed", None),
+    (no_oracle_log, "invalid trial: seat p1 left no oracle.txt", None),
 ]
 
 
@@ -199,6 +223,32 @@ def test_a_resolved_retry_counts_once(tmp_path):
     receipt = check(case)
     assert receipt["verdict"] == "PASS", receipt
     assert receipt["planned"] == receipt["matched"] == 4 and receipt["cells"][0]["attempts"] == 2
+
+
+def test_a_matching_zero_with_a_failed_solve_fails_and_names_no_private_path(tmp_path):
+    case = rehearsal(tmp_path)
+    job, trial = first_trial(case)
+    cell = case["order"][0]
+    shutil.rmtree(trial)
+    write_trial(case["jobs"], job, cell, 0.0)
+    case["rewards"][Path(cell["task"]).name] = 0.0
+    assert check(case)["verdict"] == "PASS"
+    for seat in SEATS:
+        exit_marker(case, seat, "126")
+    receipt = check(case)
+    row = receipt["cells"][0]
+    assert receipt["verdict"] == "FAIL" and receipt["matched"] == 3
+    assert row["oracle"] is None and row["sim"] is None
+    assert row["problem"] == "invalid trial: seat p1 oracle solve.sh exited with status 126 (exit-code.txt)"
+    text = json.dumps(receipt) + PARITY.text_of(receipt)
+    assert str(tmp_path) not in text and "/solution" not in text
+
+
+def test_a_legacy_zero_exit_marker_still_passes(tmp_path):
+    case = rehearsal(tmp_path)
+    for seat in SEATS:
+        exit_marker(case, seat, "0\n")
+    assert check(case)["verdict"] == "PASS"
 
 
 def test_schedule_dependence_and_changed_task_bytes_fail(tmp_path):
