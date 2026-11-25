@@ -160,29 +160,51 @@ def describe(group, convention):
     return f"{group['name']}: key form {convention[0]}, unit {convention[1]}."
 
 
-def announced(group, convention, text):
-    if group["name"].casefold() not in text.casefold():
-        return False
-    form, unit = convention
-    text = text.casefold().replace("`", "").replace('"', "")
-    explicit = re.findall(r"\bunit\s*[:=]?\s*(each|case)\b", text)
-    if explicit:
-        if set(explicit) != {unit}:
-            return False
-    else:
-        units = {"each": r"\b(each|per item|individual items|individual units)\b",
-                 "case": r"\b(case|cases|per case)\b"}
-        if {name for name, pattern in units.items() if re.search(pattern, text)} != {unit}:
-            return False
-    if any(key_for(row, convention).casefold() in text for row in group["rows"]):
+def group_clauses(group, text):
+    names = list(re.finditer(r"\b(?:supplier[-\s]*)?[a-h]\d{2}\b", text, re.IGNORECASE))
+    for index, match in enumerate(names):
+        if mentions(group, match[0]):
+            end = names[index + 1].start() if index + 1 < len(names) else len(text)
+            prefix = text[:match.start()].rsplit(".", 1)[-1].rsplit(";", 1)[-1]
+            negated = re.search(r"\b(?:not|never|except)\s*$", prefix)
+            if not negated:
+                yield text[match.end():end]
+
+
+def form_named(group, form, text):
+    if any(key_for(row, (form, "each")).casefold() in text for row in group["rows"]):
         return True
     left, right = form[:4].casefold(), form[5:].casefold()
     separator = {"/": r"/|slash", ":": r":|colon", "-": r"-|hyphen|dash"}[form[4]]
     between = rf"\b{left}\b\s*(?:(?:then|followed by|separated by|with|a|the)\s+)*"
     in_order = re.search(between + rf"(?:{separator})\s*(?:(?:then|followed by|and)\s+)*\b{right}\b", text)
-    named = re.search(rf"\b{left}\b\s+(?:first,?\s+)?(?:then|followed by|and)\s+\b{right}\b"
-                      rf"\s+(?:second,?\s+)?(?:separated by|with|using)\s+(?:a\s+)?(?:{separator})", text)
+    named = re.search(rf"\b{left}\b\s+(?:first)?[,\s]*(?:then|followed by|and)\s+\b{right}\b"
+                      rf"(?:\s+second)?[,\s]+(?:separated by|with|using)\s+(?:a\s+)?(?:{separator})", text)
     return bool(in_order or named)
+
+
+def announcement_settings(group, text):
+    settings = set()
+    for clause in group_clauses(group, text.casefold().replace("`", "").replace('"', "")):
+        # A parenthetical refusal of another setting does not negate the preceding positive statement.
+        clause = re.sub(r"\([^()]*(?:\bnot supported\b|\bnot available\b)[^()]*\)", "", clause)
+        if re.search(r"\?|\b(?:not|never|no|or|unless|if|instead of|rather than|won't|don't|cannot)\b", clause):
+            continue
+        if re.search(r"\b(?:what|which|how|should|could|would|please (?:confirm|tell|send))\b", clause):
+            continue
+        explicit = set(re.findall(r"\bunit\s*[:=]?\s*(each|case)\b", clause))
+        if not explicit:
+            units = {"each": r"\b(each|per item|individual items|individual units)\b",
+                     "case": r"\b(case|cases|per case)\b"}
+            explicit = {name for name, pattern in units.items() if re.search(pattern, clause)}
+        forms = {form for form in FORMS if form_named(group, form, clause)}
+        if len(explicit) == len(forms) == 1:
+            settings.add((next(iter(forms)), next(iter(explicit))))
+    return settings
+
+
+def announced(group, convention, text):
+    return announcement_settings(group, text) == {tuple(convention)}
 
 
 def common_text(groups, owner, messaging, max_text, max_messages):

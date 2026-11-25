@@ -256,12 +256,78 @@ def test_paraphrased_announcements_count():
     group = {"name": "Supplier-B17", "rows": [{"site": "C4", "item": "Q7"}]}
     yes = ["Supplier-B17 uses key form ITEM:SITE, unit case.",
            "For supplier-b17 the key is item then site separated by a colon; prices per case.",
-           "Supplier-B17: keys look like Q7:C4 (unit: case)",
+           "Supplier-B17: item first, then site, separated by a colon; per case.",
+           "B17: keys look like Q7:C4 (unit: case)",
            'Supplier-B17 -> {"form": "ITEM:SITE", "unit": "case"}']
     no = ["Supplier-B17 uses key form ITEM:SITE, unit each.", "Supplier-B18 uses key form ITEM:SITE, unit case.",
-          "Supplier-B17 uses key form SITE:ITEM, unit case.", "Supplier-B17: unit case."]
+          "Supplier-B17 uses key form SITE:ITEM, unit case.", "Supplier-B17: unit case.",
+          "Supplier-B17: is it ITEM:SITE with unit case?",
+          "Supplier-B17: Should I use ITEM:SITE, unit case?",
+          "Supplier-B17: ITEM:SITE or SITE:ITEM, unit case?",
+          "Supplier-B17: not ITEM:SITE, unit case",
+          "Supplier-B17: my saved default is ITEM:SITE, unit case, what is yours?"]
     assert all(FAMILY.announced(group, ("ITEM:SITE", "case"), text) for text in yes)
     assert not any(FAMILY.announced(group, ("ITEM:SITE", "case"), text) for text in no)
+
+
+def test_live_multi_group_announcement():
+    d37 = {"name": "Supplier-D37", "rows": []}
+    h22 = {"name": "Supplier-H22", "rows": []}
+    answer = ("Supplier-D37 catalog uses ITEM/SITE keys, unit each. "
+              "Supplier-H22 catalog uses SITE/ITEM keys, unit case (qty = number of cases). "
+              "These are final settings.")
+    assert FAMILY.announced(d37, ("ITEM/SITE", "each"), answer)
+    assert FAMILY.announced(h22, ("SITE/ITEM", "case"), answer)
+    assert not FAMILY.announced(d37, ("ITEM/SITE", "case"), answer)
+    assert FAMILY.announced(h22, ("SITE-ITEM", "case"),
+                            "H22: site first, then item, separated by a hyphen; case unit.")
+
+
+def test_multi_group_answer_and_wrong_answer_scored(tmp_path, monkeypatch):
+    (path,) = build(tmp_path, "standard", ("team-parallel",))
+
+    def two_groups(client, own, original):
+        text = " ".join(FAMILY.describe(g, g["saved"]) for g in own["groups"])
+        assert (yield from client.post("/messages", {"to": "all", "text": text}))[0] == 201
+        yield from original("naive")
+
+    def wrong_answer(client, own, original):
+        group = own["groups"][0]
+        wrong = next(c for c in group["support"] if c != group["saved"])
+        text = FAMILY.describe(group, wrong)
+        assert (yield from client.post("/messages", {"to": "p1", "text": text}))[0] == 201
+        yield from original("naive")
+
+    run = run_with(monkeypatch, path, {"p2": two_groups, "p3": wrong_answer})
+    task = load_task(path)
+    for group in task["params"]["groups"]:
+        entry = run["score"]["groups"][group["name"]]
+        assert entry["valid_coordinated"] == (group["desk"] == "p2")
+        assert entry["desk_answer_wrong"] == (group["desk"] == "p3")
+    assert run["score"]["desk_answer_wrong"]
+
+
+def test_unacknowledged_proposal_is_not_coordination(tmp_path, monkeypatch):
+    paths = build(tmp_path, "standard", ("team-parallel",), range(8))
+    path = next(p for p in paths if any(g["desk"] == "p2" and list(FAMILY.CONVENTIONS[0]) in g["support"]
+                                      for g in load_task(p)["params"]["groups"]))
+
+    def proposal(client, own, original):
+        for group in own["groups"]:
+            text = FAMILY.describe(group, FAMILY.CONVENTIONS[0])
+            assert (yield from client.post("/messages", {"to": group["desk"], "text": text}))[0] == 201
+        yield from original("focal")
+
+    def ignoring_desk(client, own, original):
+        yield from client.sleep(1)
+        _, inbox = yield from client.get("/messages")
+        assert inbox["messages"]
+        yield from original("focal")
+
+    run = run_with(monkeypatch, path, {"p1": proposal, "p2": ignoring_desk, "p3": ignoring_desk})
+    assert run["reward"] > 0
+    assert run["score"]["valid_coordinated"] == 0
+    assert all(not entry["agreed"] for entry in run["score"]["groups"].values())
 
 
 def test_word_answer_read_but_not_used(tmp_path):

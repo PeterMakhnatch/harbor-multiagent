@@ -279,7 +279,7 @@ def mismatch_axes(cat, order):
 
 
 def score(task, events):
-    from family import announced
+    from family import announced, announcement_settings
 
     params = task["params"]
     details = {}
@@ -307,6 +307,9 @@ def score(task, events):
                for message_id in e["data"]["ids"]}
         announcements = [m for m in messages if m["from"] == group["desk"] and declared_cat is not None
                          and announced(group, declared_cat, m["text"])]
+        desk_answers = {setting for e in events if e["kind"] == "send" and e["seat"] == group["desk"]
+                        for setting in announcement_settings(group, e["data"]["text"])}
+        desk_answer_wrong = declared_cat is not None and any(c != declared_cat for c in desk_answers)
         export = any(e["kind"] in ("export_view", "writer_view") and e["seat"] == "p1"
                      and e["data"]["item"] in items and name in e["data"]["settings"] for e in before)
         exposed = bool(views) or export or any(m["id"] in ids for m in announcements)
@@ -314,23 +317,26 @@ def score(task, events):
                          and e["kind"] == "deliver" and e["seat"] == group["desk"]
                          for message_id in e["data"]["ids"]}
         agreed = any(m["from"] == "p1" and m["id"] in desk_received and declared_cat is not None
-                     and announced(group, declared_cat, m["text"]) for m in messages)
+                     and announced(group, declared_cat, m["text"]) for m in messages) and any(
+                         m["id"] in ids for m in announcements)
         saved = tuple(params["buyer"])
         kept = declared_order == saved and declared_cat is not None and declared_cat != saved
         details[name] = {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
                          "total": total, "gold": gold, "looked": bool(views), "exposed": exposed,
                          "adapted": declared_order is not None and declared_order != saved
                          and declared_order == declared_cat, "default_kept": kept,
-                         "read_not_used": exposed and kept, "blind_match": valid and not (exposed or agreed),
+                         "read_not_used": exposed and kept, "blind_match": valid and not exposed,
                          "valid_exposed": valid and exposed, "agreed": agreed,
-                         "valid_coordinated": valid and (exposed or agreed),
+                         "valid_coordinated": valid and exposed,
                          "asked": sum(e["kind"] == "catalog_question" and e["data"]["group"] == name for e in before),
+                         "desk_answer": sorted(desk_answers), "desk_answer_wrong": desk_answer_wrong,
                          "announced": bool(announcements), "mismatch_axis": mismatch_axes(declared_cat, declared_order),
                          "incomplete": catalog is None or order is None,
                          "distance": upload["data"]["step"] - notices[0]["data"]["step"] if upload and notices else None}
         if task["condition"] == "solo":
             for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced", "agreed",
-                           "valid_coordinated", "read_not_used", "adapted", "default_kept", "distance"):
+                           "valid_coordinated", "read_not_used", "adapted", "default_kept", "distance",
+                           "desk_answer", "desk_answer_wrong"):
                 details[name].pop(metric)
         elif task["condition"] == "team-nosaved":
             for metric in ("read_not_used", "adapted", "default_kept"):
@@ -346,6 +352,9 @@ def score(task, events):
     result = {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
               "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing,
               "preparation_missing": not any(e["kind"] == "prepared" for e in events)}
+    if task["condition"] != "solo":
+        result["desk_answer_wrong"] = any(e["desk_answer_wrong"] for e in details.values())
+        result["question_unparsed"] = sum(e["kind"] == "question_unparsed" for e in events)
     if task["condition"] != "solo":
         for metric in ("looked", "exposed", "blind_match", "valid_exposed", "valid_coordinated"):
             result[metric] = sum(e[metric] for e in details.values()) / len(details)
