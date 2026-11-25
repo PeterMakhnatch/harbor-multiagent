@@ -81,6 +81,7 @@ class Interface:
 
     def __init__(self, task, host):
         self.host = host
+        self.task = task
         self.params = task["params"]
         self.groups = {group["name"]: group for group in self.params["groups"]}
         self.steps = dict.fromkeys(task["seats"], 0)
@@ -132,10 +133,23 @@ class Interface:
             return 409, "the buyer's question phase has ended"
         return None
 
+    def message_delay(self, message, recipient):
+        release = self.params.get("wait", {}).get("reply_tick", 0)
+        target = self.groups[self.params["target"]]
+        if (release and recipient == "p1" and message["from"] == target["desk"]
+                and self.host.family.announcement_settings(target, message["text"])):
+            return max(0, release - self.host.tick)
+        return 0
+
     def on_message(self, message):
         self.message_counts[message["from"]] += 1
         for name in self.host.family.questions(message, self.groups.values()):
             self.host.record("catalog_question", "p1", {"group": name})
+        if message["from"] == "p1":
+            for desk in sorted(self.desks):
+                if self.host.family.unparsed_question(message, self.groups.values(), desk):
+                    self.host.record("question_unparsed", "p1", {"desk": desk, "id": message["id"]})
+            self.host.advance()
 
     def receipt(self, kind, seat, data):
         self.receipts += 1
@@ -204,6 +218,8 @@ class Interface:
         if kind == "order":
             if not self.prepared:
                 return 409, {"error": "preparation has not ended"}
+            if "wait" in self.params and self.host.tick > self.params["wait"]["order_deadline"]:
+                return 409, {"error": "the order deadline has passed"}
             if ("catalog", name) not in self.files or (desk in self.desks and desk not in self.done):
                 return 409, {"error": "catalog desk has not finished the file"}
         return 201, {"receipt": self.publish(seat, body)}
@@ -254,10 +270,23 @@ class Interface:
     def augment_reply(self, seat, method, path):
         if seat in self.done:
             return None
-        return {"staging": self.summary()} | {k: v for k, v in self.readiness().items() if k != "tick"}
+        _, fields, ids = self.response(seat, path, {}, 200, {})
+        if path == "/await":
+            del fields["tick"]
+        return fields, ids
 
     def pending(self, seat):
         return seat in self.players and seat not in self.done
+
+    def on_deadline(self, stalled_seats):
+        if self.host.deadline_kind != "play_timeout":
+            return None
+        details = {name: file_result(group, self.files.get(("catalog", name)), self.files.get(("order", name)))
+                   for name, group in self.groups.items()}
+        result = outcome(self.task, details, sorted(self.players - self.done), self.prepared)
+        # The deadline hook cannot read the core's post-write receipts. Replay the event log for exposure.
+        result["attribution_unavailable"] = True
+        return result
 
 
 def create(task, host):
@@ -272,8 +301,30 @@ def mismatch_axes(cat, order):
             if different]
 
 
+def file_result(group, catalog, order):
+    cat, ord_, valid, total, gold = join_result(group, catalog, order)
+    return {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
+            "total": total, "gold": gold, "incomplete": catalog is None or order is None,
+            "catalog_missing": catalog is None, "order_missing": order is None,
+            "mismatch_axis": mismatch_axes(declared_convention(group, catalog), declared_convention(group, order))}
+
+
+def outcome(task, details, missing, prepared):
+    target = task["params"]["target"]
+    rest = [entry["valid"] for name, entry in details.items() if name != target]
+    mean = sum(e["valid"] for e in details.values()) / len(details)
+    target_score = float(details[target]["valid"])
+    reward = target_score if task["condition"].startswith("probe-") or task["condition"] in (
+        "solo-seam-key", "solo-seam-unit") else mean
+    return {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
+            "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing,
+            "preparation_missing": not prepared,
+            "orders_missing": sorted(name for name, e in details.items() if e["order_missing"]),
+            "catalogs_missing": sorted(name for name, e in details.items() if e["catalog_missing"])}
+
+
 def score(task, events):
-    from family import announced
+    from family import announced, announcement_settings
 
     params = task["params"]
     details = {}
@@ -284,7 +335,8 @@ def score(task, events):
         catalog = deposit["data"]["file"] if deposit else None
         upload = next((e for e in published if e["data"]["file"]["kind"] == "order"), None)
         order = upload["data"]["file"] if upload else None
-        cat, ord_, valid, total, gold = join_result(group, catalog, order)
+        base = file_result(group, catalog, order)
+        valid = base["valid"]
         declared_cat = declared_convention(group, catalog)
         declared_order = declared_convention(group, order)
         before = [e for e in events if upload is None or e["seq"] < upload["seq"]]
@@ -301,6 +353,9 @@ def score(task, events):
                for message_id in e["data"]["ids"]}
         announcements = [m for m in messages if m["from"] == group["desk"] and declared_cat is not None
                          and announced(group, declared_cat, m["text"])]
+        desk_answers = {setting for e in events if e["kind"] == "send" and e["seat"] == group["desk"]
+                        for setting in announcement_settings(group, e["data"]["text"])}
+        desk_answer_wrong = declared_cat is not None and any(c != declared_cat for c in desk_answers)
         export = any(e["kind"] in ("export_view", "writer_view") and e["seat"] == "p1"
                      and e["data"]["item"] in items and name in e["data"]["settings"] for e in before)
         exposed = bool(views) or export or any(m["id"] in ids for m in announcements)
@@ -308,38 +363,36 @@ def score(task, events):
                          and e["kind"] == "deliver" and e["seat"] == group["desk"]
                          for message_id in e["data"]["ids"]}
         agreed = any(m["from"] == "p1" and m["id"] in desk_received and declared_cat is not None
-                     and announced(group, declared_cat, m["text"]) for m in messages)
+                     and announced(group, declared_cat, m["text"]) for m in messages) and any(
+                         m["id"] in ids for m in announcements)
         saved = tuple(params["buyer"])
         kept = declared_order == saved and declared_cat is not None and declared_cat != saved
-        details[name] = {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
-                         "total": total, "gold": gold, "looked": bool(views), "exposed": exposed,
+        details[name] = base | {"looked": bool(views), "exposed": exposed,
                          "adapted": declared_order is not None and declared_order != saved
                          and declared_order == declared_cat, "default_kept": kept,
-                         "read_not_used": exposed and kept, "blind_match": valid and not (exposed or agreed),
+                         "read_not_used": exposed and kept, "blind_match": valid and not exposed,
                          "valid_exposed": valid and exposed, "agreed": agreed,
-                         "valid_coordinated": valid and (exposed or agreed),
+                         "valid_coordinated": valid and exposed,
+                         "premature": group["hidden"] and upload is not None and not exposed,
                          "asked": sum(e["kind"] == "catalog_question" and e["data"]["group"] == name for e in before),
-                         "announced": bool(announcements), "mismatch_axis": mismatch_axes(declared_cat, declared_order),
-                         "incomplete": catalog is None or order is None,
+                         "desk_answer": sorted(desk_answers), "desk_answer_wrong": desk_answer_wrong,
+                         "announced": bool(announcements),
                          "distance": upload["data"]["step"] - notices[0]["data"]["step"] if upload and notices else None}
         if task["condition"] == "solo":
             for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced", "agreed",
-                           "valid_coordinated", "read_not_used", "adapted", "default_kept", "distance"):
+                           "valid_coordinated", "read_not_used", "adapted", "default_kept", "distance",
+                           "desk_answer", "desk_answer_wrong", "premature"):
                 details[name].pop(metric)
         elif task["condition"] == "team-nosaved":
             for metric in ("read_not_used", "adapted", "default_kept"):
                 details[name].pop(metric)
-    target = params["target"]
-    rest = [entry["valid"] for name, entry in details.items() if name != target]
-    mean = sum(e["valid"] for e in details.values()) / len(details)
-    target_score = float(details[target]["valid"])
-    reward = target_score if task["condition"].startswith("probe-") or task["condition"] in (
-        "solo-seam-key", "solo-seam-unit") else mean
     missing = sorted({seat for seat in task["seats"] if not any(e["kind"] == "work_done" and e["seat"] == seat
                                                                for e in events)})
-    result = {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
-              "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing,
-              "preparation_missing": not any(e["kind"] == "prepared" for e in events)}
+    result = outcome(task, details, missing, any(e["kind"] == "prepared" for e in events))
+    if task["condition"] != "solo":
+        result["desk_answer_wrong"] = any(e["desk_answer_wrong"] for e in details.values())
+        result["question_unparsed"] = sum(e["kind"] == "question_unparsed" for e in events)
+        result["premature"] = sum(e["premature"] for e in details.values())
     if task["condition"] != "solo":
         for metric in ("looked", "exposed", "blind_match", "valid_exposed", "valid_coordinated"):
             result[metric] = sum(e[metric] for e in details.values()) / len(details)

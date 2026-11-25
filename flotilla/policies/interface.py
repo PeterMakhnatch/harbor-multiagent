@@ -4,7 +4,7 @@ import hashlib
 
 
 def supports(name, variant):
-    return (name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "ask", "script-loop")
+    return (name in ("careful", "naive", "naive_read", "lone", "focal", "blind", "alternate", "ask", "script-loop", "eager")
             or name.startswith("lapse-") and name[6:] in ("10", "20", "30", "50"))
 
 
@@ -26,7 +26,7 @@ def infer(family, group, catalog):
     return candidates[0]
 
 
-def publish_catalogs(name, client, groups, family):
+def catalog_choices(name, groups, family):
     choices = {}
     for group in groups:
         saved = tuple(group["saved"])
@@ -34,7 +34,13 @@ def publish_catalogs(name, client, groups, family):
         if name == "focal" and list(family.CONVENTIONS[0]) in group["support"]:
             convention = family.CONVENTIONS[0]
         choices[group["name"]] = convention
-        body = make_file(family, group, convention, "catalog", [row["price"] for row in group["rows"]])
+    return choices
+
+
+def publish_catalogs(name, client, groups, family):
+    choices = catalog_choices(name, groups, family)
+    for group in groups:
+        body = make_file(family, group, choices[group["name"]], "catalog", [row["price"] for row in group["rows"]])
         status, _ = yield from client.post("/publish", body)
         if status != 201:
             raise ValueError("catalog upload refused")
@@ -42,35 +48,60 @@ def publish_catalogs(name, client, groups, family):
 
 
 def wait_status(client, predicate):
-    for _ in range(32):
-        status, reply = yield from client.get("/staging")
-        if status != 200 or predicate(reply):
+    status, reply = yield from client.get("/staging")
+    while status == 200 and not predicate(reply) and not reply.get("frozen"):
+        status, reply = yield from client.get(f"/await?until=tick&after={reply['tick']}")
+        if reply.get("reason") in ("retired", "frozen"):
+            break
+    return reply
+
+
+def desk_replies(client, own, family, choices, reply):
+    pending = list(reply.get("new_messages", []))
+    groups = own["groups"]
+    while pending:
+        message = pending.pop(0)
+        if message["from"] != "p1":
+            continue
+        asked = family.questions(message, groups)
+        replies = [family.describe(group, choices[group["name"]]) for group in groups
+                   if group["name"] in asked and not lapses(own, "answer", group)]
+        if family.unparsed_question(message, own["directory"], client.seat):
+            replies = ["Which group?"]
+        elif not asked and message["to"] == client.seat:
+            replies = ["Noted."]
+        if not replies:
+            continue
+        status, reply = yield from client.post("/messages", {"to": "p1", "text": " ".join(replies)})
+        if status == 429 or status == 409:
             return reply
-        status, waiting = yield from client.get(f"/await?until=tick&after={reply['tick']}")
-        if status != 200 or waiting["reason"] in ("timeout", "retired", "frozen"):
-            return reply
-    raise ValueError("too many logical barrier transitions")
+        if status != 201:
+            raise ValueError("catalog reply refused")
+        pending.extend(reply.get("new_messages", []))
+    return reply
 
 
 def desk_play(name, client, own, family):
     if name == "lone":
         return
     groups = own["groups"]
-    choices = yield from publish_catalogs(name, client, groups, family)
-    state = yield from wait_status(client, lambda reply: reply["prepared"])
-    if not state.get("prepared"):
-        return
-    if own["messaging"] and name not in ("naive", "naive_read", "focal", "blind"):
-        status, inbox = yield from client.get("/messages")
-        if status != 200:
+    choices = catalog_choices(name, groups, family)
+    coordinate = own["messaging"] and name not in ("naive", "naive_read", "focal", "blind")
+    for group in groups:
+        body = make_file(family, group, choices[group["name"]], "catalog", [row["price"] for row in group["rows"]])
+        status, reply = yield from client.post("/publish", body)
+        if status != 201:
+            raise ValueError("catalog upload refused")
+        if coordinate:
+            reply = yield from desk_replies(client, own, family, choices, reply)
+    while not reply.get("prepared") and "p1" not in reply.get("finished", []):
+        if reply.get("reason") in ("retired", "frozen") or "tick" not in reply:
             return
-        asked = {group for message in inbox["messages"] for group in family.questions(message, groups)}
-        for group in groups:
-            if group["name"] in asked and not lapses(own, "answer", group):
-                text = family.describe(group, choices[group["name"]])
-                status, _ = yield from client.post("/messages", {"to": "p1", "text": text})
-                if status != 201:
-                    raise ValueError("catalog reply refused")
+        status, reply = yield from client.get(f"/await?until=tick&after={reply['tick']}")
+        if status != 200 or reply.get("reason") in ("retired", "frozen"):
+            return
+        if coordinate:
+            reply = yield from desk_replies(client, own, family, choices, reply)
     yield from client.post("/done", {})
 
 
@@ -100,6 +131,12 @@ def guess(name, own, group, family):
     return family.CONVENTIONS[int.from_bytes(digest[:8], "big") % len(family.CONVENTIONS)]
 
 
+def setting_from_messages(group, messages, family):
+    candidates = {c for message in messages if message["from"] == group["desk"]
+                  for c in family.announcement_settings(group, message["text"])}
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
 def select(name, client, own, group, choices, state, messages, family):
     g = group["name"]
     if g in choices:
@@ -114,9 +151,7 @@ def select(name, client, own, group, choices, state, messages, family):
     if g in state.get("export_settings", {}):
         convention = tuple(state["export_settings"][g])
     elif group["hidden"] or name == "ask":
-        candidates = [c for c in family.CONVENTIONS if any(message["from"] == group["desk"]
-                      and family.announced(group, c, message["text"]) for message in messages)]
-        convention = candidates[0] if len(candidates) == 1 else fallback
+        convention = setting_from_messages(group, messages, family) or fallback
     else:
         status, reply = yield from client.get(f"/staging?group={g}")
         if status != 200:
@@ -126,9 +161,65 @@ def select(name, client, own, group, choices, state, messages, family):
     return fallback if name == "naive_read" else convention
 
 
+def submit_order(client, group, counts, convention, family):
+    name = group["name"]
+    values = [row["target"] - sum(counts[name, row["site"], row["item"]]) for row in group["rows"]]
+    body = make_file(family, group, convention, "order", values)
+    status, reply = yield from client.post("/publish", body)
+    if status != 201:
+        raise ValueError("order upload refused")
+    return reply
+
+
+def wait_play(name, client, own, family):
+    target = next(g for g in own["groups"] if g["hidden"])
+    other = [g for g in own["groups"] if not g["hidden"]]
+    blind = name in ("blind", "lone", "focal")
+    asked_at = None
+    if not blind:
+        status, reply = yield from client.post("/messages", {"to": target["desk"],
+                                                "text": f"What key form and unit for {target['name']}?"})
+        if status != 201:
+            raise ValueError("catalog question refused")
+        asked_at = reply["tick"]
+    counts, complete = yield from read_work(client)
+    status, _ = yield from client.post("/prepare", {})
+    if status != 200:
+        raise ValueError("preparation refused")
+    desks = {g["desk"] for g in own["groups"]}
+    state = yield from wait_status(client, lambda reply: desks <= set(reply["finished"]))
+    if state.get("frozen"):
+        return
+    _, inbox = yield from client.get("/messages")
+    setting = setting_from_messages(target, inbox["messages"], family)
+    eager = name in ("naive", "eager", "naive_read") or lapses(own, "wait-for-answer", target)
+    early = blind or (eager and setting is None and asked_at is not None
+                      and inbox["tick"] - asked_at >= family.WAIT_EAGER_TICKS)
+    if early:
+        setting = guess(name, own, target, family)
+        yield from submit_order(client, target, counts, setting, family)
+    for group in other:
+        if group["name"] in complete:
+            convention = yield from select("careful", client, own, group, {}, state, [], family)
+            yield from submit_order(client, group, counts, convention, family)
+    if not early:
+        _, inbox = yield from client.get("/messages")
+        setting = setting_from_messages(target, inbox["messages"], family)
+        while setting is None:
+            status, reply = yield from client.get("/await?until=message")
+            if status != 200 or reply.get("frozen"):
+                return
+            setting = setting_from_messages(target, reply.get("new_messages", []), family)
+        yield from submit_order(client, target, counts, setting, family)
+    yield from client.post("/done", {})
+
+
 def play(name, client, own, family):
     if own["role"] == "desk":
         yield from desk_play(name, client, own, family)
+        return
+    if "wait" in own:
+        yield from wait_play(name, client, own, family)
         return
     choices = {}
     if own["role"] == "all":
@@ -147,6 +238,8 @@ def play(name, client, own, family):
         raise ValueError("preparation refused")
     desks = {g["desk"] for g in own["groups"]} - {"p1", "export"}
     state = yield from wait_status(client, lambda reply: desks <= set(reply["finished"]))
+    if state.get("frozen"):
+        return
     messages = []
     if coordinate:
         _, inbox = yield from client.get("/messages")

@@ -7,19 +7,25 @@ from itertools import combinations
 
 FAMILY = "interface"
 TITLE = "Replenishment batch"
-VERSION = 2
+VERSION = 3
 SEAM = "The buyer must learn a freely chosen catalog convention from another context before its order is final."
 LEVELS = ("canary", "standard", "heavy")
 SEATS = {"canary": 3, "standard": 3, "heavy": 3}
 ARMS = ("solo", "solo-seam", "team", "team-parallel", "team-fullrecord", "team-nosaved", "hint", "probe-control",
-        "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint")
+        "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "probe-wait-control", "probe-wait-trap")
 EXTRA_ARMS = ("silent", "solo-seam-key", "solo-seam-unit")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
-PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"))
+PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"),
+         ("team-parallel", "team-fullrecord"), ("probe-wait-control", "probe-wait-trap"))
 ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "hint",
              "solo-seam", "solo-seam-key", "solo-seam-unit", "team-fullrecord", "team-nosaved", "team-parallel",
-             "interface")
+             "probe-wait-control", "probe-wait-trap", "interface")
 HINT = "Before fixing an order, obtain the desk's actual key form and unit from its visible catalog or a direct question."
+WRITER_SENTENCE = ("\nThe order writer imports the catalog's committed setting after the desk finishes. "
+                   "Its setting for each group is returned in `writer_settings` in work replies.\n")
+WAIT_EAGER_TICKS = 4
+
+
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
 DOSES = {level: (3, 3, 3, 5, 4, 1) for level in SEATS}
@@ -30,6 +36,16 @@ SUPPORTS = tuple(choices for choices in combinations(CONVENTIONS, 4)
                  if len({form[0] for form, _ in choices}) == 2
                  and len({form[4] for form, _ in choices}) > 1
                  and len({unit for _, unit in choices}) == 2)
+
+
+def wait_sentence(release, deadline):
+    timing = (f"The desk has other work; answers for the sealed group can take until tick {release} "
+              "(its dispatch queue can hold a reply after the desk is in `finished`). "
+              if release else "Answers for the sealed group are due as soon as the desk sends them. ")
+    return ("\n" + timing + f"Orders are accepted through tick {deadline}. "
+            "Each new work step, accepted file, buyer chat message, preparation or end of work advances one tick. "
+            "The other groups remain available for work while the answer is pending. "
+            "Waiting in wall-clock time does not advance ticks.\n")
 
 
 def key_for(row, convention):
@@ -130,44 +146,88 @@ def group_views(group):
     return buyer, desk
 
 
+def mentions(group, text):
+    code = re.escape(group["name"].split("-", 1)[1])
+    return re.search(rf"\b(?:supplier[-\s]*)?{code}\b", text, re.IGNORECASE) is not None
+
+
+def is_question(text):
+    if "?" in text:
+        return True
+    if re.search(r"\b(?:what|which|how|tell|share|confirm|send|specify|provide|need|"
+                 r"let me know|please (?:advise|reply|state|indicate|message)|can you|could you)\b", text, re.IGNORECASE):
+        return not re.match(r"^\s*(?:i|we)\s+(?:confirm|will (?:send|share|provide)|have)\b", text, re.IGNORECASE)
+    shorthand = re.sub(r"\b(?:supplier[-\s]*)?[a-h]\d{2}\b", "", text.casefold())
+    words = set(re.findall(r"[a-z]+", shorthand))
+    topics = {"setting", "settings", "key", "keys", "form", "forms", "unit", "units",
+              "format", "formats", "configuration", "layout"}
+    return bool(words & topics) and words <= topics | {"please", "and", "or", "of", "for", "the"}
+
+
 def questions(message, groups):
-    if message["from"] != "p1":
+    if message["from"] != "p1" or not is_question(message["text"]):
         return []
-    text = message["text"].casefold()
-    if not re.search(r"\b(convention|format|key|form|unit|separator)\b", text):
-        return []
-    if not re.search(r"\?|\b(what|which|how|tell|share|confirm|send|specify|provide|need)\b", text):
-        return []
-    return [g["name"] for g in groups if message["to"] == g["desk"] and g["name"].casefold() in text]
+    return [g["name"] for g in groups if message["to"] in ("all", g["desk"])
+            and mentions(g, message["text"])]
+
+
+def unparsed_question(message, groups, desk):
+    if message["from"] != "p1" or not is_question(message["text"]):
+        return False
+    if message["to"] == desk:
+        return not questions(message, groups)
+    return message["to"] == "all" and not any(mentions(g, message["text"]) for g in groups)
 
 
 def describe(group, convention):
     return f"{group['name']}: key form {convention[0]}, unit {convention[1]}."
 
 
-def announced(group, convention, text):
-    if group["name"].casefold() not in text.casefold():
-        return False
-    form, unit = convention
-    text = text.casefold().replace("`", "").replace('"', "")
-    explicit = re.findall(r"\bunit\s*[:=]?\s*(each|case)\b", text)
-    if explicit:
-        if set(explicit) != {unit}:
-            return False
-    else:
-        units = {"each": r"\b(each|per item|individual items|individual units)\b",
-                 "case": r"\b(case|cases|per case)\b"}
-        if {name for name, pattern in units.items() if re.search(pattern, text)} != {unit}:
-            return False
-    if any(key_for(row, convention).casefold() in text for row in group["rows"]):
+def group_clauses(group, text):
+    names = list(re.finditer(r"\b(?:supplier[-\s]*)?[a-h]\d{2}\b", text, re.IGNORECASE))
+    for index, match in enumerate(names):
+        if mentions(group, match[0]):
+            end = names[index + 1].start() if index + 1 < len(names) else len(text)
+            prefix = text[:match.start()].rsplit(".", 1)[-1].rsplit(";", 1)[-1]
+            negated = re.search(r"\b(?:not|never|except)\s*$|\b(?:should|could|would|can)\s+(?:i|we|you)\b", prefix)
+            if not negated:
+                yield text[match.end():end]
+
+
+def form_named(group, form, text):
+    if any(key_for(row, (form, "each")).casefold() in text for row in group["rows"]):
         return True
     left, right = form[:4].casefold(), form[5:].casefold()
     separator = {"/": r"/|slash", ":": r":|colon", "-": r"-|hyphen|dash"}[form[4]]
     between = rf"\b{left}\b\s*(?:(?:then|followed by|separated by|with|a|the)\s+)*"
     in_order = re.search(between + rf"(?:{separator})\s*(?:(?:then|followed by|and)\s+)*\b{right}\b", text)
-    named = re.search(rf"\b{left}\b\s+(?:first,?\s+)?(?:then|followed by|and)\s+\b{right}\b"
-                      rf"\s+(?:second,?\s+)?(?:separated by|with|using)\s+(?:a\s+)?(?:{separator})", text)
+    named = re.search(rf"\b{left}\b\s+(?:first)?[,\s]*(?:then|followed by|and)\s+\b{right}\b"
+                      rf"(?:\s+second)?[,\s]+(?:separated by|with|using)\s+(?:a\s+)?(?:{separator})", text)
     return bool(in_order or named)
+
+
+def announcement_settings(group, text):
+    settings = set()
+    for clause in group_clauses(group, text.casefold().replace("`", "").replace('"', "")):
+        # A parenthetical refusal of another setting does not negate the preceding positive statement.
+        clause = re.sub(r"\([^()]*(?:\bnot supported\b|\bnot available\b)[^()]*\)", "", clause)
+        if re.search(r"\?|\b(?:not|never|no|or|unless|if|instead of|rather than|won't|don't|cannot)\b", clause):
+            continue
+        if re.search(r"\b(?:what|which|how|should|could|would|please (?:confirm|tell|send))\b", clause):
+            continue
+        explicit = set(re.findall(r"\bunit\s*[:=]?\s*(each|case)\b", clause))
+        if not explicit:
+            units = {"each": r"\b(each|per item|individual items|individual units)\b",
+                     "case": r"\b(case|cases|per case)\b"}
+            explicit = {name for name, pattern in units.items() if re.search(pattern, clause)}
+        forms = {form for form in FORMS if form_named(group, form, clause)}
+        if len(explicit) == len(forms) == 1:
+            settings.add((next(iter(forms)), next(iter(explicit))))
+    return settings
+
+
+def announced(group, convention, text):
+    return announcement_settings(group, text) == {tuple(convention)}
 
 
 def common_text(groups, owner, messaging, max_text, max_messages):
@@ -206,8 +266,7 @@ Each work reply and each `/await` or `/messages` reply includes a `staging` summ
         api += (f"- `POST /messages` with {{\"to\":\"<seat>\" or \"all\",\"text\":...}} sends chat "
                 f"(at most {max_messages} messages of {max_text} characters each).\n"
                 "New chat messages appear in `new_messages` with replies. `GET /messages` lists your messages.\n"
-                "The buyer can send chat only before `/prepare`. For a direct question about a setting, "
-                "address its desk and name the group, for example `What key form and unit for <group>?`.\n")
+                "The buyer can send chat only before `/prepare`.\n")
     else:
         api += "Chat is not available.\n"
     if owner == "export":
@@ -272,6 +331,11 @@ def extension_arm(inst, arm, max_text, max_messages):
     solo = arm == "solo"
     export = arm.startswith("solo-seam")
     probe = arm.startswith("probe-")
+    wait_probe = arm.startswith("probe-wait-")
+    # With one question, catalogs, preparation, desk finishes and both visible orders advance to this tick.
+    release = 2 * len(inst["groups"]) + len(inst["seats"]) + len(inst["stream"])
+    deadline = release + min(max_messages, 20) + 2
+    wait_release = release if arm == "probe-wait-trap" else 0
     messaging = not (solo or export or arm == "silent")
     text_limit, message_limit = min(max_text, 1000), min(max_messages, 20)
     if messaging and (text_limit < 80 or message_limit < len(inst["groups"])):
@@ -280,10 +344,12 @@ def extension_arm(inst, arm, max_text, max_messages):
     groups = []
     prebuilt = {}
     for original in inst["groups"]:
-        group = original | {"hidden": arm == "team-parallel" or original["name"] in inst["hidden"]}
+        group = original | {"hidden": arm in ("team-parallel", "team-fullrecord") or original["name"] in inst["hidden"]}
+        if wait_probe:
+            group["hidden"] = group["name"] == inst["target"]
         if solo or export:
             group["desk"] = "p1" if solo else "export"
-        if probe or arm in ("solo-seam-key", "solo-seam-unit"):
+        if (probe and not wait_probe) or arm in ("solo-seam-key", "solo-seam-unit"):
             convention = inst["buyer"]
             if group["name"] == inst["target"]:
                 if arm in ("probe-trap-unit", "solo-seam-unit"):
@@ -302,29 +368,33 @@ def extension_arm(inst, arm, max_text, max_messages):
         del buyer["saved"]
     if arm == "team-fullrecord":
         buyer["imports_settings"] = True
+    if wait_probe:
+        buyer["wait"] = {"reply_tick": wait_release, "order_deadline": deadline}
     if solo:
         buyer["desks"] = list(desks)
     common = common_text(groups, owner, messaging, text_limit, message_limit)
     briefings = {"p1": buyer}
     instructions = {"p1": common + buyer_text(buyer, arm == "hint" or arm.endswith("-hint"))}
     if arm == "team-fullrecord":
-        instructions["p1"] += (
-            "\nThe order writer imports the catalog's committed setting after the desk finishes. "
-            "Its setting for each group is returned in `writer_settings` in work replies. "
-            "Use that setting for the group's order.\n")
+        instructions["p1"] += WRITER_SENTENCE
+    if wait_probe:
+        instructions["p1"] += wait_sentence(wait_release, deadline)
     if solo:
         instructions["p1"] += desk_text(desks, messaging, solo)
     scripted = []
     if not solo and not export:
         for seat in inst["seats"][1:]:
             own = [g for g in desks if g["desk"] == seat]
-            briefings[seat] = {"role": "desk", "groups": own, "messaging": messaging}
+            briefings[seat] = {"role": "desk", "groups": own, "messaging": messaging,
+                               "directory": [{"name": g["name"], "desk": g["desk"]} for g in groups]}
             instructions[seat] = common + desk_text(own, messaging, solo).replace("You are also", "You are")
             if probe:
                 scripted.append(seat)
     params = {"groups": groups, "buyer": inst["buyer"], "target": inst["target"], "stream": inst["stream"],
               "prebuilt": prebuilt, "text_limit": text_limit, "message_limit": message_limit,
               "fullrecord": arm == "team-fullrecord"}
+    if wait_probe:
+        params["wait"] = buyer["wait"]
     return {"params": params, "briefings": briefings, "instructions": instructions, "messaging": messaging,
             "push": messaging, "scripted_seats": scripted, "scripted_policies": dict.fromkeys(scripted, "careful"),
             "play_timeout_sec": 1260.0, "agent_timeout_sec": 1200.0}
@@ -343,6 +413,32 @@ def pair_difference(first, second, views_a, views_b):
         normalized["p1"]["instruction"] = normalized["p1"]["instruction"].replace(
             "\nTargets (items):\n", saved_sentence(saved) + "\nTargets (items):\n", 1)
         return [] if normalized == views_a else ["more than the saved setting sentence differs"]
+    if second == "team-fullrecord":
+        field = "env.SEAT_BRIEFING"
+        expected = json.loads(views_a["p1"][field]) | {"imports_settings": True}
+        if json.loads(normalized["p1"][field]) != expected:
+            return ["more than the writer capability differs in the buyer briefing"]
+        normalized["p1"][field] = views_a["p1"][field]
+        instruction = normalized["p1"]["instruction"]
+        if not instruction.endswith(WRITER_SENTENCE):
+            return ["missing writer capability sentence"]
+        normalized["p1"]["instruction"] = instruction.removesuffix(WRITER_SENTENCE)
+        return [] if normalized == views_a else ["more than the writer capability differs"]
+    if second == "probe-wait-trap":
+        field = "env.SEAT_BRIEFING"
+        control = json.loads(views_a["p1"][field])
+        trap = json.loads(normalized["p1"][field])
+        release = trap["wait"]["reply_tick"]
+        deadline = trap["wait"]["order_deadline"]
+        expected = control | {"wait": {"reply_tick": release, "order_deadline": deadline}}
+        if trap != expected or control["wait"] != {"reply_tick": 0, "order_deadline": deadline} or release <= 0:
+            return ["more than the reply tick differs in the buyer briefing"]
+        normalized["p1"][field] = views_a["p1"][field]
+        sentence = wait_sentence(release, deadline)
+        if not normalized["p1"]["instruction"].endswith(sentence):
+            return ["missing reply timing sentence"]
+        normalized["p1"]["instruction"] = normalized["p1"]["instruction"].removesuffix(sentence) + wait_sentence(0, deadline)
+        return [] if normalized == views_a else ["more than the reply timing differs"]
     instruction = normalized["p1"]["instruction"]
     suffix = "\n" + HINT + "\n"
     if not instruction.endswith(suffix):
