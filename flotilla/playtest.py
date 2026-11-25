@@ -585,8 +585,10 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: lis
              "This is a rehearsal, not benchmark evidence.", ""]
     by_request = {seat: [] for seat in result["seats"]}
     for request in requests:
+        target = request["path"] + (f"?{request['query']}" if request["query"] else "")
         by_request[request["seat"]].append(
-            f"- #{request['seq']} t={request['t']:.3f}s {request['method']} {request['path']}")
+            f"- #{request['seq']} t={request['t']:.3f}s {request['method']} {target} "
+            f"-> {request['status'] if request['status'] is not None else 'no response'}")
     for seat, evidence in by_seat.items():
         info = result["seats"][seat]
         paths = [f"- `{path}`" for path in audit[seat]] or ["- No outside paths found."]
@@ -711,8 +713,10 @@ def main() -> None:
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         parser.exit(2, f"playtest: {exc}\n")
     print(f"Reward: {result['reward']}; results: {args.out / 'result.json'}")
+    print(f"Freeze reason: {result['freeze_reason']}")
+    print(f"Budget events: {json.dumps(result['budget_events'])}")
     for name, info in result["seats"].items():
-        print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}")
+        print(f"{name}: exit={info['exit_code']}, world calls={info['world_calls']}, 4xx={info['http_4xx']}")
     if result["stop_reason"]:
         print(f"playtest: stopped: {result['stop_reason']}", file=sys.stderr)
     if not result["valid"]:

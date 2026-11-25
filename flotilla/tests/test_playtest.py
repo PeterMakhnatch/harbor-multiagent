@@ -96,6 +96,17 @@ elif mode == 'stall':
                                      headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
     while True:
         urllib.request.urlopen(request).read()
+elif mode == 'budget':
+    import urllib.error
+    import urllib.request
+    paths = ['/whoami'] if seat == 'p1' else ['/await?until=bad'] + ['/board'] * 21
+    for path in paths:
+        request = urllib.request.Request(os.environ['WORLD_URL'] + path,
+                                         headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+        try:
+            urllib.request.urlopen(request).read()
+        except urllib.error.HTTPError:
+            pass
 """
 
 
@@ -296,6 +307,28 @@ def test_invalid_verifier_preserves_seats_and_reason(tmp_path):
     assert seat["exit_code"] == 0 and seat["seconds"] > 0
     assert seat["world_calls"] == 2 and seat["http_4xx"] == 1
     assert "invalid reason: extension_error" in (out / "summary.md").read_text()
+
+
+def test_budget_freeze_and_http_causes_in_results(tmp_path):
+    task = build(tmp_path, "team")
+    completed = play(tmp_path, task, "budget", check=False)
+    assert completed.returncode == 1
+    out = tmp_path / "out"
+    result = json.loads((out / "result.json").read_text())
+    assert result["invalid_reason"] == "fixture budget exhausted"
+    assert result["freeze_reason"] == "extension ended play"
+    assert [(e["seat"], e["data"]) for e in result["budget_events"]] == [("p2", {"limit": 20})]
+    assert result["seats"]["p2"]["http_4xx"] == 2
+    assert "Freeze reason: extension ended play" in completed.stdout
+    assert "Budget events:" in completed.stdout and '"limit": 20' in completed.stdout
+    assert "p2: exit=0, world calls=22, 4xx=2" in completed.stdout
+    requests = [json.loads(line) for line in (out / "requests.jsonl").read_text().splitlines()]
+    errors = [r for r in requests if r["seat"] == "p2" and r["status"] >= 400]
+    assert [(r["path"], r["query"], r["status"]) for r in errors] == [
+        ("/await", "until=bad", 400), ("/board", "", 409)]
+    summary = (out / "summary.md").read_text()
+    assert "GET /await?until=bad -> 400" in summary
+    assert "GET /board -> 409" in summary
 
 
 def test_summary_lists_commands_requests_and_scripted_sends(tmp_path):
