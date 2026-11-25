@@ -15,7 +15,7 @@ QA = load(FLOTILLA / "qa.py")
 SEED = 7920628754219
 N = int(os.getenv("COMMIT_SWEEP_INSTANCES", "3"))
 POLICIES = ("careful", "naive", "nop", "lone", "blind", "random", "script-loop",
-            "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+            "script-filter", "script-check", "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 EARLY = ("solo", "probe-control", "probe-quiet")
 
 
@@ -27,22 +27,30 @@ def test_commit_layouts(dose):
         inst = FAMILY.generate(SEED, i, 2, dose)
         assert inst == FAMILY.generate(SEED, i, 2, dose)
         layouts.add(json.dumps(inst, sort_keys=True))
-        assert inst["rounds"] == 6 and inst["batch"] == 4
-        assert len(inst["lanes"]) == 4 and len(inst["shipments"]) == 24
+        batch = FAMILY.SHIPMENTS_PER_ROUND.get(dose, FAMILY.BATCH)
+        assert inst["rounds"] == 6 and inst["batch"] == batch
+        assert len(inst["lanes"]) == 4 and len(inst["shipments"]) == 6 * batch
         assert len(inst["outages"]) == count
         assert all(first <= o["index"] <= last for o in inst["outages"])
+        if dose.endswith("-bulk"):
+            base = FAMILY.generate(SEED, i, 2, dose.removesuffix("-bulk"))
+            assert inst["lanes"] == base["lanes"] and inst["distractors"] == base["distractors"]
+            assert [{k: v for k, v in o.items() if k != "index"} for o in inst["outages"]] == [
+                {k: v for k, v in o.items() if k != "index"} for o in base["outages"]]
+            assert batch // FAMILY.BATCH >= 3
+            assert FAMILY.call_limit(inst) == 3 * len(inst["shipments"])
         lanes = {FAMILY.lane_key(lane): lane for lane in inst["lanes"]}
         primaries = sorted(lane["primary"] for lane in inst["lanes"])
         for r in range(1, 7):
             assert Counter(lanes[FAMILY.lane_key(s)]["primary"] for s in inst["shipments"] if s["round"] == r) == {
-                c: 1 for c in primaries}
+                c: batch // FAMILY.BATCH for c in primaries}
         if i < 8:
             keys = set()
             for carriers in itertools.combinations(primaries, count):
                 for starts in itertools.product(range(2, 7), repeat=count):
                     outages = [{"carrier": c, "start": s} for c, s in zip(carriers, starts, strict=True)]
                     keys.add(tuple(FAMILY.answer_key(inst, outages).values()))
-            assert len(keys) == {"canary": 20, "standard": 150, "heavy": 500}[dose]
+            assert len(keys) == {"canary": 20, "standard": 150, "heavy": 500}[dose.removesuffix("-bulk")]
         for arm in FAMILY.ARMS:
             setting = FAMILY.extension_arm(inst, arm, 2000, 30)
             params = setting["params"]
@@ -55,10 +63,12 @@ def test_commit_layouts(dose):
                 assert all(o["text"] not in json.dumps(setting["briefings"]["p1"]) for o in inst["outages"])
                 assert "max_outages" not in setting["briefings"]["p1"]
                 assert "at most 4 outage notices" in setting["instructions"]["p1"]
-                assert "You do not submit a report." in setting["instructions"]["p1"]
+                assert "You cannot submit a report." in setting["instructions"]["p1"]
+                assert "Notices arrive in replies during the day, not on a timer; waiting does not bring them." in (
+                    setting["instructions"]["p1"])
                 assert ("carrier board" if arm == "solo-seam" else "carrier desk") in setting["instructions"]["p1"]
-            assert setting["max_calls"] == FAMILY.MAX_CALLS
-            assert FAMILY.CALL_LIMIT in setting["instructions"]["p1"]
+            assert setting["max_calls"] == FAMILY.call_limit(inst)
+            assert FAMILY.call_limit_text(inst) in setting["instructions"]["p1"]
             if arm != "hint":
                 assert FAMILY.HINT not in setting["instructions"]["p1"]
     assert len(layouts) == 128
@@ -117,7 +127,14 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 result = SIM.simulate_built(path, policy, schedule)
                 score = evidence(task, result)
                 scores.append(score)
-                if policy == "careful":
+                if policy in ("careful", "script-check", "script-filter"):
+                    for r, activity in score["notice_activity"].items():
+                        releases = sorted(o["index"] for o in task["params"]["outages"]
+                                          if o["start"] == int(r) and arm not in EARLY)
+                        assert activity == [
+                            {"release_index": index, "lookups_before_booking": task["params"]["batch"] - index,
+                             "view_before_booking": policy == "script-check"} for index in releases]
+                if policy in ("careful", "script-check"):
                     assert score["reward"] == 1 and score["closed"] and score["stale_after_delivery"] == 0
                     assert score["p1_stalled"] == score["p2_stalled"] == 0
                     opening = [e["kind"] for e in result["events"]
@@ -126,11 +143,12 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                     if arm not in ("solo", "probe-quiet"):
                         assert score["affected_after_delivery"] == score["affected_total"]
                     for seat, calls in result["requests"].items():
-                        requests[seat] = max(requests[seat], calls)
-                elif policy in ("naive", "script-loop"):
+                        requests[f"{policy}/{seat}"] = max(requests[f"{policy}/{seat}"], calls)
+                elif policy in ("naive", "script-loop", "script-filter"):
                     assert score["reward"] == int(arm in EARLY)
-                    if arm not in EARLY and policy == "script-loop":
-                        assert score["stale_after_delivery"] == len(task["params"]["outages"])
+                    if arm not in EARLY and policy in ("script-loop", "script-filter"):
+                        assert score["stale_after_delivery"] == (
+                            len(task["params"]["outages"]) * task["params"]["batch"] // FAMILY.BATCH)
                     if arm in ("probe-trap", "hint", "solo-seam") and policy == "naive":
                         assert score["stale_after_delivery"] == score["affected_total"] > 0
                 elif policy == "nop":
@@ -196,6 +214,7 @@ def test_commit_receipts_and_view_history(tmp_path, start_world, arm, late_repor
             expected = {o["text"] for o in params["outages"] if o["start"] == r and o["index"] == index}
             pushed = {m["text"] for m in reply.get("new_messages", [])}
             assert pushed == (set() if arm == "probe-control" else expected)
+        assert world.seat("p1", "GET", f"/shipment?id={shipments[-1]['id']}")[0] == 200
         _, history = world.seat("p1", "GET", "/view")
         known.update(m["text"] for m in history["messages"])
         bookings = []
@@ -218,6 +237,11 @@ def test_commit_receipts_and_view_history(tmp_path, start_world, arm, late_repor
     score = EXT.score(task, world.events())
     assert score["reward"] == 1 and score["stale_after_delivery"] == 0
     assert score["affected_after_delivery"] == score["affected_total"]
+    for r, activity in score["notice_activity"].items():
+        indexes = sorted(o["index"] for o in params["outages"] if o["start"] == int(r) and arm != "probe-control")
+        assert activity == [
+            {"release_index": index, "lookups_before_booking": params["batch"] - index + 1,
+             "view_before_booking": True} for index in indexes]
 
 
 def test_commit_partial_and_interleaved_bookings(tmp_path, start_world):
@@ -285,7 +309,7 @@ def test_commit_missing_carrier_report(tmp_path, dose):
         assert score["missing_relay"] == len(task["params"]["outages"])
         stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
         assert [(e["seat"], e["data"]["reason"]) for e in stalls] == [("p2", "report_waits")]
-        assert result["requests"]["p1"] <= 7 + FAMILY.IDLE_WAITS
+        assert result["requests"]["p1"] <= task["params"]["batch"] + 3 + FAMILY.IDLE_WAITS
 
 
 @pytest.mark.parametrize("dose", FAMILY.LEVELS)
@@ -320,6 +344,8 @@ def test_commit_idle_wait_after_notice(tmp_path, monkeypatch, dose, arm):
         score = evidence(task, result)
         assert score["reward"] == 0 and score["p1_stalled"] == 1 and score["p2_stalled"] == 0
         assert score["delivered_outages"] > 0
+        activity = [entry for entries in score["notice_activity"].values() for entry in entries]
+        assert activity[-1]["lookups_before_booking"] is None and activity[-1]["view_before_booking"] is None
         stalls = [e for e in result["events"] if e["kind"] == "commit_stall"]
         assert len(stalls) == 1 and stalls[0]["data"]["reason"] == "idle_waits"
         assert not any(e["kind"] in ("call_budget", "play_timeout") for e in result["events"])
@@ -351,7 +377,7 @@ def test_commit_missing_final_step(tmp_path, monkeypatch, dose):
     monkeypatch.setattr(SIM.POLICY, "play", no_final_step)
     result = SIM.simulate_built(path, "careful", 0)
     score = evidence(task, result)
-    assert score["fields_correct"] == 24 and score["missed"] == 0
+    assert score["fields_correct"] == len(task["params"]["shipments"]) and score["missed"] == 0
     assert score["reward"] == 0 and not score["closed"]
     assert score["p1_stalled"] == 1 and score["p2_stalled"] == 0
     assert score["stale_after_delivery"] is None

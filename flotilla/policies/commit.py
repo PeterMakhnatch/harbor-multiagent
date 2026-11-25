@@ -5,7 +5,7 @@ import re
 
 OUTAGE = re.compile(r"^(.+?) is out of service from round (\d+) to the end of the day\.")
 POLICIES = ("careful", "naive", "lone", "primary", "backup", "blind", "random", "script-loop",
-            "lapse-10", "lapse-20", "lapse-30", "lapse-50")
+            "script-filter", "script-check", "lapse-10", "lapse-20", "lapse-30", "lapse-50")
 
 
 def supports(name, variant):
@@ -86,6 +86,26 @@ def consume_shipment(name, shipment, outages, own):
         read_outages([text], outages)
 
 
+def script_batch(name, client, ids, lanes, r, outages):
+    rows = []
+    bookings = []
+    for id_ in ids:
+        status, shipment = yield from client.get(f"/shipment?id={id_}")
+        if status != 200:
+            raise RuntimeError("shipment lookup was refused")
+        lane = lanes[key(shipment)]
+        rows.append((id_, lane))
+        if name == "script-check" and shipment.get("new_messages"):
+            status, history = yield from client.get("/view")
+            if status != 200:
+                raise RuntimeError("notice history was refused")
+            consume(history, outages)
+            bookings = [{"shipment": s, "carrier": select(name, {"id": s}, route, r, outages)} for s, route in rows]
+        else:
+            bookings.append({"shipment": id_, "carrier": select(name, shipment, lane, r, outages)})
+    return bookings
+
+
 def booking_desk(name, client, own, family):
     lanes = {key(lane): lane for lane in own["lanes"]}
     outages = {}
@@ -101,15 +121,19 @@ def booking_desk(name, client, own, family):
         r = view["round"]
         if view["finished"]:
             return
-        shipments = []
-        for id_ in view["rounds"][str(r)]:
-            status, shipment = yield from client.get(f"/shipment?id={id_}")
-            if status != 200:
-                raise RuntimeError("shipment lookup was refused")
-            shipments.append(shipment)
-            consume_shipment(name, shipment, outages, own)
-        bookings = [{"shipment": s["id"], "carrier": select(name, s, lanes[key(s)], r, outages)}
-                    for s in shipments]
+        ids = view["rounds"][str(r)]
+        if name in ("script-filter", "script-check"):
+            bookings = yield from script_batch(name, client, ids, lanes, r, outages)
+        else:
+            shipments = []
+            for id_ in ids:
+                status, shipment = yield from client.get(f"/shipment?id={id_}")
+                if status != 200:
+                    raise RuntimeError("shipment lookup was refused")
+                shipments.append(shipment)
+                consume_shipment(name, shipment, outages, own)
+            bookings = [{"shipment": s["id"], "carrier": select(name, s, lanes[key(s)], r, outages)}
+                        for s in shipments]
         status, view = yield from client.post("/step", {"round": r, "bookings": bookings})
         if status != 200:
             raise RuntimeError("booking step was refused")
