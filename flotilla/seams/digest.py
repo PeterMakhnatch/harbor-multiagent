@@ -10,18 +10,23 @@ from typing import NamedTuple
 
 FAMILY = "digest"
 TITLE = "Finishing desk shifts"
-ARMS = ("solo", "solo-seam", "team", "team-fullrecord", "hint", "probe-writer-trap", "probe-writer-control",
-        "probe-worker-trap", "probe-worker-control")
+ARMS = ("solo", "solo-seam", "team", "team-implicit", "team-fullrecord", "hint", "probe-writer-trap",
+        "probe-writer-control", "probe-worker-trap", "probe-worker-control")
 TWINS = (("probe-worker-trap", "probe-worker-control"),)
-PAIRS = (("probe-writer-trap", "probe-writer-control"), ("team", "hint"), ("team", "solo-seam"))
+PAIRS = (("probe-writer-trap", "probe-writer-control"), ("team", "hint"), ("team", "solo-seam"),
+         ("team", "team-implicit"))
 ARM_WORDS = ("digest", *[arm for arm in ARMS if "-" in arm])
 SEAM = "A capped note must carry standing rules through successive revisions across fresh contexts."
-VERSION = 4
+VERSION = 5
 BASE_LEVELS = ("canary", "standard", "heavy")
 LEVELS = (*BASE_LEVELS, "standard-order", "heavy-order")
 HINT = "When a replacement arrives, replace the old rule in your note instead of appending the new rule."
 ORDER_HINT = "Keep the manual's rule numbers and listed order in your note, replacing each changed rule in place."
 ORDER_FACTS = "Jobs can match more than one main rule. A replacement keeps the place of the rule it replaces."
+LATER_FACT = "A later complete rule with the same number replaces the earlier rule."
+REPLACEMENT_FACT = "Each rule below replaces the rule with the same number, effective now; all other rules stay."
+USAGE_LINE = "First match wins; replace same-number rules in place; keep other rules."
+CAP_LINE = r"The note can hold at most (\d+) bytes of printable ASCII, including newlines\."
 TEAM_ADDRESS = "The previous shift left you a note."
 SELF_ADDRESS = "You left yourself a note on your last shift."
 TEAM_HANDOVER = ("Write the handover note for the next shift's worker. That worker gets only your note, its own "
@@ -137,6 +142,28 @@ NESTING = ("Use the first matching main rule in the listed order; each indented 
            "its parent, and the deepest matching clause replaces the parent's action and checks.")
 
 
+def without_usage(text, role):
+    if role == "planner":
+        return text
+    text = text.replace(" " + LATER_FACT, "").replace(ORDER_FACTS + "\n", "")
+    if role == "relay":
+        text = text.replace(NESTING, NESTING.split("; ", 1)[1].capitalize())
+        text = text.replace(" " + REPLACEMENT_FACT, "")
+    return text
+
+
+def reference_cap(reference):
+    return (13 * len(reference) + 99) // 100 * 10
+
+
+def implicit_cap(reference):
+    return reference_cap(reference + "\n" + USAGE_LINE)
+
+
+def relay_facts(ordered):
+    return REPLACEMENT_FACT + (" " + ORDER_FACTS if ordered else "")
+
+
 def rule_lines(rules, alternate=False):
     for rule in rules:
         for depth, (condition, action) in enumerate(rule["clauses"]):
@@ -205,7 +232,7 @@ def parse_note(text, card=False, ordered=False):
     home = dict(p.split("=") for p in pairs)
     rules = []
     for line in lines[1:]:
-        if not line.strip() or line == NESTING:
+        if not line.strip() or line in (NESTING, USAGE_LINE):
             continue
         if "=>" in line:
             label, clause = line.strip().split(":", 1)
@@ -400,7 +427,7 @@ def generate(seed, instance, n_seats, difficulty):
             continue
         reference = note_text(home, rules)
         card = card_text(home, rules, ordered)
-        cap = (13 * len(reference) + 99) // 100 * 10
+        cap = reference_cap(reference)
         current = initial
         lengths = [len(note_text(home, current))]
         for changes in amendments[1:]:
@@ -499,6 +526,8 @@ def extension_arm(inst, arm, max_text, max_messages):
         batches = batches[:-1] + [sorted(final, key=lambda row: row["cell"].endswith(".0"))]
     fullrecord = arm == "team-fullrecord"
     cap = None if fullrecord else inst["card_cap"] if card else inst["cap"]
+    if arm == "team-implicit":
+        cap = implicit_cap(inst["reference"])
     if arm == "probe-writer-control":
         cap *= 4
     roles = {s: "worker" if i == len(seats) - 1 else "planner" if i == 0 else "relay"
@@ -522,10 +551,14 @@ def extension_arm(inst, arm, max_text, max_messages):
             own["manual"] = manual
         if seat in amendments:
             own["amendment"] = amendments[seat]
+            if arm != "team-implicit":
+                own["revision"] = relay_facts(ordered)
         briefings[seat] = own
         instructions[seat] = public + role_briefing(own, cap, arm) + (
             "\n\n" + manual if i == 0 else "") + (
             "\n\n# Today's replacement rules\n" + amendments[seat] if seat in amendments else "")
+        if arm == "team-implicit":
+            instructions[seat] = without_usage(instructions[seat], role)
     scripted = seats[1:] if card else seats[:-1] if arm.startswith("probe-worker-") else []
     return {"briefings": briefings, "instructions": instructions, "initial_active": seats[:1],
             "messaging": False, "push": False, "scripted_seats": scripted,
@@ -557,7 +590,7 @@ def public_briefing(fields, ordered=False):
         "Extra checks are allowed. Each final action is permanent. Correct jobs earn 1 point, "
         f"an incorrect send costs {WRONG_SEND_COST} points, and an incorrect hold or an unfinished job earns 0. "
         "The reward is the mean of final rule cell scores, with a floor of 0.\n"
-        + NESTING + " A later complete rule with the same number replaces the earlier rule.\n"
+        + NESTING + " " + LATER_FACT + "\n"
         + (ORDER_FACTS + "\n" if ordered else "") +
         "Free-form notes are allowed unless your role specifies a rule card.\n"
         "Use `$WORLD_URL` with `Authorization: Bearer $SEAT_TOKEN`. For POST use `Content-Type: application/json`.\n"
@@ -586,7 +619,7 @@ def role_briefing(own, cap, arm):
         text = (f"You work this desk shift. {address} {access} Work every job. "
                 "If no rule applies, send the job to its home lane. If no home lane is known, hold it.")
     if "amendment" in own:
-        text += " Each rule below replaces the rule with the same number, effective now; all other rules stay."
+        text += " " + REPLACEMENT_FACT
     if role == "worker":
         return text
     if arm == "solo-seam":
@@ -638,14 +671,56 @@ def qa(task, views):
     cap = task["params"]["cap"]
     if cap is not None and cap <= 0:
         yield "invalid note cap"
+    if task["condition"] == "team-implicit":
+        home, rules = parse_manual(task["params"]["manual"])
+        lengths = [len(note_text(home, rules) + "\n" + USAGE_LINE)]
+        for text in task["params"]["amendments"].values():
+            _, changes = parse_manual(text)
+            rules = merge_amendments(rules, changes)
+            lengths.append(len(note_text(home, rules) + "\n" + USAGE_LINE))
+        if cap != implicit_cap(note_text(home, rules)) or max(lengths) > cap:
+            yield "usage reference does not fit its computed note cap"
     for seat, view in views.items():
         own = json.loads(view["env.SEAT_BRIEFING"])
         if ("manual" in own) != (seat == task["seats"][0]):
             yield f"{seat}: inappropriate manual access"
+        if task["condition"] == "team-implicit" and own["role"] != "planner":
+            text = view["instruction"]
+            if "revision" in own or LATER_FACT in text or ORDER_FACTS in text or REPLACEMENT_FACT in text:
+                yield f"{seat}: usage facts visible outside the planner's briefing"
+            if (NESTING in text) != (own["role"] == "worker"):
+                yield f"{seat}: incorrect note application rule"
 
 
 def pair_difference(first, second, views_a, views_b):
     normalized = {seat: dict(view) for seat, view in views_b.items()}
+    if second == "team-implicit":
+        expected = {seat: dict(view) for seat, view in views_a.items()}
+        home, rules = parse_manual(json.loads(views_a["p1"]["env.SEAT_BRIEFING"])["manual"])
+        for seat in sorted(views_a):
+            own = json.loads(views_a[seat]["env.SEAT_BRIEFING"])
+            if "amendment" in own:
+                _, changes = parse_manual(own["amendment"])
+                rules = merge_amendments(rules, changes)
+        reference = note_text(home, rules)
+        old_cap, new_cap = reference_cap(reference), implicit_cap(reference)
+        for seat, view in expected.items():
+            own = json.loads(view["env.SEAT_BRIEFING"])
+            text = without_usage(view["instruction"], own["role"])
+            if own["role"] != "worker":
+                match = re.search(CAP_LINE, text)
+                if match is None or int(match[1]) != old_cap:
+                    yield f"{seat}: incorrect team reference cap"
+                else:
+                    text = text.replace(match[0], match[0].replace(str(old_cap), str(new_cap)), 1)
+            view["instruction"] = text
+            if own["role"] == "relay":
+                if own.pop("revision", None) != relay_facts(own.get("ordered", False)):
+                    yield f"{seat}: incorrect team revision facts"
+                view["env.SEAT_BRIEFING"] = json.dumps(own, sort_keys=True)
+        if expected != normalized:
+            yield f"{first} and {second} differ beyond usage facts and reference cap"
+        return
     for seat, view in normalized.items():
         instruction = view["instruction"]
         if second == "hint":
@@ -658,7 +733,7 @@ def pair_difference(first, second, views_a, views_b):
         elif second == "solo-seam":
             instruction = instruction.replace(SELF_ADDRESS, TEAM_ADDRESS).replace(SELF_HANDOVER, TEAM_HANDOVER)
         elif second == "probe-writer-control":
-            pattern = r"The note can hold at most (\d+) bytes of printable ASCII, including newlines\."
+            pattern = CAP_LINE
             a = re.search(pattern, views_a[seat]["instruction"])
             b = re.search(pattern, instruction)
             if a is None or b is None or int(b[1]) != 4 * int(a[1]):
