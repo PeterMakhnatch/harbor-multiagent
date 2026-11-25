@@ -11,9 +11,9 @@ VERSION = 2
 SEAM = "The buyer must learn a freely chosen catalog convention from another context before its order is final."
 LEVELS = ("canary", "standard", "heavy")
 SEATS = {"canary": 3, "standard": 3, "heavy": 3}
-ARMS = ("solo", "solo-seam", "team", "team-fullrecord", "team-nosaved", "hint", "probe-control",
+ARMS = ("solo", "solo-seam", "team", "team-parallel", "team-fullrecord", "team-nosaved", "hint", "probe-control",
         "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint")
-EXTRA_ARMS = ("silent", "team-parallel", "solo-seam-key", "solo-seam-unit")
+EXTRA_ARMS = ("silent", "solo-seam-key", "solo-seam-unit")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
 PAIRS = (("team", "hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"))
 ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint", "hint",
