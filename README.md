@@ -10,12 +10,14 @@ By [Olam Labs](https://olamlabs.ai). Not an official Harbor project.
 
 ## SeatLab workbench
 
+New: [check whether a teammate’s filing changes the **physical** dispatch outcome](examples/seatlab/physical_dispatch/README.md). The offline command checks every legal final move in two warehouses and can prepare a native task without starting any model.
+
 Before running a communication benchmark, [check whether a teammate’s message can change the best decision](examples/seatlab/decision_boundary/README.md). The author tool runs offline on 2 native tasks or your own finite case table. It separates missing information from a missing action.
 
 This branch combines the [team operator](examples/seatlab/workbench/team-account.md), native packaging of per-seat instructions, and a [two-seat shipping benchmark](examples/seatlab/decision_receipt/README.md). Start by checking the saved evidence:
 
 ```sh
-git clone --depth 1 --branch seatlab/decision-boundary https://github.com/PeterMakhnatch/harbor-multiagent.git
+git clone --depth 1 --branch seatlab/physical-dispatch https://github.com/PeterMakhnatch/harbor-multiagent.git
 cd harbor-multiagent
 python3.12 -BS -m examples.seatlab.workbench verify exhibit-handoff-twins
 python3.12 -BS -m examples.seatlab.workbench verify exhibit-authored-channel
