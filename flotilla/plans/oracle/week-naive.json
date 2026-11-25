@@ -7,8 +7,8 @@
   },
   "task_sets": [
     {
-      "tasks_dir": "/tmp/seams1125/b-week/naive",
-      "manifest": "/tmp/seams1125/b-week/naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b2-week/naive",
+      "manifest": "/tmp/seams1125/b2-week/naive/manifest.json",
       "instances": [0],
       "arms": ["team"]
     }
