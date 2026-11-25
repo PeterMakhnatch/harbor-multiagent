@@ -7,7 +7,7 @@ TITLE = "Book the day's outbound freight"
 SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "probe-control", "probe-trap", "hint", "probe-quiet")
 TWINS = (("probe-control", "probe-trap"), ("probe-control", "probe-quiet"))
-PAIRS = (("probe-trap", "hint"),)
+PAIRS = (("probe-trap", "hint"), ("probe-trap", "team"))
 ARM_WORDS = ARMS
 DOSES = {"canary": (1, 4, 4), "standard": (2, 2, 3), "heavy": (3, 1, 2)}
 ROUNDS = 6
@@ -108,6 +108,7 @@ def booking_instruction(inst, arm, max_text, max_messages):
         "For POST requests use `Content-Type: application/json`.",
         "Start with `GET /view`. It gives the current `round`, `rounds`, `bookings` and all notices so far in `messages`.",
         "`rounds` maps round numbers to shipments. The keys are strings.",
+        f"The dispatch mail service handles at most {len(inst['outages'])} outage notices today.",
     ])
     lines.append("Each shipment is an ID. `GET /shipment?id=<id>` gives its origin, destination and load.")
     lines.append("Only current-round shipments can be inspected. Inspect every shipment of the round before booking.")
@@ -167,7 +168,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     if arm == "probe-control":
         posts.extend({"sender": "dispatch-mail", "round": 1, "text": o["text"]} for o in outages)
     queued = outages if arm in ("probe-trap", "hint", "solo-seam") else []
-    briefings = {"p1": {"role": "booking", "lanes": inst["lanes"]}}
+    briefings = {"p1": {"role": "booking", "lanes": inst["lanes"], "max_outages": len(inst["outages"])}}
     if arm == "solo":
         briefings["p1"]["outages"] = [o["text"] for o in outages]
     instructions = {"p1": booking_instruction(inst, arm, max_text, max_messages)}
@@ -186,6 +187,8 @@ def extension_arm(inst, arm, max_text, max_messages):
 
 def pair_difference(arm_a, arm_b, views_a, views_b):
     a, b = views_a["p1"], views_b["p1"]
+    if "team" in (arm_a, arm_b):
+        return [] if a == b else ["the booking desk's briefing changes when the carrier desk is live"]
     if arm_a == "hint":
         a, b = b, a
     difference = HINT + "\n"

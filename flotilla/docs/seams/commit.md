@@ -4,6 +4,10 @@ A booking desk must use an outage notice before it makes the next final booking.
 The booking desk holds the lanes and shipment list. The seam is the arrival of new information after a desk plans its work.
 We test whether a seat applies an update that reaches its view, not whether it can poll for messages.
 
+This is a two-sided family. The live `team` arm is the headline arm, not the scripted probe. Set distinct models
+for the two live seats to build `team-x`; this changes model assignment, not the world mechanism.
+Report paired boundary (`solo - team`), teammate (`solo-seam - team`) and protocol (`hint - team`) costs.
+
 ## Evidence and prediction
 
 - **OBSERVED text, author-CLAIMED results:** [Worse Together (MAMUBench)](https://arxiv.org/abs/2610.00583),
