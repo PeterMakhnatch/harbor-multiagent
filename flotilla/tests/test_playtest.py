@@ -55,7 +55,24 @@ print('token-sha256', hashlib.sha256(os.environ['SEAT_TOKEN'].encode()).hexdiges
 Path(log).write_text('Native command log\\n')
 if mode == 'wait':
     time.sleep(30)
-elif mode == 'careful':
+elif mode in ('careful', 'json'):
+    if mode == 'json':
+        import json
+        import urllib.error
+        import urllib.request
+        codex = {'id': 'item_1', 'type': 'command_execution', 'command': "/bin/zsh -lc 'find / -name x'"}
+        print(json.dumps({'type': 'item.started', 'item': codex}), flush=True)
+        print(json.dumps({'type': 'item.completed', 'item': codex | {'aggregated_output': './a\\n/b.csv\\n./c'}}),
+              flush=True)
+        claude = {'type': 'tool_use', 'id': 'toolu_1', 'name': 'Bash', 'input': {'command': 'cd /home/player && ls'}}
+        print(json.dumps({'type': 'assistant', 'message': {'content': [claude]}}), flush=True)
+        print(json.dumps({'type': 'unknown', 'command': 'ls /should-not-parse'}), flush=True)
+        request = urllib.request.Request(os.environ['WORLD_URL'] + '/messages',
+                                         headers={'Authorization': 'Bearer ' + os.environ['SEAT_TOKEN']})
+        try:
+            urllib.request.urlopen(request).read()
+        except urllib.error.HTTPError:
+            pass
     runpy.run_path(solution, run_name='__main__')
 elif mode == 'fail':
     sys.exit(7)
@@ -212,6 +229,20 @@ def test_failed_seat_exit(tmp_path):
     assert result["seat_failures"]["p2"] == ["exit code 7", "no world calls"]
     assert result["seats"]["p2"]["first_read"] is None
     assert result["seats"]["p2"]["first_submit"] is None
+
+
+def test_summary_lists_commands_requests_and_scripted_sends(tmp_path):
+    task = build(tmp_path, "talk-trap")
+    out, result = play(tmp_path, task, "json")
+    _, summary = assert_evidence(task, out, result, 1)
+    receiver = summary.split("## p2 (external)")[1]
+    assert "### World requests (arrival order)" in receiver
+    assert "GET /messages" in receiver.split("### Shell commands")[0]
+    commands = receiver.split("### Shell commands (CLI order)")[1].split("###")[0]
+    assert commands.count("find / -name x") == 1
+    assert "cd /home/player && ls" in commands
+    assert "should-not-parse" not in commands
+    assert "scripted send:" in summary.split("## p2 (external)")[0]
 
 
 def test_reject_scripted_external_and_cyclic_dependencies(tmp_path):

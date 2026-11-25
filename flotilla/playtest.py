@@ -351,6 +351,45 @@ def outside_paths(text: str, workdir: Path) -> list[str]:
     return sorted(paths)
 
 
+def shell_commands(text: str) -> list[str]:
+    commands = []
+    seen = set()
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        items = []
+        if event.get("type") in ("item.started", "item.completed"):
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "command_execution":
+                items.append((item.get("id"), item.get("command")))
+        elif event.get("type") == "assistant":
+            message = event.get("message")
+            content = message.get("content") if isinstance(message, dict) else None
+            for item in content if isinstance(content, list) else []:
+                if isinstance(item, dict) and item.get("type") == "tool_use" and item.get("name") == "Bash":
+                    inputs = item.get("input")
+                    if isinstance(inputs, dict):
+                        items.append((item.get("id"), inputs.get("command")))
+        for item_id, command in items:
+            if not isinstance(command, str):
+                continue
+            if isinstance(item_id, str):
+                if item_id in seen:
+                    continue
+                seen.add(item_id)
+            commands.append(command)
+    return commands
+
+
+def seat_commands(output: Path) -> list[str]:
+    text = "\n".join((output / name).read_text(errors="replace") for name in ("seat.log", "command.log"))
+    return shell_commands(text)
+
+
 def archive_seats(seats: list[SeatRun]) -> dict[str, list[str]]:
     audit = {}
     for seat in seats:
@@ -361,7 +400,7 @@ def archive_seats(seats: list[SeatRun]) -> dict[str, list[str]]:
     return audit
 
 
-def timeline(out: Path, result: dict, audit: dict[str, list[str]]) -> None:
+def timeline(out: Path, result: dict, audit: dict[str, list[str]], requests: list[dict]) -> None:
     world = out / "artifacts" / "logs" / "world"
     events = read_jsonl(world / "events.jsonl")
     messages = {m["id"]: m for m in read_jsonl(world / "messages.jsonl")}
@@ -380,15 +419,27 @@ def timeline(out: Path, result: dict, audit: dict[str, list[str]]) -> None:
             data = data | {"messages": [messages.get(mid, {"id": mid}) for mid in data.get("ids", [])]}
         elif kind == "send" and data.get("id") in messages:
             data = data | {"text": messages[data["id"]]["text"]}
+            if result["seats"][seat]["mode"] == "scripted":
+                kind = "scripted send"
         by_seat[seat].append(f"- #{event['seq']} {clock}={event['t']} {kind}: `{json.dumps(data, ensure_ascii=True)}`")
     lines = ["# Local playtest", "", f"Reward: {result['reward']}; timed out: {result['timed_out']}",
              "Host processes are not isolated. This is a rehearsal, not benchmark evidence.", ""]
+    by_request = {seat: [] for seat in result["seats"]}
+    for request in requests:
+        by_request[request["seat"]].append(
+            f"- #{request['seq']} t={request['t']:.3f}s {request['method']} {request['path']}")
     for seat, evidence in by_seat.items():
         info = result["seats"][seat]
         paths = [f"- `{path}`" for path in audit[seat]] or ["- No outside paths found."]
+        commands = seat_commands(out / "seats" / seat)
+        started, ended = (f"{info[key]:.3f}" if info[key] is not None else "not started"
+                          for key in ("started_sec", "ended_sec"))
         lines += [f"## {seat} ({info['mode']})", "",
-                  f"Started: {info['started_sec']}; ended: {info['ended_sec']}; exit: {info['exit_code']}", "",
-                  *(evidence or ["- No seat events."]), "", "### Outside-path audit", "",
+                  f"Started: {started}; ended: {ended}; exit: {info['exit_code']}", "",
+                  *(evidence or ["- No seat events."]), "", "### World requests (arrival order)", "",
+                  *(by_request[seat] or ["- No world calls."]), "", "### Shell commands (CLI order)", "",
+                  *[f"- `{command}`" for command in commands],
+                  *([] if commands else ["- No recognized shell command records."]), "", "### Outside-path audit", "",
                   "Candidate outside paths in the logs (possible reads or listings, not an access trace).",
                   *paths, ""]
     (out / "summary.md").write_text("\n".join(lines))
@@ -461,7 +512,7 @@ def playtest(task_dir: Path, template: str, selected: set[str] | None, timeout: 
                   "sandbox_profile": str(profile) if profile else None, "model": model_label,
                   "harness": harness_name(template), "seat_failures": failures, "seats": seat_results}
         (out / "result.json").write_text(json.dumps(result, indent=2) + "\n")
-        timeline(out, result, audit)
+        timeline(out, result, audit, requests)
         return result
 
 
