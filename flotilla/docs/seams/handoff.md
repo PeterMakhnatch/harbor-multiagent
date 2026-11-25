@@ -191,10 +191,13 @@ Both builds passed static QA. Both Docker trials were valid at $0 and matched th
 (`handoff-pointer-v4`, jobs `2ebd4b` and `b47d9f`). Each settled all 16 results correctly.
 The careful note kept the exact candidates at all 3 crossings; the pointer note lost them at shift 1.
 
-Pilot rehearsal (`flotilla/plans/oracle/handoff-pilot-oracle.json`): the first 2 instances of every stage and
-arm of the pilot plan `flotilla/plans/seams/handoff.json`, 22 trials, with Harbor `oracle` on local Docker, no
-model and $0 cap. The pilot builds carry the careful policy. Expected: 22 valid trials, each with reward 1.
-This checks that the pilot's own task folders run end to end; it says nothing about a model.
+Pilot rehearsal: run the first 2 instances of each stage and arm with the careful policy. Use Harbor `oracle`
+on local Docker, no model, and a $0 cap. The original plan had 22 trials. Docker preflight stopped that
+rehearsal after 18 valid trials; all 18 scored 1. With `team-implicit-all` added, 24 of 24 scored 1.
+
+For the repaired build (`6fb78541`), repeat this check on the regenerated task folders. Expected: 24 valid
+trials, each with reward 1. The plan `flotilla/plans/oracle/handoff-pilot-oracle.json` selects these folders
+from `flotilla/plans/seams/handoff.json`. This checks the generated tasks, not model performance.
 
 ## Validity limits
 
