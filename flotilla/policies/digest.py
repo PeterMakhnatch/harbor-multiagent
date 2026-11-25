@@ -6,7 +6,7 @@ from collections import Counter
 
 def supports(name, variant):
     return (name in ("careful", "naive", "naive_reader", "lone", "lane_only", "hold_all", "uniform_random",
-                     "blind", "random", "copy", "append", "newest_only", "guess-mode", "guess-position",
+                     "blind", "random", "copy", "append", "newest_only", "guess-mode", "guess-position", "renumber", "reorder",
                      "lapse-10", "lapse-20", "lapse-30", "lapse-50")
             or name.startswith("constant-"))
 
@@ -28,11 +28,14 @@ def decode(family, own, reply, name):
             rules = family.merge_amendments(rules, amendments)
     else:
         try:
-            home, rules = family.parse_note(text, own.get("format") == "card")
+            home, rules = family.parse_note(text, own.get("format") == "card", own.get("ordered", False))
         except (ValueError, IndexError, KeyError, AttributeError, TypeError):
             home, rules = {}, []
     if "amendment" in own and (name not in ("copy", "append", "naive") or own.get("fullrecord")):
         _, amendments = family.parse_manual(own["amendment"])
+        if name == "renumber" and not own.get("fullrecord"):
+            ids = {r["id"] for r in rules}
+            amendments = [r for r in amendments if r["id"] in ids]
         rules = amendments if name == "newest_only" else family.merge_amendments(rules, amendments)
     return home, rules
 
@@ -94,7 +97,13 @@ def note_to_send(family, own, home, rules, text, cap, name):
     if name in ("lone", "blind", "random", "uniform_random"):
         return "No rules recorded."
     card = own.get("format") == "card"
-    render = family.card_text if card else family.note_text
+    def render(home, rules):
+        return family.card_text(home, rules, own.get("ordered", False)) if card else family.note_text(home, rules)
+    if not card and not own.get("fullrecord"):
+        if name == "renumber":
+            rules = [rule | {"id": i} for i, rule in enumerate(rules, 1)]
+        elif name == "reorder":
+            rules = sorted(rules, key=lambda rule: rule["id"])
     if own["role"] == "relay" and not own.get("fullrecord"):
         if name == "copy":
             return text

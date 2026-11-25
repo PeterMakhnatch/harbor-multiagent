@@ -27,6 +27,7 @@ def setup_instance(dose, instance=0):
 @pytest.mark.parametrize("dose", DOSES)
 def test_generator_sweep(dose):
     seen = set()
+    ordered = dose.endswith("-order")
     for i in range(100):
         inst = setup_instance(dose, i)
         assert inst == setup_instance(dose, i)
@@ -67,13 +68,25 @@ def test_generator_sweep(dose):
         for row in final:
             job = row["job"]
             weights[row["outcome"]] += 1 / cells[row["cell"]] / len(cells)
-            assert sum(D.matches(job, r["clauses"][0][0]) for r in rules) == int(row["cell"] != "0.0")
+            fitting = [r["id"] for r in rules if D.matches(job, r["clauses"][0][0])]
+            if row.get("overlap"):
+                assert ordered and fitting == row["overlap"] and len(fitting) == 2
+                assert str(fitting[0]) == row["cell"].split(".")[0]
+                alternative = D.decision([r for r in rules if r["id"] == fitting[1]], job)[2]
+                assert D.resolve(alternative, home, job, row["replies"])[1] != row["outcome"]
+            else:
+                assert len(fitting) == int(row["cell"] != "0.0")
             for text, card in ((inst["reference"], False), (inst["card"], True)):
-                parsed_home, parsed_rules = D.parse_note(text, card)
+                parsed_home, parsed_rules = D.parse_note(text, card, ordered)
                 _, _, action = D.decision(parsed_rules, job)
                 assert D.resolve(action, parsed_home, job, row["replies"]) == (row["checks"], row["outcome"])
             _, _, action = D.decision(rules, job)
             assert D.resolve(action, home, job, row["replies"]) == (row["checks"], row["outcome"])
+        if ordered:
+            assert sum(bool(row.get("overlap")) for row in final) == 8
+            assert any(ids[0] > ids[1] for row in final if (ids := row.get("overlap")))
+            assert all(r["id"] > 10 for r in rules)
+            assert D.DOSES[dose] == D.DOSES[dose.removesuffix("-order")]
         assert max(weights.values()) <= 0.2 + 1e-9
         assert all(row["cell"].endswith(".0") for row in final[:12])
         trap = D.extension_arm(inst, "probe-writer-trap", 4000, 200)
@@ -131,7 +144,7 @@ def test_simulation_sweep(dose, tmp_path):
 
 def test_dose_response_and_guess_ceiling(tmp_path):
     newest, survival, chance = [], [], []
-    for dose in D.LEVELS:
+    for dose in D.BASE_LEVELS:
         scores, shares = [], []
         guess = {name: [] for name in ("uniform_random", "guess-mode", "guess-position", "hold_all",
                                        *(f"constant-{outcome}" for outcome in D.OUTCOMES))}
@@ -172,8 +185,12 @@ def test_hint_note_style_and_staged_limits(dose, tmp_path):
         text = team["instructions"][seat]
         other = hint["instructions"][seat]
         assert "A later complete rule with the same number replaces the earlier rule." in text
-        assert other.replace("\n" + D.HINT, "") == text
-        assert other.count(D.HINT) == int(team["briefings"][seat]["role"] == "relay")
+        ordered = dose.endswith("-order")
+        sentence = D.ORDER_HINT if ordered else D.HINT
+        assert (D.ORDER_FACTS in text) == ordered
+        assert (sentence not in text) and other.replace("\n" + sentence, "") == text
+        role = team["briefings"][seat]["role"]
+        assert other.count(sentence) == int(role != "worker" if ordered else role == "relay")
     notes = []
     for path in paths.values():
         task = json.loads((path / "environment/task.json").read_text())
@@ -310,3 +327,58 @@ def test_ended_worker_is_valid_omission(tmp_path):
     assert result["score"]["shift_omissions"] == {final: "play_incomplete"}
     assert not result["score"]["handover_missing"]
     assert result["score"]["unfinished_jobs"][final] == 24
+
+
+@pytest.mark.parametrize("dose", DOSES)
+def test_order_slips_and_event_measures(dose, tmp_path):
+    ordered = dose.endswith("-order")
+    for instance in range(SWEEP):
+        paths = build(tmp_path / str(instance), dose, ("team", "team-fullrecord"), instance)
+        for arm, path in paths.items():
+            for name in ("careful", "renumber", "reorder"):
+                result = SIM.simulate_built(path, name, 0)
+                score = result["score"]
+                assert result["invalid"] is None
+                slips = ordered and arm == "team"
+                assert (result["reward"] < 1) == (slips and name != "careful")
+                assert score["numbers_kept"] == (not slips or name != "renumber")
+                assert score["order_kept"] == (not slips or name != "reorder")
+                assert score["note_measure_flag"] is None
+                matches = score["overlap_first_match"]
+                assert len(matches) == (8 if ordered else 0)
+                if name == "reorder" and slips:
+                    assert not all(matches.values())
+                elif name == "careful" or not slips:
+                    assert all(matches.values())
+                if instance == 0 and name == "careful":
+                    task = json.loads((path / "environment/task.json").read_text())
+                    final_id = "note-" + task["seats"][-1]
+                    unreadable = [
+                        e | {"data": e["data"] | {"text": "No readable rule headings."}}
+                        if e["kind"] == "note_seal" and e["data"]["id"] == final_id else e for e in result["events"]
+                    ]
+                    changed = EXT.score(task, unreadable)
+                    assert changed["reward"] == 1 and changed["note_measure_flag"] == "unreadable_note"
+                    assert changed["order_kept"] is None and changed["numbers_kept"] is None
+                    assert changed["overlap_first_match"] == matches
+
+
+def test_tolerant_rule_headings():
+    params = {"card": False, "rule_heads": [[58, "proof"], [12, "stock"], [31, "account"]]}
+    notes = [
+        "R58 proof pending -> N\n12) stock custom -> C\n- **Rule 31**: account new -> hold",
+        ("Rule 58.\nMain: proof=pending\n  58.1 exception account=key\n"
+         "Rule 12.\nMain: stock=custom\nRule 31.\nMain: account=new"),
+        "58 proof=pending->N\n12:stock=custom=>C\n31 account=new->hold",
+    ]
+    for note in notes:
+        assert EXT.note_measures(params, note) == {
+            "order_kept": True, "numbers_kept": True, "note_measure_flag": None}
+    assert EXT.note_measures(params, "1) proof pending\n2) stock custom\n3) account new") == {
+        "order_kept": True, "numbers_kept": False, "note_measure_flag": None}
+    assert EXT.note_measures(params, "R12 stock custom\nR31 account new\nR58 proof pending") == {
+        "order_kept": False, "numbers_kept": True, "note_measure_flag": None}
+    assert EXT.note_measures(params, "R58 proof pending\nR12 stock custom") == {
+        "order_kept": True, "numbers_kept": False, "note_measure_flag": None}
+    assert EXT.note_measures(params, "R58 something unclear") == {
+        "order_kept": None, "numbers_kept": None, "note_measure_flag": "unreadable_rule_heading"}
