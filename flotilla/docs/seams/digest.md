@@ -118,3 +118,7 @@ All 6 canary Docker oracle trials completed with no seat or verifier exception. 
 | team | 1 | 3/9 |
 | probe-writer-trap | 1 | 3/9 |
 | probe-writer-control | 1 | 1 |
+
+The complete sweep passed 72,000 primary simulations: 200 instances, 5 schedule seeds, 8 arms, 3 policies per dose. Every reward matches the policy table above. Across the 3 doses the observed blind-policy means are 0.096204, 0.094986 and 0.102775 (200 instances each). The largest careful request count by team seat is [4, 14], [28, 28, 39] and [34, 26, 25, 26, 51]. Request counts are not measured model turns.
+
+The full Flotilla gate ran once: 862 passed, 1 skipped, and 1 legacy wall-clock test failed (`test_probe.py:516`, rounded timestamps span more than one tenth-second bucket). All digest cases passed. The analysis suite run separately passed 130 tests and 16 subtests. Ruff passed.
