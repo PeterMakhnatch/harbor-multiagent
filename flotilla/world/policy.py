@@ -155,7 +155,10 @@ def play(name: str, client: Client, own: dict[str, Any], family: Any, oracle: An
     elif name == "nop":
         return
     elif custom is not None and custom.supports(name, variant):
-        yield from custom.play(name, client, own)
+        if extension:
+            yield from custom.play(name, client, own, family)
+        else:
+            yield from custom.play(name, client, own)
     elif extension:
         raise ValueError(f"extension does not define policy {name}")
     else:
@@ -168,7 +171,7 @@ def http_request(request: Request) -> Reply:
     wire = urllib.request.Request(os.environ.get("WORLD_URL", "http://world:8080") + request.path,
                                   data=data, method=request.method, headers=headers)
     try:
-        with urllib.request.urlopen(wire, timeout=15) as response:
+        with urllib.request.urlopen(wire, timeout=75 if request.path.split("?", 1)[0] == "/await" else 15) as response:
             return response.status, json.load(response)
     except urllib.error.HTTPError as exc:
         with exc:
