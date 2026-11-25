@@ -368,6 +368,7 @@ def test_handoff_early_ticket_and_settlement(tmp_path, start_world):
         assert post(seat, "/handover", {"note": ""})[0] == 200
     score = EXT.score(task, world.events())
     assert score["ticket"] == 0 and score["ticket_early"] == 1 and score["reconciled"] == 1
+    assert score["wrong_settlements"] == 1 and score["full_reward"] == 0
 
 
 def test_handoff_reserved_calls(tmp_path, start_world):
@@ -377,6 +378,8 @@ def test_handoff_reserved_calls(tmp_path, start_world):
         code, reply = get("/desk")
         assert code == 200
     assert reply["calls_left"] == 3
+    for path in ("/whoami", "/await?until=active", "/health") * 2:
+        assert get(path)[0] == 200
     code, reply = get("/desk")
     assert code == 429 and reply["calls_left"] == 2
     code, reply = world.seat("s1", "POST", "/handover", {"note": "é" * task["params"]["cap"]})
@@ -401,6 +404,17 @@ def test_handoff_budget_and_invalid_evidence():
     complete = SIM.simulate("handoff", "team", 0, "careful", SEED, 4, difficulty="canary")["events"]
     missing = next(e for e in complete if e["kind"] == "delivered")
     assert EXT.score(task, [e for e in complete if e is not missing]) == {"invalid": "desk reply lacks a delivery receipt"}
+
+
+def test_handoff_live_deadline_scores_unfinished_work(tmp_path, start_world):
+    task, world = start_desk(tmp_path, start_world)
+    assert world.seat("s1", "GET", "/desk")[0] == 200
+    assert world.request("POST", "/admin/freeze", token=world.admin, body={})[0] == 200
+    events = world.events()
+    outcome = next(e["data"]["result"] for e in events if e["kind"] == "deadline_score")
+    assert outcome == EXT.score(task, events)
+    assert outcome["reward"] == 0 and outcome["handover_missing"] == 1
+    assert outcome["handover_missing_cause"] == "deadline"
 
 
 def test_handoff_canary_qa(tmp_path):
