@@ -20,7 +20,7 @@ Two smaller models (GPT-6 Luna, Claude Haiku 5.5) played a part of them.
 
 | Family | Seam | Frontier result (wins / playtests) | Smaller models | Status |
 |---|---|---|---|---|
-| `handoff` | A capped shift note to a fresh context | At `standard`: `team` (fact stated) 12 of 12, `hint` 8 of 8, `team-fullrecord` 5 of 5; **`team-implicit`: Opus 6 of 14, Sol 11 of 11** | 0 of 6; 5 of 6 losses at the seam | Candidate measure for a frontier pilot (`team` / `team-implicit` / `hint` / `team-fullrecord`) |
+| `handoff` | A capped shift note to a fresh context | At `standard`: `team` (fact stated) Opus 17 of 17, Sol 3 of 3; `hint` 8 of 8; **`team-implicit`: Opus 15 of 25, Sol 15 of 16** | 0 of 6; 5 of 6 losses at the seam | Candidate measure for a frontier pilot (`team` / `team-implicit` / `hint` / `team-fullrecord`) |
 | `digest` | A chain of capped notes with replacement rules | 34 of 34 (base and order levels) | 0 of 8; 73 of 90 wrong jobs at the seam | Canary for frontier models; a measure for smaller models. Twin `team-implicit`: see the family page |
 | `commit` | A notice that arrives before an irreversible booking | 51 of 52 (base and bulk levels) | 5 of 6 | Canary |
 | `tell` | A fact that matters only to another desk | 28 of 28 | Luna 1 of 2, Haiku 1 of 1 | Canary for frontier models |
@@ -35,9 +35,11 @@ The first reading, with the limits of a playtest:
    family, and the suite's own kill rule now marks those arms as canaries for this model class.
 2. The loss that did appear is an inference about the reader. In `handoff`, Opus wrote "the bad lot is in
    B95" in its note. B95 then left the desk, and the next shift could not see its lots. With one stated fact
-   ("Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk") Opus won 6
-   of 6 playtests on the instances where it had lost 8 of 9. Sol listed the lots in both arms. The twin arm
-   `team-implicit` keeps this loss measurable; AUTHORING.md rule 25 makes it a pattern for the other families.
+   ("Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk") Opus won
+   17 of 17 playtests; without it, 15 of 25, on 16 instances. All 10 losses began with such a pointer note,
+   and no win had one. The loss depends on the instance: on the 3 instances drawn first Opus lost 8 of 9
+   runs, on 8 fresh instances 1 of 8. Sol listed the lots in both arms. The twin arm `team-implicit` keeps
+   this loss measurable; AUTHORING.md rule 25 makes it a pattern for the other families.
 3. A team is as weak as its most confused seat. 4 of 12 frontier `week` teams were ended by 1 seat that
    refused the work or misused a wait call; no team of the other families was. These are valid flagged
    results, and the wait call now has a form with no number to get wrong (`/await?until=work`).

@@ -25,12 +25,15 @@ Evidence (labels describe the independent Seams review, not a new experiment):
   hop-6 recall of at least 0.973 for 12 given facts. This is counter-evidence to a large boundary cost.
 - **OBSERVED (review, abstract):** [HSC-Bench](https://arxiv.org/abs/2610.36523) contains 1,039 tasks.
   The review did not confirm the takeover counts or the model-specific rates in the first design.
-- **OBSERVED (round-three playtests, 37 runs, native CLIs, not an experiment):** with a briefing that did not state
-  that a settled batch's lot list leaves the desk (now the arm `team-implicit`), Claude Opus 5.5 scored 0.5 in 6 of
-  11 standard `team` playtests (instances 0-2 in 6 of 6 runs; instances 3-7 in 0 of 5) and in 1 of 4 heavy ones.
-  It scored 1 in 4 of 4 `hint` and 4 of 4 `team-fullrecord` playtests. GPT-6.2 Sol scored 1 in 10 of 10 `team`
-  playtests. In every loss a note kept the bad-lot evidence as the ID of a settled batch and not as lots; every
-  result was settled right and the last seat filed no ticket. No `team` win had such a note.
+- **OBSERVED (rounds 3 and 4, 82 local playtests, native CLIs, not an experiment):** at `standard`, with the briefing
+  that does not state that a settled batch's lot list leaves the desk (the arm `team-implicit`), Claude Opus 5.5
+  won 15 of 25 playtests on 16 instances. With the fact stated (`team`) it won 17 of 17 on 14 of those instances;
+  with `hint` 7 of 7; with `team-fullrecord` 3 of 3. All 10 losses began with a shift-1 note that kept the bad-lot
+  evidence as the ID of a settled batch and not as lots; every result was settled right and the last seat filed
+  no ticket. No win had such a note. The loss depends on the instance and on the draw: the 3 instances drawn
+  first lost 8 of 9 runs, 8 fresh instances lost 1 of 8, and 2 instances lost on one draw and won on another.
+  GPT-6.2 Sol won 15 of 16 `team-implicit` playtests (the loss was an early ticket, not the note) and 3 of 3
+  `team`. Two smaller models (GPT-6 Luna, Claude Haiku 5.5) won 0 of 6 `team-implicit` playtests.
 
 ## Mechanism
 

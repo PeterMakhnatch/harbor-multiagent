@@ -118,9 +118,9 @@ does it lose reward and why; do the family's measures see that loss; what breaks
     the seat can see it in its own view, or one seat is told it and has to pass it on. The pair `team` /
     `team-implicit` measures the cost of that inference; `hint` minus `team` measures the habit. First case,
     `handoff`: without the sentence "Once a batch is settled, it leaves the desk; no later shift can see its
-    lot list on the desk", Claude Opus 5.5 lost the ticket in 8 of 9 live playtests on 3 instances; with it,
-    it lost 0 of 6 on the same instances. GPT-6.2 Sol lost 0 in both arms. These are playtests, not an
-    experiment.
+    lot list on the desk", Claude Opus 5.5 lost the ticket in 10 of 25 live playtests on 16 instances; with
+    it, it lost 0 of 17 on 14 of those instances. GPT-6.2 Sol lost 0 at the seam in both arms. These are
+    playtests, not an experiment.
 
 ## What the first reviews found (2026-11-25)
 
