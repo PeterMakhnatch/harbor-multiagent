@@ -41,6 +41,14 @@ class Fixture:
         if self.protocol == "staged" and seat == "p1" and not self.handed_off:
             self.host.record("handover_missing", seat)
 
+    def pending(self, seat):
+        return (self.protocol == "staged" and seat == "p1" and not self.handed_off
+                and seat not in self.host.ended)
+
+    def on_deadline(self, stalled_seats):
+        if self.protocol == "staged":
+            return {"reward": 0, "handover_missing": not self.handed_off, "omission": bool(stalled_seats)}
+
     def message_delay(self, message, recipient):
         return self.params["delay"] if message["text"].startswith("handoff ") else None
 

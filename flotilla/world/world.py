@@ -360,7 +360,7 @@ EVENT_SINK: Callable[[dict[str, Any]], None] | None = None
 EXTENSION_RESERVED = frozenset({
     "start", "extension_start", "freeze", "play_timeout", "tick", "seat_transition", "seat_end",
     "send", "message_route", "deliver", "delivered", "extension_call", "extension_error",
-    "await", "call_budget", "simulation_stalled", "health", "whoami", "state",
+    "await", "call_budget", "simulation_stalled", "play_incomplete", "deadline_score", "health", "whoami", "state",
     "bad_token", "invalid_http", "probe", "invalid", "denied", "late", "inactive",
     "submit", "gated", "audit", "open", "close", "season-over", "look", "wait",
     "request", "pass", "early", "repeat",
@@ -391,6 +391,38 @@ class ExtensionHost:
         self.start_after = task.get("start_after", {})
         self.predecessors = {p for predecessors in self.start_after.values() for p in predecessors}
         self.ended: set[str] = set()
+        self.open_waits = dict.fromkeys(seats, 0)
+
+    def stalled_seats(self) -> list[str]:
+        pending = getattr(EXTENSION, "pending", None)
+        return [seat for seat in sorted(self.status)
+                if self.open_waits[seat] or (pending and pending(seat))]
+
+    def deadline(self, kind: str, data: dict[str, Any]) -> None:
+        if STATE["frozen"]:
+            record(kind, None, data | {"stalled_seats": []})
+            return
+        try:
+            stalled = self.stalled_seats()
+            record(kind, None, data | {"stalled_seats": stalled})
+            hook = getattr(EXTENSION, "on_deadline", None)
+            if hook:
+                result = hook(stalled.copy())
+                if result is not None:
+                    json.dumps(result, allow_nan=False)
+                    record("deadline_score", None, {"result": result})
+        except Exception as exc:  # noqa: BLE001 - contain family-code failures
+            self.fail(None, kind, exc)
+        self.freeze()
+
+    def finish(self) -> None:
+        if STATE["frozen"]:
+            return
+        try:
+            if self.stalled_seats():
+                self.deadline("play_incomplete", {})
+        except Exception as exc:  # noqa: BLE001 - contain family-code failures
+            self.fail(None, "play_incomplete", exc)
 
     def seat_end(self, seat: str) -> None:
         if seat not in self.predecessors or seat in self.ended:
@@ -427,7 +459,7 @@ class ExtensionHost:
             if hook:
                 hook(seat)
 
-    def fail(self, seat: str, path: str, exc: Exception) -> None:
+    def fail(self, seat: str | None, path: str, exc: Exception) -> None:
         record("extension_error", seat, {"path": path, "error": type(exc).__name__})
         STATE["extension_failed"] = True
         self.freeze()
@@ -637,8 +669,7 @@ def expire() -> None:
     if HOST is not None:
         first = STATE.get("first_wall")
         if PLAY_SECONDS and not STATE["frozen"] and first is not None and time.monotonic() >= first + PLAY_SECONDS:
-            record("play_timeout", None, {"after_s": PLAY_SECONDS})
-            HOST.freeze()
+            HOST.deadline("play_timeout", {"after_s": PLAY_SECONDS})
         return
     first = STATE["first_call"]
     if PLAY_SECONDS and not STATE["frozen"] and first is not None and now() >= first + PLAY_SECONDS:
@@ -1103,9 +1134,10 @@ class World(BaseHTTPRequestHandler):
                 STATE["first_call"] = now() if STATE["first_call"] is None else STATE["first_call"]
                 if HOST is not None:
                     STATE.setdefault("first_wall", time.monotonic())
+                expire()
+                if HOST is not None:
                     for predecessor in HOST.start_after.get(seat, []):
                         HOST.seat_end(predecessor)
-                expire()
                 if SCHEDULED:
                     _post_scheduled(seat)  # version 14: the first request of a seat under test adds every post
                 if HOST is not None:
@@ -1191,6 +1223,7 @@ class World(BaseHTTPRequestHandler):
             with LOCK:
                 if HOST is not None:
                     expire()
+                    HOST.finish()
                 STATE["frozen"] = True
                 record("freeze", "admin")
             self._reply(200, {"frozen": True})
@@ -1482,6 +1515,14 @@ class World(BaseHTTPRequestHandler):
             return
         self._await_wait(seat, until[0], int(after[0]), time.monotonic() + WAIT_SECONDS)
 
+    def _wait_begin(self, seat: str) -> None:
+        with LOCK:
+            HOST.open_waits[seat] += 1
+
+    def _wait_end(self, seat: str) -> None:
+        with LOCK:
+            HOST.open_waits[seat] -= 1
+
     def _await_poll(self, seat: str, until: str, after: int, deadline: float) -> bool:
         with LOCK:
             expire()
@@ -1507,8 +1548,12 @@ class World(BaseHTTPRequestHandler):
             return True
 
     def _await_wait(self, seat: str, until: str, after: int, deadline: float) -> None:
-        while not self._await_poll(seat, until, after, deadline):
-            time.sleep(0.05)
+        self._wait_begin(seat)
+        try:
+            while not self._await_poll(seat, until, after, deadline):
+                time.sleep(0.05)
+        finally:
+            self._wait_end(seat)
 
 
     def _wait(self, seat: str) -> None:

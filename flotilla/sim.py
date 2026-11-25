@@ -80,8 +80,12 @@ def memory_handler(world: Any) -> type:
             self.pending_await = None
 
         def _await_wait(self, seat, until, after, deadline):
+            if hasattr(self, "_wait_begin"):
+                self._wait_begin(seat)
             if not self._await_poll(seat, until, after, deadline):
                 self.pending_await = (seat, until, after, deadline)
+            elif hasattr(self, "_wait_end"):
+                self._wait_end(seat)
 
         def _write(self, status: int, data: bytes, content_type: str, headers: dict | None = None) -> bool:
             self.response = (status, json.loads(data) if content_type == "application/json" else data.decode())
@@ -154,6 +158,8 @@ class Simulation:
                     del pending[seat]
             for seat, handler in list(self.parked.items()):
                 if handler._await_poll(*handler.pending_await):
+                    if hasattr(handler, "_wait_end"):
+                        handler._wait_end(seat)
                     replies[seat] = handler.response
                     ready_at[seat] = self.clock.value
                     del self.parked[seat]
@@ -186,7 +192,10 @@ class Simulation:
                 raise TypeError(f"invalid policy step {step!r}")
         if self.world.HOST is None:
             raise RuntimeError(f"simulation exceeded {MAX_STEPS} scheduler steps")
-        self.world.record("simulation_stalled", None, {"steps": MAX_STEPS})
+        if hasattr(self.world.HOST, "deadline"):
+            self.world.HOST.deadline("simulation_stalled", {"steps": MAX_STEPS})
+        else:
+            self.world.record("simulation_stalled", None, {"steps": MAX_STEPS})
 
     def finish(self) -> dict[str, Any]:
         self.request("admin", POLICY.Request("POST", "/admin/freeze", {}))
@@ -277,7 +286,8 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
         result["versions"] = task["versions"]
     return {"reward": result.get("reward"), "score": result, "invalid": result.get("invalid"),
             **({"versions": result["versions"]} if "versions" in result else {}),
-            "stalled": any(e["kind"] == "simulation_stalled" for e in sim.events),
+            "stalled": result.get("invalid") is not None and any(e["kind"] == "simulation_stalled" for e in sim.events),
+            "stalled_seats": result.get("stalled_seats", []),
             "events": sim.events, "state": state, "requests": sim.requests,
             "policies": names, "schedule_seed": schedule_seed, "files_read": files_read}
 

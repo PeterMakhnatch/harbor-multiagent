@@ -296,6 +296,29 @@ def test_staged_seat_end(tmp_path, start_world):
     assert [e["seat"] for e in sim["events"] if e["kind"] == "seat_end"] == ["p1"]
 
 
+def test_deadline_stalls(tmp_path, start_world, monkeypatch):
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("staged",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("staged", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_PLAY_SECONDS="0.1", FLOTILLA_WAIT_SECONDS="1")
+    world.ordered = True
+    assert world.seat("p1", "GET", "/await?until=tick&after=0")[1]["reason"] == "frozen"
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    monkeypatch.setattr(SIM, "MAX_STEPS", 30)
+    sim = SIM.simulate_built(path, {"p1": "stall"}, 0)
+    assert actual == {k: v for k, v in sim["score"].items() if k != "versions"}
+    assert sim["reward"] == 0 and sim["invalid"] is None and sim["stalled_seats"] == ["p1"]
+    assert actual["omission"] and actual["handover_missing"]
+
+    (path,) = BUILD.build("kit_fixture", [0], 2, "canary", SEED, ("talk",), tmp_path)
+    task = QA.load_task(path)
+    world = start_world("talk", ("p1", "p2"), FLOTILLA_TASK_JSON=str(task.env_dir / "task.json"),
+                        FLOTILLA_PLAY_SECONDS="0.1", FLOTILLA_WAIT_SECONDS="1")
+    assert world.seat("p2", "GET", "/await?until=active")[1]["reason"] == "frozen"
+    actual = SIM.SCORE.extension_score(task.task_json, world.events(), task.env_dir)
+    assert actual == {"invalid": "play_timeout", "stalled_seats": ["p2"]}
+
+
 def test_rf1v_read_first_reliance_sweep(tmp_path):
     for policy in ("naive", "careful"):
         paths = BUILD.build("probe", [0], 4, "easy", SEED, ("talk-quiet", "talk-false"), tmp_path / policy,
