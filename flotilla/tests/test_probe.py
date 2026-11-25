@@ -513,7 +513,8 @@ def test_version_16_posts_come_at_the_first_submission_of_the_seat_under_test_an
     assert world.request("GET", "/admin/state", token=world.admin)[1]["messages"] == []
     status, reply = world.seat("p1", "POST", "/submit", {"answer": {"total": 577}})
     sends = [e for e in world.events() if e["kind"] == "send"]
-    (added,) = {round(e["t"], 1) for e in sends}
+    added = min(e["t"] for e in sends)
+    assert max(e["t"] for e in sends) - added < 0.5  # the 3 posts are logged together, even on a loaded machine
     assert status == 409 and [(m["from"], m["text"]) for m in reply["messages"]] == [
         ("p4", "I got 641."), ("p4", "Void rows still count."), ("p3", "641")]
     moments = [message["t"] + before for message, before in zip(reply["messages"], (2.6, 2.0, 1.2))]

@@ -118,8 +118,9 @@ parameters; `task.toml` `[metadata]` and `environment/task.json` say them too. N
 files. See [CONTRACT.md](CONTRACT.md) section 2.
 
 Each build draws a secret seed. The family generators are public, so a seat that knew the seed could
-compute the answer key; only the manifest, `task.toml` and `task.json` record it. `--seed N` repeats
-a build: the canonical waves used `--seed 1`, which is public, so `qa.py` fails such a set
+compute the answer key. The manifest, `task.toml`, `task.json` and extension-only oracle
+`solution/policy.json` record it. No model seat reads it. `--seed N` repeats a build:
+the canonical waves used `--seed 1`, which is public, so `qa.py` fails such a set
 (`public-seed`) unless `--allow-public-seed`, which is only for repeating a published build.
 `--seed-of PATH` gives a build the seed of the tasks under PATH, so that the two builds have the same
 instances, for example a narrow channel against the `talk` tasks above:
@@ -180,6 +181,10 @@ No output names a token, an answer key or a secret seed. `--allow-readable-names
 | `push` | FAIL | `task.json` `push` is set but not `true`, is on a task that is not a probe task with messaging, or the subject's push note does not match it |
 | `inbox` | FAIL | `task.json` `inbox` is set but not `true`, is on a task that is not a probe task with messaging, the subject's "Team messages so far" block is not `task.json`'s scheduled posts exactly, or a seat has a block without `inbox` |
 | `solo-sufficient` | WARN | in a team condition, one seat's own briefing gives a correct answer (`oracle_answer`) |
+| `canary` | FAIL | an extension bundle lacks its hidden contamination marker or a seat can read the GUID |
+| `versions` | FAIL | an extension bundle's short version hashes do not match its files |
+| `answer-leak` | FAIL | a seat-readable field contains a hidden value declared by the extension family |
+| `leak-check-missing` | WARN | an extension family supplies neither `leak_values(task_json)` nor a `qa` hook |
 
 Harbor names a trial after the first 32 characters of the task folder's name, and names the trial's
 containers and networks after the trial. A seat can read these names with a reverse DNS lookup: a
@@ -245,6 +250,15 @@ It specifies every interface, including `host.post`, `GET /await`, pushed messag
 and a shared family module. It contains worked examples of capped-note shifts and a round barrier.
 `kit_fixture` implements both for tests only.
 
+Declare `SEAM`, `LEVELS`, `TWINS`, `PAIRS`, `pair_difference`, `ARM_WORDS`, `COMMON_WORDS`,
+`leak_values(task_json)` and `chance_baseline(task_json, policy)` (or `CHANCE`) as applicable.
+Section 22a describes their interfaces and how EvalCard reads them.
+QA checks declared answer values in every static seat view and warns if both leak-check hooks are absent.
+Each extension task has a training-contamination marker (`build_tasks.CANARY`) in its hidden files.
+QA rejects missing markers and visible GUIDs. The verifier and simulator report `versions` hashes of
+the shipped family, extension, policies, world and every seat instruction. Legacy tasks do not get
+these markers or stamps.
+
 ```bash
 python3 flotilla/build_tasks.py --family kit_fixture --difficulty heavy --instances 0-4 \
     --conditions solo,team,talk-control,talk-trap,hint,staged --out /tmp/seams-tasks
@@ -261,11 +275,50 @@ views and `PAIRS` when exactly the specified sentence differs. Check the chance 
 dose levels (`canary`, `standard`, `heavy`), and reproducibility from the same seeds.
 Test waiting, call budgets, delivery receipts and invalid outcomes; never count an invalid outcome as 0.
 
-Use `build_tasks.py --policy naive` (or `careful` or `nop`) for a named oracle build. Use a separate
-output root for each policy. The option does not change the model briefing or scripted teammate
-policies. Require zero QA failures and a local, zero-cost oracle rehearsal before a model run.
+Use `build_tasks.py --policy naive` (or `careful` or `nop`) for a named oracle build.
+Extensions also accept their declared `lapse-10`, `lapse-20`, `lapse-30`, `lapse-50` and
+`script-loop` policies. Use `own.lapse(percent, key)` for deterministic per-opportunity lapses.
+The simulator and seat runner use identical draws. These policies measure grader sensitivity,
+not model performance. Use a separate output root for each policy.
+The option does not change the model briefing or scripted teammate policies.
+Require zero QA failures and a local, zero-cost oracle rehearsal before a model run.
 For staged seats, set `start_after` in the extension arm. Set `--play-timeout` to cover the whole chain;
 use separate jobs for different turn caps. The kit does not receive runner-end signals.
+
+### Make an eval card
+
+```bash
+uvx --quiet --python 3.12 --with pyyaml python flotilla/eval_card.py \
+    --family kit_fixture --levels canary,heavy --instances 4 --schedule-seeds 3 --jobs 2 --out /tmp/card
+```
+
+The card writes `<family>.card.md` and `<family>.card.json` from disposable simulations. It exits
+with status 1 on any FAIL. NA means the check does not establish a pass. It reports the matrix,
+checks, event hashes and estimated cost; it does not run a model. Never reuse its seed for a model wave.
+Use `--policies careful,naive,nop,lapse-30,script-loop` to include lapse and batch policies in the sweep.
+
+### Rehearse the instructions with Playtest
+
+**Warning:** host seats are not isolated. Use only trusted commands and tasks. The outside-path audit
+is not proof of isolation. See section 22e of [CONTRACT.md](CONTRACT.md#22e-rehearse-the-player-experience-on-the-host).
+
+Build one task, then replace `ASSISTANT` below with a trusted command for the seat:
+
+```bash
+python3 flotilla/build_tasks.py --family kit_fixture --instances 0 --conditions talk-trap \
+    --out /tmp/seams-playtest-tasks
+uvx --quiet --python 3.12 --with pyyaml python flotilla/playtest.py \
+    --task /tmp/seams-playtest-tasks/kit_fixture/t-* \
+    --seat-cmd 'ASSISTANT --prompt-file {instruction}' --seats p2 \
+    --timeout-sec 120 --max-parallel 2 --out /tmp/seams-playtest-out
+```
+
+Use unquoted placeholders `{instruction}`, `{seat}`, `{workdir}` and `{log}` in the command template.
+The runner quotes their values. Without `--seats`, every subject uses the external command.
+Unselected subjects use careful; scripted seats use their built policies.
+The output has the verifier result, per-seat logs, and a world event timeline in `summary.md`.
+Playtest itself makes no model requests. The external command can incur costs.
+Use Playtest for instruction and interaction design, not benchmark evidence.
 
 ## Tests
 

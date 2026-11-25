@@ -74,6 +74,17 @@ def test_seats_survive_toml_round_trip():
     assert again.agents == config.agents
 
 
+def test_start_after_round_trip():
+    config = TaskConfig.model_validate_toml(
+        '[agents.raj]\nstart_after = ["maya"]\n[agents.maya]\n'
+    )
+
+    again = TaskConfig.model_validate_toml(config.model_dump_toml())
+
+    assert again.agents["raj"].start_after == ["maya"]
+    assert again.agents["maya"].start_after == []
+
+
 @pytest.mark.parametrize(
     "toml, message",
     [
@@ -81,6 +92,16 @@ def test_seats_survive_toml_round_trip():
         ("[agents.maya]\nnetwork_mode = 'no-network'\n", "Extra inputs"),
         ("[agents.maya]\nuser = 'maya'\n", "Extra inputs"),
         ("[agent]\nuser = 'maya'\n[agents.maya]\n", "set user: on each seat"),
+        (
+            '[agents.maya]\nstart_after = ["unknown"]\n',
+            "Seat 'maya' start_after names unknown seats:.*unknown",
+        ),
+        ('[agents.maya]\nstart_after = ["maya"]\n', "start_after cycle: maya -> maya"),
+        (
+            '[agents.maya]\nstart_after = ["raj"]\n'
+            '[agents.raj]\nstart_after = ["maya"]\n',
+            "start_after cycle:.*",
+        ),
         ('[agents."bad name"]\n', "Invalid Docker Compose service name"),
         (
             "[agents.maya]\n[[steps]]\nname = 'one'\n",
