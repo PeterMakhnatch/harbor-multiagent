@@ -1,34 +1,22 @@
 {
  "name": "interface-rehearsal",
  "prereg": {
-  "commit": "3cf92b6f56127a94fa17a3078377291ec2be366b",
+  "commit": "7ee9d91132ad8f55c9b8becbd47bf06724d46665",
   "doc": "flotilla/docs/seams/interface.md",
   "section": "## Oracle rehearsal (pre-registration)"
  },
  "task_sets": [
   {
-   "tasks_dir": "/tmp/seams1125/b-interface/oracle-careful",
-   "manifest": "/tmp/seams1125/b-interface/oracle-careful/manifest.json",
+   "tasks_dir": "/tmp/seams1125/b2-interface/oracle-careful",
+   "manifest": "/tmp/seams1125/b2-interface/oracle-careful/manifest.json",
    "instances": [0],
-   "arms": ["team"]
+   "arms": ["team", "team-parallel", "probe-control", "probe-trap-key"]
   },
   {
-   "tasks_dir": "/tmp/seams1125/b-interface/oracle-careful",
-   "manifest": "/tmp/seams1125/b-interface/oracle-careful/manifest.json",
+   "tasks_dir": "/tmp/seams1125/b2-interface/oracle-naive",
+   "manifest": "/tmp/seams1125/b2-interface/oracle-naive/manifest.json",
    "instances": [0],
-   "arms": ["probe-control", "probe-trap-key"]
-  },
-  {
-   "tasks_dir": "/tmp/seams1125/b-interface/oracle-naive",
-   "manifest": "/tmp/seams1125/b-interface/oracle-naive/manifest.json",
-   "instances": [0],
-   "arms": ["team"]
-  },
-  {
-   "tasks_dir": "/tmp/seams1125/b-interface/oracle-naive",
-   "manifest": "/tmp/seams1125/b-interface/oracle-naive/manifest.json",
-   "instances": [0],
-   "arms": ["probe-control", "probe-trap-key"]
+   "arms": ["team", "team-parallel", "probe-control", "probe-trap-key"]
   }
  ],
  "models": [null],
