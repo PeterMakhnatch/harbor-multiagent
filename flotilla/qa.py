@@ -734,6 +734,9 @@ def protected_files(task: Task, seat: str) -> dict[Path, str]:
     paths = {task.env_dir / name: f"environment/{name}" for name in WORLD_FILES}
     paths.update((path, f"environment/ext/{path.name}") for path in (task.env_dir / "ext").glob("*.py"))
     paths[task.path / "solution" / "family.py"] = "solution/family.py"
+    paths.update((path, f"solution/{path.name}") for path in (task.path / "solution").glob("policy*"))
+    paths[task.path / "solution" / "family_policy.py"] = "solution/family_policy.py"
+    paths[task.path / "solution" / "answer.json"] = "solution/answer.json"
     paths[task.path / "task.toml"] = "task.toml"
     for root in (task.path.parent, task.path.parent.parent):  # <out>/<label>/<task>: the manifest is at <out>
         paths[root / BUILD.MANIFEST] = f"the build manifest ({BUILD.MANIFEST})"
@@ -892,6 +895,16 @@ def check_stale_code(task: Task) -> Iterator[Finding]:
             missing.append(built)
         elif (task.path / built).read_bytes() != expected:
             differ.append(built)
+    if "policy" in task.task_json:
+        sources = {"solution/policy.py": "world/policy.py"}
+        custom = f"policies/{task.family_name}.py"
+        if checkout_bytes(custom) is not None:
+            sources["solution/family_policy.py"] = custom
+        for built, source in sources.items():
+            if not (task.path / built).is_file():
+                missing.append(built)
+            elif (task.path / built).read_bytes() != checkout_bytes(source):
+                differ.append(built)
     if differ:
         yield Finding("stale-code", task.name, "*",
                       f"{', '.join(differ)} differ from this checkout's files: build the set again")
@@ -980,10 +993,37 @@ def check_extension(task: Task) -> Iterator[Finding]:
             if (task.view(seat)["instruction"] != text
                     or json.loads(task.env(seat)["SEAT_BRIEFING"]) != arm["briefings"][seat]):
                 yield Finding("qa-error", task.name, seat, "extension briefing or instruction differs from generator")
+        task.cache[("extension", "arm")] = arm
         for detail in task.family.qa(data, {seat: task.view(seat) for seat in seats}):
             yield Finding("qa-error", task.name, "*", detail)
     except Exception as exc:  # noqa: BLE001 - malformed extension task is a QA failure
         yield Finding("qa-error", task.name, "*", f"extension QA failed: {type(exc).__name__}")
+
+
+def check_policy_runner(task: Task) -> Iterator[Finding]:
+    data = task.task_json
+    solution = task.path / "solution"
+    selected = data.get("policy")
+    if selected is None:
+        if (solution / "policy.json").exists() or data.get("mode") == "extension":
+            yield Finding("qa-error", task.name, "*", "task lacks policy metadata")
+        return
+    try:
+        if selected not in ("careful", "naive", "nop"):
+            raise ValueError("invalid selected policy")
+        metadata = tomllib.loads((task.path / "task.toml").read_text())["metadata"]
+        if metadata["policy"] != selected:
+            raise ValueError("policy metadata differs")
+        mode = data.get("mode", "answer")
+        arm = task.cache.get(("extension", "arm"), {})
+        custom = BUILD.load_policy(task.family_name)
+        expected = BUILD.policy_settings(task.family, custom, data["variant"], mode, selected, task.seats,
+                                         tuple(set(task.seats) - set(task.under_test)), arm.get("scripted_policies", {}))
+        if (json.loads((solution / "policy.json").read_text()) != expected
+                or (solution / "solve.sh").read_text() != BUILD.POLICY_SH):
+            raise ValueError("policy solution differs")
+    except Exception as exc:  # noqa: BLE001
+        yield Finding("qa-error", task.name, "*", f"policy QA failed: {type(exc).__name__}")
 
 
 def check_confederate_plan(task: Task) -> Iterator[Finding]:
@@ -1245,7 +1285,7 @@ def check_container_name(task: Task) -> Iterator[Finding]:
 TASK_RULES = (check_example_leak, check_condition_leak, check_software_name, check_opaque_names, check_seat_network,
               check_seat_secrets, check_token_map, check_stale_code, check_container_name, check_solo_sufficient,
               check_game_secret, check_confederate_plan, check_audit_data, check_push, check_inbox, check_policy,
-              check_extension)
+              check_extension, check_policy_runner)
 
 
 # --- Rules across tasks ----------------------------------------------------------------------------------------

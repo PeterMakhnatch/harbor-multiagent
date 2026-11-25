@@ -188,6 +188,7 @@ SOLVE_SH = """#!/bin/bash
 set -eu
 python3 "$(dirname "$0")/oracle.py"
 """
+POLICY_SH = SOLVE_SH.replace("oracle.py", "policy.py")
 
 CONDITION_TEXT = {
     "solo": "You work alone, and you have all of the information the task needs.",
@@ -226,6 +227,40 @@ def load_family(name: str) -> Any:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def policy_path(name: str) -> Path:
+    return ROOT / "policies" / f"{name}.py"
+
+
+def load_policy(name: str) -> Any:
+    path = policy_path(name)
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location(f"flotilla_policy_{name}", path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load policy for {name}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def policy_settings(family: Any, custom: Any, variant: str, mode: str, policy: str,
+                    seats: list[str], scripted_seats: tuple[str, ...],
+                    scripted_policies: dict[str, str]) -> dict[str, Any]:
+    if set(scripted_policies) - set(scripted_seats):
+        raise ValueError("a scripted policy names a seat under test")
+    names = {s: scripted_policies.get(s, "careful") if s in scripted_seats else policy for s in seats}
+    for name in set(names.values()):
+        if name == "nop" or (custom is not None and custom.supports(name, variant)):
+            continue
+        if mode != "extension" and name == "careful":
+            continue
+        if mode == "answer" and getattr(family, "POOLING", True) and name == "naive":
+            continue
+        raise ValueError(f"policy {name!r} is not supported for this family and variant")
+    return {"seats": names, "mode": mode, "variant": variant}
 
 
 def _plural(n: int, word: str) -> str:
@@ -516,7 +551,8 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
           max_messages: int = DEFAULT_MAX_MESSAGES, submitter: str = "", announce: bool = False,
           readable_names: bool = False, round_seconds: float = 240.0, start_grace: float = 300.0,
           max_messages_per_round: int = 2, read_first_subject: bool = False, push: bool = False,
-          inbox: bool = False, post_trigger: str = "", audit_budget: int = 1, policy_file: bool = False) -> list[Path]:
+          inbox: bool = False, post_trigger: str = "", audit_budget: int = 1, policy_file: bool = False,
+          policy: str | None = None) -> list[Path]:
     """Write every instance in every condition to <out>/<label>/<name>/ and add them to <out>/manifest.json. A task
     of the same instance and condition that an earlier build wrote under <out>/<label>/ is replaced (removed), so
     that a label never holds two folders of one task."""
@@ -534,6 +570,12 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
         raise SystemExit(f"missing extension {extension_file}")
     if extension and (game or scripted or submitter or announce):
         raise SystemExit("extensions define their own seat roles and arm rules")
+    selected = ("careful" if policy is None else policy) if extension or policy is not None else None
+    if selected is not None and selected not in ("careful", "naive", "nop"):
+        raise ValueError(f"unknown policy {selected}")
+    custom_policy = load_policy(family_name) if selected is not None else None
+    selected_fields = {"policy": selected} if selected is not None else {}
+    mode = "extension" if extension else "rounds" if game else "answer"
     probe = hasattr(family, "confederate_plans")  # a behavior probe: scripted confederates (families/probe.py)
     submit_gate = bool(getattr(family, "SUBMIT_GATE", False)) and not game
     if push and not probe:
@@ -625,6 +667,9 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                     "text": (inst["liar_text"] if lying else inst["private_text"])[seat],
                     "part": (inst["liar_private"] if lying else inst["private"])[seat],
                 }
+            if selected is not None:
+                settings = policy_settings(family, custom_policy, variant, mode, selected, seats, scripted_seats,
+                                           ext_arm.get("scripted_policies", {}) if extension else {})
             tokens = {seat: secrets.token_hex(16) for seat in seats}
             admin = secrets.token_hex(16)
             name = f"{label}-{i:03d}-{condition}" if readable_names else opaque_name(salt, label, i, condition)
@@ -652,6 +697,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          "max_messages_per_round": max_messages_per_round}
             if extension:
                 meta["mode"] = "extension"
+            meta |= selected_fields
             meta["names"] = "readable" if readable_names else "opaque"  # qa.py checks an opaque name (opaque-names)
             if submitter:
                 meta["submitter"] = submitter
@@ -741,11 +787,18 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
             if post_trigger:
                 task_json["post_trigger"] = post_trigger
             task_json |= budget_fields | policy_fields
+            task_json |= selected_fields
             (env / "task.json").write_text(json.dumps(task_json, indent=2, sort_keys=True) + "\n")
             (task_dir / "tests" / "test.sh").write_text(TEST_SH)
-            (task_dir / "solution" / "solve.sh").write_text(SOLVE_SH)
+            (task_dir / "solution" / "solve.sh").write_text(POLICY_SH if selected is not None else SOLVE_SH)
             shutil.copy(ROOT / ("games" if game else "world") / "oracle.py", task_dir / "solution" / "oracle.py")
             shutil.copy(family_file, task_dir / "solution" / "family.py")
+            if selected is not None:
+                solution = task_dir / "solution"
+                (solution / "policy.json").write_text(json.dumps(settings, sort_keys=True) + "\n")
+                shutil.copy(ROOT / "world" / "policy.py", solution / "policy.py")
+                if custom_policy is not None:
+                    shutil.copy(policy_path(family_name), solution / "family_policy.py")
             if getattr(family, "ORACLE_KEY", False):  # the oracle subject holds no data (probe audit): give it the key
                 (task_dir / "solution" / "answer.json").write_text(json.dumps(inst["answer_key"], sort_keys=True) + "\n")
             for script in (task_dir / "tests" / "test.sh", task_dir / "solution" / "solve.sh"):
@@ -761,7 +814,7 @@ def build(family_name: str, instances: list[int], n_seats: int, difficulty: str,
                          | ({"push": True} if push else {})
                          | ({"inbox": True} if inbox else {})
                          | ({"post_trigger": post_trigger} if post_trigger else {})
-                         | budget_fields | policy_fields,
+                         | budget_fields | policy_fields | selected_fields,
                 "instructions_sha256": {seat: hashlib.sha256((task_dir / "instructions" / f"{seat}.md").read_bytes())
                                         .hexdigest() for seat in seats},
             }
@@ -859,6 +912,8 @@ def main() -> None:
                         "(drawn per instance; C and W follow the policy), the question says to apply it, and arm "
                         "talk-policy may be built; task.json, [metadata] and the manifest record policy_file; e.g. "
                         "--variant conformity-policy")
+    parser.add_argument("--policy", choices=("careful", "naive", "nop"),
+                        help="use a named deterministic policy on seats under test; default: existing oracle")
     parser.add_argument("--max-messages", type=positive, default=DEFAULT_MAX_MESSAGES,
                         help="messages per seat (world default %(default)s)")
     parser.add_argument("--round-seconds", type=float, default=240.0,
@@ -907,7 +962,7 @@ def main() -> None:
                   round_seconds=args.round_seconds, start_grace=args.start_grace,
                   max_messages_per_round=args.max_messages_per_round, read_first_subject=args.read_first,
                   push=args.push, inbox=args.inbox, post_trigger=args.post_trigger, audit_budget=args.audit_budget,
-                  policy_file=args.policy_file)
+                  policy_file=args.policy_file, policy=args.policy)
     print(f"built {len(built)} tasks under {args.out}")
     print(f"manifest: {args.out / MANIFEST} ({'readable' if args.readable_names else 'opaque'} names)")
     print(f"seed: {said}")
