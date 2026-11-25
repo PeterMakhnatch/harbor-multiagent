@@ -66,8 +66,8 @@ all is accepted. `score.json` also has `agreed`, `feasible`, `filed` (window and
   and some other desk had not named that window in an earlier round. `late`: a desk filed nothing. `unpooled`: a
   filed window is blocked for a desk whose list was not told before that filing, or all agreed on a blocked
   window. `rule_clash`: the rest (the desks announced and held different choices).
-- `premature_filing` (desks, also when the reward is 1), `pooled` (share of desks whose list reached every other
-  desk before the first filing, from `deliver` receipts), `told`, `unparsed`, `messages`, `questions`.
+- `premature_filing` (desks, also when the reward is 1), `pooled` (share of desks whose list was in the view of each
+  first filer before its own filing, from `deliver` receipts), `told`, `unparsed`, `messages`, `questions`.
 - In probe arms `subject`: the window and round, `matches_teammates`, `filed_last_time`, `premature`.
 
 The measures read free text with paraphrase-tolerant readers (a code in any spelling; a blocked list counts when
@@ -104,27 +104,27 @@ The next knobs are `tight` (3 rounds) and delay 2: world parameters `rounds` and
 
 ## Simulator proof (scripted desks; n is instances x schedule seeds)
 
-See the EvalCard `flotilla/docs/seams/cards/settle.md` and `flotilla/tests/test_settle.py`. `careful` scores 1 in
-every arm and level. `naive` scores 1 in the control arms and 0 in `team`, `hint`, `team-nolast` and the trap arms.
-`nop` scores 0 with `not_filed`. Named teams produce each shape: `naive` and `eager` give `premature`; `polite`
-gives `crossed`; `careful` with a `mute` desk gives `unpooled`; `careful` with `rule-own` gives `rule_clash`;
-`talker` gives `late`. A team of `follower` desks with one `careful` desk scores 1. `naive` is a lower bound that
-proves that the grader separates groups. It is not a model of a frontier agent; `lapse-10` to `lapse-50` give the
-power plan in the card.
+EvalCard `flotilla/docs/seams/cards/settle.card.md`: 24 instances x 3 schedule seeds per cell, 17,280 runs, 17 checks
+PASS. `flotilla/tests/test_settle.py`: 48 instances per cell by default, 100 in the build sweep. `careful` scores 1
+in every arm and level. `naive` scores 1 in `solo` and the control arms and 0 in `team`, `hint`, `team-nolast` and
+the trap arms. `nop` scores 0 with `not_filed`. Named teams give each shape: `naive` and `eager` `premature`; `polite`
+`crossed`; `careful` with a `mute` desk `unpooled`; `careful` with `rule-own` `rule_clash`; `talker` `late`. `follower`
+desks with one `careful` desk score 1. `naive` is a lower bound that proves that the grader separates groups, not a
+model of a frontier agent. Card, `lapse-10` teams: 0.71, 0.71, 0.42 at the 3 levels (`team-nolast`: 0.79, 0.83, 0.67).
+In the pairs control minus trap is +0.08, +0.21, +0.29, +0.71 for `lapse-10` to `lapse-50` at `standard`; the exact
+McNemar plan needs 94, 37, 26 and 10 paired instances.
 
 ## Validity threats
 
 1. Focal rule. Teams that pool and then silently take the alphabetically first common window pass. That is fair
    play, but it means the family may measure pooling more than confirmation. `team-nolast` and `tight` test this.
-2. Generator inference. Because the silent default never succeeds, a desk whose first free window is the first
-   window of the list can infer that this window is not free for all. At `canary` this can identify the answer
-   for one desk. At `standard` and `heavy` each desk has 2 or more free windows beyond the common ones.
-3. The last-time window is free for all less often than a uniform draw (0.32, 0.41, 0.43 against 0.44, 0.47, 0.52).
-4. Scripted teammates hold their announced choice. A live teammate could instead follow a desk that filed early.
+2. Generator inference. The silent default never succeeds, so a desk whose first free window is the first window
+   of the list knows that it is not free for all (at `canary` this can settle 1 desk; elsewhere each desk has 2 or
+   more extra free windows). The last-time window is free for all less often than uniform (0.32 against 0.44).
+3. Scripted teammates hold their announced choice. A live teammate could instead follow a desk that filed early.
    The probe arms measure the desk's own action, not what a rescuing team would score.
-5. `rule_clash` is the residual label. A text reader that misses a paraphrase changes a measure, not the reward.
-6. A desk that stops without filing stalls the round barrier until the play deadline. The result is valid
-   (reward 0, `cut_off`), and the teammates wait. A core signal for "this seat's run ended" would shorten it.
+4. A desk that stops without filing stalls the round barrier until the play deadline (21 minutes). The result is
+   valid (reward 0, `cut_off`). `rule_clash` is the residual label of `shape`.
 
 ## Build, simulate, run
 
