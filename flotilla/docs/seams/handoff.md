@@ -238,6 +238,19 @@ Before any Docker trial, the predictions are: `careful` 1 in both arms; `pointer
 should lose the ticket. Compare the outcomes from Docker with the same built-task simulator. This checks a
 scripted mechanism, not whether access to the record helps a model.
 
+### Packaging repair and repeat of the negative control
+
+The first Docker attempt did not test either policy. Harbor recorded 3 zero rewards. Each of the 12 seats
+exited 126 before its first action: `/solution/solve.sh: Permission denied`. The fourth job stopped at
+Docker preflight. A private build made the uploaded `solution/` directory owner-only. Although `solve.sh`
+had execute permission, the non-root seat could not traverse its parent. The simulator runs as the host
+owner and did not catch the fault. Keep these attempts. Do not count them as policy losses.
+
+Repeat all 4 cells in a new run folder after repairing package permissions. Reuse the original instance
+and seed. No world rule, policy, note, scoring rule or prediction changes. Require all 4 oracle processes
+per trial to exit 0, all 16 settlements per trial to be correct, and the exact 4 rewards registered above.
+The original run must remain inspectable. Do not substitute a later successful attempt into its records.
+
 ## Validity limits
 
 - Rules are stated, not learned from unfamiliar worlds. Frontier models can reach the ceiling.
