@@ -649,3 +649,232 @@ to be committed. Cross-play still needs manifests for the seat counts. A resume 
 digest. For a fixed-size wave, pass `--retry-invalid` for a single retry per invalid cell. A staged
 wave retries within each stage before its look. `--smoke` is a CLI flag, not a plan key. It ignores
 stages, uses local Docker with a $0 cap, and can omit `models` on the `oracle` agent.
+
+## 22. Extensions, policies and the simulator
+
+A new Seams family needs three files. It needs no registry entry or change to any core file:
+
+| File | Role |
+|---|---|
+| `flotilla/seams/<family>.py` | Instance generator, arm renderings and QA expectations |
+| `flotilla/world/ext/<family>.py` | Referee state, routes and event scorer |
+| `flotilla/policies/<family>.py` | Deterministic player policies |
+
+Use a Python identifier for `<family>`. Keep these modules self-contained and standard-library only.
+The builder copies each module into the task bundle. The referee and its configuration stay in
+`main`. The policy and generator are in `solution/`, which Harbor's oracle receives, not a model seat.
+Existing answer-slot and rounds families keep their original protocols and default oracle solutions.
+
+### 22a. Generate and render an arm
+
+In `seams/<family>.py`:
+
+```python
+FAMILY = "my_family"
+TITLE = "A short task title"
+SEATS = 2
+ARMS = ("solo", "talk", "talk-control", "talk-trap")
+TWINS = (("talk-control", "talk-trap"),)
+
+def generate(seed: int, instance: int, n_seats: int, difficulty: str) -> dict:
+    # Return a JSON instance with "seats": ["p1", ..., "pN"] and the family data.
+    ...
+
+def extension_arm(inst: dict, arm: str, max_text: int, max_messages: int) -> dict:
+    # Return the rendering described below.
+    ...
+
+def qa(task: dict, views: dict[str, dict[str, str]]) -> Iterable[str]:
+    # Yield a finding for each failed family-specific check. Never print a secret.
+    ...
+```
+
+`generate` returns exactly the requested team seat count. All arms start from the same instance.
+`extension_arm` returns these keys:
+
+| Key | Meaning |
+|---|---|
+| `briefings` (required) | Seat → JSON object; its keys select the roster for this arm |
+| `instructions` (required) | Seat → Markdown, with all rules and API calls that the seat needs |
+| `params` (required) | JSON object with the extension's rules, instance data and answer key; main only |
+| `messaging` | Boolean; default: arm begins with `talk` |
+| `initial_active` | Initially active seats; default: every seat in the arm |
+| `scripted_seats` | Seats not under test; default: none |
+| `scripted_policies` | Scripted seat → policy name; default: `careful` on each scripted seat |
+| `files` | Filename → text, copied into every seat's home folder; default: none |
+
+Use `{"p1": ...}` for the `solo` roster. Scripted seats must be in the arm's roster; their
+instruction is the standard scripted-seat instruction. Other seats see only their own briefing
+and instruction, plus the common files. Do not put private data in `files`.
+Tell seats about the applicable message limits in their instructions.
+
+QA regenerates the arm and checks the roster, briefings, instructions, private parameters and initial
+seat status. It checks the shipped extension and policies against the checkout, and rejects exposed
+referee files. `views[seat]` holds the same seat-visible fields as `qa.py` checks, for example
+`instruction` and `env.SEAT_BRIEFING`. The family's `qa` hook checks answer leaks and other
+family-specific validity requirements. `TWINS` declares paired probe arms; QA compares all
+seat-visible bytes of each seat under test (apart from its token). `ARMS` supplies the default
+conditions to the builder. Use `EXTRA_ARMS` for arms that require explicit `--conditions`.
+
+### 22b. Implement the referee
+
+`world/ext/<family>.py` exports `create(task: dict, host) -> Extension` and
+`score(task: dict, events: list[dict]) -> dict`. The world loads the extension named in
+`task.json["extension"]`. The configuration includes `params`, `seed`, `instance`, `seats`,
+`condition`, `messaging` and `initial_active`. Do not return the seed, condition, answer key or
+another seat's private information from a route.
+
+The object from `create` has these members:
+
+```python
+routes = {"/board": ("GET",), "/commit": ("POST",)}
+
+def handle(self, seat: str, method: str, path: str, body: dict,
+           query: dict[str, list[str]]) -> tuple[int, dict]:
+    ...
+
+def message_delay(self, message: dict, recipient: str) -> int | None:
+    # Optional: ticks until delivery, or None to drop this recipient's copy.
+    return 0
+```
+
+The world authenticates the seat, checks the method, validates the JSON object, and calls `handle`
+under its lock. The extension validates game-specific arguments and role permissions. It returns
+an HTTP status and a JSON object; invalid actions return 4xx, not exceptions.
+Routes may not override a core route or use `/admin/`. The core records `extension_call` events
+with method, path and status. A seat can make at most 1,000 custom calls.
+The extension may hold state in its object; `create` only initializes state, before the start event.
+
+The `host` provides:
+
+| Member | Effect |
+|---|---|
+| `tick: int` | Current logical tick, initially 0 |
+| `status: dict[str, str]` | Current `waiting`, `active` or `retired` status by seat; read only |
+| `advance() -> int` | Increment the tick by 1; append a `tick` event |
+| `activate(seat: str)` | Change `waiting` to `active`; append `seat_transition` |
+| `retire(seat: str)` | Change `active` to `retired` permanently; append `seat_transition` |
+| `record(kind: str, seat: str | None, data: dict | None = None)` | Append family-specific JSON evidence |
+| `freeze()` | End play; append `freeze` once |
+
+Do not change `host.tick` or `host.status` directly. Advance time only on valid game actions.
+Use family-specific event kinds for accepted moves and state changes. Do not reuse reserved core
+event kinds. Use `host.freeze()` after the last accepted move. There is no clock-driven game rule
+in extension mode. Harbor's timeout still bounds a trial, and the verifier freezes the world.
+
+The core keeps `/health`, `/whoami`, `/messages` and the admin routes. It drops `/submit`.
+`GET /whoami` also returns `tick`, `active` (a status string), and `frozen` (boolean).
+Waiting and retired seats can poll this route, but cannot use other seat routes (409).
+After a freeze, every extension and message route refuses further calls (409); `/whoami` still
+reports the status. Use polling to wait for a tick or a shift change, not a blocking handler.
+
+When messaging is enabled, the core enforces the usual per-seat limits and logs sends and deliveries.
+On each accepted send, it calls `message_delay` once per intended recipient (other than the sender).
+It computes the arrival tick from the current tick plus the returned delay. `None` means no arrival.
+Only messages due at the current tick or earlier are returned to that recipient; a sender sees its
+own message. The `message_route` event records `id`, `to` and `arrival` (null for a drop).
+The default delay is 0. Any random delivery decision must use the task seed and the game's event
+order, not a random message ID, process clock or wall time. State the delay and drop rules in the
+instructions. The core does not invent or change message text.
+
+The verifier freezes play and calls `score(task, events)` with the complete event log in sequence
+order. Return `{"reward": float_in_0_to_1, ...}`; other keys are operator-only metrics in `score.json`.
+Score accepted actions from evidence, not replies, instruction examples, guessed identities or a
+model judge. Include any required seat participation in the score. A restart, invalid score or
+referee failure makes verification fail closed. The event times of an extension equal its logical
+ticks, not wall-clock seconds.
+
+### 22c. Write portable policies
+
+`policies/<family>.py` exports `supports(name: str, variant: str) -> bool` and
+`play(name: str, client, own: dict) -> Generator`. The latter is a generator that yields each request
+or sleep through `client`. `own` is only the seat's own briefing.
+
+```python
+def supports(name, variant):
+    return name in ("careful", "naive")
+
+def play(name, client, own):
+    status, me = yield from client.get("/whoami")
+    status, inbox = yield from client.get("/messages")
+    if name == "careful" and not inbox["messages"]:
+        yield from client.post("/advance", {})
+        status, inbox = yield from client.get("/messages")
+    # Compute from own and inbox, then submit the family's action.
+```
+
+`client.seat` is the current seat. `yield from client.get(path)` and
+`yield from client.post(path, body)` return `(status, reply)` (including 4xx). Query parameters
+belong in `path`. `yield from client.sleep(seconds)` lets other seats run; it does not advance
+extension ticks. `client.read_file(name)` reads a plain-name local file. Do not use global state,
+network calls, `time.sleep`, the host filesystem, another seat's data or random numbers in a policy.
+The core executes `nop` with no calls; it does not need a custom implementation.
+
+Use `careful` for play that follows the full coordination protocol. Use `naive` for play that follows
+the task but skips the single coordination step under study. Extra names are available for scripted
+seats. The builder ships a policy runner and `policy.json` for extension tasks, or for an existing
+family built with `--policy careful|naive|nop`. A policy selection changes only seats under test,
+never the scripted roster or teammates' policies. Use separate `--out` roots for different policy
+builds: tasks with the same label, instance and arm otherwise replace each other.
+
+For existing answer families, `careful` uses the reference pooling or subject behavior; `naive`
+defaults to local-only computation in pooling families. Other naive policies are family-specific.
+The verify probe has custom `careful` and `naive` policies. Legacy rounds use their existing oracle
+for careful play and do not have a general naive policy.
+Without `--policy`, legacy builds continue to ship the original oracle solution.
+
+### 22d. Simulate and prove the mechanism
+
+`flotilla/sim.py` builds the task in a temporary directory, uses the actual world request handlers
+and policy generators, and replaces HTTP writes with in-memory replies. A seeded scheduler selects
+one ready seat per step. It uses a simulated clock for legacy scheduled posts and sleeps, and
+deterministic message IDs. It stops after at most 50,000 steps. No LLM, Docker or sockets are used.
+
+```python
+simulate(family, arm, instance, policies, seed, schedule_seed,
+         *, variant="", n_seats=None, difficulty="easy", **build_options) -> dict
+simulate_built(task_dir, policies, schedule_seed) -> dict
+```
+
+`policies` is a name for all seats under test, or a mapping of subject seat → name (unspecified
+seats keep careful or the built policy). `simulate_built` accepts `None` to keep the built policies.
+Scripted seats cannot be overridden. The result contains `reward`, `events`, frozen `state`,
+`requests` by seat, `files_read` by seat, `policies` and `schedule_seed`.
+Pass options such as `read_first_subject=True` to `simulate` to match a build.
+The simulator checks event order and shape, response status, and that frozen play accepts no
+further seat moves. It checks the final reward range. It runs sequentially within a process
+(the legacy world reads environment variables at import). Use separate processes for parallel
+sweeps. PyYAML is required to read the built Compose config.
+Legacy wall-clock rounds games are not supported by this simulator.
+
+Worked example, test-only `kit_fixture`: the sender's partial sum goes to a receiver after a shift.
+The receiver must wait for delivery before adding the two values. The control delivers at tick 1;
+the trap at tick 2, with identical briefings. Both arms script the sender. The diagnostic message
+never arrives, as stated in the instructions. The solo seat has both parts. A receiver guessing
+the missing part has chance 1/9,000 in easy and 1/90,000 in hard; a sender alone cannot score.
+
+```bash
+uvx --quiet --python 3.12 --with pyyaml python flotilla/sim.py --family kit_fixture \
+    --arms solo,talk,talk-control,talk-trap --instances 0-4 --schedule-seeds 0-4
+uvx --quiet --python 3.12 --with pyyaml python flotilla/sim.py --family probe \
+    --variant verify-readfirst --read-first --arms talk-quiet,talk-false \
+    --policies careful,naive --instances 0-4 --schedule-seeds 0-4
+```
+
+The fixture's careful policy scores 1 in every arm. The naive receiver scores 1 in the control
+and 0 in the trap. For `rf1v`, naive sums the complete reports before reading any file, or reads
+the files if there are no complete reports. Expect naive 0 in `talk-false` and 1 in `talk-quiet`;
+careful 1 in both. These are scripted demonstrations of the mechanism, not estimates of model
+performance.
+
+Family checklist before a model run:
+
+1. Name one seam and one variable that distinguishes the probe arms. State the chance baseline.
+2. Prove `solo=1` and `team=1` with careful play across instances and schedule seeds.
+3. Prove that one seat cannot score alone. Test missing, stale, late and malformed inputs.
+4. Prove the naive trap/control gap; keep scripted teammates fixed. Check the event evidence.
+5. Replay identical seeds and compare complete events. Sweep both difficulty settings.
+6. Make a fresh opaque build, run QA with 0 FAIL, and rehearse it with Harbor's oracle on local Docker.
+7. Keep briefings small (target 15 or fewer agent turns). Make each player rule explicit.
+
+No LLM or paid environment is needed for these checks.

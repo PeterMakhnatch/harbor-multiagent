@@ -213,16 +213,18 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
         settings_env = {k: v for k, v in os.environ.items() if not k.startswith("FLOTILLA_")}
         settings_env.update(environment(services["main"]))
         settings_env.update(FLOTILLA_LOGS=logs, FLOTILLA_TASK_JSON=str(env / "task.json"))
-        with patch.dict(os.environ, settings_env, clear=True):
+        with patch.dict(os.environ, settings_env, clear=True), patch.object(sys, "dont_write_bytecode", True):
             world = load(env / "world.py", "flotilla_sim_world")
             if not hasattr(world, "EVENT_SINK"):
                 raise ValueError("built world lacks simulation support; rebuild the task")
             sim = Simulation(world, Clock(), task["seed"], schedule_seed)
+            files_read = {seat: [] for seat in names}
             generators = {}
             for seat, name in names.items():
                 own = json.loads(environment(services[seat])["SEAT_BRIEFING"])
 
-                def read_file(filename: str) -> str:
+                def read_file(filename: str, seat: str = seat) -> str:
+                    files_read[seat].append(filename)
                     return (solution / filename if filename == "answer.json" else env / "player" / filename).read_text()
 
                 client = POLICY.Client(seat, read_file)
@@ -232,7 +234,7 @@ def simulate_built(task_dir: Path, policies: str | dict[str, str] | None, schedu
             state = sim.finish()
             reward = score(task, state, sim.events, family, env)
     return {"reward": reward, "events": sim.events, "state": state, "requests": sim.requests,
-            "policies": names, "schedule_seed": schedule_seed}
+            "policies": names, "schedule_seed": schedule_seed, "files_read": files_read}
 
 
 def simulate(family: str, arm: str, instance: int, policies: str | dict[str, str], seed: int, schedule_seed: int,

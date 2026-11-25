@@ -228,6 +228,38 @@ for reply timing and for `--read-first`, `--push`, `--inbox` and `--post-trigger
 `flotilla/trust_card.py plan` writes a wave plan. `report` analyses a finished wave.
 See [the runbook](docs/NEXT-WAVE.md) for `run_wave.py`, including the cost forecast and no-cost `--smoke` mode.
 
+## Add a family
+
+Seams studies one coordination mechanism per task. A careful single agent must solve the `solo`
+arm. A team has the same work with one named seam between its agents. Matched probe arms measure
+the effect of that seam with scripted teammates.
+
+Add these files, with the same Python identifier for `<family>`:
+
+- `seams/<family>.py`: generate instances, render arms, declare paired arms and check family-specific QA.
+- `world/ext/<family>.py`: implement the referee routes, logical ticks, seat shifts and event scorer.
+- `policies/<family>.py`: implement `careful`, `naive` and any scripted teammate policies.
+
+No registration or core edit is needed. Follow [CONTRACT.md section 22](CONTRACT.md#22-extensions-policies-and-the-simulator)
+for the interfaces. `kit_fixture` is a worked example for tests only.
+
+```bash
+python3 flotilla/build_tasks.py --family kit_fixture --instances 0-4 --out /tmp/seams-tasks
+uvx --quiet --python 3.12 --with pyyaml python flotilla/qa.py '/tmp/seams-tasks/*/*'
+uvx --quiet --python 3.12 --with pyyaml python flotilla/sim.py --family kit_fixture \
+    --arms solo,talk,talk-control,talk-trap --instances 0-4 --schedule-seeds 0-4
+```
+
+The simulator needs no model or Docker. It uses the same referee and policy code as an oracle run.
+It sweeps task instances and scheduler seeds. Check the complete event log, not only the reward.
+Prove that careful play scores 1 in `solo` and the team arms, and that no single seat can score
+alone in a team arm. Measure the naive probe against its matched control. Check the chance baseline,
+both difficulty settings and reproducibility from the same seeds.
+
+Use `build_tasks.py --policy naive` (or `careful` or `nop`) for a named oracle build. Use a separate
+output root for each policy. The option does not change the model briefing or scripted teammate
+policies. Require zero QA failures and a local, zero-cost oracle rehearsal before a model run.
+
 ## Tests
 
 Run `bash flotilla/check.sh` before delivery. It runs both test suites, `ruff check` on the paths listed in
