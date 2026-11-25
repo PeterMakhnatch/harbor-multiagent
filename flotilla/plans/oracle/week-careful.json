@@ -1,0 +1,32 @@
+{
+  "name": "week-careful-rehearsal",
+  "prereg": {
+    "commit": "d4beb8e2c728ad6aa77c90014bf7a74e6d212058",
+    "doc": "flotilla/docs/seams/week.md",
+    "section": "## Zero-cost oracle rehearsal"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b-week/careful",
+      "manifest": "/tmp/seams1125/b-week/careful/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    }
+  ],
+  "scripted_seats": [],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 15,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}
