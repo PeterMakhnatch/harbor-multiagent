@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -26,6 +27,32 @@ class Sleep(NamedTuple):
 
 Reply = tuple[int, dict[str, Any]]
 Policy = Generator[Request | Sleep, Reply | None, None]
+
+
+class Own(dict[str, Any]):
+    """The seat's briefing, with a reproducible draw for a named lapse opportunity."""
+
+    def __init__(self, briefing: dict[str, Any], seed: int | None, instance: int | None, seat: str, name: str):
+        super().__init__(briefing)
+        self._lapse_context = (seed, instance, seat, name)
+        self.lapse_percent: int | None = None
+        if name.startswith("lapse-"):
+            suffix = name.removeprefix("lapse-")
+            if not suffix.isascii() or not suffix.isdecimal() or len(suffix) > 3:
+                raise ValueError("lapse policy must be lapse-0 through lapse-100")
+            percent = int(suffix)
+            if str(percent) != suffix or not 0 <= percent <= 100:
+                raise ValueError("lapse policy must be lapse-0 through lapse-100")
+            self.lapse_percent = percent
+
+    def lapse(self, percent: int, key: Any) -> bool:
+        if type(percent) is not int or not 0 <= percent <= 100:
+            raise ValueError("lapse percent must be an integer from 0 through 100")
+        if self._lapse_context[0] is None or self._lapse_context[1] is None:
+            raise ValueError("lapse requires the build seed and instance")
+        data = json.dumps((*self._lapse_context, key), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        draw = int.from_bytes(hashlib.sha256(data.encode()).digest(), "big")
+        return draw * 100 < percent * (1 << 256)
 
 
 class Client:
@@ -149,14 +176,15 @@ def legacy_play(name: str, client: Client, own: dict[str, Any], family: Any, ora
 
 
 def play(name: str, client: Client, own: dict[str, Any], family: Any, oracle: Any,
-         custom: Any = None, variant: str = "", extension: bool = False) -> Generator:
+         custom: Any = None, variant: str = "", extension: bool = False,
+         seed: int | None = None, instance: int | None = None) -> Generator:
     if not extension and "script" in own:
         yield from scripted(client, own, oracle)
     elif name == "nop":
         return
     elif custom is not None and custom.supports(name, variant):
         if extension:
-            yield from custom.play(name, client, own, family)
+            yield from custom.play(name, client, Own(own, seed, instance, client.seat, name), family)
         else:
             yield from custom.play(name, client, own)
     elif extension:
@@ -212,7 +240,8 @@ def main() -> None:
         return (root / filename if filename == "answer.json" else Path.cwd() / filename).read_text()
 
     client = Client(seat, read_file)
-    run_http(play(name, client, own, family, oracle, custom, settings["variant"], settings["mode"] == "extension"))
+    run_http(play(name, client, own, family, oracle, custom, settings["variant"], settings["mode"] == "extension",
+                  settings.get("seed"), settings.get("instance")))
 
 
 if __name__ == "__main__":

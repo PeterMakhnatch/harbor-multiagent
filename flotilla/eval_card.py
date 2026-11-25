@@ -13,13 +13,19 @@ import subprocess
 import tempfile
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
+from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 LEVELS = ("canary", "standard", "heavy")
-POLICIES = ("careful", "naive", "nop", "blind", "random", "lone")
+LAPSE_POLICIES = ("lapse-10", "lapse-20", "lapse-30", "lapse-50")
+POWER_POLICIES = (*LAPSE_POLICIES, "script-loop")
+POLICIES = ("careful", "naive", "nop", "blind", "random", "lone", *POWER_POLICIES)
+POWER_ALPHA = 0.05
+POWER_TARGET = 0.8
+POWER_LIMIT = 1000
 PRICES = (1, 5, 15)
 CHANCE_TOLERANCE = 0.10
 TOKEN_MODEL = ("Estimate: 4 characters per input token; repeat the instruction, JSON briefing and seat files "
@@ -61,6 +67,8 @@ class Kit:
     def difficulty(self, level: str, seed: int) -> str | None:
         declared = next((getattr(self.module, name) for name in ("LEVELS", "DOSES", "SETTINGS")
                          if getattr(self.module, name, None)), None)
+        if declared is None and isinstance(getattr(self.module, "SEATS", None), dict):
+            declared = self.module.SEATS
         if declared is not None:
             if level in declared:
                 return level
@@ -87,8 +95,9 @@ class Kit:
 
     def views(self, task: Any, subjects_only: bool = False) -> dict[str, dict[str, str]]:
         seats = task.under_test if subjects_only else task.seats
-        return {seat: {key: value for key, value in task.view(seat).items() if key != "env.SEAT_TOKEN"}
-                for seat in seats}
+        return {seat: {key: value for key, value in (
+                    self.qa.twin_view(task, seat) if subjects_only else task.view(seat)).items()
+                       if key != "env.SEAT_TOKEN"} for seat in seats}
 
     def leak_evidence(self, task: Any, arms: tuple[str, ...]) -> list[str]:
         findings = list(task.errors)
@@ -129,7 +138,7 @@ class Kit:
             return float(value)
         return None
 
-    def pair(self, first: Any, second: Any) -> tuple[dict, list[str]]:
+    def pair(self, first: Any, second: Any, intended_difference: bool) -> tuple[dict, list[str]]:
         a, b = self.views(first, True), self.views(second, True)
         flat_a = {(seat, field): text for seat, view in a.items() for field, text in view.items()}
         flat_b = {(seat, field): text for seat, view in b.items() for field, text in view.items()}
@@ -142,11 +151,23 @@ class Kit:
         evidence = {"instance": first.instance, "control": first.condition, "trap": second.condition,
                     "changed_fields": changed, "edit_chars": sum(item["edit_chars"] for item in changed)}
         hook = getattr(self.module, "pair_difference", None)
-        if callable(hook):
-            errors = list(hook(first.condition, second.condition, a, b))
+        if intended_difference:
+            errors = list(hook(first.condition, second.condition, a, b)) if callable(hook) else [
+                "declared PAIR has no pair_difference hook"]
         else:
-            errors = ["subject-visible fields differ without a validating pair_difference hook"] if changed else []
+            errors = ["subject-visible fields differ in twin arms"] if changed else []
         return evidence, errors
+
+    def canary(self, task: Any) -> list[str]:
+        marker = self.builder.CANARY
+        findings = []
+        if marker not in (task.path / "task.toml").read_text():
+            findings.append(f"{task.condition}/{task.instance}: absent from task.toml")
+        for seat in task.seats:
+            for field, text in task.view(seat).items():
+                if marker in field or marker in text or marker in self.qa.decoded(text):
+                    findings.append(f"{task.condition}/{task.instance}: present in {seat}/{field}")
+        return findings
 
     def sizes(self, task: Any) -> dict[str, dict]:
         return {seat: {"briefing_chars": len(view.get("env.SEAT_BRIEFING", "")),
@@ -176,8 +197,13 @@ def simulate_job(job: tuple[Path, str, int, bool]) -> dict[str, Any]:
     score = result.get("score") or {}
     invalid = bool(result.get("invalid") or result.get("stalled") or score.get("invalid") or score.get("error"))
     events = json.dumps(result.get("events", []), sort_keys=True, separators=(",", ":"), allow_nan=False)
-    return {"reward": result.get("reward"), "invalid": invalid, "requests": result.get("requests", {}),
-            "event_sha256": hashlib.sha256(events.encode()).hexdigest(), "event_count": len(result.get("events", []))}
+    row = {"reward": result.get("reward"), "invalid": invalid, "stalled": bool(result.get("stalled")),
+           "requests": result.get("requests", {}), "event_sha256": hashlib.sha256(events.encode()).hexdigest(),
+           "event_count": len(result.get("events", []))}
+    versions = result.get("versions", score.get("versions"))
+    if versions is not None:
+        row["versions"] = versions
+    return row
 
 
 # Card computation. No hidden task values or raw event traces enter the output.
@@ -221,11 +247,16 @@ def declared_pairs(module: Any) -> list[tuple[str, str]]:
 
 
 def trap_pairs(arms: tuple[str, ...], twins: list[tuple[str, str]], overrides: list[str]) -> dict[str, str]:
-    pairs = {arm: arm.removesuffix("-trap") + "-control" for arm in arms if arm.endswith("-trap")}
+    def is_trap(arm: str) -> bool:
+        parts = arm.split("-")
+        return "trap" in parts and "hint" not in parts
+
+    pairs = {arm: "-".join("control" if part == "trap" else part for part in arm.split("-"))
+             for arm in arms if is_trap(arm)}
     for a, b in twins:
-        if a.endswith("-trap") and b.endswith("-control"):
+        if a in arms and is_trap(a) and "control" in b.split("-"):
             pairs[a] = b
-        elif b.endswith("-trap") and a.endswith("-control"):
+        elif b in arms and is_trap(b) and "control" in a.split("-"):
             pairs[b] = a
     for override in overrides:
         trap, sep, control = override.partition("=")
@@ -246,6 +277,78 @@ def policy_matrix(runs: list[dict]) -> list[dict]:
                        "invalid_n": len(group) - len(rewards), "mean": statistics.mean(rewards) if rewards else None,
                        "min": min(rewards) if rewards else None, "max": max(rewards) if rewards else None})
     return matrix
+
+
+def paired_effect(runs: dict, level: str, policy: str, control: str, treatment: str) -> dict:
+    a = runs.get((level, policy, control), {})
+    b = runs.get((level, policy, treatment), {})
+    keys = a.keys() | b.keys()
+    valid = [(key, a[key]["reward"], b[key]["reward"]) for key in sorted(a.keys() & b.keys())
+             if not a[key]["invalid"] and not b[key]["invalid"]
+             and a[key]["reward"] is not None and b[key]["reward"] is not None]
+    plus = sum(x == 1 and y < 1 for _, x, y in valid)
+    minus = sum(y == 1 and x < 1 for _, x, y in valid)
+    return {"level": level, "policy": policy, "control": control, "treatment": treatment,
+            "instances": len({key[0] for key, _, _ in valid}), "pairs": len(valid),
+            "excluded_pairs": len(keys) - len(valid),
+            "effect": statistics.mean(x - y for _, x, y in valid) if valid else None,
+            "success_effect": (plus - minus) / len(valid) if valid else None, "plus": plus, "minus": minus}
+
+
+def advance_binomial(mass: list[float], probability: float) -> list[float]:
+    return [mass[0] * (1 - probability), *(
+        before * probability + after * (1 - probability) for before, after in pairwise(mass)),
+        mass[-1] * probability]
+
+
+@lru_cache(maxsize=1)
+def fixed_boundaries() -> tuple[int, ...]:
+    from stages import SequentialTest
+
+    return SequentialTest([POWER_LIMIT], alpha=POWER_ALPHA).boundary
+
+
+@lru_cache(maxsize=256)
+def planned_instances(p_plus: float, p_minus: float) -> int | None:
+    """Single fixed look; integrate the exact test's rejection region under the observed alternative."""
+    if p_plus == p_minus:
+        return None
+    discordance = p_plus + p_minus
+    direction = p_plus / discordance
+    bounds = fixed_boundaries()
+    signs, totals, reject = [1.0], [1.0], [0.0]
+    for n in range(1, POWER_LIMIT + 1):
+        signs = advance_binomial(signs, direction)
+        totals = advance_binomial(totals, min(1.0, discordance))
+        k = bounds[n]
+        reject.append(sum(signs[:k + 1]) + sum(signs[n - k:]) if k >= 0 else 0.0)
+        if math.fsum(p * q for p, q in zip(totals, reject, strict=True)) >= POWER_TARGET:
+            return n
+    return None
+
+
+def comparisons(card: dict) -> tuple[list[dict], list[dict]]:
+    i = card["identity"]
+    index = defaultdict(dict)
+    for run in card["runs"]:
+        index[run["level"], run["policy"], run["arm"]][run["instance"], run["schedule_seed"]] = run
+    boundary = "team-fullrecord" if "team-fullrecord" in i["known_arms"] else "solo"
+    costs, power = [], []
+    for level in i["levels"]:
+        for policy in i["policies"]:
+            for name, control in (("boundary", boundary), ("teammate", "solo-seam"), ("protocol", "hint")):
+                costs.append({"cost": name} | paired_effect(index, level, policy, control, "team"))
+            if policy not in POWER_POLICIES:
+                continue
+            for treatment, control in (*i["trap_controls"].items(), ("team", "team-fullrecord")):
+                row = paired_effect(index, level, policy, control, treatment)
+                n = row["pairs"]
+                available = n > 0 and row["excluded_pairs"] == 0
+                row["planned_n"] = planned_instances(row["plus"] / n, row["minus"] / n) if available else None
+                row["plan_status"] = ("NA" if not available else "no effect" if row["plus"] == row["minus"] else
+                                      f"> {POWER_LIMIT}" if row["planned_n"] is None else "planned")
+                power.append(row)
+    return costs, power
 
 
 def check(name: str, rule: str, status: str, evidence: str) -> dict:
@@ -379,14 +482,13 @@ def make_checks(card: dict, pairs: dict[str, str], twins: list[tuple[str, str]])
     comparisons = static["pairs"]
     errors = [error for pair in comparisons for error in pair["errors"]]
     missing_pairs = [f"{trap}={control}" for trap, control in pairs.items()
-                     if not any(p["trap"] == trap and p["control"] == control for p in comparisons)]
+                     if not any({p["trap"], p["control"]} == {trap, control} for p in comparisons)]
     summaries = []
-    for trap, control in pairs.items():
-        group = [p for p in comparisons if (p["trap"], p["control"]) == (trap, control)]
-        if group:
-            fields = sorted({f"{f['seat']}/{f['field']}" for p in group for f in p["changed_fields"]})
-            summaries.append(f"{control}→{trap}: {len(group)} pairs, max {max(p['edit_chars'] for p in group)} "
-                             f"changed chars; fields: {', '.join(fields) or 'none'}")
+    for control, treatment in sorted({(p["control"], p["trap"]) for p in comparisons}):
+        group = [p for p in comparisons if (p["control"], p["trap"]) == (control, treatment)]
+        fields = sorted({f"{f['seat']}/{f['field']}" for p in group for f in p["changed_fields"]})
+        summaries.append(f"{control}→{treatment}: {len(group)} pairs, max {max(p['edit_chars'] for p in group)} "
+                         f"changed chars; fields: {', '.join(fields) or 'none'}")
     result.append(check("pairs", "A1/D2", "FAIL" if errors else "NA" if missing_pairs or not comparisons else "PASS",
                         "; ".join(summaries + errors + [f"missing {p}" for p in missing_pairs]) or "No built pairs"))
     required = set(pairs) & set(identity["arms"])
@@ -402,23 +504,39 @@ def make_checks(card: dict, pairs: dict[str, str], twins: list[tuple[str, str]])
     if not stall or stall.get("unsupported_stall"):
         result.append(check("invalid is not zero", "F1", "NA", "Kit does not return a result for scheduler exhaustion"))
     else:
-        valid = stall.get("invalid") and stall.get("reward") is None and not stall.get("error")
+        valid = stall.get("stalled") and stall.get("invalid") and stall.get("reward") is None and not stall.get("error")
         result.append(check("invalid is not zero", "F1", "PASS" if valid else "FAIL",
-                            f"Budget-limited simulation: invalid={stall.get('invalid')}, reward={stall.get('reward')}"))
+                            f"Budget-limited simulation: stalled={stall.get('stalled')}, "
+                            f"invalid={stall.get('invalid')}, reward={stall.get('reward')}"))
+    canary = static["canary"]
+    result.append(check("canary", "A6", "NA" if canary is None or not static["tasks"] else
+                        "FAIL" if canary else "PASS", "Builder has no canary marker" if canary is None else
+                        "; ".join(canary) or f"Marker checked in {static['tasks']} task files and all seat views"))
+    power = card["power"]
+    lapse = set(LAPSE_POLICIES) & set(identity["policies"])
+    result.append(check("power plan", "A3", "PASS" if lapse and power else "NA",
+                        f"{len(power)} paired comparisons; fixed exact McNemar plan (see table)" if lapse and power
+                        else "No supported lapse policies in sweep"))
     return result
 
 
-def static_checks(kit: Kit, tasks: list[Any], arms: tuple[str, ...], pairs: dict[str, str]) -> dict:
-    result = {"tasks": len(tasks), "leaks": [], "pairs": []}
-    grouped = defaultdict(dict)
-    for task in tasks:
-        result["leaks"].extend(kit.leak_evidence(task, arms))
-        grouped[task.instance][task.condition] = task
-    for group in grouped.values():
-        for trap, control in pairs.items():
-            if trap in group and control in group:
-                evidence, errors = kit.pair(group[control], group[trap])
-                result["pairs"].append(evidence | {"errors": errors})
+def static_checks(kit: Kit, built: dict[str, list[Any]], arms: tuple[str, ...],
+                  twins: list[tuple[str, str]]) -> dict:
+    result = {"tasks": 0, "leaks": [], "pairs": [], "canary": [] if hasattr(kit.builder, "CANARY") else None}
+    permitted = set(getattr(kit.module, "PAIRS", ()))
+    for level, tasks in built.items():
+        result["tasks"] += len(tasks)
+        grouped = defaultdict(dict)
+        for task in tasks:
+            result["leaks"].extend(kit.leak_evidence(task, arms))
+            if result["canary"] is not None:
+                result["canary"].extend(kit.canary(task))
+            grouped[task.instance][task.condition] = task
+        for group in grouped.values():
+            for first, second in twins:
+                if first in group and second in group:
+                    evidence, errors = kit.pair(group[first], group[second], (first, second) in permitted)
+                    result["pairs"].append(evidence | {"level": level, "errors": errors})
     return result
 
 
@@ -454,6 +572,9 @@ def load_stats(runs: list[dict], sizes: dict) -> list[dict]:
 def build_card(args: argparse.Namespace) -> dict:
     kit = Kit(args)
     arms = tuple(args.arms) if args.arms else kit.arms()
+    if not args.arms and "team" in arms:
+        extra = getattr(kit.module, "EXTRA_ARMS", ())
+        arms = tuple(dict.fromkeys((*arms, *(a for a in ("solo-seam", "team-fullrecord", "hint") if a in extra))))
     twins = declared_pairs(kit.module)
     pairs = trap_pairs(arms, twins, args.pair)
     twins.extend((trap, ctrl) for trap, ctrl in (item.split("=") for item in args.pair)
@@ -490,8 +611,8 @@ def build_card(args: argparse.Namespace) -> dict:
                             samples.append(len(jobs) - 1)
         canary = built.get("canary")
         if canary is None and (difficulty := kit.difficulty("canary", args.seed)) is not None:
-            canary = kit.build(root, "canary-static", difficulty, arms, args.instances, args.seed)
-        card["static"] = static_checks(kit, canary or [], known_arms, pairs)
+            built["canary"] = kit.build(root, "canary-static", difficulty, arms, args.instances, args.seed)
+        card["static"] = static_checks(kit, built, known_arms, twins)
         with ProcessPoolExecutor(max_workers=args.jobs) as pool:
             for item, result in zip(meta, pool.map(simulate_job, jobs), strict=True):
                 card["runs"].append(item | result)
@@ -506,6 +627,7 @@ def build_card(args: argparse.Namespace) -> dict:
                 card["stall"] = pool.submit(simulate_job, (path, policy, schedule, True)).result()
     card["matrix"] = policy_matrix(card["runs"])
     card["load"] = load_stats(card["runs"], sizes)
+    card["costs"], card["power"] = comparisons(card)
     identity["seats"] = {f"{level}/{arm}": sorted({seat for (l, a, _), roster in sizes.items()
                                                   if l == level and a == arm for seat in roster})
                          for level in levels for arm in arms if any(l == level and a == arm for l, a, _ in sizes)}
@@ -515,6 +637,55 @@ def build_card(args: argparse.Namespace) -> dict:
     card["passed"] = not any(row["status"] == "FAIL" for row in card["checks"])
     return card
 
+
+def signed(value: float | None) -> str:
+    return "NA" if value is None else f"{value:+.3f}"
+
+
+def plan_label(row: dict) -> str:
+    return str(row["planned_n"]) if row["planned_n"] is not None else row["plan_status"]
+
+
+def render_comparisons(card: dict) -> list[str]:
+    lines = ["", "## Three costs (paired reward differences)", "",
+             "Positive means the control scores higher than team; missing arms are NA.", "",
+             "| Level | Policy | Cost | Control − team | Effect | Valid pairs / instances | Excluded |",
+             "|---|---|---|---|---|---|---|"]
+    for row in card["costs"]:
+        lines.append(f"| {row['level']} | {row['policy']} | {row['cost']} | {row['control']} − team | "
+                     f"{signed(row['effect'])} | {row['pairs']} / {row['instances']} | {row['excluded_pairs']} |")
+    lines += ["", "## Power plan (scripted stand-ins)", "",
+              ("Fixed sample, exact two-sided McNemar, α=0.05, target power 0.8; "
+               "binary success means reward = 1. The paired reward effect also includes partial credit."),
+              ("Schedule repeats estimate outcome probabilities; they are not independent instances. "
+               "The planned n assumes independent new instances, one paired run each."),
+              ("No-effect and NA cells have no planned n. Plans search up to 1,000 instances. "
+               "These are sensitivity estimates, not model performance predictions."), "",
+              ("| Level | Policy | Control − treatment | Reward effect | Success effect | + / − | "
+               "Valid pairs / instances | Excluded | Planned n |"),
+              "|---|---|---|---|---|---|---|---|---|"]
+    for row in card["power"]:
+        lines.append(f"| {row['level']} | {row['policy']} | {row['control']} − {row['treatment']} | "
+                     f"{signed(row['effect'])} | {signed(row['success_effect'])} | {row['plus']} / {row['minus']} | "
+                     f"{row['pairs']} / {row['instances']} | {row['excluded_pairs']} | {plan_label(row)} |")
+    if not card["power"]:
+        lines.append("| NA | NA | No supported lapse or script-loop policy | NA | NA | NA | NA | NA | NA |")
+    return lines
+
+
+def render_versions(card: dict) -> list[str]:
+    groups = defaultdict(set)
+    for run in card["runs"]:
+        if "versions" in run:
+            block = json.dumps(run["versions"], sort_keys=True, ensure_ascii=False)
+            groups[block].add(f"{run['level']}/{run['arm']}/{run['instance']}")
+    if not groups:
+        return []
+    lines = ["", "## Versions", "", "| Task(s) | Simulator versions |", "|---|---|"]
+    for block, tasks in groups.items():
+        escaped = block.replace("|", "\\|")
+        lines.append(f"| {', '.join(sorted(tasks))} | `{escaped}` |")
+    return lines
 
 def render(card: dict) -> str:
     i = card["identity"]
@@ -547,6 +718,8 @@ def render(card: dict) -> str:
         if len(evidence) > 400:
             evidence = evidence[:397] + "… (full evidence in JSON)"
         lines.append(f"| {row['name']} | {row['rule']} | **{row['status']}** | {evidence} |")
+    lines += render_comparisons(card)
+    lines += render_versions(card)
     lines += ["", "## Load and cost (estimates)", "", TOKEN_MODEL, "",
               "| Level / arm | Per-seat max calls / briefing chars | Mean estimated tokens | $1 / $5 / $15 per M |",
               "|---|---|---|---|"]
@@ -562,6 +735,32 @@ def render(card: dict) -> str:
     lines += [f"- {r['status']}: {r['name']}" for r in card["checks"] if r["status"] != "PASS"] or ["- None flagged."]
     lines += ["", "Scripted policy results are not estimates of frontier-model performance.", ""]
     return "\n".join(lines)
+
+
+def suite_row(card: dict) -> str:
+    i = card["identity"]
+    counts = {status: sum(row["status"] == status for row in card["checks"]) for status in ("PASS", "FAIL", "NA")}
+    cells = {(r["level"], r["arm"], r["policy"]): r["mean"] for r in card["matrix"]}
+    gaps = []
+    for level in i["levels"]:
+        for arm in i["arms"]:
+            careful = cells.get((level, arm, "careful"))
+            value = cells.get((level, arm, "naive"))
+            gap = signed(careful - value if careful is not None and value is not None else None)
+            gaps.append(f"{level}/{arm}: {gap}")
+    loads = [f"{r['level']}/{r['arm']}: " + ", ".join(
+        f"{seat}={data['calls']}" for seat, data in r["seat_maxima"].items()) for r in card["load"]]
+    plans = [f"{r['level']}/{r['policy']}/{r['control']}−{r['treatment']}: {plan_label(r)}" for r in card["power"]]
+    return "| " + " | ".join((f"[{i['family']}]({i['family']}.card.md)",
+                              " / ".join(str(counts[status]) for status in counts),
+                              "<br>".join(gaps), "<br>".join(loads) or "NA", "<br>".join(plans) or "NA")) + " |"
+
+
+def render_suite(cards: list[dict]) -> str:
+    return "\n".join(["# Seams suite", "", "Scripted results only. Cells link to complete family cards.", "",
+                      ("| Family | PASS / FAIL / NA | Careful − naive by level/arm | "
+                       "Max careful calls per seat by level/arm | Planned paired instances |"),
+                      "|---|---|---|---|---|", *(suite_row(card) for card in cards), ""])
 
 
 def positive(value: str) -> int:
@@ -580,7 +779,9 @@ def csv_names(value: str) -> tuple[str, ...]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--family", required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--family")
+    selection.add_argument("--suite", type=csv_names, metavar="FAMILY,FAMILY,...")
     parser.add_argument("--levels", type=csv_names, default=LEVELS)
     parser.add_argument("--instances", type=positive, default=4)
     parser.add_argument("--schedule-seeds", type=positive, default=3)
@@ -594,17 +795,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seats", type=positive)
     parser.add_argument("--seed", type=int, default=None, help="repeat a disposable simulation seed")
     args = parser.parse_args(argv)
-    if not args.family.isidentifier():
-        parser.error("--family must be a Python identifier; use --variant separately")
+    families = args.suite or (args.family,)
+    if not all(family.isidentifier() for family in families):
+        parser.error("--family and --suite require Python identifiers; use --variant separately")
     if not set(args.levels) <= {*LEVELS, "easy", "hard"}:
         parser.error("--levels must contain canary, standard, heavy (or legacy easy, hard)")
     if args.seed is None:
         args.seed = secrets.randbelow(2**53 - 1_000_000) + 1_000_000
-    card = build_card(args)
     args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / f"{args.family}.card.json").write_text(json.dumps(card, indent=2, sort_keys=True, allow_nan=False) + "\n")
-    (args.out / f"{args.family}.card.md").write_text(render(card))
-    return 0 if card["passed"] else 1
+    cards = []
+    for family in families:
+        card = build_card(argparse.Namespace(**(vars(args) | {"family": family})))
+        (args.out / f"{family}.card.json").write_text(json.dumps(card, indent=2, sort_keys=True, allow_nan=False) + "\n")
+        (args.out / f"{family}.card.md").write_text(render(card))
+        cards.append(card)
+    if args.suite:
+        (args.out / "SUITE.md").write_text(render_suite(cards))
+    return 0 if all(card["passed"] for card in cards) else 1
 
 
 if __name__ == "__main__":
