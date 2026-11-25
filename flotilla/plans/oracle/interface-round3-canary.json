@@ -1,0 +1,39 @@
+{
+  "name": "interface-round3-canary",
+  "prereg": {
+    "commit": "cd5e8138e072cbcfe9b8ec64531499763d57f5ca",
+    "doc": "flotilla/docs/seams/interface.md",
+    "section": "## Oracle rehearsal (pre-registration)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b3-interface/oracle-careful",
+      "manifest": "/tmp/seams1125/b3-interface/oracle-careful/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-interface/oracle-careful",
+      "manifest": "/tmp/seams1125/b3-interface/oracle-careful/manifest.json",
+      "instances": [0],
+      "arms": ["probe-wait-trap"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-interface/oracle-naive",
+      "manifest": "/tmp/seams1125/b3-interface/oracle-naive/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-interface/oracle-naive",
+      "manifest": "/tmp/seams1125/b3-interface/oracle-naive/manifest.json",
+      "instances": [0],
+      "arms": ["probe-wait-trap"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {"max_turns": 20, "env": "docker", "concurrency": 1, "start_spacing_s": 0.0},
+  "budget": {"cap_usd": 0.0, "reserve_per_trial_usd": 0.0, "provider_floors": {}, "max_invalid_streak": 3},
+  "order_seed": 20261125
+}
