@@ -13,7 +13,8 @@ echo "== analysis tests"
 echo "== lint"
 uvx --quiet ruff check flotilla/families flotilla/games flotilla/world flotilla/build_tasks.py flotilla/make_jobs.py \
     flotilla/qa.py flotilla/analysis/flotilla_analysis flotilla/analysis/tests flotilla/seams flotilla/policies \
-    flotilla/sim.py flotilla/eval_card.py flotilla/playtest.py flotilla/pilot_plan.py flotilla/token_profile.py
+    flotilla/sim.py flotilla/eval_card.py flotilla/playtest.py flotilla/pilot_plan.py flotilla/token_profile.py \
+    flotilla/oracle_parity.py flotilla/handoff_receipts.py
 echo "== build and QA"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/flotilla-check.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT

@@ -99,6 +99,8 @@ The rules are the same at every level. The load sits on the seam: per-seat turns
 | `flotilla/playtest.py` | Runs a built task on the host with a real assistant in each seat under a sandbox profile; `--check-seat` tests the seat's shell with no model |
 | `flotilla/token_profile.py`, `flotilla/pilot_plan.py` | A token profile from playtest logs or from a turn model; a gated pilot plan with a price forecast. Neither starts a run |
 | `flotilla/run_wave.py` | Pre-registered waves with a cost forecast, caps, and stages with gates (`--stop-after-stage`) |
+| `flotilla/oracle_parity.py` | Compares a frozen local Docker oracle rehearsal to the simulator on the same built tasks. A missing, invalid or extra result is not a match |
+| `flotilla/handoff_receipts.py` | Tests a memory aid offline. For each batch ID in a handoff note, recover the lots from a response delivered to its writer before filing. Report missing evidence and byte cost. Never change the score |
 | `start_after` (Harbor core) | A seat's agent starts only when the listed seats' agents have ended: chains of shifts |
 
 A family is 3 files that the kit discovers: `flotilla/seams/<family>.py` (generator, arms, instruction text,

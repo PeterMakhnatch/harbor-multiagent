@@ -36,6 +36,30 @@ Do not select an 8-trial window from those results and call it the entry test.
 A pilot with smaller models (GPT-6 Luna, Claude Haiku 5.5) is a separate option. They lost 17 of 25
 playtests across `digest`, `handoff`, `tell`, `interface` and `commit`.
 
+### Prospective `handoff` entry check (not run)
+
+Test access to the earlier record, not removal of a sentence. Use `standard`, `team` and `team-fullrecord`.
+Freeze 8 fresh instances, 200–207, from one private build before any seat plays. Both arms and both models
+use those same 8 instances: 32 four-seat playtests. Never use these instances for the paid stages.
+The local build is `.flotilla-local/seams-entry-20261125`. Its `manifest.json` SHA-256 is
+`78abf0fb8d356408faa29cf5236709dbf6f6bb0c69651d873d61106cdc574a7e`. All 16 tasks passed static QA.
+The world parameters match across arms in each pair. No assistant has played this build.
+
+Opus is the primary model because its development notes contain the failure. Sol is a comparison, not a
+second opportunity to pass. Use fresh native CLI seats. On even instances, play `team` first for Opus and
+the control first for Sol. Reverse that order on odd instances. Do not show the results to later seats.
+
+Count a primary failure only when `team` loses the ticket without filing one, correctly settles all results,
+and its first note is a pointer to a settled batch without sufficient lot IDs. Inspect that note and the
+delivery record. Record any disagreement with `lots_pointer`. Do not change the classifier or threshold on
+these cases. A refusal or an omission is a valid loss, but it does not establish this mechanism.
+
+The screen passes only if all 8 Opus controls win and at least 3 matched Opus `team` trials show the primary
+failure. Finish both model cohorts. Retry only an infrastructure failure, once; do not replace its instance.
+An unresolved infrastructure failure makes that cohort incomplete. Report all paired outcomes, other failure
+causes and host versions whether or not the screen passes. This is a selection rule, not a significance test.
+Passing does not approve stage A. Failing keeps the paid pilot on hold.
+
 ## 3. Models and harnesses
 
 - Models: `openai/gpt-6.2-sol` and `anthropic/claude-opus-5.5`. Both have zero-data-retention endpoints in the
