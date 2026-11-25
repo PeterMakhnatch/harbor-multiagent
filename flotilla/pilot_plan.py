@@ -1,4 +1,4 @@
-"""Generate a preview-only Seams pilot and price forecast (requires PyYAML). Never start a wave."""
+"""Generate a gated Seams pilot and price forecast (requires PyYAML). Never start a wave."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import io
 import json
 import math
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -25,7 +26,6 @@ import token_profile
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
-PILOT_SEED = 1
 CONTROL_N = 10
 SIGNAL_N = 12
 HEADLINE_CAP = 100
@@ -36,26 +36,22 @@ STAGES = ("A", "B", "C")
 PRICE_URL = "https://openrouter.ai/api/v1/models"
 SNAPSHOT = Path("/tmp/seams1125/frontier-prices.json")
 
-# This exact text also serves as the prereg.section value: the runner rejects a notes field.
-PROTOCOL = """PREVIEW ONLY. This is the maximum envelope, not an executable staged wave.
+PROTOCOL = """Seams staged pilot: executable maximum envelope, not spending approval.
 Stage A: 10 distinct instances per model, level and control arm; require at least 9 full successes in each arm.
-Drop a level for a model if either control fails. Invalid or missing cells are not failures; retry once, then stop if incomplete.
-Stage B: at the first passing level, run each matched probe pair on 12 fresh instances per model.
-Use exact sequential McNemar at 3, 6 and 12 pairs, alpha 0.05, Holm over pairs within model.
-At least 2 control-only successes in a pair for at least one model are required to continue.
-Ensure 12 valid pairs before declaring a ceiling. An early efficacy stop with at least 2 control-only successes meets the signal gate;
-a statistical futility stop does not establish a ceiling at this descriptive threshold. Continue the screen if 2 is still reachable.
-If no pair meets the gate, report 'at the ceiling for this model class at this level' and try the next level that passed A.
-Do not advance a model whose control gate failed. If no eligible level remains, stop the family.
-Stage C: on fresh matched instances at the first signal level, compare team to team-fullrecord when present, otherwise solo.
-Include all models that passed A at that level, even if only one model supplied the B signal.
-Include hint and solo-seam when present. Use the smallest positive lapse effect from the card consistent with B;
-choose n before C, at most 100, for 80% power at alpha 0.05. Use fixed-sample exact McNemar on full success.
-A capped sample can have less than 80% power. If no card alternative fits, stop and revise the power plan before C.
+Drop a model-level group if either control fails or remains incomplete after one retry.
+Stage B: run each matched probe pair on 12 fresh instances for each model-level group that passed A.
+Use exact sequential McNemar at 3, 6 and 12 pairs, alpha 0.05, Holm over pairs within model and level.
+At least 2 control-only successes in any pair are required for that model-level group to continue.
+Early positive efficacy can stop with this threshold met; statistical futility cannot establish no effect.
+If the threshold is not met, report no-effect only with 12 valid pairs; otherwise report incomplete.
+Stage C: on fresh matched instances for each passing group, compare team to team-fullrecord when present, otherwise solo.
+Include hint and solo-seam when present. Freeze n at the largest eligible positive card alternative, at most 100.
+Use fixed-sample exact McNemar on full success. A capped sample can have less than 80% power.
+Conditional selection of the smallest compatible card effect, first signal level, or inclusion of other A-passing
+models at that level requires a separately pre-registered headline plan. The runner does not resize the headline.
 A family without probe pairs has no attribution gate: week is only a descriptive demonstration (no headline claim).
-Manual hard stops: do NOT run this entire preview. Split into separately committed stage/model/level plans after each gate;
-rebuild with a fresh private seed, QA, oracle parity, and approval before paid work. Apply cumulative stage caps.
-The runner has no cross-set eligibility gates, stage-specific samples, conditional sample sizing, or operator pause.
+Require a private seed, QA, oracle parity and approval before paid work. Use --stop-after-stage A, then B, then C
+with the same run directory; the runner applies the gates and cumulative model caps. For week skip B.
 Repeat on Terminus 2 and one native command-line harness before claiming an effect; record the delivery mode.
 Matched-token and cross-model team controls, and 5 human baselines, are required before publication.
 The target result is a boundary cost on the same work, with a similar cost for self and teammate transfer;
@@ -147,6 +143,7 @@ def task_sets(args: argparse.Namespace, module: object, arms: list[str], pairs: 
         design, power[level] = stage_design(arms, pairs, level, card)
         seats = module.SEATS.get(level) if isinstance(module.SEATS, dict) else module.SEATS
         root = scratch / level
+        seed = secrets.randbelow(2**53 - 1_000_000) + 1_000_000
         for stage in STAGES:
             selected = [(arm_names, instances) for tag, arm_names, instances in design if tag == stage]
             if not selected:
@@ -156,7 +153,7 @@ def task_sets(args: argparse.Namespace, module: object, arms: list[str], pairs: 
             for arm_names, instances in selected:
                 groups[tuple(instances)].extend(arm_names)
             for instances, arm_names in groups.items():
-                paths = build_tasks.build(args.family, list(instances), seats, level, PILOT_SEED,
+                paths = build_tasks.build(args.family, list(instances), seats, level, seed,
                                           tuple(dict.fromkeys(arm_names)), stage_root, policy="careful")
                 by_arm = defaultdict(list)
                 for path in paths:
@@ -185,7 +182,7 @@ def task_sets(args: argparse.Namespace, module: object, arms: list[str], pairs: 
                         sets.append({"tasks_dir": str(stage_root), "manifest": str(stage_root / "manifest.json"),
                                      "arms": group, "instances": list(instances)})
                         details.append({"stage": stage, "level": level, "arms": group, "n": len(instances)})
-    # Order A across every level, then B, then C. The runner's dry-run order is not this stage order.
+    # Order A across every level, then B, then C.
     order = sorted(range(len(sets)), key=lambda i: STAGES.index(details[i]["stage"]))
     return [sets[i] for i in order], [details[i] for i in order], samples, power
 
@@ -307,6 +304,29 @@ def check_forecast(text: str, rows: list[dict]) -> None:
         raise ValueError("dry run differs from snapshot forecast (check the runner's price cache and history)")
 
 
+def named_stages(args, plan, details, rows):
+    stages = []
+    for tag in STAGES:
+        selected = [(i, detail) for i, detail in enumerate(details) if detail["stage"] == tag]
+        if not selected:
+            continue
+        cells = [{"task_set": i, "level": detail["level"], "arms": detail["arms"],
+                  "instances": plan["task_sets"][i]["instances"], "models": plan["models"]}
+                 for i, detail in selected]
+        gate = {"type": "none"}
+        if tag == "A":
+            gate = {"type": "min_success", "controls": [
+                {"task_set": i, "arm": arm, "k": 10 if args.family == "digest" and detail["level"] == "heavy"
+                 and arm == "solo" else 9} for i, detail in selected for arm in detail["arms"]]}
+        elif tag == "B":
+            gate = {"type": "effect", "tests": [{"task_set": i, "arms": detail["arms"]} for i, detail in selected],
+                    "looks": list(LOOKS), "minimum": 2, "alpha": .05}
+        cumulative = [row for row in rows if STAGES.index(row["stage"]) <= STAGES.index(tag)]
+        cap = min(plan["budget"]["cap_usd"], math.ceil(totals(cumulative)["model_high"]))
+        stages.append({"name": tag, "cells": cells, "gate": gate, "cap_usd": cap})
+    return stages
+
+
 def build_plan(args: argparse.Namespace, scratch: Path, snapshot: PriceSnapshot, prereg: dict) -> dict:
     arms, pairs, module = family_design(args.family, args.levels)
     card_path = args.cards / f"{args.family}.card.json"
@@ -321,11 +341,14 @@ def build_plan(args: argparse.Namespace, scratch: Path, snapshot: PriceSnapshot,
             "agent": "terminus-2", "make_jobs": {"max_turns": 100, "env": "modal", "concurrency": 10,
                                                    "start_spacing_s": 5.0},
             "budget": {"cap_usd": 0, "reserve_per_trial_usd": 0, "provider_floors": {"openrouter": 2.0}},
-            "order_seed": 20261125, "token_profiles": profiles}
+            "order_seed": 20261125, "token_profiles": profiles,
+            "notes": "Fixed upper-envelope headline sample. Obtain separate approval before each stage; "
+                     "do not treat the scripted power alternatives as model effect estimates."}
     history = scratch / "empty-history"
     rows = cost_rows(plan, details, snapshot, history)
     plan["budget"]["cap_usd"] = args.cap_usd if args.cap_usd is not None else math.ceil(totals(rows)["model_high"])
     plan["budget"]["reserve_per_trial_usd"] = math.ceil(max(row["model_high"] / row["trials"] for row in rows) * 100) / 100
+    plan["stages"] = named_stages(args, plan, details, rows)
     path = args.out / f"{args.family}.json"
     preview = scratch / "preview.json"
     write_json(preview, plan)
@@ -389,7 +412,7 @@ def family_lines(result: dict) -> list[str]:
         lines.append(f"{prefix} **Total** | {count_text(totals(group))} |")
     lines.extend(["", ("| Stage | Model | Added trials | Added model / all seats | Added low / expected / high | "
                        "Cumulative trials | Cumulative model / all seats | Cumulative low / expected / high | "
-                       "Cumulative model high (stop) |"),
+                       "Cumulative model high estimate (stage cap on all row) |"),
                   "|---|---|---:|---:|---:|---:|---:|---:|---:|"])
     for stage in STAGES:
         for model in (*result["models"], "all"):
@@ -398,8 +421,9 @@ def family_lines(result: dict) -> list[str]:
             cumulative = totals([row for row in selected if STAGES.index(row["stage"]) <= STAGES.index(stage)])
             if not added["trials"]:
                 continue
+            shown_cap = min(result["cap"], math.ceil(cumulative["model_high"])) if model == "all" else cumulative["model_high"]
             lines.append(f"| {stage} | {model.removeprefix('openrouter/')} | {count_text(added)} | "
-                         f"{count_text(cumulative)} | ${min(result['cap'], math.ceil(cumulative['model_high'])):.2f} |")
+                         f"{count_text(cumulative)} | ${shown_cap:.2f} |")
     looks = (f"Stage B exact looks: {result['looks']}; no optional non-binding futility."
              if result["pairs"] else "Stage B skipped: no probe pair.")
     lines.extend(["", f"Power source: `{result['card']}`. {looks} Stage C envelope (largest eligible card n, capped):", ""])
@@ -419,27 +443,25 @@ def family_lines(result: dict) -> list[str]:
 
 
 def render_forecast(results: list[dict]) -> str:
-    lines = ["# Seams pilot forecast", "", "**No model run. No spend approval. Preview plans only.**", "",
+    lines = ["# Seams pilot forecast", "", "**No model run. No spend approval. Gated plans.**", "",
              PROTOCOL.rstrip(), "", "## Forecast assumptions", "",
-             ("- All eligible levels and models are included in the maximum envelope; actual B checks levels in order. "
-              "C uses the first signal level and every model that passed A there. A, B and C use disjoint instance IDs."),
-             ("- For B, b is control-only full success and c is trap-only full success. For C use the smallest positive "
-              "lapse alternative not rejected by equal-tailed exact binomial tests of b and c at 0.025 each. "
-              "The card's paired n is an estimate, not observed model power; probe effect may not transfer to team."),
+             ("- All planned levels and models are included in the maximum envelope. B and C run only groups that "
+              "pass the preceding gate. A, B and C use disjoint instance IDs."),
+             ("- For B, b is control-only full success and c is trap-only full success. C uses the largest eligible "
+              "card n, capped at 100. The card's paired n is an estimate, not observed model power; "
+              "probe effect may not transfer to team."),
              ("- Each row is a maximum count (no early stop, no retries). The cap is the cumulative model-only high "
               "estimate rounded up to USD, unless overridden. Sandbox spend is outside the model cap."),
              (f"- Modal is ${pricing.MODAL_PER_TRIAL_USD:.4f}/trial (measured 2026-11-24); scripted seats have no model cost. "
               "Costs include sandbox spend, not invalid retries or second-harness replication."),
-             (f"- Profile simulation: first {PROFILE_N} instances per level and arm, careful policy, public disposable "
-              "seed 1, schedule seed 0. Playtest rows override matching arm/role only; other rows use turn estimates."),
+             (f"- Profile simulation: first {PROFILE_N} instances per level and arm, careful policy, private build "
+              "seed, schedule seed 0. Playtest rows override matching arm/role only; other rows use turn estimates."),
              ("- One homogeneous model per trial; Terminus 2, max 100 turns, Modal, concurrency 10, starts spaced 5 s. "
               "Turn estimates extrapolate probe history; model cache and turn costs may differ. No assumed compaction."),
              ("- The runner has a single agent and roster design; the second harness and cross-model and matched-token "
               "arms need separate approved plans. A second pass at the same counts and profile would double these totals."),
-             ("- The staged runner's `Outcomes` refuses non-`probe` families even when dry-run accepts the syntax. "
-              "For Seams B, apply `stages.SequentialTest` and count complete pairs from event scores manually."),
              "- Low/high = model estimate divided/multiplied by uncertainty, plus fixed sandbox cost. Not a confidence interval.",
-             "- Rebuild using private seeds before real runs. The current built sets are for forecast and simulation only.", ""]
+             "- Keep the private builds and manifests frozen; require QA and oracle parity before approved model runs.", ""]
     for result in results:
         lines.extend(family_lines(result))
     lines.extend(["## Suite: maximum envelope, one harness", "",
