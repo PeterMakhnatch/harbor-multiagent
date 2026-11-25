@@ -140,6 +140,10 @@ def test_commit_scheduler_sweep(tmp_path, dose, arm):
                 assert score["reward"] == expected, (dose, arm, i, schedule, policy, score)
                 if policy == "careful":
                     assert score["stale_after_delivery"] == 0
+                    assert score["closed"]
+                    if arm in ("team", "probe-control", "probe-trap", "hint", "solo-seam"):
+                        assert score["delivered_outages"] == len(task["params"]["outages"])
+                    assert score["missing_relay"] == 0
                     for seat, count in result["requests"].items():
                         requests[seat] = max(requests[seat], count)
                 elif policy == "naive" and arm in ("probe-trap", "hint", "solo-seam"):

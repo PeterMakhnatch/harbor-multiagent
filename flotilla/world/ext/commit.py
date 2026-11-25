@@ -161,7 +161,11 @@ def score(task, events):
             elif shipment in affected and carrier == params["primary"][shipment] and carrier in delivered:
                 stale += 1
     late = sum(o["carrier"] in send_rounds and send_rounds[o["carrier"]] >= o["start"] for o in params["outages"])
+    missing = (sum(o["carrier"] not in send_rounds for o in params["outages"])
+               if task["condition"] == "team" else 0)
+    closed = sum(event["kind"] == "tick" for event in events) == params["rounds"]
     return {"reward": float(len(correct) == len(answer)), "fields_correct": len(correct),
             "affected_total": len(affected), "affected_correct": len(correct & affected),
             "unaffected_correct": len(correct - affected), "missed": len(answer) - len(booked),
-            "stale_after_delivery": stale, "p2_send_round": send_rounds, "late_relay": late}
+            "stale_after_delivery": stale, "delivered_outages": len(delivered), "p2_send_round": send_rounds,
+            "late_relay": late, "missing_relay": missing, "closed": closed}
