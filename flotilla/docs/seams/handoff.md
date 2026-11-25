@@ -30,8 +30,8 @@ Evidence (labels describe the independent Seams review, not a new experiment):
   won 15 of 25 playtests on 16 instances. With the fact stated (`team`) it won 17 of 17 on 14 of those instances;
   with `hint` 7 of 7; with `team-fullrecord` 3 of 3. All 10 losses began with a shift-1 note that kept the bad-lot
   evidence as the ID of a settled batch and not as lots; every result was settled right and the last seat filed
-  no ticket. No win had such a note. The loss depends on the instance and on the draw: the 3 instances drawn
-  first lost 8 of 9 runs, 8 fresh instances lost 1 of 8, and 2 instances lost on one draw and won on another.
+  no ticket. No win had such a note. The 3 instances drawn first lost 8 of 9 runs. Eight fresh instances lost
+  1 of 8. Two instances lost on one draw and won on another. Round 6 did not reproduce this instance pattern.
   GPT-6.2 Sol won 15 of 16 `team-implicit` playtests (the loss was an early ticket, not the note) and 3 of 3
   `team`. Two smaller models (GPT-6 Luna, Claude Haiku 5.5) won 0 of 6 `team-implicit` playtests.
 - **OBSERVED (round 5, 26 local playtests):** with all 3 facts about the desk unstated (`team-implicit-all`), Opus
@@ -62,6 +62,21 @@ Evidence (labels describe the independent Seams review, not a new experiment):
 - **LIMIT:** on the same 5 instances, Opus won 4/5 with the neutral rule and 5/5 without it. Instances that
   lost before sometimes won on replay, and the reverse also occurred. The pointer failure recurs. Neither a
   causal effect of wording nor a ranking of models follows. Keep repaired and earlier results separate.
+
+### Can a receipt restore the missing list?
+
+We replayed the 25 round-6 logs with `flotilla/handoff_receipts.py`. It attaches the lot list for a named
+batch only when the note writer's own desk supplied it in that shift before filing. A response counts as
+delivered when the world writes it to the socket. The tool never reads the hidden answer or the reward.
+
+In all 7 failed first notes, the returned batch resolved to 16 lots. The complete attachment cost 417 bytes
+in each of those notes. Selecting only the returned batch after reading the note would cost 105 bytes. The
+tool does not select that batch for the reader. Across 75 non-final notes, it resolved 355 of 359 references.
+
+The first attachment is not a persistent record. On the 7 fixed losing transcripts, the next notes omitted
+the original batch 5 times and named it without a local receipt twice. None of the 7 third notes named it.
+Later notes could have carried a smaller set of lots instead. We did not deliver any attachment to a seat
+or measure a change in team score. A live test needs an equal-length control and a rule fixed before play.
 
 ## Mechanism
 
