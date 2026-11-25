@@ -81,3 +81,7 @@ python3 flotilla/run_wave.py flotilla/plans/oracle/digest-canary.json --dry-run
 ```
 
 Do not start any paid run without approval.
+
+## Zero-cost validation (2026-11-25)
+
+The EvalCard (24 instances, 3 schedule seeds, 19,440 simulations) has 17 PASS and 0 FAIL checks. Careful play scores 1 in every arm and level. Nop scores 0. Blind play scores 0.099–0.114. A local Docker oracle run on 8 canary tasks (careful and naive; team, team-fullrecord and the writer pair) gave rewards identical to the simulator on the exact built tasks: careful 1, 1, 1, 1; naive 4/11, 1, 5/11, 1. Spend was $0.
