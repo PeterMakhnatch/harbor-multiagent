@@ -118,14 +118,14 @@ class Desk:
                 return note
         raise ValueError("lot list does not fit the note cap")
 
-    def handover(self, seat, body, exhausted=False):
+    def handover(self, seat, body):
         note = body.get("note")
         if not isinstance(note, str):
             return 400, {"error": "send a note string"}
         if len(note) > self.params["cap"]:
             return 413, {"error": "note exceeds the character limit"}
         pending = [b for b, state in self.state.items() if state == "dispatched" and self.batches[b]["lag"] is not None]
-        if self.arm == "twin" and not exhausted:
+        if self.arm == "twin":
             note = self.canonical()
         tokens = set(re.findall(r"\b[BLR]\d{2}\b", note))
         missing = [b for b in pending if not {b, self.batches[b]["reference"]} <= tokens]
@@ -146,10 +146,7 @@ class Desk:
 
     def on_budget(self, seat):
         self.host.record("handover_missing", seat, {"shift": self.shift, "reason": "call_budget"})
-        if len(self.seats) == 1:
-            self.host.freeze()
-        else:
-            self.handover(seat, {"note": ""}, exhausted=True)
+        self.host.freeze()
 
     def perform(self, seat, path, body):
         if path == "/desk":
@@ -170,7 +167,7 @@ class Desk:
 
     def receipt_ids(self, view, shift, reply):
         ids = [view]
-        if shift > 1:
+        if shift > 1 and "note" in reply:
             ids.append(f"note-{shift - 1}")
         ids.extend(f"result-{r['reference']}" for r in reply["inbox"])
         ids.extend(f"binding-{b}-{r}" for b, r in reply.get("references", {}).items())
@@ -187,9 +184,15 @@ class Desk:
         shift = self.shift
         self.release()
         note = self.note
-        status, reply = self.perform(seat, path, body)
+        remaining = self.host.max_calls[seat] - self.host.attempts[seat]
+        if remaining < 3 and path != "/handover":
+            status, reply = 429, {"error": "remaining calls are reserved for handover"}
+        else:
+            status, reply = self.perform(seat, path, body)
         inbox = [{"reference": ref, "status": value} for ref, value in sorted(self.inbox.items())]
-        reply |= {"note": note, "inbox": inbox}
+        reply |= {"inbox": inbox, "calls_left": remaining}
+        if path != "/handover" or status != 200:
+            reply["note"] = note
         self.visible_refs[seat].update(result["reference"] for result in inbox)
         self.observed_possible = self.possible.copy()
         self.view_index += 1
@@ -249,10 +252,14 @@ def score(task, events):
     if any(receipts.get(e["data"]["view"]) != (e["seat"], e["data"]["path"])
            for e in events if e["kind"] == "desk_view"):
         return {"invalid": "desk reply lacks a delivery receipt"}
+    params = task["params"]
+    handovers = [e["data"] for e in events if e["kind"] == "handover"]
+    if len(handovers) != params["shifts"]:
+        return {"invalid": "handoff_missing", "handover_count": len(handovers),
+                "handoff_missing": params["shifts"] - len(handovers)}
     for event in events:
         if event["kind"] in ("extension_error", "play_timeout", "simulation_stalled"):
             return {"invalid": event["kind"]}
-    params = task["params"]
     scored = {b["reference"]: b for b in params["batches"] if b["lag"] is not None}
     correct = set()
     tickets = []
@@ -267,8 +274,8 @@ def score(task, events):
                 correct.add(ref)
             seen.add(ref)
         elif event["kind"] == "ticket":
-            tickets.append(data["lot"])
-    ticket = float(bool(tickets) and tickets[0] == params["bad"])
+            tickets.append(data)
+    ticket = float(bool(tickets) and tickets[0]["lot"] == params["bad"] and not tickets[0]["early"])
     rates = {}
     for lag in (0, 1, 2, 3):
         eligible = {ref for ref, batch in scored.items() if batch["lag"] == lag}
@@ -280,7 +287,6 @@ def score(task, events):
         reward = ticket
     elif arm.startswith("probe-ref"):
         reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
-    handovers = [e["data"] for e in events if e["kind"] == "handover"]
     crossings = [h for h in handovers if h["shift"] < params["shifts"]]
     losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
     return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),

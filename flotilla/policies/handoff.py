@@ -128,10 +128,8 @@ def play(name, client, own, family):
     if status != 200 or me["active"] != "active" or me["frozen"]:
         return
     if name == "exhaust":
-        for _ in range(family.CALL_CAPS[own["cap"]]):
-            code, _ = yield from client.get("/desk")
-            if code != 200:
-                return
+        for _ in range(family.CALL_CAP):
+            yield from client.get("/desk")
         return
     if own["continuous"]:
         memory = None

@@ -182,12 +182,15 @@ Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN` for all calls
 For POST calls send JSON with the header `Content-Type: application/json`.
 Call `GET /await?until=active` to wait for your shift. Proceed when `active` is `active`.
 If the call returns `frozen`, `retired`, or `timeout` without activation, stop.
-Your seat can make {budget} active world calls, including refused calls.
-If the last allowed call does not complete handover, the shift ends with an empty note.
+Your seat can make {budget} active world calls, including GET /await, GET /whoami and refused calls.
+The field `calls_left` in desk replies gives the number remaining after that call.
+Reserve your last 3 world calls and last 3 agent turns for handover. Only handover is allowed in the last 3 calls.
+A missing handover makes the chain incomplete; it is not treated as a lost note.
 
 In each shift, print and dispatch every batch in your plan. Settle all carrier results that arrive.
 Exactly one ink lot is bad. A batch returns if and only if it uses the bad lot.
-Once the evidence leaves only one possible bad lot, file its ID. Only one ticket can be filed for the run.
+Once the evidence leaves only one possible bad lot, file its ID. A ticket filed before then earns no credit.
+Only one ticket can be filed for the run.
 
 Calls:
 - `GET /desk`: your shift, the ink lots, your plan, open batches from earlier shifts, and any filed ticket.
