@@ -136,6 +136,18 @@ Two local Docker oracle trials on the same standard-order instance match the bui
 
 The round 4 EvalCard covers 12 instances × 3 schedules at all 5 levels, with 14 supported policies (22,680 ordinary simulations). It has 17 PASS, 0 FAIL and 0 invalid runs. All careful arms and the two slip policies in fullrecord score 1. Team renumber means are 1 / 1 / 1 / 0.816 / 0.748; reorder means are 1 / 1 / 1 / 0.798 / 0.815. The card does not establish a model effect or a monotonic order-slip dose response.
 
+Round 5: 24 instances × 3 schedules per level and policy, 2,160 simulations, 0 invalid. Mean reward:
+
+| Level | Team careful | Team no-usage | Team naive | Implicit careful | Implicit no-usage | Implicit naive |
+|---|---:|---:|---:|---:|---:|---:|
+| canary | 1 | 1 | .293 | 1 | 1 | .293 |
+| standard | 1 | 1 | .266 | 1 | 1 | .266 |
+| heavy | 1 | 1 | .190 | 1 | 1 | .190 |
+| standard-order | 1 | 1 | .266 | 1 | .853 | .266 |
+| heavy-order | 1 | 1 | .225 | 1 | .867 | .225 |
+
+Implicit `no-usage` loses reward in 22/24 standard-order and 21/24 heavy-order instances on every schedule. The other instances have no overlap whose winning rule changes under this policy. This is not a monotonic dose effect. A local Docker oracle pair gives the exact built-task simulator rewards: careful 1.0, no-usage 0.7245454545454545. The no-usage run retains the rule numbers but changes the order and gets 2/8 overlapping jobs right. Spend was $0.
+
 Build a matched candidate pair for playtesting with a new secret seed:
 
 ```sh
