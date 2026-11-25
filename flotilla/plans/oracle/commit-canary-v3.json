@@ -1,32 +1,32 @@
 {
-  "name": "commit-canary-rehearsal-v3",
+  "name": "commit-canary-rehearsal-v3-final",
   "prereg": {
-    "commit": "0c4736b0e90877900fbeecf9678898feb1b81833",
+    "commit": "b61f4c7e9820d49eee157abd033d4073182faeb7",
     "doc": "flotilla/docs/seams/commit.md",
     "section": "## Validation and rehearsal pre-registration (2026-11-25)"
   },
   "task_sets": [
     {
-      "tasks_dir": "/tmp/seams1125/b3-commit/careful",
-      "manifest": "/tmp/seams1125/b3-commit/careful/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/careful",
+      "manifest": "/tmp/seams1125/b3-commit/final/careful/manifest.json",
       "instances": [0],
       "arms": ["team"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b3-commit/careful",
-      "manifest": "/tmp/seams1125/b3-commit/careful/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/careful",
+      "manifest": "/tmp/seams1125/b3-commit/final/careful/manifest.json",
       "instances": [0],
       "arms": ["probe-trap"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b3-commit/naive",
-      "manifest": "/tmp/seams1125/b3-commit/naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/naive",
+      "manifest": "/tmp/seams1125/b3-commit/final/naive/manifest.json",
       "instances": [0],
       "arms": ["team"]
     },
     {
-      "tasks_dir": "/tmp/seams1125/b3-commit/naive",
-      "manifest": "/tmp/seams1125/b3-commit/naive/manifest.json",
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/naive",
+      "manifest": "/tmp/seams1125/b3-commit/final/naive/manifest.json",
       "instances": [0],
       "arms": ["probe-trap"]
     }
