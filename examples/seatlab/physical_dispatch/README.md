@@ -173,3 +173,5 @@ The audit checks two kinds of expired path: a current registrar record with an e
 After three accepted actions, the loader's final view exists. The reader can measure it without a final dispatch. It does **not** report a matched final request, choice or reward until the fourth action is present. Before three actions it reports no final-view evidence. Missing and inconsistent archives return separate statuses, never an invented loss. Local consistency cannot establish an external model's identity, attention, first attempt or independence.
 
 For a future team study, count every assigned case, including incomplete cases. Report physical reward and the handoff observations separately. Do not interpret associations between teammates' voluntary choices and reward as a causal effect. Use the matched receiver study when the question is the effect of a specified filing policy.
+
+To test whether **both** teammates contribute necessary facts, use the [independent registrar and depot maps](../joint_handoffs/README.md). That native control separates the restricted four-map optimum from a rule that sees only the delivered records.

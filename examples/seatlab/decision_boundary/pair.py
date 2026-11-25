@@ -3,13 +3,7 @@ from fractions import Fraction
 from .core import BoundaryError, World, analyze
 
 
-def compare(
-    before: list[World], before_scale: int, after: list[World], after_scale: int
-) -> dict[str, int | str]:
-    before_analysis = analyze(before, before_scale)
-    after_analysis = analyze(after, after_scale)
-    if before_scale != after_scale:
-        raise BoundaryError("scale mismatch")
+def partition(before: list[World], after: list[World]) -> tuple[str, int]:
     before_by_name = {world.name: world for world in before}
     after_by_name = {world.name: world for world in after}
     if before_by_name.keys() != after_by_name.keys():
@@ -43,11 +37,22 @@ def compare(
     else:
         relation = "incomparable"
 
+    return relation, same_bytes
+
+
+def compare(
+    before: list[World], before_scale: int, after: list[World], after_scale: int
+) -> dict[str, int | str]:
+    before_analysis = analyze(before, before_scale)
+    after_analysis = analyze(after, after_scale)
+    if before_scale != after_scale:
+        raise BoundaryError("scale mismatch")
+    relation, same_bytes = partition(before, after)
     before_observed = Fraction(before_analysis["observed"])
     after_observed = Fraction(after_analysis["observed"])
     gain = after_observed - before_observed
-    assert not refinement or gain >= 0
-    assert not coarsening or gain <= 0
+    assert relation not in ("refinement", "equivalent") or gain >= 0
+    assert relation not in ("coarsening", "equivalent") or gain <= 0
     return {
         "relation": relation,
         "before_observed": str(before_observed),

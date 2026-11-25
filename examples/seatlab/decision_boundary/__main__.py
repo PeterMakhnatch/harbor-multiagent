@@ -6,6 +6,7 @@ from typing import Any
 
 from .core import BoundaryError, World, analyze, conflict_witness
 from .inputs import census, read_input
+from .joint import ARMS, qualify
 from .pair import compare
 
 SCHEMA = "seatlab.decision-boundary/v1"
@@ -63,6 +64,19 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
         choices=("equivalent", "refinement", "coarsening", "incomparable"),
     )
     paired.add_argument("--expect-gain", choices=("negative", "zero", "positive"))
+    joint = subs.add_parser("joint", help="qualify two sources on one finite decision")
+    joint.add_argument(
+        "--files",
+        required=True,
+        nargs=4,
+        metavar=("NEITHER", "FIRST", "SECOND", "BOTH"),
+        help="four matched finite world files; use - once for standard input",
+    )
+    joint.add_argument(
+        "--expect-each-needed",
+        choices=("yes", "no"),
+        help="check whether removing either source strictly lowers the attainable joint value",
+    )
     for p in (paired, examples):
         p.add_argument(
             "--seed",
@@ -140,10 +154,40 @@ def _paired(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
     }, matches
 
 
+def _joint(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
+    if args.files.count("-") > 1:
+        raise BoundaryError("at most one joint input can be standard input")
+    arms: dict[str, list[World]] = {}
+    scale = None
+    for name, path in zip(ARMS, args.files, strict=True):
+        incoming, worlds = census(read_input(path))
+        if type(incoming) is not int or (scale is not None and incoming != scale):
+            raise BoundaryError("joint inputs must use the same integer scale")
+        scale = incoming
+        arms[name] = worlds
+    if scale is None:
+        raise BoundaryError("missing joint inputs")
+    joint = qualify(arms, scale)
+    expected = args.expect_each_needed
+    matches = expected is None or joint["each_source_adds_value_given_other"] == (
+        expected == "yes"
+    )
+    return {
+        "qualification": joint,
+        "expect_each_needed": expected,
+        "expectation_met": matches if expected else None,
+    }, matches
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _arguments(argv)
     try:
-        result, matches = _paired(args) if args.command == "compare" else _finite(args)
+        if args.command == "joint":
+            result, matches = _joint(args)
+        elif args.command == "compare":
+            result, matches = _paired(args)
+        else:
+            result, matches = _finite(args)
     except BoundaryError as exc:
         print(f"decision-boundary: {exc}", file=sys.stderr)
         return 2
