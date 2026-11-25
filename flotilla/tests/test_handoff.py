@@ -115,10 +115,19 @@ def blind_expected(task, events):
 @pytest.mark.parametrize("dose", FAMILY.DOSES)
 def test_handoff_generator(dose):
     fingerprints = set()
+    order, batch_numbers, reference_numbers, outcomes, lags = [], [], [], [], []
     for instance in range(200):
         inst = FAMILY.generate(SEED, instance, FAMILY.DOSES[dose], dose)
         assert inst == FAMILY.generate(SEED, instance, FAMILY.DOSES[dose], dose)
         fingerprints.add(json.dumps(inst, sort_keys=True))
+        for index, batch in enumerate(inst["base"]["batches"]):
+            if batch["lag"] is None:
+                continue
+            order.append(index)
+            batch_numbers.append(int(batch["batch"][1:]))
+            reference_numbers.append(int(batch["reference"][1:]))
+            outcomes.append(int(batch["status"] == "returned"))
+            lags.append(batch["lag"])
         for first, second in FAMILY.TWINS:
             left, right = (FAMILY.extension_arm(inst, arm, 600, 32) for arm in (first, second))
             assert left["instructions"] == right["instructions"]
@@ -131,6 +140,9 @@ def test_handoff_generator(dose):
             assert changes == [(left["params"][target], "shift" if "hunt" in first else "lag")]
         assert 0 < FAMILY.chance_baseline(inst["base"]) < 1
     assert len(fingerprints) == 200
+    for left, right in ((reference_numbers, batch_numbers), (reference_numbers, outcomes),
+                        (reference_numbers, lags), (order, outcomes), (batch_numbers, outcomes), (lags, outcomes)):
+        assert abs(statistics.correlation(left, right)) < 0.08
 
 
 @pytest.mark.parametrize("dose", FAMILY.DOSES)
@@ -215,6 +227,50 @@ def test_handoff_refusals_and_activation(tmp_path, start_world):
     assert post("s2", "/ticket", {"lot": desk["lots"][1]})[0] == 409
     assert post("s2", "/handover", {"note": ""})[0] == 200
     assert get("s2", "/desk")[0] == 409
+
+
+def test_handoff_settlement_and_record_scope(tmp_path, start_world):
+    inst = FAMILY.generate(SEED, 0, 3, "canary")
+    task = task_for(inst, "team-record", "canary")
+    config = tmp_path / "task.json"
+    config.write_text(json.dumps(task))
+    world = start_world("team-record", tuple(task["seats"]), FLOTILLA_TASK_JSON=str(config))
+    get = lambda seat, path: world.seat(seat, "GET", path)
+    post = lambda seat, path, body: world.seat(seat, "POST", path, body)
+    code, desk = get("s1", "/desk")
+    assert code == 200
+    ticket = task["params"]["bad"]
+    assert post("s1", "/ticket", {"lot": ticket})[0] == 200
+    assert post("s1", "/ticket", {"lot": desk["lots"][0]})[0] == 409
+    first, second = [b for b in task["params"]["batches"] if b["shift"] == 1 and b["lag"] == 0]
+    for batch in (first, second):
+        assert post("s1", "/print", {"batch": batch["batch"]})[0] == 200
+    code, reply = post("s1", "/dispatch", {"batches": [first["batch"], second["batch"]]})
+    assert code == 200 and reply["inbox"] == []
+    first_item = {"reference": first["reference"], "batch": first["batch"], "action": EXT.action_for(first["status"])}
+    second_item = {"reference": second["reference"], "batch": second["batch"], "action": EXT.action_for(second["status"])}
+    code, reply = post("s1", "/settle", {"items": [first_item]})
+    assert code == 409 and {r["reference"] for r in reply["inbox"]} == {first["reference"], second["reference"]}
+    assert post("s1", "/settle", {"items": [first_item]})[0] == 200
+    assert post("s1", "/settle", {"items": [first_item]})[0] == 409
+    assert post("s1", "/settle", {"items": [second_item | {"batch": first["batch"]}]})[0] == 409
+    wrong_action = "close" if second_item["action"] == "reissue" else "reissue"
+    code, reply = post("s1", "/settle", {"items": [second_item | {"action": wrong_action}]})
+    assert code == 200 and reply["recorded"] == 1 and "correct" not in reply
+    note = "é" * task["params"]["cap"]
+    assert post("s1", "/handover", {"note": note})[0] == 200
+    for path, methods in EXT.Desk.routes.items():
+        if "GET" in methods:
+            assert get("s1", path)[0] == 409
+        else:
+            assert post("s1", path, {})[0] == 409
+    assert get("s2", "/desk")[1]["note"] == note
+    assert all(call["shift"] == 2 for call in get("s2", "/log")[1]["calls"])
+    assert post("s2", "/close", {})[0] == 200
+    assert {call["shift"] for call in get("s2", "/log")[1]["calls"]} == {1, 2}
+    assert post("s2", "/handover", {"note": ""})[0] == 200
+    score = EXT.score(task, world.events())
+    assert score["ticket"] == 1 and score["ticket_early"] == 1 and score["reconciled"] == 1
 
 
 def test_handoff_canary_qa(tmp_path):
