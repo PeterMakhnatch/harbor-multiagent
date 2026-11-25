@@ -23,16 +23,18 @@ A family enters when all of this is true:
 A family that every live trial passes at `standard` and `heavy` is at the ceiling for this model class. It
 stays in the suite as a canary for smaller models. It does not enter a frontier pilot.
 
-Result on 2026-11-25 (playtests of GPT-6.2 Sol and Claude Opus 5.5; see README.md):
+Decision on 2026-11-25: **hold the paid pilot**. `handoff` has a repeatable failure mechanism, but its
+repaired build has no prospective sample for entry rule 3. Round 6 deliberately revisited earlier instances.
+Do not select an 8-trial window from those results and call it the entry test.
 
 | Family | Entry | Reason |
 |---|---|---|
-| `handoff` | Yes, with the dose arms | Opus: `team` 0 of 17 lost, `team-implicit` 10 of 25, `team-implicit-all` 5 of 10. Sol: 0 of 3, 1 of 16 (not at the seam), 0 of 16 |
+| `handoff` | Candidate for testing access to the earlier record; not a confirmed effect of wording | On the repaired build Opus won 4/5 with the desk fact, 8/11 without it and 2/5 with 3 facts removed. Sol won 4/4 without the desk fact. All 7 losses began with a note naming an inaccessible batch. |
 | `digest`, `commit`, `tell`, `interface`, `settle` (base arms) | No | No loss at the seam, or 1, in 20 to 52 playtests each; canaries for this class |
 | `week` | No | An integration scenario; it has no matched pair |
 
-A pilot with smaller models (GPT-6 Luna, Claude Haiku 5.5) is a separate, cheaper option: they lost 15 of 23
-playtests on `digest`, `handoff`, `tell`, `interface` and `commit`, most of them at the seam.
+A pilot with smaller models (GPT-6 Luna, Claude Haiku 5.5) is a separate option. They lost 17 of 25
+playtests across `digest`, `handoff`, `tell`, `interface` and `commit`.
 
 ## 3. Models and harnesses
 
@@ -48,18 +50,15 @@ playtests on `digest`, `handoff`, `tell`, `interface` and `commit`, most of them
 | Stage | Cells | Gate to the next stage |
 |---|---|---|
 | A, control gate | The control arms (`solo`; `team-fullrecord` where the family has it) at each requested level; 10 instances per model | 9 of 10 full successes per model and level. A level that fails is void for that model and is dropped. |
-| B, effect check | Each matched pair of arms (test arm and its control, same instances) at the first level that passed A; 12 pairs per model; staged exact McNemar at 3, 6 and 12 pairs | 2 or more control-only successes in 1 pair for 1 model. If no effect is seen with all 12 pairs valid, the family is "at the ceiling at this level"; the same check then runs at the next level that passed A. |
-| C, headline | `team` against the primary control, with `hint`, `solo-seam` and `team-implicit` where the family has them; n pairs per model from the eval card's power plan, at most 100 | None. Fixed sample, exact McNemar, alpha 0.05, Holm correction per model. |
+| B, effect check | Each matched probe pair on 12 new instances in each model-level group that passed A. Compare the paired outcomes at 3, 6 and 12 pairs. | A group needs at least 2 control-only successes in any probe pair to continue. A missing pair is not a negative result. Failing this gate does not prove that the effect is zero. |
+| C, headline | `team` against the primary control, with `hint`, `solo-seam`, `team-implicit` and `team-implicit-all` where available. Fixed sample from the card, at most 100 pairs per model. | No further stage. Use the fixed-sample exact McNemar test for the primary comparison. |
 
-Run a stage with `python3 flotilla/run_wave.py <plan> --stop-after-stage A`, read the gate result, then resume
-the same plan without the flag. Each stage has its own cumulative cap in the plan.
+Run `python3 flotilla/run_wave.py <plan> --stop-after-stage A` only with approval for A. Read the gate result.
+If B is approved, resume the same run directory with `--stop-after-stage B`. Apply the same rule to C.
 
-For `handoff`, stage B tests the 2 scripted-successor pairs. No live playtest has exercised them since their
-repair, and the playtest finding is in the dose arms `team`, `team-implicit` and `team-implicit-all` (0, 1 or
-3 facts about the desk left unstated), which the plan runs in stage C. With a loss on about 1 instance in 8
-(the fresh-instance rate for Opus in `team-implicit`), 12 pairs show 2 or more losses with a probability of
-about 0.45, so a 12-pair gate on these arms would be too weak. The recommended first paid step is therefore
-stage A, then the 3 dose arms alone on the stage C instances (94 per model).
+The general plan cannot skip B or run only selected C arms. Stop after A unless the next stage has separate
+approval. Resuming with no stop flag can run all remaining eligible stages. A change of design needs a new
+protocol and a new run directory. Do not report a price subtotal as a runnable plan.
 
 ## 5. Outcomes
 
@@ -89,20 +88,21 @@ Retire a family for this model class when one of these is true:
 
 ## 8. Cost
 
-`pilot-forecast.md` has the table per stage, arm and model, with low, expected and high values, and
-`flotilla/plans/seams/handoff.json` is the plan (1,264 trials, `standard` only, 2 models). Token use per seat
-comes from 98 playtests of this family (`flotilla/plans/seams/handoff.playtest-profile.json`: about 7,000
-fresh input tokens, 150,000 cached input tokens and 1,700 output tokens per seat in the native CLIs) with an
-uncertainty factor of 2; arms without a playtest use the turn model of the earlier probe waves. Terminus 2
-can differ from both. The envelope has every branch and no early stop.
+`pilot-forecast.md` gives costs by stage, arm and model. `flotilla/plans/seams/handoff.json` is the full
+880-trial plan (`standard`, 2 models). It uses 25 repaired-build playtests for the 3 wording arms and 11
+earlier `hint` and `team-fullrecord` playtests for their token profiles. Other arms use the turn model.
+The high forecast doubles model cost. Terminus 2 may use more tokens than the native CLIs.
 
 | Step | Trials | Expected | High |
 |---|---:|---:|---:|
 | Stage A (controls) | 40 | $24 | $47 |
 | Stage B (2 scripted-successor pairs) | 96 | $11 | $22 |
-| Stage C, dose arms only (`team`, `team-implicit`, `team-implicit-all`) | 564 | $155 | $309 |
-| Stage C, other arms (`hint`, `solo-seam`, `team-fullrecord`) | 564 | $213 | $425 |
-| All | 1,264 | $403 | $802 |
+| Stage C, 3 wording arms | 372 | $114 | $227 |
+| Stage C, other arms | 372 | $141 | $280 |
+| All | 880 | $289 | $576 |
+
+Stage A's $47 model cap governs new starts. It is not a hard bill limit. Work in flight can cost more than
+the reserve. Modal charges separately. The full plan has a $575 model cap.
 
 The plan's task folders are in `.flotilla-local/pilot/` of the worktree that made the plan (not in git). A
 rehearsal of those folders with the `oracle` agent on local Docker is `flotilla/plans/oracle/handoff-pilot-oracle.json`.

@@ -112,19 +112,13 @@ does it lose reward and why; do the family's measures see that loss; what breaks
 23. Freeze the tool and the tasks for a session (`git archive` to a scratch folder) and record the commit.
 24. A family that 2 frontier assistants pass in every live trial at `standard` and `heavy` is at the ceiling
     for that class. Keep it as a canary, or move the load to where the logs showed slips. Do not add a trick.
-25. The implicit twin. A frontier assistant carries what it is told to carry. What it can miss is what the
-    other seat will not have. So when a family is at the ceiling, add a twin arm that leaves out one stated
-    fact about the other seat's view, and change nothing else. The fact must stay within the team's reach:
-    the seat can see it in its own view, or one seat is told it and has to pass it on. The pair `team` /
-    `team-implicit` measures the cost of that inference; `hint` minus `team` measures the habit. First case,
-    `handoff`, as first built: without the sentence "Once a batch is settled, it leaves the desk; no later
-    shift can see its lot list on the desk", Claude Opus 5.5 lost the ticket in 10 of 25 live playtests on 16
-    instances; with it, it lost 0 of 17 on 14 of those instances; with all 3 facts about the desk left out it
-    lost 5 of 10. GPT-6.2 Sol lost 0 at the seam in all 3 arms. Counter-cases: in `digest` the left-out usage
-    rule is written in the planner's manual, every planner copied it into its note, and the twin showed no
-    loss in 16 playtests; in `settle` the desks wrote their own sheet order into their first message (57 of
-    62), so the difference showed itself, and the twin showed no loss in 18. The twin bites when the fact is
-    written nowhere and the seat must infer it from its own view. These are playtests, not an experiment.
+25. Test what information the next seat has. If the stated rules make a task too easy, try a paired arm
+    that omits one fact about the next seat's view. Keep the fact discoverable. Keep the work, score,
+    note limit and other briefing text unchanged. Compare matched instances before making a wording claim.
+    In `handoff`, the first contrast looked strong. After a fairness repair, the pointer failure remained,
+    but the contrast did not: on 5 matched instances Opus won 4/5 with the neutral fact and 5/5 without it.
+    In `digest`, all 16 planners with a private usage rule passed it on. In `settle`, desks often stated their
+    own sheet order. Omitting a sentence does not guarantee that evidence is lost.
 26. The seat's own view must not contradict the fact that it has to infer. An independent check of the
     `handoff` twin found that the writer's own plan still showed a settled batch with its lots, while a later
     shift saw nothing of it. That is a contrary cue, and a loss after it is partly the task's fault. Read

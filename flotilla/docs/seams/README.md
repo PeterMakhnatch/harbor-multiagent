@@ -5,8 +5,8 @@ multi-agent system is several separate contexts: each agent sees its own part of
 is lost at the boundary between two contexts: what one agent says, stores or compresses for another, and what
 two agents must keep in sync.
 
-Every task is easy for 1 agent that holds all the information. The same work is hard across a boundary for
-exactly one named reason. A low score then means a boundary problem, not a hard task and not a trick.
+Each family tests one proposed failure between contexts. A knowledgeable seat with the full record should
+succeed. A low score alone does not establish the cause; use matched controls and the world events.
 
 **Status (2026-11-25).** No paid model run exists. The numbers come from 3 sources, always labelled: scripted
 policies in the simulator; the `oracle` agent on local Docker ($0); and live playtests, where a real
@@ -20,37 +20,29 @@ Two smaller models (GPT-6 Luna, Claude Haiku 5.5) played a part of them.
 
 | Family | Seam | Frontier result (wins / playtests) | Smaller models | Status |
 |---|---|---|---|---|
-| `handoff` | A capped shift note to a fresh context | At `standard`, by facts about the desk left unstated (0 / 1 / 3): **Opus 17 of 17, 15 of 25, 5 of 10; Sol 3 of 3, 15 of 16, 16 of 16**; `hint` 8 of 8 | 0 of 6; 5 of 6 losses at the seam | Candidate measure for a frontier pilot (dose arms `team`, `team-implicit`, `team-implicit-all`; `hint`; `team-fullrecord`) |
+| `handoff` | One shift writes a note for the next shift | Repaired build, facts left unstated (0 / 1 / 3): Opus 4/5, 8/11, 2/5. Sol 4/4 with 1 fact unstated | 0/6 on the earlier build | Repeated loss of evidence in notes; no reliable effect size for the wording change |
 | `digest` | A chain of capped notes with replacement rules | 52 of 52 (base levels, order levels, and the twin `team-implicit` 16 of 16) | 0 of 8; 73 of 90 wrong jobs at the seam | Canary for frontier models in every arm; a measure for smaller models |
 | `commit` | A notice that arrives before an irreversible booking | 51 of 52 (base and bulk levels) | 5 of 6 | Canary |
 | `tell` | A fact that matters only to another desk | 28 of 28 | Luna 1 of 2, Haiku 1 of 1 | Canary for frontier models |
 | `interface` | A setting that only another desk knows | 8 of 8 live teams; 28 of 28 pair runs, 0 premature orders | Luna 0 of 1, Haiku 1 of 1 | Canary. The pair `probe-wait` does not yet measure waiting (see the family page) |
 | `settle` | Agree on one value with delayed messages | 45 of 46 (the loss was a scripted-desk defect); the pair `team-ownorder` / `team-implicit` 26 of 26 | not played | Canary in every arm |
-| `week` | All seams in one scenario of 4 or 5 desks | 8 of 12 teams at the reference value or EUR 2 below it; no seam failure in a finished run; 4 teams ended by 1 seat (1 refusal, 3 wait-call errors) | not played | Integration scenario, not a measure |
+| `week` | 4 seams in one scenario of 4 or 5 desks | 8 of 12 attempts finished at the reference value or within EUR 2; 1 flagged zero and 3 early attempts with no trial result | not played | Integration scenario, not a measure |
 
 The first reading, with the limits of a playtest:
 
-1. Frontier assistants carry what they are told to carry. A capped note, a notice in a reply, an unasked
-   forward and an exact key form cost them nothing at these sizes. The reviewers had predicted this for every
-   family, and the suite's own kill rule now marks those arms as canaries for this model class.
-2. The loss that did appear is an inference about the reader. In `handoff`, Opus wrote "the bad lot is in
-   B95" in its note. B95 then left the desk, and the next shift could not see its lots. With one stated fact
-   ("Once a batch is settled, it leaves the desk; no later shift can see its lot list on the desk") Opus won
-   17 of 17 playtests; without it, 15 of 25, on 16 instances. All 10 losses began with such a pointer note,
-   and no win had one. The loss depends on the instance: on the 3 instances drawn first Opus lost 8 of 9
-   runs, on 8 fresh instances 1 of 8. With all 3 facts about the desk unstated (`team-implicit-all`) Opus won
-   5 of 10: it lost 3 of 8 instances that it had won with 1 fact unstated. One writer saw the risk ("If the
-   next operator's desk doesn't show the lots ... they can't rebuild the shortlist from my note") and still
-   left the lots out. Sol listed the lots in every arm (34 of 35; its 1 loss was an early ticket). No note of
-   either model ever lost a reference pair. AUTHORING.md rule 25 states the pattern and its limit: the same
-   twin in `digest` (16 of 16) and `settle` (18 of 18) showed no loss, because there the left-out fact was
-   written in a text that the writer had, or the desks wrote it into their messages. The twin bites when the
-   fact is written nowhere.
-3. A team is as weak as its most confused seat. 4 of 12 frontier `week` teams were ended by 1 seat that
-   refused the work or misused a wait call; no team of the other families was. These are valid flagged
-   results, and the wait call now has a form with no number to get wrong (`/await?until=work`).
-4. The families separate model classes. On the same tasks the 2 smaller models lost in 15 of 23 playtests, and
-   most losses are at the seam, not in the seat's own work.
+1. The other families mostly serve as controls for these frontier models. A capped note or an unusual work
+   order did not by itself make the teams fail. A single failure in `commit` came from a seat hiding a reply
+   in its own script.
+2. In `handoff`, the writer sometimes leaves a batch ID, not the lot IDs the next shift needs. On the
+   repaired build, all 7 Opus losses began that way. The reference pairs and settlements were correct; the
+   last shift could not identify the lot. A sufficient first note uses 97 of the 200 characters.
+   This happened even with the desk rule stated. On the 5 instances played in both arms, Opus won 4/5 with
+   the rule and 5/5 without it. The original control had named the lot list and given a misleading desk
+   view. Do not pool the builds or treat the original wording contrast as a measured boundary cost.
+3. In `week`, the first tool version wrote no result for 3 stalled teams. A later version recorded an
+   unfinished week as a valid zero. Report these separately. The world now has a wait call that does not
+   require the seat to compute a tick (`/await?until=work`).
+4. The 2 smaller models won 8 of 25 playtests. They won none of the 8 `digest` or 6 `handoff` playtests.
 
 ## Two kinds of family
 
@@ -64,7 +56,7 @@ and a demonstration, not a headline number.
 
 Each family reports costs as paired differences of arms on the same instances: the boundary cost (the control
 without the boundary minus `team`), the teammate cost (`solo-seam` minus `team`), the protocol cost (`hint`
-minus `team`) and, where the family has the twin, the inference cost (`team` minus `team-implicit`).
+minus `team`) and, where offered, the stated-fact contrast (`team` minus `team-implicit`).
 
 ## The standard
 
@@ -111,7 +103,7 @@ The rules are the same at every level. The load sits on the seam: per-seat turns
 
 A family is 3 files that the kit discovers: `flotilla/seams/<family>.py` (generator, arms, instruction text,
 metadata), `flotilla/world/ext/<family>.py` (the rules and the score) and `flotilla/policies/<family>.py`. See
-CONTRACT.md section 22, AUTHORING.md (how to write a family, 25 rules) and PILOT.md (the protocol draft for a
+CONTRACT.md section 22, AUTHORING.md (how to write a family, 27 rules) and PILOT.md (the protocol draft for a
 first paid run).
 
 ## What a number needs before anyone should trust it
