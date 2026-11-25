@@ -8,13 +8,13 @@ from itertools import combinations
 FAMILY = "interface"
 TITLE = "Replenishment batch"
 SEATS = {"canary": 3, "standard": 3, "heavy": 3}
-ARMS = ("solo", "solo-seam", "team", "team-hint", "probe-control", "probe-trap-key",
+ARMS = ("solo", "solo-seam", "team", "team-nosaved", "team-hint", "probe-control", "probe-trap-key",
         "probe-trap-unit", "probe-trap-key-hint")
 EXTRA_ARMS = ("silent", "team-parallel")
 TWINS = (("probe-control", "probe-trap-key"), ("probe-control", "probe-trap-unit"))
-PAIRS = (("team", "team-hint"), ("probe-trap-key", "probe-trap-key-hint"))
+PAIRS = (("team", "team-hint"), ("team", "team-nosaved"), ("probe-trap-key", "probe-trap-key-hint"))
 ARM_WORDS = ("probe-control", "probe-trap-key", "probe-trap-unit", "probe-trap-key-hint",
-             "solo-seam", "team-hint", "interface")
+             "solo-seam", "team-hint", "team-nosaved", "team-parallel", "interface")
 HINT = "Before fixing an order, obtain the desk's actual key form and unit from its visible catalog or a direct question."
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
@@ -216,11 +216,17 @@ A `complete` event means that group's counts are final. Send `/prepare` after th
 Orders can be uploaded after preparation, once the group's catalog is deposited and its desk has finished.
 Your order writer supports all 12 combinations.
 """
-    text += f"Its saved setting is `{own['saved'][0]}`, unit `{own['saved'][1]}`.\n\nTargets (items):\n"
+    if "saved" in own:
+        text += saved_sentence(own["saved"])
+    text += "\nTargets (items):\n"
     for group in own["groups"]:
         targets = "; ".join(f"site {r['site']}, item {r['item']}: {r['target']}" for r in group["rows"])
         text += f"- {group['name']}: {targets}\n"
     return text + (f"\n{HINT}\n" if hint else "")
+
+
+def saved_sentence(saved):
+    return f"Its saved setting is `{saved[0]}`, unit `{saved[1]}`.\n"
 
 
 def desk_text(groups, messaging, solo):
@@ -273,6 +279,8 @@ def extension_arm(inst, arm, max_text, max_messages):
     buyers, desks = zip(*(group_views(g) for g in groups), strict=True)
     buyer = {"role": "all" if solo else "buyer", "saved": inst["buyer"], "groups": list(buyers),
              "messaging": messaging}
+    if arm == "team-nosaved":
+        del buyer["saved"]
     if solo:
         buyer["desks"] = list(desks)
     common = common_text(groups, owner, messaging, text_limit, message_limit)
@@ -296,6 +304,17 @@ def extension_arm(inst, arm, max_text, max_messages):
 
 def pair_difference(first, second, views_a, views_b):
     normalized = {seat: dict(view) for seat, view in views_b.items()}
+    if second == "team-nosaved":
+        field = "env.SEAT_BRIEFING"
+        saved = json.loads(views_a["p1"][field])["saved"]
+        expected = json.loads(views_a["p1"][field])
+        del expected["saved"]
+        if json.loads(normalized["p1"][field]) != expected:
+            return ["more than the saved setting differs in the buyer briefing"]
+        normalized["p1"][field] = views_a["p1"][field]
+        normalized["p1"]["instruction"] = normalized["p1"]["instruction"].replace(
+            "\nTargets (items):\n", saved_sentence(saved) + "\nTargets (items):\n", 1)
+        return [] if normalized == views_a else ["more than the saved setting sentence differs"]
     instruction = normalized["p1"]["instruction"]
     suffix = "\n" + HINT + "\n"
     if not instruction.endswith(suffix):
