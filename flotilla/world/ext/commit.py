@@ -10,6 +10,10 @@ class Freight:
     def __init__(self, task, host):
         self.host = host
         self.params = task["params"]
+        self.task = task
+        self.actions = []
+        self.idle_waits = dict.fromkeys(task["seats"], 0)
+        self.ended = False
         self.rounds = self.params["rounds"]
         self.shipments = {s["id"]: s for s in self.params["shipments"]}
         self.by_round = {r: [s["id"] for s in self.shipments.values() if s["round"] == r]
@@ -17,6 +21,7 @@ class Freight:
         self.primaries = {lane["primary"] for lane in self.params["lanes"]}
         self.carriers = self.primaries | {lane["backup"] for lane in self.params["lanes"]}
         self.report_ready = not self.params["live_report"]
+        self.opening_acknowledged = not self.params["report_barrier"]
         self.stepped = False
         self.bookings = {}
         self.messages = {}
@@ -28,6 +33,62 @@ class Freight:
     @property
     def round(self):
         return self.host.tick + 1
+
+    def record_action(self, kind, seat, data):
+        self.host.record(kind, seat, data)
+        self.actions.append({"kind": kind, "seat": seat, "data": data})
+
+    def on_tick(self, tick):
+        self.actions.append({"kind": "tick", "seat": None, "data": {"tick": tick}})
+
+    def finish(self):
+        self.ended = True
+        self.host.freeze()
+
+    def pending(self, seat):
+        if self.ended:
+            return False
+        if seat == "p2":
+            return not self.report_ready
+        waiting_for_report = self.stepped and self.opening_acknowledged and not self.report_ready
+        return self.round <= self.rounds and not waiting_for_report
+
+    def on_deadline(self, stalled_seats):
+        for seat in stalled_seats:
+            if self.pending(seat):
+                self.record_action("commit_stall", seat, {"round": self.round, "reason": "unfinished"})
+        result = score(self.task, self.actions)
+        # The kit's deadline hook has no post-write receipt log. Do not invent deliveries.
+        # The verifier's complete event log still supports offline replay of these measures.
+        if any(m["from"] == "dispatch-mail" for m in self.messages.values()):
+            result["delivered_outages"] = None
+            if any(self.params["answer"][s] != self.params["primary"][s] for s in self.bookings):
+                result.update(stale_after_delivery=None, affected_after_delivery=None, stale_rate=None)
+        self.ended = True
+        return result
+
+    def augment_reply(self, seat, method, path):
+        if self.ended or path != "/await":
+            return None
+        if seat == "p1" and self.stepped and not self.opening_acknowledged:
+            self.opening_acknowledged = True
+            self.record_action("commit_opening_ack", seat, {"round": self.round})
+            self.advance()
+            return {"round_ready": self.round > 1}
+        if seat == "p1" and self.stepped and not self.report_ready:
+            self.idle_waits[seat] += 1
+            if self.idle_waits[seat] >= self.host.family.IDLE_WAITS:
+                self.record_action("commit_stall", "p2", {"round": self.round, "reason": "report_waits"})
+                self.finish()
+                return {"duty_stalled": True}
+            return None
+        if not self.pending(seat):
+            return None
+        self.idle_waits[seat] += 1
+        if self.idle_waits[seat] < self.host.family.IDLE_WAITS:
+            return None
+        self.stall(seat, "idle_waits")
+        return {"duty_stalled": True}
 
     def allow_message(self, message):
         return 403, "notices are read-only"
@@ -78,13 +139,14 @@ class Freight:
         return None
 
     def advance(self):
-        if not self.stepped or not self.report_ready:
+        if not self.stepped or not self.report_ready or not self.opening_acknowledged:
             return
         self.stepped = False
+        self.idle_waits["p1"] = 0
         self.fetched.clear()
         self.host.advance()
         if self.round > self.rounds:
-            self.host.freeze()
+            self.finish()
         else:
             self.open_round()
 
@@ -101,10 +163,12 @@ class Freight:
             return self.refuse(seat, 400, error)
         for entry in body["bookings"]:
             self.bookings[entry["shipment"]] = entry["carrier"]
-            self.host.record("commit_book", seat, {"round": self.round, **entry})
+            self.record_action("commit_book", seat, {"round": self.round, **entry})
+        if body["bookings"] or close:
+            self.idle_waits[seat] = 0
         if close:
             self.stepped = True
-            self.host.record("commit_step", seat, {"round": self.round})
+            self.record_action("commit_step", seat, {"round": self.round})
             self.advance()
         return 200, self.view(seat)
 
@@ -114,7 +178,7 @@ class Freight:
         if self.report_ready or self.round != 1:
             return self.refuse(seat, 409, "report already closed")
         notices = body.get("notices")
-        if set(body) != {"notices"} or not isinstance(notices, list) or len(notices) > len(self.params["outages"]):
+        if set(body) != {"notices"} or not isinstance(notices, list) or len(notices) > len(self.primaries):
             return self.refuse(seat, 400, "invalid notice list")
         seen = set()
         for notice in notices:
@@ -130,7 +194,7 @@ class Freight:
             carrier, start = notice["carrier"], notice["start"]
             self.queued.append({**notice, "index": indexes.get(carrier, self.params["batch"]),
                                 "text": self.host.family.outage_text(carrier, start)})
-        self.host.record("commit_report", seat, {"notices": notices})
+        self.record_action("commit_report", seat, {"notices": notices})
         self.report_ready = True
         self.host.retire(seat)
         self.advance()
@@ -145,6 +209,7 @@ class Freight:
         id_ = ids[0]
         if id_ not in self.fetched:
             self.fetched.add(id_)
+            self.idle_waits[seat] = 0
             index = len(self.fetched)
             for notice in sorted(self.queued, key=lambda n: n["carrier"]):
                 if notice["start"] == self.round and notice["index"] == index:
@@ -165,14 +230,18 @@ class Freight:
             return self.relay(seat, body)
         return self.step(seat, body, close=path == "/step")
 
-    def on_budget(self, seat):
-        self.host.record("commit_stall", seat, {"round": self.round})
+    def stall(self, seat, reason):
+        self.record_action("commit_stall", seat, {"round": self.round, "reason": reason})
         if seat == "p2":
             self.report_ready = True
             self.host.retire(seat)
             self.advance()
         else:
-            self.host.freeze()
+            self.finish()
+
+    def on_budget(self, seat):
+        if self.pending(seat):
+            self.stall(seat, "call_budget")
 
 
 def create(task, host):
@@ -193,8 +262,6 @@ def score(task, events):
     booked = set()
     stale = exposed = 0
     stalls = set()
-    batch_rounds = set()
-    consecutive = 0
     for event in events:
         kind, data, seat = event["kind"], event["data"], event["seat"]
         if kind == "commit_report":
@@ -213,22 +280,17 @@ def score(task, events):
             if shipment in affected and params["primary"][shipment] in delivered:
                 exposed += 1
                 stale += carrier == params["primary"][shipment]
-            consecutive += 1
-            if consecutive == params["batch"]:
-                batch_rounds.add(data["round"])
-        elif kind == "commit_round_open" or (kind == "extension_call" and seat == "p1" and
-                                             data["method"] == "GET" and data["status"] == 200):
-            consecutive = 0
         elif kind == "commit_stall":
             stalls.add(seat)
     missing = len(expected_report - report) if params["live_report"] else 0
     report_ok = not params["live_report"] or report == expected_report
     closed = sum(event["kind"] == "tick" for event in events) == params["rounds"]
-    return {"reward": float(len(correct) == len(answer) and report_ok), "fields_correct": len(correct),
+    return {"reward": float(len(correct) == len(answer) and report_ok and closed and not stalls),
+            "fields_correct": len(correct),
             "affected_total": len(affected), "affected_correct": len(correct & affected),
             "unaffected_correct": len(correct - affected), "missed": len(answer) - len(booked),
             "stale_after_delivery": stale, "affected_after_delivery": exposed,
             "stale_rate": stale / exposed if exposed else None,
             "delivered_outages": len(delivered), "missing_relay": missing, "report_ok": report_ok,
-            "scripted_batch": len(batch_rounds), "p1_stalled": int("p1" in stalls),
+            "p1_stalled": int("p1" in stalls),
             "p2_stalled": int("p2" in stalls), "closed": closed}

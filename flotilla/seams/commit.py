@@ -1,12 +1,11 @@
 """Freight booking with mid-day carrier notices."""
 
-import math
 import random
 
 FAMILY = "commit"
 TITLE = "Book the day's outbound freight"
 SEAM = "Apply an outage update received during an ongoing batch before committing a final booking."
-VERSION = 2
+VERSION = 3
 SEATS = 2
 ARMS = ("solo", "solo-seam", "team", "probe-control", "probe-trap", "hint", "probe-quiet")
 TWINS = (("probe-control", "probe-trap"), ("probe-control", "probe-quiet"))
@@ -16,6 +15,10 @@ DOSES = {"canary": (1, 4, 4), "standard": (2, 2, 3), "heavy": (3, 1, 2)}
 LEVELS = tuple(DOSES)
 ROUNDS = 6
 BATCH = 4
+IDLE_WAITS = 5
+MAX_CALLS = 1000
+CALL_LIMIT = (f"Each desk can make at most {MAX_CALLS} calls while active, including refused calls. "
+              "`/await`, `/whoami` and `/health` do not count.")
 HINT = "Before booking, check the notices received so far, including those in the shipment replies."
 
 CARRIERS = (
@@ -97,22 +100,24 @@ def booking_instruction(inst, arm, max_text, max_messages):
         lines.append("These are all the outages today:")
         lines.extend(f"- {o['text']}" for o in inst["outages"])
     elif arm == "solo-seam":
-        lines.append("The carrier board knows the outages and their start rounds.")
+        lines.append("The carrier board knows the outages and submits the report. You do not submit a report.")
     else:
-        lines.append("The carrier desk knows the outages and their start rounds.")
+        lines.append("The carrier desk knows the outages and submits the report. You do not submit a report.")
     if arm != "solo":
         lines.append("The dispatch mail service releases the report as notices during the day.")
     lines.extend([
         "The yard board can also send notices. These use the same message channel.",
         "Only an outage that affects a lane changes its booking. Other notices need no action.",
         "Notices are read-only; there is no direct chat or question route.",
-        "Each desk can make at most 1000 world calls.",
+        CALL_LIMIT,
+        f"After {IDLE_WAITS} waits without progress on your own work, the world records your desk as stalled.",
+        "Progress means inspecting a new shipment, booking a shipment or accepting its round's final step.",
         "",
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.",
         "For POST requests use `Content-Type: application/json`.",
         "Start with `GET /view`. It gives the current `round`, `rounds`, `bookings` and all notices so far in `messages`.",
         "`rounds` maps round numbers to shipments. The keys are strings.",
-        f"The dispatch mail service handles at most {len(inst['outages'])} outage notices today.",
+        f"The dispatch mail service handles at most {BATCH} outage notices today.",
     ])
     lines.append("Each shipment is an ID. `GET /shipment?id=<id>` gives its origin, destination and load.")
     lines.append("Only current-round shipments can be inspected. Inspect every shipment of the round before booking.")
@@ -125,16 +130,19 @@ def booking_instruction(inst, arm, max_text, max_messages):
     ])
     if arm != "solo":
         lines.extend([
-            "Round 2 cannot open until the report for the day is submitted.",
+            "Round 2 waits for both the report and your opening acknowledgment.",
             "The report can be submitted before round 1 ends; its notices can arrive much later.",
-            "If `stepped` is true, use `GET /await?until=tick&after=0` to wait for round 2, then `GET /view`.",
-            "If the wait returns in round 1, wait again.",
+            "After round 1's `/step`, `stepped` is true. Call `GET /await?until=active` to acknowledge the step.",
+            "If `round_ready` is true, get `/view`. Otherwise wait with `GET /await?until=tick&after=0`.",
+            "When `tick` exceeds 0, get `/view`.",
+            f"After {IDLE_WAITS} completed waits while the report is missing, the world ends play with reward 0.",
             "Full success requires a correct report as well as correct bookings.",
         ])
     lines.extend([
         "Any reply can carry new notices in `new_messages`. Each outage notice specifies its first affected round.",
         "Message field `t` is the world tick (round minus 1), not the start round of an outage.",
         "When `finished` is true or the world reports that play has ended, stop.",
+        "If `duty_stalled` is true, stop: unfinished work scores 0.",
     ])
     if arm == "hint":
         lines.append(HINT)
@@ -150,11 +158,14 @@ def carrier_instruction(inst, max_text, max_messages):
         f"Only you know these outages:\n{notices}\n"
         "Submit your complete report during round 1. The dispatch mail service releases each notice during the day.\n"
         "The booking desk can inspect and book round 1 while you prepare the report. Round 2 waits for your report.\n"
+        f"The report closes if it is still missing after {IDLE_WAITS} waits by the booking desk following acknowledgment.\n"
         "Use $WORLD_URL with the header `Authorization: Bearer $SEAT_TOKEN`.\n"
-        "Each desk can make at most 1000 world calls.\n"
+        f"{CALL_LIMIT}\n"
+        f"After {IDLE_WAITS} waits without submitting the report, the world records your desk as stalled.\n"
+        "If `duty_stalled` is true, stop: unfinished work scores 0.\n"
         "For POST requests use `Content-Type: application/json`.\n"
         '`POST /relay` with `{"notices": [{"carrier": "<name>", "start": <first affected round>}]}` submits the report.\n'
-        "Include each outage once, with its exact carrier name and start round. A successful submission is final.\n"
+        f"Include each outage once, at most {BATCH}, with its exact carrier name and start round. Submission is final.\n"
         "Stop after this call succeeds. There is no other step or direct chat.\n"
         "Full success requires a complete and correct report and every shipment booked with the right carrier.\n"
     )
@@ -165,7 +176,7 @@ def extension_arm(inst, arm, max_text, max_messages):
         raise ValueError("unknown freight booking condition")
     messages = [outage_text(lane["primary"], inst["rounds"]) for lane in inst["lanes"]]
     messages.extend(d["text"] for d in inst["distractors"])
-    if max_text < max(map(len, messages)) or max_messages < max(len(inst["outages"]), len(inst["distractors"])):
+    if max_text < max(map(len, messages)) or max_messages < max(BATCH, len(inst["distractors"])):
         raise ValueError("messaging budget cannot carry all notices")
     single = arm in ("solo", "solo-seam")
     scripted = not single and arm != "team"
@@ -174,7 +185,7 @@ def extension_arm(inst, arm, max_text, max_messages):
     if arm == "probe-control":
         posts.extend({"sender": "dispatch-mail", "round": 1, "text": o["text"]} for o in outages)
     queued = outages if arm in ("probe-trap", "hint", "solo-seam") else []
-    briefings = {"p1": {"role": "booking", "lanes": inst["lanes"], "max_outages": len(inst["outages"])}}
+    briefings = {"p1": {"role": "booking", "lanes": inst["lanes"]}}
     if arm == "solo":
         briefings["p1"]["outages"] = [o["text"] for o in outages]
     instructions = {"p1": booking_instruction(inst, arm, max_text, max_messages)}
@@ -185,9 +196,11 @@ def extension_arm(inst, arm, max_text, max_messages):
         instructions["p2"] = carrier_instruction(inst, max_text, max_messages)
     params = {k: inst[k] for k in ("dose", "rounds", "batch", "shipments", "lanes")}
     params.update(outages=outages, posts=posts, queued=queued, live_report=arm == "team",
+                  report_barrier=arm != "solo",
                   answer=answer_key(inst, outages), primary=answer_key(inst, []))
     return {"params": params, "briefings": briefings, "instructions": instructions,
             "messaging": True, "push": True, "senders": ["yard-board", "dispatch-mail"],
+            "max_calls": MAX_CALLS,
             "scripted_seats": ["p2"] if scripted else [], "scripted_policies": {"p2": "nop"} if scripted else {}}
 
 
@@ -219,10 +232,8 @@ def chance_baseline(task_json, policy):
     if policy == "random":
         return 2 ** -len(params["shipments"])
     if policy == "blind":
-        count = len(params["outages"])
-        if count == 0:
-            return 0.0
-        return 1 / (math.comb(params["batch"], count) * (params["rounds"] - 1) ** count)
+        # Guess the most concentrated nonempty plan: one uniformly drawn carrier and start.
+        return 1 / (params["batch"] * (params["rounds"] - 1)) if len(params["outages"]) == 1 else 0.0
     return None
 
 

@@ -1,0 +1,49 @@
+{
+  "name": "commit-canary-rehearsal-v3-final",
+  "prereg": {
+    "commit": "b61f4c7e9820d49eee157abd033d4073182faeb7",
+    "doc": "flotilla/docs/seams/commit.md",
+    "section": "## Validation and rehearsal pre-registration (2026-11-25)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/careful",
+      "manifest": "/tmp/seams1125/b3-commit/final/careful/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/careful",
+      "manifest": "/tmp/seams1125/b3-commit/final/careful/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/naive",
+      "manifest": "/tmp/seams1125/b3-commit/final/naive/manifest.json",
+      "instances": [0],
+      "arms": ["team"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/final/naive",
+      "manifest": "/tmp/seams1125/b3-commit/final/naive/manifest.json",
+      "instances": [0],
+      "arms": ["probe-trap"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 15,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}

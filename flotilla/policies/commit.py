@@ -1,7 +1,6 @@
 """Freight policies that differ only in consumption of the dispatch mail."""
 
 import hashlib
-import itertools
 import re
 
 OUTAGE = re.compile(r"^(.+?) is out of service from round (\d+) to the end of the day\.")
@@ -50,10 +49,16 @@ def select(name, shipment, lane, r, outages):
     return lane["backup"] if outages.get(primary, r + 1) <= r else primary
 
 
-def wait_next(client):
-    for _ in range(30):
+def wait_next(client, idle_waits):
+    status, reply = yield from client.get("/await?until=active")
+    if status != 200 or reply.get("frozen") or reply.get("duty_stalled"):
+        return None
+    if reply.get("round_ready") or reply["tick"] > 0:
+        status, view = yield from client.get("/view")
+        return view if status == 200 else None
+    for _ in range(idle_waits):
         status, reply = yield from client.get("/await?until=tick&after=0")
-        if status != 200 or reply.get("frozen"):
+        if status != 200 or reply.get("frozen") or reply.get("duty_stalled"):
             return None
         if reply["tick"] > 0:
             status, view = yield from client.get("/view")
@@ -63,13 +68,10 @@ def wait_next(client):
 
 def blind_plan(own, view):
     carriers = sorted({lane["primary"] for lane in own["lanes"]})
-    k = own["max_outages"]
-    combinations = list(itertools.combinations(carriers, k))
-    starts = list(itertools.product(range(2, len(view["rounds"]) + 1), repeat=k))
+    starts = len(view["rounds"]) - 1
     ids = "|".join(id_ for batch in view["rounds"].values() for id_ in batch)
     draw = int.from_bytes(hashlib.sha256(ids.encode()).digest(), "big")
-    return dict(zip(combinations[draw % len(combinations)], starts[draw // len(combinations) % len(starts)],
-                    strict=True))
+    return {carriers[draw % len(carriers)]: 2 + draw // len(carriers) % starts}
 
 
 def consume_shipment(name, shipment, outages, own):
@@ -84,7 +86,7 @@ def consume_shipment(name, shipment, outages, own):
         read_outages([text], outages)
 
 
-def booking_desk(name, client, own):
+def booking_desk(name, client, own, family):
     lanes = {key(lane): lane for lane in own["lanes"]}
     outages = {}
     read_outages(own.get("outages", []), outages)
@@ -112,7 +114,7 @@ def booking_desk(name, client, own):
         if status != 200:
             raise RuntimeError("booking step was refused")
         if view["stepped"]:
-            view = yield from wait_next(client)
+            view = yield from wait_next(client, family.IDLE_WAITS)
             if view is None:
                 return
         if name not in ("naive", "blind"):
@@ -123,4 +125,4 @@ def play(name, client, own, family=None):
     if own["role"] == "carrier":
         yield from carrier_desk(name, client, own)
     else:
-        yield from booking_desk(name, client, own)
+        yield from booking_desk(name, client, own, family)
