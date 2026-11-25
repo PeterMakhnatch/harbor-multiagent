@@ -719,6 +719,8 @@ for the dose ladder; the rules remain the same at each dose.
 | `senders` | Non-seat sender labels for world posts; default: none |
 | `max_calls` | Positive integer, or seat → positive integer; default: 1,000 per seat |
 | `start_after` | Seat → list of predecessor seats; optional Harbor agent start dependencies |
+| `play_timeout_sec` | Positive finite seconds for the entire world play period; overrides the builder's default |
+| `agent_timeout_sec` | Positive finite seconds, or a complete seat → seconds map; requested agent run limits |
 | `files` | Plain filename → text, copied into every seat's home folder; default: none |
 
 The `solo` roster has one of the generator's seats. Names need not be `p1`, `p2`, etc. The builder
@@ -727,6 +729,16 @@ Scripted seats must be in the arm's roster; their instruction is the standard sc
 Other seats see only their own briefing and instruction, plus the common files. Do not put private
 data in `files`. Specify messaging, push, call limits and all family rules in the applicable instructions.
 Unknown arm keys, malformed types, and invalid rosters or dependencies fail the build.
+
+The builder writes the arm play limit to `[metadata].play_timeout_sec` in `task.toml`, `task.json`
+and `FLOTILLA_PLAY_SECONDS`. It records explicitly requested seat limits in `[metadata].agent_timeout_sec`
+and records the complete map in `task.json`. Harbor currently uses one `[agent].timeout_sec` for the
+whole concurrent run or for each individual staged seat. The builder sets it to the largest requested
+seat limit; unequal limits are recorded but cannot yet be enforced individually by Harbor.
+`--play-timeout` supplies the default when an arm does not specify its own limits (900 s by default).
+Without an explicit arm play limit, the builder extends the play period for staged seats.
+QA requires at least the sum of the effective agent limits of seats in the dependency graph,
+plus 60 s of margin. The world starts its deadline at the first authenticated seat call.
 
 QA regenerates the arm and checks the roster, briefings, instructions, private parameters and initial
 seat status. It checks the shipped extension and policies against the checkout, and rejects exposed
@@ -813,6 +825,27 @@ def on_tick(self, tick: int) -> None:
 def on_budget(self, seat: str) -> None:
     # Optional: called once when the active seat exhausts its calls and has not retired.
     ...
+
+def on_seat_end(self, seat: str) -> None:
+    # Optional: a staged predecessor's agent has ended; called once during open play.
+    ...
+
+def pending(self, seat: str) -> bool:
+    # Optional: pure query, True while this seat has an unfinished required duty.
+    ...
+
+def on_deadline(self, stalled_seats: list[str]) -> dict | None:
+    # Optional: return a score or an invalid outcome using the same schema as score().
+    ...
+
+def on_retired_call(self, seat: str, method: str, path: str, body: dict,
+                    query: dict[str, list[str]]) -> tuple[int, dict] | None:
+    # Optional: replay a completed extension route without any state change, else None.
+    ...
+
+def augment_reply(self, seat: str, method: str, path: str) -> dict | tuple[dict, list[str]] | None:
+    # Optional: extra fields and receipt IDs for successful /await and /messages replies.
+    ...
 ```
 
 The world authenticates the seat, checks the method, validates the JSON object, and calls `handle`
@@ -823,10 +856,11 @@ cannot give a valid reward for that trial. The core reserves `new_messages` in r
 Routes are exact matches: use `/shipment?id=S-417`, not `/shipment/<id>`. They cannot override
 core routes or use `/admin/`. The core records `extension_call` with method, path and status.
 The request body has a general byte limit; enforce any family-specific note size inside `handle`.
-The call cap counts authorized calls while active, including core and refused routes. After the last
-allowed reply, the core calls `on_budget` once if the seat is still active and play is not frozen.
-A further active call gets 429; waiting and retired calls do not count. The hook can retire the seat,
-activate its successor or freeze play. The kit cannot detect a runner stop with no further world calls.
+The call cap counts authorized calls while active, including refused routes, except `/await`,
+`/whoami` and `/health`. After the last counted reply, the core calls `on_budget` once if the
+seat is still active and play is not frozen. A further active counted call gets 429 with
+`budget: "max_calls"` and `limit`; waiting and retired calls do not count. The hook can retire
+the seat, activate its successor or freeze play.
 The extension can hold state in its object. `create` runs before the start event; initialize state and
 queue startup posts there. Do not call `record`, `advance`, `activate`, `retire` or `freeze` in `create`.
 Use `import family` at module level to share pure functions from the shipped generator, or
@@ -848,23 +882,39 @@ The `host` provides:
 
 Do not change `host.tick` or `host.status` directly. Advance time only on valid game actions.
 Use family-specific event kinds for accepted moves and state changes. Reserved core kinds include
-`start`, `extension_start`, `freeze`, `play_timeout`, `tick`, `seat_transition`, `send`, `message_route`,
-`deliver`, `delivered`, `extension_call`, `extension_error`, `await`, `call_budget`, `simulation_stalled`,
+`start`, `extension_start`, `freeze`, `play_timeout`, `tick`, `seat_transition`, `seat_end`, `send`, `message_route`,
+`deliver`, `delivered`, `extension_call`, `extension_error`, `retired_retry`, `await`, `call_budget`,
+`simulation_stalled`, `play_incomplete`, `deadline_score`,
 `health`, `whoami`, `state`, `bad_token`, `invalid_http`, `probe`, `invalid`, `denied`, `late`, `inactive`,
 `submit`, `gated`, `audit`, `open`, `close`, `season-over`, `look`, `wait`, `request`, `pass`, `early`, `repeat`.
-Use `host.freeze()` after the last accepted move. The separate wall-clock play deadline
-(`--play-timeout`, measured from the first seat call) freezes a stalled world as invalid.
-Wall time never determines a valid game outcome or advances a logical tick.
+Use `host.freeze()` after the last accepted move. The separate wall-clock play deadline freezes
+a stalled world. A stalled seat has an open `/await` or a true `pending(seat)` at that point.
+The world records the sorted `stalled_seats` on `play_timeout` or `simulation_stalled` events,
+and copies it to the score. `on_deadline` may return a valid reward and flags; the world records
+its result in `deadline_score` before freeze. Without this hook or when it returns None, the
+deadline or exhausted scheduler stays invalid. On normal admin freeze, open duties or waits
+produce `play_incomplete` and may use the same hook; otherwise the ordinary scorer decides.
+A seat's own omission is a valid flagged outcome. Infrastructure failures are invalid, not
+reward 0. Wall time never advances a logical tick.
 
 The core keeps `/health`, `/whoami`, `/messages` and the admin routes. It drops `/submit`.
 `GET /whoami` also returns `tick`, `active` (a status string), and `frozen` (boolean).
 `GET /await?until=active|message|tick&after=N` waits for the chosen condition. For `tick` it
 returns when the current tick is greater than `N`; `message` waits for an unread due message.
 It returns 200 with `active`, `tick`, `frozen` and `reason` (`active`, `message`, `tick`, `frozen`,
-`retired` or `timeout`). The timeout is `FLOTILLA_WAIT_SECONDS` (default 60 s). The HTTP
-handler does not hold the world lock while waiting; the simulator parks the seat and advances
-to the next runnable step or timeout. Waiting and retired seats can call `/whoami` and `/await`,
-but cannot use other seat routes (409). After freeze these two read routes still work.
+`retired`, `timeout` or `predecessor_ended`). The timeout is `FLOTILLA_WAIT_SECONDS` (default 60 s).
+For a staged seat's first authenticated call, the world records `seat_end` for its predecessors,
+once each. During open play it invokes `on_seat_end` for each. The simulator records this when a
+predecessor policy returns. If all predecessors ended but the seat is still waiting,
+`/await?until=active` returns immediately with `active: "waiting"` and
+`reason: "predecessor_ended"`. This is not a runner failure signal; it establishes only that the
+predecessor's run ended. The HTTP handler does not hold the world lock while waiting; the simulator
+parks the seat and advances to the next runnable step or timeout.
+Waiting and retired seats can call `/whoami` and `/await`, but cannot use other seat routes (409).
+After freeze these two read routes still work. `on_retired_call` can replay a completed extension
+route for a retired seat, even after freeze. Return None to use the ordinary refusal. Return the
+original status and reply without advancing ticks, changing state, publishing messages, or adding
+receipts. The core records `retired_retry` for the replay; it adds no chat push to that reply.
 
 When messaging is enabled, the core enforces the usual per-seat limits and logs sends and deliveries.
 `message` contains `id`, `from`, `to` (a seat or `"all"`), `text`, and `t` (the send tick).
@@ -880,14 +930,22 @@ When push is enabled, each authenticated seat reply includes due unread messages
 when nonempty. GET `/messages` already contains the visible history and does not add a duplicate push.
 Each `deliver` receipt is recorded only after the reply body is written; pushed receipts use `via: "push"`.
 An extension's optional third return value similarly creates `delivered` with `ids` and `path` after
-the reply. A failed write creates no receipt. A receipt proves the server wrote the bytes, not that the
-model understood them. State all delivery rules in instructions. Use the task seed and logical event
+the reply. A failed write creates no receipt. A receipt proves the server wrote the bytes, not that
+the model understood them.
+
+`augment_reply` may add fields to a successful core `/await`, GET `/messages` or POST `/messages`
+reply for the authenticated seat. It runs under the world lock. Return None or a dict of added
+fields, optionally with receipt IDs as `(fields, ids)`. Never replace existing fields or
+`new_messages`. The same post-write `delivered` receipt rule applies; invalid hook replies fail closed.
+State all delivery rules in instructions. Use the task seed and logical event
 order for any random delivery decision, never the wall clock. The core does not change message text.
 
-The verifier freezes play and calls `score(task, events)` with the complete event log in sequence
-order. Return `{"reward": float_in_0_to_1, ...}` or `{"invalid": "<reason>", ...}` without a reward.
+The verifier freezes play and uses `deadline_score` when present. Otherwise it calls
+`score(task, events)` with the complete event log in sequence order.
+Return `{"reward": float_in_0_to_1, ...}` or `{"invalid": "<reason>", ...}` without a reward.
 Other keys are operator-only metrics in `score.json`. An invalid outcome writes `error` and no reward,
-and fails verification. A restart, extension failure, play deadline or invalid score also fails closed.
+and fails verification. A restart, extension failure or invalid score fails closed, even when a deadline
+hook supplies a score.
 Score accepted actions from evidence, not replies, instruction examples, guessed identities or a
 model judge. Include required seat participation. Event times are logical ticks, not wall time.
 
@@ -973,11 +1031,12 @@ simulate_built(task_dir, policies, schedule_seed) -> dict
 `policies` is a name for all seats under test, or a mapping of subject seat → name (unspecified
 seats keep careful or the built policy). `simulate_built` accepts `None` to keep the built policies.
 Scripted seats cannot be overridden. The result contains `reward` (None when invalid), the complete
-`score` dict, `invalid` (reason or None), `stalled`, `events`, frozen `state`, `requests` by seat,
-`files_read` by seat, `policies` and `schedule_seed`. The simulator honors `start_after` dependencies.
-Pass options such as `read_first_subject=True` to `simulate` to match a build. Exceeding the scheduler
-step cap produces an invalid stalled result for extension tasks, not reward 0. A family must distinguish
-valid failed play from missing or incomplete evidence in its scorer. The simulator checks event order,
+`score` dict, `invalid` (reason or None), `stalled` (an invalid scheduler exhaustion), `stalled_seats`,
+`events`, frozen `state`, `requests` by seat, `files_read` by seat, `policies` and `schedule_seed`.
+The simulator honors `start_after` dependencies. Pass options such as `read_first_subject=True`
+to `simulate` to match a build. Exceeding the scheduler step cap follows the same deadline scoring
+contract as HTTP. A family must distinguish valid failed play from missing or incomplete evidence
+in its scorer. The simulator checks event order,
 response status and that frozen play accepts no new moves. It runs sequentially within a process
 (the legacy world reads environment variables at import). Use separate processes for parallel
 sweeps. PyYAML is required to read the built Compose config.
@@ -995,10 +1054,12 @@ Harbor starts p2's agent only after p1's agent ends, even on a run error. The si
 same dependencies. In `/handoff`, validate the note and its 12-character cap, store it, record the
 seal, call `host.advance()`, `host.retire("p1")`, and `host.activate("p2")`. In `/board`, return
 `(200, {"note": note}, ["note-1"])` for p2. Score the seal, receipt and final commit from events.
+The fixture also returns the note and receipt ID in `augment_reply` on `/await`.
 For an 8-seat chain, give each successor its own dependency on its predecessor. The world must
-still enforce inactive-seat rules; Harbor setup is concurrent. `--play-timeout` must cover the
-entire chain. Harbor gives each staged agent that timeout separately; use separate job files to
-vary `make_jobs.py --max-turns` by arm. No runner signal to the world exists.
+still enforce inactive-seat rules; Harbor setup is concurrent. Set an arm-specific `agent_timeout_sec`
+and `play_timeout_sec` to cover the chain, or use the builder defaults. Use separate job files to vary
+`make_jobs.py --max-turns` by arm. The world learns that a predecessor ended from a successor's
+authenticated call, not from an independent runner notification. It cannot infer the exit cause.
 
 **Round barrier (`team` fixture arm).** All seats start active. Each calls `/ready` exactly once;
 the extension records readiness. When every required seat has acted, call `host.advance()`.
