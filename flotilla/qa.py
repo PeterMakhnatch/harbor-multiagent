@@ -627,8 +627,15 @@ def check_condition_leak(task: Task) -> Iterator[Finding]:
             if WARNING in text and not warned:
                 yield Finding("condition-leak", task.name, seat,
                               f"{name} has the warning sentence, but {task.condition} is not a warned condition")
-            extra = tuple(arm for arm in getattr(task.family, "ARMS", ()) if "-" in arm)
-            hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition, extra)
+            words = getattr(task.family, "ARM_WORDS", None)
+            if words is None:
+                extra = tuple(arm for arm in getattr(task.family, "ARMS", ()) if "-" in arm)
+                hits = reveal_hits(text.replace(WARNING, " " * len(WARNING)), task.condition, extra)
+            else:
+                hits = [(m.start(), m.group()) for word in words
+                        for m in re.finditer(rf"(?<![A-Za-z0-9_-]){re.escape(word)}(?![A-Za-z0-9_-])",
+                                             text, re.IGNORECASE)]
+                hits.sort()
             if hits:
                 where = f" (line {text.count(chr(10), 0, hits[0][0]) + 1})" if name == "instruction" else ""
                 words = ", ".join(sorted({repr(word) for _start, word in hits}))
@@ -977,17 +984,26 @@ def check_extension(task: Task) -> Iterator[Finding]:
     try:
         if data.get("extension") != task.family_name:
             raise ValueError("extension name differs from family")
-        metadata = tomllib.loads((task.path / "task.toml").read_text())["metadata"]
-        inst = task.family.generate(data["seed"], data["instance"], metadata["team_seats"], data["difficulty"])
-        arm = task.family.extension_arm(inst, data["condition"], data["max_text"], data["max_messages"])
+        config = tomllib.loads((task.path / "task.toml").read_text())
+        metadata = config["metadata"]
+        count = None if metadata.get("generator_seats") == 0 else metadata["team_seats"]
+        inst = task.family.generate(data["seed"], data["instance"], count, data["difficulty"])
+        arm = BUILD.validate_arm(task.family.extension_arm(inst, data["condition"], data["max_text"],
+                                                          data["max_messages"]), inst["seats"], data["condition"])
         seats = sorted(arm["briefings"])
         scripted = sorted(arm.get("scripted_seats", ()))
         if (seats != task.seats or seats != sorted(data["seats"]) or scripted != sorted(data["scripted_seats"])
                 or sorted(set(seats) - set(scripted)) != task.under_test
-                or data["params"] != arm["params"]
-                or data["initial_active"] != arm.get("initial_active", seats)
-                or data["messaging"] != arm.get("messaging", data["condition"].startswith("talk"))):
+                or any(data.get(key) != arm[key] for key in
+                       ("params", "initial_active", "messaging", "push", "senders", "max_calls"))):
             yield Finding("qa-error", task.name, "*", "extension arm differs from family generator")
+        actual_edges = {seat: config["agents"][seat]["start_after"] for seat in seats
+                        if "start_after" in config["agents"][seat]}
+        if actual_edges != arm.get("start_after", {}):
+            yield Finding("qa-error", task.name, "*", "extension start_after differs from generator")
+        for name, text in arm.get("files", {}).items():
+            if (task.env_dir / "player" / name).read_text() != text:
+                yield Finding("qa-error", task.name, "*", "extension file differs from generator")
         for seat in seats:
             text = BUILD.SCRIPTED_INSTRUCTION if seat in scripted else arm["instructions"][seat]
             if (task.view(seat)["instruction"] != text
@@ -1081,6 +1097,8 @@ def check_confederate_plan(task: Task) -> Iterator[Finding]:
 def check_push(task: Task) -> Iterator[Finding]:
     """A push task (task.json `push: true`, CONTRACT.md 17) is a probe task in a messaging condition whose subject's
     text holds PUSH_NOTE; any other task has neither the key nor the note."""
+    if task.task_json.get("mode") == "extension":
+        return
     push = task.task_json.get("push")
     probe = task.task_json.get("probe")
     subject = probe.get("subject") if isinstance(probe, dict) else None
@@ -1355,6 +1373,19 @@ def check_twins(tasks: list[Task]) -> Iterator[Finding]:
                     if name != "env.SEAT_TOKEN" and theirs.get(name) != mine.get(name):
                         yield Finding("twin-mismatch", b.name, seat,
                                       describe_difference(name, mine.get(name), theirs.get(name), a.shown))
+        for first, second in getattr(exemplar.family, "PAIRS", ()):
+            if first not in by_condition or second not in by_condition:
+                continue
+            a, b = by_condition[first], by_condition[second]
+            views = []
+            for task in (a, b):
+                views.append({seat: {key: value for key, value in twin_view(task, seat).items()
+                                     if key != "env.SEAT_TOKEN"} for seat in task.under_test})
+            try:
+                for detail in exemplar.family.pair_difference(first, second, *views):
+                    yield Finding("twin-mismatch", b.name, "*", detail)
+            except Exception as exc:  # noqa: BLE001
+                yield Finding("qa-error", b.name, "*", f"pair check failed: {type(exc).__name__}")
 
 
 def compose_project(name: str) -> str:
