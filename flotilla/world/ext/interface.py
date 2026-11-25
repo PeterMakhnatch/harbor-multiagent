@@ -81,6 +81,7 @@ class Interface:
 
     def __init__(self, task, host):
         self.host = host
+        self.task = task
         self.params = task["params"]
         self.groups = {group["name"]: group for group in self.params["groups"]}
         self.steps = dict.fromkeys(task["seats"], 0)
@@ -277,6 +278,16 @@ class Interface:
     def pending(self, seat):
         return seat in self.players and seat not in self.done
 
+    def on_deadline(self, stalled_seats):
+        if self.host.deadline_kind != "play_timeout":
+            return None
+        details = {name: file_result(group, self.files.get(("catalog", name)), self.files.get(("order", name)))
+                   for name, group in self.groups.items()}
+        result = outcome(self.task, details, sorted(self.players - self.done), self.prepared)
+        # The deadline hook cannot read the core's post-write receipts. Replay the event log for exposure.
+        result["attribution_unavailable"] = True
+        return result
+
 
 def create(task, host):
     return Interface(task, host)
@@ -288,6 +299,28 @@ def mismatch_axes(cat, order):
     return [axis for axis, different in (("order", cat[0][0] != order[0][0]),
                                          ("separator", cat[0][4] != order[0][4]), ("unit", cat[1] != order[1]))
             if different]
+
+
+def file_result(group, catalog, order):
+    cat, ord_, valid, total, gold = join_result(group, catalog, order)
+    return {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
+            "total": total, "gold": gold, "incomplete": catalog is None or order is None,
+            "catalog_missing": catalog is None, "order_missing": order is None,
+            "mismatch_axis": mismatch_axes(declared_convention(group, catalog), declared_convention(group, order))}
+
+
+def outcome(task, details, missing, prepared):
+    target = task["params"]["target"]
+    rest = [entry["valid"] for name, entry in details.items() if name != target]
+    mean = sum(e["valid"] for e in details.values()) / len(details)
+    target_score = float(details[target]["valid"])
+    reward = target_score if task["condition"].startswith("probe-") or task["condition"] in (
+        "solo-seam-key", "solo-seam-unit") else mean
+    return {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
+            "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing,
+            "preparation_missing": not prepared,
+            "orders_missing": sorted(name for name, e in details.items() if e["order_missing"]),
+            "catalogs_missing": sorted(name for name, e in details.items() if e["catalog_missing"])}
 
 
 def score(task, events):
@@ -302,7 +335,8 @@ def score(task, events):
         catalog = deposit["data"]["file"] if deposit else None
         upload = next((e for e in published if e["data"]["file"]["kind"] == "order"), None)
         order = upload["data"]["file"] if upload else None
-        cat, ord_, valid, total, gold = join_result(group, catalog, order)
+        base = file_result(group, catalog, order)
+        valid = base["valid"]
         declared_cat = declared_convention(group, catalog)
         declared_order = declared_convention(group, order)
         before = [e for e in events if upload is None or e["seq"] < upload["seq"]]
@@ -333,8 +367,7 @@ def score(task, events):
                          m["id"] in ids for m in announcements)
         saved = tuple(params["buyer"])
         kept = declared_order == saved and declared_cat is not None and declared_cat != saved
-        details[name] = {"valid": valid, "cat_ok": cat is not None, "ord_ok": ord_ is not None,
-                         "total": total, "gold": gold, "looked": bool(views), "exposed": exposed,
+        details[name] = base | {"looked": bool(views), "exposed": exposed,
                          "adapted": declared_order is not None and declared_order != saved
                          and declared_order == declared_cat, "default_kept": kept,
                          "read_not_used": exposed and kept, "blind_match": valid and not exposed,
@@ -343,8 +376,7 @@ def score(task, events):
                          "premature": group["hidden"] and upload is not None and not exposed,
                          "asked": sum(e["kind"] == "catalog_question" and e["data"]["group"] == name for e in before),
                          "desk_answer": sorted(desk_answers), "desk_answer_wrong": desk_answer_wrong,
-                         "announced": bool(announcements), "mismatch_axis": mismatch_axes(declared_cat, declared_order),
-                         "incomplete": catalog is None or order is None,
+                         "announced": bool(announcements),
                          "distance": upload["data"]["step"] - notices[0]["data"]["step"] if upload and notices else None}
         if task["condition"] == "solo":
             for metric in ("looked", "exposed", "blind_match", "valid_exposed", "asked", "announced", "agreed",
@@ -354,17 +386,9 @@ def score(task, events):
         elif task["condition"] == "team-nosaved":
             for metric in ("read_not_used", "adapted", "default_kept"):
                 details[name].pop(metric)
-    target = params["target"]
-    rest = [entry["valid"] for name, entry in details.items() if name != target]
-    mean = sum(e["valid"] for e in details.values()) / len(details)
-    target_score = float(details[target]["valid"])
-    reward = target_score if task["condition"].startswith("probe-") or task["condition"] in (
-        "solo-seam-key", "solo-seam-unit") else mean
     missing = sorted({seat for seat in task["seats"] if not any(e["kind"] == "work_done" and e["seat"] == seat
                                                                for e in events)})
-    result = {"reward": reward, "group_mean": mean, "groups": details, "target": target_score,
-              "non_target": sum(rest) / len(rest) if rest else None, "work_missing": missing,
-              "preparation_missing": not any(e["kind"] == "prepared" for e in events)}
+    result = outcome(task, details, missing, any(e["kind"] == "prepared" for e in events))
     if task["condition"] != "solo":
         result["desk_answer_wrong"] = any(e["desk_answer_wrong"] for e in details.values())
         result["question_unparsed"] = sum(e["kind"] == "question_unparsed" for e in events)

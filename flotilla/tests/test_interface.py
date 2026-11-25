@@ -192,6 +192,9 @@ def test_probe_desk_ignores_ack_and_greeting(tmp_path, monkeypatch):
         assert (yield from client.post("/messages", {"to": "all", "text": "ok"}))[0] == 201
         for desk in sorted({g["desk"] for g in own["groups"]}):
             assert (yield from client.post("/messages", {"to": desk, "text": "Hello, ready when you are."}))[0] == 201
+            group = next(g for g in own["groups"] if g["desk"] == desk)
+            text = f"I confirm {group['name']} order format is set."
+            assert (yield from client.post("/messages", {"to": desk, "text": text}))[0] == 201
         yield from original("naive")
 
     run = run_with(monkeypatch, path, {"p1": chatty})
@@ -224,6 +227,11 @@ def test_direct_question_gets_only_that_group(tmp_path):
     ("What key form and unit for {name}?", True),
     ("Please let me know the configuration of {name}", False),
     ("What key form and unit for {name}?", False),
+    ("{name}: settings", False),
+    ("{code} keys", False),
+    ("Key form and unit for {space}", True),
+    ("Format for {name} please", False),
+    ("Unless you tell me otherwise, I will use my default for {name}. Please message me the key form and unit.", False),
 ])
 def test_probe_replies_before_prepare_after_timeout(tmp_path, monkeypatch, template, to_all):
     (path,) = build(tmp_path, "standard", ("probe-trap-key",))
@@ -250,6 +258,25 @@ def test_probe_replies_before_prepare_after_timeout(tmp_path, monkeypatch, templ
     assert run["score"]["groups"][target["name"]]["asked"] >= 1
     assert any(e["kind"] == "question_unparsed" for e in run["events"])
     assert any(e["kind"] == "await" and e["data"]["reason"] == "timeout" for e in run["events"])
+
+
+def test_probe_combined_question_gets_both_group_settings(tmp_path, monkeypatch):
+    (path,) = build(tmp_path, "heavy", ("probe-trap-key",))
+    task = load_task(path)
+    groups = [g for g in task["params"]["groups"] if g["desk"] == "p2"]
+
+    def buyer(client, own, original):
+        names = " and ".join(g["name"] for g in groups)
+        text = f"What key form and unit for {names}? Please confirm both."
+        assert (yield from client.post("/messages", {"to": "all", "text": text}))[0] == 201
+        _, reply = yield from client.get("/await?until=message")
+        assert not reply["prepared"]
+        assert any(all(FAMILY.announced(g, g["saved"], m["text"]) for g in groups)
+                   for m in reply["new_messages"] if m["from"] == "p2")
+        yield from original("careful")
+
+    run = run_with(monkeypatch, path, {"p1": buyer})
+    assert run["reward"] == 1
 
 
 def test_paraphrased_announcements_count():
@@ -401,6 +428,68 @@ def test_own_omission_is_valid_and_flagged(tmp_path):
     run = SIM.simulate_built(path, {"p1": "nop"}, 0)
     assert run["invalid"] is None and run["reward"] == 0
     assert "p1" in run["score"]["work_missing"] and run["score"]["preparation_missing"]
+    assert len(run["score"]["orders_missing"]) == 3
+    assert run["score"]["attribution_unavailable"]
+
+
+def test_desk_stops_before_done_with_partial_valid_reward(tmp_path, monkeypatch):
+    (path,) = build(tmp_path, "canary", ("team",))
+    task = load_task(path)
+
+    def desk_stops(client, own, original):
+        generator = original("careful")
+        reply = None
+        while True:
+            request = generator.send(reply)
+            if request.path == "/done":
+                return
+            reply = yield request
+
+    def partial_buyer(client, own, original):
+        counts = {}
+        while True:
+            _, reply = yield from client.post("/next", {})
+            for event in reply["events"]:
+                if event["kind"] != "complete":
+                    counts[event["group"], event["site"], event["item"]] = event["on_hand"] + event["in_transit"]
+            if reply["end"]:
+                break
+        _, state = yield from client.post("/prepare", {})
+        while "p3" not in state["finished"]:
+            _, state = yield from client.get(f"/await?until=tick&after={state['tick']}")
+        group = next(g for g in own["groups"] if g["desk"] == "p3")
+        _, view = yield from client.get(f"/staging?group={group['name']}")
+        catalog = next(f for f in view["files"] if f["kind"] == "catalog")
+        convention = next(c for c in FAMILY.CONVENTIONS if c[1] == catalog["unit"]
+                          and {FAMILY.key_for(r, c) for r in group["rows"]} == {r["key"] for r in catalog["rows"]})
+        values = [r["target"] - counts[group["name"], r["site"], r["item"]] for r in group["rows"]]
+        body = {"kind": "order", "group": group["name"], "unit": convention[1],
+                "rows": FAMILY.encode(group["rows"], values, convention, "order")}
+        assert (yield from client.post("/publish", body))[0] == 201
+        yield from client.post("/done", {})
+
+    # A desk may deposit correct catalogs and leave without the required /done. The other desk remains usable.
+    run = run_with(monkeypatch, path, {"p1": partial_buyer, "p2": desk_stops})
+    assert run["invalid"] is None and run["reward"] == 1 / 3
+    assert run["score"]["work_missing"] == ["p2"] and not run["score"]["catalogs_missing"]
+    assert run["score"]["orders_missing"] == sorted(g["name"] for g in task["params"]["groups"] if g["desk"] == "p2")
+
+
+def test_buyer_done_without_orders_is_flagged(tmp_path, monkeypatch):
+    (path,) = build(tmp_path, "standard", ("team",))
+
+    def buyer_stops(client, own, original):
+        while True:
+            _, reply = yield from client.post("/next", {})
+            if reply["end"]:
+                break
+        yield from client.post("/prepare", {})
+        yield from client.post("/done", {})
+
+    run = run_with(monkeypatch, path, {"p1": buyer_stops})
+    assert run["invalid"] is None and run["reward"] == 0
+    assert len(run["score"]["orders_missing"]) == 3 and not run["score"]["work_missing"]
+    assert not run["score"]["preparation_missing"]
 
 
 def test_no_unprompted_desk_messages_in_probes(tmp_path):

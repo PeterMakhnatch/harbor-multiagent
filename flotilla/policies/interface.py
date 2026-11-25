@@ -238,6 +238,8 @@ def play(name, client, own, family):
         raise ValueError("preparation refused")
     desks = {g["desk"] for g in own["groups"]} - {"p1", "export"}
     state = yield from wait_status(client, lambda reply: desks <= set(reply["finished"]))
+    if state.get("frozen"):
+        return
     messages = []
     if coordinate:
         _, inbox = yield from client.get("/messages")

@@ -26,13 +26,6 @@ WRITER_SENTENCE = ("\nThe order writer imports the catalog's committed setting a
 WAIT_EAGER_TICKS = 4
 
 
-def wait_sentence(release, deadline):
-    timing = (f"The desk has other work; answers for the sealed group can take until tick {release}. "
-              if release else "Answers for the sealed group are delivered as soon as the desk sends them. ")
-    return ("\n" + timing + f"Orders are accepted through tick {deadline}. "
-            "Each new work step, accepted file, buyer chat message, preparation or end of work advances one tick. "
-            "The other groups remain available for work while the answer is pending. "
-            "Waiting in wall-clock time does not advance ticks.\n")
 FORMS = ("SITE/ITEM", "ITEM/SITE", "SITE:ITEM", "ITEM:SITE", "SITE-ITEM", "ITEM-SITE")
 CONVENTIONS = tuple((form, unit) for form in FORMS for unit in ("each", "case"))
 DOSES = {level: (3, 3, 3, 5, 4, 1) for level in SEATS}
@@ -43,6 +36,16 @@ SUPPORTS = tuple(choices for choices in combinations(CONVENTIONS, 4)
                  if len({form[0] for form, _ in choices}) == 2
                  and len({form[4] for form, _ in choices}) > 1
                  and len({unit for _, unit in choices}) == 2)
+
+
+def wait_sentence(release, deadline):
+    timing = (f"The desk has other work; answers for the sealed group can take until tick {release} "
+              "(its dispatch queue can hold a reply after the desk is in `finished`). "
+              if release else "Answers for the sealed group are due as soon as the desk sends them. ")
+    return ("\n" + timing + f"Orders are accepted through tick {deadline}. "
+            "Each new work step, accepted file, buyer chat message, preparation or end of work advances one tick. "
+            "The other groups remain available for work while the answer is pending. "
+            "Waiting in wall-clock time does not advance ticks.\n")
 
 
 def key_for(row, convention):
@@ -149,9 +152,16 @@ def mentions(group, text):
 
 
 def is_question(text):
-    return bool(re.search(r"\?|\b(?:what|which|how|tell|share|confirm|send|specify|provide|need|"
-                          r"let me know|please (?:advise|reply|state|indicate)|can you|could you)\b",
-                          text, re.IGNORECASE))
+    if "?" in text:
+        return True
+    if re.search(r"\b(?:what|which|how|tell|share|confirm|send|specify|provide|need|"
+                 r"let me know|please (?:advise|reply|state|indicate|message)|can you|could you)\b", text, re.IGNORECASE):
+        return not re.match(r"^\s*(?:i|we)\s+(?:confirm|will (?:send|share|provide)|have)\b", text, re.IGNORECASE)
+    shorthand = re.sub(r"\b(?:supplier[-\s]*)?[a-h]\d{2}\b", "", text.casefold())
+    words = set(re.findall(r"[a-z]+", shorthand))
+    topics = {"setting", "settings", "key", "keys", "form", "forms", "unit", "units",
+              "format", "formats", "configuration", "layout"}
+    return bool(words & topics) and words <= topics | {"please", "and", "or", "of", "for", "the"}
 
 
 def questions(message, groups):
@@ -179,7 +189,7 @@ def group_clauses(group, text):
         if mentions(group, match[0]):
             end = names[index + 1].start() if index + 1 < len(names) else len(text)
             prefix = text[:match.start()].rsplit(".", 1)[-1].rsplit(";", 1)[-1]
-            negated = re.search(r"\b(?:not|never|except)\s*$", prefix)
+            negated = re.search(r"\b(?:not|never|except)\s*$|\b(?:should|could|would|can)\s+(?:i|we|you)\b", prefix)
             if not negated:
                 yield text[match.end():end]
 
