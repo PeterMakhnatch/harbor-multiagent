@@ -1798,7 +1798,8 @@ def named_gate(spec, cells, state, launch_cells, starts, run_dir, outcomes):
             if selected:
                 found = outcomes.success(control["task_set"], jobs_for(selected, state["finished"]), model, control["arm"])
                 status = "incomplete" if found["n"] != len(selected) else "pass" if found["k"] >= control["k"] else "fail"
-                records.append({"level": level, "model": model, **control, "planned": len(selected), **found, "status": status})
+                records.append({"level": level, "model": model, "task_set": control["task_set"], "arm": control["arm"],
+                                "required": control["k"], "planned": len(selected), **found, "status": status})
     return "done", records
 
 
@@ -1827,10 +1828,17 @@ def run_named_stages(staged, state, launch_cells, outcomes, *, run_dir, digest, 
         kind = spec["gate"]["type"]
         decisions = []
         for group in sorted({group_of(cell) for cell in cells}):
-            statuses = [row["status"] for row in tests if (row["level"], row["model"]) == group]
-            passed = kind == "none" or (all(s == "pass" for s in statuses) if kind == "min_success" else "pass" in statuses)
-            status = "pass" if passed else "incomplete" if "incomplete" in statuses else "no-effect" if kind == "effect" else "fail"
-            decisions.append({"level": group[0], "model": group[1], "status": status})
+            decision = {"level": group[0], "model": group[1]}
+            if kind == "none":
+                selected = [cell for cell in cells if group_of(cell) == group]
+                valid = sum(cell_valid(state["finished"].get(cell["key"])) for cell in selected)
+                decision.update(valid=valid, planned=len(selected))
+                status = "complete" if valid == len(selected) else "incomplete"
+            else:
+                statuses = [row["status"] for row in tests if (row["level"], row["model"]) == group]
+                passed = all(s == "pass" for s in statuses) if kind == "min_success" else "pass" in statuses
+                status = "pass" if passed else "incomplete" if "incomplete" in statuses else "no-effect" if kind == "effect" else "fail"
+            decisions.append({**decision, "status": status})
             line = f"stage {spec['name']}: {group[0]} {group[1]} {status}"
             log(run_dir, line)
             print(line)

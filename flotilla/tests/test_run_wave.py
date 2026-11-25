@@ -2184,6 +2184,7 @@ def test_named_gates_drop_failed_models_and_only_run_headline_after_effect(tmp_p
     stages = wave.summary()["stages"]
     assert [stage["name"] for stage in stages] == (["A", "B", "C"] if signal else ["A", "B"])
     assert [row["status"] for row in stages[0]["decisions"]] == ["pass", "fail"]
+    assert (stages[0]["tests"][0]["required"], stages[0]["tests"][0]["k"]) == (2, 3)
     tests = stages[1]["tests"]
     assert len(tests) == 1 and tests[0]["status"] == ("pass" if signal else "no-effect")
     assert tests[0]["looks"][-1]["n"] == 4
@@ -2193,6 +2194,8 @@ def test_named_gates_drop_failed_models_and_only_run_headline_after_effect(tmp_p
     assert count == (17 if signal else 15)
     assert wave.run()[-1]["reason"] == ("done" if signal else "gate")
     assert len(wave.starts()) == count
+    if signal:
+        assert stages[2]["decisions"] == [{"level": "standard", "model": M1, "status": "complete", "valid": 2, "planned": 2}]
 
 
 def test_named_incomplete_pairs_are_not_no_effect(tmp_path):
@@ -2203,6 +2206,16 @@ def test_named_incomplete_pairs_are_not_no_effect(tmp_path):
     stage = wave.summary()["stages"][-1]
     assert stage["name"] == "B"
     assert {row["status"] for row in stage["decisions"]} == {"incomplete"}
+
+
+def test_named_no_gate_records_incomplete_headline(tmp_path):
+    plan = named_plan()
+    plan["budget"]["max_invalid_streak"] = 20
+    wave = Wave(tmp_path, plan, lambda cell: (wins(cell)[0], 2 if cell["instance"] >= 7 else 0))
+    assert wave.run()[-1]["reason"] == "done"
+    stage = wave.summary()["stages"][-1]
+    assert stage["name"] == "C"
+    assert all(row["status"] == "incomplete" and row["valid"] == 0 and row["planned"] == 2 for row in stage["decisions"])
 
 
 def test_named_operator_pause_and_caps(tmp_path):

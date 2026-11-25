@@ -510,9 +510,10 @@ The same cell cannot occur in two stages. Different stages may use different bui
   early for positive efficacy with the threshold met. It does not stop early for statistical futility.
   Report `no-effect` only when all planned pairs are valid and the threshold is not met. Otherwise report
   `incomplete`. A group passes if any of its comparisons passes; Holm is within model and level.
-- `none` runs all surviving groups. The runner stops with `gate` if no eligible cells remain.
-  A failed group cannot return in a later stage. Stage C has a fixed pre-registered sample; conditional
-  sizing and first-signal-level selection require a separate plan. Week has no probe gate.
+- `none` runs all surviving groups. It records `complete` or `incomplete` from valid cell counts, not success.
+  The runner stops with `gate` if no group can advance. A failed group cannot return in a later stage.
+  Stage C has a fixed pre-registered sample; conditional sizing and first-signal-level selection require
+  a separate plan. Week has no probe gate.
 - `cap_usd` is a cumulative model cap through that stage (defaults to the full plan cap).
   Caps must be nondecreasing and at most the total cap. Reserve checks include in-flight trials.
   The model accounting estimates are not provider billing limits.
