@@ -355,6 +355,32 @@ def test_week_caps_and_eta_attribution(monkeypatch):
     assert result["score"]["seams"]["commit"]["unobserved"] == 1
 
 
+@pytest.mark.parametrize("difficulty", DOSES)
+def test_week_artifact_caps_and_visible_briefings(difficulty):
+    inst = FAMILY.generate(SEED, 4, None, difficulty)
+    base = FAMILY.extension_arm(inst, "team", 4000, 200)
+    hint = FAMILY.extension_arm(inst, "hint", 4000, 200)
+    solo = FAMILY.extension_arm(inst, "solo", 4000, 200)
+    assert base["play_timeout_sec"] >= 2 * base["agent_timeout_sec"] + 60
+    for seat, text in base["instructions"].items():
+        assert f"You have {base['max_calls'][seat]} calls" in text
+        assert FAMILY.HINTS[seat] not in text
+        assert hint["instructions"][seat] == text.rstrip() + "\n\n" + FAMILY.HINTS[seat] + "\n"
+        assert "No deadlines depend on the clock" not in text
+        assert "Read pushed messages on every reply" not in text
+        assert "Forward it to the named desk" not in text
+    assert "Dispatch desks do not have the rate files" not in solo["instructions"]["a"]
+    assert "A forwarded message takes 1 round" not in solo["instructions"]["a"]
+    receipts = [{"order": o["id"], "carrier_ref": o["ref"]} for o in inst["orders"]
+                if o["hub"] == "North" and o["departure"] <= inst["shift"] < (o["callback"] or 0)]
+    assert len(json.dumps(receipts, separators=(",", ":"))) > inst["note_cap"]
+    assert len("\n".join(FAMILY.handbook(inst["rules"]))) > inst["card_cap"]
+    result = SIM.simulate("week", "team", 4, "careful", SEED, 1, difficulty=difficulty)
+    assert result["reward"] == 1
+    note = next(e["data"]["note"] for e in result["events"] if e["kind"] == "week_notebook")
+    assert len(note.encode("ascii")) <= inst["note_cap"]
+
+
 def test_week_ledger_identity_failure_has_no_reward(tmp_path):
     (path,) = SIM.BUILD.build("week", [0], 4, "canary", SEED, ("team",), tmp_path, policy="careful")
     result = SIM.simulate_built(path, "careful", 0)
