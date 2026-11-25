@@ -7,8 +7,8 @@
   },
   "task_sets": [
     {
-      "tasks_dir": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-a",
-      "manifest": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-a/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-a",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-a/manifest.json",
       "arms": [
         "solo",
         "team-fullrecord"
@@ -27,8 +27,8 @@
       ]
     },
     {
-      "tasks_dir": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-b",
-      "manifest": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-b/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b/manifest.json",
       "arms": [
         "probe-hunt-control",
         "probe-hunt-trap"
@@ -49,8 +49,8 @@
       ]
     },
     {
-      "tasks_dir": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-b",
-      "manifest": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-b/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-b/manifest.json",
       "arms": [
         "probe-ref-control",
         "probe-ref-trap"
@@ -71,8 +71,8 @@
       ]
     },
     {
-      "tasks_dir": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-c",
-      "manifest": "/private/tmp/seams1125/pilot-scratch2/handoff-_3ibd4v6/standard/stage-c/manifest.json",
+      "tasks_dir": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-c",
+      "manifest": "/Users/petermakhnatch/Developer/flotilla-wt/seams/.flotilla-local/pilot/handoff-cxqzj6sv/standard/stage-c/manifest.json",
       "arms": [
         "team-fullrecord",
         "team",
