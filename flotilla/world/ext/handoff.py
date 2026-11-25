@@ -34,6 +34,8 @@ class Desk:
         self.inbox = {}
         self.released = set()
         self.possible = set(self.params["lots"])
+        self.observed_possible = self.possible.copy()
+        self.visible_refs = {seat: set() for seat in self.seats}
         self.logs = []
 
     def release(self):
@@ -87,7 +89,8 @@ class Desk:
             ref, batch, action = item.get("reference"), item.get("batch"), item.get("action")
             if not all(isinstance(v, str) for v in (ref, batch, action)) or action not in ("close", "reissue"):
                 return 400, {"error": "send a reference, batch and valid action"}
-            if ref not in self.inbox or self.state.get(batch) != "dispatched" or ref in refs or batch in batches:
+            if (ref not in self.inbox or ref not in self.visible_refs[seat] or self.state.get(batch) != "dispatched"
+                    or ref in refs or batch in batches):
                 return 409, {"error": "reference or batch is not available"}
             refs.add(ref)
             batches.add(batch)
@@ -107,13 +110,17 @@ class Desk:
         if self.ticket is not None:
             return 409, {"error": "a ticket was already filed"}
         self.ticket = lot
-        self.host.record("ticket", seat, {"lot": lot, "shift": self.shift, "early": len(self.possible) != 1,
+        self.host.record("ticket", seat, {"lot": lot, "shift": self.shift, "early": len(self.observed_possible) != 1,
                                          "correct": lot == self.params["bad"]})
         return 200, {"recorded": True}
 
     def canonical(self):
         pending = {b: self.batches[b]["reference"] for b, state in self.state.items() if state == "dispatched"}
-        return note_text(pending, self.possible)
+        for count in range(len(pending), -1, -1):
+            note = note_text(dict(sorted(pending.items())[:count]), self.observed_possible)
+            if len(note) <= self.params["cap"]:
+                return note
+        raise ValueError("lot list does not fit the note cap")
 
     def handover(self, seat, body):
         note = body.get("note")
@@ -128,7 +135,7 @@ class Desk:
         missing = [b for b in pending if not {b, self.batches[b]["reference"]} <= tokens]
         self.host.record("handover", seat, {"shift": self.shift, "note": note, "length": len(note),
                                             "pending": len(pending), "missing_bindings": missing,
-                                            "kept_lots": self.possible <= tokens})
+                                            "kept_lots": self.observed_possible <= tokens})
         self.note = note
         if self.shift == self.params["shifts"]:
             self.host.freeze()
@@ -165,6 +172,8 @@ class Desk:
         status, reply = self.perform(seat, path, body)
         inbox = [{"reference": ref, "status": value} for ref, value in sorted(self.inbox.items())]
         reply |= {"note": note, "inbox": inbox}
+        self.visible_refs[seat].update(result["reference"] for result in inbox)
+        self.observed_possible = self.possible.copy()
         if path != "/log":
             entry = {"shift": shift, "path": path, "body": deepcopy(body), "status": status, "reply": deepcopy(reply)}
             self.logs.append(entry)
@@ -180,6 +189,33 @@ def action_for(status):
 
 def create(task, host):
     return Desk(task, host)
+
+def reader_metrics(params, scored, correct, events):
+    possible = set(params["lots"])
+    inherited = set()
+    pinned_missing = 0
+    known_wrong = 0
+    filed = False
+    observed = set()
+    for event in events:
+        data = event["data"]
+        if event["kind"] == "desk_view":
+            for result in data["reply"]["inbox"]:
+                ref = result["reference"]
+                if ref not in observed:
+                    possible = narrow(possible, scored[ref]["lots"], result["status"])
+                    observed.add(ref)
+        elif event["kind"] == "settled":
+            ref = data["reference"]
+            if ref not in correct and ref in scored and {ref, scored[ref]["batch"]} <= inherited:
+                known_wrong += 1
+        elif event["kind"] == "ticket":
+            filed = True
+        elif event["kind"] == "handover":
+            pinned_missing += bool(inherited and len(possible) == 1 and not filed)
+            inherited = set(re.findall(r"\b[BLR]\d{2}\b", data["note"]))
+    return {"pinned_not_filed": pinned_missing, "settle_with_binding_in_note_wrong": known_wrong}
+
 
 
 def score(task, events):
@@ -212,8 +248,13 @@ def score(task, events):
     elif arm.startswith("probe-ref"):
         reward = float(any(ref in correct and b["batch"] == params["ref_target"] for ref, b in scored.items()))
     handovers = [e["data"] for e in events if e["kind"] == "handover"]
-    losses = [h["shift"] for h in handovers[:-1] if h["missing_bindings"] or not h["kept_lots"]]
+    crossings = [h for h in handovers if h["shift"] < params["shifts"]]
+    losses = [h["shift"] for h in crossings if h["missing_bindings"] or not h["kept_lots"]]
     return {"reward": reward, "full_reward": full, "ticket": ticket, "reconciled": len(correct),
             "total_results": len(scored), **rates, "handover_count": len(handovers),
             "first_loss_shift": min(losses) if losses else None,
-            "missing_bindings": sum(len(h["missing_bindings"]) for h in handovers[:-1])}
+            "missing_bindings": sum(len(h["missing_bindings"]) for h in crossings),
+            "kept_bindings": sum(h["pending"] - len(h["missing_bindings"]) for h in crossings),
+            "kept_lots": sum(h["kept_lots"] for h in crossings),
+            "ticket_early": sum(e["data"]["early"] for e in events if e["kind"] == "ticket"),
+            **reader_metrics(params, scored, correct, events)}

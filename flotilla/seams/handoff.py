@@ -36,7 +36,7 @@ def schedule(dose, probe):
     if dose == "canary":
         return [(2, 0, 3), (2, 2, 0), (2, 0, 0)]
     if dose == "standard":
-        return [(2, 3, 4), (2, 3, 4), (2, 2, 0), (2, 0, 0)]
+        return [(2, 2, 5), (2, 4, 3), (2, 2, 0), (2, 0, 0)]
     return [(2, 3, 4)] * 4 + [(1, 3, 4)] * 2 + [(1, 2, 0), (1, 0, 0)]
 
 
@@ -68,6 +68,10 @@ def make_case(rng, dose, probe):
                     returned = False
                 elif dose == "standard" and due == 3 and lag == 0:
                     returned = True
+                elif dose == "standard" and lag == 2:
+                    returned = j < size - 1
+                elif (dose == "standard" and lag == 1 and shift == 2) or (dose == "heavy" and lag == 2):
+                    returned = j < 3
                 inks = (early if due == 1 else common) if returned else rng.sample(safe, 2)
                 batches.append({"shift": shift, "lag": lag, "lots": sorted(inks),
                                 "status": "returned" if returned else "delivered"})
@@ -169,6 +173,11 @@ def validate_case(params, dose, arm):
         raise ValueError("inconsistent carrier results")
     if not 0.4 <= sum(b["status"] == "returned" for b in scored) / len(scored) <= 0.6:
         raise ValueError("result mix outside 40-60%")
+    if not arm.startswith("probe-"):
+        for lag in (0, 1, 2):
+            group = [b for b in scored if b["lag"] == lag]
+            if 2 * sum(b["status"] == "returned" for b in group) != len(group):
+                raise ValueError("result status correlates with the lag class")
     if candidates(lots, scored) != [params["bad"]]:
         raise ValueError("lot does not have a unique diagnosis")
     for shift in range(1, shifts + 1):

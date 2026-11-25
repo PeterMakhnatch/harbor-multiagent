@@ -5,18 +5,22 @@ import re
 
 
 def supports(name, variant):
-    return name in ("careful", "naive", "lone", "blind", "reverse")
+    return name in ("careful", "naive", "lone", "blind", "reverse", "colon", "slash", "lines", "ref-first")
 
 
 def parse_note(note, lots):
-    bindings = dict(re.findall(r"\b(B\d{2})=(R\d{2})\b", note))
+    bindings = dict(re.findall(r"\b(B\d{2})[=:/ ](R\d{2})\b", note))
+    bindings.update((batch, ref) for ref, batch in re.findall(r"\b(R\d{2})>(B\d{2})\b", note))
     suspects = set(re.findall(r"\bL\d{2}\b", note))
     return bindings, suspects or set(lots)
 
 
-def write_note(bindings, possible, reverse=False):
-    order = sorted(bindings, reverse=reverse)
-    return "Pending " + " ".join(f"{b}={bindings[b]}" for b in order) + "; Suspects " + " ".join(sorted(possible))
+def write_note(bindings, possible, style="careful"):
+    order = sorted(bindings, reverse=style == "reverse")
+    separator = {"colon": ":", "slash": "/", "lines": " "}.get(style, "=")
+    pairs = [f"{bindings[b]}>{b}" if style == "ref-first" else f"{b}{separator}{bindings[b]}" for b in order]
+    joiner = "\n" if style == "lines" else " "
+    return "Pending " + joiner.join(pairs) + "; Suspects " + " ".join(sorted(possible))
 
 
 def narrow(possible, lots, status):
@@ -122,7 +126,7 @@ def work(name, client, own, memory):
         keep, suspects = {}, set()
     else:
         keep, suspects = bindings, possible
-    note = write_note(keep, suspects, name == "reverse")
+    note = write_note(keep, suspects, name)
     if own["continuous"] and len(note) > own["cap"]:
         note = ""
     check(*(yield from client.post("/handover", {"note": note})))
