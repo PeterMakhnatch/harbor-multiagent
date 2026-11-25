@@ -6,6 +6,7 @@ FAMILY = "week"
 TITLE = "Dispatch week at Kestrel Freight and Fulfilment"
 SEATS = {"canary": 4, "standard": 5}
 ARMS = ("solo", "team", "team-fullrecord", "hint")
+PAIRS = (("team", "team-fullrecord"), ("team", "hint"))
 ARM_WORDS = ("team-fullrecord", "naive-digest", "naive-interface", "naive-commit", "naive-handoff")
 CARRIERS = ("VIR", "BRW", "OST", "PEL")
 FORMS = ("C/Z", "Z/C", "C.Z", "Z.C")
@@ -288,6 +289,20 @@ def extension_arm(inst, arm, max_text, max_messages):
                              for seat in seats},
             "initial_active": [s for s in seats if s != "N2"], "messaging": not single,
             "start_after": {} if single else {"N2": ["N1"]}, "max_calls": 5 * inst["rounds"] + 30}
+
+
+def pair_difference(first, second, views_a, views_b):
+    normalized = {seat: dict(view) for seat, view in views_b.items()}
+    if second == "hint":
+        for seat, view in normalized.items():
+            view["instruction"] = view["instruction"].replace("\n\n" + HINTS[seat] + "\n", "\n")
+    elif second == "team-fullrecord":
+        view = normalized["N2"]
+        view["instruction"] = view["instruction"].replace(
+            "You can also read the early shift's complete booking record in `prior_record`.",
+            "You cannot read that shift's carrier receipts or private messages.",
+        )
+    return [] if normalized == views_a else ["seat views differ beyond the specified control sentence"]
 
 
 def leak_values(task):
