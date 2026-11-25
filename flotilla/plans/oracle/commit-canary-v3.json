@@ -1,0 +1,37 @@
+{
+  "name": "commit-canary-rehearsal-v3",
+  "prereg": {
+    "commit": "0c4736b0e90877900fbeecf9678898feb1b81833",
+    "doc": "flotilla/docs/seams/commit.md",
+    "section": "## Validation and rehearsal pre-registration (2026-11-25)"
+  },
+  "task_sets": [
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/careful",
+      "manifest": "/tmp/seams1125/b3-commit/careful/manifest.json",
+      "instances": [0],
+      "arms": ["team", "probe-trap"]
+    },
+    {
+      "tasks_dir": "/tmp/seams1125/b3-commit/naive",
+      "manifest": "/tmp/seams1125/b3-commit/naive/manifest.json",
+      "instances": [0],
+      "arms": ["team", "probe-trap"]
+    }
+  ],
+  "models": [null],
+  "agent": "oracle",
+  "make_jobs": {
+    "max_turns": 15,
+    "env": "docker",
+    "concurrency": 1,
+    "start_spacing_s": 0.0
+  },
+  "budget": {
+    "cap_usd": 0.0,
+    "reserve_per_trial_usd": 0.0,
+    "provider_floors": {},
+    "max_invalid_streak": 1
+  },
+  "order_seed": 20261125
+}
