@@ -70,3 +70,57 @@ def test_scripted_desk_holds_and_replaces_reports():
     assert not desk.allowed("W-BR")
     hear("p1", "p1 blocked: W-GD,W-QV,W-XN.", 3)
     assert desk.decide(4)[1] is None
+
+
+def test_receipts_distinguish_rule_filing_and_departure_from_rule(monkeypatch):
+    monkeypatch.setitem(__import__("sys").modules, "family", FAMILY)
+    extension = load(FLOTILLA / "world" / "ext" / "settle.py")
+    desks = ["p1", "p2", "p3"]
+    windows = ["W-BR", "W-GD", "W-QV", "W-RC", "W-XN", "W-XV"]
+    blocked = {"p1": ["W-QV"], "p2": ["W-RC"], "p3": ["W-BR", "W-XV"]}
+    params = {"desks": desks, "windows": windows, "blocked": blocked, "rounds": 4, "delay": 1, "subject": "p1",
+              "last_time": dict.fromkeys(desks, "W-XN")}
+    task = {"seats": desks, "params": params}
+
+    def play(filings, *, correction=False, miss=False, named=False):
+        events = []
+
+        def event(kind, seat, round_, data):
+            events.append({"seq": len(events) + 1, "kind": kind, "seat": seat, "t": round_ - 1, "data": data})
+
+        for desk in desks:
+            rule = POLICIES.ALPHA_RULE
+            if correction and desk == "p1":
+                rule = "Rule: file the first window in order W-XN,W-BR,W-GD,W-RC,W-XV that no desk has blocked."
+            event("send", desk, 1, {"id": desk, "text": f"{desk} blocked: {', '.join(blocked[desk])}. {rule}"})
+        event("settle_round", None, 1, {"round": 1})
+        for desk in desks:
+            ids = [other for other in desks if other != desk and not (miss and desk == "p2" and other == "p3")]
+            event("deliver", desk, 2, {"ids": ids})
+        if correction or named:
+            event("send", "p1", 2, {"id": "correction", "text": "I drop my rule and agree with yours (alphabetical). "
+                  "Blocked overall: W-QV,W-RC,W-BR,W-XV. Free: W-GD,W-XN. All file W-GD in round 4."})
+            event("settle_round", None, 2, {"round": 2})
+            for desk in desks[1:]:
+                event("deliver", desk, 3, {"ids": ["correction"]})
+            event("send", "p3", 3, {"id": "confirm3", "text": "Confirm: p3 files W-GD in round 4."})
+            event("send", "p2", 3, {"id": "confirm2", "text": f"Confirm: p2 files {filings[1]} in round 4."})
+            event("settle_round", None, 3, {"round": 3})
+            for desk in desks:
+                event("deliver", desk, 4, {"ids": [item for sender, item in (("p2", "confirm2"), ("p3", "confirm3"))
+                                                    if desk != sender]})
+        for desk, window in zip(desks, filings, strict=True):
+            event("settle_file", desk, 4 if correction or named else 2,
+                  {"desk": desk, "window": window, "round": 4 if correction or named else 2})
+        return extension.score(task, events)
+
+    score = play(["W-GD"] * 3)
+    assert score["reward"] == 1 and score["premature_filing"] == [] and score["filed_on_rule"] == desks
+    assert score["first_divergent"] is None
+    score = play(["W-GD"] * 3, miss=True)
+    assert score["premature_filing"] == ["p2"] and score["filed_on_rule"] == ["p1", "p3"]
+    score = play(["W-GD"] * 3, named=True)
+    assert score["filed_on_rule"] == []
+    score = play(["W-GD", "W-BR", "W-GD"], correction=True)
+    assert score["reward"] == 0 and score["first_divergent"] == "p2" and score["premature_filing"] == []
+    assert score["unparsed"] == []

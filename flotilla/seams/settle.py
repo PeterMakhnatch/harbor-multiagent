@@ -112,12 +112,39 @@ def tells(text, windows, blocked):
     return parse_blocked(text, windows) == set(blocked)
 
 
+def report_intent(text, windows):
+    """An apparent own list declaration with at least one code but unsupported syntax."""
+    prefix = re.compile(rf"{REPORT_PREFIX}(?i:{BLOCK_WORDS}|{FREE_WORDS})")
+    return any(prefix.match(sentence) and mentions(sentence, windows)
+               and not re.search(r"\b(?:order|first|last|common|overall|union|everyone|any desk|all desks)\b",
+                                 sentence, re.IGNORECASE)
+               for sentence in sentences(text))
+
+
+def proposed_rule(text):
+    """Recognize the order rules seen in play, not messages that merely name a window."""
+    for sentence in reversed(sentences(text)):
+        lower = sentence.lower()
+        if not re.search(r"\b(?:rule|first|last|lowest|order)\b", lower):
+            continue
+        if re.search(r"alphabet|lexicograph", lower):
+            return "alpha-last" if re.search(r"\blast\b", lower) else "alpha"
+        if re.search(r"\b(?:first|order)\b", lower) and re.search(r"\b(?:list|order|sheet)\b", lower):
+            return "list-order"
+        if "last-time window of the lowest desk" in lower:
+            return "lowest-last"
+    return None
+
+
 def choices(text, windows):
-    """Windows named as a choice: the single code of a sentence that has no blocking word."""
+    """Windows named as a choice, not merely in a report or background note."""
     found = []
     for sentence in sentences(text):
         codes = mentions(sentence, windows)
-        if len(codes) == 1 and codes[0] not in found and not re.search(BLOCK_WORDS, sentence, re.IGNORECASE):
+        if (len(codes) == 1 and codes[0] not in found
+                and re.search(r"\b(?:propos\w*|pick|choos\w*|file\w*|take|confirm\w*|agree\w*|first|keep|prefer|select\w*)\b",
+                              sentence, re.IGNORECASE)
+                and not re.search(BLOCK_WORDS, sentence, re.IGNORECASE)):
             found.append(codes[0])
     return found
 
